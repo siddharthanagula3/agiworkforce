@@ -20,7 +20,6 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
 
   const data = result?.data as CodeDiffData | undefined;
 
-  // Show running state
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -30,9 +29,7 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
     );
   }
 
-  // Show error state — subtle gray styling, not aggressive red
   if (status === 'failed' || status === 'error') {
-    // Extract a clean description from data instead of showing raw JSON
     const errorData = result?.data as Record<string, unknown> | undefined;
     const filePath = (errorData?.['filePath'] ??
       errorData?.['input'] ??
@@ -94,7 +91,6 @@ export const InlineCodeDiff: React.FC<ToolResultProps> = ({ result, status }) =>
   const hasDiffContent = Boolean(before && after);
   const canExpand = hasReadContent || hasDiffContent;
 
-  // Calculate line changes
   const beforeLines = before.split('\n').length;
   const afterLines = after.split('\n').length;
   const additions = Math.max(0, afterLines - beforeLines);

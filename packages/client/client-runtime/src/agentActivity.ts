@@ -107,15 +107,6 @@ export type AgentActivityEntry =
   | AgentActivityContextEntry
   | AgentActivityErrorEntry;
 
-/**
- * Durable, renderer-neutral projection of the canonical activity envelope.
- *
- * The projection intentionally excludes text and reasoning deltas. Answer text
- * belongs in the assistant message and private provider scratchpads must never
- * be promoted into a user-visible activity log. Only `progress-update`, whose
- * wire contract explicitly guarantees safe display text, becomes a progress
- * row.
- */
 export interface AgentActivityState {
   schemaVersion: 1;
   sessionId: string;
@@ -134,14 +125,7 @@ export interface AgentActivityState {
 export interface FinishAgentActivityLocallyOptions {
   status: Extract<AgentActivityRunStatus, 'completed' | 'failed' | 'cancelled'>;
   completedAtMs: number;
-  /** Safe, user-visible transport failure summary. Never pass provider scratchpad text. */
   error?: string;
-  /**
-   * A host-side protocol validator may discover that a nominal server success
-   * is unusable (for example, an end-turn with no text, tool output, source,
-   * or artifact). In that narrow case the durable projection may replace a
-   * terminal `completed` status with `failed`.
-   */
   overrideTerminal?: boolean;
 }
 
@@ -154,11 +138,6 @@ export interface StartAgentActivityLocallyOptions {
 
 const LOCAL_START_PROGRESS_ID = 'progress:local-starting';
 
-/**
- * Give a work-mode turn an honest action state before the provider emits its
- * first canonical envelope. The first server-owned event replaces this local
- * placeholder, so it can never become a duplicate durable step.
- */
 export function startAgentActivityLocally(
   options: StartAgentActivityLocallyOptions,
 ): AgentActivityState {
@@ -223,11 +202,6 @@ function updateAt<T extends AgentActivityEntry>(
   return next;
 }
 
-/**
- * Apply one already runtime-validated envelope to the durable activity view.
- * Duplicate or reordered envelopes are ignored by identity, so transport
- * retries cannot duplicate user-visible work.
- */
 export function applyAgentActivityEvent(
   current: AgentActivityState | undefined,
   envelope: AgentEventEnvelope,
@@ -559,12 +533,6 @@ export function applyAgentActivityEvent(
   }
 }
 
-/**
- * Close a projection when the local transport ends before the server can emit
- * its terminal envelope (for example, a user abort or a disconnected stream).
- * This does not advance the server-owned sequence number, so a later resume
- * can continue applying canonical envelopes without a synthetic ordering gap.
- */
 export function finishAgentActivityLocally(
   current: AgentActivityState,
   options: FinishAgentActivityLocallyOptions,

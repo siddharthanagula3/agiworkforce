@@ -1,16 +1,3 @@
-/**
- * Shared Conversations API
- *
- * POST /api/shared - Store a packaged conversation and return its public URL.
- * GET  /api/shared?token=<token> - Retrieve a stored conversation by token.
- *
- * POST requires an authenticated user and records them as the owner.
- * GET is intentionally public — the unguessable token IS the capability, which
- * is the point of a share link.
- *
- * The conversation is stored in the Neon `shared_conversations` table and
- * expires after 30 days (enforced by the GET handler and a DB cron job).
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -22,33 +9,20 @@ import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 
-// Maximum size in bytes for the messages payload (~2 MB).
 const MAX_MESSAGES_BYTES = 2 * 1024 * 1024;
-// UUID v4 pattern used to validate incoming tokens.
 const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-// Maximum allowed title length.
 const MAX_TITLE_LEN = 500;
 
 function getDb() {
   return getNeonDb();
 }
 
-/** POST /api/shared - upload a packaged conversation */
 async function handlePost(request: NextRequest) {
-  // AUDIT-FIX BUG-19: this endpoint publishes caller-supplied content at a
-  // first-party https://agiworkforce.com/shared/<token> URL. Leaving it
-  // anonymous made the product's own domain a ready-made host for fabricated
-  // "AI conversations" — a phishing and disinformation primitive carrying the
-  // brand's TLS and reputation — and left growth bounded only by a per-IP
-  // limit. It also meant shares had no owner, so account deletion and data
-  // export could not reach them.
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const { userId } = await getClerkAuthUser(request);
 
-  // Rate-limit uploads to prevent abuse. Now keyed per user rather than per IP,
-  // so a shared NAT does not pool one budget across unrelated people.
   const rateLimitResponse = await withRateLimit(request, 'share-create', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -77,7 +51,6 @@ async function handlePost(request: NextRequest) {
     throw createError.validation('messages payload exceeds 2 MB limit');
   }
 
-  // Validate messages is parseable JSON before storing.
   try {
     JSON.parse(messages);
   } catch {
@@ -97,7 +70,6 @@ async function handlePost(request: NextRequest) {
       [token, messages, safeTitle, expiresAt.toISOString(), userId],
     );
   } catch (err: unknown) {
-    // Duplicate token (23505) - return the existing URL instead of erroring.
     const pgCode = (err as { code?: string })?.code;
     if (pgCode === '23505') {
       const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
@@ -112,7 +84,6 @@ async function handlePost(request: NextRequest) {
   return NextResponse.json({ url }, { status: 201 });
 }
 
-/** GET /api/shared?token=<token> - retrieve a stored conversation */
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'share-view');
   if (rateLimitResponse) return rateLimitResponse;

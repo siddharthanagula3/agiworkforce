@@ -3,10 +3,6 @@ import { render, screen } from '@testing-library/react';
 import { MessageBubbleSkeleton } from './MessageBubbleSkeleton';
 import { ChatLoadingState } from './ChatLoadingState';
 
-// ---------------------------------------------------------------------------
-// MessageBubbleSkeleton
-// ---------------------------------------------------------------------------
-
 describe('MessageBubbleSkeleton', () => {
   it('renders with accessible role and aria attributes', () => {
     render(<MessageBubbleSkeleton />);
@@ -30,10 +26,7 @@ describe('MessageBubbleSkeleton', () => {
 
   it('renders name and timestamp chips in the header row', () => {
     const { container } = render(<MessageBubbleSkeleton />);
-    // The header row contains two Skeleton divs (name chip + timestamp chip)
-    // Both are siblings inside the header flex container
     const skeletons = container.querySelectorAll('[aria-hidden="true"]');
-    // At minimum avatar + 2 header chips + at least 1 line
     expect(skeletons.length).toBeGreaterThanOrEqual(4);
   });
 
@@ -50,17 +43,14 @@ describe('MessageBubbleSkeleton', () => {
 
   it('renders a rounded bubble shape for user messages', () => {
     const { container } = render(<MessageBubbleSkeleton isUser lines={1} />);
-    // User bubble: rounded-2xl rounded-tr-sm
     const bubble = container.querySelector('.rounded-2xl.rounded-tr-sm');
     expect(bubble).toBeInTheDocument();
   });
 
   it('renders the correct number of text lines for assistant messages', () => {
     const { container } = render(<MessageBubbleSkeleton isUser={false} lines={3} />);
-    // The prose area wraps lines in a space-y-2 div
     const proseLine = container.querySelector('.space-y-2');
     expect(proseLine).toBeInTheDocument();
-    // Each line is an h-4 skeleton inside the prose block
     const lines = proseLine!.querySelectorAll('[aria-hidden="true"]');
     expect(lines).toHaveLength(3);
   });
@@ -90,10 +80,6 @@ describe('MessageBubbleSkeleton', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// ChatLoadingState
-// ---------------------------------------------------------------------------
-
 describe('ChatLoadingState', () => {
   it('renders with accessible aria-label and aria-live', () => {
     render(<ChatLoadingState />);
@@ -122,7 +108,6 @@ describe('ChatLoadingState', () => {
 
   it('renders at least one assistant-aligned skeleton', () => {
     const { container } = render(<ChatLoadingState count={4} />);
-    // The outer mx-auto flex container without flex-row-reverse is assistant
     const allMessages = container.querySelectorAll('.mx-auto.flex.max-w-3xl');
     const assistantMessages = Array.from(allMessages).filter(
       (el) => !el.classList.contains('flex-row-reverse'),
@@ -133,7 +118,6 @@ describe('ChatLoadingState', () => {
   it('alternates user (index % 2 === 0) and assistant (index % 2 === 1) messages', () => {
     const { container } = render(<ChatLoadingState count={4} />);
     const allMessages = container.querySelectorAll('.mx-auto.flex.max-w-3xl');
-    // index 0 → user (flex-row-reverse), index 1 → assistant, etc.
     expect(allMessages[0]!.classList.contains('flex-row-reverse')).toBe(true);
     expect(allMessages[1]!.classList.contains('flex-row-reverse')).toBe(false);
     expect(allMessages[2]!.classList.contains('flex-row-reverse')).toBe(true);

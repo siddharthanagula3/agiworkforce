@@ -1,15 +1,3 @@
-/**
- * @file Actions the support agent will NEVER perform.
- *
- * This is a separate frozen record, deliberately NOT a registry entry with
- * `available: false`. An excluded action must not be one config flag away from
- * being executable, and it must not appear anywhere the proposal machinery can
- * reach it. `registry.ts` never imports a member of this record as an action.
- *
- * The agent's job for these is to EXPLAIN and LINK. A user who wants to cancel
- * a subscription gets told how, and gets a link to the real control, from a
- * bot that cannot itself cancel anything.
- */
 
 export type ExcludedSupportActionId =
   | 'delete_account'
@@ -20,9 +8,7 @@ export type ExcludedSupportActionId =
 
 export interface ExcludedSupportAction {
   id: ExcludedSupportActionId;
-  /** Why the agent refuses. Shown to the user verbatim. */
   reason: string;
-  /** The real control the user should use instead. */
   control: { label: string; href: string };
 }
 

@@ -1,31 +1,14 @@
-/**
- * L1 Security - Data Isolation (BOLA / IDOR prevention)
- *
- * Exercises the REAL conversation route:
- *   apps/web/app/api/chat/conversations/[id]/route.ts
- *
- * The route scopes every read/update/delete with `where id = $1 and user_id = $2`.
- * These tests prove a user can only reach their own conversations: the
- * authenticated userId is bound into the query, and a row owned by another user
- * is reported as 404 (not found) rather than leaking existence/content.
- *
- * External deps are mocked the same way the existing apps/web/__tests__/security
- * suite does: Clerk auth + the Neon DB adapter. The route logic itself is real.
- */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-// ─── Auth mock: the currently authenticated user ────────────────────────────
 const mockAuth = vi.fn();
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockAuth(),
 }));
 
-// ─── Neon DB mock: simulates per-user row ownership ─────────────────────────
-// Conversation "conv-owned-by-user-1" belongs to user-1 only.
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 vi.mock('@/lib/server/neon-db', () => ({
@@ -49,10 +32,6 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-// A successful DELETE releases the conversation's paused E2B sandbox. Unmocked,
-// the owner's happy path would attempt a real network call to E2B. The route
-// swallows the failure, so the test would still pass — but only after a live
-// timeout, which is how a fast suite quietly becomes a slow one.
 vi.mock('@/lib/e2b/runtime', () => ({ killE2BSession: vi.fn(async () => {}) }));
 
 import { GET, PUT, DELETE } from '@/app/api/chat/conversations/[id]/route';
@@ -61,17 +40,12 @@ const OWNER = 'user-1';
 const ATTACKER = 'user-2';
 const CONV_ID = 'conv-owned-by-user-1';
 
-/**
- * Simulate ownership-scoped SQL: a SELECT/UPDATE that filters by user_id
- * returns the row only when the bound userId matches the owner.
- */
 function rowScopedByUser(sql: string, params: unknown[]): unknown[] {
   const boundUserId = params[1];
   const isOwnershipScoped = /user_id\s*=\s*\$2/i.test(sql);
   if (isOwnershipScoped && boundUserId === OWNER) {
     return [{ id: CONV_ID, title: 'Secret', model: null, project_id: null, pinned: false }];
   }
-  // Foreign user (or unscoped) → no row visible.
   return [];
 }
 
@@ -103,7 +77,6 @@ describe('L1 Security - Data Isolation (BOLA/IDOR Prevention)', () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.conversation.id).toBe(CONV_ID);
-    // The authenticated owner id must be bound into the ownership-scoped query.
     const ownershipCall = mockQuery.mock.calls.find((c) => /user_id\s*=\s*\$2/i.test(c[0]));
     expect(ownershipCall).toBeDefined();
     expect(ownershipCall![1][1]).toBe(OWNER);
@@ -114,7 +87,6 @@ describe('L1 Security - Data Isolation (BOLA/IDOR Prevention)', () => {
     const { req, context } = makeRequest('GET');
     const res = await GET(req, context);
     expect(res.status).toBe(404);
-    // The attacker's id — never the owner's — is what was bound to the query.
     const ownershipCall = mockQuery.mock.calls.find((c) => /user_id\s*=\s*\$2/i.test(c[0]));
     expect(ownershipCall![1][1]).toBe(ATTACKER);
   });
@@ -138,9 +110,6 @@ describe('L1 Security - Data Isolation (BOLA/IDOR Prevention)', () => {
     const { req, context } = makeRequest('DELETE');
     const res = await DELETE(req, context);
 
-    // Pairs with the foreign-row test below. Without this case, that test would
-    // still pass if DELETE were broken for EVERYONE — a 404 would then prove
-    // nothing about ownership scoping.
     expect(res.status).toBe(200);
   });
 
@@ -149,17 +118,8 @@ describe('L1 Security - Data Isolation (BOLA/IDOR Prevention)', () => {
     const { req, context } = makeRequest('DELETE');
     const res = await DELETE(req, context);
 
-    // 404, not 200. The route deliberately collapses unknown, foreign,
-    // wrong-workspace and already-deleted rows into one response so a client
-    // cannot clear a durable tombstone on the strength of a no-op the server
-    // reported as success (see the comment on handleDeleteConversation).
-    // Reporting 200 here would also confirm the row exists, which is the
-    // existence leak the rest of this suite exists to prevent.
     expect(res.status).toBe(404);
 
-    // The security property is unchanged and is what this test really guards:
-    // the soft-delete is scoped by `user_id = $2` and the id bound there is the
-    // CALLER's, so the owner's row is never the one updated.
     const deleteCall = mockQuery.mock.calls.find((c) => /update web_conversations/i.test(c[0]));
     expect(deleteCall).toBeDefined();
     expect(deleteCall![1][1]).toBe(ATTACKER);

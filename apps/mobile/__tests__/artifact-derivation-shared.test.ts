@@ -1,11 +1,3 @@
-/**
- * Verifies that @agiworkforce/artifacts derivation runs in the RN/Jest
- * environment (uuid v5 bundles without react-native-get-random-values) and
- * that mobile's delegation to deriveArtifacts produces the correct output.
- *
- * This test also exercises the mapping layer introduced in
- * src/features/artifacts/store.ts Step 1a of the shared-packages consolidation.
- */
 import { deriveArtifacts, computeDerivedArtifactId } from '@agiworkforce/artifacts';
 import { deriveAndMapToMobileArtifacts } from '@/src/features/artifacts/store';
 
@@ -44,7 +36,6 @@ describe('uuid v5 bundling in RN/Jest (no react-native-get-random-values require
 
     expect(a).toHaveLength(1);
     expect(a[0]!.id).toBe(b[0]!.id);
-    // uuid v5 format
     expect(a[0]!.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
@@ -81,15 +72,12 @@ describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
     expect(result).toHaveLength(1);
     const ma = result[0]!;
 
-    // id must be the shared deterministic id (NOT a legacy `${messageId}_code_0` string)
     expect(ma.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    // must equal what computeDerivedArtifactId gives directly
     expect(ma.id).toBe(computeDerivedArtifactId('conv-42', 'msg-99', 0));
 
     expect(ma.kind).toBe('code');
     expect(ma.content).toBeTruthy();
     expect(ma.sourceLabel).toBe('Test conversation');
-    // ageLabel is derived from the fixed createdAt — just verify it's a non-empty string
     expect(typeof ma.ageLabel).toBe('string');
     expect(ma.ageLabel.length).toBeGreaterThan(0);
   });
@@ -127,7 +115,6 @@ describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
       THEME,
       LOCAL_PROVENANCE,
     );
-    // language should be undefined (gallery falls back to kind label), not 'text'
     if (result.length > 0) {
       expect(result[0]!.language).toBeUndefined();
     }

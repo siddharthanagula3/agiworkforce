@@ -1,13 +1,3 @@
-/**
- * Golden tests for Anthropic payload policy.
- *
- * Pins:
- *   - resolveAnthropicPayloadPolicy outputs (cacheControl shape, serviceTier)
- *   - applyAnthropicPayloadPolicyToParams attaches cache_control to the
- *     system prompt and the last user turn
- *   - the cache boundary marker, when present in the system text, splits
- *     the prompt into stable+dynamic blocks
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -99,7 +89,6 @@ describe('applyAnthropicPayloadPolicyToParams', () => {
       cacheControl: { type: 'ephemeral' },
       serviceTier: undefined,
     });
-    // The string content should be coerced to a [TextBlock] with cache_control on it.
     const msgs = params['messages'] as Array<{ content: unknown }>;
     expect(Array.isArray(msgs[0]?.content)).toBe(true);
     const block = (msgs[0]?.content as Array<Record<string, unknown>>)[0];

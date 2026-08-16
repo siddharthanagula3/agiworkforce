@@ -1,100 +1,40 @@
-/**
- * Desktop Dispatch listener service.
- *
- * This module is the desktop peer to `apps/mobile/lib/dispatchHmac.ts`.
- * Mobile signs every outbound control message with HMAC-SHA-256; this
- * service verifies those signatures via the Rust crypto module exposed
- * through Tauri commands (`dispatch_hmac_init`, `dispatch_hmac_verify`,
- * `dispatch_hmac_sign`, `dispatch_hmac_reset`).
- *
- * Lifecycle:
- *   1. Mobile connects and sends `dispatchSalt` in `peer_ready` metadata.
- *   2. Caller calls `initDispatchSession(pairingCode, dispatchSalt)`.
- *      The Rust side derives the 32-byte HKDF session key.
- *   3. On inbound control message: `verifyInbound(rawJson)` → VerifyOutcome.
- *   4. On outbound control message: `signOutbound(payload, type)` → wire JSON.
- *   5. On disconnect: `resetDispatchSession()` zeroes the key.
- *
- * Edge cases handled:
- *   - Clock drift: ±30s window enforced in Rust (plan says ±5min but Rust
- *     uses 30s which is stricter; +6min drift is rejected).
- *   - Replay: sliding-window nonce cache (1000 IDs / 60s) managed in Rust.
- *   - Key rotation: `rotateDispatchKey()` fetches a new salt from the cloud API
- *     and re-initialises the session key. Two active key slots are supported
- *     by the Rust state (current + retry with old key on mismatch).
- *   - Salt collisions: 16-byte random nonce per message; collision probability
- *     is negligible (~2^-128 per message pair). Log + reject on the Rust side.
- *   - Unsigned grace window: accepted with warning until 2026-06-05; after
- *     that, rejected (Rust enforces; we surface the log).
- *   - Message dedup by ID: deduplicated in this module before calling Rust
- *     verify, so the nonce cache stays clean.
- *   - Network retry: exponential backoff for key rotation fetches.
- *   - Mobile version mismatch: parsed from `peer_ready` metadata; logged
- *     and emitted via `onVersionMismatch` callback so the UI can prompt.
- */
 
 import { invoke } from '../lib/tauri-mock';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** ISO date after which unsigned messages are hard-rejected by Rust. */
 export const DISPATCH_HMAC_REQUIRED_AFTER = '2026-05-26T00:00:00.000Z';
 const DISPATCH_HMAC_REQUIRED_AFTER_MS = new Date(DISPATCH_HMAC_REQUIRED_AFTER).getTime();
 
-/** Minimum semantic version string that supports HMAC signing on mobile. */
 const DISPATCH_HMAC_MIN_MOBILE_VERSION = '1.3.0';
 
-/** Maximum number of processed message IDs to track for dedup. */
 const MAX_DEDUP_IDS = 1000;
 
-/** How long to keep a message ID in the dedup set (ms). Matches Rust nonce TTL. */
 const DEDUP_TTL_MS = 60_000;
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Outcome strings mirroring Rust `VerifyOutcome`. */
 export type VerifyOutcome = 'signed' | 'unsigned_transitional';
 
-/** Full verify result surface to callers. */
 export type DispatchVerifyResult =
   | { ok: true; outcome: VerifyOutcome }
   | { ok: false; reason: string };
 
-/** Structured inbound message before HMAC verification. */
 export interface InboundDispatchMessage {
-  /** Application-level deduplicated message ID (not the HMAC nonce). */
   id?: string;
-  /** Raw JSON of the full signed envelope (passed to Rust for crypto). */
   rawJson: string;
 }
 
-/** Callbacks the caller can provide to react to dispatch events. */
 export interface DispatchListenerCallbacks {
   onVersionMismatch?: (mobileVersion: string, minRequired: string) => void;
   onUnsignedTransitional?: () => void;
   onKeyRotated?: (newKeyHex: string) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Module-level state
-// ---------------------------------------------------------------------------
-
-/** Whether a session key is currently active. */
 let _sessionActive = false;
 
-/** Serialises native key install/reset so stale A setup cannot overwrite B. */
 let _sessionLifecycleQueue: Promise<void> = Promise.resolve();
 let _sessionLifecycleGeneration = 0;
 let _sessionLifecycleHasKeyOrPendingSetup = false;
 
-/** Dedup cache: message ID → expiry ms. */
 const _dedupCache = new Map<string, number>();
 
-/** Registered callbacks. */
 let _callbacks: DispatchListenerCallbacks = {};
 
 class DispatchSessionSupersededError extends Error {
@@ -112,10 +52,6 @@ function enqueueSessionLifecycle<T>(operation: () => Promise<T>): Promise<T> {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Dedup helpers
-// ---------------------------------------------------------------------------
-
 function pruneDedup(nowMs: number): void {
   for (const [id, expiry] of _dedupCache) {
     if (expiry < nowMs) {
@@ -127,7 +63,6 @@ function pruneDedup(nowMs: number): void {
 function isDuplicate(id: string): boolean {
   pruneDedup(Date.now());
   if (_dedupCache.size >= MAX_DEDUP_IDS) {
-    // Evict oldest entries when at cap.
     const oldest = [..._dedupCache.entries()].sort((a, b) => a[1] - b[1]);
     const toEvict = oldest.slice(0, _dedupCache.size - MAX_DEDUP_IDS + 1);
     for (const [key] of toEvict) {
@@ -141,14 +76,6 @@ function isDuplicate(id: string): boolean {
   return false;
 }
 
-// ---------------------------------------------------------------------------
-// Version comparison helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Compares two semantic version strings (major.minor.patch).
- * Returns negative if a < b, 0 if equal, positive if a > b.
- */
 function compareSemver(a: string, b: string): number {
   const parseParts = (v: string): number[] =>
     v
@@ -168,14 +95,6 @@ function isMobileVersionSufficient(mobileVersion: string): boolean {
   return compareSemver(mobileVersion, DISPATCH_HMAC_MIN_MOBILE_VERSION) >= 0;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Register optional callbacks for dispatch events.
- * Safe to call before `initDispatchSession`.
- */
 export function setDispatchCallbacks(callbacks: DispatchListenerCallbacks): void {
   _callbacks = { ..._callbacks, ...callbacks };
 }
@@ -256,7 +175,6 @@ export async function verifyInbound(
     return { ok: false, reason: 'session_not_initialised' };
   }
 
-  // App-layer dedup by message ID before hitting Rust.
   if (message.id && isDuplicate(message.id)) {
     return { ok: false, reason: 'duplicate_message_id' };
   }
@@ -384,17 +302,10 @@ export async function rotateDispatchKey(
   );
 }
 
-/**
- * Reset the session — zero the session key and clear the nonce + dedup caches.
- * Call this when the Dispatch connection terminates.
- */
 export async function resetDispatchSession(): Promise<void> {
   const shouldResetNative = _sessionLifecycleHasKeyOrPendingSetup || _sessionActive;
   _sessionLifecycleGeneration += 1;
 
-  // Revoke renderer authority before the native bridge awaits. Account/mode
-  // transitions must make send/verify fail synchronously even when native key
-  // zeroing is still in flight.
   _sessionActive = false;
   _sessionLifecycleHasKeyOrPendingSetup = false;
   _dedupCache.clear();
@@ -409,21 +320,10 @@ export async function resetDispatchSession(): Promise<void> {
   });
 }
 
-/** Whether a dispatch session is currently active (key derived and stored). */
 export function isDispatchSessionActive(): boolean {
   return _sessionActive;
 }
 
-/**
- * Extract `dispatchSalt` and `version` from `peer_ready` metadata.
- *
- * Mobile sends:
- * ```json
- * { "deviceType": "mobile", "app": "agiworkforce-mobile", "version": "...", "dispatchSalt": "..." }
- * ```
- *
- * Returns `null` when the field is absent (old mobile version or non-mobile peer).
- */
 export function extractDispatchSalt(
   metadata: Record<string, unknown> | null | undefined,
 ): { salt: string; version?: string } | null {

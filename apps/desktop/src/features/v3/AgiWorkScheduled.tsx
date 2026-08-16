@@ -62,9 +62,6 @@ export function AgiWorkScheduled() {
   const toggleTask = useSchedulerStore((s) => s.toggleTask);
   const deleteTask = useSchedulerStore((s) => s.deleteTask);
   const [deleteCandidate, setDeleteCandidate] = useState<ScheduledTask | null>(null);
-  // The panel shipped with no create path at all, while every locale's empty
-  // string told the user to click a "Schedule new task" button. This is that
-  // button, wired to the scheduler modal that already existed.
   const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {

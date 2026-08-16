@@ -1,17 +1,3 @@
-/**
- * Bulk message save endpoint.
- *
- * POST /api/chat/conversations/[id]/messages/bulk
- *   Upserts an array of messages into a conversation. Uses INSERT ... ON CONFLICT
- *   so the same message ID can be sent multiple times safely (idempotent).
- *   Used by mobile localCloudSyncService (data-controls) for batch persistence.
- *
- * Request body: { messages: Array<{ id?, role, content, model?, metadata? }> }
- * Response:     { saved: number, messages: ChatMessageRow[] }
- *
- * Max 200 messages per call. All messages must belong to the same conversation
- * and user, verified server-side.
- */
 
 import 'server-only';
 
@@ -73,7 +59,6 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
   const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId);
 
-  // Verify conversation ownership
   const [conv] = await db.query<{ id: string }>(
     `select id
        from web_conversations
@@ -91,15 +76,6 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
   try {
     for (const msg of messages) {
       if (msg.id) {
-        // Upsert by provided ID.
-        //
-        // AUDIT-FIX (CRITICAL #17, IDOR): the conflict target is the global
-        // PK and msg.id is client-supplied · without the conversation guard
-        // on the DO UPDATE, posting a victim's message UUID into the
-        // attacker's own (ownership-checked) conversation would overwrite
-        // the victim's row and leak its provider/token/cost fields via
-        // RETURNING. The WHERE clause makes a foreign-row conflict a no-op,
-        // which is rejected explicitly below instead of silently skipped.
         const [row] = await db.query<ChatMessageRow>(
           `
             insert into web_messages
@@ -123,12 +99,10 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
           ],
         );
         if (!row) {
-          // Conflict on a message that belongs to a different conversation.
           throw createError.validation('Message id belongs to another conversation');
         }
         saved.push(row);
       } else {
-        // Insert without explicit ID
         const [row] = await db.query<ChatMessageRow>(
           `
             insert into web_messages
@@ -156,7 +130,6 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
       ),
     });
   } catch (error) {
-    // Re-throw typed AppErrors (e.g. the cross-conversation rejection above).
     if (error && typeof error === 'object' && ('status' in error || 'statusCode' in error)) {
       throw error;
     }

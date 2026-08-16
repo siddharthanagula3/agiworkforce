@@ -1,9 +1,3 @@
-/**
- * Small tag badge shown on ConversationItem.
- * 'sm' = colored dot only (compact list views).
- * 'md' = colored dot + label text.
- * Renders nothing for 'general' tag (don't show generic tags).
- */
 
 import { View } from 'react-native';
 import { Text } from '@/components/ui/text';
@@ -15,7 +9,6 @@ interface AutoTagBadgeProps {
 }
 
 export function AutoTagBadge({ tag, size = 'md' }: AutoTagBadgeProps) {
-  // Don't render anything for the generic 'general' tag
   if (tag === 'general') return null;
 
   const info = getTagInfo(tag);

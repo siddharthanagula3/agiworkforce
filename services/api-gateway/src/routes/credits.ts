@@ -1,15 +1,3 @@
-/**
- * @file Credits API Routes
- * @security
- * - Rate limiting: Applied per-endpoint based on financial sensitivity
- * - Authentication: JWT required for all endpoints
- * - Privacy: Public responses contain percentage/reset status only
- *
- * Rate limit rationale (OWASP compliant):
- * - GET /balance: 10/min - read operation, moderate limit
- * - POST /check: 10/min - retired compatibility response
- * - POST /deduct: 5/min - retired compatibility response
- */
 
 import { Router, type Request, type Response } from 'express';
 import {
@@ -43,7 +31,6 @@ function asIsoTimestamp(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-/** Keep private ledger operands and unpublished Free-plan usage inside the service boundary. */
 function toPublicUsageBalance(
   balance: Record<string, unknown> | null,
   usageVisible: boolean,
@@ -73,15 +60,8 @@ function toPublicUsageBalance(
 }
 
 router.use(authenticateToken);
-// SECURITY: Baseline rate limit for all credit endpoints (100/min fallback)
 router.use(createRateLimiter('default'));
 
-/**
- * GET /api/credits/balance
- * Get current credit balance for the authenticated user
- *
- * SECURITY: Rate limited to 10 requests/minute per user
- */
 router.get(
   '/balance',
   createRateLimiter('credits-balance'),
@@ -91,12 +71,6 @@ router.get(
       throw new AppError('Unauthorized', 401);
     }
 
-    // P1-GW-RLS: get_credit_balance runs with caller privileges (no SECURITY
-    // DEFINER — 0020_functions.sql), reading public.token_credits, which has
-    // RLS enabled+forced with a policy keyed on `user_id =
-    // current_app_user_id()` (0037_rls_user_isolation.sql). getUserScopedClient
-    // binds the verified token via withUser(), so this RPC now runs under real
-    // Postgres RLS as a backstop behind the explicit p_user_id parameter below.
     const userDb = getUserScopedClient({ userId: user.userId, token: user.token });
     const [balanceResult, subscriptionResult] = await Promise.all([
       userDb.rpc('get_credit_balance', {
@@ -128,18 +102,12 @@ router.get(
     );
     const usageVisible = effectiveTier !== 'free';
 
-    // The RPC returns an array, get the first row
     const balance = Array.isArray(balanceResult.data) ? balanceResult.data[0] : balanceResult.data;
 
     res.json(toPublicUsageBalance(balance ?? null, usageVisible));
   },
 );
 
-/**
- * Client-supplied ledger amounts are no longer accepted. Managed requests are
- * reserved and settled by the authenticated LLM route after it calculates the
- * provider cost server-side.
- */
 function retireClientManagedCreditOperation(_req: Request, res: Response): void {
   res.status(410).json({
     error: 'Client-managed credit operations are no longer available',

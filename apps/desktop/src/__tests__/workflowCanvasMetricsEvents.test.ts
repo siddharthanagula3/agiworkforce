@@ -2,10 +2,6 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// A `listen(...)` with no matching Tauri `emit(...)` is a silently dead UI:
-// the panel mounts, subscribes, and then never updates. These three surfaces
-// each shipped that way, so the contract is asserted from source rather than
-// from a hand-maintained list of names.
 const SURFACES = [
   '../hooks/useWorkflows.ts',
   '../features/roi-dashboard/roiStore.ts',
@@ -39,16 +35,12 @@ function listenedEventNames(relativePath: string): string[] {
 }
 
 function hasEmitter(eventName: string): boolean {
-  // Matches `app.emit("name", ...)` and the `emit_to`/`emit_filter` variants,
-  // allowing for a leading target argument.
   const pattern = new RegExp(
     `\\bemit\\w*\\s*\\(\\s*(?:[^;()]{0,60}?,\\s*)?"${eventName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`,
   );
   return rustSources.some((source) => pattern.test(source));
 }
 
-// The ROI and canvas trees are route-or-delete candidates. A deleted surface
-// cannot hold an orphaned listener, so it drops out rather than failing here.
 const liveSurfaces = SURFACES.filter((relativePath) =>
   existsSync(resolve(__dirname, relativePath)),
 );

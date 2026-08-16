@@ -39,19 +39,11 @@ import { Button } from '@agiworkforce/ui';
 
 export interface GeneratedFileCardProps {
   presentation: GeneratedFilePresentation;
-  /** Fires when the user clicks the primary action (Download / Open). */
   onDownload?: () => void;
-  /** Optional share action — hidden when omitted. */
   onShare?: () => void;
-  /** Optional jump-to-source-session — hidden when omitted. */
   onOpenSourceSession?: () => void;
-  /** Optional preview affordance — hidden when omitted or canPreview is false. */
   onPreview?: () => void;
-  /** Reports that the inline thumbnail could not be loaded. Hosts can probe
-   * the authenticated asset route and distinguish missing bytes from an
-   * image-decoding-only failure. */
   onPreviewError?: () => void;
-  /** Optional extra className for host-layout integration. */
   className?: string;
 }
 
@@ -147,10 +139,6 @@ export function GeneratedFileCard({
       data-testid="generated-file-card"
       data-generated-file-id={presentation.generatedFileId ?? undefined}
       className={cn(
-        // h-full so cards in a grid row share a height, and the action row
-        // below is pushed to the bottom with mt-auto. Without it a card with
-        // more badges grows taller and its Download sits lower than its
-        // neighbours', which reads as a ragged, unfinished grid.
         'flex h-full flex-col gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)]',
         'bg-[var(--chat-surface-elevated)] p-3',
         className,
@@ -266,8 +254,4 @@ export function GeneratedFileCard({
   );
 }
 
-/**
- * Re-export GeneratedFileKind so consumers who import the card don't need
- * a second import line from `@agiworkforce/types`.
- */
 export type { GeneratedFileKind };

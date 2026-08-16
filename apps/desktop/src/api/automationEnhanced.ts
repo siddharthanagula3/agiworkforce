@@ -371,10 +371,6 @@ export async function generateCode(
   }
 }
 
-// ============================================================================
-// Bridge commands — match frontend invoke() names to existing implementations
-// ============================================================================
-
 export async function listAutomationScripts(): Promise<AutomationScript[]> {
   try {
     const result = await invokeWithTimeout<unknown[]>('list_automation_scripts');

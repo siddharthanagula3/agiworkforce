@@ -86,9 +86,6 @@ export interface HighlightResult {
 export type BrowserFormData = Record<string, string | number | boolean>;
 
 export class BrowserAutomation {
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
 
   static async init(): Promise<void> {
     return invoke('browser_init');
@@ -112,10 +109,6 @@ export class BrowserAutomation {
     return invoke('browser_close', { browserId });
   }
 
-  // ---------------------------------------------------------------------------
-  // Tab management
-  // ---------------------------------------------------------------------------
-
   static async openTab(url?: string): Promise<string> {
     return invoke('browser_open_tab', { url });
   }
@@ -131,10 +124,6 @@ export class BrowserAutomation {
   static async listTabs(): Promise<Tab[]> {
     return invoke('browser_list_tabs');
   }
-
-  // ---------------------------------------------------------------------------
-  // Navigation
-  // ---------------------------------------------------------------------------
 
   static async navigate(tabId: string | undefined, url: string): Promise<void> {
     if (!url || !url.trim()) {
@@ -170,10 +159,6 @@ export class BrowserAutomation {
     return invoke('browser_wait_for_navigation', { tabId, timeoutMs });
   }
 
-  // ---------------------------------------------------------------------------
-  // Page info
-  // ---------------------------------------------------------------------------
-
   static async getUrl(tabId?: string): Promise<string> {
     return invoke('browser_get_url', { tabId });
   }
@@ -189,10 +174,6 @@ export class BrowserAutomation {
   static async getDomSnapshot(tabId?: string): Promise<string> {
     return invoke('browser_get_dom_snapshot', { tabId });
   }
-
-  // ---------------------------------------------------------------------------
-  // DOM interaction
-  // ---------------------------------------------------------------------------
 
   static async click(tabId: string | undefined, selector: string): Promise<void> {
     return invoke('browser_click', { tabId, selector });
@@ -261,10 +242,6 @@ export class BrowserAutomation {
     return invoke('browser_highlight_element', { tabId, selector });
   }
 
-  // ---------------------------------------------------------------------------
-  // Element state
-  // ---------------------------------------------------------------------------
-
   static async getElementState(tabId: string | undefined, selector: string): Promise<ElementState> {
     return invoke('browser_get_element_state', { tabId, selector });
   }
@@ -277,10 +254,6 @@ export class BrowserAutomation {
     return invoke('browser_wait_for_interactive', { tabId, selector, timeoutMs });
   }
 
-  // ---------------------------------------------------------------------------
-  // Screenshots
-  // ---------------------------------------------------------------------------
-
   static async screenshot(tabId?: string, selector?: string): Promise<string> {
     return invoke('browser_screenshot', { tabId, selector });
   }
@@ -288,10 +261,6 @@ export class BrowserAutomation {
   static async getScreenshotStream(tabId?: string): Promise<string> {
     return invoke('browser_get_screenshot_stream', { tabId });
   }
-
-  // ---------------------------------------------------------------------------
-  // JavaScript execution (approval-gated)
-  // ---------------------------------------------------------------------------
 
   static async evaluate(tabId: string | undefined, script: string): Promise<unknown> {
     if (!script || !script.trim()) {
@@ -307,10 +276,6 @@ export class BrowserAutomation {
     return invoke('browser_execute_async_js', { tabId, script });
   }
 
-  // ---------------------------------------------------------------------------
-  // Forms
-  // ---------------------------------------------------------------------------
-
   static async fillForm(
     tabId: string | undefined,
     selector: string,
@@ -318,10 +283,6 @@ export class BrowserAutomation {
   ): Promise<void> {
     return invoke('browser_fill_form', { tabId, selector, data });
   }
-
-  // ---------------------------------------------------------------------------
-  // Drag & drop / file upload
-  // ---------------------------------------------------------------------------
 
   static async dragAndDrop(
     tabId: string | undefined,
@@ -345,10 +306,6 @@ export class BrowserAutomation {
     return invoke('browser_upload_file', { tabId, selector, paths: [filePath] });
   }
 
-  // ---------------------------------------------------------------------------
-  // Cookies
-  // ---------------------------------------------------------------------------
-
   static async getCookies(tabId?: string): Promise<Cookie[]> {
     return invoke('browser_get_cookies', { tabId });
   }
@@ -361,25 +318,13 @@ export class BrowserAutomation {
     return invoke('browser_clear_cookies', { tabId });
   }
 
-  // ---------------------------------------------------------------------------
-  // Performance
-  // ---------------------------------------------------------------------------
-
   static async getPerformanceMetrics(tabId?: string): Promise<PerformanceMetrics> {
     return invoke('browser_get_performance_metrics', { tabId });
   }
 
-  // ---------------------------------------------------------------------------
-  // Request interception
-  // ---------------------------------------------------------------------------
-
   static async enableRequestInterception(enabled: boolean): Promise<void> {
     return invoke('browser_enable_request_interception', { enabled });
   }
-
-  // ---------------------------------------------------------------------------
-  // Frames (approval-gated for executeInFrame)
-  // ---------------------------------------------------------------------------
 
   static async getFrames(tabId?: string): Promise<BrowserFrame[]> {
     return invoke('browser_get_frames', { tabId });
@@ -392,10 +337,6 @@ export class BrowserAutomation {
   ): Promise<unknown> {
     return invoke('browser_execute_in_frame', { tabId, frameId, script });
   }
-
-  // ---------------------------------------------------------------------------
-  // Function calls
-  // ---------------------------------------------------------------------------
 
   static async callFunction(
     tabId: string | undefined,
@@ -410,10 +351,6 @@ export class BrowserAutomation {
     }
     return invoke('browser_call_function', { tabId, functionName, args });
   }
-
-  // ---------------------------------------------------------------------------
-  // Semantic selectors
-  // ---------------------------------------------------------------------------
 
   static async findElementSemantic(tabId: string | undefined, query: string): Promise<string> {
     return invoke('find_element_semantic', { tabId, query });
@@ -437,10 +374,6 @@ export class BrowserAutomation {
   static async testSelectorStrategies(tabId: string | undefined, query: string): Promise<unknown> {
     return invoke('test_selector_strategies', { tabId, query });
   }
-
-  // ---------------------------------------------------------------------------
-  // Accessibility
-  // ---------------------------------------------------------------------------
 
   static async getAccessibilityTree(tabId?: string): Promise<unknown> {
     return invoke('get_accessibility_tree', { tabId });

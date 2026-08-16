@@ -20,8 +20,6 @@ import {
   DEFAULT_THEME,
 } from '../ThemeConstants';
 
-// Mock next-themes so tests do not depend on Next.js SSR context. next-themes
-// owns the <html> class + localStorage; the bridge delegates to its setTheme.
 const mockSetTheme = vi.fn();
 let mockTheme = 'system';
 vi.mock('next-themes', () => {
@@ -36,8 +34,6 @@ vi.mock('next-themes', () => {
     }),
   };
 });
-
-// ---- ThemeConstants -------------------------------------------------------
 
 describe('ThemeConstants', () => {
   describe('getSystemTheme', () => {
@@ -104,8 +100,6 @@ describe('ThemeConstants', () => {
   });
 });
 
-// ---- useThemeContext outside provider -------------------------------------
-
 describe('useThemeContext', () => {
   it('throws when used outside ThemeProvider', () => {
     expect(() => renderHook(() => useThemeContext())).toThrow(
@@ -122,8 +116,6 @@ describe('useThemeContext', () => {
     expect(['light', 'dark']).toContain(result.current.actualTheme);
   });
 });
-
-// ---- ThemeProvider DOM integration ---------------------------------------
 
 describe('ThemeProvider DOM integration', () => {
   beforeEach(() => {
@@ -156,8 +148,6 @@ describe('ThemeProvider DOM integration', () => {
       result.current.setTheme('dark');
     });
 
-    // The bug was: setTheme dispatched a dead CustomEvent nothing listened to.
-    // It must now call next-themes' setTheme so the app actually re-themes.
     expect(mockSetTheme).toHaveBeenCalledWith('dark');
   });
 
@@ -173,7 +163,7 @@ describe('ThemeProvider DOM integration', () => {
   });
 
   it('mirrors data-theme from the resolved next-themes theme (dark)', () => {
-    mockTheme = 'system'; // resolves to dark in the mock
+    mockTheme = 'system';
 
     render(
       <ThemeProvider>

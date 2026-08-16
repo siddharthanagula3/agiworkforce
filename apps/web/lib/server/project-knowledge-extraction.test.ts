@@ -150,11 +150,6 @@ describe('extractProjectKnowledgeFile', () => {
     expect(destroy).toHaveBeenCalledOnce();
   });
 
-  // Notebooks were not accepted at all. Accepting them via the plain-text path
-  // would have been worse than useless: it feeds the model the notebook's
-  // entire serialized form — base64 PNG outputs, execution counts, kernel
-  // metadata — which on a notebook with a few plots is megabytes of noise that
-  // crowds out the analysis and burns the project's context budget.
   describe('Jupyter notebooks', () => {
     function notebook(cells: unknown[]): Buffer {
       return Buffer.from(JSON.stringify({ cells, metadata: {}, nbformat: 4 }));
@@ -192,7 +187,6 @@ describe('extractProjectKnowledgeFile', () => {
       expect(extractedText).toContain('# Revenue analysis');
       expect(extractedText).toContain('df.describe()');
       expect(extractedText).toContain('count 42');
-      // Sequential meaning: prose before the code it introduces.
       expect(extractedText!.indexOf('Revenue analysis')).toBeLessThan(
         extractedText!.indexOf('df.describe()'),
       );

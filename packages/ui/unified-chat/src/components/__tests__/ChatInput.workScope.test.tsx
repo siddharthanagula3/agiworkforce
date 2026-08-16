@@ -1,9 +1,3 @@
-/**
- * Chat | AGI Work toggle + "Project or folder" picker (web ChatComposerNew
- * parity, host-fed). The toggle and picker exist ONLY when the host feeds
- * `projectPicker`; hosts that don't (mobile) get the unchanged composer and
- * the unchanged onSend signature.
- */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput, type ChatInputProps } from '../ChatInput';
@@ -128,7 +122,6 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     fireEvent.change(textarea, { target: { value: 'Plain send' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
 
-    // Exact-arity assertion: no scope argument leaks into picker-less hosts.
     expect(onSend).toHaveBeenCalledWith('Plain send', 'ask', undefined, undefined, false);
   });
 
@@ -213,7 +206,6 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     const { view } = renderComposer(props);
     expect(picker.onSelectProject).not.toHaveBeenCalled();
 
-    // Host's native dialog resolves → folder label transitions null → value.
     view.rerender(
       <ChatInput
         onSend={vi.fn()}
@@ -230,7 +222,6 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
   });
 
   it('stamps workMode + projectId into the send when scoped', () => {
-    // A preselected project lands the composer in AGI Work mode automatically.
     const { onSend, textarea } = renderComposer({
       projectPicker: makePicker({ activeProjectId: 'p1' }),
     });

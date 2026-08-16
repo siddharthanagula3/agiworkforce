@@ -1,17 +1,3 @@
-/**
- * EmailArtifact — renderer for `email` artifacts (email drafts).
- *
- * Scope note: `'email'` exists in the shared `ArtifactType` union
- * (packages/contracts/types/src/conversation.ts). The desktop `create_artifact` tool
- * accepts it (persisted as Document), while the derivation service never
- * detects it. This renderer defines the display contract WITHOUT inventing
- * a wire format: it parses
- * optional leading RFC-822-style header lines (Subject/To/From/Cc/Bcc/
- * Reply-To/Date) and treats everything else as the body. Content with no
- * headers renders entirely as the body — nothing is dropped.
- *
- * Surface-agnostic: no Tauri imports, no desktop-specific deps.
- */
 
 import { Check, Copy, Mail } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -44,18 +30,12 @@ export interface ParsedEmail {
 
 const HEADER_LINE_RE = /^(from|to|cc|bcc|subject|reply-to|date)\s*:\s*(.*)$/i;
 
-/**
- * Parse optional leading header lines from an email draft. Headers must form
- * a contiguous block at the top (blank lines before the block are ignored);
- * the first non-header line ends the block and starts the body.
- */
 export function parseEmail(content: string): ParsedEmail {
   const text = (content ?? '').replace(/\r\n/g, '\n');
   const lines = text.split('\n');
   const headers: Partial<Record<HeaderKey, string>> = {};
 
   let i = 0;
-  // Skip leading blank lines.
   while (i < lines.length && lines[i]!.trim() === '') i += 1;
 
   let sawHeader = false;
@@ -72,12 +52,10 @@ export function parseEmail(content: string): ParsedEmail {
     return { headers: {}, body: text.trim() };
   }
 
-  // Skip the conventional blank line between headers and body.
   while (i < lines.length && lines[i]!.trim() === '') i += 1;
   return { headers, body: lines.slice(i).join('\n').trim() };
 }
 
-/** Plain-text serialization for "copy as text". */
 export function emailToText(parsed: ParsedEmail): string {
   const headerLines = HEADER_KEYS.filter((k) => parsed.headers[k]).map(
     (k) => `${HEADER_LABELS[k]}: ${parsed.headers[k]}`,

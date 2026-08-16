@@ -1,13 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M31 — the connectors directory search must not scroll away.
- *
- * The field lived inside the settings shell's ScrollView, so on a catalog this
- * long it left the screen after a couple of flicks and the only way back to it
- * was scrolling to the top. It is now the shared `BottomSearchBar`, pinned over
- * the shell, with a trailing spacer inside the scroll content so the last
- * connector row can still be scrolled clear of it.
- */
 import React from 'react';
 import { ScrollView } from 'react-native';
 import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
@@ -109,8 +100,6 @@ describe('Connectors directory bottom-anchored search', () => {
     await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(1));
 
     expect(screen.getByTestId('connectors-search')).toBeTruthy();
-    // Neither the shell's vertical scroll view nor the horizontal chip row may
-    // contain it — being inside either is what made it scroll out of reach.
     for (const scrollView of screen.UNSAFE_getAllByType(ScrollView)) {
       expect(within(scrollView).queryByTestId('connectors-search')).toBeNull();
     }

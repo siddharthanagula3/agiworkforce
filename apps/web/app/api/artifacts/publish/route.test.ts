@@ -1,12 +1,3 @@
-/**
- * POST / GET /api/artifacts/publish (CAP-015 slice 1).
- *
- * This directory shipped EMPTY, which is exactly why
- * `packages/platform/artifacts` could truthfully say no surface had a
- * `CloudPublisher`. These tests pin the parts that make publishing safe rather
- * than merely functional: CSRF before any write, auth via the RLS-scoped
- * adapter, kind rejection at the boundary, and a list that never ships bodies.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -91,13 +82,10 @@ describe('POST /api/artifacts/publish', () => {
     const body = await response.json();
     expect(body.token).toBe(TOKEN);
     expect(body.shareUrl).toContain(`/shared-artifact/${TOKEN}`);
-    // The client must be able to tell the user HOW the page will render.
     expect(body.sandboxed).toBe(true);
   });
 
   it('refuses a cross-site publish before writing anything', async () => {
-    // Publishing makes content world-readable; a forged POST must never be able
-    // to do that on a signed-in user's behalf.
     mocks.csrf.mockResolvedValue(NextResponse.json({ error: 'csrf' }, { status: 403 }));
     const response = await POST(postRequest(VALID_BODY));
     expect(response.status).toBe(403);

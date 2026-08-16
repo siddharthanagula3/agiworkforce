@@ -17,9 +17,6 @@ function ConnectBody() {
   const deviceFingerprint = searchParams.get('device_fingerprint');
   const name = friendlyDeviceName(deviceType);
 
-  // Reject unrecognised device types before rendering anything that looks like
-  // an approval prompt. Checked ahead of the missing-device_id branch so a
-  // crafted link cannot reach the grant UI at all.
   if (!isKnownDeviceType(deviceType)) {
     return (
       <section

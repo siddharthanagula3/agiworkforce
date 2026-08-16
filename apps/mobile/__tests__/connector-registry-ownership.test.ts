@@ -1,27 +1,3 @@
-/**
- * Regression guard for MOBILE-CONNECTORS-ROUTE-THEATER-01 (known-flaws.md,
- * fixed 2026-07-11) and ledger item HARD-017.
- *
- * Before the fix, `/(app)/connectors` — the route all three chat entry points
- * push (chat tab, AddToChatSheet, ConnectorDetailScreen) — rendered a second,
- * fully independent hardcoded connector catalog that never called
- * `GET /api/connectors`. The fix made that route a thin wrapper around the one
- * API-backed screen, `src/features/settings/cloud-connectors/index.tsx`.
- *
- * A doc comment saying "do NOT fork a second implementation here" is not a
- * mechanism. This is. It asserts:
- *   1. exactly one Mobile source file enumerates connector ids,
- *   2. the chat-facing route wrapper delegates instead of listing connectors,
- *   3. every id/name in that one catalog matches the canonical catalog in
- *      apps/web/features/connectors/data/connectors.ts.
- *
- * (3) is a text comparison rather than an import on purpose: Mobile may only
- * import `packages/*`, never another app, so the same read-the-source approach
- * `scripts/check-connector-logos.mjs` uses for the shared logo map is used
- * here. Only ids and display names are compared — Mobile deliberately groups
- * its filter chips with its own category labels ("Email", "Cloud Storage"),
- * which is presentation, not catalog identity.
- */
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -34,7 +10,6 @@ interface CatalogEntry {
   name: string;
 }
 
-/** Read the array literal that follows `marker` and pull out `id`/`name`. */
 function readCatalog(file: string, marker: string): CatalogEntry[] {
   const source = fs.readFileSync(file, 'utf8');
   const markerIndex = source.indexOf(marker);
@@ -69,7 +44,6 @@ function readCatalog(file: string, marker: string): CatalogEntry[] {
     .filter((entry): entry is CatalogEntry => Boolean(entry.id));
 }
 
-/** Every .ts/.tsx file under the Mobile app's own source roots. */
 function mobileSourceFiles(): string[] {
   const roots = ['app', 'src', 'components', 'lib', 'services', 'stores', 'types'];
   const files: string[] = [];
@@ -102,8 +76,6 @@ describe('mobile connector catalog ownership', () => {
 
   it('has exactly one Mobile file that enumerates connector ids', () => {
     const ids = catalog.map((entry) => entry.id);
-    // Three or more catalog ids quoted in one file is a connector list, not an
-    // incidental mention (a screen that special-cases GitHub quotes one id).
     const enumerating = mobileSourceFiles().filter((file) => {
       const source = fs.readFileSync(file, 'utf8');
       return (
@@ -123,8 +95,6 @@ describe('mobile connector catalog ownership', () => {
     );
 
     expect(wrapper).toContain("from '@/src/features/settings/cloud-connectors'");
-    // The forked catalog this route used to own was an array of objects with
-    // per-connector copy. Neither may come back here.
     expect(wrapper).not.toMatch(/description:\s*'/);
     expect(wrapper).not.toMatch(/category:\s*'/);
   });

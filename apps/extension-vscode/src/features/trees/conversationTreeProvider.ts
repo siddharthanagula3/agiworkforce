@@ -1,4 +1,3 @@
-/** Workspace-scoped developer-session history backed by the Rust app-server. */
 
 import * as vscode from 'vscode';
 import type { ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';

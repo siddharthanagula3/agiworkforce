@@ -83,7 +83,6 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
   );
 
   useEffect(() => {
-    // Capture phase ensures this wins over chat textarea Enter handlers.
     window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);

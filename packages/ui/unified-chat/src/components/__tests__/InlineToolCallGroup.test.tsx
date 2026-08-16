@@ -1,15 +1,3 @@
-/**
- * InlineToolCallGroup — collapsible group wrapper tests.
- *
- * Covers:
- *   1. Default-open renders children
- *   2. defaultOpen=false hides children
- *   3. Click header toggles children
- *   4. Keyboard Enter + Space toggle
- *   5. aria-expanded tracks open state
- *   6. Header text contains integrationName + summary
- *   7. Chevron rotation class on open/close
- */
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
@@ -111,7 +99,6 @@ describe('InlineToolCallGroup', () => {
       </InlineToolCallGroup>,
     );
     const chevron = container.querySelector('.inline-tool-call-group__chevron');
-    // SVG elements return SVGAnimatedString from .className; use getAttribute instead
     expect(chevron?.getAttribute('class')).toMatch(/rotate-180/);
   });
 

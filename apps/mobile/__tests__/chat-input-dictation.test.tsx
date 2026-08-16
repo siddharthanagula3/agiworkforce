@@ -1,27 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M22 — dictation controls on the composer row.
- *
- * The reference (IMG_0686) shows FOUR controls while dictating: cancel, the
- * waveform, a stop square, and a separately enabled send arrow. IMG_0687 keeps
- * cancel fully enabled through "Transcribing" and dims only the two ending
- * controls. This suite covers the two behaviours that were missing:
- *
- *  - a one-tap send path (stop -> transcribe -> send) that never round-trips
- *    through the composer, and
- *  - a cancel that stays live while the recognizer is still resolving, and
- *    actually aborts it instead of letting a late transcript land.
- *
- * It lives apart from chat-input.test.tsx so the dictation row can be driven
- * with deferred VoiceService promises without touching that suite's mocks.
- */
 
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks — declared before imports
-// ---------------------------------------------------------------------------
 
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
@@ -97,9 +77,6 @@ jest.mock('../src/features/chat/components/CommandPalette', () => {
   return { CommandPalette: () => <View testID="command-palette" /> };
 });
 
-// The waveform is stubbed so the test can assert on the props that encode
-// "frozen": the real one is a reanimated tree whose motion is unobservable
-// from a render snapshot.
 let lastWaveformProps: { active?: boolean; audioLevel?: number } | undefined;
 
 jest.mock('../src/features/voice/components/Waveform', () => {
@@ -208,10 +185,6 @@ jest.mock('../src/ui/theme', () => {
 
 jest.mock('../lib/constants', () => ({ MAX_INPUT_LINES: 6 }));
 
-// ---------------------------------------------------------------------------
-// Imports (after mocks)
-// ---------------------------------------------------------------------------
-
 import { ChatInput } from '../src/features/chat/components/ChatInput';
 
 const VoiceService = require('../src/features/voice/services/voice') as {
@@ -235,7 +208,6 @@ function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInput>> 
   return render(<ChatInput {...defaultProps} {...overrides} />);
 }
 
-/** Drive the composer into its recording state the way VoiceInputButton does. */
 function startRecording() {
   act(() => {
     capturedRecordingStart!();
@@ -265,8 +237,6 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
       expect(getByTestId('chat.composer.recording')).toBeTruthy();
       expect(getByTestId('dictation-waveform')).toBeTruthy();
       expect(getByTestId('chat.composer.dictation-stop')).toBeTruthy();
-      // The fourth control: previously there was no send-while-dictating path
-      // at all, only stop-into-the-composer.
       expect(getByTestId('chat.composer.dictation-send')).toBeTruthy();
     });
 
@@ -274,8 +244,6 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
       const { queryByText } = renderInput();
       startRecording();
 
-      // formatClock() rendered "00:00" and ticked 10x a second; the reference
-      // row has no clock.
       expect(queryByText(/^\d\d:\d\d$/)).toBeNull();
     });
   });
@@ -297,8 +265,6 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
       await waitFor(() => {
         expect(onSend).toHaveBeenCalledWith('book the meeting room', undefined);
       });
-      // Accepted send clears the composer; the dictation never sat there
-      // waiting for a second tap.
       await waitFor(() => {
         expect(getByLabelText('Message input').props.value).toBe('');
       });
@@ -357,10 +323,6 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
   });
 
   describe('cancel during transcription', () => {
-    /**
-     * Hold the component in its transcribing state by deferring stopRecording,
-     * which is exactly where it sits while the recognizer resolves.
-     */
     function renderTranscribing(overrides: Partial<React.ComponentProps<typeof ChatInput>> = {}) {
       let releaseStop!: (uri: string) => void;
       VoiceService.stopRecording.mockImplementation(
@@ -379,9 +341,6 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
 
       expect(getByTestId('chat.composer.transcribing')).toBeTruthy();
 
-      // Only the ending controls dim — the exact inversion of the old row,
-      // where cancel went dead the moment capture stopped and a mis-heard long
-      // dictation could not be abandoned at all.
       expect(
         getByTestId('chat.composer.dictation-cancel').props.accessibilityState?.disabled,
       ).toBeFalsy();
@@ -392,8 +351,6 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
         true,
       );
 
-      // Enabled in behaviour, not just in styling: the press reaches the
-      // handler, while the dimmed stop is inert.
       const stopCallsBefore = VoiceService.stopRecording.mock.calls.length;
       act(() => {
         fireEvent.press(getByTestId('chat.composer.dictation-stop'));
@@ -429,18 +386,14 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
         fireEvent.press(getByTestId('chat.composer.dictation-cancel'));
       });
 
-      // The recognizer is torn down, not left running behind a dismissed UI.
       expect(VoiceService.cancelRecording).toHaveBeenCalledTimes(1);
 
-      // The in-flight run resolves AFTER the cancel: its transcript must not
-      // reach the composer, and must not be sent.
       await act(async () => {
         releaseStop();
       });
 
       expect(getByLabelText('Message input').props.value).toBe('');
       expect(onSend).not.toHaveBeenCalled();
-      // Back to the idle composer, not stuck on "Transcribing".
       expect(getByTestId('chat.composer.send')).toBeTruthy();
     });
   });

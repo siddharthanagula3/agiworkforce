@@ -19,7 +19,6 @@ import {
 
 type JsonLdObject = Record<string, unknown>;
 
-/** Organization: who publishes the site. */
 export function organizationSchema(): JsonLdObject {
   return {
     '@context': 'https://schema.org',
@@ -39,10 +38,6 @@ export function organizationSchema(): JsonLdObject {
   };
 }
 
-/**
- * WebSite: the site itself. Deliberately NO `potentialAction`/`SearchAction` —
- * there is no public site-search endpoint to point a search box at.
- */
 export function webSiteSchema(): JsonLdObject {
   return {
     '@context': 'https://schema.org',
@@ -53,10 +48,6 @@ export function webSiteSchema(): JsonLdObject {
   };
 }
 
-/**
- * SoftwareApplication: the product. No `offers`/`operatingSystem` assertion of
- * pricing or platform availability beyond the honest description.
- */
 export function softwareApplicationSchema(): JsonLdObject {
   return {
     '@context': 'https://schema.org',
@@ -72,7 +63,6 @@ export function softwareApplicationSchema(): JsonLdObject {
   };
 }
 
-/** FAQPage from a list of question/answer pairs. */
 export function faqPageSchema(items: readonly { q: string; a: string }[]): JsonLdObject {
   return {
     '@context': 'https://schema.org',
@@ -85,7 +75,6 @@ export function faqPageSchema(items: readonly { q: string; a: string }[]): JsonL
   };
 }
 
-/** BreadcrumbList from ordered crumbs. Paths are site-relative. */
 export function breadcrumbSchema(crumbs: readonly { name: string; path: string }[]): JsonLdObject {
   return {
     '@context': 'https://schema.org',
@@ -99,7 +88,6 @@ export function breadcrumbSchema(crumbs: readonly { name: string; path: string }
   };
 }
 
-/** CollectionPage — for index/hub pages such as the blog listing. */
 export function collectionPageSchema(input: {
   name: string;
   description: string;
@@ -115,14 +103,6 @@ export function collectionPageSchema(input: {
   };
 }
 
-/**
- * Article — for individual blog posts.
- *
- * NOTE: `/blog/[slug]` currently 404s (no posts are published yet), so this
- * builder is intentionally unused in production today. It is kept ready so the
- * first published post ships with correct structured data instead of leaving a
- * gap. Wire it into `app/blog/[slug]/page.tsx` when posts exist.
- */
 export function articleSchema(input: {
   title: string;
   description: string;

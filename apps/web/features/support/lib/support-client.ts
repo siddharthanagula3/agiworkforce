@@ -1,20 +1,3 @@
-/**
- * Transport for the support widget.
- *
- * Every function here is total: it returns a value for success, for a non-2xx,
- * for a malformed body and for a network failure. Nothing throws into render.
- * That is not defensive-programming garnish — the widget calls seven endpoints
- * owned by three other builders, several of which may not exist yet in a given
- * deployment, and the honest degradation for "the assistant is not reachable"
- * is an abstention plus a route to a human, not a stack trace or a spinner.
- *
- * CSRF: every POST goes through `addCsrfHeaders` (lib/client/csrf.ts), the same
- * path `waitlistServiceClient` uses.
- *
- * CSP: same-origin `fetch` only. No EventSource, no WebSocket, no third-party
- * SDK, no CDN. `connect-src 'self'` in proxy.ts already covers this; nothing
- * about the widget requires loosening the policy.
- */
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
@@ -53,10 +36,6 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-/* ------------------------------------------------------------------ *
- * Ask
- * ------------------------------------------------------------------ */
-
 export interface AskSupportInput {
   message: string;
   surface: SupportSurface;
@@ -64,10 +43,6 @@ export interface AskSupportInput {
   signal?: AbortSignal;
 }
 
-/**
- * History is client-held, so the server MUST treat it as untrusted input and
- * re-truncate. We cap it here too so a long session cannot balloon the request.
- */
 function buildHistory(turns: SupportTurn[]): { role: 'user' | 'assistant'; content: string }[] {
   const history: { role: 'user' | 'assistant'; content: string }[] = [];
   for (const turn of turns) {
@@ -114,16 +89,6 @@ export async function askSupport(input: AskSupportInput): Promise<SupportReplyVi
   return normalizeAnswer(await readJson(response));
 }
 
-/* ------------------------------------------------------------------ *
- * Presence
- * ------------------------------------------------------------------ */
-
-/**
- * Maps the handoff builder's `HandoffAvailability` onto the widget's view.
- * ANY doubt resolves to `UNAVAILABLE_PRESENCE`: a missing route, a malformed
- * body, a network error, or `live` not being literally `true`. The widget can
- * only ever be *more* pessimistic than the server, never less.
- */
 export async function fetchPresence(signal?: AbortSignal): Promise<SupportPresenceView> {
   let response: Response;
   try {
@@ -159,17 +124,6 @@ export async function fetchPresence(signal?: AbortSignal): Promise<SupportPresen
   };
 }
 
-/* ------------------------------------------------------------------ *
- * Account context
- * ------------------------------------------------------------------ */
-
-/**
- * Display allowlist for the "what I can see about your account" disclosure.
- *
- * It is an ALLOWLIST rather than "render every key" on purpose: the account
- * builder's model-safe projection can gain a key at any time, and an unknown
- * key must not auto-appear in the UI. Anything not named here is not shown.
- */
 const ACCOUNT_FACT_LABELS: Readonly<Record<string, string>> = {
   plan_tier: 'Plan',
   effective_plan_tier: 'Effective plan',
@@ -211,10 +165,6 @@ export function toDisplayFacts(facts: unknown): SupportAccountFact[] {
   return out;
 }
 
-/**
- * 401/403/404/network error all mean "treat this as a signed-out visitor" —
- * NOT an error state. The marketing widget must work with no account at all.
- */
 export async function fetchAccountContext(
   signal?: AbortSignal,
 ): Promise<SupportAccountContextView> {
@@ -238,10 +188,6 @@ export async function fetchAccountContext(
 
   return { signedIn: true, planLabel, facts };
 }
-
-/* ------------------------------------------------------------------ *
- * Actions
- * ------------------------------------------------------------------ */
 
 export async function fetchAvailableActions(
   signal?: AbortSignal,
@@ -281,12 +227,6 @@ function normalizeEffects(raw: unknown): string[] {
   return out;
 }
 
-/**
- * Mints a proposal. This is NOT the action — it is the server writing, in its
- * own words, exactly what would happen. It runs on a user click (never
- * automatically on the model's suggestion) so that an unwanted suggestion
- * costs nothing.
- */
 export async function proposeAction(
   actionId: string,
   surface: SupportSurface,
@@ -313,8 +253,6 @@ export async function proposeAction(
     const summary = proposalRaw ? str(proposalRaw['summary']) : null;
     const title = proposalRaw ? str(proposalRaw['title']) : null;
 
-    // Fail closed: without a server-authored summary and a single-use token
-    // there is nothing honest to show the user, so refuse to render a confirm.
     if (!proposalRaw || !token || !proposalId || !resolvedActionId || !summary || !title) {
       return { kind: 'error', message: 'I could not prepare that safely, so I stopped.' };
     }
@@ -364,12 +302,6 @@ export async function proposeAction(
   return { kind: 'error', message: 'I could not prepare that action.' };
 }
 
-/**
- * Executes a proposal. The body is EXACTLY the proposal id and its single-use
- * token — no action id, no parameters, no target. The server re-reads what to
- * do from its own row, which is what makes retargeting from the client
- * impossible rather than merely checked.
- */
 export async function confirmAction(
   proposalId: string,
   confirmationToken: string,
@@ -413,8 +345,6 @@ export async function confirmAction(
     const request = isRecord(result['request']) ? result['request'] : null;
     const path = request ? str(request['path']) : null;
     const method = request ? str(request['method']) : null;
-    // A server-supplied endpoint is still only followed on a further user
-    // click, and only when it is a same-origin API path.
     if (path && path.startsWith('/api/') && !path.startsWith('//')) {
       if (method === 'GET') {
         return { kind: 'ok', message, followUp: { mode: 'link', label: 'Open it', href: path } };
@@ -441,10 +371,6 @@ export async function confirmAction(
   return { kind: 'ok', message, followUp: null };
 }
 
-/**
- * Runs a POST follow-up descriptor (e.g. the billing portal session) on an
- * explicit user click and returns a URL to open, if the route gave one.
- */
 export async function runPostFollowUp(path: string): Promise<{ url: string } | { error: string }> {
   if (!path.startsWith('/api/') || path.startsWith('//')) {
     return { error: 'That link was not valid, so I did not follow it.' };
@@ -463,10 +389,6 @@ export async function runPostFollowUp(path: string): Promise<{ url: string } | {
   }
 }
 
-/* ------------------------------------------------------------------ *
- * Handoff
- * ------------------------------------------------------------------ */
-
 export interface HandoffAttemptedActionWire {
   action: string;
   outcome: 'succeeded' | 'failed' | 'refused' | 'confirmation_pending';
@@ -484,12 +406,6 @@ export interface CreateHandoffInput {
   pagePath?: string;
 }
 
-/**
- * Every source the agent showed the user, so the human picking this up starts
- * where the agent finished instead of re-reading the docs from scratch.
- * Abstention links count: "I pointed them at /refund-policy and stopped" is
- * exactly the context a human needs on a hard-abstain escalation.
- */
 export function buildHandoffCitations(turns: SupportTurn[]): { title: string; url: string }[] {
   const seen = new Set<string>();
   const out: { title: string; url: string }[] = [];
@@ -505,19 +421,6 @@ export function buildHandoffCitations(turns: SupportTurn[]): { title: string; ur
   return out;
 }
 
-/**
- * "What the agent already tried", per the handoff brief.
- *
- * THE CREDENTIAL RULE, enforced structurally rather than by remembering:
- * a `secret_once` outcome (a live API key) reaches the widget through
- * `SupportActionOutcome.secret`. This function reads `outcome.kind` and
- * `outcome.message` and NEVER touches `.secret`, so the key cannot travel into
- * the escalation payload, the stored transcript, or the email. On the one
- * outcome that can carry credential material the detail is replaced with a
- * fixed string rather than passed through, because the server's own success
- * message for a key regeneration is not worth the risk of it ever being
- * templated to include the key. A test asserts the key never appears.
- */
 export function buildAttemptedActions(
   flows: Record<string, { phase: string; actionId?: string } & Record<string, unknown>>,
 ): HandoffAttemptedActionWire[] {
@@ -566,7 +469,6 @@ export function buildAttemptedActions(
       continue;
     }
 
-    // offered / preparing / confirming / running — proposed but never completed.
     out.push({
       action,
       outcome: 'confirmation_pending',
@@ -578,15 +480,6 @@ export function buildAttemptedActions(
   return out;
 }
 
-/**
- * Builds the transcript that leaves the browser.
- *
- * It reads ONLY `role` + prose. Action results — in particular the
- * `secret_once` API key — are held in a separate slice of widget state and are
- * structurally unreachable from here. That is the widget's half of the
- * action builder's contract: live credential material must never reach the
- * transcript, the escalation email, an audit record or a model prompt.
- */
 export function buildHandoffTranscript(
   turns: SupportTurn[],
 ): { role: 'user' | 'assistant'; content: string; at: string }[] {
@@ -648,9 +541,6 @@ export function normalizeHandoffCreate(body: Record<string, unknown>): SupportHa
     const sessionId = str(body['sessionId']);
     const referenceId = str(body['referenceId']);
     const waitExpiresAt = str(body['waitExpiresAt']);
-    // A live/waiting state without a deadline is exactly the failure mode this
-    // feature exists to prevent. If the server omits one, do NOT render a
-    // waiting UI — treat it as a failed handoff and say so.
     if (!sessionId || !referenceId || !waitExpiresAt) {
       return handoffFailure('I could not start a chat safely, so I did not leave you waiting.');
     }
@@ -690,11 +580,6 @@ export function normalizeHandoffCreate(body: Record<string, unknown>): SupportHa
   return handoffFailure('I could not pass this on.');
 }
 
-/**
- * Polls one waiting/connected session. The server performs the timeout
- * transition on read, so a poll that crosses the deadline comes back as
- * `emailed` — the client never has to invent that outcome.
- */
 export async function fetchHandoffStatus(sessionId: string): Promise<SupportHandoffView | null> {
   let response: Response;
   try {

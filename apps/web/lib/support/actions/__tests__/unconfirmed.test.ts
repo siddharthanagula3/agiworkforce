@@ -1,11 +1,3 @@
-/**
- * An unconfirmed action does not execute.
- *
- * The proposal step is where an LLM has influence, so the proposal step must be
- * inert. These tests assert that on the DATABASE: after a proposal, the only
- * statements that ran are reads plus the proposal INSERT — no mutation of the
- * thing the action would have changed.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -63,7 +55,6 @@ describe('support actions — nothing runs without a confirmation', () => {
     expect(proposal.actionId).toBe('revoke_connector');
     expect(confirmationToken).toEqual(expect.any(String));
 
-    // The user still has the connector, and no revoke ran.
     expect(mocks.db!.callsMatching(/update user_connectors set is_active = false/iu)).toHaveLength(
       0,
     );
@@ -95,7 +86,6 @@ describe('support actions — nothing runs without a confirmation', () => {
       0,
     );
     expect(mocks.db!.connectors.map((c) => c.connector_id)).toEqual(['slack']);
-    // The real proposal is still usable — a wrong guess must not burn it.
     expect(mocks.db!.proposals[0]!.consumed_at).toBeNull();
   });
 
@@ -119,7 +109,6 @@ describe('support actions — nothing runs without a confirmation', () => {
     expect(
       mocks.db!.callsMatching(/update user_connectors set is_active = false/iu).length,
     ).toBeGreaterThan(0);
-    // The settings route's full revoke semantics, not a weaker one.
     expect(
       mocks.db!.callsMatching(/delete from public\.connector_tool_permissions/iu).length,
     ).toBeGreaterThan(0);

@@ -8,7 +8,6 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-// Override the global sonner mock to provide toast sub-methods used by productivityStore
 vi.mock('sonner', () => {
   const toastFn = Object.assign(vi.fn(), {
     success: vi.fn(),
@@ -98,7 +97,7 @@ describe('useProductivityStore', () => {
             },
           ];
         case 'productivity_trello_list_boards':
-          return [{ id: 'board-1', name: 'Product Roadmap', url: 'https://trello.com/b/board-1' }]; //trello.com/b/board-1' }];
+          return [{ id: 'board-1', name: 'Product Roadmap', url: 'https://trello.com/b/board-1' }];
         default:
           throw new Error(`Unexpected invoke command: ${command}`);
       }

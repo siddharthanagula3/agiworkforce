@@ -10,26 +10,6 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
 
-/**
- * POST /api/waitlist/cloud-managed
- *
- * Account-bound early-access signup for higher-capacity / Team & Enterprise
- * plans. Managed cloud itself is public-alpha-open, not gated by this list.
- * Persists to the `cloud_managed_waitlist` table (see apps/web/db/neon/).
- * Fails closed if persistence is unavailable; waitlist signups must never be
- * acknowledged without durable storage.
- *
- * Body: { email: string, source: 'byok' | 'sync' | 'billing' | 'other' }
- *
- * PII handling: this table stores normalized email addresses because launch
- * operations must be able to notify waitlisted visitors. The table is
- * insert-only for public callers and read-restricted to service/admin access
- * by the database policy.
- */
-
-// 'mobile' is a separate early-access source that still rolls up into the
-// countable cloud_managed_waitlist total. Keep the route account-bound across
-// all sources; mobile anonymous early-access capture belongs in a separate endpoint.
 type WaitlistSource = 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
 
 const VALID_SOURCES = new Set<WaitlistSource>(['byok', 'sync', 'billing', 'mobile', 'other']);
@@ -52,8 +32,6 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Use the dedicated 'waitlist' rate limit key: 5/hour per IP, fail-closed.
-  // The account-bound PII intake warrants a tighter limit than 'default'.
   const rateLimitResponse = await withRateLimit(request, 'waitlist');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -103,7 +81,6 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       console.warn('[waitlist/cloud-managed] Table not yet migrated; refusing signup.', { source });
       throw createError.internal('Cloud waitlist storage is not migrated');
     }
-    // Re-throw AppErrors (rate limit, CSRF, etc.) as-is
     if (err && typeof err === 'object' && 'status' in err) throw err;
     console.warn('[waitlist/cloud-managed] DB unreachable; refusing signup.', { source });
     throw createError.internal('Cloud waitlist storage is unavailable');

@@ -1,14 +1,3 @@
-/**
- * Regression: the FileTree root-load effect must settle.
- *
- * `loadDirectory` used to depend on `expandedPaths` while also calling
- * `setExpandedPaths`, so every load re-minted the callback, re-fired the
- * root-load effect, and looped until React threw max-update-depth into the
- * global error boundary — the intermittent "Code panel crashes on open" bug
- * the WDIO nav sweep caught in 3 of 5 native runs. This pins the fix: one
- * bounded root load, no re-fire storm, and expanding a folder loads only
- * that folder.
- */
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -66,7 +55,6 @@ describe('FileTree root load stability', () => {
     render(<FileTree rootPath="/repo" onFileSelect={vi.fn()} />);
 
     await screen.findByText('README.md');
-    // Give any runaway effect re-fires a real window to happen before asserting.
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(dirListCalls()).toBe(1);
@@ -82,7 +70,6 @@ describe('FileTree root load stability', () => {
     await screen.findByText('main.ts');
     await new Promise((resolve) => setTimeout(resolve, 150));
 
-    // One reload pass for the expansion (root + expanded child), not a loop.
     expect(dirListCalls() - before).toBeLessThanOrEqual(2);
   });
 });

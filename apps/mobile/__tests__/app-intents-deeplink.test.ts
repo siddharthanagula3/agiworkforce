@@ -1,10 +1,3 @@
-// Tests for App Intents deep-link URL shape.
-// We validate the agiworkforce://intent/<verb>?<params> format using the
-// standard URL API (available in Node/Jest). expo-linking.parse() requires
-// a native module constant and cannot be called in Jest's JSDOM environment;
-// the _layout.tsx handler itself calls Linking.parse() inside a useEffect —
-// that path is tested by integration/E2E. These tests verify the URL
-// construction contract that Swift's AGIIntentDispatch must honour.
 
 import fs from 'fs';
 import path from 'path';
@@ -111,10 +104,6 @@ describe('App Intents deep-link URL construction', () => {
   });
 
   it('Share URL (Android ACTION_SEND/ACTION_PROCESS_TEXT rewrite) carries text param', () => {
-    // MainActivity.kt rewrites external shares to this exact shape via
-    // Uri.Builder — scheme agiworkforce, authority intent, path /share,
-    // query params text (the payload) and ts (uniqueness nonce so repeat
-    // shares of identical text still fire the JS url-change effect).
     const u = makeIntentUrl('share', { text: 'Shared from another app', ts: '1719999999999' });
     expect(u.pathname).toBe('/share');
     expect(u.searchParams.get('text')).toBe('Shared from another app');
@@ -148,7 +137,6 @@ describe('App Intents deep-link URL construction', () => {
 
   it('special characters in prompt are percent-encoded', () => {
     const u = makeIntentUrl('ask', { prompt: 'What is 2+2? <>&' });
-    // URLSearchParams encodes & → %26 etc.; decoded value must roundtrip correctly
     expect(u.searchParams.get('prompt')).toBe('What is 2+2? <>&');
   });
 

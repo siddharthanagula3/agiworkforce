@@ -2,15 +2,6 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 
-/**
- * Reveal · IntersectionObserver-driven scroll entrance for marketing
- * sections. Adds `.is-revealed` when the element enters the viewport;
- * globals.css owns the transition (opacity + translateY at --agi-dur-base).
- *
- * Honors prefers-reduced-motion by revealing immediately, and renders
- * content visible-by-default when JavaScript never hydrates (the class
- * starts unset only after mount), so SEO and no-JS visitors lose nothing.
- */
 export function Reveal({
   children,
   delay = 0,
@@ -18,7 +9,6 @@ export function Reveal({
   className,
 }: {
   children: ReactNode;
-  /** Stagger delay in ms, applied via transition-delay. */
   delay?: number;
   as?: 'div' | 'section' | 'li' | 'article';
   className?: string;

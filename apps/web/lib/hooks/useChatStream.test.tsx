@@ -97,10 +97,6 @@ function mockLlmErrorResponse(body: unknown, status = 503) {
   );
 }
 
-/**
- * Build a streaming SSE Response from an array of parsed SSE data objects.
- * Each item is emitted as `data: <json>\n\n`, terminated with `data: [DONE]\n\n`.
- */
 function mockSseStream(events: unknown[]) {
   const lines = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
   const body = lines + 'data: [DONE]\n\n';
@@ -136,8 +132,6 @@ describe('useChatStream', () => {
 
   describe('auth failure at send time', () => {
     it('surfaces an error and adds no message when the token is unavailable', async () => {
-      // Expired/revoked session: getToken() returns null. Previously this threw
-      // uncaught after the composer cleared the input, silently losing the message.
       authMocks.getToken.mockResolvedValueOnce(null);
       const fetchSpy = vi.fn();
       vi.stubGlobal('fetch', fetchSpy);
@@ -151,7 +145,6 @@ describe('useChatStream', () => {
 
       expect(useChatStore.getState().error).toBeTruthy();
       expect(fetchSpy).not.toHaveBeenCalled();
-      // No half-added user/assistant bubble in the transcript.
       expect(
         useChatStore.getState().messages.some((m) => m.content === 'this must not vanish silently'),
       ).toBe(false);
@@ -344,7 +337,6 @@ describe('useChatStream', () => {
             },
           ],
         },
-        // Duplicate sequence must not replace the accepted event.
         {
           choices: [
             {
@@ -359,7 +351,6 @@ describe('useChatStream', () => {
             },
           ],
         },
-        // Invalid payload must be ignored without poisoning the stream.
         { choices: [{ delta: { x_agent_event: { schemaVersion: 999 } } }] },
         {
           choices: [
@@ -820,9 +811,6 @@ describe('useChatStream', () => {
 
   describe('x_tool_result / mcp_tool_use wiring', () => {
     it('populates tool result and survives a trailing finishRunningTools flush', async () => {
-      // Emit: mcp_tool_use running → x_tool_result → finish_reason (triggers finishRunningTools)
-      // The discriminating assertion: result must survive the trailing publishToolTimeline
-      // called inside finishRunningTools at stream end.
       mockSseStream([
         {
           choices: [
@@ -847,8 +835,6 @@ describe('useChatStream', () => {
             },
           ],
         },
-        // Assistant text follows the tool result — this triggers another publishToolTimeline
-        // indirectly via flushContentBuffer → no, but finish_reason calls finishRunningTools
         { choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] },
       ]);
 
@@ -995,27 +981,18 @@ describe('useChatStream', () => {
     });
   });
 
-  // Regression: the persist-after-long-request path. A web-search / deep-research
-  // / long-generation stream outlives the Clerk JWT captured when the request
-  // started (~60s TTL), so persisting the assistant turn with that stale Bearer
-  // failed (401 on the save route + 403 CSRF_VALIDATION_FAILED via the CSRF
-  // fallback) and the answer vanished on reload. The fix: saveMessageToDb takes a
-  // token PROVIDER and fetches a fresh token at save time (and on each retry).
   describe('saveMessageToDb durability (persist after a long stream)', () => {
     function headerRecord(init: RequestInit | undefined): Record<string, string> {
       return (init?.headers ?? {}) as Record<string, string>;
     }
 
     it('fetches a FRESH auth token at save time instead of reusing a stale one', async () => {
-      // First provider call (send-time) yields the token that would be expired by
-      // save time; every later call yields the refreshed token.
       const getToken = vi
         .fn<() => Promise<string>>()
         .mockResolvedValueOnce('token-stale')
         .mockResolvedValue('token-fresh');
       const getAuthToken = async () => getToken();
 
-      // Simulate the request start consuming the send-time token.
       await getAuthToken();
 
       vi.mocked(fetch).mockResolvedValueOnce(
@@ -1032,10 +1009,7 @@ describe('useChatStream', () => {
       expect(fetch).toHaveBeenCalledTimes(1);
       const [, init] = vi.mocked(fetch).mock.calls[0]!;
       const headers = headerRecord(init);
-      // The save must carry the token fetched AT SAVE TIME, not the send-time one.
       expect(headers['Authorization']).toBe('Bearer token-fresh');
-      // ...and a CSRF header (Bearer-authed requests bypass server CSRF, but the
-      // header is still attached uniformly).
       expect(headers['x-csrf-token']).toBe('csrf-token');
     });
 
@@ -1043,7 +1017,6 @@ describe('useChatStream', () => {
       const getToken = vi.fn<() => Promise<string>>().mockResolvedValue('token-fresh');
       const getAuthToken = async () => getToken();
 
-      // First attempt: transient 500 (retryable). Second attempt: success.
       vi.mocked(fetch)
         .mockResolvedValueOnce(new Response('err', { status: 500 }))
         .mockResolvedValueOnce(
@@ -1059,7 +1032,6 @@ describe('useChatStream', () => {
 
       expect(saved.id).toBe('saved-2');
       expect(fetch).toHaveBeenCalledTimes(2);
-      // One token fetch per attempt — a stale token cannot persist across retries.
       expect(getToken).toHaveBeenCalledTimes(2);
     });
 
@@ -1079,14 +1051,8 @@ describe('useChatStream', () => {
     });
   });
 
-  // Reasoning / extended-thinking. Providers serialize thinking as literal
-  // `<thinking>…</thinking>` text inside delta.content (see stream-transform.ts);
-  // the client re-parses those tags into metadata.thinkingContent / segments.
   describe('reasoning (thinking) accumulation + persistence', () => {
     it('keeps thinkingContent after the block closes (no metadata wipe) and leaves single-block turns un-segmented', async () => {
-      // Regression: closing `</thinking>` used to updateMessage() with a bare
-      // metadata object, which REPLACES the bag and erased the accumulated
-      // reasoning — the block vanished on completion. It must survive, collapsed.
       mockSseStream([
         { choices: [{ delta: { content: '<thinking>reasoning here</thinking>' } }] },
         { choices: [{ delta: { content: 'final answer' }, finish_reason: 'stop' }] },
@@ -1101,13 +1067,9 @@ describe('useChatStream', () => {
 
       const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
       expect(assistantMsg?.metadata?.thinkingContent).toBe('reasoning here');
-      // Never left in a live-streaming state once done — reload would otherwise
-      // show a stuck timer.
       expect(assistantMsg?.metadata?.isThinkingStreaming).toBe(false);
       expect(assistantMsg?.metadata?.thinkingCompletedAt).toBeTruthy();
-      // Single block → no segments (single-block render path stays untouched).
       expect(assistantMsg?.metadata?.thinkingSegments).toBeUndefined();
-      // The visible answer excludes the reasoning text.
       expect(assistantMsg?.content).toBe('final answer');
     });
 
@@ -1131,14 +1093,11 @@ describe('useChatStream', () => {
       expect(segments).toHaveLength(2);
       expect(segments[0]?.content).toBe('first thought');
       expect(segments[1]?.content).toBe('second thought');
-      // Both segments finalized (not stuck streaming) once the turn completes.
       expect(segments.every((s) => s.isStreaming === false)).toBe(true);
       expect(segments.every((s) => typeof s.completedAt === 'string')).toBe(true);
     });
 
     it('persists reasoning to the DB so it survives reload', async () => {
-      // Non-temporary conversation → the assistant turn is saved. Assert the save
-      // payload carries the reasoning (previously dropped: only the answer saved).
       const CONV = { ...TEMP_CONVERSATION, id: 'conv-persist', isTemporary: false };
       useChatStore.setState({ conversations: [CONV], activeConversationId: CONV.id });
 
@@ -1179,7 +1138,6 @@ describe('useChatStream', () => {
           conversationId: CONV.id,
         });
       });
-      // The assistant save is fire-and-forget inside the [DONE] handler.
       await vi.waitFor(() => expect(saveBodies.some((b) => b['role'] === 'assistant')).toBe(true));
 
       const assistantSave = saveBodies.find((b) => b['role'] === 'assistant');
@@ -1190,16 +1148,9 @@ describe('useChatStream', () => {
     });
   });
 
-  // Continue Generation (task #88): finish_reason plumbing + append-in-place
-  // continuation of a truncated / user-stopped assistant turn.
   describe('continue generation', () => {
     const PERSISTED_CONV = { ...TEMP_CONVERSATION, id: 'conv-continue', isTemporary: false };
 
-    /**
-     * Route-aware fetch mock: /api/llm/ requests stream `streamBody`, message
-     * saves are captured into `saveBodies`, and LLM request payloads into
-     * `llmBodies`.
-     */
     function mockRoutedFetch(streamBody: string) {
       const saveBodies: Array<Record<string, unknown>> = [];
       const llmBodies: Array<Record<string, unknown>> = [];
@@ -1228,8 +1179,6 @@ describe('useChatStream', () => {
           } catch {
             /* ignore */
           }
-          // Echo the client-supplied id like the real route (coalesce($1, ...))
-          // so the store message id is not renamed mid-test.
           return new Response(JSON.stringify({ message: { id: body['id'] ?? 'saved-row' } }), {
             status: 200,
           });
@@ -1263,9 +1212,6 @@ describe('useChatStream', () => {
     });
 
     it('captures an additive x_stream_error delta into metadata.streamError and still persists the partial content', async () => {
-      // Mid-stream provider failure (packages/ai/provider-protocol's openai-wire-compat.ts
-      // sseChunks() 'error' case): the server still sends a clean [DONE], so this
-      // is the ONLY signal distinguishing it from a normal completion.
       mockSseStream([
         { choices: [{ delta: { content: 'partial answer before' } }] },
         {
@@ -1297,7 +1243,6 @@ describe('useChatStream', () => {
         code: '529',
         retryable: true,
       });
-      // The partial content that DID stream is never discarded or replaced.
       expect(assistantMsg?.content).toBe('partial answer before');
     });
 
@@ -1342,8 +1287,6 @@ describe('useChatStream', () => {
       });
 
       const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
-      // 'stop' is recorded honestly — the Continue affordance must never
-      // appear on a normally-completed turn.
       expect(assistantMsg?.metadata?.finishReason).toBe('stop');
     });
 
@@ -1358,8 +1301,6 @@ describe('useChatStream', () => {
         const url = String(input);
         if (url.includes('/api/llm/')) {
           const encoder = new TextEncoder();
-          // Emit partial content, then reject the NEXT read like an aborted
-          // fetch does (pull-based so the chunk is consumed before the error).
           let pulls = 0;
           const stream = new ReadableStream({
             pull(controller) {
@@ -1447,7 +1388,6 @@ describe('useChatStream', () => {
       });
       expect(assistantMsg?.isStreaming).toBe(false);
 
-      // The partial (with the 'stopped' marker) is persisted so it survives reload.
       await vi.waitFor(() =>
         expect(
           saveBodies.some((b) => b['role'] === 'assistant' && b['content'] === 'partial answer'),
@@ -1557,16 +1497,11 @@ describe('useChatStream', () => {
 
       const state = useChatStore.getState();
       const assistantMessages = state.messages.filter((m) => m.role === 'assistant');
-      // Append-not-replace: still exactly ONE assistant bubble, same id.
       expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0]?.id).toBe('0190a000-0000-7000-8000-0000000000aa');
       expect(assistantMessages[0]?.content).toBe('Once upon a time, the story continued.');
-      // The continuable marker clears on normal completion (re-offered only if
-      // it truncates again).
       expect(assistantMessages[0]?.metadata?.finishReason).toBe('stop');
 
-      // The request thread ends with the partial assistant turn + an ephemeral
-      // continue instruction, and reuses the SAME model that produced the partial.
       const llmRequest = llmBodies[0]!;
       expect(llmRequest['model']).toBe('test/model-1');
       const requestMessages = llmRequest['messages'] as Array<Record<string, unknown>>;
@@ -1576,10 +1511,8 @@ describe('useChatStream', () => {
       expect(secondToLast['content']).toBe('Once upon a time');
       expect(last['role']).toBe('user');
       expect(String(last['content'])).toMatch(/continue/i);
-      // The ephemeral instruction is never stored in the transcript.
       expect(state.messages.some((m) => m.content === last['content'])).toBe(false);
 
-      // The MERGED full text is persisted.
       await vi.waitFor(() =>
         expect(
           saveBodies.some(
@@ -1707,9 +1640,7 @@ describe('useChatStream', () => {
       });
 
       const assistantMsg = useChatStore.getState().messages.find((m) => m.id === 'assistant-1');
-      // The partial is preserved (not replaced by a bare error message)...
       expect(assistantMsg?.content).toContain('partial before failure');
-      // ...with an honest error note appended, and the turn flagged as errored.
       expect(assistantMsg?.content).toContain('Error: Provider down');
       expect(assistantMsg?.error).toBe(true);
       expect(useChatStore.getState().error).toBe('Provider down');

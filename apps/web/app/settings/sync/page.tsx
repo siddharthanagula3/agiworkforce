@@ -1,13 +1,3 @@
-/**
- * /settings/sync · Cross-device sync settings page.
- *
- * Managed cloud is public alpha and open by default (founder decision,
- * 2026-06-27, AGENTS.md) — there is no waitlist/request-access step for sync
- * itself. Settings sync (/api/settings/sync, a cloud-safe namespace allowlist)
- * and chat-history sync (/api/chat/sync) are live today for signed-in AGI Cloud
- * accounts on Web, Mobile, and Desktop Cloud. Desktop Local/BYOK modes keep
- * history device-local by design and never inherit Cloud sync implicitly.
- */
 
 export default function SyncSettingsPage() {
   return (

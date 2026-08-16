@@ -1,16 +1,5 @@
 'use client';
 
-/**
- * useAttachments - Hook for managing file attachments in the chat composer
- *
- * Features:
- * - State: attachments (File[]) and previews ({file, url, type}[])
- * - addFiles / removeFile / clearAll actions
- * - Preview URLs via URL.createObjectURL
- * - Validation: max 10 files, max 12 MiB per file, cross-provider-safe MIME types
- * - Auto-cleanup of object URLs on unmount
- */
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   CHAT_ATTACHMENT_MIME_TYPES,
@@ -19,8 +8,6 @@ import {
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
 } from '@/lib/chat-attachment-policy';
-
-// ─── Constants ───────────────────────────────────────────────────────────────
 
 const MAX_FILE_COUNT = MAX_CHAT_ATTACHMENT_COUNT;
 const MAX_FILE_SIZE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
@@ -45,24 +32,9 @@ const MAX_FILE_SIZE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
  */
 export const ALLOWED_MIME_TYPES = new Set<string>(CHAT_ATTACHMENT_MIME_TYPES);
 
-/**
- * Extension fallback used when the browser can't determine a MIME type
- * (common for code files on some platforms). Kept in sync with the regex
- * in `isAllowedType` below so `getAcceptAttribute()` reflects reality.
- */
-/**
- * Builds an `<input type="file" accept="...">` value from the canonical
- * allowlist above. Consuming components should call this instead of
- * hardcoding `accept="image/*"`, which silently disagrees with what
- * `addFiles`/`isAllowedType` actually accept and produces dead
- * document-upload code paths (menu says "Add photos & files" but the file
- * picker only offers images).
- */
 export function getAcceptAttribute(): string {
   return chatAttachmentAcceptAttribute();
 }
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type AttachmentPreviewType = 'image' | 'document';
 
@@ -73,36 +45,19 @@ export interface AttachmentPreview {
 }
 
 export interface UseAttachmentsOptions {
-  /** Maximum number of files allowed (default: `MAX_CHAT_ATTACHMENT_COUNT`, 10). */
   maxFiles?: number;
-  /**
-   * Maximum size of one file in bytes. Defaults to `MAX_CHAT_ATTACHMENT_BYTES`
-   * (12 MiB) — the same value `/api/uploads/presign` enforces, so an accepted
-   * file is one the server will actually take. `MAX_ATTACHMENT_BYTES` (25 MiB)
-   * in `@agiworkforce/types` is a different, larger bound and is not what this
-   * hook uses.
-   */
   maxFileSize?: number;
-  /** Callback fired when a validation error occurs */
   onError?: (message: string) => void;
 }
 
 export interface UseAttachmentsReturn {
-  /** Raw File objects */
   attachments: File[];
-  /** Preview metadata with object URLs for rendering */
   previews: AttachmentPreview[];
-  /** Whether files can still be added */
   canAddMore: boolean;
-  /** Add one or more files (validates before adding) */
   addFiles: (files: File[]) => void;
-  /** Remove a file by its index */
   removeFile: (index: number) => void;
-  /** Clear all attachments and revoke all preview URLs */
   clearAll: () => void;
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function classifyFile(file: File): AttachmentPreviewType {
   return file.type.startsWith('image/') ? 'image' : 'document';
@@ -124,8 +79,6 @@ export function isAllowedType(file: File): boolean {
   return isSupportedChatAttachment(file.name, file.type);
 }
 
-// ─── Hook ────────────────────────────────────────────────────────────────────
-
 export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachmentsReturn {
   const { maxFiles = MAX_FILE_COUNT, maxFileSize = MAX_FILE_SIZE_BYTES, onError } = options;
 
@@ -133,13 +86,11 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
   const previewUrlsRef = useRef<string[]>([]);
 
-  // Revoke a single URL and remove it from the tracking ref
   const revokeUrl = useCallback((url: string) => {
     URL.revokeObjectURL(url);
     previewUrlsRef.current = previewUrlsRef.current.filter((u) => u !== url);
   }, []);
 
-  // Revoke ALL tracked URLs
   const revokeAllUrls = useCallback(() => {
     for (const url of previewUrlsRef.current) {
       URL.revokeObjectURL(url);
@@ -147,7 +98,6 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     previewUrlsRef.current = [];
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       revokeAllUrls();
@@ -155,13 +105,10 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── addFiles ─────────────────────────────────────────────────────────────
-
   const addFiles = useCallback(
     (incoming: File[]) => {
       if (incoming.length === 0) return;
 
-      // Validate count
       const availableSlots = maxFiles - attachments.length;
       if (availableSlots <= 0) {
         onError?.(`Maximum ${maxFiles} files allowed.`);
@@ -177,7 +124,6 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           break;
         }
 
-        // Validate size
         if (file.size > maxFileSize) {
           onError?.(
             `"${file.name}" is too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(maxFileSize)}.`,
@@ -185,7 +131,6 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           continue;
         }
 
-        // Validate type
         if (!isAllowedType(file)) {
           onError?.(`"${file.name}" has an unsupported file type (${file.type || 'unknown'}).`);
           continue;
@@ -206,8 +151,6 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     [attachments.length, maxFiles, maxFileSize, onError],
   );
 
-  // ── removeFile ───────────────────────────────────────────────────────────
-
   const removeFile = useCallback(
     (index: number) => {
       if (index < 0 || index >= previews.length) return;
@@ -222,8 +165,6 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     },
     [previews, revokeUrl],
   );
-
-  // ── clearAll ─────────────────────────────────────────────────────────────
 
   const clearAll = useCallback(() => {
     revokeAllUrls();

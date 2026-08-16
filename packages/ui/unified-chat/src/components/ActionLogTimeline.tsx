@@ -1,10 +1,3 @@
-// packages/ui/unified-chat/src/components/ActionLogTimeline.tsx
-// Ported from apps/desktop/src/components/UnifiedAgenticChat/ActionLogTimeline.tsx
-//
-// Changes vs source:
-//  - ActionLogEntry imported from agentLoopStore (not desktop toolStore)
-//  - ActionLogTimeline now accepts entries as props (no desktop useMessageActionLog hook)
-//  - ActionLogTimelineConnected variant reads from agentLoopStore for store-connected usage
 
 import { useMemo, useState, type ElementType } from 'react';
 import {
@@ -25,7 +18,6 @@ import type { ActionLogEntry, ActionLogEntryType, ActionLogStatus } from '../sto
 import { useAgentLoopStore, selectActionLog } from '../stores/agentLoopStore';
 import { cn } from '../lib/utils';
 
-// Re-export for consumers
 export type { ActionLogEntry, ActionLogEntryType, ActionLogStatus };
 
 const TYPE_ICON_MAP: Record<ActionLogEntry['type'], ElementType> = {
@@ -138,10 +130,6 @@ function formatStatusCount(count: number, label: string): string | null {
   return `${count} ${label}`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Props-driven variant (for testing and explicit control)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export interface ActionLogTimelineContentProps {
   entries: ActionLogEntry[];
   className?: string;
@@ -209,10 +197,6 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Store-connected variant — reads from agentLoopStore by messageId
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface ActionLogTimelineProps {
   messageId: string;

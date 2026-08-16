@@ -4,7 +4,6 @@ import { immer } from 'zustand/middleware/immer';
 import type { Conversation, ChatMessage } from '../lib/types';
 import { getTemporalGroup } from '../lib/utils';
 
-/** SSR-safe localStorage fallback (returns no-op storage when window is undefined). */
 const noopStorage: Storage = {
   getItem: () => null,
   setItem: () => {},
@@ -61,32 +60,22 @@ interface ChatState {
   conversations: Conversation[];
   messagesByConversation: Record<string, ChatMessage[]>;
   activeConversationId: string | null;
-  /** In-flight turns keyed by origin conversation. Ephemeral; never persisted. */
   streamingConversationIds: Record<string, true>;
-  /** Backward-compatible aggregate: true when any conversation is streaming. */
   isStreaming: boolean;
   streamingContent: string;
   streamingReasoning: string;
   searchQuery: string;
   searchResults: Conversation[];
-  /** Canonical live composer value for the active conversation. */
   draftContent: string;
-  /** In-memory unsent drafts, isolated by conversation (plus the new-chat composer). */
   draftsByConversation: Record<string, string>;
   activeMode: ActiveMode;
   webSearchEnabled: boolean;
 
-  // Actions
   setActiveConversation: (id: string | null) => void;
   addConversation: (conv: Conversation) => void;
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   removeConversation: (id: string) => void;
   setConversations: (convs: Conversation[]) => void;
-  /**
-   * Replace host-owned conversation state and discard cached data that no
-   * longer belongs to the active host boundary. Desktop calls this whenever
-   * Local/Cloud mode or the authenticated Cloud account changes.
-   */
   replaceHostSnapshot: (convs: Conversation[], activeConversationId: string | null) => void;
   addMessage: (conversationId: string, message: ChatMessage) => void;
   updateMessage: (conversationId: string, messageId: string, updates: Partial<ChatMessage>) => void;
@@ -125,9 +114,6 @@ export const useChatStore = create<ChatState>()(
       draftContent: '',
       draftsByConversation: {},
       activeMode: null,
-      // Automatic intent only. The send pipeline still clamps this against
-      // the active runtime/model/deployment so "on" never invents capability
-      // or crosses a Local/BYOK trust boundary.
       webSearchEnabled: true,
 
       setActiveConversation: (id) =>
@@ -198,12 +184,6 @@ export const useChatStore = create<ChatState>()(
 
           state.draftContent =
             state.draftsByConversation[composerDraftKey(state.activeConversationId)] ?? '';
-          // Host snapshots also fire for ordinary title/sidebar metadata
-          // updates. Those must not cancel the shared live-turn projection:
-          // the runtime pins streaming to its origin conversation even when
-          // the user navigates elsewhere. Reset ephemeral execution/search
-          // state only when the host actually replaced the account/trust
-          // boundary or removed the active conversation.
           if (boundaryReplaced || activeConversationRemoved) {
             state.searchQuery = '';
             state.searchResults = [];
@@ -363,11 +343,6 @@ export const useChatStore = create<ChatState>()(
     })),
     {
       name: 'agi-web-chat',
-      // v2: rename `messages` -> `messagesByConversation` and
-      // `currentConversationId` -> `activeConversationId` to match desktop.
-      // v3: Web search becomes automatic rather than a user preference.
-      // The migrate() function below transforms old state on load; new
-      // persists intentionally omit the automatic intent flag.
       version: 3,
       storage: createJSONStorage(() =>
         typeof window === 'undefined' ? noopStorage : window.localStorage,
@@ -380,8 +355,6 @@ export const useChatStore = create<ChatState>()(
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Record<string, unknown>;
         if (version < 2) {
-          // v1 used `messages` and `currentConversationId`; v2 renames them to
-          // match the desktop chatStore so both share the same localStorage key.
           if ('messages' in state && !('messagesByConversation' in state)) {
             state['messagesByConversation'] = state['messages'];
             delete state['messages'];
@@ -392,9 +365,6 @@ export const useChatStore = create<ChatState>()(
           }
         }
         if (version < 3) {
-          // Older builds could persist the now-removed menu toggle as false.
-          // Automatic search is the product default; actual execution remains
-          // capability- and trust-clamped at send time in useChat.
           state['webSearchEnabled'] = true;
         }
         return state as unknown as ChatState;

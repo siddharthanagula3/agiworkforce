@@ -59,7 +59,6 @@ import {
   type DeleteQuery,
 } from '../api/database';
 
-// Re-export types for consumers
 export type {
   ConnectionConfig,
   PoolConfig,
@@ -138,17 +137,14 @@ interface DatabaseState {
   redisHSet: (key: string, field: string, value: string) => Promise<boolean>;
   redisHGetAll: (key: string) => Promise<Record<string, string>>;
 
-  // SQL validation & pool management
   validateQuery: (sql: string) => Promise<QueryValidation>;
   getPoolStats: (connectionId: string) => Promise<PoolStats>;
 
-  // Secure password storage
   storePassword: (connectionId: string, password: string) => Promise<void>;
   hasStoredPassword: (connectionId: string) => Promise<boolean>;
   getStoredPassword: (connectionId: string) => Promise<string | null>;
   deleteStoredPassword: (connectionId: string) => Promise<void>;
 
-  // MySQL-specific operations
   mysqlTestConnection: (connectionId: string) => Promise<boolean>;
   mysqlListTables: (connectionId: string) => Promise<string[]>;
   mysqlDescribeTable: (connectionId: string, tableName: string) => Promise<MySqlColumnInfo[]>;
@@ -170,7 +166,6 @@ interface DatabaseState {
   clearResults: () => void;
   clearError: () => void;
 
-  // AUDIT-006-022: Cleanup function for logout
   resetOnLogout: () => void;
 }
 
@@ -625,8 +620,6 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     }
   },
 
-  // --- SQL validation & pool management ---
-
   validateQuery: async (sql: string) => {
     try {
       return await dbValidateQuery(sql);
@@ -642,8 +635,6 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       throw error;
     }
   },
-
-  // --- Secure password storage ---
 
   storePassword: async (connectionId: string, password: string) => {
     try {
@@ -676,8 +667,6 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       throw error;
     }
   },
-
-  // --- MySQL-specific operations ---
 
   mysqlTestConnection: async (connectionId: string) => {
     try {
@@ -750,7 +739,6 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     set({ error: null });
   },
 
-  // AUDIT-006-022 fix: Add resetOnLogout function for cleanup
   resetOnLogout: () => {
     set({
       connections: [],

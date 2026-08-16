@@ -67,7 +67,6 @@ interface TerminalState {
   smartCommit: (sessionId: string) => Promise<string>;
   aiSuggestImprovements: (command: string, shellType: ShellTypeLiteral) => Promise<string | null>;
 
-  /** Execute a one-shot terminal command (full options) */
   executeCommand: (
     command: string,
     options?: {
@@ -79,25 +78,18 @@ interface TerminalState {
     },
   ) => Promise<ExecuteResult>;
 
-  /** Simplified terminal execution (command + optional working dir) */
   executeSimple: (command: string, workingDir?: string) => Promise<TerminalExecuteResult>;
 
-  /** List all active session IDs from the backend */
   listSessions: () => Promise<string[]>;
 
-  /** Clear command history for a session */
   clearHistory: (sessionId: string) => Promise<void>;
 
-  /** Set an environment variable in a session */
   setEnv: (sessionId: string, key: string, value: string) => Promise<void>;
 
-  /** Get an environment variable from a session */
   getEnv: (sessionId: string, key: string) => Promise<string | null>;
 
-  /** List all environment variables in a session */
   listEnv: (sessionId: string) => Promise<[string, string][]>;
 
-  /** Unset an environment variable in a session */
   unsetEnv: (sessionId: string, key: string) => Promise<void>;
 }
 
@@ -139,9 +131,7 @@ export const useTerminalStore = create<TerminalState>()(
             set(
               (state) => {
                 const newSessions = [...state.sessions, newSession];
-                // AUDIT-006-021 fix: Cap sessions at 20
                 if (newSessions.length > 20) {
-                  // Close oldest inactive session
                   const oldestInactive = newSessions.find((s) => s.id !== sessionId && !s.active);
                   if (oldestInactive) {
                     return {
@@ -149,7 +139,6 @@ export const useTerminalStore = create<TerminalState>()(
                       activeSessionId: sessionId,
                     };
                   }
-                  // If all sessions are active, just cap at 20
                   return {
                     sessions: newSessions.slice(-20),
                     activeSessionId: sessionId,
@@ -274,7 +263,6 @@ export const useTerminalStore = create<TerminalState>()(
 
           get().removeOutputListener(sessionId);
 
-          // AUDIT-TERMINAL-031 fix: Handle both string and object payload formats
           const outputUnlisten = await listen<string | { stream: string; data: string }>(
             outputEvent,
             (event) => {
@@ -329,7 +317,6 @@ export const useTerminalStore = create<TerminalState>()(
         },
 
         removeOutputListener: (sessionId: string) => {
-          // Atomically get and remove listeners to avoid race conditions
           let unlisteners: UnlistenFn[] | undefined;
 
           set(
@@ -346,7 +333,6 @@ export const useTerminalStore = create<TerminalState>()(
             'terminal/removeOutputListener',
           );
 
-          // Call unlisteners outside of set() to avoid side effects during state update
           if (unlisteners && unlisteners.length > 0) {
             unlisteners.forEach((fn) => {
               try {
@@ -364,7 +350,6 @@ export const useTerminalStore = create<TerminalState>()(
         },
 
         reset: () => {
-          // Clean up all listeners before resetting state
           const currentListeners = get().listeners;
           currentListeners.forEach((unlisteners) => {
             unlisteners.forEach((fn) => {
@@ -444,8 +429,6 @@ export const useTerminalStore = create<TerminalState>()(
             throw error;
           }
         },
-
-        // --- Newly wired commands from Rust backend ---
 
         executeCommand: async (
           command: string,
@@ -556,7 +539,6 @@ export const useTerminalStore = create<TerminalState>()(
           availableShells: state.availableShells,
         }),
         migrate: (persistedState: unknown, _version: number) => {
-          // Handle future migrations here
           return persistedState as TerminalState;
         },
       },
@@ -565,13 +547,11 @@ export const useTerminalStore = create<TerminalState>()(
   ),
 );
 
-// Selectors
 export const selectTerminalSessions = (state: TerminalState) => state.sessions;
 export const selectActiveSessionId = (state: TerminalState) => state.activeSessionId;
 export const selectAvailableShells = (state: TerminalState) => state.availableShells;
 export const selectTerminalListeners = (state: TerminalState) => state.listeners;
 
-// Derived selectors
 export const selectActiveSession = (state: TerminalState) =>
   state.sessions.find((s) => s.id === state.activeSessionId);
 export const selectSessionById = (sessionId: string) => (state: TerminalState) =>

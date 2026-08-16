@@ -2,20 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-// Mock ONLY the catalog lookup so pricing is controlled without needing the real
-// catalog. `resolveEffectiveModelPricing` is deliberately left REAL: it is the
-// shared, pure date-window resolver, and stubbing it would test nothing.
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
-  // `provider` is load-bearing: the cost tracker uses it to decide token
-  // accounting (Anthropic reports input DISJOINT from cache tokens; OpenAI/
-  // Gemini/DeepSeek report INCLUSIVE prompt counts where cache tokens are a
-  // subset that must be subtracted before billing input).
   const catalog: Record<string, Record<string, unknown>> = {
-    // Mirrors the shipped catalog: ONE price on every date. Founder Decision
-    // #22 (reaffirmed 2026-08-05) — Sonnet 5 bills the standard $3/$15 per MTok
-    // regardless of date; a provider's introductory window is a provider-cost
-    // fact, not a product price.
     'fixture-anthropic-standard': {
       provider: 'anthropic',
       inputCost: 3.0,
@@ -24,9 +13,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
       cached_write: 3.75,
       cached_write_1h: 6.0,
     },
-    // SYNTHETIC scheduled model. Its window dates are arbitrary and belong to
-    // no product price: the dated-window mechanism is proved here so it stays
-    // covered without a live promotional window to lean on.
     'fixture-scheduled-model': {
       provider: 'anthropic',
       inputCost: 3.0,
@@ -70,7 +56,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
         },
       ],
     },
-    // This inclusive-accounting fixture declares a cache-WRITE price at 1.25x input.
     'fixture-inclusive-tiered-secondary': {
       provider: 'openai',
       inputCost: 2.0,
@@ -87,7 +72,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
         },
       ],
     },
-    // Synthetic OpenAI fixture with no write price declared.
     'fixture-no-cache-write': {
       provider: 'openai',
       inputCost: 0.75,
@@ -116,9 +100,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
       outputCost: 0.28,
       cached_input: 0.0028,
     },
-    // A model that publishes no cache-read price takes the shared fallback.
-    // The fixture deliberately reports cache tokens without declaring caching,
-    // proving that the fallback keys on missing pricing rather than capability.
     'fixture-inclusive-unpriced-cache': {
       provider: 'xai',
       inputCost: 2.0,
@@ -132,12 +113,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
   };
 });
 
-/**
- * Fixed pricing dates. Cost is billed at the request's date, so every assertion
- * pins one of these rather than reading the clock. The `SCHEDULED_*` dates
- * bracket the SYNTHETIC fixture's window boundary; `PRICED_ON` is an ordinary
- * date used wherever the model has one price on every date.
- */
 const SCHEDULED_MODEL = 'fixture-scheduled-model';
 const INSIDE_FIRST_WINDOW = new Date('2030-02-15T00:00:00.000Z');
 const LAST_DAY_OF_FIRST_WINDOW = new Date('2030-03-31T23:59:59.999Z');
@@ -255,8 +230,6 @@ describe('cost calculation', () => {
   });
 
   it('calculates input/output cost from models.json pricing', () => {
-    // fixture-anthropic-standard: $3/M input, $15/M output on every date.
-    // 1M input + 1M output = $3 + $15 = $18
     recordModelUsage(
       SESSION_A,
       'fixture-anthropic-standard',
@@ -273,8 +246,6 @@ describe('cost calculation', () => {
   });
 
   it('uses catalog cached_input price when present', () => {
-    // fixture-anthropic-premium: inputCost=$5, cached_input=$0.5
-    // 1M input + 1M cache_read = $5 + $0.5 = $5.5
     recordModelUsage(SESSION_A, 'fixture-anthropic-premium', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -287,10 +258,6 @@ describe('cost calculation', () => {
   });
 
   it('does not double-count cache reads for inclusive-prompt providers (deepseek)', () => {
-    // fixture-inclusive-discounted-cache: input=$0.14/M, cached_input=$0.0028/M. DeepSeek reports
-    // prompt_tokens INCLUSIVE of cache hits, so a 1M prompt with 1M cache hits is
-    // entirely cached. Correct cost = 1M * $0.0028 = $0.0028, NOT
-    // 1M*$0.14 + 1M*$0.0028 (the old double-count bug = $0.1428).
     recordModelUsage(SESSION_A, 'fixture-inclusive-discounted-cache', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -303,8 +270,6 @@ describe('cost calculation', () => {
   });
 
   it('bills only the uncached remainder at input rate for inclusive providers (openai)', () => {
-    // Above the catalog threshold the long rates are input=$4/M and cache
-    // read=$0.4/M. 600k plain + 400k cached = $2.40 + $0.16 = $2.56.
     recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-secondary', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -317,10 +282,6 @@ describe('cost calculation', () => {
   });
 
   it('bills cache_read at the full input rate when the catalog prices none', () => {
-    // fixture-inclusive-unpriced-cache prices no cache read, so its reads bill at the full $2/M — the
-    // rate the desktop calculator and the gateway charge for the same request.
-    // A 90%-off fallback here would bill $0.20/M for a discount the catalog
-    // does not publish.
     recordModelUsage(SESSION_A, 'fixture-inclusive-unpriced-cache', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -333,8 +294,6 @@ describe('cost calculation', () => {
   });
 
   it('charges cache_creation at 125% of input rate', () => {
-    // fixture-anthropic-standard: catalog cacheCreation = $3.75/M
-    // 1M cache_creation = $3.75
     recordModelUsage(
       SESSION_A,
       'fixture-anthropic-standard',
@@ -363,23 +322,8 @@ describe('cost calculation', () => {
   });
 });
 
-// Worked cost examples that exercise ALL FOUR token classes (input, output,
-// cache-read, cache-write) at once, pinning the per-class multipliers to a
-// known token mix → an exact dollar total. Anthropic multipliers verified
-// against the official prompt-caching pricing page (2026-07):
-//   https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching
-//   cache read = 0.1x base input · 5-minute cache write = 1.25x · 1-hour = 2x.
-// The pipeline also carries the 1-hour cache-write subset so it can bill that
-// portion at 2x while billing the remainder at the 5-minute 1.25x rate.
 describe('worked cost examples — all token classes, per provider', () => {
   it('anthropic (disjoint input): applies Sonnet 5 catalog cache prices', () => {
-    // fixture-anthropic-standard: input=$3/M, output=$15/M, cache-read=$0.3/M,
-    // cache-write=$3.75/M.
-    //   input      100k * 3    /1e6 = $0.30   (Anthropic input_tokens are disjoint → full, no subtraction)
-    //   output      50k * 15   /1e6 = $0.75
-    //   cache-read 200k * 0.30 /1e6 = $0.06
-    //   cache-write800k * 3.75 /1e6 = $3.00
-    //   total = $4.11
     recordModelUsage(
       SESSION_A,
       'fixture-anthropic-standard',
@@ -398,13 +342,6 @@ describe('worked cost examples — all token classes, per provider', () => {
   });
 
   it('anthropic (catalog cached_input): read billed at explicit rate, write at 1.25x', () => {
-    // fixture-anthropic-premium: input=$5/M, output=$25/M, cache-read=$0.5/M,
-    // cache-write=$6.25/M.
-    //   input       1M * 5    /1e6 = $5.00
-    //   output      1M * 25   /1e6 = $25.00
-    //   cache-read  1M * 0.50 /1e6 = $0.50
-    //   cache-write 1M * 6.25 /1e6 = $6.25
-    //   total = $36.75
     recordModelUsage(SESSION_A, 'fixture-anthropic-premium', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
@@ -418,12 +355,6 @@ describe('worked cost examples — all token classes, per provider', () => {
   });
 
   it('anthropic 1h cache write bills at 2x input; the 5m remainder at 1.25x', () => {
-    // fixture-anthropic-standard: 5m cache-write=$3.75/M, 1h cache-write=$6/M.
-    //   1h write 400k * (3 * 2.0  = $6.00/M) /1e6 = $2.40
-    //   5m write 600k * (3 * 1.25 = $3.75/M) /1e6 = $2.25   (1M total − 400k @ 1h)
-    //   total = $4.65
-    // Exercises the 2x 1h premium explicitly — the other examples leave
-    // cacheCreation1hInputTokens at 0, so only this case can fail on that rate.
     recordModelUsage(
       SESSION_A,
       'fixture-anthropic-standard',
@@ -442,14 +373,6 @@ describe('worked cost examples — all token classes, per provider', () => {
   });
 
   it('openai (inclusive prompt): cached subset subtracted from the input bucket', () => {
-    // This request is above the long-context threshold: input=$10/M,
-    // output=$45/M, and cache read=$1/M.
-    // OpenAI prompt_tokens INCLUDE the cached hits, so the cached subset is
-    // subtracted from the billable-input bucket (billed once, at the read rate).
-    //   billable input (1M - 400k) 600k * 10 /1e6 = $6.00
-    //   cache-read                 400k * 1  /1e6 = $0.40
-    //   output                      1M  * 45 /1e6 = $45.00
-    //   total = $51.40
     recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
@@ -461,11 +384,6 @@ describe('worked cost examples — all token classes, per provider', () => {
   });
 
   it('deepseek (inclusive prompt): fully-cached prompt bills only the discounted read rate', () => {
-    // fixture-inclusive-discounted-cache: input=$0.14/M, output=$0.28/M, catalog cached_input=$0.0028/M.
-    //   billable input (1M - 1M)   0 * 0.14   /1e6 = $0.00
-    //   cache-read                1M * 0.0028 /1e6 = $0.0028
-    //   output                   500k * 0.28  /1e6 = $0.14
-    //   total = $0.1428
     recordModelUsage(SESSION_A, 'fixture-inclusive-discounted-cache', {
       inputTokens: 1_000_000,
       outputTokens: 500_000,
@@ -477,17 +395,8 @@ describe('worked cost examples — all token classes, per provider', () => {
   });
 });
 
-// Effective-dated pricing, proved against the SYNTHETIC fixture model above —
-// arbitrary window dates that belong to no product price. Bounds are UTC
-// calendar days, inclusive on both sides, so the changeover happens at UTC
-// midnight. Every case pins a fixed date on one side of that boundary and none
-// of them can drift with the calendar.
-//
-// Sonnet 5 deliberately does NOT appear here: founder Decision #22 (reaffirmed
-// 2026-08-05) prices it identically on every date, which the pin below asserts.
 describe('effective-dated pricing', () => {
   it('bills the first window rate for a request inside it', () => {
-    // First window: $2/M input, $10/M output → 1M + 1M = $12.
     recordModelUsage(
       SESSION_A,
       SCHEDULED_MODEL,
@@ -498,8 +407,6 @@ describe('effective-dated pricing', () => {
   });
 
   it('bills the later window rate on and after the changeover date', () => {
-    // The second window declares only its start, so it inherits the top-level
-    // rates: $3/M input, $15/M output → 1M + 1M = $18.
     recordModelUsage(
       SESSION_A,
       SCHEDULED_MODEL,
@@ -528,10 +435,6 @@ describe('effective-dated pricing', () => {
   });
 
   it('moves every cache rate with the window, not just input and output', () => {
-    // First window cache rates: read $0.2/M, 5m write $2.5/M, 1h write $4/M.
-    //   read     1M * 0.2 /1e6 = $0.20
-    //   1h write 1M * 4.0 /1e6 = $4.00
-    //   total = $4.20
     recordModelUsage(
       SESSION_A,
       SCHEDULED_MODEL,
@@ -546,7 +449,6 @@ describe('effective-dated pricing', () => {
     );
     expect(getModelUsageReport(SESSION_A).get(SCHEDULED_MODEL)!.costUsd).toBeCloseTo(4.2, 6);
 
-    // Inherited rates in the second window: read $0.3/M, 1h write $6/M → $6.30.
     recordModelUsage(
       SESSION_B,
       SCHEDULED_MODEL,
@@ -563,7 +465,6 @@ describe('effective-dated pricing', () => {
   });
 
   it('prices Sonnet 5 identically on every date — founder Decision #22', () => {
-    // $3/M input on both sides of the retired 2026-09-01 boundary.
     recordModelUsage(
       SESSION_A,
       'fixture-anthropic-standard',
@@ -606,13 +507,8 @@ describe('effective-dated pricing', () => {
   });
 });
 
-// Some OpenAI models charge for prompt-cache writes at 1.25x uncached input.
-// The catalog expresses that as `cached_write`, so billing keys off declared
-// pricing rather than a concrete model family or release name.
 describe('OpenAI cache-write billing', () => {
   it('bills writes at the declared price for models that publish one', () => {
-    // Above the threshold, a 1M prompt consisting entirely of cache writes uses
-    // the catalog's $5/M long-context write rate.
     recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-secondary', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -640,11 +536,6 @@ describe('OpenAI cache-write billing', () => {
   });
 
   it('bills each prompt token exactly once across input, read, and write', () => {
-    // Long-context rates are input $4/M, cache read $0.4/M, cache write $5/M.
-    //   plain input (1M - 400k - 200k) 400k * 4   /1e6 = $1.60
-    //   cache read                     400k * 0.4 /1e6 = $0.16
-    //   cache write                    200k * 5   /1e6 = $1.00
-    //   total = $2.76
     recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-secondary', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -657,14 +548,6 @@ describe('OpenAI cache-write billing', () => {
   });
 
   it('keeps Anthropic disjoint accounting: cache tokens add to input, never subtract', () => {
-    // fixture-anthropic-premium: input $5/M, cached_input $0.5/M, cached_write $6.25/M.
-    // Anthropic reports input_tokens SEPARATELY from the cache buckets, so all
-    // three are summed — this is the accounting distinction that must survive
-    // the OpenAI write-billing change.
-    //   input       1M * 5    /1e6 = $5.00
-    //   cache read  1M * 0.50 /1e6 = $0.50
-    //   cache write 1M * 6.25 /1e6 = $6.25
-    //   total = $11.75
     recordModelUsage(SESSION_A, 'fixture-anthropic-premium', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -684,14 +567,12 @@ describe('getSessionTotalCostUsd', () => {
   });
 
   it('sums cost across all models in a session', () => {
-    // fixture-anthropic-standard: $3/M input → 1M = $3
     recordModelUsage(
       SESSION_A,
       'fixture-anthropic-standard',
       { inputTokens: 1_000_000, outputTokens: 0 },
       PRICED_ON,
     );
-    // The 1M input crosses the long-context tier: $10/M → $10.
     recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -716,9 +597,8 @@ describe('getModelUsageReport', () => {
 
     const report = getModelUsageReport(SESSION_A);
     const usage = report.get('fixture-inclusive-tiered-primary')!;
-    usage.inputTokens = 9999; // mutate snapshot
+    usage.inputTokens = 9999;
 
-    // Store should be unaffected
     const report2 = getModelUsageReport(SESSION_A);
     expect(report2.get('fixture-inclusive-tiered-primary')!.inputTokens).toBe(100);
   });
@@ -794,8 +674,6 @@ describe('reasoningOutputTokens', () => {
   });
 
   it('charges reasoning tokens at the output token rate', () => {
-    // fixture-inclusive-tiered-primary: outputCost=$30/M
-    // 1M reasoning tokens = $30
     recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 0,
       outputTokens: 0,
@@ -808,8 +686,6 @@ describe('reasoningOutputTokens', () => {
   });
 
   it('adds reasoning cost on top of input + output cost', () => {
-    // Above the threshold: input=$10/M, output/reasoning=$45/M.
-    // 1M input + 1M output + 500k reasoning = $10 + $45 + $22.50 = $77.50.
     recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
@@ -911,7 +787,6 @@ describe('toOtelAttributes', () => {
       cacheCreationInputTokens: 300,
     });
 
-    // total = 1000 + 500 + 200 + 300 = 2000
     expect(attrs['codex.usage.total_tokens']).toBe(2000);
   });
 
@@ -922,7 +797,6 @@ describe('toOtelAttributes', () => {
       cacheReadInputTokens: 800, // not counted in total
     });
 
-    // total = 1000 + 500 = 1500 (cache reads excluded)
     expect(attrs['codex.usage.total_tokens']).toBe(1500);
   });
 
@@ -935,10 +809,6 @@ describe('toOtelAttributes', () => {
     expect(attrs['gen_ai.system']).toBe('google_ai_studio');
   });
 
-  // CPST Stage-0 mirror of the managed-usage ledger keys
-  // (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2). The
-  // tracker is in-memory and is explicitly NOT a CPST source; these attributes
-  // only label the span with what the durable row already carries.
   describe('CPST vendor attributes', () => {
     it('emits no codex.usage CPST attribute when no CPST fields are supplied', () => {
       const attrs = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', {

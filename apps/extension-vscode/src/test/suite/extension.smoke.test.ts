@@ -1,18 +1,3 @@
-/**
- * extension.smoke.test.ts — Minimal integration smoke test.
- *
- * Runs inside the VS Code extension host (NOT the vitest mock).
- * Asserts:
- *   1. The extension activates without throwing.
- *   2. At least one of the package.json commands is registered and resolvable.
- *   3. The `@agi` chat participant is registered (catches registration order bugs).
- *   4. The branded settings editor opens inside a real extension host.
- *   5. Two editor-chat commands create two independent webview tabs.
- *   6. The installed VSIX completes a native @agi turn through an isolated,
- *      loopback-only LM Studio-compatible provider.
- *
- * Requires: pnpm add -D mocha @types/mocha glob @types/glob
- */
 
 import * as assert from 'assert';
 import * as fs from 'node:fs';
@@ -21,7 +6,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { E2E_COMPLETE_RESPONSE, E2E_PROMPT_MARKER } from '../localModelFixture';
 
-// Mocha's tdd UI is configured by the loader (`suite/index.ts`).
 declare function suite(name: string, fn: () => void): void;
 declare function test(name: string, fn: () => void | Promise<void>): void;
 
@@ -166,8 +150,6 @@ suite('AGI Workforce extension — smoke', () => {
     ).map((c) => c.command);
     assert.ok(declared.length > 0, 'no commands declared in package.json contributes.commands');
     const all = new Set(await vscode.commands.getCommands(true));
-    // Collect EVERY missing command before failing so a single run reports the
-    // full breakage surface instead of stopping at the first missing id.
     const missing = declared.filter((id) => !all.has(id));
     assert.deepStrictEqual(
       missing,
@@ -179,7 +161,6 @@ suite('AGI Workforce extension — smoke', () => {
 
   test('newConversation command resolves without throwing', async () => {
     const all = await vscode.commands.getCommands(true);
-    // No silent skip: if the command is absent that is itself a failure.
     assert.ok(
       all.includes('agi-workforce.newConversation'),
       'command "agi-workforce.newConversation" is not registered at runtime',
@@ -282,16 +263,11 @@ suite('AGI Workforce extension — smoke', () => {
         'extension did not retain the explicit absolute CLI path',
       );
 
-      // This shipped command resolves session history through LocalRuntimePool,
-      // which starts the configured `agi app-server`. The missing id is
-      // intentional: it avoids mutating session data after the real handshake.
       await vscode.commands.executeCommand(
         'agi-workforce.openConversation',
         `packaged-runtime-probe-${Date.now()}`,
       );
 
-      // A ready result requires LocalRuntimeClient.restart() to shut down the
-      // process above and complete a fresh protocol-validated initialize call.
       const result = await vscode.commands.executeCommand<unknown>(
         'agi-workforce.restartLocalRuntime',
       );

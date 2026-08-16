@@ -35,11 +35,6 @@ describe('marketing plan matrix', () => {
 });
 
 describe('launch messaging', () => {
-  // A hardcoded date here fans out to ~25 marketing pages and their SEO
-  // descriptions as a FUTURE promise, and turns into a false claim the day it
-  // passes — which is exactly what happened with 'July 12, 2026'. Keep launch
-  // messaging status-only; announcing a real date should be a deliberate edit
-  // that also updates this guard, not an inherited default.
   it('carries no calendar date', () => {
     const serialized = JSON.stringify(LAUNCH);
     expect(serialized).not.toMatch(
@@ -57,10 +52,6 @@ describe('launch messaging', () => {
 });
 
 describe('model and provider counts', () => {
-  // The site shipped "50+ models" against a 31-model catalog on five pages at
-  // once, justified by a comment claiming a 56-model catalog that never
-  // existed. These counts must stay DERIVED so a hand-typed floor cannot come
-  // back.
   it('derives the model count from the canonical catalog', () => {
     expect(MARKETING.models.count).toBe(Object.keys(modelsCatalogJson.models).length);
     expect(MARKETING.models.display).toBe(String(MARKETING.models.count));
@@ -70,9 +61,6 @@ describe('model and provider counts', () => {
     expect(MARKETING.providers.count).toBe(Object.keys(modelsCatalogJson.providers).length);
   });
 
-  // `display` is a deliberate conservative floor because several pages
-  // enumerate providers around the token. It must remain TRUE against the
-  // catalog rather than merely unchanged.
   it('keeps the conservative provider floor truthful', () => {
     const floor = Number(MARKETING.providers.display.replace(/\D/g, ''));
     expect(Number.isFinite(floor)).toBe(true);
@@ -94,10 +82,6 @@ describe('model and provider counts', () => {
 });
 
 describe('surface availability', () => {
-  // This map previously read "Coming soon" for ALL SIX surfaces while the home
-  // page's primary CTA led into a working web app, and while Desktop and the
-  // CLI both had published release tags. A surface may only be described as
-  // unavailable when it genuinely has no release.
   it('does not mark every surface as unreleased', () => {
     const statuses = Object.values(SURFACE_STATUS);
     expect(statuses.every((status) => status === COMING_SOON_LABEL)).toBe(false);
@@ -105,7 +89,6 @@ describe('surface availability', () => {
 
   it('states the three shipped surfaces as available', () => {
     expect(SURFACE_STATUS.web).not.toBe(COMING_SOON_LABEL);
-    // Sourced from git tags v-desktop-1.2.0 and v-cli-1.0.0.
     expect(SURFACE_STATUS.desktop).toContain('1.2.0');
     expect(SURFACE_STATUS.cli).toContain('1.0.0');
   });

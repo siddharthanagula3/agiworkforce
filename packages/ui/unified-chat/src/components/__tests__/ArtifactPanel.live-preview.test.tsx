@@ -1,17 +1,3 @@
-/**
- * ArtifactPanel — live-preview regression coverage.
- *
- * Round-2 audit P0 #9 (Artifacts live preview, 2026-05-21). These tests pin
- * the sandbox attributes the live preview is allowed to use so a careless
- * refactor cannot widen the iframe's privileges without showing up here.
- *
- * Specifically asserts:
- *   - HTML preview iframe carries `allow-scripts` AND the injected CSP meta.
- *   - SVG preview stays an `<img>` (no script-enabled iframe).
- *   - React artifact type routes through ReactPreview.
- *   - Run/Stop control toggles the HTML iframe on/off.
- *   - Markdown/document fall back to plain article rendering.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -19,8 +5,6 @@ import { ArtifactPanel } from '../ArtifactPanel';
 import { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from '../../lib/artifact-sandbox';
 import type { Artifact } from '../../lib/types';
 
-// ReactPreview wires postMessage between an iframe and the host; jsdom can't
-// load CDN React, so stub the component shape and assert routing.
 vi.mock('../artifact-components/ReactPreview', () => ({
   ReactPreview: ({ code }: { code: string }) => (
     <div data-testid="stub-react-preview" data-code-length={code.length} />
@@ -87,9 +71,6 @@ describe('ArtifactPanel live preview', () => {
     fireEvent.click(stopButton);
     expect(wrapper.querySelector('iframe')).toBeNull();
 
-    // After pause, both an icon toolbar button (aria-label="Run preview") and
-    // an inline "Run preview" body button exist. Click the toolbar one — it's
-    // the affordance the design lives on.
     const runButton = screen.getByLabelText('Run preview');
     fireEvent.click(runButton);
     expect(wrapper.querySelector('iframe')).not.toBeNull();
@@ -230,7 +211,6 @@ describe('ArtifactPanel edit-in-place', () => {
     fireEvent.click(screen.getByLabelText('Discard edit'));
 
     expect(saved).toBe(false);
-    // Edit textarea is unmounted; the code view re-appears.
     expect(screen.queryByTestId('artifact-panel-edit-mode')).toBeNull();
   });
 });

@@ -11,7 +11,6 @@
  * @packageDocumentation
  */
 
-// Per-command async context isolation (uses node:async_hooks via AsyncLocalStorage)
 export {
   getAgentContext,
   runWithContext,

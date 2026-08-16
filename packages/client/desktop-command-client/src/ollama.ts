@@ -1,10 +1,5 @@
-/**
- * Ollama API — typed wrappers for ollama_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface OllamaModelDetails {
   parameterSize: string;
@@ -22,8 +17,6 @@ export interface OllamaModel {
   digest: string;
   details: OllamaModelDetails;
 }
-
-// ---- Commands ----
 
 export async function ollamaCheckStatus(): Promise<boolean> {
   return command<boolean>('ollama_check_status');

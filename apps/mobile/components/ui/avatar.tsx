@@ -36,9 +36,6 @@ export function Avatar({ name, size = 'md', variant = 'user' }: AvatarProps) {
   return (
     <View
       className={`${sizeClasses[size]} ${isAssistant ? '' : 'bg-blue-500'} rounded-full items-center justify-center`}
-      // The assistant circle used `bg-teal-500` from a literal teal ramp that
-      // no longer exists (PAR-M27). `colors.teal` is the accent-aware token —
-      // it follows the user's accent choice and the theme.
       style={isAssistant ? { backgroundColor: colors.teal } : undefined}
     >
       {/* The user circle sits on a saturated blue, so its label stays literal

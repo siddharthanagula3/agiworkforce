@@ -2,20 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { Laptop, Cloud, type LucideIcon } from 'lucide-react';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
 
-/**
- * Bottom-of-sidebar Local↔Cloud toggle — the primary mode nav.
- *
- * Local  = on-device LLMs + BYOK keys (no AGI-funded compute).
- * Cloud  = AGI Cloud managed models.
- *
- * Switching delegates to appModeStore.setMode, which enforces the trust-boundary
- * guards (Cloud requires a signed-in, eligible account; Local requires the
- * desktop runtime; neither switches mid-stream) and surfaces a toast on refusal.
- *
- * Cloud requires a signed-in session at a managed tier; setMode enforces that
- * (and surfaces an honest toast on refusal), so the Cloud segment renders as a
- * normal selectable tab on every runtime.
- */
 export interface LocalCloudToggleProps {
   collapsed?: boolean;
 }

@@ -1,10 +1,5 @@
-/**
- * Research API — typed wrappers for research_* and process reasoning commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface ResearchRequest {
   query: string;
@@ -43,8 +38,6 @@ export interface ProcessStatDTO {
   successRate: number;
 }
 
-// ---- Research ----
-
 export async function researchStart(request: ResearchRequest): Promise<ResearchResponse> {
   return command<ResearchResponse>('research_start', { request });
 }
@@ -66,8 +59,6 @@ export async function researchQuick(query: string): Promise<ResearchResponse> {
 export async function researchCheckAvailability(): Promise<unknown> {
   return command<unknown>('research_check_availability');
 }
-
-// ---- Process Reasoning ----
 
 export async function getProcessTemplates(): Promise<ProcessTemplateDTO[]> {
   return command<ProcessTemplateDTO[]>('get_process_templates');

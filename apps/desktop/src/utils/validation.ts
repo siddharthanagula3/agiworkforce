@@ -9,7 +9,6 @@
 
 import { escapeHtml as escapeHtmlSecure, sanitizeHtml as sanitizeHtmlSecure } from './security';
 
-// Re-export common validation utilities from shared package
 export {
   validateEmail,
   validateFilePath,
@@ -22,11 +21,8 @@ export {
   type PasswordValidationResult,
 } from '@agiworkforce/utils';
 
-// Import validateUrl from shared package for compatibility wrapper
 import { validateUrl as validateUrlShared } from '@agiworkforce/utils';
 
-// Re-export checkForInjection from security.ts (local implementation)
-// This is kept for backwards compatibility with existing code
 export { checkForInjection } from './security';
 
 /**
@@ -126,9 +122,6 @@ export class ClientRateLimiter {
     this.requests.delete(key);
   }
 
-  /**
-   * Clear all rate limit tracking.
-   */
   clearAll(): void {
     this.requests.clear();
   }

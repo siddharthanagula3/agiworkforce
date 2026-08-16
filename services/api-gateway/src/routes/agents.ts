@@ -1,17 +1,3 @@
-/**
- * @file Agent Status & Approval API Routes
- * @security
- * - Rate limiting: Applied per-endpoint based on operation type
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Authentication: JWT required for all endpoints
- * - Ownership validation: Users can only access their own desktop agents
- *
- * Rate limit rationale (OWASP compliant):
- * - GET /status: 60/min - read operation, frequent polling
- * - POST /approve: 30/min - action-based, moderate limit
- * - POST /deny: 30/min - action-based, moderate limit
- * - GET /pending: 60/min - read operation, frequent polling
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -25,22 +11,10 @@ import { isValidUuid } from '../validations/ids';
 
 const router: Router = Router();
 
-// GW-1 (audit 2026-05-03): authenticate FIRST, then rate-limit. The
-// previous order (rate-limit before authenticateToken) was inconsistent
-// with desktop.ts/mobile.ts and meant any future route inserted between
-// them would silently bypass auth. Putting auth at the top of the chain
-// makes it impossible to forget.
 router.use(authenticateToken);
 
-// SECURITY: Baseline rate limit for all agent endpoints (100/min fallback)
-// — applied AFTER auth so the per-IP bucket reflects authenticated traffic.
 router.use(createRateLimiter('default'));
 
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
-
-// SECURITY: .strict() rejects unexpected fields to prevent mass assignment
 const approveSchema = z
   .object({
     desktopId: z.string().uuid(),
@@ -56,10 +30,6 @@ const denySchema = z
     reason: z.string().max(500).optional(),
   })
   .strict();
-
-// =============================================================================
-// HELPER: Verify desktop ownership
-// =============================================================================
 
 async function verifyDesktopOwnership(desktopId: string, user: UserAuth): Promise<void> {
   if (!isValidUuid(desktopId)) {
@@ -82,18 +52,6 @@ async function verifyDesktopOwnership(desktopId: string, user: UserAuth): Promis
   }
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
-/**
- * Get agent status from a desktop device
- * GET /agents/status?desktopId=<uuid>
- *
- * Returns the current running agents and their states on the paired desktop.
- *
- * SECURITY: Rate limited to 60/min for responsive UX
- */
 router.get('/status', createRateLimiter('device-status'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -108,15 +66,12 @@ router.get('/status', createRateLimiter('device-status'), async (req: Request, r
   await verifyDesktopOwnership(desktopId, user);
 
   const db = getUserScopedClient(user);
-  // Send a status query to the desktop via WebSocket and return the response.
-  // For MVP, we query the last known status from the DB.
   const { data: desktop } = await db
     .from('desktop_devices')
     .select('*')
     .eq('id', desktopId)
     .single();
 
-  // Also check if the desktop is currently connected
   const { delivered } = sendCommandToDesktop(user.userId, desktopId, 'status-probe', 'query', {
     query: 'agent_status',
   });
@@ -130,21 +85,11 @@ router.get('/status', createRateLimiter('device-status'), async (req: Request, r
     connected: delivered,
     lastSeen,
     agents: {
-      // Agent status will be populated when the desktop responds via WebSocket.
-      // The mobile client should listen on the WebSocket for real-time agent updates.
       status: online ? 'awaiting_response' : 'offline',
     },
   });
 });
 
-/**
- * Get pending approval requests for a desktop
- * GET /agents/pending?desktopId=<uuid>
- *
- * Returns tool execution requests that need mobile user approval.
- *
- * SECURITY: Rate limited to 60/min for responsive UX
- */
 router.get('/pending', createRateLimiter('device-status'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -159,7 +104,6 @@ router.get('/pending', createRateLimiter('device-status'), async (req: Request, 
   await verifyDesktopOwnership(desktopId, user);
 
   const db = getUserScopedClient(user);
-  // Fetch pending approval requests from Neon
   const { data: pendingRequests, error } = await db
     .from('agent_approval_requests')
     .select('*')
@@ -186,14 +130,6 @@ router.get('/pending', createRateLimiter('device-status'), async (req: Request, 
   });
 });
 
-/**
- * Approve tool execution on desktop
- * POST /agents/approve
- *
- * Sends an approval signal to the desktop so the agent can proceed with tool execution.
- *
- * SECURITY: Rate limited to 30/min to prevent automation abuse
- */
 router.post(
   '/approve',
   createRateLimiter('device-command'),
@@ -226,7 +162,6 @@ router.post(
       throw new AppError('Approval request not found or already resolved', 404);
     }
 
-    // Send approval command to desktop via WebSocket
     const { delivered, queued } = sendCommandToDesktop(
       user.userId,
       desktopId,
@@ -252,14 +187,6 @@ router.post(
   },
 );
 
-/**
- * Deny tool execution on desktop
- * POST /agents/deny
- *
- * Sends a denial signal to the desktop, blocking the agent from proceeding.
- *
- * SECURITY: Rate limited to 30/min to prevent automation abuse
- */
 router.post('/deny', createRateLimiter('device-command'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -293,7 +220,6 @@ router.post('/deny', createRateLimiter('device-command'), async (req: Request, r
     throw new AppError('Approval request not found or already resolved', 404);
   }
 
-  // Send denial command to desktop via WebSocket
   const { delivered, queued } = sendCommandToDesktop(
     user.userId,
     desktopId,

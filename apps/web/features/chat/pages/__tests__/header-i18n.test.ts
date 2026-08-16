@@ -2,13 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-/**
- * WebChatPage is ~3,300 lines of client component and is stubbed everywhere it
- * is rendered under test (see chat-route.test.tsx), so its copy is pinned at
- * the source level instead: the header's share control kept raw English long
- * after the rest of the file was wired to i18next, which is exactly the kind of
- * regression a render test would never have caught here.
- */
 const SOURCE = readFileSync(resolve(process.cwd(), 'features/chat/pages/WebChatPage.tsx'), 'utf8');
 
 const BUNDLES: Record<string, unknown> = {

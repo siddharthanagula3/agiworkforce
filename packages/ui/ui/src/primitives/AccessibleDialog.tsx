@@ -15,33 +15,19 @@ import {
 import { X } from 'lucide-react';
 
 export interface AccessibleDialogProps {
-  /** Whether the dialog is open */
   open: boolean;
-  /** Callback when open state changes */
   onOpenChange: (open: boolean) => void;
-  /** Dialog title - required for accessibility */
   title: string;
-  /** Optional description */
   description?: string;
-  /** Dialog content */
   children: React.ReactNode;
-  /** Footer content (buttons, etc.) */
   footer?: React.ReactNode;
-  /** Ref to the element that should receive focus when dialog opens */
   initialFocusRef?: React.RefObject<HTMLElement>;
-  /** Ref to the element that triggered the dialog - focus returns here on close */
   triggerRef?: React.RefObject<HTMLElement>;
-  /** Whether to show the close button */
   showCloseButton?: boolean;
-  /** Whether pressing Escape should close the dialog */
   closeOnEscape?: boolean;
-  /** Whether clicking the overlay should close the dialog */
   closeOnOverlayClick?: boolean;
-  /** Custom class name for the dialog content */
   className?: string;
-  /** Size of the dialog */
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
-  /** Whether the dialog is a modal (traps focus) - default true */
   modal?: boolean;
 }
 
@@ -53,43 +39,6 @@ const sizeClasses = {
   full: 'max-w-[90vw]',
 };
 
-/**
- * An accessible dialog component with enhanced features.
- *
- * Features:
- * - Focus trapping within the dialog
- * - Focus restoration to trigger element on close
- * - Escape key to close
- * - Screen reader announcements
- * - Proper ARIA attributes
- * - Initial focus management
- *
- * Usage:
- * ```tsx
- * const triggerRef = useRef<HTMLButtonElement>(null);
- * const [open, setOpen] = useState(false);
- *
- * <Button ref={triggerRef} onClick={() => setOpen(true)}>
- *   Open Dialog
- * </Button>
- *
- * <AccessibleDialog
- *   open={open}
- *   onOpenChange={setOpen}
- *   title="Confirm Action"
- *   description="Are you sure you want to proceed?"
- *   triggerRef={triggerRef}
- *   footer={
- *     <>
- *       <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
- *       <Button onClick={handleConfirm}>Confirm</Button>
- *     </>
- *   }
- * >
- *   <p>Dialog content here</p>
- * </AccessibleDialog>
- * ```
- */
 export function AccessibleDialog({
   open,
   onOpenChange,
@@ -110,20 +59,16 @@ export function AccessibleDialog({
   const contentRef = React.useRef<HTMLDivElement>(null);
   const previousActiveElement = React.useRef<Element | null>(null);
 
-  // Store the active element before opening
   React.useEffect(() => {
     if (open) {
       previousActiveElement.current = document.activeElement;
     }
   }, [open]);
 
-  // Manage focus on close
   React.useEffect(() => {
     if (!open) {
-      // Return focus to trigger or previous active element
       const focusTarget = triggerRef?.current ?? previousActiveElement.current;
       if (focusTarget && focusTarget instanceof HTMLElement) {
-        // Small delay to ensure dialog is fully closed
         requestAnimationFrame(() => {
           focusTarget.focus();
         });
@@ -131,17 +76,14 @@ export function AccessibleDialog({
     }
   }, [open, triggerRef]);
 
-  // Handle initial focus
   React.useEffect(() => {
     if (open && initialFocusRef?.current) {
-      // Delay focus to ensure dialog content is rendered
       requestAnimationFrame(() => {
         initialFocusRef.current?.focus();
       });
     }
   }, [open, initialFocusRef]);
 
-  // Handle escape key
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent) => {
       if (closeOnEscape && event.key === 'Escape') {

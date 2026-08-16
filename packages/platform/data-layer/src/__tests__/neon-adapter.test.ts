@@ -1,23 +1,6 @@
-/**
- * NeonDatabaseAdapter unit tests.
- *
- * `@neondatabase/serverless` is mocked via `vi.mock` — we never open a
- * real socket. The mock surfaces just enough of the `Pool` / `PoolClient`
- * API for the adapter to drive its codepaths:
- *
- *   - `pool.query(sql, params)` returns `{ rows, rowCount }`.
- *   - `pool.connect()` returns a `PoolClient` whose `.query()` records
- *     every call (so we can assert BEGIN / SET LOCAL / COMMIT / ROLLBACK).
- *   - `pool.end()` resolves so `dispose()` is observable.
- *
- * The mock is reset between tests so each test gets a fresh call log.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataLayerConfigError, type DatabaseAdapter } from '../types';
 
-// ---------------------------------------------------------------------------
-// Mock state — visible to both the mock factory and the assertions.
-// ---------------------------------------------------------------------------
 type Call = { sql: string; params?: unknown[] };
 type QueryResp = { rows: unknown[]; rowCount: number | null };
 
@@ -54,11 +37,6 @@ beforeEach(() => {
   state.lastPoolConfig = undefined;
 });
 
-// ---------------------------------------------------------------------------
-// Mock the driver module. `vi.mock` factories must not capture mutable
-// outer state, so the mock reads `state` by reference inside the methods —
-// every call to the methods re-reads the latest handler.
-// ---------------------------------------------------------------------------
 vi.mock('@neondatabase/serverless', () => {
   class MockPool {
     constructor(config: unknown) {
@@ -87,17 +65,12 @@ vi.mock('@neondatabase/serverless', () => {
   return { Pool: MockPool };
 });
 
-// IMPORTANT: import the adapter AFTER vi.mock is registered.
 const { NeonDatabaseAdapter } = await import('../adapters/neon');
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-// The RLS preamble is batched to keep the per-query round-trip count down:
-// BEGIN travels with SET LOCAL ROLE, and both claim GUCs share one
-// parameterized SELECT. These helpers read a binding out of whichever
-// statement happens to carry it.
 function findClientCall(fragment: string): Call | undefined {
   return state.clientCalls.find((c) => c.sql.includes(fragment));
 }
@@ -105,12 +78,9 @@ function findClientCall(fragment: string): Call | undefined {
 function boundClaims(): { sub: unknown; org: unknown } | undefined {
   const call = findClientCall("set_config('request.jwt.claim.sub'");
   if (!call?.params) return undefined;
-  // Parameter order follows the statement: subject first, organization second.
   return { sub: call.params[0], org: call.params[1] };
 }
 
-// Helper: a JWT with a known `sub` claim. Header / signature are dummy —
-// we never verify, we just decode the middle segment.
 function makeJwt(payload: Record<string, unknown>): string {
   const b64u = (s: string) =>
     Buffer.from(s, 'utf8')
@@ -192,7 +162,7 @@ describe('NeonDatabaseAdapter.transaction', () => {
     });
     expect(result).toBe(1);
     expect(captured).toHaveLength(1);
-    expect(captured[0]).not.toBe(adapter); // sub-adapter, not outer
+    expect(captured[0]).not.toBe(adapter);
     const sqls = state.clientCalls.map((c) => c.sql);
     expect(sqls[0]).toBe('BEGIN');
     expect(sqls[sqls.length - 1]).toBe('COMMIT');
@@ -227,25 +197,17 @@ describe('NeonDatabaseAdapter.transaction', () => {
       return null;
     });
     expect(boundClaims()?.sub).toBe('user-42');
-    // Privilege restriction: per-user queries must run as the non-bypass role.
     expect(findClientCall('SET LOCAL ROLE app_rls')).toBeDefined();
   });
 });
 
 describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATALAYER-JWT)', () => {
-  // The footgun: withUser decodes the `sub` of an UNVERIFIED JWT and binds it
-  // as the RLS subject. An attacker who reaches this with a self-minted token
-  // picks any `sub` and impersonates any user. The fix makes withUser
-  // default-deny: it refuses to decode/bind unless the integrator explicitly
-  // opted in by constructing the adapter with unsafeAllowUnverifiedJwtSubject,
-  // which acknowledges the token was signature-verified upstream first.
 
   it('THROWS by default — refuses an attacker-influenced JWT when no opt-in flag is set', () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
       // unsafeAllowUnverifiedJwtSubject intentionally NOT set → default-deny.
     });
-    // Attacker-minted token claiming to be the victim. Unverified.
     const forged = makeJwt({ sub: 'victim-admin-user' });
     expect(() => adapter.withUser(forged)).toThrow(DataLayerConfigError);
     expect(() => adapter.withUser(forged)).toThrow(/unsafeAllowUnverifiedJwtSubject/);
@@ -256,7 +218,6 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
     });
     expect(() => adapter.withUser(makeJwt({ sub: 'attacker' }))).toThrow(DataLayerConfigError);
-    // The deny happens at withUser() time, before any SET LOCAL could fire.
     const setLocal = state.clientCalls.find((c) =>
       c.sql.includes("set_config('request.jwt.claim.sub'"),
     );
@@ -267,8 +228,6 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
     });
-    // Perfectly well-formed JWT — still denied, because the signature was
-    // never verified and the integrator did not acknowledge that precondition.
     expect(() => adapter.withUser(makeJwt({ sub: 'well-formed' }))).toThrow(
       /verify the token signature upstream|Verify the token signature upstream/i,
     );
@@ -299,8 +258,6 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
       unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'u-1' }));
-    // The child must still carry the flag — re-binding through the child
-    // (e.g. a second request scope) must not regress to default-deny.
     expect(() => (scoped as NeonDatabaseAdapter).withUser(makeJwt({ sub: 'u-2' }))).not.toThrow();
   });
 });
@@ -329,7 +286,6 @@ describe('NeonDatabaseAdapter.withUser', () => {
     const rows = await scoped.query<{ id: number }>('select id from t');
     expect(rows).toEqual([{ id: 7 }]);
     expect(boundClaims()?.sub).toBe('user-abc');
-    // Privilege restriction: per-user queries must run as the non-bypass role.
     expect(findClientCall('SET LOCAL ROLE app_rls')).toBeDefined();
   });
 
@@ -394,8 +350,6 @@ describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () =>
 
   it('always binds the org GUC, so a pooled connection cannot inherit a previous request scope', async () => {
     state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
-    // No withOrg() at all: the binding must still fire, with an empty value,
-    // which current_app_org_id() maps to NULL and every org branch denies.
     await makeAdapter()
       .withUser(makeJwt({ sub: 'user-abc' }))
       .query('select 1');
@@ -426,10 +380,6 @@ describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () =>
 });
 
 describe('NeonDatabaseAdapter RLS preamble round trips', () => {
-  // Every statement the adapter sends on a scoped call is a full Neon RTT
-  // that lands before the caller's own query. The preamble used to cost four
-  // of them (BEGIN, SET LOCAL ROLE, one set_config per GUC); batching what
-  // the wire protocol allows cuts that to two.
   const makeScoped = () =>
     new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
@@ -459,8 +409,6 @@ describe('NeonDatabaseAdapter RLS preamble round trips', () => {
     state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
     await makeScoped().query('select id from t');
     const sqls = state.clientCalls.map((c) => c.sql);
-    // The privilege restriction must still land before anything the caller
-    // asked for — batching it away would hand the caller the BYPASSRLS owner.
     expect(sqls.findIndex((s) => s.includes('SET LOCAL ROLE app_rls'))).toBeLessThan(
       sqls.indexOf('select id from t'),
     );
@@ -472,7 +420,6 @@ describe('NeonDatabaseAdapter RLS preamble round trips', () => {
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
     });
     await adapter.transaction(async () => null);
-    // No bound subject: no role switch, no GUCs — just the transaction.
     expect(state.clientCalls.map((c) => c.sql)).toEqual(['BEGIN', 'COMMIT']);
   });
 });
@@ -482,13 +429,10 @@ describe('NeonDatabaseAdapter.dispose', () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
     });
-    // Prime the pool by running a no-op query — otherwise the lazy
-    // promise never resolves and we never construct.
     await adapter.query('select 1');
     expect(state.poolConstructions).toBe(1);
     await adapter.dispose();
     expect(state.ended).toBe(1);
-    // Second dispose is a no-op (no second pool.end()).
     await adapter.dispose();
     expect(state.ended).toBe(1);
   });
@@ -515,20 +459,15 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
       unsafeAllowUnverifiedJwtSubject: true,
     });
 
-    // Prime the root pool by running one unscoped query so the lazy
-    // construction promise resolves.
     await root.query('select 1');
     expect(state.poolConstructions).toBe(1);
 
-    // Now create 100 per-request scoped adapters via withUser and run a
-    // query through each. None of them should construct a new Pool.
     for (let i = 0; i < 100; i++) {
       const scoped = root.withUser(makeJwt({ sub: `u-${i}` }));
       const rows = await scoped.query<{ id: number }>('select id from x');
       expect(rows).toEqual([{ id: 1 }]);
     }
 
-    // Pool count is still 1 — every withUser child re-used the parent's pool.
     expect(state.poolConstructions).toBe(1);
   });
 
@@ -541,14 +480,12 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
       unsafeAllowUnverifiedJwtSubject: true,
     });
-    await root.query('select 1'); // prime
+    await root.query('select 1');
     const child = root.withUser(makeJwt({ sub: 'c1' }));
     await child.dispose();
-    expect(state.ended).toBe(0); // child dispose did NOT call pool.end()
-    // Root still works.
+    expect(state.ended).toBe(0);
     const rows = await root.query('select 1');
     expect(rows).toBeDefined();
-    // Disposing the root DOES end the shared pool.
     await root.dispose();
     expect(state.ended).toBe(1);
   });
@@ -567,8 +504,6 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
 describe('NeonDatabaseAdapter constructor / raw', () => {
   it('does NOT open the pool at construction time', () => {
     new NeonDatabaseAdapter({ connectionString: 'postgresql://u:p@ep.neon.tech/db' });
-    // The lazy IIFE schedules construction asynchronously, but no
-    // synchronous Pool() call has fired yet.
     expect(state.poolConstructions).toBe(0);
   });
 
@@ -591,7 +526,6 @@ describe('NeonDatabaseAdapter constructor / raw', () => {
     });
     const pool = await adapter.raw();
     expect(pool).toBeDefined();
-    // It must look like a Pool — connect / end / query are all present.
     expect(typeof (pool as { connect?: unknown }).connect).toBe('function');
     expect(typeof (pool as { end?: unknown }).end).toBe('function');
   });

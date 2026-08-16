@@ -1,22 +1,12 @@
-/**
- * QuickAnswerToggle Component
- *
- * Toggle that appears on assistant messages which used extended thinking.
- * Lets users switch between the detailed thinking response and a concise quick answer.
- */
 
 import React, { memo, useCallback } from 'react';
 import { Brain, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface QuickAnswerToggleProps {
-  /** ID of the message this toggle belongs to */
   messageId: string;
-  /** Whether the message contains thinking/reasoning content */
   hasThinking: boolean;
-  /** Whether we are currently showing the quick (condensed) version */
   isQuickMode: boolean;
-  /** Callback invoked when the user clicks the toggle */
   onToggle: (quickMode: boolean) => void;
 }
 
@@ -25,8 +15,6 @@ const QuickAnswerToggleComponent: React.FC<QuickAnswerToggleProps> = ({
   isQuickMode,
   onToggle,
 }) => {
-  // Pure client-side toggle — full content is already stored in the message,
-  // so we just flip the display mode without a backend call.
   const handleClick = useCallback(() => {
     onToggle(!isQuickMode);
   }, [isQuickMode, onToggle]);

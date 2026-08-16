@@ -8,21 +8,11 @@ const migration = readFileSync(
   'utf8',
 );
 
-/**
- * Executable SQL only. The header documents the old `> 0` guards it replaces,
- * so a whole-file assertion would match the very thing being removed.
- */
 const statements = migration
   .split('\n')
   .filter((line) => !line.trimStart().startsWith('--'))
   .join('\n');
 
-/**
- * GOV-1: 0066 enforced each rolling ceiling only when the cap was strictly
- * `> 0`, so a cap of 0 meant UNLIMITED — the exact inversion of fail-closed.
- * 0070 replaces every guard with `is not null`, making "declared uncapped"
- * (NULL) and "ceiling of zero" (0, deny) two different facts.
- */
 describe('managed usage cap semantics migration', () => {
   it('recreates both cap-enforcing functions', () => {
     expect(migration).toMatch(

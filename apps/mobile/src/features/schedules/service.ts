@@ -15,12 +15,6 @@ import {
 import type { Schedule, ScheduleRun, CreateScheduleInput } from './store';
 import { assertMobileScheduleRecurrenceSupported } from './policy';
 
-/**
- * Schedule API Service
- *
- * All endpoints communicate with the Next.js API routes at /api/schedules.
- */
-
 function assertSchedulesAvailable(): void {
   if (!FEATURES.schedules) throw new Error('schedules: cloud schedules not available in v1');
 }
@@ -103,9 +97,6 @@ function mapRun(run: ManagedCloudScheduleRun): ScheduleRun {
   };
 }
 
-/**
- * Fetch all schedules for the authenticated user.
- */
 export async function fetchSchedules(): Promise<Schedule[]> {
   assertSchedulesAvailable();
   const value = await api.get<unknown>('/api/schedules');
@@ -117,9 +108,6 @@ export async function fetchSchedules(): Promise<Schedule[]> {
   return data.schedules.map(mapSchedule);
 }
 
-/**
- * Create a new scheduled task.
- */
 export async function createSchedule(input: CreateScheduleInput): Promise<Schedule> {
   assertSchedulesAvailable();
   assertMobileScheduleRecurrenceSupported(input.recurrence);
@@ -132,9 +120,6 @@ export async function createSchedule(input: CreateScheduleInput): Promise<Schedu
   return mapSchedule(data.schedule);
 }
 
-/**
- * Update an existing schedule.
- */
 export async function updateSchedule(
   id: string,
   input: Partial<CreateScheduleInput>,
@@ -152,17 +137,11 @@ export async function updateSchedule(
   return mapSchedule(data.schedule);
 }
 
-/**
- * Delete a schedule permanently.
- */
 export async function deleteSchedule(id: string): Promise<void> {
   assertSchedulesAvailable();
   await api.delete(managedCloudSchedulePath(id));
 }
 
-/**
- * Toggle a schedule's active status.
- */
 export async function toggleSchedule(id: string, isActive: boolean): Promise<Schedule> {
   assertSchedulesAvailable();
   const value = await api.patch<unknown>(managedCloudSchedulePath(id), {
@@ -176,9 +155,6 @@ export async function toggleSchedule(id: string, isActive: boolean): Promise<Sch
   return mapSchedule(data.schedule);
 }
 
-/**
- * Fetch run history for a specific schedule.
- */
 export async function fetchScheduleRuns(scheduleId: string): Promise<ScheduleRun[]> {
   assertSchedulesAvailable();
   const value = await api.get<unknown>(managedCloudScheduleRunsPath(scheduleId));
@@ -190,9 +166,6 @@ export async function fetchScheduleRuns(scheduleId: string): Promise<ScheduleRun
   return data.runs.map(mapRun);
 }
 
-/**
- * Trigger an immediate run of a schedule.
- */
 export async function triggerScheduleNow(id: string): Promise<ScheduleRun> {
   assertSchedulesAvailable();
   const idempotencyKey = `agi.schedule.mobile.${Crypto.randomUUID()}`;

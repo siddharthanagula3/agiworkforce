@@ -1,7 +1,3 @@
-/**
- * TOTP 2FA Implementation Tests
- * Tests the RFC 6238 compliant TOTP implementation
- */
 
 import { describe, it, expect } from 'vitest';
 import {
@@ -20,10 +16,8 @@ describe('TOTP 2FA Implementation', () => {
     it('should generate a Base32 encoded secret', () => {
       const secret = generateTOTPSecret();
 
-      // Base32 alphabet check
       expect(secret).toMatch(/^[A-Z2-7]+$/);
 
-      // 20 bytes = 160 bits, which encodes to 32 Base32 characters
       expect(secret.length).toBe(32);
     });
 
@@ -34,7 +28,6 @@ describe('TOTP 2FA Implementation', () => {
         secrets.add(generateTOTPSecret());
       }
 
-      // All 100 secrets should be unique
       expect(secrets.size).toBe(100);
     });
   });
@@ -85,7 +78,7 @@ describe('TOTP 2FA Implementation', () => {
 
     it('should generate consistent codes for the same time window', async () => {
       const secret = 'JBSWY3DPEHPK3PXP';
-      const timestamp = 1234567890000; // Fixed timestamp
+      const timestamp = 1234567890000;
 
       const code1 = await generateTOTPCode(secret, timestamp);
       const code2 = await generateTOTPCode(secret, timestamp);
@@ -96,7 +89,7 @@ describe('TOTP 2FA Implementation', () => {
     it('should generate different codes for different time windows', async () => {
       const secret = 'JBSWY3DPEHPK3PXP';
       const timestamp1 = 1234567890000;
-      const timestamp2 = timestamp1 + 30000; // Next time window
+      const timestamp2 = timestamp1 + 30000;
 
       const code1 = await generateTOTPCode(secret, timestamp1);
       const code2 = await generateTOTPCode(secret, timestamp2);
@@ -104,19 +97,13 @@ describe('TOTP 2FA Implementation', () => {
       expect(code1).not.toBe(code2);
     });
 
-    // RFC 6238 test vector
     it('should generate correct code for RFC 6238 test vector', async () => {
-      // This is a well-known test case from RFC 6238
-      // Secret: 12345678901234567890 (in hex: 31323334353637383930...)
-      // However, the standard test vectors use raw bytes, which we need to convert to Base32
-      // For our implementation, we use a known Base32 secret
 
-      const secret = 'GEZDGNBVGY3TQOJQ'; // Base32 encoded "12345678901234567890"
-      const timestamp = 59000; // Unix time 59 (in milliseconds)
+      const secret = 'GEZDGNBVGY3TQOJQ';
+      const timestamp = 59000;
 
       const code = await generateTOTPCode(secret, timestamp);
 
-      // The code should be valid 6 digits
       expect(code).toMatch(/^\d{6}$/);
     });
   });
@@ -159,15 +146,13 @@ describe('TOTP 2FA Implementation', () => {
 
       const isValid = await verifyTOTPCode(secret, '000000');
 
-      // While it's theoretically possible for 000000 to be valid,
-      // the probability is extremely low (1 in 1 million)
       expect(isValid).toBe(false);
     });
 
     it('should reject a code from too far in the past', async () => {
       const secret = generateTOTPSecret();
       const currentTime = Date.now();
-      const oldWindow = currentTime - TOTP_CONFIG.PERIOD * 2000; // Two windows back
+      const oldWindow = currentTime - TOTP_CONFIG.PERIOD * 2000;
 
       const code = await generateTOTPCode(secret, oldWindow);
       const isValid = await verifyTOTPCode(secret, code, currentTime);
@@ -225,7 +210,6 @@ describe('TOTP 2FA Implementation', () => {
       const codes = generateBackupCodes();
 
       codes.forEach((code) => {
-        // Should not contain I, O (easily confused with 1, 0)
         expect(code).not.toMatch(/[IO]/);
       });
     });
@@ -303,7 +287,6 @@ describe('TOTP 2FA Implementation', () => {
       const codes = generateBackupCodes();
       const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
 
-      // Remove dash from code
       const codeWithoutDash = codes![0]!.replace('-', '')!;
       const index = await verifyBackupCode(codeWithoutDash, hashedCodes);
 
@@ -329,10 +312,8 @@ describe('TOTP 2FA Implementation', () => {
     });
 
     it('should have reasonable security parameters', () => {
-      // 20 bytes = 160 bits, which is the recommended minimum
       expect(TOTP_CONFIG.SECRET_LENGTH).toBeGreaterThanOrEqual(20);
 
-      // Should have at least 8 backup codes
       expect(TOTP_CONFIG.BACKUP_CODE_COUNT).toBeGreaterThanOrEqual(8);
     });
   });
@@ -342,16 +323,14 @@ describe('TOTP 2FA Implementation', () => {
       const secret = generateTOTPSecret();
       const epochTime = 0;
 
-      // Should not throw
       const code = await generateTOTPCode(secret, epochTime);
       expect(code).toMatch(/^\d{6}$/);
     });
 
     it('should handle very large timestamps', async () => {
       const secret = generateTOTPSecret();
-      const farFuture = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000; // 100 years
+      const farFuture = Date.now() + 100 * 365 * 24 * 60 * 60 * 1000;
 
-      // Should not throw
       const code = await generateTOTPCode(secret, farFuture);
       expect(code).toMatch(/^\d{6}$/);
     });
@@ -359,7 +338,6 @@ describe('TOTP 2FA Implementation', () => {
     it('should generate valid codes at time window boundaries', async () => {
       const secret = generateTOTPSecret();
 
-      // Test at exact 30-second boundary
       const boundary = Math.floor(Date.now() / 30000) * 30000;
 
       const code = await generateTOTPCode(secret, boundary);

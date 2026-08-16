@@ -5,24 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import { metadata } from '@/app/use-cases/layout';
 
-/**
- * `/use-cases` metadata must not advertise an industry vertical that has no
- * page under `app/use-cases/`.
- *
- * The layout's `keywords` are the only metadata field the index page does not
- * override (`buildMetadata` in `page.tsx` replaces title/description/openGraph/
- * twitter/canonical), so they ship verbatim on every `/use-cases/*` route. They
- * claimed "AI for healthcare" and "AI for legal" while the routed set is
- * startups, consulting, IT service providers, and sales teams — there is no
- * health or legal surface anywhere in the product, and `app/terms/page.tsx`
- * tells users not to rely on output for legal, medical, or financial decisions.
- *
- * The allowance is derived from the filesystem, not hardcoded: ship
- * `app/use-cases/healthcare/page.tsx` and "healthcare" becomes legal copy again.
- */
 const USE_CASES_DIR = path.join(__dirname, '..');
 
-/** Industry words that would each need their own vertical page to be claimable. */
 const VERTICAL_TERMS = [
   'healthcare',
   'health',

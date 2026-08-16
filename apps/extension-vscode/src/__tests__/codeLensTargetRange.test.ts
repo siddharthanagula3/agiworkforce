@@ -1,12 +1,3 @@
-/**
- * codeLensTargetRange.test.ts — VSCX-01.
- *
- * Clicking a CodeLens above a function sent the *whole file* to the model. The
- * lens computed a range and threw it away: the commands were registered with no
- * parameters, so runInlineCommand fell back to `editor.selection`, and
- * `getText(undefined)` on an empty selection returns the entire document — which
- * also meant the "Select some code first" guard never fired.
- */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -40,7 +31,6 @@ describe('declarationSpan', () => {
       '}',
     ];
 
-    // The defect sent everything; the span must not reach the second function.
     expect(declarationSpan(lines, 0).endLine).toBe(2);
     expect(declarationSpan(lines, 3).endLine).toBe(5);
   });
@@ -67,8 +57,6 @@ describe('declarationSpan', () => {
   });
 
   it('falls back to the declaration line when braces are unbalanced mid-edit', () => {
-    // Erring toward too little context is safe; erring toward too much is the
-    // bug being fixed.
     const lines = ['function broken() {', '  const x = 1;'];
     expect(declarationSpan(lines, 0)).toMatchObject({ startLine: 0, endLine: 0 });
   });
@@ -80,7 +68,6 @@ describe('lens → command wiring', () => {
   const inline = read('core/runInlineCommand.ts');
 
   it('passes the target range as a command argument', () => {
-    // The regression: a computed range that never reached the command.
     expect(provider).toContain('arguments: [targetRange]');
     expect(provider.match(/arguments: \[targetRange\]/g)?.length).toBe(4);
   });
@@ -92,7 +79,6 @@ describe('lens → command wiring', () => {
   });
 
   it('no longer resolves an empty selection to the whole document', () => {
-    // getText(undefined) returns the entire file — the exact silent whole-file send.
     expect(inline).not.toContain('getText(selection.isEmpty ? undefined : selection)');
     expect(inline).toContain('targetRange ?? (selection.isEmpty ? undefined : selection)');
   });

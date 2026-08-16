@@ -1,7 +1,3 @@
-/**
- * Leak detector: scans request/response data for secret-shaped strings.
- * Call assertNoLeaks() on untrusted data before logging or returning to clients.
- */
 
 /**
  * EXPORTED so redactors can share ONE pattern list with the detector.
@@ -32,7 +28,6 @@ export class LeakDetectedError extends Error {
 function scanString(value: string, label: string): void {
   for (const pattern of ASSERTABLE_SECRET_PATTERNS) {
     if (pattern.test(value)) {
-      // Log sanitized warning (don't log the actual value)
       console.warn(`[leak-detector] Pattern ${pattern.source} matched in: ${label}`);
       throw new LeakDetectedError(label, pattern.source);
     }

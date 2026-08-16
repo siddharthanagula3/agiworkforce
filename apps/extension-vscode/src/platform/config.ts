@@ -27,7 +27,6 @@ import {
 
 export type ExtensionAgentEffort = 'low' | 'medium' | 'high' | 'max';
 export type ComposerFollowUpBehavior = 'queue' | 'steer';
-/** Mutable settings exposed by the branded settings panel. */
 export interface MutableConfigValues {
   apiEndpoint: string;
   model: string;
@@ -54,12 +53,6 @@ export type ConfigSettingUpdate = {
   [K in MutableConfigKey]: { key: K; value: MutableConfigValues[K] };
 }[MutableConfigKey];
 
-/**
- * Canonical display label for a resolved tier. `unknown` and any unrecognised
- * value stay literal rather than being normalised to "Free" — this is a
- * diagnostic surface, and silently showing a plan the user may not have would be
- * worse than showing that we could not resolve one.
- */
 function currentTierLabel(tier: string): string {
   if (!tier || tier === 'unknown') return 'Unknown';
   return isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : tier;
@@ -92,16 +85,12 @@ export interface ExtensionSettingsSnapshot {
   workspaceTrusted: boolean;
 }
 
-/** Default values mirror those declared in `package.json` `contributes.configuration`. */
 const DEFAULTS = {
   apiEndpoint: 'https://agiworkforce.com/api/llm/v1',
   agentPlanMode: false,
   agentMode: 'auto',
   agentEffort: 'medium',
   agentThinking: false,
-  // Off by default: four lenses above every declaration in every open file is
-  // more chrome than the editor's own lenses, and the same actions are reachable
-  // from the context menu and the sidebar. Opt-in via agiWorkforce.codeLensEnabled.
   codeLensEnabled: false,
   hoverEnabled: false,
   autoApplyFixes: false,
@@ -136,24 +125,15 @@ function workspaceOverrides(): MutableConfigKey[] {
   });
 }
 
-/** Single-call helpers and the typed settings-panel write boundary. */
 export const Config = {
-  // ── Agent mode ──────────────────────────────────────────────────────────
   agentPlanMode(): boolean {
     return get<boolean>('agent.planMode', DEFAULTS.agentPlanMode);
   },
-  /**
-   * Resolve the effective agent mode:
-   *  1. If `agent.mode` has been explicitly set, use it.
-   *  2. Otherwise, fall back to `agent.planMode` backwards-compat alias:
-   *     `true` → 'plan', `false` → 'auto'.
-   */
   agentMode(): ExtensionAgentMode {
     const raw = get<string>('agent.mode', DEFAULTS.agentMode);
     if (raw === 'ask' || raw === 'auto' || raw === 'plan' || raw === 'bypass') {
       return enforceAgentModeConsent(raw);
     }
-    // Backwards-compat: fall through to deprecated planMode alias
     return get<boolean>('agent.planMode', false) ? 'plan' : 'auto';
   },
   agentEffort(): ExtensionAgentEffort {
@@ -165,12 +145,10 @@ export const Config = {
     return get<boolean>('agent.thinking', DEFAULTS.agentThinking);
   },
 
-  // ── Hover actions ───────────────────────────────────────────────────────
   hoverEnabled(): boolean {
     return get<boolean>('hoverEnabled', DEFAULTS.hoverEnabled);
   },
 
-  // ── CodeLens / inline completions ───────────────────────────────────────
   codeLensEnabled(): boolean {
     return get<boolean>('codeLensEnabled', DEFAULTS.codeLensEnabled);
   },
@@ -187,11 +165,7 @@ export const Config = {
     return get<number>('inlineCompletions.maxLength', DEFAULTS.inlineCompletionsMaxLength);
   },
 
-  // ── Provider routing ────────────────────────────────────────────────────
   model(): string {
-    // Model selection determines whether a developer turn is Local, provider
-    // BYOK, or Managed Cloud. A checked-out repository must never be able to
-    // change that trust boundary through .vscode/settings.json.
     return getUserScoped<string>('model', DEFAULTS.model);
   },
   composerFollowUpBehavior(): ComposerFollowUpBehavior {
@@ -205,18 +179,13 @@ export const Config = {
     return getUserScoped<string>('apiEndpoint', DEFAULTS.apiEndpoint);
   },
 
-  // ── Desktop bridge ─────────────────────────────────────────────────────
   desktopBridgeEnabled(): boolean {
-    // The bridge authenticates with Desktop's local IPC token. Keep both the
-    // opt-in and destination user-owned so workspace settings cannot redirect
-    // that credential to another localhost process.
     return getUserScoped<boolean>('desktopBridge.enabled', DEFAULTS.desktopBridgeEnabled);
   },
   desktopBridgePort(): number {
     return getUserScoped<number>('desktopBridge.port', DEFAULTS.desktopBridgePort);
   },
 
-  // ── Telemetry ───────────────────────────────────────────────────────────
   telemetryEnabled(): boolean {
     return get<boolean>('telemetryEnabled', DEFAULTS.telemetryEnabled);
   },
@@ -224,10 +193,6 @@ export const Config = {
     return get<string>('telemetryEndpoint', DEFAULTS.telemetryEndpoint);
   },
 
-  /**
-   * Read the cached current tier from global (user-scoped) settings only.
-   * Workspace values are ignored to prevent untrusted-workspace tier spoofing.
-   */
   currentTier(): string {
     const inspected = vscode.workspace
       .getConfiguration('agiWorkforce')
@@ -235,10 +200,6 @@ export const Config = {
     return inspected?.globalValue ?? DEFAULTS.currentTier;
   },
 
-  /**
-   * Executable used for the workspace-scoped local developer runtime.
-   * Untrusted workspaces cannot replace it with a workspace-authored binary.
-   */
   cliPath(): string {
     const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<string>('cliPath');
     if (!vscode.workspace.isTrusted) {
@@ -269,10 +230,6 @@ export const Config = {
         'desktopBridge.port': this.desktopBridgePort(),
         telemetryEndpoint: this.telemetryEndpoint(),
         currentTier: this.currentTier(),
-        // Human label resolved from the shared billing catalog, NOT by
-        // string-munging the tier id. The settings webview used to render
-        // `currentTier.replace(/_/g, ' ')`, which printed "max 15x" where every
-        // other surface says "Max 15x", and "local only" for "Local Mode".
         currentTierLabel: currentTierLabel(this.currentTier()),
       },
       workspaceOverrides: workspaceOverrides(),
@@ -280,11 +237,6 @@ export const Config = {
     };
   },
 
-  /**
-   * Persist a validated setting at user scope. Agent mode is deliberately
-   * routed through the versioned bypass-consent boundary instead of writing
-   * directly.
-   */
   async update(context: vscode.ExtensionContext, update: ConfigSettingUpdate): Promise<boolean> {
     if (update.key === 'agent.mode') {
       return setAgentModeWithConsent(context, update.value);
@@ -299,5 +251,4 @@ export const Config = {
   },
 } as const;
 
-/** Test-only: expose defaults for assertion tests. */
 export const __CONFIG_DEFAULTS = DEFAULTS;

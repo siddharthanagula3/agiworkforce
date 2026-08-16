@@ -99,18 +99,9 @@ for (const file of listFilesRecursive('tasks/team-status')) {
   }
 }
 
-// Note: the former docs/archive/2026-06-05-doc-reset/** archived-artifact
-// existence checks were removed — scripts/clean-repo.mjs deletes docs/archive/**
-// under the agi-alpha policy, so requiring those paths is obsolete.
-
 const allowedLiveNonMarkdownPrefixes = [
   'docs/agent-context/',
   'docs/api/',
-  // The consolidated remediation register: `register.json` is the machine-
-  // readable index the wave documents are generated from, and the security
-  // scan it absorbed keeps its own JSON/JSONL evidence beside it. Same
-  // rationale as docs/agent-context/ — a live, queried artifact, not raw
-  // historical output.
   'docs/remediation/',
   'docs/design/ui-ux-reference-2026-07/',
   'docs/spec/artifacts/',

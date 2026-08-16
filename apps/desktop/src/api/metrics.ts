@@ -1,18 +1,6 @@
-/**
- * Metrics API
- *
- * TypeScript wrappers for the metrics and ROI dashboard Tauri commands.
- * Provides real-time stats, historical metrics, comparisons, milestones,
- * and report export functionality.
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Request to record an automation run */
 export interface RecordAutomationRequest {
   automationName: string;
   estimatedManualTimeMs: number;
@@ -22,7 +10,6 @@ export interface RecordAutomationRequest {
   qualityScore?: number;
 }
 
-/** Snapshot of metrics at a point in time */
 export interface MetricsSnapshot {
   totalTimeSavedHours: number;
   totalCostSavedUsd: number;
@@ -30,7 +17,6 @@ export interface MetricsSnapshot {
   avgTimeSavedPerRun: number;
 }
 
-/** Real-time stats across time periods */
 export interface RealtimeStats {
   today: MetricsSnapshot;
   thisWeek: MetricsSnapshot;
@@ -38,7 +24,6 @@ export interface RealtimeStats {
   allTime: MetricsSnapshot;
 }
 
-/** Comparison between manual and automated processes */
 export interface Comparison {
   manualTimeMinutes: number;
   automatedTimeMinutes: number;
@@ -51,14 +36,12 @@ export interface Comparison {
   qualityImprovementPercent: number;
 }
 
-/** Comparison between two time periods */
 export interface PeriodComparison {
   current: MetricsSnapshot;
   previous: MetricsSnapshot;
   timeSavedChangePercent: number;
 }
 
-/** Comparison against industry benchmark */
 export interface BenchmarkComparison {
   userTimeSaved: number;
   industryAvgTimeSaved: number;
@@ -68,7 +51,6 @@ export interface BenchmarkComparison {
   percentile: number;
 }
 
-/** Milestone achievement data */
 export interface MilestoneData {
   id: string;
   milestoneType: string;
@@ -77,7 +59,6 @@ export interface MilestoneData {
   shared: boolean;
 }
 
-/** Stats for a single day */
 export interface DayStats {
   totalTimeSavedHours: number;
   totalCostSavedUsd: number;
@@ -88,7 +69,6 @@ export interface DayStats {
   topAutomationTimeSaved: number;
 }
 
-/** Top performing automation data */
 export interface TopAutomationData {
   automationName: string;
   timeSavedHours: number;
@@ -97,7 +77,6 @@ export interface TopAutomationData {
   successRate: number;
 }
 
-/** Daily breakdown entry */
 export interface DailyBreakdown {
   date: string;
   timeSavedHours: number;
@@ -105,7 +84,6 @@ export interface DailyBreakdown {
   automationsRun: number;
 }
 
-/** Stats for the current week */
 export interface WeekStats {
   totalTimeSavedHours: number;
   totalCostSavedUsd: number;
@@ -116,7 +94,6 @@ export interface WeekStats {
   dailyBreakdown: DailyBreakdown[];
 }
 
-/** Weekly breakdown entry */
 export interface WeeklyBreakdown {
   weekStart: string;
   weekEnd: string;
@@ -125,7 +102,6 @@ export interface WeeklyBreakdown {
   automationsRun: number;
 }
 
-/** Stats for the current month */
 export interface MonthStats {
   totalTimeSavedHours: number;
   totalCostSavedUsd: number;
@@ -136,7 +112,6 @@ export interface MonthStats {
   weeklyBreakdown: WeeklyBreakdown[];
 }
 
-/** Monthly trend entry */
 export interface MonthlyTrend {
   month: string;
   timeSavedHours: number;
@@ -144,7 +119,6 @@ export interface MonthlyTrend {
   automationsRun: number;
 }
 
-/** All-time stats with milestones and trends */
 export interface AllTimeStats {
   totalTimeSavedHours: number;
   totalCostSavedUsd: number;
@@ -155,7 +129,6 @@ export interface AllTimeStats {
   monthlyTrend: MonthlyTrend[];
 }
 
-/** Manual vs automated comparison data */
 export interface ComparisonData {
   manualTimeHours: number;
   automatedTimeHours: number;
@@ -169,7 +142,6 @@ export interface ComparisonData {
   qualityImprovement: number;
 }
 
-/** Period-over-period comparison data */
 export interface PeriodComparisonData {
   currentPeriodLabel: string;
   previousPeriodLabel: string;
@@ -182,7 +154,6 @@ export interface PeriodComparisonData {
   percentageChange: number;
 }
 
-/** Industry benchmark comparison data */
 export interface BenchmarkComparisonData {
   yourTimeSavedHours: number;
   industryAverageTimeSavedHours: number;
@@ -193,7 +164,6 @@ export interface BenchmarkComparisonData {
   percentageBetter: number;
 }
 
-/** Recent activity feed item */
 export interface ActivityItem {
   id: string;
   type: string;
@@ -206,7 +176,6 @@ export interface ActivityItem {
   status?: string;
 }
 
-/** Options for exporting an ROI report */
 export interface ExportOptions {
   dateRange: string;
   format: string;
@@ -218,11 +187,6 @@ export interface ExportOptions {
   endDate?: string;
 }
 
-// ============================================================================
-// API Functions
-// ============================================================================
-
-/** Get real-time metrics stats */
 export async function getRealtimeStats(): Promise<RealtimeStats> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -233,7 +197,6 @@ export async function getRealtimeStats(): Promise<RealtimeStats> {
   }
 }
 
-/** Record an automation run and get updated snapshot */
 export async function recordAutomationMetrics(
   request: RecordAutomationRequest,
 ): Promise<MetricsSnapshot> {
@@ -248,7 +211,6 @@ export async function recordAutomationMetrics(
   }
 }
 
-/** Get metrics history for a given number of days */
 export async function getMetricsHistory(days: number): Promise<MetricsSnapshot[]> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -259,7 +221,6 @@ export async function getMetricsHistory(days: number): Promise<MetricsSnapshot[]
   }
 }
 
-/** Compare automated vs manual for a given automation type */
 export async function compareToManual(automationType: string): Promise<Comparison> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -270,7 +231,6 @@ export async function compareToManual(automationType: string): Promise<Compariso
   }
 }
 
-/** Compare current period with previous period */
 export async function compareToPreviousPeriod(days: number): Promise<PeriodComparison> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -281,7 +241,6 @@ export async function compareToPreviousPeriod(days: number): Promise<PeriodCompa
   }
 }
 
-/** Compare to industry benchmark for a given role */
 export async function compareToIndustryBenchmark(role: string): Promise<BenchmarkComparison> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -292,7 +251,6 @@ export async function compareToIndustryBenchmark(role: string): Promise<Benchmar
   }
 }
 
-/** Get list of achieved milestones */
 export async function getMilestones(): Promise<MilestoneData[]> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -303,7 +261,6 @@ export async function getMilestones(): Promise<MilestoneData[]> {
   }
 }
 
-/** Share a milestone (mark as publicly visible) */
 export async function shareMilestone(milestoneId: string): Promise<void> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -314,7 +271,6 @@ export async function shareMilestone(milestoneId: string): Promise<void> {
   }
 }
 
-/** Get today's stats summary */
 export async function getTodayStats(): Promise<DayStats> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -325,7 +281,6 @@ export async function getTodayStats(): Promise<DayStats> {
   }
 }
 
-/** Get this week's stats with daily breakdown */
 export async function getWeekStats(): Promise<WeekStats> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -336,7 +291,6 @@ export async function getWeekStats(): Promise<WeekStats> {
   }
 }
 
-/** Get this month's stats with weekly breakdown */
 export async function getMonthStats(): Promise<MonthStats> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -347,7 +301,6 @@ export async function getMonthStats(): Promise<MonthStats> {
   }
 }
 
-/** Get all-time stats with monthly trends */
 export async function getAllTimeStats(): Promise<AllTimeStats> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -358,7 +311,6 @@ export async function getAllTimeStats(): Promise<AllTimeStats> {
   }
 }
 
-/** Get manual vs automated comparison for an automation type */
 export async function getManualVsAutomatedComparison(
   automationType: string,
 ): Promise<ComparisonData> {
@@ -373,7 +325,6 @@ export async function getManualVsAutomatedComparison(
   }
 }
 
-/** Get period-over-period comparison (week, month, quarter, year) */
 export async function getPeriodComparison(period: string): Promise<PeriodComparisonData> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -384,7 +335,6 @@ export async function getPeriodComparison(period: string): Promise<PeriodCompari
   }
 }
 
-/** Get benchmark comparison for a given role */
 export async function getBenchmarkComparison(role: string): Promise<BenchmarkComparisonData> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -395,7 +345,6 @@ export async function getBenchmarkComparison(role: string): Promise<BenchmarkCom
   }
 }
 
-/** Get recent activity feed */
 export async function getRecentActivity(limit: number): Promise<ActivityItem[]> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');
@@ -406,7 +355,6 @@ export async function getRecentActivity(limit: number): Promise<ActivityItem[]> 
   }
 }
 
-/** Export ROI report to file, returns file path */
 export async function exportRoiReport(options: ExportOptions): Promise<string> {
   try {
     if (!isTauri) throw new Error('Metrics requires Tauri runtime');

@@ -23,9 +23,6 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Custom AbortError for environments where DOMException may not be available.
- */
 export class AbortError extends Error {
   constructor(message = 'Aborted') {
     super(message);
@@ -54,12 +51,9 @@ export function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> 
       return;
     }
 
-    // Declare abortHandler before the timer so the timer callback can reference it.
     let abortHandler: (() => void) | undefined;
 
     const timer = setTimeout(() => {
-      // Remove the abort listener when the timer fires naturally to prevent
-      // listener accumulation when an AbortController is reused across multiple calls.
       if (abortHandler) signal!.removeEventListener('abort', abortHandler);
       resolve();
     }, ms);
@@ -105,7 +99,6 @@ export function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> 
  */
 export interface DebouncedFunction<TArgs extends unknown[]> {
   (...args: TArgs): void;
-  /** Drop any pending call. Idempotent, and safe to call after it has fired. */
   cancel(): void;
 }
 
@@ -172,32 +165,16 @@ export function throttle<TArgs extends unknown[], TReturn>(
   };
 }
 
-/**
- * Options for retry operations.
- */
 export interface RetryOptions {
-  /** Maximum number of retry attempts (default: 3) */
   maxAttempts?: number;
-  /** Initial delay in milliseconds (default: 1000) */
   initialDelay?: number;
-  /** Maximum delay in milliseconds (default: 30000) */
   maxDelay?: number;
-  /** Multiplier for exponential backoff (default: 2) */
   backoffMultiplier?: number;
-  /**
-   * Error message substrings that should abort retries immediately.
-   * Each entry is matched against `error.message` via `String.includes()`.
-   */
   abortOnErrorMessages?: string[];
-  /** Callback invoked on each retry attempt */
   onRetry?: (attempt: number, error: Error) => void;
-  /** Custom function to determine if error is retryable */
   shouldRetry?: (error: Error, attempt: number) => boolean;
 }
 
-/**
- * Error thrown when all retry attempts have been exhausted.
- */
 export class RetryError extends Error {
   constructor(
     message: string,
@@ -271,17 +248,14 @@ export async function retry<T>(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
-      // Check if error should abort retries
       if (abortOnErrorMessages.some((msg) => lastError.message.includes(msg))) {
         throw lastError;
       }
 
-      // Check custom retry condition
       if (shouldRetry && !shouldRetry(lastError, attempt + 1)) {
         throw lastError;
       }
 
-      // Check if this was the last attempt
       if (attempt === maxAttempts - 1) {
         break;
       }
@@ -303,11 +277,7 @@ export async function retry<T>(
   );
 }
 
-/**
- * Predefined retry strategies for common scenarios.
- */
 export const retryStrategies = {
-  /** Network request retry strategy */
   network: {
     maxAttempts: 3,
     initialDelay: 1000,
@@ -316,7 +286,6 @@ export const retryStrategies = {
     abortOnErrorMessages: ['404', 'Not Found', 'Unauthorized', 'Forbidden'],
   } satisfies RetryOptions,
 
-  /** Database operation retry strategy */
   database: {
     maxAttempts: 5,
     initialDelay: 500,
@@ -325,7 +294,6 @@ export const retryStrategies = {
     abortOnErrorMessages: ['SQLITE_CORRUPT', 'corrupted'],
   } satisfies RetryOptions,
 
-  /** API call retry strategy */
   api: {
     maxAttempts: 4,
     initialDelay: 2000,
@@ -342,7 +310,6 @@ export const retryStrategies = {
     },
   } satisfies RetryOptions,
 
-  /** Filesystem operation retry strategy */
   filesystem: {
     maxAttempts: 3,
     initialDelay: 500,

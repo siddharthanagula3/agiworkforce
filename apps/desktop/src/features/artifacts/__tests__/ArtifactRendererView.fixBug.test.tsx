@@ -1,9 +1,3 @@
-/**
- * Regression test for the "Fix Bug" affordance ported from
- * features/canvas/ArtifactPreview.tsx into the live Diagram error state:
- * clicking it must call onFixBug with the render error and the offending
- * source so the caller can send both back to the model.
- */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { RenderedArtifact } from '@/stores/artifactStore';

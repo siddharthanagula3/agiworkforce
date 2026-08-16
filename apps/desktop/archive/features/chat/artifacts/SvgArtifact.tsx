@@ -91,7 +91,6 @@ export function SvgArtifact({ artifact }: { artifact: Artifact }) {
             'patternTransform',
           ],
           svg: ['viewBox', 'xmlns', 'width', 'height', 'preserveAspectRatio'],
-          // SECURITY: Only allow href on elements that need it to prevent javascript: URI XSS
           use: ['href', 'x', 'y', 'width', 'height'],
           image: ['href', 'x', 'y', 'width', 'height', 'preserveAspectRatio'],
           linearGradient: ['href'],

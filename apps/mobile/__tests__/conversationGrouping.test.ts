@@ -1,17 +1,6 @@
-/**
- * Tests for conversation grouping logic (Today / Yesterday / This Week / Older).
- *
- * The grouping function lives in ConversationList.tsx but we extract the logic
- * via the TIME_GROUPS constants from lib/constants to stay in sync.
- */
 
 import { TIME_GROUPS } from '../lib/constants';
 import type { ConversationSummary, ConversationGroup } from '../types/chat';
-
-// ---------------------------------------------------------------------------
-// Inline the groupConversations function so we can test it directly without
-// importing JSX / React Native components.
-// ---------------------------------------------------------------------------
 
 interface GroupedConversations {
   label: ConversationGroup;
@@ -58,10 +47,6 @@ function groupConversations(
     .map((label) => ({ label, conversations: groups[label] }));
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeConversation(id: string, updatedAt: string): ConversationSummary {
   return {
     id,
@@ -73,22 +58,12 @@ function makeConversation(id: string, updatedAt: string): ConversationSummary {
   };
 }
 
-/** Reference "now" for all tests so assertions don't drift at midnight */
 const NOW = new Date('2026-03-07T15:00:00.000Z');
 
-/**
- * Replicate exactly how groupConversations computes startOfToday:
- * setHours(0,0,0,0) uses LOCAL time, not UTC. We must mirror that here.
- */
 const START_OF_TODAY = new Date(NOW);
 START_OF_TODAY.setHours(0, 0, 0, 0);
 
-/** ms from epoch for start-of-today (local timezone, mirrors production code) */
 const TODAY_MS = START_OF_TODAY.getTime();
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('groupConversations', () => {
   describe('Today bucket', () => {
@@ -100,8 +75,6 @@ describe('groupConversations', () => {
     });
 
     it('groups a conversation updated 1ms after local midnight as "Today"', () => {
-      // TODAY_MS is start-of-today in LOCAL time (matches groupConversations logic).
-      // age = todayMs - (todayMs + 1) = -1 < 0 → Today bucket.
       const justAfterMidnight = new Date(TODAY_MS + 1).toISOString();
       const groups = groupConversations([makeConversation('1', justAfterMidnight)], NOW);
       expect(groups[0].label).toBe('Today');
@@ -116,7 +89,6 @@ describe('groupConversations', () => {
 
   describe('Yesterday bucket', () => {
     it('groups a conversation updated exactly at start-of-today as "Yesterday"', () => {
-      // age = 0 → falls into yesterday (age < YESTERDAY threshold)
       const startOfTodayIso = new Date(TODAY_MS).toISOString();
       const groups = groupConversations([makeConversation('1', startOfTodayIso)], NOW);
       expect(groups[0].label).toBe('Yesterday');
@@ -129,7 +101,6 @@ describe('groupConversations', () => {
     });
 
     it('groups a conversation just before the YESTERDAY→THIS_WEEK boundary as "Yesterday"', () => {
-      // age = TIME_GROUPS.YESTERDAY - 1ms → still < YESTERDAY → Yesterday bucket.
       const justBeforeThisWeek = new Date(TODAY_MS - TIME_GROUPS.YESTERDAY + 1).toISOString();
       const groups = groupConversations([makeConversation('1', justBeforeThisWeek)], NOW);
       expect(groups[0].label).toBe('Yesterday');
@@ -196,13 +167,12 @@ describe('groupConversations', () => {
       ];
 
       const groups = groupConversations(conversations, NOW);
-      // Yesterday and This Week have no items — they must not appear
       expect(groups.map((g) => g.label)).toEqual(['Today', 'Older']);
     });
 
     it('returns conversations sorted by updatedAt descending within each group', () => {
-      const first = new Date(NOW.getTime() - 30 * 60 * 1000).toISOString(); // 30 min ago
-      const second = new Date(NOW.getTime() - 90 * 60 * 1000).toISOString(); // 90 min ago
+      const first = new Date(NOW.getTime() - 30 * 60 * 1000).toISOString();
+      const second = new Date(NOW.getTime() - 90 * 60 * 1000).toISOString();
       const conversations = [
         makeConversation('older_conv', second),
         makeConversation('newer_conv', first),

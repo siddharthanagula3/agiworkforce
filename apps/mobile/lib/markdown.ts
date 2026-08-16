@@ -1,8 +1,3 @@
-/**
- * Minimal markdown parsing for chat messages.
- * Handles: **bold**, *italic*, `inline code`, ```code blocks```,
- * and thinking/reasoning tags.
- */
 
 export interface ParsedSegment {
   type: 'text' | 'bold' | 'italic' | 'code' | 'codeBlock' | 'thinking';
@@ -10,11 +5,6 @@ export interface ParsedSegment {
   language?: string;
 }
 
-/**
- * Extract thinking/reasoning blocks from message content.
- * Supported formats: <thinking>...</thinking>, <reasoning>...</reasoning>,
- * <antThinking>...</antThinking>, <internal_monologue>...</internal_monologue>
- */
 export function extractThinkingBlocks(content: string): {
   visibleContent: string;
   thinkingContent: string | null;
@@ -44,20 +34,14 @@ export function extractThinkingBlocks(content: string): {
   };
 }
 
-/**
- * Parse markdown segments for rendering.
- * Lightweight — only handles common chat formatting.
- */
 export function parseMarkdownSegments(text: string): ParsedSegment[] {
   const segments: ParsedSegment[] = [];
 
-  // Split by code blocks first
   const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
   let lastIndex = 0;
   let match;
 
   while ((match = codeBlockRegex.exec(text)) !== null) {
-    // Add text before code block
     if (match.index > lastIndex) {
       segments.push(...parseInlineSegments(text.slice(lastIndex, match.index)));
     }
@@ -69,7 +53,6 @@ export function parseMarkdownSegments(text: string): ParsedSegment[] {
     lastIndex = match.index + match[0].length;
   }
 
-  // Add remaining text
   if (lastIndex < text.length) {
     segments.push(...parseInlineSegments(text.slice(lastIndex)));
   }

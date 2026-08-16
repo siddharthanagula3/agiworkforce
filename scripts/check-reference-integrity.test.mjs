@@ -14,10 +14,6 @@ import {
   resolveReference,
 } from './lib/comment-scan.mjs';
 
-// ---------------------------------------------------------------------------
-// Comment extraction
-// ---------------------------------------------------------------------------
-
 test('extracts line and block comments with 1-indexed line numbers', () => {
   const source = [
     'const a = 1;',
@@ -62,10 +58,6 @@ test('ignores a hash inside a TOML string but reads a real comment', () => {
   assert.match(comments[0].text, /real/);
 });
 
-// ---------------------------------------------------------------------------
-// Markdown fences
-// ---------------------------------------------------------------------------
-
 test('skips fenced code blocks in markdown', () => {
   const source = ['prose one', '```', 'inside fence', '```', 'prose two'].join('\n');
   const lines = markdownProseLines(source).map((l) => l.text);
@@ -73,10 +65,6 @@ test('skips fenced code blocks in markdown', () => {
   assert.ok(lines.includes('prose two'));
   assert.ok(!lines.includes('inside fence'));
 });
-
-// ---------------------------------------------------------------------------
-// Path resolution
-// ---------------------------------------------------------------------------
 
 const index = buildPathIndex([
   'apps/mobile/services/streaming.ts',
@@ -89,7 +77,6 @@ test('resolves an exact repo-root path', () => {
 });
 
 test("resolves a path written relative to the referencing file's package", () => {
-  // `services/streaming.ts` cited from inside apps/mobile is how people actually write it.
   assert.equal(resolveReference('services/streaming.ts', 'apps/mobile/lib/thing.ts', index), true);
 });
 
@@ -103,13 +90,8 @@ test('resolves a directory only when directories are allowed', () => {
 });
 
 test('normalises a trailing slash before resolving a directory', () => {
-  // Prose spells a directory `docs/decisions/`; the index stores it bare.
   assert.equal(resolveReference('docs/decisions/', 'x.md', index, { allowDirectory: true }), true);
 });
-
-// ---------------------------------------------------------------------------
-// Block context — provenance must be judged per block, not per line
-// ---------------------------------------------------------------------------
 
 test('joins contiguous comment lines into one block', () => {
   const comments = [
@@ -123,17 +105,12 @@ test('joins contiguous comment lines into one block', () => {
   assert.equal(byLine.get(9), 'unrelated');
 });
 
-// ---------------------------------------------------------------------------
-// Allowlist
-// ---------------------------------------------------------------------------
-
 test('intentional entries can be scoped by kind', () => {
   const intentional = [{ pathPrefix: 'docs/plan.md', kinds: ['package'], reason: 'x'.repeat(25) }];
   assert.equal(
     isIntentional({ file: 'docs/plan.md', kind: 'package', reference: '@a/b' }, intentional),
     true,
   );
-  // A stale *file* reference in the same doc is still a real finding.
   assert.equal(
     isIntentional({ file: 'docs/plan.md', kind: 'md-path', reference: 'apps/x.ts' }, intentional),
     false,
@@ -161,14 +138,7 @@ test('knownContradictions require an owner', () => {
   assert.match(errors[0], /needs an owner/);
 });
 
-// ---------------------------------------------------------------------------
-// Gitignore probing
-// ---------------------------------------------------------------------------
-
 test('a bare candidate is also asked as a directory', () => {
-  // `git check-ignore` matches a directory-only pattern (`/ios/`) against a bare
-  // path only while that directory exists on disk, so the bare form alone made the
-  // answer depend on whether the developer had run a build.
   const map = ignoreQueryMap(['apps/mobile/ios']);
   assert.deepEqual([...map.keys()], ['apps/mobile/ios', 'apps/mobile/ios/']);
   assert.equal(map.get('apps/mobile/ios/'), 'apps/mobile/ios');

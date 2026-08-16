@@ -1,27 +1,13 @@
 import * as Speech from 'expo-speech';
 
-/**
- * Text-to-speech service.
- * Uses expo-speech (system TTS) for v1.
- * Cloud TTS (ElevenLabs, OpenAI) can be added as a provider later.
- */
-
 export interface TTSOptions {
-  /** Voice identifier (platform-specific). Pass undefined for system default. */
   voice?: string;
-  /** Speech rate: 0.5 = half speed, 1.0 = normal, 2.0 = double. Default 1.0 */
   rate?: number;
-  /** Pitch multiplier: 0.5 = low, 1.0 = normal, 2.0 = high. Default 1.0 */
   pitch?: number;
-  /** Language/locale code (e.g., 'en-US'). Default: system locale */
   language?: string;
-  /** Callback when speech starts */
   onStart?: () => void;
-  /** Callback when speech finishes */
   onDone?: () => void;
-  /** Callback when speech is stopped early */
   onStopped?: () => void;
-  /** Callback on error */
   onError?: (error: Error) => void;
 }
 
@@ -32,13 +18,7 @@ export interface VoiceInfo {
   language: string;
 }
 
-/**
- * Speak the given text using the system TTS engine.
- * Stops any currently playing speech first.
- */
 export async function speak(text: string, options?: TTSOptions): Promise<void> {
-  // Always stop before speak to prevent race condition where two concurrent
-  // calls both pass isSpeakingAsync check
   await Speech.stop();
 
   return new Promise<void>((resolve, reject) => {
@@ -74,24 +54,14 @@ export async function speak(text: string, options?: TTSOptions): Promise<void> {
   });
 }
 
-/**
- * Stop any currently playing speech.
- */
 export async function stop(): Promise<void> {
   await Speech.stop();
 }
 
-/**
- * Check if the TTS engine is currently speaking.
- */
 export async function isSpeaking(): Promise<boolean> {
   return Speech.isSpeakingAsync();
 }
 
-/**
- * Get available TTS voices on this device.
- * Results vary by platform and installed voice packs.
- */
 export async function getAvailableVoices(): Promise<VoiceInfo[]> {
   try {
     const voices = await Speech.getAvailableVoicesAsync();
@@ -106,17 +76,10 @@ export async function getAvailableVoices(): Promise<VoiceInfo[]> {
   }
 }
 
-/**
- * Get available English voices, sorted by quality.
- */
 export async function getEnglishVoices(): Promise<VoiceInfo[]> {
   return getVoicesForLanguage('en');
 }
 
-/**
- * Get voices for a given language prefix (e.g. 'en', 'fr', 'es').
- * Falls back to all voices if the prefix matches nothing.
- */
 export async function getVoicesForLanguage(languagePrefix: string): Promise<VoiceInfo[]> {
   const voices = await getAvailableVoices();
   const filtered = voices.filter((v) =>
@@ -129,11 +92,6 @@ export async function getVoicesForLanguage(languagePrefix: string): Promise<Voic
   });
 }
 
-/**
- * Return unique language prefixes from the available voice list.
- * Each entry has a code (e.g. 'en'), a display label (e.g. 'English'),
- * and the raw locale of the first matching voice.
- */
 export async function getAvailableLanguages(): Promise<
   { code: string; label: string; locale: string }[]
 > {

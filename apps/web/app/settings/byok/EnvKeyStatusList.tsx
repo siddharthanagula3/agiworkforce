@@ -12,7 +12,6 @@ interface ApiResponse {
   providers: ProviderStatus[];
 }
 
-/** Icon abbreviation cell · consistent with connections page pattern */
 function ProviderIcon({ text }: { text: string }) {
   return (
     <div
@@ -74,7 +73,6 @@ function StatusBadge({ isSet }: { isSet: boolean }) {
 }
 
 interface Props {
-  /** Static provider list from server (label, iconText, envVar). No key values. */
   providers: ReadonlyArray<ByokProvider>;
 }
 

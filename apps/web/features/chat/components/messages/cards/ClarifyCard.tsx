@@ -1,26 +1,5 @@
 'use client';
 
-/**
- * `clarify.v1` renderer — slice 2 of the interactive-card rollout.
- *
- * The decoder, persistence, and fallback path shipped in slice 1 with a
- * deliberately empty registry, so every clarify card rendered as preformatted
- * fallback text. This is the renderer that makes them answerable.
- *
- * Design constraints taken from the contract, not invented here:
- *  - Answers key by stable `questionId` / `optionId`. Labels are resolved
- *    SERVER-side and never travel inbound, so a renamed or localised label
- *    cannot change what a stored answer means.
- *  - `isSecret` questions are rejected by the server and get no masked input
- *    here either. A clarifying-question card must never be able to look like a
- *    credential prompt.
- *  - Every terminal state (`answered`, `dismissed`, `expired`) renders
- *    read-only with NO buttons, because the suspended turn it belonged to is
- *    gone and pressing anything would be a lie.
- *  - `canRespond: false` surfaces (VS Code, CLI) render the questions and the
- *    selection state but cannot submit.
- */
-
 import { useCallback, useMemo, useState } from 'react';
 import { Check } from 'lucide-react';
 import type {
@@ -44,19 +23,16 @@ interface ClarifyCardProps {
   ctx: ClarifyCardContext;
 }
 
-/** Selection state while the card is still pending, keyed by question id. */
 type Draft = Record<string, { optionIds: string[]; otherText: string }>;
 
 function emptyDraft(questions: readonly ClarifyQuestion[]): Draft {
   return Object.fromEntries(questions.map((q) => [q.id, { optionIds: [], otherText: '' }]));
 }
 
-/** Human-readable summary of a settled answer, for the read-only states. */
 function describeAnswer(answer: ClarifyAnswer | undefined): string {
   if (!answer) return 'No answer';
   if (answer.kind === 'skipped') return 'Skipped';
   if (answer.kind === 'other') return answer.text;
-  // `labels` are server-resolved; fall back to ids only if the server sent none.
   return answer.labels.length > 0 ? answer.labels.join(', ') : answer.optionIds.join(', ');
 }
 
@@ -82,7 +58,6 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
         : selected
           ? []
           : [optionId];
-      // Choosing an option clears any free text: a question has one answer.
       return { ...prev, [question.id]: { optionIds, otherText: '' } };
     });
   }, []);
@@ -90,14 +65,12 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
   const setOtherText = useCallback((questionId: string, text: string) => {
     setDraft((prev) => ({
       ...prev,
-      // Free text and options are mutually exclusive for the same reason.
       [questionId]: { optionIds: [], otherText: text.slice(0, CLARIFY_OTHER_MAX_LENGTH) },
     }));
   }, []);
 
   const canSubmit = useMemo(() => {
     if (!interactive) return false;
-    // At least one question must carry an answer; the rest are sent as skipped.
     return body.questions.some((q) => {
       const entry = draft[q.id];
       return (entry?.optionIds.length ?? 0) > 0 || (entry?.otherText.trim().length ?? 0) > 0;
@@ -116,7 +89,6 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
         if (entry.optionIds.length > 0) {
           return { question_id: q.id, option_ids: entry.optionIds };
         }
-        // Silence is representable, and distinct from "not yet asked".
         return { question_id: q.id, skipped: true };
       }),
     });
@@ -205,9 +177,6 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
                   {question.isOther && (
                     <input
                       type="text"
-                      // Never a masked input: `isSecret` cards are rejected
-                      // server-side and this must not resemble a credential
-                      // prompt on any surface.
                       value={entry.otherText}
                       disabled={!interactive}
                       maxLength={CLARIFY_OTHER_MAX_LENGTH}

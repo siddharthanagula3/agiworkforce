@@ -38,7 +38,6 @@ export interface ChatExecutionState {
   lastStreamActivityAt: number | null;
   streamWatchdogTimerId: ReturnType<typeof setTimeout> | null;
 
-  // Streaming actions
   setIsLoading: (loading: boolean) => void;
   setLoadingMessages: (loading: boolean) => void;
   setStreamingMessage: (id: string | null) => void;
@@ -48,7 +47,6 @@ export interface ChatExecutionState {
   stopStreamWatchdog: () => void;
   handleStreamInactivityTimeout: () => void;
 
-  // Inline panel actions — these delegate mutation to chatStore via callback
   addInlinePanel: (messageId: string, panel: InlinePanel) => void;
   updateInlinePanel: (
     messageId: string,
@@ -57,13 +55,11 @@ export interface ChatExecutionState {
   ) => void;
   toggleInlinePanelCollapse: (messageId: string, panelId: string) => void;
 
-  // Pending message actions
   addPendingMessage: (message: PendingUserMessage) => void;
   removePendingMessage: (id: string) => void;
   clearPendingMessages: () => void;
   getPendingMessagesCount: () => number;
 
-  // Tool timeline actions
   addToolTimelineEntry: (messageId: string, entry: ToolLabelEntry) => void;
   updateToolTimelineEntry: (
     messageId: string,
@@ -71,14 +67,11 @@ export interface ChatExecutionState {
     updates: Partial<ToolLabelEntry>,
   ) => void;
 
-  // Thinking content actions
   appendThinkingContent: (messageId: string, delta: string) => void;
   clearThinkingContent: (messageId: string) => void;
 
-  // Agentic loop
   setAgenticLoopStatus: (status: ChatExecutionState['agenticLoopStatus']) => void;
 
-  // Branching
   loadBranches: (conversationId: number) => Promise<void>;
   switchBranch: (conversationId: number, branchId: string) => Promise<void>;
   forkAndRegenerate: (
@@ -88,15 +81,11 @@ export interface ChatExecutionState {
   ) => Promise<void>;
   deleteBranch: (conversationId: number, branchId: string) => Promise<void>;
 
-  // Reset
   resetExecutionState: () => void;
 }
 
-// Module-level dedup guard for tool timeline entries
 const _recentTimelineIds = new Set<string>();
 
-// Inline panel mutations are applied to the message arrays owned by chatStore.
-// We accept a patcher callback so chatExecutionStore stays independent.
 type MessagePatcher = (
   fn: (messages: EnhancedMessage[], convoMessages: EnhancedMessage[] | undefined) => void,
 ) => void;
@@ -159,7 +148,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
         },
 
         appendToStreamingMessage: (content) => {
-          // Delegates to chatStore's message arrays via the registered patcher
           if (_patchMessages) {
             const currentId = get().currentStreamingMessageId;
             if (!currentId) return;
@@ -260,7 +248,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
             'exec/handleStreamInactivityTimeout',
           );
 
-          // Propagate timeout error to message content via patcher
           if (_patchMessages && currentStreamingMessageId) {
             _patchMessages((messages, convoMessages) => {
               const msgIdx = messages.findIndex((m) => m.id === currentStreamingMessageId);
@@ -292,7 +279,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
           }
         },
 
-        // Inline panels delegate mutation to chatStore message arrays
         addInlinePanel: (messageId, panel) => {
           if (_patchMessages) {
             _patchMessages((messages, convoMessages) => {
@@ -349,7 +335,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
           }
         },
 
-        // Pending messages
         addPendingMessage: (message) =>
           set(
             (state) => {
@@ -387,7 +372,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
 
         getPendingMessagesCount: () => get().pendingMessages.length,
 
-        // Tool timeline
         addToolTimelineEntry: (messageId, entry) =>
           set(
             (state) => {
@@ -419,7 +403,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
             'exec/updateToolTimelineEntry',
           ),
 
-        // Thinking content
         appendThinkingContent: (messageId, delta) =>
           set(
             (state) => {
@@ -439,7 +422,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
             'exec/clearThinkingContent',
           ),
 
-        // Agentic loop
         setAgenticLoopStatus: (status) =>
           set(
             (state) => {
@@ -449,7 +431,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
             'exec/setAgenticLoopStatus',
           ),
 
-        // Branching — reads BackendMessage from chatStore conversion helper via invoke
         loadBranches: async (conversationId) => {
           try {
             const branches = await invoke<BranchSummary[]>('conversation_list_branches', {
@@ -469,7 +450,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
 
         switchBranch: async (conversationId, branchId) => {
           try {
-            // Import chatStore lazily to avoid circular deps at module init time
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { useChatStore } = require('./chatStore') as {
               useChatStore: {
@@ -506,7 +486,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
                 tokenCount: msg.tokens ?? undefined,
               },
             }));
-            // Only update if user hasn't switched conversations during the await
             if (useChatStore.getState().activeConversationId !== currentConvoId) return;
             set(
               (state) => {
@@ -628,7 +607,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
   ),
 );
 
-// Selectors
 export const selectIsLoading = (state: ChatExecutionState) => state.isLoading;
 export const selectIsLoadingMessages = (state: ChatExecutionState) => state.isLoadingMessages;
 export const selectIsStreaming = (state: ChatExecutionState) => state.isStreaming;

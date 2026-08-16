@@ -1,31 +1,5 @@
 import 'server-only';
 
-/**
- * The grounded answer engine.
- *
- * Order of operations is the security design, not an implementation detail:
- *
- *   1. validate input                     -> abstention on failure
- *   2. hard-abstain classification        -> abstention BEFORE retrieval and
- *                                            BEFORE any provider call
- *   3. corpus load                        -> abstention if unavailable
- *   4. retrieval + relevance floor        -> abstention, model never called
- *   5. render prompt (documents fenced and sanitized)
- *   6. one bounded model call
- *   7. parse + schema                     -> abstention on any failure
- *   8. resolve citations SERVER-SIDE by chunk id lookup
- *                                         -> abstention if none survive
- *   9. re-classify the ANSWER TEXT        -> downgrade to abstention
- *  10. validate proposedActionId against the caller-supplied allowlist
- *
- * Steps 2 and 4 mean there is no code path from a refused category or an
- * unsupported question to a provider request. Step 8 means an answer without a
- * real, retrieved source cannot be returned at all.
- *
- * Abstention is a first-class success value — never a thrown error, never a
- * non-2xx.
- */
-
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import type {
@@ -121,13 +95,6 @@ function abstain(
   };
 }
 
-/**
- * The single entry point for the support answer engine.
- *
- * Never throws for an expected condition. An unexpected internal error is caught
- * and returned as an abstention, because a support surface that 500s tells the
- * user nothing about what to do next.
- */
 export async function answerSupportQuestion(input: SupportAnswerInput): Promise<SupportAnswer> {
   try {
     return await run(input);
@@ -145,7 +112,6 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
   if (!parsedInput.success) return abstain('invalid_question');
   const input = parsedInput.data;
 
-  // ---- 2. Hard abstain, before retrieval and before any provider call -------
   const history = (input.history ?? []).slice(-MAX_HISTORY_TURNS);
   const lastUserTurn = [...history].reverse().find((turn) => turn.role === 'user')?.content ?? '';
   const category =
@@ -155,20 +121,17 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
     return abstain(HARD_ABSTAIN_REASON[category], authoritativeCitations(category));
   }
 
-  // ---- 3. Corpus -----------------------------------------------------------
   const corpus = getSupportCorpus();
   if (!corpus.available) {
     logger.error({ reason: corpus.reason }, '[support-agent] corpus unavailable');
     return abstain('corpus_unavailable');
   }
 
-  // ---- 4. Retrieval + relevance floor --------------------------------------
   const retrieval = retrieveSupportChunks(input.question);
   if (!retrieval.passedFloor) {
     return abstain('no_relevant_source');
   }
 
-  // ---- 5/6. Render and call ------------------------------------------------
   const userMessage = renderSupportContext({
     question: input.question,
     history,
@@ -191,7 +154,6 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
   }
   const route = modelResult.route;
 
-  // ---- 7. Parse ------------------------------------------------------------
   const modelAnswer = parseModelAnswer(modelResult.text);
   if (!modelAnswer) {
     logger.warn({ provider: route.provider }, '[support-agent] model output failed schema');
@@ -201,9 +163,6 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
     return abstain('no_relevant_source', [], route);
   }
 
-  // ---- 8. Resolve citations server-side by id lookup ------------------------
-  // The model's ids are matched against THIS TURN's retrieved set. An id it did
-  // not receive is dropped; nothing it wrote can name a source or a URL.
   const retrievedById = new Map(retrieval.chunks.map((item) => [item.chunk.id, item.citation]));
   const citations: SupportCitation[] = [];
   const seen = new Set<string>();
@@ -217,8 +176,6 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
     return abstain('unverifiable_citation', [], route);
   }
 
-  // ---- 9. Re-classify the generated answer ---------------------------------
-  // Second net for an obliquely phrased question that the pre-model gate missed.
   const answerCategory = classifyHardAbstain(modelAnswer.answer);
   if (answerCategory) {
     return abstain(
@@ -228,9 +185,6 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
     );
   }
 
-  // ---- 10. Action allowlist ------------------------------------------------
-  // The engine only ECHOES a validated id. It executes nothing, and an id the
-  // caller did not offer is dropped rather than passed through.
   const allowed = new Set((input.availableActions ?? []).map((action) => action.id));
   const proposedActionId =
     modelAnswer.proposedActionId && allowed.has(modelAnswer.proposedActionId)

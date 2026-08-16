@@ -1,20 +1,6 @@
-/**
- * Code Search API
- *
- * TypeScript API wrappers for code search, glob, and formatting Tauri commands.
- * Provides regex content search (grep), file pattern search (glob),
- * auto-formatting, and formatter detection.
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * A single grep match result
- */
 export interface GrepMatch {
   path: string;
   lineNumber: number;
@@ -23,41 +9,23 @@ export interface GrepMatch {
   context?: string[];
 }
 
-/**
- * Response from grep_search
- */
 export interface GrepSearchResult {
   matches: GrepMatch[];
   totalFilesSearched: number;
   truncated: boolean;
 }
 
-/**
- * Output mode for grep search
- */
 export type GrepOutputMode = 'content' | 'files_with_matches' | 'count';
 
-/**
- * Options for grep search
- */
 export interface GrepSearchOptions {
-  /** Regex pattern to search for */
   pattern: string;
-  /** Optional root directory (defaults to project root) */
   root?: string;
-  /** Optional glob to restrict file types (e.g. "*.ts") */
   includePattern?: string;
-  /** Case-insensitive search */
   caseInsensitive?: boolean;
-  /** Output mode: content, files_with_matches, or count */
   outputMode?: GrepOutputMode;
-  /** Number of context lines around each match */
   contextLines?: number;
 }
 
-/**
- * A single glob match result
- */
 export interface GlobMatch {
   path: string;
   relativePath: string;
@@ -66,17 +34,11 @@ export interface GlobMatch {
   modifiedSecs: number;
 }
 
-/**
- * Response from glob_search
- */
 export interface GlobSearchResult {
   matches: GlobMatch[];
   truncated: boolean;
 }
 
-/**
- * Formatter detection info
- */
 export interface FormatterInfo {
   language: string;
   formatter: string;
@@ -84,19 +46,12 @@ export interface FormatterInfo {
   available: boolean;
 }
 
-/**
- * Result from formatting a file
- */
 export interface FormatResult {
   formatted: boolean;
   formatter: string;
   changed: boolean;
   error: string | null;
 }
-
-// ============================================================================
-// Grep Search
-// ============================================================================
 
 /**
  * Search file contents using a regular expression.
@@ -126,10 +81,6 @@ export async function grepSearch(options: GrepSearchOptions): Promise<GrepSearch
     return { matches: [], totalFilesSearched: 0, truncated: false };
   }
 }
-
-// ============================================================================
-// Glob Search
-// ============================================================================
 
 /**
  * Find files matching a glob pattern.
@@ -161,10 +112,6 @@ export async function globSearch(
     return { matches: [], truncated: false };
   }
 }
-
-// ============================================================================
-// File Formatting
-// ============================================================================
 
 /**
  * Run the appropriate code formatter for a file.

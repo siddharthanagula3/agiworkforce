@@ -1,17 +1,3 @@
-/**
- * ENT-004 regression test for GET /enterprise/organizations/:orgId/audit-events/export.
- *
- * Before the fix there was NO export route anywhere in the repository, while
- * `organization_admin_policies.audit_export_enabled` (returned to clients as
- * `policy.auditExportEnabled`, defaulting to `true`) advertised the capability
- * and had zero readers. Against that state every case below 404s.
- *
- * The mock models the REAL query shapes the route issues:
- *   organization_members        select(role).eq.eq.maybeSingle
- *   organization_admin_policies select(cols).eq.maybeSingle
- *   enterprise_audit_events     select(cols).eq.lte[.gte].order.order.range
- *   rpc('record_enterprise_audit_event', …)
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
@@ -49,8 +35,6 @@ vi.mock('../../src/lib/neonClients', () => {
       order: () => q,
       range: (from: number, to: number) => {
         state.lastRange = [from, to];
-        // The route over-fetches by one to detect a further page, so the mock
-        // must honour the requested window rather than return everything.
         const count = to - from + 1;
         return Promise.resolve({
           data: state.auditRows.slice(from, from + count),
@@ -81,7 +65,6 @@ vi.mock('../../src/lib/neonClients', () => {
     if (table === 'enterprise_audit_events') {
       return auditQuery();
     }
-    // profiles kill-switch used by middleware/auth.ts
     return {
       select: () => ({
         eq: () => ({
@@ -142,8 +125,6 @@ function auditRow(overrides: Record<string, unknown> = {}): Record<string, unkno
   };
 }
 
-// Each test uses its own userId: the shared 'enterprise-audit-events' limiter
-// keys by user, and 10 requests/min would otherwise be spent across the file.
 describe('ENT-004: enterprise audit export', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -176,7 +157,6 @@ describe('ENT-004: enterprise audit export', () => {
       outcome: 'success',
     });
 
-    // The export is scoped to the org and bounded by the pinned window.
     expect(state.lastFilters).toContainEqual({
       op: 'eq',
       column: 'organization_id',
@@ -209,7 +189,6 @@ describe('ENT-004: enterprise audit export', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('AUDIT_EXPORT_DISABLED');
-    // Nothing may leak in the refusal body.
     expect(res.text).not.toMatch(/member_role_changed/);
   });
 
@@ -255,11 +234,9 @@ describe('ENT-004: enterprise audit export', () => {
       .set('Authorization', `Bearer ${createToken('user-export-5')}`);
 
     expect(res.status).toBe(200);
-    // Over-fetch by one to detect the further page without a COUNT query.
     expect(state.lastRange).toEqual([0, 2]);
     expect(res.headers['x-audit-export-row-count']).toBe('2');
     expect(res.headers['x-audit-export-next-offset']).toBe('2');
-    // The pinned bound must be echoed so page 2 addresses the same row set.
     expect(res.headers['x-audit-export-window-end']).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
     );
@@ -289,7 +266,6 @@ describe('ENT-004: enterprise audit export', () => {
     });
     expect(res.headers['x-audit-export-window-end']).toBe('2026-08-01T00:00:00.000Z');
 
-    // Exporting the audit trail is itself an auditable administrative action.
     const call = state.rpcCalls.find((c) => c.name === 'record_enterprise_audit_event');
     expect(call).toBeDefined();
     expect(call?.args).toMatchObject({

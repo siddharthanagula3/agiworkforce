@@ -1,8 +1,3 @@
-/**
- * Memory Search API
- *
- * GET /api/memory/search?q=search+terms - Search user memories by content
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -31,10 +26,8 @@ async function handleSearchMemories(request: NextRequest) {
     throw createError.validation('Search query must be 500 characters or less');
   }
 
-  // Escape LIKE wildcards to prevent wildcard injection
   const escapedQuery = query.replace(/[%_\\]/g, '\\$&');
 
-  // Simple ILIKE text search - can be upgraded to vector similarity later
   let data: UserMemoryRow[];
   try {
     data = await db.query<UserMemoryRow>(

@@ -26,9 +26,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select';
 import { useUiTranslation } from '../i18n';
 
-// Helper to build a sortable column header, e.g. columns: ColumnDef<Row>[] = [
-//   { accessorKey: 'name', header: createSortableHeader('Name') },
-// ]
 export const createSortableHeader = (label: string) => {
   const SortableHeader = ({
     column,

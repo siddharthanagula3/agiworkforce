@@ -11,12 +11,6 @@ import {
 
 export type ManagedMemoryTurnOutcome = 'completed' | 'failed' | 'cancelled';
 
-/**
- * Best-effort terminal owner for managed auto-memory. Only completed
- * account-surface turns admitted by the server-side memory policy carry
- * candidates; failures, cancellations, empty extraction, tenant mismatch,
- * and persistence outages are safe no-ops.
- */
 export async function recordManagedAutoMemoryTurn(params: {
   db?: ManagedMemoryContextDb;
   request?: NextRequest;

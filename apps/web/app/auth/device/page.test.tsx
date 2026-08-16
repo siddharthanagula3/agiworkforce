@@ -75,10 +75,6 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => <footer>Footer</footer>,
 }));
 
-/**
- * A private i18next instance per render, so a bundle override in one test
- * cannot leak into the next one through the app-wide singleton.
- */
 function render(ui: React.ReactElement, overrides?: Record<string, unknown>) {
   const instance = createInstance();
   void instance.use(initReactI18next).init({ ...baseInitOptions, lng: 'en' });
@@ -363,10 +359,6 @@ describe('/auth/device page', () => {
     );
   });
 
-  // Pairing is the one sign-in a CLI/desktop user cannot skip, so English baked
-  // into the JSX locks every non-English user out of the trust decision. These
-  // two tests pin the copy to the corpus from both ends: swapping the bundle
-  // must change what renders, and every key the page asks for must exist.
   it('renders the pairing copy from the shared corpus, not from baked-in English', async () => {
     render(<AuthDevicePage />, {
       device: {
@@ -386,12 +378,6 @@ describe('/auth/device page', () => {
     expect(screen.queryByText('Connect a device.')).not.toBeInTheDocument();
   });
 
-  // app/i18n/index.ts calls `i18n.changeLanguage()` from a post-hydration
-  // setTimeout on every page load, and i18next emits `languageChanged` even when
-  // the language is unchanged — which mints a new `t`. If the lookup effect
-  // depended on `t`, that would abort the in-flight request, flip the verified
-  // client and scope list back to "Verifying the requesting app…", and re-issue
-  // the lookup, on the screen where the user approves device access.
   it('does not re-run the device lookup when the language settles after hydration', async () => {
     const fetchMock = vi.mocked(fetch);
     const instance = createInstance();

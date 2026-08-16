@@ -6,32 +6,10 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 
-/**
- * PER-25 — the job that finally deletes the BYTES.
- *
- * `DELETE /api/media` only set `deleted_at`, and `media_assets.storage_pathname`
- * — documented in migration 0036 as "used for deletion" — was never used that
- * way anywhere in the repository: `deleteStoredMedia` had exactly one
- * occurrence, its own definition. Combined with PER-26's permanent public URLs
- * that made deletion cosmetic: the object stayed in R2 and stayed fetchable.
- *
- * Soft delete is deliberate — the Library's Recently-deleted bin restores an
- * asset for 30 days, and `restoreMediaAsset` enforces exactly that window. This
- * job runs after the window closes: it hard-deletes rows whose `deleted_at` is
- * older than 30 days and removes their objects from storage.
- *
- * Ordering: the rows are read first, the objects are deleted next, and the rows
- * are removed last. If object deletion fails the row survives and the next run
- * retries it — a retryable leak is strictly better than a row deleted with its
- * bytes still live and no remaining pointer to them.
- */
-
 export const runtime = 'nodejs';
 
-/** Must match the restore window enforced by `restoreMediaAsset`. */
 const RECOVERY_WINDOW_DAYS = 30;
 
-/** Bound per run so a large backlog cannot exceed the function timeout. */
 const MAX_ASSETS_PER_RUN = 500;
 
 export async function GET(request: NextRequest) {
@@ -64,9 +42,6 @@ export async function GET(request: NextRequest) {
     );
     const stillStored = new Set(failedPathnames);
 
-    // Only drop rows whose bytes are gone (or that never had a stored object).
-    // A row whose object deletion failed keeps its pointer so the next run can
-    // retry instead of orphaning the bytes forever.
     const purgeableIds = expired
       .filter((row) => !row.storage_pathname || !stillStored.has(row.storage_pathname))
       .map((row) => row.id);

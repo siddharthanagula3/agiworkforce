@@ -12,13 +12,6 @@ interface ImageTranscriptRecoveryNoticeProps {
   onDismiss: () => void;
 }
 
-/**
- * Explicit recovery for an image turn whose chat-row write failed.
- *
- * The result variant is intentionally precise: the provider is not called by
- * this control. It retries only the idempotent message write for the asset that
- * is already durable in Library.
- */
 export function ImageTranscriptRecoveryNotice({
   phase,
   resultKind,

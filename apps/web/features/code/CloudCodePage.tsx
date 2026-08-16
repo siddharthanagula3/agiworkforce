@@ -279,9 +279,6 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
           onModeChange={handleSidebarMode}
           onNewChat={openCreate}
           onNavigateView={handleSidebarView}
-          // CRIT-008: open the modal in place. `/settings/account` renders a
-          // SettingsModalRedirect that lands the user on /chat, so navigating
-          // there threw away the code session they were looking at.
           onOpenAccountMenu={() => openSettings('account')}
         />
       </div>

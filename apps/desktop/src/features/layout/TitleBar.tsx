@@ -41,14 +41,12 @@ const TitleBar = ({
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  // Window store state and actions
   const pinned = useWindowStore((s) => s.pinned);
   const alwaysOnTop = useWindowStore((s) => s.alwaysOnTop);
   const windowStoreInit = useWindowStore((s) => s.init);
   const setPinned = useWindowStore((s) => s.setPinned);
   const setAlwaysOnTop = useWindowStore((s) => s.setAlwaysOnTop);
 
-  // Initialize window store on mount
   useEffect(() => {
     void windowStoreInit();
   }, [windowStoreInit]);

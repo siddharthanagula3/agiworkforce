@@ -5,17 +5,6 @@ import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
 
-/**
- * FIX-007 (Sprint 3): per-user daily LLM-spend tracker. Polls the
- * `budget_get_status` IPC every 30 seconds and renders a compact
- * `$X / $Y today` chip. The widget is the user-visible surface for the
- * `DailyBudgetGuard` enforcement that lives in the Rust backend; without
- * it, the user only sees the cap when a call is rejected.
- *
- * Mounts as a no-op in the web build (no IPC channel) and on Tauri before
- * the user is identified — the chip is shown only when we have a real
- * status to report.
- */
 interface BudgetStatus {
   user_id: string;
   day: string;
@@ -27,7 +16,6 @@ interface BudgetStatus {
 const POLL_INTERVAL_MS = 30_000;
 
 export interface BudgetStatusWidgetProps {
-  /** User identity for budget-bucket lookup. Pass `'default'` for guest sessions. */
   userId: string;
 }
 

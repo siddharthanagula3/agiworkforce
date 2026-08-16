@@ -1,10 +1,5 @@
-/**
- * File Operations API — typed wrappers for file_*, dir_*, and fs_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface FileMetadata {
   size: number;
@@ -43,8 +38,6 @@ export interface WorkspaceFile {
   size: number;
   language: string;
 }
-
-// ---- File Commands ----
 
 export async function fileRead(path: string): Promise<string> {
   return command<string>('file_read', { path });
@@ -126,8 +119,6 @@ export async function undoFileOperation(
   return command<void>('undo_file_operation', { operation, path, content });
 }
 
-// ---- Directory Commands ----
-
 export async function dirCreate(path: string): Promise<void> {
   return command<void>('dir_create', { path });
 }
@@ -143,8 +134,6 @@ export async function dirDelete(path: string, recursive: boolean): Promise<void>
 export async function dirTraverse(path: string, globPattern: string): Promise<string[]> {
   return command<string[]>('dir_traverse', { path, globPattern });
 }
-
-// ---- File Watcher ----
 
 export async function fileWatchStart(path: string, recursive: boolean): Promise<void> {
   return command<void>('file_watch_start', { path, recursive });

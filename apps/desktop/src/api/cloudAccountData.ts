@@ -1,11 +1,6 @@
 import { WEB_APP_URL } from './config';
 import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
-/**
- * Downloads the reviewed, tenant-scoped Cloud account export. Local chats,
- * local settings, and device-held provider credentials are intentionally not
- * part of this payload.
- */
 export async function exportCloudAccountData(): Promise<string> {
   const request = createManagedCloudRequestContext('Cloud account export');
   const response = await request.fetch(`${WEB_APP_URL}/api/user/export?download=true`, {

@@ -30,10 +30,6 @@ import { AVAILABLE_MODELS, useModelStore } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
 import { normalizeModelId, requireProviderDefaultModel } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface CommandOption {
   id: string;
   title: string;
@@ -41,9 +37,7 @@ export interface CommandOption {
   group: string;
   shortcut?: string;
   icon: React.ElementType;
-  /** When true, clicking opens a sub-list instead of closing the palette */
   hasSubMenu?: boolean;
-  /** Sub-commands rendered when this option is "expanded" */
   subCommands?: CommandOption[];
   action: () => void;
 }
@@ -51,10 +45,6 @@ export interface CommandOption {
 type ActiveSubMenu = 'model' | null;
 
 const DEFAULT_COMMAND_PALETTE_MODEL = requireProviderDefaultModel('anthropic');
-
-// ---------------------------------------------------------------------------
-// Hook: build the full command list
-// ---------------------------------------------------------------------------
 
 function useCommands(
   onOpenSubMenu: (menu: ActiveSubMenu) => void,
@@ -83,7 +73,6 @@ function useCommands(
   ];
 
   const top: CommandOption[] = [
-    // ---------- Actions ----------
     {
       id: 'new-chat',
       title: 'New Chat',
@@ -112,7 +101,6 @@ function useCommands(
       action: () => onOpenSubMenu('model'),
     },
 
-    // ---------- Navigate ----------
     {
       id: 'go-chat',
       title: 'Go to Chat',
@@ -143,7 +131,6 @@ function useCommands(
       action: () => router.push('/pricing'),
     },
 
-    // ---------- Preferences ----------
     ...preferences,
   ];
 
@@ -159,10 +146,6 @@ function useCommands(
   return { top, modelCommands };
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function groupCommands(commands: CommandOption[]): Record<string, CommandOption[]> {
   return commands.reduce<Record<string, CommandOption[]>>((acc, cmd) => {
     const list = acc[cmd.group] ?? [];
@@ -172,18 +155,10 @@ function groupCommands(commands: CommandOption[]): Record<string, CommandOption[
   }, {});
 }
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function CommandPalette({ open, onOpenChange }: Props) {
   const [query, setQuery] = useState('');
@@ -225,7 +200,6 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   const groups = useMemo(() => groupCommands(filtered), [filtered]);
 
-  // Reset on open/query change
   useEffect(() => {
     if (open) {
       setQuery('');
@@ -241,7 +215,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
   const execute = useCallback(
     (cmd: CommandOption) => {
       if (cmd.hasSubMenu) {
-        cmd.action(); // triggers setActiveSubMenu
+        cmd.action();
         return;
       }
       onOpenChange(false);

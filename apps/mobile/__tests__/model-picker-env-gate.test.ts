@@ -11,10 +11,6 @@
  *  (d) CRITICAL SAFETY: no current catalog model has its availability changed.
  */
 
-// ---------------------------------------------------------------------------
-// Mocks — same pattern as model-picker-cloud-labels.test.ts
-// ---------------------------------------------------------------------------
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -30,9 +26,6 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// Partial mock of @agiworkforce/types: spread actual so SLOT_REGISTRY and all
-// other exports are preserved, but wrap getModelMetadataById so individual
-// tests can inject requiresEnvironment onto a specific model ID.
 jest.mock('@agiworkforce/types', () => {
   const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
   return {
@@ -40,10 +33,6 @@ jest.mock('@agiworkforce/types', () => {
     getModelMetadataById: jest.fn((id: string) => actual.getModelMetadataById(id)),
   };
 });
-
-// ---------------------------------------------------------------------------
-// Imports
-// ---------------------------------------------------------------------------
 
 import {
   applyEnvironmentGate,
@@ -53,14 +42,9 @@ import {
 } from '../src/features/model-picker/service';
 import { evaluateModelEnvironment, getModelMetadataById } from '@agiworkforce/types';
 
-// Typed reference to the mocked function for per-test overrides.
 const mockGetModelMetadataById = getModelMetadataById as jest.MockedFunction<
   typeof getModelMetadataById
 >;
-
-// ---------------------------------------------------------------------------
-// Tests for the helper functions
-// ---------------------------------------------------------------------------
 
 describe('environmentAvailability (Phase A stub)', () => {
   it('always returns { configured: false } for e2b', () => {
@@ -90,10 +74,9 @@ describe('applyEnvironmentGate', () => {
     description: 'Test model in AGI Cloud',
   };
 
-  // (a) Model WITHOUT requiresEnvironment is unchanged
   it('(a) returns the model unchanged when requiresEnvironment is undefined', () => {
     const result = applyEnvironmentGate(baseModel, undefined);
-    expect(result).toBe(baseModel); // same reference — no copy made
+    expect(result).toBe(baseModel);
     expect(result.availability).toBe('ready');
     expect(result.lockReason).toBeUndefined();
   });
@@ -108,18 +91,15 @@ describe('applyEnvironmentGate', () => {
     expect(result).toBe(lockedBase);
   });
 
-  // (b) Model WITH requiresEnvironment: 'e2b' becomes locked with env reason
   it("(b) locks a model with requiresEnvironment:'e2b' and sets the correct reason", () => {
     const result = applyEnvironmentGate(baseModel, 'e2b');
 
-    expect(result).not.toBe(baseModel); // new object
+    expect(result).not.toBe(baseModel);
     expect(result.availability).toBe('locked');
 
-    // Verify reason matches evaluateModelEnvironment output exactly
     const verdict = evaluateModelEnvironment('e2b', { configured: false });
     expect(verdict.selectable).toBe(false);
     expect(result.lockReason).toBe(verdict.reason);
-    // Exact string check (note the em-dash — not a hyphen):
     expect(result.lockReason).toMatch(/managed compute/i);
   });
 
@@ -133,7 +113,6 @@ describe('applyEnvironmentGate', () => {
   });
 
   it("(b) env gate overrides 'ready' availability even if cloud is unlocked (runs last / fail-closed)", () => {
-    // Simulate a cloud-unlocked model that also requires e2b
     const unlockedModel = { ...baseModel, availability: 'ready' as const, lockReason: undefined };
     const result = applyEnvironmentGate(unlockedModel, 'e2b');
 
@@ -141,18 +120,6 @@ describe('applyEnvironmentGate', () => {
     expect(result.lockReason).toMatch(/managed compute/i);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Wiring test (c): env gate is actually called from toCloudModelDef, not just
-// defined as a helper. We inject requiresEnvironment:'e2b' onto a known cloud
-// model via the getModelMetadataById mock, then assert that
-// getModelListForCloudAccess(true) — which calls toCloudModelDef at call time
-// — marks it locked with the env reason, even when cloudUnlocked:true.
-//
-// This test fails if applyEnvironmentGate is removed from toCloudModelDef
-// (model would be 'ready'). It also fails if the gate runs before the
-// cloudUnlocked availability assignment (the 'ready' would overwrite the lock).
-// ---------------------------------------------------------------------------
 
 describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
   function getCurrentCloudTargetId(): string {
@@ -164,7 +131,6 @@ describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
   }
 
   beforeEach(() => {
-    // Restore default passthrough behaviour before each test.
     mockGetModelMetadataById.mockImplementation((id) =>
       jest
         .requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types')
@@ -178,7 +144,6 @@ describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
 
   it('(c) a cloud model with requiresEnvironment:e2b is locked in getModelListForCloudAccess(true) even when cloudUnlocked', () => {
     const targetId = getCurrentCloudTargetId();
-    // Inject requiresEnvironment:'e2b' onto the target model ID.
     const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
     mockGetModelMetadataById.mockImplementation((id) => {
       const base = actual.getModelMetadataById(id);
@@ -188,8 +153,6 @@ describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
       return base;
     });
 
-    // cloudUnlocked:true rebuilds models via toCloudModelDef at call time —
-    // the mock is in effect when that call hits getModelMetadataById.
     const models = getModelListForCloudAccess(true);
     const target = models.find((m) => m.id === targetId);
 
@@ -214,24 +177,18 @@ describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
       (m) => m.surface === 'cloud_managed' && m.id !== targetId,
     );
 
-    // All other cloud models should be 'ready' when cloudUnlocked:true.
     for (const m of otherCloudModels) {
       expect(m.availability).toBe('ready');
     }
   });
 });
 
-// ---------------------------------------------------------------------------
 // (d) CRITICAL SAFETY: no current model has its availability changed
-// ---------------------------------------------------------------------------
 
 describe('CRITICAL SAFETY: no current model availability is altered by Phase A env gate (d)', () => {
   it('all models from getModelListForCloudAccess(false) have their expected (non-env-gated) lock state', () => {
     const models = getModelListForCloudAccess(false);
 
-    // Every model should either be 'ready'/'download_required' (local) or
-    // 'locked' with the cloud sign-in reason (cloud). No model should have an
-    // env-gate reason.
     for (const model of models) {
       if (model.lockReason !== undefined) {
         expect(model.lockReason ?? '').not.toMatch(/managed compute/i);
@@ -246,7 +203,6 @@ describe('CRITICAL SAFETY: no current model availability is altered by Phase A e
 
     expect(localModels.length).toBeGreaterThan(0);
     for (const m of localModels) {
-      // Local models are 'ready' (built-in, 0 bytes) or 'download_required'
       expect(['ready', 'download_required']).toContain(m.availability);
       expect(m.lockReason).toBeUndefined();
     }

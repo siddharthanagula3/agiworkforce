@@ -1,9 +1,3 @@
-/**
- * Fail-closed visual regression gate for the Desktop cloud-web entry surface.
- *
- * Baselines are reviewed repository artifacts. A missing baseline is an error;
- * local regeneration requires the explicit UPDATE_VISUAL_BASELINES=1 opt-in.
- */
 
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';

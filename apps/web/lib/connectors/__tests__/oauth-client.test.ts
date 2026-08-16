@@ -1,9 +1,3 @@
-/**
- * The token endpoint is the only place a client secret and an authorization
- * code are on the wire together. These tests pin the request shape, the strict
- * response validation, and the rule that an error carries a status and an
- * OAuth error code but never a response body.
- */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -46,7 +40,6 @@ function jsonResponse(body: unknown, status = 200): Response {
   } as unknown as Response;
 }
 
-/** The submitted form body, decoded. */
 function submittedForm(callIndex = 0): URLSearchParams {
   const init = fetchMock.mock.calls[callIndex]?.[1] as RequestInit;
   return init.body as URLSearchParams;
@@ -98,7 +91,6 @@ describe('exchangeAuthorizationCode', () => {
 
     expect(result.accessToken).toBe('access-value');
     expect(result.refreshToken).toBe('refresh-value');
-    // The RESPONSE scope wins over what we asked for.
     expect(result.grantedScopes).toEqual(['read', 'write']);
     expect(result.accessTokenExpiresAt).toBeInstanceOf(Date);
   });

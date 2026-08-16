@@ -1,7 +1,3 @@
-/**
- * Retrieval against the REAL corpus. These assertions fail if the corpus entry,
- * the tag boost, or the citation resolver is removed — they are not smoke tests.
- */
 
 import { describe, expect, it } from 'vitest';
 import { SITE_URL } from '@/lib/seo/site';
@@ -68,7 +64,6 @@ describe('retrieveSupportChunks', () => {
     const staticIds = corpus.chunks
       .filter((chunk) => chunk.origin === 'static-data')
       .map((chunk) => chunk.id);
-    // 6 published FAQs + 3 articles.
     expect(staticIds).toHaveLength(9);
     expect(staticIds).toContain('static-faq:faq-001');
     expect(staticIds).toContain('static-article:article-002');

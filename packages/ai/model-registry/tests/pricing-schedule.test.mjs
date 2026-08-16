@@ -7,20 +7,6 @@ import {
   normalizePricingSchedule,
 } from '../scripts/compile.mjs';
 
-/**
- * Compiler-side coverage for the dated-pricing MECHANISM.
- *
- * Every fixture here is synthetic: a made-up model key with arbitrary window
- * dates. That is deliberate. Proving the mechanism against a live promotional
- * window would tie these assertions to a shipped price, so retiring that price
- * would look like a mechanism regression (and, worse, restoring the price would
- * look like a way to make the tests pass). What the shipped roster publishes is
- * asserted separately in `current-roster.test.mjs` and `catalog-policy.test.mjs`.
- *
- * `effectiveFrom`/`effectiveUntil` are UTC calendar days, inclusive on both
- * sides; a changeover happens at UTC midnight.
- */
-
 const MODEL = 'fixture-model';
 
 test('normalizes ordered input-length tiers into explicit registry rate names', () => {
@@ -169,9 +155,6 @@ test('rejects an unsupported key instead of silently dropping it', () => {
   );
 });
 
-// Overlap rejection. Consumers resolve a date by taking the FIRST covering
-// window, so two windows covering the same day would make the billed price
-// depend on authoring order — a silent, order-dependent price.
 test('rejects overlapping windows with closed ranges', () => {
   assert.throws(
     () =>
@@ -195,8 +178,6 @@ test('rejects windows that overlap on a single shared day (inclusive bounds)', (
 });
 
 test('rejects an open-ended window that swallows a later one', () => {
-  // Missing bounds are open-ended, so an open-left window intersects anything
-  // before its end and an open-right window intersects anything after its start.
   assert.throws(
     () =>
       normalizePricingSchedule(MODEL, [
@@ -232,8 +213,6 @@ test('names both offending windows and the model in the overlap error', () => {
 });
 
 test('accepts adjacent windows that meet without overlapping', () => {
-  // The common shape: one window ends on a UTC day and the next starts on the
-  // following UTC day, so exactly one window covers every date.
   const schedule = normalizePricingSchedule(MODEL, [
     { effectiveUntil: '2030-03-31', inputCost: 1 },
     { effectiveFrom: '2030-04-01', effectiveUntil: '2030-06-30', inputCost: 2 },

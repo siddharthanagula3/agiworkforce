@@ -19,22 +19,10 @@ import {
 } from '@/lib/managed-compute-gate';
 import SecurityOperationsPanel from '../components/SecurityOperationsPanel';
 
-// Managed compute has been public alpha (open by default) since 2026-06-27.
-// AGI_MANAGED_COMPUTE_PRIVATE_BETA is an incident-response kill-switch only
-// (0/false/off re-gates); every status element below reads the same live
-// signal so this page cannot drift into the retired "launch gate"/"private
-// beta"/"waitlisted" framing again.
 function managedComputeStatusLabel(open: boolean): string {
   return open ? 'Public alpha' : 'Temporarily disabled (incident kill-switch)';
 }
 
-/**
- * Badge tone. Every readiness status used to render in the same emerald
- * success badge regardless of what it said, so with the incident kill-switch
- * engaged this table showed "Temporarily disabled (incident kill-switch)" in a
- * green success badge while the header two sections above it correctly turned
- * amber. A status surface that cannot render "not ok" is decoration.
- */
 type ReadinessTone = 'ok' | 'warn';
 
 const READINESS_TONE_CLASS: Record<ReadinessTone, string> = {
@@ -93,17 +81,6 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
   ];
 }
 
-/**
- * Inventory of every admin control and the service that actually owns it
- * (CRIT-014, bullet 1). This is navigation, not decoration: each entry links to
- * the surface that operates the control.
- *
- * It exists because `/admin/directory-sync` — a fully wired SCIM control plane
- * with create/revoke/token endpoints — had ZERO inbound links anywhere in the
- * repository. It was reachable only by typing the URL, which is the same
- * failure as not shipping it. `grep -rn "admin/directory-sync" apps/web` found
- * nothing but the route file itself before this section.
- */
 const ADMIN_CONTROLS: ReadonlyArray<{
   name: string;
   href: string;

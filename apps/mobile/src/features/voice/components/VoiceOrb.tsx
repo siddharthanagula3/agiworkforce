@@ -1,12 +1,3 @@
-/**
- * The single voice orb.
- *
- * Every voice surface renders this one component — the inline bar in chat and
- * the on-device companion route. Three orbs used to coexist with three
- * different animation treatments, and only one of them carried the jitter fix,
- * which is why "voice shaking here and there" kept reproducing after it was
- * reported fixed. Keeping one implementation is the fix.
- */
 
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
@@ -24,14 +15,8 @@ import { colors } from '@/src/ui/theme';
 
 export type VoiceOrbPhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
-/** Follow-time for an amplitude change. Long enough to swallow one metering frame. */
 const AMPLITUDE_DURATION_MS = 110;
 
-/**
- * History weight of the mic-level exponential moving average. Raw metering
- * arrives at ~10-20Hz and is noisy frame to frame; weighting history this
- * heavily means a single-frame spike cannot snap the orb.
- */
 const LEVEL_HISTORY_WEIGHT = 0.75;
 
 /**
@@ -44,11 +29,8 @@ export function smoothVoiceLevel(previous: number, next: number): number {
 
 export interface VoiceOrbProps {
   phase: VoiceOrbPhase;
-  /** Normalised 0..1 capture/playback level. Surfaces without metering omit it. */
   audioLevel?: number;
-  /** Diameter of the orb body. */
   size?: number;
-  /** Soft halo behind the body — full-screen surfaces only. */
   glow?: boolean;
 }
 
@@ -59,9 +41,6 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
   const smoothedLevel = useRef(0);
   const amplitudeDriven = phase === 'listening' || phase === 'speaking';
 
-  // Phase-driven loops. `audioLevel` is deliberately NOT a dependency: including
-  // it restarted these withRepeat loops on every metering tick, so the idle and
-  // thinking pulses never completed a cycle and the orb read as stuttering.
   useEffect(() => {
     if (amplitudeDriven) return;
     if (reducedMotion) {
@@ -90,7 +69,6 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
     );
   }, [amplitudeDriven, phase, reducedMotion, scale, glowOpacity]);
 
-  // Amplitude-reactive animation, live only while the mic or playback is.
   useEffect(() => {
     if (!amplitudeDriven) {
       smoothedLevel.current = 0;
@@ -98,8 +76,6 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
     }
     smoothedLevel.current = smoothVoiceLevel(smoothedLevel.current, audioLevel);
     const level = reducedMotion ? 0 : smoothedLevel.current;
-    // withTiming rather than withSpring: a spring re-targeted on every metering
-    // tick never settles, and its overshoot is the shake the founder reported.
     scale.value = withTiming(1 + level * 0.28, {
       duration: AMPLITUDE_DURATION_MS,
       easing: Easing.out(Easing.quad),
@@ -114,8 +90,6 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
   }));
 
   const radius = size / 2;
-  // The halo scales past the body, so the box has to reserve room for it or the
-  // glow clips against whatever lays this out.
   const box = glow ? Math.round(size * 1.7) : size;
 
   return (

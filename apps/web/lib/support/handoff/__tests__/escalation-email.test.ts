@@ -1,7 +1,3 @@
-/**
- * The email body itself. A human must be able to act from the top of it without
- * reading to the bottom, and must never redo something the agent already did.
- */
 
 import { describe, expect, it, vi } from 'vitest';
 

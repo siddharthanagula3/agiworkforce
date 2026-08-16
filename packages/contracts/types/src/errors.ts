@@ -8,73 +8,33 @@
  * @packageDocumentation
  */
 
-/**
- * Standardized error codes for API and application errors.
- *
- * Organized by category:
- * - Authentication/Authorization: UNAUTHORIZED, FORBIDDEN
- * - Validation: VALIDATION_ERROR, INVALID_INPUT
- * - Resources: NOT_FOUND, CONFLICT
- * - Server: INTERNAL_ERROR, SERVICE_UNAVAILABLE, TIMEOUT
- * - Rate Limiting: RATE_LIMIT_EXCEEDED
- * - External Services: STRIPE_ERROR, CLOUD_DB_ERROR
- * - Network: NETWORK_ERROR, PAYLOAD_TOO_LARGE
- *
- * Using const object pattern for isolatedModules compatibility.
- */
 export const ErrorCode = {
-  // Authentication & Authorization
-  /** User is not authenticated */
   UNAUTHORIZED: 'UNAUTHORIZED',
-  /** User lacks required permissions */
   FORBIDDEN: 'FORBIDDEN',
 
-  // Validation
-  /** Request validation failed */
   VALIDATION_ERROR: 'VALIDATION_ERROR',
-  /** Invalid input data */
   INVALID_INPUT: 'INVALID_INPUT',
 
-  // Resource
-  /** Requested resource not found */
   NOT_FOUND: 'NOT_FOUND',
-  /** Resource conflict (e.g., duplicate) */
   CONFLICT: 'CONFLICT',
 
-  // Server
-  /** Internal server error */
   INTERNAL_ERROR: 'INTERNAL_ERROR',
-  /** Service temporarily unavailable */
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  /** Operation timed out */
   TIMEOUT: 'TIMEOUT',
 
-  // Rate Limiting
-  /** Rate limit exceeded */
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
 
-  // External Services
-  /** Stripe API error */
   STRIPE_ERROR: 'STRIPE_ERROR',
-  /** Cloud database/API error */
   CLOUD_DB_ERROR: 'CLOUD_DB_ERROR',
-  /** Postgres "no rows" sentinel */
   PGRST116: 'PGRST116',
 
-  // Network
-  /** Network connection error */
   NETWORK_ERROR: 'NETWORK_ERROR',
-  /** Request payload too large */
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
-  /** Invalid response from server */
   INVALID_RESPONSE: 'INVALID_RESPONSE',
 
-  // Payment
-  /** Payment required (e.g., insufficient credits) */
   PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
 } as const;
 
-/** Type for error codes - matches the values in the ErrorCode object */
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 /**
@@ -91,19 +51,12 @@ export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
  * ```
  */
 export interface ApiError {
-  /** Error code for programmatic handling */
   code: ErrorCodeValue;
-  /** Human-readable error message */
   message: string;
-  /** Additional error details */
   details?: unknown;
-  /** HTTP status code */
   statusCode: number;
 }
 
-/**
- * Error with a code property for categorization.
- */
 export interface CodedError extends Error {
   code: string;
 }
@@ -131,9 +84,6 @@ export function isCodedError(error: unknown): error is CodedError {
   );
 }
 
-/**
- * Map of HTTP status codes to error codes.
- */
 export const HTTP_STATUS_TO_ERROR_CODE: Record<number, ErrorCodeValue> = {
   400: ErrorCode.VALIDATION_ERROR,
   401: ErrorCode.UNAUTHORIZED,
@@ -148,9 +98,6 @@ export const HTTP_STATUS_TO_ERROR_CODE: Record<number, ErrorCodeValue> = {
   504: ErrorCode.TIMEOUT,
 };
 
-/**
- * Map of error codes to HTTP status codes.
- */
 export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.UNAUTHORIZED]: 401,
   [ErrorCode.FORBIDDEN]: 403,
@@ -171,23 +118,13 @@ export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.PAYMENT_REQUIRED]: 402,
 };
 
-/**
- * User-friendly error information.
- */
 export interface FriendlyError {
-  /** Short title for the error */
   title: string;
-  /** Detailed message explaining the error */
   message: string;
-  /** Suggested action for the user */
   suggestion?: string;
-  /** Icon category for UI display */
   icon?: 'error' | 'warning' | 'info' | 'network' | 'payment' | 'auth';
 }
 
-/**
- * Map of error codes to user-friendly messages.
- */
 export const FRIENDLY_ERROR_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
   [ErrorCode.UNAUTHORIZED]: {
     title: 'Sign In Required',

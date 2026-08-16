@@ -7,9 +7,6 @@ import { StartupRecoveryLoading } from './features/startup-recovery/StartupRecov
 
 const NormalApplication = React.lazy(() => import('./NormalApplication'));
 
-// Registers window.wdioTauri for development and the isolated bundled WDIO
-// harness (browser.tauri.execute()/mock()). Release builds never set the E2E
-// flag, so the test bridge stays out of production bundles.
 if (import.meta.env.DEV || import.meta.env.VITE_WDIO_E2E === '1') {
   void import('@wdio/tauri-plugin');
 }

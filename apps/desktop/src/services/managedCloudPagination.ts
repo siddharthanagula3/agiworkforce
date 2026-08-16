@@ -58,9 +58,7 @@ export interface ManagedCloudPageInput {
   items: readonly unknown[];
   hasMore: boolean;
   currentOffset: number;
-  /** Server-owned next offset for conversation pages; inferred for messages. */
   nextOffset?: number;
-  /** Server-reported transcript total, when available. */
   reportedTotal?: number;
 }
 

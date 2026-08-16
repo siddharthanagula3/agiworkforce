@@ -7,62 +7,31 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 
-/**
- * Image/file attachment preview strip shown above the chat input bar.
- * Displays thumbnails in a horizontal scrollable row.
- */
-
 export interface Attachment {
-  /** Unique ID for the attachment */
   id: string;
-  /** Local file URI */
   uri: string;
-  /** MIME type (e.g., 'image/jpeg', 'application/pdf') */
   mimeType: string;
-  /** Original file name */
   fileName: string;
-  /** Image width (for images only) */
   width?: number;
-  /** Image height (for images only) */
   height?: number;
-  /** File size in bytes */
   fileSize?: number;
-  /**
-   * Existing owner-scoped Managed Cloud asset. Library re-attachment can reuse
-   * this id without downloading and uploading the same bytes again.
-   */
   assetId?: string;
-  /**
-   * Present for "Pasted text" attachments — a very large block dropped into
-   * the composer, held here instead of the input. Folded back into the
-   * outgoing message at send time; tapping the card expands it back inline.
-   */
   pastedText?: string;
 }
 
 interface AttachmentPreviewProps {
-  /** List of attachments to display */
   attachments: Attachment[];
-  /** Called when user removes an attachment */
   onRemove: (id: string) => void;
-  /** Called when the user taps a "Pasted text" card to expand it back inline */
   onExpandPastedText?: (id: string) => void;
-  /**
-   * Per-file privacy label rendered as a chip on each thumbnail
-   * (e.g. "Local"). Sourced from the host's SendPreviewPresentation.
-   * PLAN.md section 5: "Add per-file privacy labels".
-   */
   privacyShortLabel?: string;
 }
 
-/** Format file size to human-readable string */
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Check if MIME type is an image */
 function isImage(mimeType: string): boolean {
   return mimeType.startsWith('image/');
 }

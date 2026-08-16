@@ -1,13 +1,3 @@
-/**
- * Memory compactor — when context budget hits 80%, summarizes older 50% of
- * turns into a single synthetic "summary" message and drops the original turns,
- * preserving the most recent 50% verbatim.
- *
- * Compaction is intentionally model-agnostic: the summary message is plain text
- * prefixed with a marker so callers can detect previously-compacted history.
- * No LLM call is made for summarization in v1 — we concatenate role+content
- * pairs into a structured block which the model can follow as prior context.
- */
 
 import {
   compactContext,
@@ -21,9 +11,7 @@ import type { ChatMessage } from '@/types/chat';
 
 export interface CompactionResult {
   messages: ChatMessage[];
-  /** Number of original turns dropped */
   droppedTurns: number;
-  /** Whether any compaction occurred */
   compacted: boolean;
 }
 
@@ -89,10 +77,6 @@ export async function compact(
   };
 }
 
-/**
- * Estimate how many tokens the compacted summary will consume.
- * Useful for pre-flight checks without actually compacting.
- */
 export function estimateSummaryTokens(messages: ChatMessage[]): number {
   if (messages.length === 0) return 0;
   const dropCount = messages.length - Math.max(1, Math.floor(messages.length / 2));

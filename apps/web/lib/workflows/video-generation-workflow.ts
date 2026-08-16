@@ -77,12 +77,6 @@ function nextDelaySeconds(job: VideoGenerationJob): number {
   return Math.max(5, Math.min(Number.isFinite(untilDue) ? untilDue : 10, 600));
 }
 
-/**
- * One idempotent Node.js step. Provider submission deliberately remains in the
- * request boundary and is never a retrying Workflow step because neither Veo
- * nor Runway proves provider-side generation idempotency. Polling, rehosting,
- * and settlement are DB-claimed/idempotent and may safely resume here.
- */
 export async function reconcileVideoGenerationWorkflowStep(
   rawInput: VideoGenerationWorkflowInput,
   workflowRunId: string,
@@ -103,16 +97,9 @@ export async function reconcileVideoGenerationWorkflowStep(
       : { terminal: true, status: 'missing', retryAfterSeconds: 0 };
   }
   if (snapshot.workflowRunId && snapshot.workflowRunId !== workflowRunId) {
-    // A start whose DB attachment failed is cancelled by the starter. If that
-    // cancellation response was lost, this guard still prevents a detached or
-    // superseded run from owning provider/billing work.
     return { terminal: true, status: 'detached', retryAfterSeconds: 0 };
   }
   if (!snapshot.workflowRunId) {
-    // `start()` enqueues before the request can attach the returned run id.
-    // A first step may therefore observe NULL even on the healthy path. Wait
-    // only through the bounded pre-egress handoff; provider submission is
-    // forbidden in SQL until a run id is attached.
     try {
       snapshot = await attachVideoGenerationWorkflow({
         db,
@@ -141,8 +128,6 @@ export async function reconcileVideoGenerationWorkflowStep(
     try {
       snapshot = await reconcileVideoGenerationJobWithRequiredTranscript(db, snapshot);
     } catch {
-      // Terminal provider/billing state is already durable. Keep Workflow alive
-      // so the next step retries the idempotent assistant-row projection only.
       return { terminal: false, status: 'unavailable', retryAfterSeconds: 60 };
     }
     if (snapshot.incidentAlertStatus === 'exhausted') {
@@ -154,9 +139,6 @@ export async function reconcileVideoGenerationWorkflowStep(
     return { terminal: true, status: snapshot.status, retryAfterSeconds: 0 };
   }
 
-  // The workflow is attached before provider egress. Give the request boundary
-  // time to persist its pre-egress marker/task identity; if that request died,
-  // the shared reconciler will then settle the genuinely unstarted job failed.
   if (
     snapshot.status === 'submitting' &&
     !snapshot.providerStartedAt &&
@@ -169,8 +151,6 @@ export async function reconcileVideoGenerationWorkflowStep(
   try {
     reconciled = await reconcileVideoGenerationJobWithRequiredTranscript(db, snapshot);
   } catch {
-    // This includes a post-finalization transcript projection failure. The next
-    // step re-reads the terminal row and cannot replay provider/billing work.
     return { terminal: false, status: 'unavailable', retryAfterSeconds: 60 };
   }
   if (isTerminal(reconciled.status) && reconciled.billingSettlementStatus === 'pending') {
@@ -192,11 +172,6 @@ export async function reconcileVideoGenerationWorkflowStep(
   };
 }
 
-/**
- * Idempotent recovery step for the narrow provider-accepted/DB-attach window.
- * The provider id is serialized in Workflow's event log before the request
- * reports success, so process loss cannot erase the only copy of that id.
- */
 export async function recoverVideoProviderTaskAttachmentWorkflowStep(
   rawInput: VideoProviderTaskAttachmentWorkflowInput,
 ): Promise<VideoProviderTaskAttachmentStepResult> {
@@ -220,13 +195,10 @@ export async function recoverVideoProviderTaskAttachmentWorkflowStep(
     });
     return 'attached';
   } catch {
-    // Database attachment is idempotent. Keep the provider identity in the
-    // durable workflow and retry without ever submitting provider work again.
     return 'retry';
   }
 }
 
-/** Durable no-client owner for one paid asynchronous video job. */
 export async function videoGenerationWorkflow(input: VideoGenerationWorkflowInput): Promise<void> {
   'use workflow';
 
@@ -238,12 +210,6 @@ export async function videoGenerationWorkflow(input: VideoGenerationWorkflowInpu
   }
 }
 
-/**
- * Durable handoff for a known provider id that could not be written in the
- * request. This workflow performs no provider egress; all retries are safe DB
- * attachment attempts. The primary workflow closes an unrecovered job as
- * outcome_unknown after its longer bounded attachment grace.
- */
 export async function videoProviderTaskAttachmentWorkflow(
   input: VideoProviderTaskAttachmentWorkflowInput,
 ): Promise<void> {

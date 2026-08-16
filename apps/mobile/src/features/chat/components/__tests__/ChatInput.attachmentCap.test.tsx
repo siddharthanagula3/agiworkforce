@@ -1,19 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * The composer must not stage an attachment the send will deterministically
- * refuse, and when it refuses one it must name the real cause.
- *
- * This drives the SAME imperative handle the real pickers use:
- * `app/(app)/(tabs)/chat.tsx:547/563/587/596` and
- * `app/(app)/chat/[id].tsx:745/761/785/794` all call
- * `chatInputAttachRef.current?.addAttachments(...)` with `fileSize` taken
- * straight off the ImagePicker/DocumentPicker asset.
- *
- * Before the fix the cap was a flat 25 MB, so a 20 MB file was accepted here,
- * then `uploadWithRetry` (stores/chat/chatExecutionStore.ts:503) burned three
- * exponential-backoff retries against a 12 MiB presign contract and alerted
- * "Could not upload … please check your connection".
- */
 import React from 'react';
 import { Alert } from 'react-native';
 import { render, act } from '@testing-library/react-native';
@@ -61,7 +46,6 @@ jest.mock('@/src/features/chat/draftStore', () => ({
   clearDraft: jest.fn(),
 }));
 
-// The one piece of real state under test: the live Local/Cloud boundary.
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ appMode: mockAppMode }),
@@ -141,7 +125,6 @@ jest.mock('@/services/docParser', () => ({
 
 import { ChatInput, type ChatInputHandle } from '@/src/features/chat/components/ChatInput';
 
-/** Between the 12 MiB cloud contract and the 25 MB device ceiling. */
 const TWENTY_MB = 20 * 1024 * 1024;
 
 function twentyMbPdf() {

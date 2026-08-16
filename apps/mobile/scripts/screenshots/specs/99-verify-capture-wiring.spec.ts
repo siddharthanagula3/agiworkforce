@@ -1,4 +1,3 @@
-/** Throwaway spec used only to verify Detox artifact-copy wiring. Not part of the screenshot deck. */
 import { device } from 'detox';
 
 describe('verify capture wiring', () => {

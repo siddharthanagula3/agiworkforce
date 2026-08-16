@@ -18,14 +18,6 @@ function trustedBillingUrl(rawUrl: string): string {
   return url.toString();
 }
 
-/**
- * Open Stripe or the AGI billing surface inside an owned Desktop window.
- *
- * Screen-capture protection follows the destination rather than the window:
- * Stripe Checkout and the Stripe portal take card details and stay protected,
- * while an `agiworkforce.com` billing page is an ordinary account surface and
- * must remain visible in a screen share (see `ownedWindowPresentation.ts`).
- */
 export async function openDesktopBillingWindow(
   rawUrl: string,
   title: string,

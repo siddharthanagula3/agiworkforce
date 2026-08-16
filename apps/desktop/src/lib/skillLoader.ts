@@ -19,43 +19,23 @@
  * prefer `loadFilesystemSkills()` for layered loading.
  */
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-/** Parsed skill definition from a .md employee file. */
 export interface LoadedSkill {
-  /** Unique identifier derived from filename (e.g. "3d-artist") */
   id: string;
-  /** Human-readable name from frontmatter */
   name: string;
-  /** Description of the skill's capabilities */
   description: string;
-  /** Category for UI grouping (e.g. "Technical", "Creative", "Finance") */
   category: string;
-  /** Tools available to this skill */
   tools: string[];
-  /** LLM model preference */
   model: string;
-  /** Expertise areas for matching */
   expertise: string[];
-  /** Full system prompt (markdown body after frontmatter) */
   systemPrompt: string;
-  /** Optional avatar */
   avatar?: string;
-  /** Optional price */
   price?: number;
 }
 
-// ── Lightweight YAML Frontmatter Parser ────────────────────────────────────────
-
-/** Parsed frontmatter result with typed data accessors. */
 interface FrontmatterData {
   [key: string]: unknown;
 }
 
-/**
- * Extracts YAML frontmatter and markdown body from a string.
- * Expects the format: `---\n...yaml...\n---\nmarkdown body`
- */
 function parseFrontmatter(content: string): { data: FrontmatterData; body: string } {
   const trimmed = content.trimStart();
   if (!trimmed.startsWith('---')) {
@@ -74,10 +54,6 @@ function parseFrontmatter(content: string): { data: FrontmatterData; body: strin
   return { data, body };
 }
 
-/**
- * Parses simple YAML (the subset used by employee frontmatter).
- * Supports: string values, arrays (both inline and block), numbers.
- */
 function parseSimpleYaml(yaml: string): FrontmatterData {
   const result: FrontmatterData = {};
   const lines = yaml.split('\n');
@@ -85,12 +61,10 @@ function parseSimpleYaml(yaml: string): FrontmatterData {
   let currentArray: string[] | null = null;
 
   for (const line of lines) {
-    // Skip empty lines and comments
     if (line.trim() === '' || line.trim().startsWith('#')) {
       continue;
     }
 
-    // Check for array item (indented with "- ")
     const arrayItemMatch = line.match(/^\s+-\s+(.+)$/);
     if (arrayItemMatch && currentKey) {
       const captured = arrayItemMatch[1];
@@ -98,7 +72,6 @@ function parseSimpleYaml(yaml: string): FrontmatterData {
         if (!currentArray) {
           currentArray = [];
         }
-        // Strip quotes from array values
         const val = captured.trim().replace(/^['"]|['"]$/g, '');
         currentArray.push(val);
         result[currentKey] = currentArray;
@@ -106,13 +79,11 @@ function parseSimpleYaml(yaml: string): FrontmatterData {
       continue;
     }
 
-    // Save any pending array before processing new key
     if (currentArray && currentKey) {
       result[currentKey] = currentArray;
       currentArray = null;
     }
 
-    // Check for key: value pair
     const kvMatch = line.match(/^(\w[\w-]*):\s*(.*)$/);
     if (kvMatch) {
       const key = kvMatch[1] ?? '';
@@ -120,12 +91,10 @@ function parseSimpleYaml(yaml: string): FrontmatterData {
       currentKey = key;
 
       if (rawValue === '' || rawValue === '|' || rawValue === '>') {
-        // Value will come as array items or multi-line (treat as empty for now)
         currentArray = null;
         continue;
       }
 
-      // Parse inline arrays: [item1, item2]
       if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
         const items = rawValue
           .slice(1, -1)
@@ -137,21 +106,18 @@ function parseSimpleYaml(yaml: string): FrontmatterData {
         continue;
       }
 
-      // Parse numbers
       if (/^\d+(\.\d+)?$/.test(rawValue)) {
         result[currentKey] = Number(rawValue);
         currentArray = null;
         continue;
       }
 
-      // Parse booleans
       if (rawValue === 'true' || rawValue === 'false') {
         result[currentKey] = rawValue === 'true';
         currentArray = null;
         continue;
       }
 
-      // String value (strip quotes)
       result[currentKey] = rawValue.replace(/^['"]|['"]$/g, '');
       currentArray = null;
     }
@@ -160,38 +126,22 @@ function parseSimpleYaml(yaml: string): FrontmatterData {
   return result;
 }
 
-// ── Skill Loading ──────────────────────────────────────────────────────────────
-
-/** Cache for loaded skills */
 let cachedSkills: LoadedSkill[] | null = null;
 let cacheTimestamp = 0;
 
-/** Cache TTL in milliseconds (5 minutes) */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-/**
- * Eagerly import all employee .md files via Vite's import.meta.glob.
- * The `eager: true` + `query: '?raw'` flags load file contents as strings
- * at build time, so no async loading is needed at runtime.
- */
 const employeeFiles: Record<string, string> = import.meta.glob('../data/employees/*.md', {
   query: '?raw',
   eager: true,
   import: 'default',
 }) as Record<string, string>;
 
-/**
- * Extracts a skill ID from a file path.
- * e.g. "../data/employees/3d-artist.md" -> "3d-artist"
- */
 function filePathToId(filePath: string): string {
   const fileName = filePath.split('/').pop() ?? '';
   return fileName.replace(/\.md$/, '');
 }
 
-/**
- * Safely retrieves a string value from frontmatter data.
- */
 function getString(data: FrontmatterData, key: string, fallback: string): string {
   const val = data[key];
   return typeof val === 'string' ? val : fallback;
@@ -207,7 +157,6 @@ function getString(data: FrontmatterData, key: string, fallback: string): string
 export function loadSkills(forceRefresh = false): LoadedSkill[] {
   const now = Date.now();
 
-  // Return cached results if still valid
   if (!forceRefresh && cachedSkills && now - cacheTimestamp < CACHE_TTL_MS) {
     return cachedSkills;
   }
@@ -223,7 +172,6 @@ export function loadSkills(forceRefresh = false): LoadedSkill[] {
       const category = getString(data, 'category', 'Other');
       const model = getString(data, 'model', 'inherit');
 
-      // Tools: support both YAML arrays and comma-separated strings
       let tools: string[] = [];
       const rawTools = data['tools'];
       if (Array.isArray(rawTools)) {
@@ -235,7 +183,6 @@ export function loadSkills(forceRefresh = false): LoadedSkill[] {
           .filter(Boolean);
       }
 
-      // Expertise: YAML array
       let expertise: string[] = [];
       const rawExpertise = data['expertise'];
       if (Array.isArray(rawExpertise)) {
@@ -262,73 +209,39 @@ export function loadSkills(forceRefresh = false): LoadedSkill[] {
     }
   }
 
-  // Sort alphabetically by name for consistent UI ordering
   skills.sort((a, b) => a.name.localeCompare(b.name));
 
-  // Cache results
   cachedSkills = skills;
   cacheTimestamp = now;
 
   return skills;
 }
 
-/**
- * Finds a skill by its ID (filename without .md extension).
- * Useful for resolving @mentions like "@3d-artist" to the full skill.
- */
 export function getSkillById(id: string): LoadedSkill | undefined {
   const skills = loadSkills();
   return skills.find((s) => s.id === id);
 }
 
-/**
- * Finds a skill by its name (case-insensitive).
- */
 export function getSkillByName(name: string): LoadedSkill | undefined {
   const skills = loadSkills();
   const lower = name.toLowerCase();
   return skills.find((s) => s.name.toLowerCase() === lower);
 }
 
-/**
- * Returns all unique categories present across loaded skills.
- */
 export function getSkillCategories(): string[] {
   const skills = loadSkills();
   const categories = new Set(skills.map((s) => s.category));
   return Array.from(categories).sort();
 }
 
-/**
- * Invalidates the skill cache, forcing a reload on next access.
- */
 export function invalidateSkillCache(): void {
   cachedSkills = null;
   cacheTimestamp = 0;
 }
 
-// ── Filesystem-Resident Skills (via @agiworkforce/skills) ──────────────────────
-
-/**
- * Layered skill loader powered by the shared `@agiworkforce/skills` package.
- *
- * Reads SKILL.md / *.md files from one or more directories, resolves
- * frontmatter (with prototype-pollution defense), and merges across six
- * precedence layers (extra > workspace > project > personal > managed-local
- * > bundled). The shared package depends on `node:fs/promises`, so this
- * function is only callable from a Node environment (Tauri sidecar, build
- * scripts, tests) — in a browser/renderer build the dynamic import will
- * fail. Guarded with a runtime-environment check; returns `[]` on web.
- *
- * Progressive disclosure: only metadata loads at session start. Bodies are
- * available on the returned `Skill[]` for on-demand access — UIs that show
- * a skill list should defer rendering the body until the user opens it.
- */
 export async function loadFilesystemSkills(
   layers: Array<{ rootDir: string; source: import('@agiworkforce/skills').SkillSource }>,
 ): Promise<import('@agiworkforce/skills').Skill[]> {
-  // Browser / renderer guard: `@agiworkforce/skills` uses `node:fs`. If we
-  // ever land a Tauri-fs-backed shim, this guard moves into the package.
   if (typeof window !== 'undefined' && typeof process === 'undefined') {
     return [];
   }
@@ -337,10 +250,6 @@ export async function loadFilesystemSkills(
   return skillsPkg.mergeSkills(layerResults);
 }
 
-/**
- * Format filesystem skills as a system-prompt block. Used when generating
- * the agent's session-start system reminder.
- */
 export async function formatFilesystemSkills(
   skills: import('@agiworkforce/skills').Skill[],
   options?: import('@agiworkforce/skills').FormatSkillsOptions,

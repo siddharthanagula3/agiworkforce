@@ -4,13 +4,6 @@ import userEvent from '@testing-library/user-event';
 
 import { CameraCaptureDialog } from './CameraCaptureDialog';
 
-/**
- * `getUserMedia` hands back a live stream with no UI of its own. The failure
- * this component exists to prevent is capturing a frame the user never saw —
- * camera light on, photo attached, no preview. These cover that, and the other
- * half of the same problem: a stream left running after the dialog closes.
- */
-
 const stopTrack = vi.fn();
 let getUserMedia: ReturnType<typeof vi.fn>;
 
@@ -25,7 +18,6 @@ beforeEach(() => {
     configurable: true,
     value: { getUserMedia },
   });
-  // jsdom has no media pipeline; play() rejects without this.
   Object.defineProperty(HTMLMediaElement.prototype, 'play', {
     configurable: true,
     value: vi.fn(async () => undefined),
@@ -40,8 +32,6 @@ describe('CameraCaptureDialog — lifecycle', () => {
   it('requests no camera access while closed', () => {
     render(<CameraCaptureDialog open={false} onClose={vi.fn()} onCapture={vi.fn()} />);
 
-    // Turning the camera on for a dialog nobody opened is the worst version of
-    // this bug.
     expect(getUserMedia).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -61,7 +51,6 @@ describe('CameraCaptureDialog — lifecycle', () => {
 
     unmount();
 
-    // A live track here leaves the camera light on after the dialog is gone.
     expect(stopTrack).toHaveBeenCalled();
   });
 
@@ -77,7 +66,6 @@ describe('CameraCaptureDialog — lifecycle', () => {
     const { unmount } = render(<CameraCaptureDialog open onClose={vi.fn()} onCapture={vi.fn()} />);
     await waitFor(() => expect(getUserMedia).toHaveBeenCalled());
 
-    // The user dismissed the dialog while the permission prompt was still up.
     unmount();
     resolveStream?.(fakeStream());
 

@@ -124,8 +124,6 @@ describe('DSAR export local stores', () => {
       ],
       activeProjectId: 'project-1',
     });
-    // buildLocalDataExportSnapshot reads mode-split fields (accentColor, personalization, etc.)
-    // from useLocalSettingsStore (in local mode). Set them there for the export to pick them up.
     useLocalSettingsStore.setState({
       accentColor: 'blue',
       referencePastChats: false,

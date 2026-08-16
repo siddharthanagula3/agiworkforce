@@ -1,11 +1,6 @@
-/**
- * React Query configuration and setup
- * Handles server state management and API caching
- */
 
 import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
-// ReactQueryDevtools loaded lazily in dev only
 import { toast } from 'sonner';
 import { useNotificationStore } from './notification-store';
 import { logger } from '@shared/lib/logger';
@@ -13,12 +8,8 @@ import { logger } from '@shared/lib/logger';
 const ENABLE_REACT_QUERY_DEVTOOLS =
   process.env['NEXT_PUBLIC_ENABLE_REACT_QUERY_DEVTOOLS'] === 'true';
 
-/**
- * Extract user-friendly error message from various error types
- */
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
-    // Handle specific error codes
     if ('code' in error && error.code === 'PGRST116') {
       return 'Resource not found';
     }
@@ -36,18 +27,12 @@ function getErrorMessage(error: unknown): string {
   return 'An unexpected error occurred';
 }
 
-/**
- * Global query cache with error handling
- */
 const queryCache = new QueryCache({
   onError: (error, query) => {
-    // Log all errors
     logger.error(`[QueryError] ${query.queryKey.join('/')}:`, error);
 
-    // Get custom error message from query meta, or use default
     const errorMessage = (query.meta?.['errorMessage'] as string) || getErrorMessage(error);
 
-    // Don't show toast for background refetch errors when we have cached data
     if (query.state.data !== undefined) {
       logger.warn(
         `[QueryError] Background refetch failed for ${query.queryKey.join('/')}, using cached data`,
@@ -55,87 +40,63 @@ const queryCache = new QueryCache({
       return;
     }
 
-    // Show toast notification for user-facing errors
     toast.error(errorMessage);
   },
 });
 
-/**
- * Global mutation cache with error handling
- */
 const mutationCache = new MutationCache({
   onError: (error, _variables, _context, mutation) => {
-    // Log all mutation errors
     logger.error(`[MutationError] ${mutation.options.mutationKey?.join('/') || 'unknown'}:`, error);
 
-    // Get custom error message from mutation meta, or use default
     const errorMessage = (mutation.meta?.['errorMessage'] as string) || getErrorMessage(error);
 
-    // Show toast notification - mutations already have their own onError handlers
-    // so we only show a generic error if no handler exists
     if (!mutation.options.onError) {
       toast.error(errorMessage);
     }
   },
   onSuccess: (_data, _variables, _context, mutation) => {
-    // Log successful mutations in debug mode
     logger.debug(`[MutationSuccess] ${mutation.options.mutationKey?.join('/') || 'unknown'}`);
   },
 });
 
-// Configure query client with optimized defaults
 export const queryClient = new QueryClient({
   queryCache,
   mutationCache,
   defaultOptions: {
     queries: {
-      // Stale time: How long data is considered fresh
       staleTime: 5 * 60 * 1000, // 5 minutes
 
-      // Cache time: How long unused data stays in cache
       gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
 
-      // Retry configuration
       retry: (failureCount, error: unknown) => {
-        // Don't retry on 4xx errors (client errors)
         if (error && typeof error === 'object' && 'status' in error) {
           const status = (error as { status: number }).status;
           if (status >= 400 && status < 500) {
             return false;
           }
         }
-        // Retry up to 3 times for other errors
         return failureCount < 3;
       },
 
-      // Retry delay (exponential backoff)
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
 
-      // Refetch on window focus
       refetchOnWindowFocus: false,
 
-      // Refetch on network reconnect
       refetchOnReconnect: true,
 
-      // Enable background refetch
       refetchInterval: false,
 
-      // Error handling
       throwOnError: false,
     },
     mutations: {
-      // Global retry for mutations
       retry: 1,
       retryDelay: 1000,
 
-      // Error handling
       throwOnError: false,
     },
   },
 });
 
-// Query client provider wrapper. React Query Devtools is opt-in so local
-// public demos do not render product-unrelated floating controls.
 interface QueryProviderProps {
   children: React.ReactNode;
 }
@@ -175,16 +136,13 @@ export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
   );
 };
 
-// Query keys factory for consistent key management
 export const queryKeys = {
-  // Authentication
   auth: {
     user: () => ['auth', 'user'] as const,
     session: () => ['auth', 'session'] as const,
     permissions: () => ['auth', 'permissions'] as const,
   },
 
-  // Chat
   chat: {
     all: () => ['chat'] as const,
     conversations: () => ['chat', 'conversations'] as const,
@@ -199,7 +157,6 @@ export const queryKeys = {
     search: (userId: string, query: string) => ['chat', 'search', userId, query] as const,
   },
 
-  // Message Reactions
   reactions: {
     all: () => ['reactions'] as const,
     message: (messageId: string) => ['reactions', 'message', messageId] as const,
@@ -207,7 +164,6 @@ export const queryKeys = {
       ['reactions', 'messages', messageIds.sort().join(',')] as const,
   },
 
-  // Conversation Branches
   branches: {
     all: () => ['branches'] as const,
     session: (sessionId: string) => ['branches', 'session', sessionId] as const,
@@ -220,7 +176,6 @@ export const queryKeys = {
     count: (sessionId: string) => ['branches', 'count', sessionId] as const,
   },
 
-  // Search
   search: {
     all: () => ['search'] as const,
     history: (userId: string) => ['search', 'history', userId] as const,
@@ -230,7 +185,6 @@ export const queryKeys = {
       ['search', 'suggestions', userId, query] as const,
   },
 
-  // Billing
   billing: {
     all: () => ['billing'] as const,
     subscription: () => ['billing', 'subscription'] as const,
@@ -239,7 +193,6 @@ export const queryKeys = {
     paymentMethods: () => ['billing', 'payment-methods'] as const,
   },
 
-  // Settings
   settings: {
     all: () => ['settings'] as const,
     profile: (userId?: string) => ['settings', 'profile', userId] as const,
@@ -248,7 +201,6 @@ export const queryKeys = {
     notifications: () => ['settings', 'notifications'] as const,
   },
 
-  // System
   system: {
     health: () => ['system', 'health'] as const,
     config: () => ['system', 'config'] as const,
@@ -256,10 +208,8 @@ export const queryKeys = {
   },
 } as const;
 
-// Re-export ApiError from shared types for convenience
 export type { ApiError as APIError } from '@shared/types';
 
-// Custom error class
 export class APIException extends Error {
   code?: string;
   status?: number;
@@ -274,9 +224,6 @@ export class APIException extends Error {
   }
 }
 
-/**
- * Handle 402 Payment Required responses by showing upgrade notification
- */
 function handlePaymentRequired(): void {
   const { addNotification } = useNotificationStore.getState();
 
@@ -293,11 +240,8 @@ function handlePaymentRequired(): void {
   });
 }
 
-// Re-export ApiResponse from shared types
-// Note: The shared ApiResponse is slightly different but compatible
 import type { ApiError, ApiResponse as SharedApiResponse } from '@shared/types';
 
-// Extended API response type for query client with pagination meta
 export interface APIResponse<T = unknown> extends Omit<SharedApiResponse<T>, 'data' | 'error'> {
   data: T;
   error?: string | null;
@@ -310,7 +254,6 @@ export interface APIResponse<T = unknown> extends Omit<SharedApiResponse<T>, 'da
   };
 }
 
-// Pagination parameters
 export interface PaginationParams {
   page?: number;
   perPage?: number;
@@ -318,14 +261,6 @@ export interface PaginationParams {
   order?: 'asc' | 'desc';
 }
 
-/**
- * Resolve the API gateway base URL.
- *
- * A relative `/api` fallback would silently retarget gateway calls at the web
- * app's own route handlers, so resolution mirrors `@shared/lib/api`: the local
- * gateway in development, and a hard failure when a deployed build ships
- * without the variable.
- */
 function resolveApiBaseUrl(): string {
   const configured = process.env['NEXT_PUBLIC_API_URL'];
   if (configured) return configured;
@@ -333,14 +268,6 @@ function resolveApiBaseUrl(): string {
   throw new Error('NEXT_PUBLIC_API_URL not configured');
 }
 
-/**
- * Read the bearer token the way `APIClient` writes it.
- *
- * `auth_token` holds AES-GCM ciphertext (`APIClient.setToken` in
- * `@shared/lib/api`), so the stored value is not a credential — sending it
- * verbatim authenticates nothing. The crypto module is imported lazily to keep
- * its DOMPurify dependency out of every page that mounts `QueryProvider`.
- */
 async function readAuthToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
 
@@ -352,15 +279,12 @@ async function readAuthToken(): Promise<string | null> {
   try {
     return (await securityManager.decryptAsync(stored)) || null;
   } catch {
-    // Same migration path the writer accepts: a token persisted before
-    // encryption landed is already plaintext, and JWTs start with "ey".
     if (stored.startsWith('ey')) return stored;
     logger.warn('[apiFetch] Ignoring undecryptable auth_token');
     return null;
   }
 }
 
-// Base fetch function with error handling
 export const apiFetch = async <T = unknown>(
   url: string,
   options: RequestInit = {},
@@ -382,7 +306,6 @@ export const apiFetch = async <T = unknown>(
   try {
     const response = await fetch(fullUrl, config);
 
-    // Handle 402 Payment Required specifically
     if (response.status === 402) {
       handlePaymentRequired();
       throw new APIException({
@@ -392,7 +315,6 @@ export const apiFetch = async <T = unknown>(
       });
     }
 
-    // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
     if (!contentType?.includes('application/json')) {
       if (!response.ok) {
@@ -425,7 +347,6 @@ export const apiFetch = async <T = unknown>(
       throw error;
     }
 
-    // Network or parsing error
     throw new APIException({
       message: error instanceof Error ? error.message : 'Network error occurred',
       code: 'NETWORK_ERROR',
@@ -433,7 +354,6 @@ export const apiFetch = async <T = unknown>(
   }
 };
 
-// Utility functions for common API patterns
 export const apiGet = <T = unknown>(url: string, params?: Record<string, unknown>) => {
   const searchParams = new URLSearchParams();
   if (params) {
@@ -469,7 +389,6 @@ export const apiPatch = <T = unknown>(url: string, data?: unknown) =>
 
 export const apiDelete = <T = unknown>(url: string) => apiFetch<T>(url, { method: 'DELETE' });
 
-// Utility to invalidate related queries
 export const invalidateQueries = (patterns: (keyof typeof queryKeys)[]) => {
   patterns.forEach((pattern) => {
     queryClient.invalidateQueries({
@@ -479,7 +398,6 @@ export const invalidateQueries = (patterns: (keyof typeof queryKeys)[]) => {
   });
 };
 
-// Prefetch utility
 export const prefetchQuery = <T = unknown>(
   queryKey: readonly unknown[],
   queryFn: () => Promise<T>,
@@ -492,7 +410,6 @@ export const prefetchQuery = <T = unknown>(
   });
 };
 
-// Set query data utility
 export const setQueryData = <T = unknown>(
   queryKey: readonly unknown[],
   data: T | ((old: T | undefined) => T),
@@ -500,26 +417,21 @@ export const setQueryData = <T = unknown>(
   queryClient.setQueryData(queryKey, data);
 };
 
-// Optimistic update utilities
 export const optimisticUpdate = <T = unknown>(
   queryKey: readonly unknown[],
   updater: (old: T | undefined) => T,
   rollbackFn?: () => void,
 ) => {
-  // Store previous data for rollback
   const previousData = queryClient.getQueryData<T>(queryKey);
 
-  // Optimistically update
   queryClient.setQueryData(queryKey, updater);
 
-  // Return rollback function
   return () => {
     if (rollbackFn) rollbackFn();
     queryClient.setQueryData(queryKey, previousData);
   };
 };
 
-// Background sync utility
 export const backgroundSync = (queryKey: readonly unknown[]) => {
   return queryClient.refetchQueries({
     queryKey,
@@ -527,5 +439,4 @@ export const backgroundSync = (queryKey: readonly unknown[]) => {
   });
 };
 
-// Export commonly used hooks for convenience
 export { useQuery, useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';

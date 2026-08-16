@@ -1,36 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Background Task Store
- *
- * Wires all bg_* Tauri commands from background_tasks.rs to the frontend.
- * This is for the generic task queue system (submit/cancel/pause/resume/stats).
- * For the background *agent* system (push conversations to background), see
- * backgroundAgentStore.ts instead.
- *
- * Covered commands (sys/commands/background_tasks.rs):
- *   bg_submit_task         -- submit a new task to the queue
- *   bg_cancel_task         -- cancel a running/queued task
- *   bg_pause_task          -- pause a running task
- *   bg_resume_task         -- resume a paused task
- *   bg_get_task_status     -- get a single task by ID
- *   bg_list_tasks          -- list tasks with optional status/priority filter
- *   bg_get_task_stats      -- aggregate stats (counts by status)
- *
- * Also wires the alias commands registered for frontend compat:
- *   background_task_list   -- alias for bg_list_tasks
- *   background_task_cancel -- alias for bg_cancel_task
- *   background_task_status -- alias for bg_get_task_status
- *
- * Timeout/control commands (also in background_tasks.rs):
- *   agi_get_timeout_status  -- remaining time for a task
- *   agi_extend_timeout      -- extend a task's deadline
- *   agi_pause_task          -- alias for bg_pause_task
- *   agi_resume_task         -- alias for bg_resume_task
- *   agi_abort_task          -- alias for bg_cancel_task
- *   timeout_get_config      -- get global timeout config
- *   timeout_set_config      -- set global timeout config
- *   timeout_get_recommended -- recommended timeout by task type
- */
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
@@ -39,17 +7,9 @@ import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { toast } from 'sonner';
 import { useSettingsStore, selectEnableTimeoutWarnings } from './settingsStore';
 
-// =============================================================================
-// Types (mirror Rust structs in features/tasks/types.rs + background_tasks.rs)
-// =============================================================================
-
 export type TaskStatus = 'Queued' | 'Running' | 'Paused' | 'Completed' | 'Failed' | 'Cancelled';
 export type TaskPriority = 'Low' | 'Normal' | 'High';
 
-/**
- * Task fields use snake_case to match the Rust struct
- * (no `#[serde(rename_all = "camelCase")]` on Task in features/tasks/types.rs).
- */
 export interface Task {
   id: string;
   name: string;
@@ -65,9 +25,6 @@ export interface Task {
   deadline_override_secs: number | null;
 }
 
-/**
- * TaskStats fields match Rust struct in features/tasks/persistence.rs.
- */
 export interface TaskStats {
   total: number;
   queued: number;
@@ -78,10 +35,6 @@ export interface TaskStats {
   cancelled: number;
 }
 
-/**
- * Timeout status fields use snake_case to match the Rust struct
- * (no `#[serde(rename_all = "camelCase")]` on the Rust side).
- */
 export interface TimeoutStatus {
   task_id: string;
   task_name: string;
@@ -91,10 +44,6 @@ export interface TimeoutStatus {
   total_estimated_steps: number | null;
 }
 
-/**
- * Timeout config fields use snake_case to match the Rust struct
- * (no `#[serde(rename_all = "camelCase")]` on the Rust side).
- */
 export interface TimeoutConfig {
   max_duration_secs: number;
   enable_warnings: boolean;
@@ -114,10 +63,6 @@ export interface ListTasksRequest {
   limit?: number;
 }
 
-// =============================================================================
-// Store State
-// =============================================================================
-
 interface BackgroundTaskStoreState {
   tasks: Task[];
   stats: TaskStats | null;
@@ -125,7 +70,6 @@ interface BackgroundTaskStoreState {
   isLoading: boolean;
   error: string | null;
 
-  // Core task actions
   submitTask: (request: SubmitTaskRequest) => Promise<string | null>;
   cancelTask: (taskId: string) => Promise<boolean>;
   pauseTask: (taskId: string) => Promise<boolean>;
@@ -134,20 +78,14 @@ interface BackgroundTaskStoreState {
   listTasks: (request?: ListTasksRequest) => Promise<Task[]>;
   fetchStats: () => Promise<TaskStats | null>;
 
-  // Timeout actions
   getTimeoutStatus: (taskId: string) => Promise<TimeoutStatus | null>;
   extendTimeout: (taskId: string, additionalMinutes: number) => Promise<boolean>;
   fetchTimeoutConfig: () => Promise<TimeoutConfig | null>;
   setTimeoutConfig: (config: TimeoutConfig) => Promise<boolean>;
   getRecommendedTimeout: (taskType: string) => Promise<number | null>;
 
-  // Utility
   clearError: () => void;
 }
-
-// =============================================================================
-// Store
-// =============================================================================
 
 export const useBackgroundTaskStore = create<BackgroundTaskStoreState>()(
   devtools(
@@ -157,10 +95,6 @@ export const useBackgroundTaskStore = create<BackgroundTaskStoreState>()(
       timeoutConfig: null,
       isLoading: false,
       error: null,
-
-      // =====================================================================
-      // Core Task Actions
-      // =====================================================================
 
       submitTask: async (request) => {
         set(
@@ -362,10 +296,6 @@ export const useBackgroundTaskStore = create<BackgroundTaskStoreState>()(
         }
       },
 
-      // =====================================================================
-      // Timeout Actions
-      // =====================================================================
-
       getTimeoutStatus: async (taskId) => {
         try {
           const status = await invoke<TimeoutStatus>('agi_get_timeout_status', { taskId });
@@ -462,10 +392,6 @@ export const useBackgroundTaskStore = create<BackgroundTaskStoreState>()(
         }
       },
 
-      // =====================================================================
-      // Utility
-      // =====================================================================
-
       clearError: () =>
         set(
           (state) => {
@@ -479,16 +405,10 @@ export const useBackgroundTaskStore = create<BackgroundTaskStoreState>()(
   ),
 );
 
-// =============================================================================
-// Event Listener
-// =============================================================================
-
 let _generation = 0;
 let _listenerCleanup: (() => void) | null = null;
 
-/** Subscribe to AGI timeout warning events from the Rust backend. */
 export function subscribeToTimeoutWarnings(): () => void {
-  // Clean up any previous subscription before re-registering
   if (_listenerCleanup) {
     _listenerCleanup();
   }
@@ -503,8 +423,7 @@ export function subscribeToTimeoutWarnings(): () => void {
       remainingSeconds: number;
       maxTimeoutMinutes: number;
     }>('agi:timeout_warning', (event) => {
-      if (_generation !== myGeneration) return; // Guard against stale listeners from a previous generation
-      // Honor the "Timeout Warnings" setting (was shown unconditionally).
+      if (_generation !== myGeneration) return;
       if (!selectEnableTimeoutWarnings(useSettingsStore.getState())) return;
       const { taskName, remainingSeconds } = event.payload;
       const mins = Math.ceil(remainingSeconds / 60);
@@ -515,7 +434,6 @@ export function subscribeToTimeoutWarnings(): () => void {
   );
 
   const cleanup = () => {
-    // Only invalidate if we're still the active generation
     if (_generation === myGeneration) {
       _generation++;
     }
@@ -530,10 +448,6 @@ export function subscribeToTimeoutWarnings(): () => void {
   _listenerCleanup = cleanup;
   return cleanup;
 }
-
-// =============================================================================
-// Selectors
-// =============================================================================
 
 export const selectAllTasks = (state: BackgroundTaskStoreState) => state.tasks;
 export const selectTaskStats = (state: BackgroundTaskStoreState) => state.stats;

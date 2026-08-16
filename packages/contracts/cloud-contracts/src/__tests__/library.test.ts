@@ -1,8 +1,3 @@
-/**
- * Tests for the GET /api/library cloud contract: item legacy fallbacks
- * (surface/previewable/origin defaults + catches), query parsing bounds,
- * and the list-response envelope.
- */
 
 import { describe, expect, it } from 'vitest';
 import {

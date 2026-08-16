@@ -1,19 +1,7 @@
-/**
- * ToolLabel Component Tests
- *
- * Covers:
- * - Rendering tool name and display args
- * - Status indicator icons: Check (completed), Spinner (running), X (error)
- * - Duration formatting: milliseconds and seconds
- * - Hiding duration while running
- * - Hiding args when displayArgs is empty
- * - Running ellipsis animation indicator
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-// Mock framer-motion so motion.div renders as a plain div in jsdom
 vi.mock('framer-motion', () => ({
   motion: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: framer-motion motion proxy
@@ -24,7 +12,6 @@ vi.mock('framer-motion', () => ({
 
 import { ToolLabel, type ToolLabelEntry } from '../ToolLabel';
 
-// A fully-populated completed entry used as baseline in most tests
 const baseEntry: ToolLabelEntry = {
   id: 'test-1',
   displayName: 'Read',
@@ -47,7 +34,6 @@ describe('ToolLabel', () => {
 
     it('does not render args span when displayArgs is empty string', () => {
       render(<ToolLabel entry={{ ...baseEntry, displayArgs: '' }} />);
-      // When displayArgs is falsy the span is not rendered at all
       expect(screen.queryByText(/^\(.*\)$/)).not.toBeInTheDocument();
     });
 
@@ -70,19 +56,16 @@ describe('ToolLabel', () => {
   describe('status icon classes', () => {
     it('shows emerald Check icon for completed status', () => {
       render(<ToolLabel entry={baseEntry} />);
-      // The Check icon receives .text-emerald-400
       expect(document.querySelector('.text-emerald-400')).toBeTruthy();
     });
 
     it('shows spinning Loader icon for running status', () => {
       render(<ToolLabel entry={{ ...baseEntry, status: 'running', durationMs: undefined }} />);
-      // Loader2 gets animate-spin class
       expect(document.querySelector('.animate-spin')).toBeTruthy();
     });
 
     it('shows red X icon for error status', () => {
       render(<ToolLabel entry={{ ...baseEntry, status: 'error', error: 'failed' }} />);
-      // X icon receives .text-red-400
       expect(document.querySelector('.text-red-400')).toBeTruthy();
     });
 
@@ -90,7 +73,6 @@ describe('ToolLabel', () => {
       const { container } = render(
         <ToolLabel entry={{ ...baseEntry, status: 'error', error: 'oops' }} />,
       );
-      // The outer motion.div gets text-red-400 when isError is true
       expect(container.firstChild).toHaveClass('text-red-400');
     });
 
@@ -102,7 +84,7 @@ describe('ToolLabel', () => {
 
   describe('duration display', () => {
     it('renders millisecond duration for completed entries under one second', () => {
-      render(<ToolLabel entry={baseEntry} />); // durationMs: 45
+      render(<ToolLabel entry={baseEntry} />);
       expect(screen.getByText('45ms')).toBeInTheDocument();
     });
 
@@ -167,7 +149,6 @@ describe('ToolLabel', () => {
         displayArgs: '',
       };
       const { container } = render(<ToolLabel entry={entry} />);
-      // Should not throw — component renders the Wrench fallback icon
       expect(container.firstChild).toBeTruthy();
       expect(screen.getByText('my_custom_tool')).toBeInTheDocument();
     });

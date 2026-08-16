@@ -14,58 +14,16 @@ import type { Artifact, MessageArtifactProjection, MessageRouting } from '../lib
 interface MessageListProps {
   conversationId: string;
   onArtifactClick?: (artifact: Artifact) => void;
-  /**
-   * Per-message artifact projections keyed by message id, computed once by
-   * `ChatInterface` from the host's `deriveMessageArtifacts` capability. Absent
-   * (or missing an entry) means "render this message exactly as stored" — the
-   * behaviour for hosts that wire no derivation.
-   */
   artifactProjections?: ReadonlyMap<string, MessageArtifactProjection> | null;
-  /**
-   * When true (default), assistant messages render a `ProvenanceFooter`
-   * below their bubble. Pass `false` to suppress.
-   */
   showProvenanceFooter?: boolean;
-  /**
-   * Continue Generation (cloud mode): resume the LAST assistant turn when it
-   * was truncated at the token cap or user-stopped with partial content.
-   * When omitted, the Continue control is not rendered (e.g. surfaces whose
-   * runtime exposes no finish signal — no fake affordance).
-   */
   onContinueGeneration?: (assistantMessageId: string) => void;
-  /**
-   * Re-run the user turn that produced an assistant message, replacing the old
-   * exchange. Drives THREE affordances that all die together when it is
-   * omitted: the mid-stream-error notice's Retry (see `hasStreamError`), the
-   * per-message Retry in `ActionBar`, and the resend on an expired
-   * tool-approval card. When omitted every one of them is hidden rather than
-   * rendered dead — no fake affordance.
-   */
   onRegenerateMessage?: (assistantMessageId: string) => void;
-  /** Forwarded to `MessageBubble` — see its doc comments. */
   onToolApprove?: (messageId: string, toolCallId: string) => void;
   onToolReject?: (messageId: string, toolCallId: string) => void;
-  /**
-   * True when this conversation's suspended approval turn is no longer live
-   * (see `ChatRuntime.hasLiveApprovalTurn`'s doc comment) -- awaiting_approval
-   * cards render an expired notice instead of live Approve/Reject buttons,
-   * which would otherwise render wired but silently no-op.
-   */
   approvalTurnExpired?: boolean;
-  /**
-   * Commit an edited body for one of the user's own turns. Forwarded to
-   * `MessageBubble`; omitted means no Edit control renders anywhere in the
-   * feed, rather than one wired to nothing.
-   */
   onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
-/**
- * Distance from the bottom (in pixels) within which we still consider the
- * user "at the bottom" and auto-scroll on new messages. 120px is roughly
- * one message bubble's worth of clearance — stays out of the way when the
- * user has clearly scrolled up to re-read history.
- */
 const STICK_TO_BOTTOM_THRESHOLD_PX = 120;
 
 export function MessageList({
@@ -87,12 +45,6 @@ export function MessageList({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // UX-MSGLIST-01: don't yank the user back to the bottom while they're
-  // reading history. We track whether they're "near bottom" and only
-  // auto-scroll when so; otherwise we surface a floating button + an
-  // unread-count badge for them to opt back in. Mirrors the pattern in
-  // Claude Desktop's chat surface (reference: 04_chat-layout_scroll-to-
-  // bottom-floating-button.png).
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const lastSeenLengthRef = useRef(0);
@@ -104,8 +56,6 @@ export function MessageList({
     setIsNearBottom(distanceFromBottom <= STICK_TO_BOTTOM_THRESHOLD_PX);
   }, []);
 
-  // Recompute on any user scroll. Throttling via rAF keeps this cheap
-  // even on long histories.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -119,14 +69,10 @@ export function MessageList({
       });
     };
     el.addEventListener('scroll', onScroll, { passive: true });
-    // Initial measurement after layout settles.
     checkNearBottom();
     return () => el.removeEventListener('scroll', onScroll);
   }, [checkNearBottom]);
 
-  // When messages arrive: if the user is near the bottom, follow them.
-  // Otherwise increment the unread badge so they can see how much they're
-  // missing without losing their reading position.
   useEffect(() => {
     const len = messages.length;
     const prevLen = lastSeenLengthRef.current;
@@ -141,8 +87,6 @@ export function MessageList({
     lastSeenLengthRef.current = len;
   }, [messages.length, isNearBottom]);
 
-  // Conversation switch: snap straight to bottom (no animation) and
-  // reset the unread tracker, since the user explicitly chose this view.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -154,10 +98,6 @@ export function MessageList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
-  // "Pin to <model>" in an auto-routed message's provenance footer: replace the
-  // `auto` alias with the concrete model the router landed on, so every later
-  // turn in this conversation goes to that model instead of being re-routed.
-  // `selectModel` also clears the stale routing badge in the model selector.
   const handlePinModel = useCallback(
     (routing: MessageRouting) => {
       if (!routing.pinModel) return;
@@ -173,27 +113,14 @@ export function MessageList({
 
   const showJumpButton = !isNearBottom;
 
-  // Continue-Generation control: offered only for the LAST message, when it is
-  // a continuable assistant turn (truncated/user-stopped with partial content),
-  // nothing is currently streaming, and the host wired a handler. Continuing an
-  // earlier turn would fork history, so it is strictly the tail message.
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : undefined;
   const hasStreamingAssistant = messages.some(
     (message) => message.role === 'assistant' && message.isStreaming,
   );
-  // A host bridge may persist only durable/non-empty messages. Keep the
-  // lifecycle indicator at the shared list boundary as a fallback so a real
-  // in-flight turn never looks idle while its empty assistant placeholder is
-  // absent from the rendered snapshot.
   const showDetachedThinkingStatus = isStreaming && !hasStreamingAssistant;
   const showContinue =
     !isStreaming && !!onContinueGeneration && !!lastMessage && isMessageContinuable(lastMessage);
 
-  // Mid-stream provider failure notice: the turn otherwise looks like a
-  // clean completion (server still ends the stream normally), so this is
-  // the only signal telling the user their answer may be cut off. Offered
-  // only on the last message, only once streaming has stopped, and mutually
-  // exclusive with Continue — see hasStreamError's doc comment.
   const showStreamErrorNotice =
     !isStreaming &&
     !showContinue &&

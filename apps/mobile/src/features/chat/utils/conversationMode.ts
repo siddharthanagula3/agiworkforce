@@ -8,10 +8,6 @@ export function executionModeForModel(modelId?: string | null): ConversationExec
   return modelId && isCloudManagedModelId(modelId) ? 'cloud' : 'local';
 }
 
-/**
- * Auto is a routing policy, not a trust boundary. It must stay inside the
- * active conversation boundary; explicit models may request a boundary switch.
- */
 export function executionModeForSelection(
   modelId: string | null | undefined,
   activeMode: ConversationExecutionMode,
@@ -35,12 +31,6 @@ export function executionModeForConversation(
   return executionModeForModel(conversation.model);
 }
 
-/**
- * Temporary/incognito conversations must never surface in history listings
- * (recents, search, full history, chat-count stats) even though the active
- * chat screen still looks them up directly by id. Use this in every
- * "list of past conversations" surface, not in single-conversation lookups.
- */
 export function isHistoryVisibleConversation(
   conversation: Pick<ConversationSummary, 'temporary'>,
 ): boolean {

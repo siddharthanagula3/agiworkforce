@@ -14,10 +14,6 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Agent Card
-// ============================================================================
-
 /**
  * A capability advertisement published by an agent.
  *
@@ -41,46 +37,22 @@
  * ```
  */
 export interface A2AAgentCard {
-  /** Unique, stable identifier for the agent instance. */
   agentId: string;
 
-  /** Human-readable agent name shown in dashboards and logs. */
   name: string;
 
-  /** Semantic version of the agent's capability set (semver string). */
   version: string;
 
-  /**
-   * List of named capabilities this agent advertises.
-   *
-   * Capability names are free-form strings (e.g., `"code_review"`,
-   * `"web_search"`, `"file_edit"`). Orchestrators use them to route tasks.
-   */
   capabilities: string[];
 
-  /** LLM model identifiers this agent can operate with. */
   supportedModels: string[];
 
-  /**
-   * Transport endpoint for reaching this agent.
-   *
-   * Scheme examples:
-   * - `local://swarm/<agentId>` — in-process desktop swarm
-   * - `https://agents.internal/<agentId>` — HTTP service
-   * - `webrtc://<signalingChannel>` — WebRTC data channel
-   */
   endpoint: string;
 
-  /** Whether callers must supply authentication credentials. */
   authRequired: boolean;
 
-  /** Arbitrary metadata for capability negotiation. */
   metadata: Record<string, unknown>;
 }
-
-// ============================================================================
-// Task Request
-// ============================================================================
 
 /**
  * A task delegation request sent from one agent to another.
@@ -101,31 +73,18 @@ export interface A2AAgentCard {
  * ```
  */
 export interface A2ATaskRequest {
-  /** Unique request identifier for correlation with the response. */
   requestId: string;
 
-  /** Agent ID of the requesting (delegating) agent. */
   fromAgent: string;
 
-  /** Natural-language description of the task to perform. */
   taskDescription: string;
 
-  /**
-   * Optional additional context provided to the receiving agent
-   * (e.g., relevant file contents, conversation summary).
-   */
   context?: string;
 
-  /** Maximum seconds the receiving agent should spend on this task. */
   timeoutSeconds?: number;
 
-  /** Execution priority hint. Receiving agent may honour or ignore this. */
   priority: 'low' | 'normal' | 'high' | 'critical';
 }
-
-// ============================================================================
-// Task Response
-// ============================================================================
 
 /**
  * The response returned by the receiving agent after processing a task request.
@@ -141,31 +100,16 @@ export interface A2ATaskRequest {
  * ```
  */
 export interface A2ATaskResponse {
-  /** Correlation identifier matching the originating `A2ATaskRequest.requestId`. */
   requestId: string;
 
-  /**
-   * Outcome status:
-   * - `accepted`  -- Task received and queued; result will follow asynchronously.
-   * - `completed` -- Task finished successfully; `result` is populated.
-   * - `failed`    -- Task could not be completed; `error` is populated.
-   * - `rejected`  -- Agent declined the task (out of scope, overloaded, etc.).
-   */
   status: 'accepted' | 'completed' | 'failed' | 'rejected';
 
-  /** Task output as a string (populated when status is `'completed'`). */
   result?: string;
 
-  /** Error description (populated when status is `'failed'` or `'rejected'`). */
   error?: string;
 
-  /** Wall-clock milliseconds from request receipt to response. */
   durationMs: number;
 }
-
-// ============================================================================
-// Handoff Request
-// ============================================================================
 
 /**
  * A full conversation handoff from one agent to another.
@@ -188,30 +132,14 @@ export interface A2ATaskResponse {
  * ```
  */
 export interface A2AHandoffRequest {
-  /** Agent ID that is initiating the handoff. */
   fromAgent: string;
 
-  /** Agent ID that should take over the conversation. */
   toAgent: string;
 
-  /**
-   * Free-text summary of the conversation so far.
-   *
-   * The receiving agent uses this as its initial working context,
-   * enabling it to respond coherently without replaying all messages.
-   */
   conversationContext: string;
 
-  /**
-   * Ordered message history to transfer.
-   *
-   * Should be the recent N messages (or a compacted version) rather than
-   * the full unbounded history, to respect context window limits.
-   */
   messages: Array<{
-    /** Message author role. */
     role: string;
-    /** Message text content. */
     content: string;
   }>;
 }

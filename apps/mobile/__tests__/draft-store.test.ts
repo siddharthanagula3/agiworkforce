@@ -1,7 +1,3 @@
-/**
- * Composer draft persistence (src/features/chat/draftStore) — survives unmount/backgrounding.
- * Backed by an in-memory MMKV mock so we exercise the real get/set/clear logic.
- */
 
 const mockStore = new Map<string, string>();
 jest.mock('../lib/mmkv', () => ({

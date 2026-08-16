@@ -1,14 +1,3 @@
-/**
- * Tool Store
- *
- * Manages tool executions, file operations, terminal commands, and approval workflows.
- * Split from unifiedChatStore for better modularity.
- *
- * Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(immer(...))))
- * - Export selectors for all state slices
- * - subscribeWithSelector for granular subscriptions
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -165,9 +154,6 @@ export interface ApprovalRequest {
   actionSignature?: string;
 }
 
-/**
- * State for tracking a streaming tool execution
- */
 export interface ToolStreamStateEntry {
   tool_id: string;
   tool_name: string;
@@ -187,52 +173,40 @@ export interface ToolStreamStateEntry {
   parameters?: Record<string, unknown>;
 }
 
-/**
- * Cap an array to `limit` most-recent entries.
- * Returns the original array reference unchanged when under the limit.
- */
 function capArray<T>(arr: T[], limit: number): T[] {
   return arr.length > limit ? arr.slice(-limit) : arr;
 }
 
-// Named cap limits — single source of truth for all array size guards in this store.
-const FILE_OPS_LIMIT = 200; // fileOperations, terminalCommands, toolExecutions, screenshots
-const ACTION_LOG_LIMIT = 500; // actionLog entries (newest-first via unshift + slice)
-const PENDING_APPROVALS_LIMIT = 50; // pendingApprovals queue depth
+const FILE_OPS_LIMIT = 200;
+const ACTION_LOG_LIMIT = 500;
+const PENDING_APPROVALS_LIMIT = 50;
 
 const STORAGE_VERSION = 1;
 
 export interface ToolState {
-  // Operations
   fileOperations: FileOperation[];
   terminalCommands: TerminalCommand[];
   toolExecutions: ToolExecution[];
   screenshots: Screenshot[];
   actionLog: ActionLogEntry[];
 
-  // Approvals
   pendingApprovals: ApprovalRequest[];
   trustedWorkflows: Record<string, TrustedWorkflow>;
 
-  // Context and plan
   activeContext: ContextItem[];
   workflowContext: WorkflowContext | null;
   plan: PlanData | null;
 
-  // Tool streaming
   activeToolStreams: Map<string, ToolStreamStateEntry>;
 
-  // Filters
   filters: {
     fileOperations: FileOperationType[];
     terminalStatus: ('success' | 'error')[];
     toolNames: string[];
   };
 
-  // Actions - File operations
   addFileOperation: (op: Omit<FileOperation, 'timestamp'>) => void;
 
-  // Actions - Terminal commands
   addTerminalCommand: (cmd: Omit<TerminalCommand, 'timestamp'>) => void;
   updateTerminalOutput: (payload: {
     command_id: string;
@@ -242,54 +216,44 @@ export interface ToolState {
     duration_ms: number;
   }) => void;
 
-  // Actions - Tool executions
   addToolExecution: (exec: Omit<ToolExecution, 'timestamp'>) => void;
 
-  // Actions - Screenshots
   addScreenshot: (screenshot: Omit<Screenshot, 'timestamp'>) => void;
 
-  // Actions - Action log
   addActionLogEntry: (entry: Omit<ActionLogEntry, 'createdAt' | 'updatedAt'>) => void;
   updateActionLogEntry: (id: string, updates: Partial<ActionLogEntry>) => void;
   clearActionLog: () => void;
   clearToolHistory: () => void;
 
-  // Actions - Plan
   setWorkflowContext: (context: WorkflowContext | null) => void;
   setPlan: (plan: PlanData | null) => void;
   updatePlanStep: (stepId: string, updates: Partial<PlanStep>) => void;
   clearPlan: () => void;
 
-  // Actions - Approvals
   addApprovalRequest: (request: Omit<ApprovalRequest, 'createdAt' | 'status'>) => void;
   approveOperation: (id: string) => void;
   rejectOperation: (id: string, reason?: string) => void;
   removeApprovalRequest: (id: string) => void;
 
-  // Actions - Trusted workflows
   setTrustedWorkflow: (workflow: TrustedWorkflow) => void;
   removeTrustedWorkflow: (hash: string) => void;
   recordTrustedAction: (hash: string, signature: string) => void;
   isActionTrusted: (hash: string | undefined, signature: string | undefined) => boolean;
 
-  // Actions - Context
   addContextItem: (item: ContextItem) => void;
   removeContextItem: (id: string) => void;
   clearContext: () => void;
 
-  // Actions - Tool streaming
   updateToolStream: (toolId: string, state: Partial<ToolStreamStateEntry>) => void;
   removeToolStream: (toolId: string) => void;
   clearToolStreams: () => void;
   getActiveToolStreams: () => ToolStreamStateEntry[];
   cancelToolExecution: (toolId: string) => void;
 
-  // Actions - Filters
   setFileOperationFilter: (types: FileOperationType[]) => void;
   setTerminalStatusFilter: (statuses: ('success' | 'error')[]) => void;
   setToolNameFilter: (names: string[]) => void;
 
-  // Actions - Reset
   resetOnLogout: () => void;
 }
 
@@ -298,7 +262,6 @@ export const useToolStore = create<ToolState>()(
     persist(
       subscribeWithSelector(
         immer((set, get) => ({
-          // Initial state
           fileOperations: [],
           terminalCommands: [],
           toolExecutions: [],
@@ -316,24 +279,20 @@ export const useToolStore = create<ToolState>()(
             toolNames: [],
           },
 
-          // File operations
           addFileOperation: (op) =>
             set(
               (state) => {
                 state.fileOperations.push({ ...op, timestamp: new Date() });
-                // AUDIT-006-017 fix: Cap fileOperations at 200 entries
                 state.fileOperations = capArray(state.fileOperations, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addFileOperation',
             ),
 
-          // Terminal commands
           addTerminalCommand: (cmd) =>
             set(
               (state) => {
                 state.terminalCommands.push({ ...cmd, timestamp: new Date() });
-                // AUDIT-006-017 fix: Cap terminalCommands at 200 entries
                 state.terminalCommands = capArray(state.terminalCommands, FILE_OPS_LIMIT);
               },
               undefined,
@@ -357,31 +316,26 @@ export const useToolStore = create<ToolState>()(
               'tool/updateTerminalOutput',
             ),
 
-          // Tool executions
           addToolExecution: (exec) =>
             set(
               (state) => {
                 state.toolExecutions.push({ ...exec, timestamp: new Date() });
-                // AUDIT-006-017 fix: Cap toolExecutions at 200 entries
                 state.toolExecutions = capArray(state.toolExecutions, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addToolExecution',
             ),
 
-          // Screenshots
           addScreenshot: (screenshot) =>
             set(
               (state) => {
                 state.screenshots.push({ ...screenshot, timestamp: new Date() });
-                // AUDIT-006-017 fix: Cap screenshots at 200 entries
                 state.screenshots = capArray(state.screenshots, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addScreenshot',
             ),
 
-          // Action log
           addActionLogEntry: (entry) =>
             set(
               (state) => {
@@ -391,7 +345,6 @@ export const useToolStore = create<ToolState>()(
                   createdAt: now,
                   updatedAt: now,
                 });
-                // Cap at 500 entries — unshift prepends, so slice from the front keeps newest entries.
                 if (state.actionLog.length > ACTION_LOG_LIMIT) {
                   state.actionLog = state.actionLog.slice(0, ACTION_LOG_LIMIT);
                 }
@@ -440,7 +393,6 @@ export const useToolStore = create<ToolState>()(
               'tool/clearToolHistory',
             ),
 
-          // Plan
           setWorkflowContext: (context) =>
             set(
               (state) => {
@@ -510,7 +462,6 @@ export const useToolStore = create<ToolState>()(
               'tool/clearPlan',
             ),
 
-          // Approvals
           addApprovalRequest: (request) =>
             set(
               (state) => {
@@ -527,7 +478,6 @@ export const useToolStore = create<ToolState>()(
                   state.pendingApprovals[index] = normalized;
                 } else {
                   state.pendingApprovals.push(normalized);
-                  // AUDIT-006-018 fix: Cap pendingApprovals at 50 entries
                   if (state.pendingApprovals.length > PENDING_APPROVALS_LIMIT) {
                     state.pendingApprovals = state.pendingApprovals.slice(-PENDING_APPROVALS_LIMIT);
                   }
@@ -542,7 +492,6 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
                 if (index !== -1) {
-                  // Remove directly - no need to update status on an item being removed
                   state.pendingApprovals.splice(index, 1);
                 }
               },
@@ -555,7 +504,6 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
                 if (index !== -1) {
-                  // Record rejection details before removing (preserves audit trail)
                   state.pendingApprovals[index]!.status = 'rejected';
                   state.pendingApprovals[index]!.rejectedAt = new Date();
                   if (reason) state.pendingApprovals[index]!.rejectionReason = reason;
@@ -577,7 +525,6 @@ export const useToolStore = create<ToolState>()(
               'tool/removeApprovalRequest',
             ),
 
-          // Trusted workflows
           setTrustedWorkflow: (workflow) =>
             set(
               (state) => {
@@ -630,7 +577,6 @@ export const useToolStore = create<ToolState>()(
             return Boolean(workflow?.actionSignatures.includes(signature));
           },
 
-          // Context
           addContextItem: (item) =>
             set(
               (state) => {
@@ -658,13 +604,11 @@ export const useToolStore = create<ToolState>()(
               'tool/clearContext',
             ),
 
-          // Tool streaming
           updateToolStream: (toolId, updates) =>
             set(
               (state) => {
                 const existing = state.activeToolStreams.get(toolId);
                 if (existing) {
-                  // Filter out undefined values to avoid overwriting valid data with undefined
                   const filteredUpdates = Object.fromEntries(
                     Object.entries(updates).filter(([_key, v]) => v !== undefined),
                   );
@@ -757,7 +701,6 @@ export const useToolStore = create<ToolState>()(
             }
           },
 
-          // Filters
           setFileOperationFilter: (types) =>
             set(
               (state) => {
@@ -785,7 +728,6 @@ export const useToolStore = create<ToolState>()(
               'tool/setToolNameFilter',
             ),
 
-          // Reset
           resetOnLogout: () => {
             set(
               (state) => {
@@ -819,7 +761,6 @@ export const useToolStore = create<ToolState>()(
         }),
 
         migrate: (persistedState: unknown, _version: number) => {
-          // Handle future migrations here
           return persistedState as ToolState;
         },
       },
@@ -828,7 +769,6 @@ export const useToolStore = create<ToolState>()(
   ),
 );
 
-// Selectors
 export const selectFileOperations = (state: ToolState) => state.fileOperations;
 export const selectTerminalCommands = (state: ToolState) => state.terminalCommands;
 export const selectToolExecutions = (state: ToolState) => state.toolExecutions;
@@ -842,7 +782,6 @@ export const selectPlan = (state: ToolState) => state.plan;
 export const selectActiveToolStreams = (state: ToolState) => state.activeToolStreams;
 export const selectFilters = (state: ToolState) => state.filters;
 
-// Derived selectors
 export const selectRecentFileOperations = (state: ToolState) => state.fileOperations.slice(0, 50);
 
 export const selectSuccessfulTerminalCommands = (state: ToolState) =>
@@ -857,5 +796,4 @@ export const selectHighRiskApprovals = (state: ToolState) =>
 export const selectRunningToolStreams = (state: ToolState) =>
   Array.from(state.activeToolStreams.values()).filter((stream) => stream.status === 'running');
 
-// Re-export ContextItem type
 export type { ContextItem };

@@ -1,8 +1,5 @@
 import type { MetadataRoute } from 'next';
 
-// Next.js App Router file convention: automatically served at /manifest.webmanifest
-// and linked into <head> — no manual <link rel="manifest"> or metadata.manifest needed.
-// https://nextjs.org/docs/app/api-reference/file-conventions/metadata/manifest
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'AGI | One AI workspace across models and tools.',

@@ -7,7 +7,6 @@ export const useExport = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
 
-  // Export chat in specified format
   const exportChat = useCallback(
     async (
       session: ChatSession,
@@ -32,7 +31,6 @@ export const useExport = () => {
     [],
   );
 
-  // Copy chat to clipboard
   const copyToClipboard = useCallback(
     async (
       session: ChatSession,
@@ -51,14 +49,12 @@ export const useExport = () => {
     [],
   );
 
-  // Generate shareable link
   const generateShareLink = useCallback(async (sessionId: string) => {
     try {
       toast.info('Generating share link...');
       const link = await chatExportService.generateShareLink(sessionId);
       setShareLink(link);
 
-      // Copy to clipboard
       await navigator.clipboard.writeText(link);
       toast.success('Share link copied to clipboard');
 
@@ -70,12 +66,10 @@ export const useExport = () => {
     }
   }, []);
 
-  // Clear share link
   const clearShareLink = useCallback(() => {
     setShareLink(null);
   }, []);
 
-  // Export as Markdown
   const exportAsMarkdown = useCallback(
     async (session: ChatSession, messages: ChatMessage[]) => {
       return exportChat(session, messages, 'markdown');
@@ -83,7 +77,6 @@ export const useExport = () => {
     [exportChat],
   );
 
-  // Export as JSON
   const exportAsJSON = useCallback(
     async (session: ChatSession, messages: ChatMessage[]) => {
       return exportChat(session, messages, 'json');
@@ -91,7 +84,6 @@ export const useExport = () => {
     [exportChat],
   );
 
-  // Export as HTML
   const exportAsHTML = useCallback(
     async (session: ChatSession, messages: ChatMessage[]) => {
       return exportChat(session, messages, 'html');
@@ -99,7 +91,6 @@ export const useExport = () => {
     [exportChat],
   );
 
-  // Export as Text
   const exportAsText = useCallback(
     async (session: ChatSession, messages: ChatMessage[]) => {
       return exportChat(session, messages, 'text');

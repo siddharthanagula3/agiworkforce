@@ -64,8 +64,6 @@ function MenuItem({ icon: Icon, label, onClick, danger }: MenuItemProps) {
   );
 }
 
-// ChatGPT-style project folder row: hover reveals a quick new-chat icon + a
-// 3-dots menu (rename inline / open / delete).
 export function ProjectRow({
   project,
   active,

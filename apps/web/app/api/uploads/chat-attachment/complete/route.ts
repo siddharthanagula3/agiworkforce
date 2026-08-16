@@ -33,16 +33,10 @@ const CompleteChatAttachmentSchema = z.object({
   byteCount: z.number().int().positive().max(MAX_CHAT_ATTACHMENT_BYTES),
 });
 
-/**
- * A rejected upload is DELETED, not merely left unregistered. New attachment
- * PUTs land in the private bucket, so scan-time bytes are never world-readable;
- * deletion also prevents rejected or abandoned content from consuming storage.
- */
 async function purgeRejectedUpload(userId: string, storageKey: string): Promise<void> {
   try {
     await deletePrivateObject(storageKey);
   } catch (deleteError) {
-    // Loud: rejected bytes remain stored until an operator removes them.
     logger.error(
       { err: deleteError, userId, storageKey },
       '[uploads] CRITICAL: could not delete a rejected upload from private storage',
@@ -69,9 +63,6 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     throw createError.internal('Private object storage is not configured');
   }
 
-  // Capture workspace provenance once, before object inspection. Both the
-  // idempotency read and final catalog write must remain in this scope even if
-  // another tab switches the account's active workspace while scanning runs.
   const organizationId = await resolveActiveOrganizationId(getNeonDb(), userId);
 
   const parsed = CompleteChatAttachmentSchema.safeParse(await request.json().catch(() => null));
@@ -118,11 +109,6 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Uploaded file type does not match the selected file.');
   }
 
-  // Hash first. The structural scan below asks whether the file can *do*
-  // something dangerous when served; the denylist asks what it *depicts*, which
-  // no amount of structure inspection answers. An exact SHA-256 hit against a
-  // confirmed-illegal-media list is also the only verdict here that is a fact
-  // rather than a heuristic, so it outranks everything and is reported.
   const hashMatch = matchDenylistedUpload(object.data);
   if (hashMatch.matched) {
     await purgeRejectedUpload(userId, storageKey);
@@ -141,10 +127,6 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Inspect the actual BYTES. Every check before this point trusts the client's
-  // claims about the file; this is the first one that opens it. Catches
-  // type-confusion polyglots, disguised executables, script-bearing SVGs, and
-  // auto-executing PDFs.
   const scan = await scanUploadBytes(object.data, mimeType);
   if (!scan.ok) {
     logger.warn(
@@ -152,8 +134,6 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
       '[uploads] rejected an attachment that failed content inspection',
     );
     await purgeRejectedUpload(userId, storageKey);
-    // Deliberately generic for the uploader: the specific detector that fired
-    // is an oracle for tuning an evasion against, and it is already logged.
     throw createError.validation(
       'This file could not be attached because its contents failed a safety check.',
     );
@@ -165,7 +145,6 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     kind: isChatImageMimeType(mimeType) ? 'image' : 'file',
     mimeType,
     byteSize: object.data.byteLength,
-    // Internal locator only. Clients receive the authenticated /api/files URL.
     storageUrl: storageKey,
     storagePathname: storageKey,
     sourceSurface,

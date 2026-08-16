@@ -75,11 +75,6 @@ function sameWallClock(left: WallClockParts, right: WallClockParts): boolean {
   );
 }
 
-/**
- * Convert one user-visible date/time in an IANA timezone into the exact
- * instant sent to the scheduler. DST gaps and repeated wall-clock minutes are
- * rejected so the saved task can never run at a different time than shown.
- */
 export function zonedDateAndTimeToIso(date: string, time: string, timezone: string): string {
   const target = parseDateAndTime(date, time);
   const formatter = formatterFor(timezone);
@@ -113,7 +108,6 @@ export function zonedDateAndTimeToIso(date: string, time: string, timezone: stri
   return candidates[0]!;
 }
 
-/** Convert a persisted instant back to the date shown in the selected zone. */
 export function isoToZonedDateInput(value: string | null | undefined, timezone: string): string {
   if (!value) return '';
   const date = new Date(value);

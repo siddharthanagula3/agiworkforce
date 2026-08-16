@@ -1,17 +1,3 @@
-/**
- * Clear every device-side cache that belongs to the currently authenticated
- * Cloud account.
- *
- * This service is deliberately synchronous and network-free so it can run both
- * from explicit sign-out and from Clerk's loaded -> signed-out transition
- * (session expiry, revocation, or an external sign-out). It must never call
- * Clerk signOut itself: doing so from ClerkTokenBridge would recurse through
- * the same auth transition.
- *
- * Local chats, Local settings, Local memories, and Local projects are not
- * imported here. They belong to the device's Local trust boundary and survive
- * Cloud account changes.
- */
 import { whenMmkvReady } from '@/lib/mmkv';
 
 const DEFAULT_CLOUD_SETTINGS = {
@@ -42,8 +28,6 @@ function runTeardownStep(label: string, step: () => void): void {
   try {
     step();
   } catch (error) {
-    // Account isolation is best-effort per store: one malformed/hydration-failed
-    // cache must not prevent the remaining account-scoped stores from clearing.
     console.warn(`[auth] Failed to clear Cloud ${label} state:`, error);
   }
 }
@@ -187,12 +171,6 @@ function clearLocalCloudAccountStateNow(): void {
 export function clearLocalCloudAccountState(): void {
   clearLocalCloudAccountStateNow();
 
-  // If teardown was requested before encrypted MMKV opened, every store above
-  // currently contains defaults and its persisted account-A payload is still
-  // queued to rehydrate. Register this callback after loading those stores so
-  // their rehydrate callbacks run first, then erase the restored account data.
-  // whenMmkvReady fires synchronously when already ready; avoid a redundant
-  // second clear in that normal case.
   let registrationComplete = false;
   whenMmkvReady(() => {
     if (registrationComplete) clearLocalCloudAccountStateNow();

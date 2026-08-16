@@ -44,12 +44,6 @@ function purchaseErrorMessage(error: PurchaseError | Error): string {
   return message || 'The store could not complete this purchase.';
 }
 
-/**
- * Store and catalog SDK failures can include parser/runtime implementation
- * details (for example when an older deployment returns an HTML fallback for
- * a JSON route). Billing renders this string directly, so keep diagnostics in
- * development logs and show a stable recovery message to the user.
- */
 function nativeBillingErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
   const message = error.message.trim();
@@ -99,9 +93,6 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
           productId: product.productId,
           purchaseToken: token,
         });
-        // Finish only after the server has atomically recorded the entitlement
-        // or grant. If this call fails, StoreKit/Play replays the transaction;
-        // the server receipt is idempotent and the next attempt finishes it.
         await finishTransaction({ purchase, isConsumable: product.kind === 'top_up' });
         setLastResult(result);
         await refreshTier();

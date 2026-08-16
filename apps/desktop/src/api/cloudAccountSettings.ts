@@ -1,31 +1,3 @@
-/**
- * Cloud Account Settings API Client
- *
- * Bearer-authenticated clients for the account-owned settings surfaces Desktop
- * previously could only reach by opening agiworkforce.com in a child webview.
- * That webview is gated on a Clerk BROWSER COOKIE (`apps/web/proxy.ts`
- * `hasBrowserSessionCookie` + the `/settings(.*)` redirect), which Desktop never
- * propagates — Desktop holds a first-party HS256 device bearer instead
- * (`apps/desktop/src/services/cloudAccountAuth.ts`). So those sections could
- * silently land on `/login` while the app showed the user as signed in.
- *
- * Everything here goes through routes that authenticate with
- * `getClerkAuthUser()` (`apps/web/lib/api-auth.ts`), whose Path 2b accepts the
- * device bearer, and whose CSRF gate is bypassed for a verifying bearer
- * (`apps/web/lib/csrf.ts` `isBearerTokenValid`). Auth/CSRF plumbing is reused
- * through the shared Managed Cloud request context, which pins each operation
- * to one account/session while still resolving rotated same-account tokens.
- *
- * `/api/settings/sessions` used to be the one account control that could not be
- * served here: it authenticated through a route-local `requireBrowserSession()`
- * that demanded a Clerk cookie AND a `sessionId`. That route now resolves its
- * caller through `getClerkAuthUser` as well
- * (`apps/web/app/api/settings/sessions/session-principal.ts`), so the session
- * list and "log out of all devices" are real here. The one thing a device token
- * still cannot express is "which listed row is me" — a device token is not a
- * Clerk session — so the server answers `currentSessionKnown: false` and the UI
- * says so instead of inventing a current row.
- */
 
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import {
@@ -46,10 +18,6 @@ import {
   createManagedCloudRequestContext,
   type ManagedCloudRequestContext,
 } from '../services/managedCloudRequestContext';
-
-// ============================================================================
-// Shared helpers
-// ============================================================================
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -74,11 +42,6 @@ async function failure(
   return new Error(readApiError(body, `${fallback} (HTTP ${response.status})`));
 }
 
-// ============================================================================
-// Shared links — GET /api/share, DELETE /api/share/{token}
-// ============================================================================
-
-/** Mirrors the row shape returned by `handleListShares` in apps/web/app/api/share/route.ts. */
 export interface CloudSharedLink {
   token: string;
   title: string;
@@ -143,10 +106,6 @@ export async function revokeCloudSharedLink(token: string): Promise<void> {
   request.assertBoundary();
 }
 
-// ============================================================================
-// Archived Cloud chats — /api/chat/conversations
-// ============================================================================
-
 export interface CloudArchivedConversation {
   id: string;
   title: string;
@@ -159,11 +118,6 @@ export interface CloudArchivedConversationPage {
   nextOffset: number;
 }
 
-/**
- * Page size comes from the conversations wire contract — the same constant the
- * route itself falls back to when `limit` is absent, and the same one Web and
- * Mobile page with. A locally written `50` would be a fourth copy free to drift.
- */
 export const CLOUD_ARCHIVED_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 
 export async function listCloudArchivedConversations(
@@ -221,10 +175,6 @@ export async function deleteCloudConversation(conversationId: string): Promise<v
   ManagedCloudDeleteConversationResponseSchema.parse(await response.json());
   request.assertBoundary();
 }
-
-// ============================================================================
-// Security posture — GET /api/settings/2fa, GET /api/settings/activity
-// ============================================================================
 
 export interface CloudTwoFactorStatus {
   enabled: boolean;
@@ -290,11 +240,6 @@ export async function listCloudSecurityActivity(limit = 10): Promise<CloudSecuri
   });
 }
 
-// ============================================================================
-// Active sessions — /api/settings/sessions
-// ============================================================================
-
-/** Mirrors `serializeSession` in apps/web/app/api/settings/sessions/route.ts. */
 export interface CloudAccountSession {
   id: string;
   status: string;
@@ -304,20 +249,11 @@ export interface CloudAccountSession {
   createdAt: string | null;
   lastActiveAt: string | null;
   expiresAt: string | null;
-  /**
-   * Always false for this Desktop: the account's sessions are Clerk browser
-   * sessions and this app holds a device token, which is not one of them.
-   * `CloudActiveSessions.currentSessionKnown` carries that distinction.
-   */
   isCurrent: boolean;
 }
 
 export interface CloudActiveSessions {
   sessions: CloudAccountSession[];
-  /**
-   * Whether the server could identify the caller's own row. False for a device
-   * token, which is the honest answer — not a sign the list is incomplete.
-   */
   currentSessionKnown: boolean;
 }
 
@@ -376,12 +312,6 @@ export async function revokeCloudSession(sessionId: string): Promise<void> {
 
 export interface CloudRevokeAllSessionsResult {
   revokedCount: number;
-  /**
-   * Whether the caller's own credential was among the revoked sessions. Always
-   * false for a device token, so Desktop must also sign itself out to finish
-   * "log out of all devices" — see `signOut()` in `services/cloudAccountAuth.ts`,
-   * which revokes the device token through `POST /api/auth/logout`.
-   */
   currentSessionRevoked: boolean;
 }
 
@@ -403,16 +333,6 @@ export async function revokeAllCloudSessions(): Promise<CloudRevokeAllSessionsRe
   };
 }
 
-// ============================================================================
-// API keys — /api/settings/api-keys
-// ============================================================================
-
-/**
- * Mirrors `API_KEY_SCOPE_VALUES` in `apps/web/lib/api-key-scopes.ts`, which is
- * app-private and cannot be imported here. The server re-validates every scope,
- * so drift surfaces as a 400 with the server's own message rather than a silent
- * mis-issue.
- */
 export const CLOUD_API_KEY_SCOPES = [
   { value: 'models:read', label: 'Read model catalog' },
   { value: 'inference:write', label: 'Run inference' },
@@ -474,7 +394,6 @@ export async function listCloudApiKeys(): Promise<CloudApiKey[]> {
 
 export interface CreatedCloudApiKey {
   apiKey: CloudApiKey;
-  /** Returned exactly once by the server; never persisted by Desktop. */
   fullKey: string;
 }
 
@@ -509,19 +428,6 @@ export async function revokeCloudApiKey(keyId: string): Promise<void> {
   request.assertBoundary();
 }
 
-// ============================================================================
-// Account preferences — /api/settings/preferences
-// ============================================================================
-
-/**
- * The account settings document is one JSONB column keyed by namespace
- * (`apps/web/app/api/settings/preferences/route.ts`). A PUT replaces the whole
- * value of ONE namespace — the SQL merge (`settings || excluded.settings`) is
- * shallow and only preserves OTHER namespaces. So a client that edits a subset
- * of a namespace must read it, merge, and write the whole namespace back, or it
- * silently deletes the keys it does not know about (web writes `chatFont` and
- * `voice` into `general`, for example). Every caller below does exactly that.
- */
 export async function getCloudPreferenceNamespace(
   namespace: string,
 ): Promise<Record<string, unknown>> {
@@ -556,18 +462,6 @@ export async function saveCloudPreferenceNamespace(
   request.assertBoundary();
 }
 
-// ============================================================================
-// Cloud profile identity — GET/PATCH /api/me
-// ============================================================================
-
-/**
- * PER-8: the full name's single source of truth is `profiles.display_name`,
- * written only by `PATCH /api/me`. The preferred name and work description are
- * resolved by the same server resolver and shipped on `/api/me` as `profile`;
- * the `general` preferences namespace is where the user's edits are stored.
- * Desktop reads both and applies web's precedence — a stored value wins only
- * when it carries information.
- */
 export interface CloudAccountProfile {
   email: string | null;
   displayName: string | null;
@@ -608,10 +502,6 @@ export async function saveCloudDisplayName(displayName: string): Promise<void> {
   request.assertBoundary();
 }
 
-// ============================================================================
-// Reflect recap — GET /api/reflect
-// ============================================================================
-
 export class CloudReflectMemoryRequiredError extends Error {
   constructor() {
     super('Reflect uses the same account chat-history controls as Memory.');
@@ -619,12 +509,6 @@ export class CloudReflectMemoryRequiredError extends Error {
   }
 }
 
-/**
- * The recap is built on read from account conversation activity; the route
- * returns 409 `memory_required` when the account's memory/history controls are
- * off. That is a state, not a failure, so it gets its own error type instead of
- * being flattened into a generic message.
- */
 export async function fetchCloudReflectRecap(
   range: ManagedCloudReflectRange,
   timezone: string,
@@ -651,10 +535,6 @@ export async function fetchCloudReflectRecap(
   return recap;
 }
 
-// ============================================================================
-// Team / organization — /api/settings/organization, /api/settings/team
-// ============================================================================
-
 export type CloudTeamRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export const CLOUD_TEAM_ROLES: readonly CloudTeamRole[] = [
@@ -668,7 +548,6 @@ function parseTeamRole(value: unknown): CloudTeamRole {
   return CLOUD_TEAM_ROLES.includes(value as CloudTeamRole) ? (value as CloudTeamRole) : 'member';
 }
 
-/** Mirrors `buildOrgResponse` in apps/web/app/api/settings/organization/route.ts. */
 export interface CloudOrganization {
   id: string;
   name: string;
@@ -680,7 +559,6 @@ export interface CloudOrganization {
 
 export interface CloudOrganizationOverview {
   organization: CloudOrganization | null;
-  /** Server's own admin/seat verdict — never re-derived on the client. */
   canManageTeam: boolean;
 }
 
@@ -713,16 +591,11 @@ export async function getCloudOrganizationOverview(): Promise<CloudOrganizationO
   const access = isRecord(payload) && isRecord(payload['access']) ? payload['access'] : {};
   return {
     organization: isRecord(payload) ? parseOrganization(payload['organization']) : null,
-    // `access.canManageTeam` is the server's own verdict (TeamAdminAccess in
-    // apps/web/app/api/settings/team/team-admin-access.ts). Anything but an
-    // explicit true means "cannot manage", so the UI never offers a control
-    // the server would refuse — and it is never re-derived from a plan label.
     canManageTeam: access['canManageTeam'] === true,
   };
 }
 
 export interface CloudTeamMember {
-  /** Composite `"<organizationId>:<userId>"` id the member routes expect. */
   id: string;
   userId: string;
   email: string;
@@ -768,11 +641,6 @@ export async function listCloudTeamMembers(organizationId: string): Promise<Clou
     .filter((member): member is CloudTeamMember => member !== null);
 }
 
-/**
- * There is no invitation persistence or email delivery in this repo: the route
- * adds an EXISTING AGI account by email and fails with an actionable message
- * for an unknown address. The UI must not call this "send an invite".
- */
 export async function addCloudTeamMember(
   organizationId: string,
   email: string,
@@ -812,21 +680,10 @@ export async function removeCloudTeamMember(memberId: string): Promise<void> {
   request.assertBoundary();
 }
 
-// ============================================================================
-// Account deletion — DELETE /api/user/delete-account
-// ============================================================================
-
 export interface CloudAccountDeletionResult {
-  /** Server-provided confirmation copy, if it sent one. */
   message: string | null;
 }
 
-/**
- * Schedules erasure of the Cloud account. The server soft-schedules deletion
- * (24h) or, when the profile schema predates that column, erases immediately —
- * Desktop reports whichever message the server returns rather than promising a
- * grace window it cannot verify. Local data is untouched by this call.
- */
 export async function requestCloudAccountDeletion(): Promise<CloudAccountDeletionResult> {
   const request = createManagedCloudRequestContext('Cloud account deletion');
   const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/user/delete-account`, {

@@ -1,11 +1,3 @@
-/**
- * Canonical manual-update contract for the cloud-only Electron shell.
- *
- * AGI Cloud currently publishes a signed/notarized DMG, not an in-place
- * electron-updater feed. Both the Electron main process and the bundled
- * fallback renderer use these same endpoints so neither surface can claim an
- * automatic install that the release pipeline does not provide.
- */
 
 export const DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL =
   'https://agiworkforce.com/api/releases/desktop-cloud/latest';
@@ -57,7 +49,6 @@ function parseSemver(value: string): ParsedSemver | null {
   return { core, prerelease };
 }
 
-/** Compare semantic versions according to SemVer precedence rules. */
 export function compareDesktopCloudVersions(left: string, right: string): number {
   const a = parseSemver(left);
   const b = parseSemver(right);
@@ -129,10 +120,6 @@ function parseReleasePayload(value: unknown): DesktopCloudReleasePayload {
   };
 }
 
-/**
- * Check the published AGI Cloud release. A non-success response is an error,
- * not proof that the installed version is current.
- */
 export async function checkDesktopCloudUpdate(
   currentVersion: string,
   architecture: DesktopCloudMacArchitecture,

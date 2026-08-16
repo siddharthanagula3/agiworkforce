@@ -72,9 +72,6 @@ jest.mock('../stores/settingsStore', () => ({
     }),
 }));
 
-// General settings now renders the active model on its "Models" row (PAR-M21).
-// Stub the catalog stores so this suite stays hermetic — the real stores pull in
-// MMKV/expo-crypto native glue that this suite has no reason to load.
 jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (state: { selectedModel: string }) => unknown) =>
     selector({ selectedModel: mockSelectedModelId }),

@@ -16,9 +16,6 @@ async function handleGetAvailability(request: NextRequest): Promise<NextResponse
   const limited = await withRateLimit(request, 'model-catalog');
   if (limited) return limited;
 
-  // The response reveals no secrets, but deployment-specific provider
-  // configuration is an account feature signal rather than public catalog
-  // metadata. Mobile/Electron can use their existing Bearer-token path.
   await getClerkAuthUser(request);
 
   return NextResponse.json(await resolveDeploymentMediaModelAvailability());
@@ -26,9 +23,6 @@ async function handleGetAvailability(request: NextRequest): Promise<NextResponse
 
 const getWithErrors = withErrorHandler(handleGetAvailability);
 
-// CORS must wrap the error boundary so Mobile/Electron can read 401/429/503
-// recovery responses too. Availability is deployment-specific and can change
-// independently of a catalog release, so no outcome may be cached.
 export const GET = withCorsRoute(async (request: NextRequest) => {
   const response = await getWithErrors(request);
   response.headers.set('Cache-Control', 'private, no-store, max-age=0');

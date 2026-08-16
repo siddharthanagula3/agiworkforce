@@ -1,17 +1,3 @@
-/**
- * Phase A Slice 2 — smoke render tests for agentic-loop visualizer components.
- *
- * Covers: AgenticLoopStatusBar (via store mutation), AgentStepTimeline (props),
- * ActionLogTimelineContent (props).
- *
- * renderToStaticMarkup is used for pure-props components (no hooks). For
- * AgenticLoopStatusBar — which reads from useAgentLoopStore — we test the
- * store logic (store tests cover this fully) and verify the zero-state SSR
- * render returns empty, then test the visible-state logic with a wrapper that
- * passes the right props to its inner rendering logic.
- *
- * AgenticLoopStatusBar store-connected behavior is covered in agentLoopStore.test.ts.
- */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -21,10 +7,6 @@ import type { AgentStep } from '../AgentStepTimeline';
 import { ActionLogTimelineContent } from '../ActionLogTimeline';
 import type { ActionLogEntry } from '../ActionLogTimeline';
 import { useAgentLoopStore } from '../../stores/agentLoopStore';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function resetStores() {
   useAgentLoopStore.setState({ agentLoop: null, activeGoal: null, actionLogByMessage: {} });
@@ -52,18 +34,10 @@ function makeLogEntry(overrides?: Partial<ActionLogEntry>): ActionLogEntry {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AgenticLoopStatusBar — null-state SSR smoke test only
-// (renderToStaticMarkup uses React SSR which stubs useSyncExternalStore to
-// server snapshot; the store's initial state is null so the component returns
-// null — which is the correct SSR guard behaviour)
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('AgenticLoopStatusBar', () => {
   beforeEach(resetStores);
 
   it('renders nothing in SSR context when loop is inactive (null initial store state)', () => {
-    // SSR: useSyncExternalStore returns server snapshot (null) → component returns null
     const html = renderToStaticMarkup(<AgenticLoopStatusBar />);
     expect(html).toBe('');
   });
@@ -81,10 +55,6 @@ describe('AgenticLoopStatusBar', () => {
     expect(loop?.maxIterations).toBe(10);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AgentStepTimeline
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('AgentStepTimeline', () => {
   it('renders nothing for empty steps array', () => {
@@ -124,10 +94,6 @@ describe('AgentStepTimeline', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ActionLogTimelineContent
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('ActionLogTimelineContent', () => {
   it('renders nothing for empty entries', () => {
     const html = renderToStaticMarkup(<ActionLogTimelineContent entries={[]} />);
@@ -142,7 +108,6 @@ describe('ActionLogTimelineContent', () => {
   });
 
   it('renders entry titles when a running entry forces the panel open', () => {
-    // The panel auto-expands when any entry is 'running' (hasActiveEntries=true)
     const entries = [
       makeLogEntry({ title: 'Run cargo check', status: 'running' }),
       makeLogEntry({ title: 'Execute bash script', status: 'running' }),
@@ -162,7 +127,6 @@ describe('ActionLogTimelineContent', () => {
   });
 
   it('renders failed count in summary when entry is blocked (forces open)', () => {
-    // 'blocked' status forces the panel open so summary counts are visible
     const entries = [
       makeLogEntry({ status: 'blocked', title: 'Blocked task' }),
       makeLogEntry({ status: 'success', title: 'Succeeded task' }),
@@ -182,7 +146,6 @@ describe('ActionLogTimelineContent', () => {
       'approval',
       'metrics',
     ];
-    // Use 'running' status so the panel auto-expands and titles render
     const entries = types.map((type) => makeLogEntry({ type, title: type, status: 'running' }));
     const html = renderToStaticMarkup(<ActionLogTimelineContent entries={entries} />);
     types.forEach((t) => expect(html).toContain(t));

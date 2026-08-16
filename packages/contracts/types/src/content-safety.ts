@@ -1,11 +1,3 @@
-/**
- * Shared, deterministic strict-content filter used before a prompt reaches a
- * Local or Managed Cloud model. Product surfaces decide when the policy is
- * active and supply their own user-facing refusal copy.
- *
- * Keep patterns specific enough to avoid blocking ordinary educational,
- * medical, journalistic, or support-seeking discussion.
- */
 const STRICT_UNSAFE_PATTERNS: readonly RegExp[] = [
   /\b(porn|pornography|hentai|nsfw|xxx|erotic|explicit\s+sexual|nude\s+photo|naked\s+photo)\b/,
   /\b(how\s+to\s+kill|how\s+to\s+murder|instructions?\s+to\s+(harm|injure|kill))\b/,

@@ -1,17 +1,3 @@
-/**
- * usageMeterTrustBoundary.test.ts — SIX-02.
- *
- * `pushUsageMeter()` used to post a fixed `source: 'unbounded'` literal, and it
- * is the only producer of the `usageMeter` message. Since the webview maps that
- * source onto the header pill (`Local` / "nothing leaves this machine"), the one
- * indicator a user checks before sending a prompt asserted the Local boundary
- * while a BYOK or Managed Cloud model was selected — and the extension already
- * computed the real boundary (`_providerBoundaryForModel`) and threw it away.
- *
- * These tests pin the host half of the contract: which `source` reaches the
- * webview for each boundary, and that the account lookup never fires from the
- * Local boundary. `runtimePill.webview.test.ts` pins the render half.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
@@ -34,7 +20,6 @@ vi.mock('../utils/api', async (importOriginal) => {
   return { ...actual, fetchTierInfo: vi.fn() };
 });
 
-/** A real catalog model id — never a hand-written one. */
 const CATALOG_MODEL = MODEL_PICKER_OPTIONS.find((option) => option.id !== 'auto')!.id;
 const CATALOG_PROVIDER_ID = getModelProviderInfo(CATALOG_MODEL).providerId;
 const LOCAL_MODEL = SYNTHETIC_LOCAL_MODEL_ID;
@@ -100,9 +85,6 @@ function configuredModel(model: string): void {
     ),
     update: vi.fn().mockResolvedValue(undefined),
     has: vi.fn().mockReturnValue(false),
-    // `Config.model()` reads the user/global scope via `inspect()`, not `get()`,
-    // so a checked-out .vscode/settings.json cannot move the trust boundary.
-    // Stubbing only `get()` silently yields DEFAULTS.model instead.
     inspect: vi.fn((key: string) => (key === 'model' ? { key, globalValue: model } : undefined)),
   } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
 }
@@ -140,7 +122,6 @@ describe('usage meter trust boundary (SIX-02)', () => {
     await harness.manager.handleMessage({ type: 'ready' });
 
     expect(lastMeter(harness.posted).source).toBe('unbounded');
-    // A Local-boundary session must not put the account token on the wire.
     expect(fetchTierInfo).not.toHaveBeenCalled();
   });
 
@@ -197,7 +178,6 @@ describe('usage meter trust boundary (SIX-02)', () => {
       payload: { modelId: CATALOG_MODEL },
     });
 
-    // The exact silent reroute the fixed literal could not represent.
     expect(lastMeter(harness.posted).source).toBe('user-api-key');
     expect(meters(harness.posted).length).toBe(2);
   });
@@ -209,7 +189,6 @@ describe('usage meter trust boundary (SIX-02)', () => {
     await harness.manager.handleMessage({ type: 'ready' });
     expect(lastMeter(harness.posted).source).toBe('unbounded');
 
-    // The turn only settles on a runtime event, so drive it like a real send.
     const turn = harness.manager.handleMessage({
       type: 'sendMessage',
       payload: { text: 'Continue on the hosted model', model: CATALOG_MODEL },
@@ -247,7 +226,6 @@ describe('usage meter trust boundary (SIX-02)', () => {
       payload: { modelId: sameProviderModel!.id },
     });
 
-    // Same boundary, same pill — and one fewer account round-trip.
     expect(meters(harness.posted).length).toBe(before);
     expect(fetchTierInfo).toHaveBeenCalledTimes(1);
   });
@@ -269,7 +247,6 @@ describe('usage meter trust boundary (SIX-02)', () => {
     await harness.manager.handleMessage({ type: 'ready' });
     expect(lastMeter(harness.posted).source).toBe('user-api-key');
 
-    // extension.ts drives this pair from the configuration-change listener.
     configuredModel(LOCAL_MODEL);
     harness.manager.syncActiveModelFromConfiguration();
     await harness.manager.pushUsageMeter();
@@ -289,9 +266,6 @@ describe('usage meter trust boundary (SIX-02)', () => {
   });
 
   it('does not assume a bare model id is local when discovery has not admitted it', async () => {
-    // The fixture is presented as a local-runtime model elsewhere, but nothing
-    // has proven that to this window yet. Claiming Local from an unverified bare
-    // ID is the failure mode this whole item exists to prevent.
     configuredModel(LOCAL_MODEL);
     const harness = makeHarness();
 

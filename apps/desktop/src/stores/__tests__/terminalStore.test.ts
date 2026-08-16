@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { useTerminalStore } from '../terminalStore';
 
-// AUDIT-P3-TEST-TYPE: Properly typed event listeners for terminal events
 type TerminalEventPayload = { payload: string };
 const listeners: Record<string, (event: TerminalEventPayload) => void> = {};
 const unlistenSpies: Mock<() => void>[] = [];
@@ -14,7 +13,6 @@ vi.mock('../../lib/tauri-mock', () => ({
       delete listeners[event];
     });
     unlistenSpies.push(unlisten);
-    // AUDIT-P3-TEST-TYPE: Return unlisten function with proper type
     return Promise.resolve(unlisten);
   }),
   isTauri: true,
@@ -50,7 +48,6 @@ describe('useTerminalStore setupOutputListener', () => {
     await useTerminalStore.getState().setupOutputListener(sessionId, outputSpy, exitSpy);
 
     const { listen } = await import('../../lib/tauri-mock');
-    // AUDIT-P3-TEST-TYPE: Use proper mock type for listen function
     const listenMock = listen as Mock<typeof listen>;
     expect(listenMock).toHaveBeenCalledWith(`terminal-output-${sessionId}`, expect.any(Function));
     expect(listenMock).toHaveBeenCalledWith(`terminal-exit-${sessionId}`, expect.any(Function));

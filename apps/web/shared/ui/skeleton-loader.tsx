@@ -76,7 +76,6 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   );
 };
 
-// Pre-built skeleton components for common use cases
 export const SkeletonText: React.FC<{ lines?: number; className?: string }> = ({
   lines = 1,
   className,

@@ -1,13 +1,3 @@
-/**
- * KeyboardShortcutsOverlay — full-screen cheatsheet.
- *
- * Shows all keyboard shortcuts grouped by category. Its only mount site is the
- * "View all shortcuts" button on the Keybindings settings page; no key opens it
- * (there is no Cmd+/ listener anywhere). Closes on Escape or backdrop click.
- *
- * Replaces KeyboardShortcutsDialog with a more comprehensive view that reads
- * live from DEFAULT_SHORTCUTS and respects custom keybindings.
- */
 
 import React, { useEffect, useCallback } from 'react';
 import { Keyboard, X } from 'lucide-react';
@@ -27,11 +17,6 @@ import {
   type VoiceInputHotkey,
 } from '../../stores/settingsStore';
 import { Button } from '@/ui/Button';
-
-// ---------------------------------------------------------------------------
-// Inline shortcuts not stored in DEFAULT_SHORTCUTS
-// (actions that are context-bound rather than global)
-// ---------------------------------------------------------------------------
 
 interface InlineShortcut {
   description: string;
@@ -62,21 +47,6 @@ const INLINE_SECTIONS: InlineSection[] = [
 
 export type ComposerSendShortcut = NonNullable<ChatPreferences['sendShortcut']>;
 
-/**
- * Which key sends and which key breaks a line is a user setting, so this
- * section is derived from it rather than stated.
- *
- * The composer's `handleKeyDown` (`unified-chat/src/components/ChatInput.tsx`)
- * sends on plain Enter under `enter`, and on Cmd/Ctrl+Enter under `mod-enter`
- * — under `mod-enter` a bare Enter falls through to the textarea and breaks the
- * line. Hard-coding "Send: Enter" told half the users the wrong key.
- *
- * Stopping a generation and editing an earlier message are deliberately absent:
- * nothing binds Escape to stop (`onStop` is only reachable from the send
- * button, which is why it is listed as a click) and there is no ArrowUp
- * recall handler at all — ChatInput's ArrowUp only moves the slash menu
- * selection.
- */
 export function chatInlineSection(sendShortcut: ComposerSendShortcut): InlineSection {
   const shortcuts: InlineShortcut[] =
     sendShortcut === 'mod-enter'
@@ -92,12 +62,6 @@ export function chatInlineSection(sendShortcut: ComposerSendShortcut): InlineSec
   return { category: 'chat-inline', label: 'Chat', shortcuts };
 }
 
-/**
- * The dictation hotkey is a user setting, not a fixed key, and it is the ONLY
- * voice shortcut the app actually listens for (`hooks/useVoiceHotkey.ts`
- * registers exactly these combos on the document). This section is derived from
- * that setting so the cheatsheet can never advertise a key nothing handles.
- */
 export function voiceInlineSection(hotkey: VoiceInputHotkey): InlineSection {
   const entry: InlineShortcut =
     hotkey === 'caps_lock'
@@ -110,10 +74,6 @@ export function voiceInlineSection(hotkey: VoiceInputHotkey): InlineSection {
   return { category: 'voice-inline', label: 'Voice', shortcuts: [entry] };
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function resolvedDisplay(
   shortcut: ShortcutDefinition,
   customKeybindings: Record<string, string>,
@@ -125,10 +85,6 @@ function resolvedDisplay(
   }
   return formatComboDisplay(shortcut.key, shortcut.modifiers).split('+');
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 interface KeyBadgeProps {
   label: string;
@@ -183,22 +139,11 @@ function SectionCard({ title, children }: SectionCardProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface KeyboardShortcutsOverlayProps {
-  /** Whether the overlay is currently visible. */
   open: boolean;
-  /** Called when the user dismisses the overlay. */
   onClose: () => void;
-  /** Optional handler that navigates to the Keybindings settings tab. */
   onOpenSettings?: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 export function KeyboardShortcutsOverlay({
   open,
@@ -228,8 +173,6 @@ export function KeyboardShortcutsOverlay({
     };
   }, [open, handleKeyDown]);
 
-  // Chat keys are listed by INLINE_SECTIONS above: DEFAULT_SHORTCUTS no longer
-  // carries a 'chat' category, so every category it does carry is rendered.
   const dynamicCategories = Array.from(
     new Set(DEFAULT_SHORTCUTS.map((s) => s.category)),
   ) as ShortcutDefinition['category'][];

@@ -116,22 +116,18 @@ export const useCodeStore = create<CodeState>()(
 
               set(
                 (prevState) => {
-                  // Prevent duplicate tabs during concurrent hydration/open operations.
                   if (prevState.openFiles.some((f) => f.path === path)) {
                     return shouldActivate ? { activeFilePath: path } : {};
                   }
 
                   let nextOpenFiles = [...prevState.openFiles, newFile];
-                  // AUDIT-006-004 fix: Cap openFiles at 50 entries, close oldest non-dirty files first
                   if (nextOpenFiles.length > 50) {
-                    // Find and remove the oldest non-dirty file (excluding the new one and active file)
                     const oldestNonDirtyIndex = nextOpenFiles.findIndex(
                       (f) => !f.isDirty && f.path !== path && f.path !== prevState.activeFilePath,
                     );
                     if (oldestNonDirtyIndex >= 0) {
                       nextOpenFiles = nextOpenFiles.filter((_, i) => i !== oldestNonDirtyIndex);
                     } else {
-                      // If all files are dirty or active, just drop the oldest one (excluding new file)
                       nextOpenFiles = nextOpenFiles.slice(-50);
                     }
                   }
@@ -140,7 +136,6 @@ export const useCodeStore = create<CodeState>()(
                   let nextPersisted = alreadyPersisted
                     ? prevState.persistedOpenPaths
                     : [...prevState.persistedOpenPaths, path];
-                  // Keep persistedOpenPaths in sync with actual open files
                   const openPaths = new Set(nextOpenFiles.map((f) => f.path));
                   nextPersisted = nextPersisted.filter((p) => openPaths.has(p));
 
@@ -331,7 +326,6 @@ export const useCodeStore = create<CodeState>()(
             try {
               await Promise.all(savePromises);
 
-              // Re-read fresh state after await to avoid overwriting concurrent changes
               const freshOpenFiles = get().openFiles.map((file) =>
                 dirtyPaths.has(file.path) && file.isDirty
                   ? { ...file, originalContent: file.content, isDirty: false }
@@ -373,15 +367,9 @@ export const useCodeStore = create<CodeState>()(
             );
           },
 
-          /**
-           * Revert AGI-made changes to files using the backend edit history.
-           * Falls back to git checkout if no edit history exists.
-           * After successful revert, reloads the file content from disk.
-           */
           revertAgiChanges: async (paths: string[]): Promise<RevertResult> => {
             const result = await revertAgiChanges(paths);
 
-            // Reload successfully reverted files from disk
             if (result.reverted_files.length > 0) {
               for (const path of result.reverted_files) {
                 const currentFiles = get().openFiles;
@@ -421,11 +409,9 @@ export const useCodeStore = create<CodeState>()(
               return;
             }
 
-            // WRK-005 fix: Load files in batches to prevent UI freezing
-            const BATCH_SIZE = 3; // Load 3 files at a time
-            const MAX_HYDRATE_FILES = 20; // Limit total files to restore
+            const BATCH_SIZE = 3;
+            const MAX_HYDRATE_FILES = 20;
 
-            // Limit the number of files to hydrate
             const pathsToHydrate = state.persistedOpenPaths.slice(0, MAX_HYDRATE_FILES);
             if (pathsToHydrate.length < state.persistedOpenPaths.length) {
               console.warn(
@@ -433,11 +419,9 @@ export const useCodeStore = create<CodeState>()(
               );
             }
 
-            // Process files in batches with yielding to prevent UI blocking
             for (let i = 0; i < pathsToHydrate.length; i += BATCH_SIZE) {
               const batch = pathsToHydrate.slice(i, i + BATCH_SIZE);
 
-              // Load batch in parallel
               await Promise.all(
                 batch.map(async (path) => {
                   try {
@@ -448,7 +432,6 @@ export const useCodeStore = create<CodeState>()(
                 }),
               );
 
-              // WRK-005 fix: Yield to the event loop between batches to allow UI updates
               if (i + BATCH_SIZE < pathsToHydrate.length) {
                 await new Promise((resolve) => setTimeout(resolve, 0));
               }
@@ -476,7 +459,6 @@ export const useCodeStore = create<CodeState>()(
           persistedOpenPaths: state.persistedOpenPaths,
         }),
         migrate: (persistedState: unknown, _version: number) => {
-          // Handle future migrations here
           return persistedState as CodeState;
         },
       },
@@ -485,16 +467,11 @@ export const useCodeStore = create<CodeState>()(
   ),
 );
 
-// Use useCodeStore.getState() to access current state when needed outside of React components.
-// Example: const { openFiles, activeFilePath } = useCodeStore.getState();
-
-// Selectors
 export const selectOpenFiles = (state: CodeState) => state.openFiles;
 export const selectActiveFilePath = (state: CodeState) => state.activeFilePath;
 export const selectRootPath = (state: CodeState) => state.rootPath;
 export const selectPersistedOpenPaths = (state: CodeState) => state.persistedOpenPaths;
 
-// Derived selectors
 export const selectActiveFile = (state: CodeState) =>
   state.openFiles.find((f) => f.path === state.activeFilePath);
 export const selectDirtyFiles = (state: CodeState) => state.openFiles.filter((f) => f.isDirty);

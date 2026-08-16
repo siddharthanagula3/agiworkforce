@@ -1,22 +1,7 @@
-/**
- * ComposerFooter · reasoning/effort flyout (reasoning-effort-capability wave)
- *
- * Verifies the real component against capability-shaped synthetic fixtures.
- * Catalog-contract tests separately prove that live entries satisfy the same
- * reasoning schema, while this UI test stays stable when a concrete model is
- * replaced in the one canonical registry owner.
- *   (a) Six-Level Fixture shows its exact none/low/medium/high/xhigh/max ladder.
- *   (b) non-reasoning model (Non-Reasoning Fixture) shows NO effort control.
- *   (c) Five-Level Fixture shows low/medium/high/xhigh/max.
- *   (d) a non-reasoning fixture exposes no synthetic effort ladder.
- *   (e) Always-On Fixture reasoning is mandatory and cannot be switched off.
- *   (f) Six-Level Fixture is live/selectable, while a synthetic future preview is disabled.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
-// Mutable selected model, controlled per-test.
 const sel = vi.hoisted(() => ({ id: 'fixture-six-level' }));
 
 const MODELS = vi.hoisted(() => [
@@ -151,8 +136,6 @@ vi.mock('@shared/stores/web-auth-store', () => ({
     selector({ subscription: { tier: 'max' }, dailyUsage_cents: 0, dailyLimit_cents: 0 }),
 }));
 
-// Keep the component's real configuration module, replacing only the catalog
-// lookup with capability fixtures and tier gates needed by this focused unit.
 vi.mock('@shared/config/llm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shared/config/llm')>();
   return {
@@ -174,7 +157,6 @@ vi.mock('@/lib/free-trial-config', () => ({
   FREE_TRIAL_MODEL: 'fixture-four-level',
 }));
 
-// Stateful thinking store: enabled so effort chips render for switch-gated models.
 const thinking = vi.hoisted(() => ({ enabled: true, effort: 'medium' }));
 vi.mock('@shared/stores/thinking-store', () => ({
   useThinkingStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -347,7 +329,6 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
   it('keeps a synthetic future preview non-selectable and non-focusable', () => {
     sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
-    // coming_soon rows live in the "More models" group — expand it.
     fireEvent.click(screen.getByRole('button', { name: /more models/i }));
     const row = screen.getByRole('button', { name: /future preview model.*not yet available/i });
     expect(row).toBeDisabled();

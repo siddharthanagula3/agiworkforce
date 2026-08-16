@@ -41,9 +41,6 @@ export function ModelRow({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const isLocked = model.availability === 'locked';
-  // Locked rows are locked either because the user isn't signed in to AGI Cloud
-  // (→ sign-in) or because their subscription tier doesn't cover this model
-  // (→ upgrade). The badge and a11y strings must match the actual unlock path.
   const isSignInLock = isLocked && model.lockReason === CLOUD_LOCK_REASON;
   const isLocal = model.surface === 'local';
   const reasoning = getModelReasoning(model.id);

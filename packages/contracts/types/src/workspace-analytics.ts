@@ -14,10 +14,6 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Analytics Event
-// ============================================================================
-
 /**
  * A single analytics event emitted by any surface within a workspace.
  *
@@ -44,36 +40,20 @@
  * ```
  */
 export interface WorkspaceAnalyticsEvent {
-  /** Unique event identifier (UUID v4). */
   id: string;
 
-  /** Workspace that owns this event. */
   workspaceId: string;
 
-  /** User who triggered the event. */
   userId: string;
 
-  /** High-level event category. */
   eventType: 'agent_execution' | 'tool_usage' | 'model_call' | 'user_action';
 
-  /**
-   * Specific event name within the category.
-   *
-   * Examples: `"agent/started"`, `"tool/bash"`, a catalog-derived model call
-   * name, or `"ui/settings_opened"`.
-   */
   eventName: string;
 
-  /** Event-type-specific key-value data. */
   metadata: Record<string, unknown>;
 
-  /** ISO 8601 timestamp when the event occurred. */
   timestamp: string;
 }
-
-// ============================================================================
-// Analytics Summary
-// ============================================================================
 
 /**
  * Pre-aggregated usage summary for a workspace over a time period.
@@ -101,52 +81,30 @@ export interface WorkspaceAnalyticsEvent {
  * ```
  */
 export interface WorkspaceAnalyticsSummary {
-  /** Workspace this summary covers. */
   workspaceId: string;
 
-  /** Aggregation bucket width. */
   period: 'day' | 'week' | 'month';
 
-  /**
-   * Start date of the period in ISO 8601 date format (`YYYY-MM-DD`).
-   *
-   * For `'day'` this is the day; for `'week'` this is the Monday; for
-   * `'month'` this is the first of the month.
-   */
   date: string;
 
-  /** Total number of agent or task executions in this period. */
   totalExecutions: number;
 
-  /** Total tokens consumed (input + output) across all model calls. */
   totalTokens: number;
 
-  /** Total USD cost of all model calls in this period. */
   totalCost: number;
 
-  /** Number of distinct users who were active in this period. */
   activeUsers: number;
 
-  /** Top models by call count, ordered descending. */
   topModels: Array<{
-    /** Model identifier resolved from the canonical model catalog. */
     model: string;
-    /** Number of calls to this model in the period. */
     count: number;
   }>;
 
-  /** Top tools by invocation count, ordered descending. */
   topTools: Array<{
-    /** Tool name (e.g., `"bash"`, `"read_file"`). */
     tool: string;
-    /** Number of times this tool was invoked in the period. */
     count: number;
   }>;
 }
-
-// ============================================================================
-// Usage Quota
-// ============================================================================
 
 /**
  * A usage quota applied to a workspace for a given metric and period.
@@ -168,26 +126,15 @@ export interface WorkspaceAnalyticsSummary {
  * ```
  */
 export interface WorkspaceUsageQuota {
-  /** Workspace this quota applies to. */
   workspaceId: string;
 
-  /**
-   * The metric being capped:
-   * - `tokens`     — cumulative LLM tokens (input + output).
-   * - `executions` — total agent/task executions.
-   * - `cost`       — total USD spend (multiplied by 100 for integer storage).
-   */
   quotaType: 'tokens' | 'executions' | 'cost';
 
-  /** Maximum allowed value for the quota metric in one period. */
   limit: number;
 
-  /** Current consumption of the quota metric in the active period. */
   used: number;
 
-  /** Period over which the quota is measured. */
   period: 'day' | 'month';
 
-  /** ISO 8601 timestamp when the quota counter resets to zero. */
   resetAt: string;
 }

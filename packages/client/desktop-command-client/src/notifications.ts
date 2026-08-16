@@ -1,10 +1,5 @@
-/**
- * Notifications API — typed wrappers for notification_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface NotificationAction {
   id: string;
@@ -42,8 +37,6 @@ export interface CreateNotificationInput {
   body: string;
   [key: string]: unknown;
 }
-
-// ---- System Notifications ----
 
 export async function notificationCheckPermission(): Promise<boolean> {
   return command<boolean>('notification_check_permission');
@@ -103,8 +96,6 @@ export async function notificationUpdate(
 export async function notificationRegisterActions(actions: NotificationAction[]): Promise<void> {
   return command<void>('notification_register_actions', { actions });
 }
-
-// ---- Notification Center ----
 
 export async function notificationList(
   page?: number,

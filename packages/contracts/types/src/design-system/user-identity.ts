@@ -1,13 +1,5 @@
 import { BILLING_PLAN_PRICING, type BillingPlanTier } from '../billing-catalog';
 
-/**
- * Pricing tiers per the current billing catalog (packages/contracts/types/src/billing-catalog.ts).
- * Named UIPlanTier to distinguish from the legacy Tauri PlanTier in tauri.ts.
- *
- * The UI uses `local` for the billing catalog's `local-only` identifier. All
- * managed tiers remain distinct so an unknown value can never relabel a
- * Managed Cloud session as BYOK.
- */
 export type UIPlanTier = 'local' | Exclude<BillingPlanTier, 'local-only'>;
 
 export const PLAN_LABEL: Readonly<Record<UIPlanTier, string>> = Object.freeze({
@@ -49,21 +41,14 @@ export function normalizeUIPlanTier(
   return fallback;
 }
 
-/** True for tiers that are free forever — never gate the tool on these. */
 export function isFreePlan(tier: UIPlanTier): boolean {
   return tier === 'local' || tier === 'byok' || tier === 'free';
 }
 
-/**
- * True for tiers that include the multi-provider in-thread switch
- * differentiator. Used by ModelSelector + chat runtime to gate the
- * cross-provider continuity flow.
- */
 export function canSwitchProviderInThread(tier: UIPlanTier): boolean {
   return tier === 'max' || tier === 'max_15x' || tier === 'enterprise';
 }
 
-/** Strict tier ordering for upgrade-path comparisons. */
 const TIER_ORDER: Readonly<Record<UIPlanTier, number>> = Object.freeze({
   local: 0,
   byok: 0,
@@ -76,35 +61,22 @@ const TIER_ORDER: Readonly<Record<UIPlanTier, number>> = Object.freeze({
   enterprise: 5,
 });
 
-/** True iff `actual` meets or exceeds `required`. */
 export function tierAtLeast(actual: UIPlanTier, required: UIPlanTier): boolean {
   return TIER_ORDER[actual] >= TIER_ORDER[required];
 }
 
-/**
- * Usage meter shown in profile popover.
- * Managed-plan users see hosted usage; BYOK users see their own key's limits (when known);
- * Local users see no meter.
- */
 export interface UsageMeter {
-  /** 0–1, percentage of quota remaining. Null = no meter applies (Local mode). */
   remaining: number | null;
-  /** ISO timestamp of next quota reset. Null when unbounded. */
   resetsAt: string | null;
-  /** Tokens used in the active billing window when reported by the source. */
   usedTokens?: number;
-  /** Token allowance for the active billing window when reported by the source. */
   limitTokens?: number;
-  /** Whose limit this is — affects framing in the UI. */
   source: 'managed-plan' | 'user-api-key' | 'unbounded';
 }
 
-/** Identity surfaced everywhere user-context is shown. */
 export interface UserIdentity {
   email: string;
   displayName: string | null;
   avatarUrl: string | null;
   plan: UIPlanTier;
-  /** Optional — null for Local users not signed in. */
   usage: UsageMeter | null;
 }

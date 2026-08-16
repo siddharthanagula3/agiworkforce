@@ -1,19 +1,8 @@
-/**
- * Stripe Subscription Cancellation Webhook Tests
- *
- * Tests for customer.subscription.deleted event handling:
- * - Subscription status update to 'canceled'
- * - Credit revocation for canceled subscriptions
- * - Handling canceled_at timestamp from Stripe
- * - Error handling for missing/invalid data
- * - Edge cases for already-canceled subscriptions
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-// Mock environment variables before imports
 const mockEnv = {
   STRIPE_SECRET_KEY: 'sk_test_mock_key',
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
@@ -22,7 +11,6 @@ const mockEnv = {
 vi.stubEnv('STRIPE_SECRET_KEY', mockEnv.STRIPE_SECRET_KEY);
 vi.stubEnv('STRIPE_WEBHOOK_SECRET', mockEnv.STRIPE_WEBHOOK_SECRET);
 
-// Mock logger
 const mockLoggerInfo = vi.fn();
 const mockLoggerError = vi.fn();
 const mockLoggerWarn = vi.fn();
@@ -36,18 +24,11 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock security audit.
-// `recordAuditEvent` is the business audit-trail writer (AUDIT-TRAIL-01); the
-// cancellation handler calls it to record the entitlement change. It must be
-// present in this factory or the handler throws on an undefined import and the
-// webhook 500s.
 vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Neon DB mock — module-level refs survive clearAllMocks because they use
-// vi.fn() wrappers that we call inside beforeEach.
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockDb = {
@@ -64,7 +45,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => mockDb),
 }));
 
-// Mock subscription service
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: {
     allocateCreditsForPeriod: vi.fn().mockResolvedValue(undefined),
@@ -72,7 +52,6 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-// Mock credit service
 const mockGetBalance = vi.fn();
 const mockDeductCredits = vi.fn();
 
@@ -83,14 +62,12 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-// Mock price tier mapping
 vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: vi.fn(() => 'pro'),
   isValidPlanTier: vi.fn(() => true),
   getTierMapping: vi.fn(() => ({})),
 }));
 
-// Utility to generate Stripe signature
 function generateStripeSignature(
   payload: string,
   secret: string,
@@ -105,7 +82,6 @@ function generateStripeSignature(
   };
 }
 
-// Mock Stripe with proper signature verification
 const mockStripeWebhooks = {
   constructEvent: vi.fn((body: string, signature: string, secret: string) => {
     const parts = signature.split(',');
@@ -185,11 +161,9 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Re-establish getNeonDb mock after resetModules
     const neonModule = await import('@/lib/server/neon-db');
     (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
-    // Default idempotency: should process (true)
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes('process_stripe_event_idempotent')) {
         return Promise.resolve([{ process_stripe_event_idempotent: true }]);
@@ -202,13 +176,11 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
     mockExecute.mockResolvedValue(1);
 
-    // Default credit balance (has credits to revoke)
     mockGetBalance.mockResolvedValue({
       credits_remaining_cents: 500,
       account_id: 'acc_123',
     });
 
-    // Default successful deduction
     mockDeductCredits.mockResolvedValue({
       success: true,
       remaining_cents: 0,
@@ -251,7 +223,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // Verify the DB execute was called to update subscription to canceled
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining("status = 'canceled'"),
         expect.anything(),
@@ -259,11 +230,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
     });
 
     it('should NOT revoke remaining credits on cancellation (runs to billing end)', async () => {
-      // Cancellation policy (founder, 2026-07): cancellations run to the end of
-      // the paid billing period with no mid-period cutoff and no prorated
-      // adjustment. The user keeps any remaining credit balance (including
-      // separately-purchased top-ups) through the period — no clawback. Credit
-      // clawback remains ONLY for refunds and disputes (money genuinely returned).
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
       const eventPayload = JSON.stringify({
@@ -294,7 +260,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // No credit interaction on cancellation.
       expect(mockGetBalance).not.toHaveBeenCalled();
       expect(mockDeductCredits).not.toHaveBeenCalled();
     });
@@ -302,7 +267,7 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
     it('should use Stripe canceled_at timestamp', async () => {
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
-      const specificCanceledAt = 1704067200; // 2024-01-01 00:00:00 UTC
+      const specificCanceledAt = 1704067200;
 
       const eventPayload = JSON.stringify({
         id: 'evt_cancel_timestamp',
@@ -331,7 +296,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       await POST(request);
 
-      // Verify logger was called with subscription ID
       expect(mockLoggerInfo).toHaveBeenCalledWith(
         expect.objectContaining({ stripeSubId: 'sub_stripe_timestamp' }),
         expect.any(String),
@@ -370,8 +334,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       await POST(request);
 
-      // The cancel path revokes entitlement with a single UPDATE scoped by
-      // stripe_subscription_id (no credit-balance lookup any more).
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('subscriptions'),
         expect.arrayContaining(['sub_unique_stripe_id']),
@@ -379,7 +341,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
     });
 
     it('should handle subscription not found in database', async () => {
-      // Override to return no subscription
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: true }]);
@@ -416,14 +377,12 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       const response = await POST(request);
 
-      // Should still return 200 (event processed, just no local subscription)
       expect(response.status).toBe(200);
     });
   });
 
   describe('Credit Revocation', () => {
     it('should never touch the credit balance on cancellation, regardless of balance', async () => {
-      // Even with a positive balance, cancellation must not claw back credits.
       mockGetBalance.mockResolvedValue({
         credits_remaining_cents: 500,
         account_id: 'acc_123',
@@ -459,14 +418,11 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // No balance lookup and no deduction on cancel.
       expect(mockGetBalance).not.toHaveBeenCalled();
       expect(mockDeductCredits).not.toHaveBeenCalled();
     });
 
     it('should cancel cleanly even if the credit service would have errored', async () => {
-      // The cancel path no longer calls the credit service at all, so a broken
-      // credit service must not affect cancellation.
       mockGetBalance.mockRejectedValue(new Error('Database connection failed'));
       mockDeductCredits.mockRejectedValue(new Error('Deduction failed'));
 
@@ -536,12 +492,10 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       const response = await POST(request);
 
-      // Should use current timestamp as fallback
       expect(response.status).toBe(200);
     });
 
     it('should handle database execute error gracefully', async () => {
-      // Override execute to fail for the update call
       mockExecute.mockRejectedValue(new Error('Update failed'));
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
@@ -573,13 +527,11 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       const response = await POST(request);
 
-      // Entitlement revocation failed, so the webhook must request a retry.
       expect(response.status).toBe(500);
       expect(mockLoggerError).toHaveBeenCalled();
     });
 
     it('should handle cancellation for subscription without user_id', async () => {
-      // Override to return subscription without user_id
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: true }]);
@@ -620,14 +572,12 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // Should not attempt to revoke credits without user_id
       expect(mockGetBalance).not.toHaveBeenCalled();
     });
   });
 
   describe('Idempotency', () => {
     it('should skip already processed cancellation events', async () => {
-      // Mock idempotency check to return false (already processed)
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: false }]);
@@ -670,7 +620,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       expect(response.status).toBe(200);
       expect(data.message).toContain('already processed');
-      // Should not attempt credit revocation for duplicate event
       expect(mockGetBalance).not.toHaveBeenCalled();
     });
   });
@@ -708,8 +657,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // No clawback even when Stripe reports an immediate (not-at-period-end)
-      // cancellation — the user keeps their remaining credits either way.
       expect(mockDeductCredits).not.toHaveBeenCalled();
     });
 
@@ -779,7 +726,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       await POST(request);
 
-      // Verify logging includes subscription ID
       expect(mockLoggerInfo).toHaveBeenCalledWith(
         expect.objectContaining({ stripeSubId: 'sub_logging_test' }),
         'Subscription deleted',
@@ -816,7 +762,6 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       await POST(request);
 
-      // No revocation happens, so no revocation log line is emitted.
       expect(mockLoggerInfo).not.toHaveBeenCalledWith(
         expect.objectContaining({ revokedCents: expect.anything() }),
         'Credits revoked for canceled subscription',

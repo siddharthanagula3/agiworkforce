@@ -27,28 +27,12 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
  *   - View auth is public-by-token, matching the conversation-share precedent.
  */
 
-// ─── Bounds ───────────────────────────────────────────────────────────────────
-
-/** Matches the `length(content) <= 1000000` CHECK in migration 0095. */
 export const MAX_CONTENT_CHARS = 1_000_000;
 const MAX_TITLE_CHARS = 300;
 const MAX_ARTIFACT_ID_CHARS = 200;
 const MAX_LANGUAGE_CHARS = 50;
-/** Hard ceiling on one management-list response. */
 const MAX_LIST_LIMIT = 200;
 
-/**
- * Artifact kinds the public page can actually serve.
- *
- * Must stay in step with `ArtifactKind` in `apps/web/lib/artifact-sandbox.ts`
- * and with the CHECK constraint in migration 0095. `html`, `react` and
- * `mermaid` execute script, so the page serves them ONLY through the
- * cross-origin sandbox frame; `svg` renders as an inert `<img>` and the rest
- * render inline under a strict CSP. Document/binary artifacts (pdf,
- * docx, images) and the shared-renderer kinds (spreadsheet, presentation,
- * email) have no safe public serving path yet and are rejected rather than
- * stored as rows the page could not honour.
- */
 export const PUBLISHABLE_KINDS = [
   'html',
   'react',
@@ -61,14 +45,6 @@ export const PUBLISHABLE_KINDS = [
 
 export type PublishableKind = (typeof PUBLISHABLE_KINDS)[number];
 
-/**
- * Kinds whose content executes author-supplied script when rendered.
- *
- * `mermaid` is included: rendering a diagram runs the mermaid parser over the
- * published source, which must not happen on the app origin. Keep this in step
- * with `PUBLISHED_SANDBOX_KINDS` in
- * `features/chat/components/artifacts/publishedArtifactRender.ts`.
- */
 const SCRIPTED_KINDS: ReadonlySet<string> = new Set(['html', 'react', 'mermaid']);
 
 export function isPublishableKind(value: unknown): value is PublishableKind {
@@ -84,10 +60,7 @@ export function requiresSandboxedRender(kind: PublishableKind): boolean {
   return SCRIPTED_KINDS.has(kind);
 }
 
-/** Token shape minted below and validated by every route and the public page. */
 export const PUBLISHED_TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
-
-// ─── Errors ───────────────────────────────────────────────────────────────────
 
 export class PublishedArtifactValidationError extends Error {
   constructor(message: string) {
@@ -95,8 +68,6 @@ export class PublishedArtifactValidationError extends Error {
     this.name = 'PublishedArtifactValidationError';
   }
 }
-
-// ─── Row / DTO shapes ─────────────────────────────────────────────────────────
 
 interface PublishedArtifactRow {
   id: string;
@@ -112,7 +83,6 @@ interface PublishedArtifactRow {
   updated_at: string | Date;
 }
 
-/** Full record, including the artifact body. Used by the public page only. */
 export interface PublishedArtifact {
   id: string;
   token: string;
@@ -127,11 +97,6 @@ export interface PublishedArtifact {
   updatedAt: string;
 }
 
-/**
- * Management-list entry. Deliberately omits `content`: the settings list is an
- * index, and returning every published artifact body in one response would be
- * both large and needless (same reasoning as GET /api/share).
- */
 export interface PublishedArtifactSummary {
   token: string;
   artifactId: string;
@@ -153,20 +118,11 @@ export interface PublishArtifactRecordInput {
   content: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function toIso(value: string | Date): string {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
 }
 
-/**
- * A row whose `kind` somehow fell outside the publishable set (a hand-edited
- * row, or a future migration that widened the CHECK before this code caught
- * up) is reported as `text` rather than cast blindly into the union. `text`
- * renders inline as escaped plain text, so the fallback is the SAFE direction:
- * it can never promote unknown content into the script-executing branch.
- */
 function rowKind(kind: string): PublishableKind {
   return isPublishableKind(kind) ? kind : 'text';
 }
@@ -187,7 +143,6 @@ function rowToPublishedArtifact(row: PublishedArtifactRow): PublishedArtifact {
   };
 }
 
-/** List projection: the body's LENGTH, never the body itself. */
 interface PublishedArtifactSummaryRow {
   token: string;
   artifact_id: string;
@@ -200,8 +155,6 @@ interface PublishedArtifactSummaryRow {
 }
 
 function rowToSummary(row: PublishedArtifactSummaryRow): PublishedArtifactSummary {
-  // `length()` in Postgres counts CHARACTERS, so the field is named for what it
-  // actually holds. Calling it bytes would misreport any non-ASCII artifact.
   const characters = Number(row.content_chars ?? 0);
   return {
     token: row.token,
@@ -215,33 +168,15 @@ function rowToSummary(row: PublishedArtifactSummaryRow): PublishedArtifactSummar
   };
 }
 
-/**
- * Mint a fresh public handle: 18 random bytes → 24 base64url chars (144 bits).
- *
- * NEVER derive this from the artifact id. A derived token would be guessable by
- * anyone who has seen the artifact id in a shared conversation, which would
- * turn "unlisted" into "public to anyone who read the chat".
- */
 export function mintPublishToken(): string {
   return randomBytes(18).toString('base64url');
 }
 
-/** Absolute public URL for a token, using the same env var as /api/share. */
 export function buildPublishedArtifactUrl(token: string): string {
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   return `${appUrl.replace(/\/+$/, '')}/shared-artifact/${token}`;
 }
 
-// ─── Writes ───────────────────────────────────────────────────────────────────
-
-/**
- * Publish (or re-publish) one artifact.
- *
- * Idempotent on `(user_id, artifact_id)`: editing an artifact and pressing
- * Publish again overwrites the content in place and KEEPS the existing token,
- * so a URL the user already handed out keeps working and a double-click cannot
- * mint two live pages for one artifact.
- */
 export async function publishArtifactRecord(
   db: DatabaseAdapter,
   input: PublishArtifactRecordInput,
@@ -270,7 +205,6 @@ export async function publishArtifactRecord(
     throw new PublishedArtifactValidationError('content is required');
   }
   if (content.length > MAX_CONTENT_CHARS) {
-    // Truncating would publish a broken page under a URL the user shares.
     throw new PublishedArtifactValidationError(
       `content exceeds ${MAX_CONTENT_CHARS} characters and cannot be published`,
     );
@@ -306,9 +240,6 @@ export async function publishArtifactRecord(
 
   const row = rows[0];
   if (!row) {
-    // An UPDATE filtered out by an RLS USING clause comes back as zero rows
-    // (an INSERT WITH CHECK violation raises instead). Either way, never
-    // report a successful publish that produced no row.
     throw new PublishedArtifactValidationError(
       'Artifact was not published (row-level security denied the write)',
     );
@@ -316,14 +247,6 @@ export async function publishArtifactRecord(
   return rowToPublishedArtifact(row);
 }
 
-/**
- * Revoke one published artifact.
- *
- * Returns false when nothing was deleted — the token does not exist, or it
- * belongs to someone else. The caller reports that as 404 so an unpublish of a
- * stranger's token cannot be distinguished from an unpublish of a token that
- * was never minted.
- */
 export async function unpublishArtifactRecord(
   db: DatabaseAdapter,
   input: { userId: string; token: string },
@@ -342,9 +265,6 @@ export async function unpublishArtifactRecord(
   return rows.length > 0;
 }
 
-// ─── Reads ────────────────────────────────────────────────────────────────────
-
-/** The caller's own published artifacts, newest first. Never returns bodies. */
 export async function listPublishedArtifacts(
   db: DatabaseAdapter,
   input: { userId: string; limit?: number },
@@ -354,8 +274,6 @@ export async function listPublishedArtifacts(
   const limit = Math.min(MAX_LIST_LIMIT, Math.max(1, Math.floor(input.limit ?? MAX_LIST_LIMIT)));
 
   const rows = await db.query<PublishedArtifactSummaryRow>(
-    // `content` itself is never selected — only its length, so the list can
-    // show a size without shipping every published body in one response.
     `select token, artifact_id, title, kind, language,
             length(content) as content_chars, created_at, updated_at
        from public.published_artifacts
@@ -367,13 +285,6 @@ export async function listPublishedArtifacts(
   return rows.map(rowToSummary);
 }
 
-/**
- * Anonymous token lookup for the public page.
- *
- * Takes the app-owner adapter (`getNeonDb`), NOT an RLS-scoped one: there is no
- * signed-in subject on a public page. The token is the grant, so it is
- * shape-checked before it ever reaches the query.
- */
 export async function getPublishedArtifactByToken(
   db: DatabaseAdapter,
   token: string,

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* global console */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -168,15 +167,6 @@ function walkFiles(relativeDirectory, predicate) {
   return files;
 }
 
-/**
- * Every module the Tauri renderer can actually load, walked from `main.tsx`
- * through the real import graph.
- *
- * A lexical sweep of the frontend roots counts `invoke('cmd')` inside modules
- * that no entry point imports, which is how ~96 registered commands passed this
- * check while being unreachable from the running app (SIX-32). Reachability is
- * the difference between "the string exists" and "a user can trigger it".
- */
 export function collectReachableRendererFiles() {
   const entry = path.join(repoRoot, rendererEntry);
   if (!fs.existsSync(entry)) {
@@ -371,8 +361,6 @@ export function analyzeWiring({
   frontendCalls,
   rustDefinitions,
   allowlisted,
-  // Commands invoked from a module the renderer entry point can actually load.
-  // Defaults to `frontendCalls` so the lexical-only groups keep their meaning.
   reachableFrontendCalls = frontendCalls,
   reachabilityAllowlisted = new Set(),
 }) {
@@ -395,8 +383,6 @@ export function analyzeWiring({
     .filter((command) => !registered.has(command) || frontendCalls.has(command))
     .sort();
 
-  // A command whose only invoke sites sit in modules unreachable from
-  // `main.tsx`: the string exists, the user can never trigger it.
   const registeredWithoutReachableCaller = [...registered]
     .filter(
       (command) =>

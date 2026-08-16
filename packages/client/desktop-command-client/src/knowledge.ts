@@ -1,10 +1,5 @@
-/**
- * Knowledge API — typed wrappers for knowledge_* and project_*_knowledge Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface KnowledgeQueryResult {
   results: KnowledgeSearchResult[];
@@ -18,8 +13,6 @@ export interface KnowledgeSearchResult {
   score: number;
   metadata: Record<string, unknown>;
 }
-
-// ---- Commands ----
 
 export async function knowledgeAdd(
   content: string,

@@ -74,7 +74,6 @@ describe('persistGeneratedFileBytes', () => {
           filename: 'table.csv',
           origin: 'e2b-execution',
           checksumSha256: expectedHash,
-          // Classification persisted for library filtering (Wave D).
           surface: 'file',
           previewable: true,
         }),

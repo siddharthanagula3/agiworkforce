@@ -2,16 +2,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * The sidebar lives directly above native VS Code views, so its surfaces and
- * text follow the host theme while AGI tokens remain complete fallbacks. The
- * previous fixed-dark policy made the extension look split in light and
- * high-contrast themes.
- *
- * Stateful pairs must still come from one family. Compositing a host warning
- * background with fixed near-white text once produced about 1.10:1 contrast in
- * Light+, even though each token was reasonable in isolation.
- */
 const source = readFileSync(
   resolve(import.meta.dirname, '../features/sidebar-webview/webviewContent.ts'),
   'utf8',
@@ -50,10 +40,6 @@ describe('sidebar panel palette', () => {
   });
 
   it('states the colour policy truthfully in its own header', () => {
-    // Strip JSDoc line-leaders before matching. The policy sentence wraps
-    // inside a block comment, so a phrase spanning the wrap is separated by
-    // "\n * " — and `\s` does not match that literal asterisk, which made the
-    // assertion fail on a purely cosmetic reflow rather than on the wording.
     const header = source
       .slice(0, source.indexOf('export function getWebviewContent'))
       .replace(/^[ \t]*\*[ \t]?/gm, '');

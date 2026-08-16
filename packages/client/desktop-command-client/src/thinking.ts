@@ -1,10 +1,5 @@
-/**
- * Thinking API — typed wrappers for thinking_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface ThinkingConfigResponse {
   enabled: boolean;
@@ -21,8 +16,6 @@ export interface ThinkingContent {
   model: string;
   tokens: number;
 }
-
-// ---- Commands ----
 
 export async function thinkingGetConfig(): Promise<ThinkingConfigResponse> {
   return command<ThinkingConfigResponse>('thinking_get_config');

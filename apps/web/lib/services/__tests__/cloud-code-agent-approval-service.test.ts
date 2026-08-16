@@ -36,16 +36,6 @@ const SESSION_ID = '22222222-2222-4222-8222-222222222222';
 const OWNER = { userId: 'user-1', organizationId: null };
 const DANGEROUS_COMMAND = 'rm -rf build';
 
-/**
- * A stand-in for the two rows this decision actually turns on.
- *
- * The point of interest is how it decides whether an UPDATE matches: it reads
- * the predicates out of the SQL it was handed and applies only those. A guard
- * the production statement does not contain is a guard this fake does not
- * enforce, so deleting `and state = 'pending'` or `and expires_at > now()` from
- * the real query makes the exactly-once and expiry tests below fail instead of
- * passing on the fake's own good behavior.
- */
 function fakeDb(options: {
   approvalState?: 'pending' | 'approved' | 'rejected' | 'expired';
   approvalExpired?: boolean;
@@ -71,7 +61,6 @@ function fakeDb(options: {
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     sqlLog.push(sql);
     const text = sql.replace(/\s+/g, ' ').trim();
-    /** True only when the statement itself asks for the predicate. */
     const guards = (predicate: string) => text.includes(predicate);
 
     if (text.startsWith('select id, goal, model, provider, state')) {
@@ -114,7 +103,6 @@ function fakeDb(options: {
 
     if (text.startsWith('select step_index, tool_name')) return steps;
 
-    // The sweep on the read path: only the predicates the statement carries.
     if (text.startsWith('update cloud_code_agent_approvals a')) {
       const stale = !guards('and a.expires_at <= now()') || approval.expired;
       const pending = !guards("and a.state = 'pending'") || approval.state === 'pending';
@@ -176,7 +164,6 @@ describe('a pending Cloud Code approval can actually be decided', () => {
     expect(call?.preApproved).toMatchObject({ approved: true, command: DANGEROUS_COMMAND });
     expect(call?.turnId).toBe(TURN_ID);
     expect(record.stopReason).toBe('done');
-    // The turn left the suspended state, so nothing else can resume it.
     expect(harness.turn.state).toBe('running');
   });
 
@@ -188,8 +175,6 @@ describe('a pending Cloud Code approval can actually be decided', () => {
   });
 
   it('runs the command stored with the approval, not one supplied by the caller', async () => {
-    // The decide API has no command field at all: the executor re-reads the
-    // exact string the user was shown, so display and execution cannot drift.
     const harness = fakeDb({});
     await decide(harness.db);
     const call = vi.mocked(executePersistedAgentTurn).mock.calls[0]?.[0];
@@ -265,16 +250,12 @@ describe('the resumed turn continues instead of restarting', () => {
       .filter((b): b is ToolUseBlock => b.type === 'tool_use');
     expect(toolUses.map((b) => b.name)).toEqual(['list_files', 'read_file', 'run_command']);
 
-    // Every reconstructed result is paired with the call it answers, or the
-    // provider rejects the resumed transcript outright.
     const results = messages
       .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
       .filter((b): b is ToolResultBlock => b.type === 'tool_result');
     const useIds = new Set(toolUses.map((b) => b.id));
     for (const result of results) expect(useIds.has(result.toolUseId)).toBe(true);
 
-    // The approved command is the LAST call, so the loop's decision result pairs
-    // with it rather than with an earlier step.
     expect(toolUses.at(-1)?.input).toEqual({ command: DANGEROUS_COMMAND });
     expect(call?.preApproved?.toolUseId).toBe(toolUses.at(-1)?.id);
   });

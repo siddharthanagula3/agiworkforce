@@ -71,15 +71,6 @@ describe('POST /api/settings/team authorization invariants', () => {
     );
   });
 
-  /**
-   * 0085 makes "exactly one owner" a database fact
-   * (idx_org_members_single_owner), so this route can no longer mint an owner
-   * at all — not by an admin, and not by the existing owner either. Ownership
-   * moves through POST /api/settings/organization/transfer-ownership.
-   *
-   * This replaces the previous "an admin cannot create an owner" rule, which
-   * still permitted an OWNER to create a second one.
-   */
   it('refuses to create an owner through the add-member route, whoever is asking', async () => {
     const response = await POST(
       request({
@@ -90,7 +81,6 @@ describe('POST /api/settings/team authorization invariants', () => {
     );
 
     expect(response.status).toBe(400);
-    // Rejected at the edge: no transaction opened, no row touched.
     expect(mockTransaction).not.toHaveBeenCalled();
     expect(mockQuery).not.toHaveBeenCalled();
     expect(mockExecute).not.toHaveBeenCalled();
@@ -98,8 +88,8 @@ describe('POST /api/settings/team authorization invariants', () => {
 
   it('refuses a caller who is not a member of the named organization', async () => {
     mockQuery
-      .mockResolvedValueOnce([]) // advisory lock
-      .mockResolvedValueOnce([]); // requester membership: none
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
 
     const response = await POST(
       request({ organizationId: ORG_A, email: 'someone@example.com', role: 'member' }),
@@ -131,7 +121,7 @@ describe('POST /api/settings/team authorization invariants', () => {
 
   it('does not read a member count before inserting, because the ceiling is a DB constraint', async () => {
     mockQuery
-      .mockResolvedValueOnce([]) // advisory lock
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
           organization_id: ORG_A,
@@ -145,7 +135,7 @@ describe('POST /api/settings/team authorization invariants', () => {
       .mockResolvedValueOnce([
         { id: 'target-user', email: 'someone@example.com', display_name: null, avatar_url: null },
       ])
-      .mockResolvedValueOnce([]) // not already a member
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
           organization_id: ORG_A,
@@ -165,7 +155,6 @@ describe('POST /api/settings/team authorization invariants', () => {
     );
 
     expect(response.status).toBe(201);
-    // A read-then-write count would let two admins both pass against one seat.
     const sqls = mockQuery.mock.calls.map(([sql]) => String(sql).toLowerCase());
     expect(
       sqls.some((sql) => sql.includes('count(*)') && sql.includes('organization_members')),

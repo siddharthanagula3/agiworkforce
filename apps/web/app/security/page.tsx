@@ -17,41 +17,6 @@ export const metadata = buildMetadata({
   path: '/security',
 });
 
-/**
- * Every statement on this page must be checkable against this repository.
- *
- * The 2026 marketing audit found the site making concrete claims the code
- * contradicted ("50+ models" over a 31-model catalog, an audit trail over a
- * table nothing wrote to). The failure mode was not lying — it was hedged,
- * unfalsifiable copy ("is designed to", "where available", "should not") that
- * nobody could verify OR disprove, which let real drift hide inside it.
- *
- * So: no hedges. Each sentence below names a specific implemented behaviour, or
- * it sits in the "What we have not done" section. If you change a control,
- * change the sentence. If you cannot point at the code, delete the sentence.
- *
- * Evidence index for the claims rendered here:
- *   Transport headers ........ apps/web/next.config.ts (headers())
- *   CSP / route protection ... apps/web/proxy.ts
- *   Artifact sandbox ......... infrastructure/sandbox/vercel.json,
- *                              apps/web/lib/artifact-sandbox.ts
- *   Auth + abuse ............. apps/web/lib/{csrf,rate-limit,auth-guards}.ts,
- *                              apps/web/lib/services/api-key-service.ts
- *   Database isolation ....... apps/web/db/neon/0037,0049,0054,0069,0073*.sql,
- *                              apps/web/lib/server/rls-db.ts,
- *                              packages/platform/data-layer/src/adapters/neon.ts
- *   Device encryption ........ apps/desktop/src-tauri/Cargo.toml,
- *                              .../data/db/key_management.rs,
- *                              .../sys/security/{machine_key,master_password}.rs
- *   Egress / SSRF ............ apps/web/lib/{egress-policy,mcp-url-validation}.ts
- *   Logging .................. apps/web/lib/{security-audit,error-handler,
- *                              leak-detector,sentry-shared}.ts
- *   Deletion ................. apps/web/lib/server/account-erasure.ts,
- *                              apps/web/app/api/cron/purge-deleted-accounts,
- *                              vercel.json (crons)
- *   Release integrity ........ .github/workflows/{ci,codeql,release-desktop,
- *                              build-windows-release}.yml
- */
 const LAST_REVIEWED = POLICY_LAST_UPDATED.security;
 
 const BOUNDARIES: {
@@ -212,10 +177,6 @@ const ISOLATION: { title: string; body: string }[] = [
   },
   {
     title: 'Model-generated artifacts',
-    // CORRECTED 2026-08-14: this said frame-src 'none'. The deployed policy in
-    // infrastructure/sandbox/vercel.json sets frame-src 'self'. Quoting a
-    // directive more restrictive than the one actually served is the worst kind
-    // of error on a security page — a reviewer checks the quote, not the header.
     body: "Artifacts render on a separate origin with its own policy: default-src 'none', connect-src 'none', frame-src 'self', form-action 'none', base-uri 'none', object-src 'none', Referrer-Policy no-referrer, cross-origin isolation headers, and frame-ancestors pinned to our application hosts. Code in an artifact can paint, but it cannot make a fetch, XHR or WebSocket call (connect-src is 'none'), submit a form, or reach the parent page. It is not fully network-isolated: the policy still permits images and fonts over https and scripts from two pinned CDNs, so an artifact can issue outbound GETs for those resource types. Treat an artifact as sandboxed against interaction with your session, not as an airgap. Where that origin is not configured, artifacts fall back to a same-origin frame WITHOUT allow-same-origin, which is the flag combination that would defeat the sandbox. Scripts inside an HTML artifact do not run unless the artifact is explicitly marked as needing them.",
   },
   {
@@ -285,10 +246,6 @@ const LOGGING: { k: string; v: string }[] = [
 const DELETION: { title: string; body: string }[] = [
   {
     title: 'The list is enumerated, not implied',
-    // The figure said 34 until 14 August 2026, while the list had grown to 66.
-    // Nothing guarded it, so it drifted silently for every migration that added
-    // a user-scoped table. A test now derives the number from the constant and
-    // fails if this sentence disagrees — see trust-surface-claims.test.ts.
     body: 'Erasure walks a hardcoded, foreign-key-ordered list of 66 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, consent records, data-rights requests, email preferences, device registrations, sync data, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
   },
   {
@@ -319,21 +276,6 @@ const DELETION: { title: string; body: string }[] = [
 
 const RELEASE: { k: string; v: string }[] = [
   {
-    // CORRECTED 2026-08-14. The previous version of this row made three claims
-    // the workflows do not support, and a security page is the worst place to
-    // be optimistic. What it said, and what is actually there:
-    //
-    //  - "blocks on Semgrep's security-audit ruleset". Semgrep runs
-    //    (.github/workflows/ci.yml) but is NOT blocking — the step's own
-    //    comment says `--error` flips it to blocking only once the surviving
-    //    findings reach zero, and they have not.
-    //  - "CodeQL runs on push and weekly on Mondays at 04:17 UTC". There is no
-    //    CodeQL in this repository. `.github/workflows/codeql.yml` is named
-    //    'Rust Security' and runs cargo audit + clippy on that schedule. The
-    //    filename is the only thing about it that says CodeQL.
-    //  - "GitHub Actions are pinned by commit digest". scripts/check-action-pins.sh
-    //    enforces SHA pinning for THIRD-PARTY actions and exempts the
-    //    first-party `actions/` namespace.
     k: 'Dependency and code scanning',
     v: 'What blocks a merge: dependency audits at critical and high severity, cargo-deny checks for banned crates, sources, licences and advisories, and a check that every third-party GitHub Action is pinned to a full commit SHA (first-party `actions/*` are exempt from that check). What runs without blocking: a Semgrep security-audit pass, whose remaining findings are package-manager supply-chain hardening we have triaged and not yet done — it will block once they reach zero. A weekly Monday job runs a Rust advisory audit and clippy. We do not run CodeQL; if you saw that claim here before 14 August 2026, it was wrong.',
   },
@@ -400,13 +342,6 @@ const NOT_DONE: { k: string; v: string }[] = [
     k: 'Health-check coverage',
     v: 'The live check on /status covers Postgres reachability, the payments API, and required environment configuration. Authentication, object storage, the gateway, the rate limiter, and model routes are not covered by it.',
   },
-  //
-  // ── Added 14 August 2026, from a review of the security safeguards India's
-  // DPDP Act s.8(5) requires. Each row is a posture statement a reviewer needs.
-  // Deliberately NOT included: the specific configuration values, env-var names
-  // and code paths involved. Those are in the internal remediation log. A
-  // security page owes a reviewer an honest picture, not a working recipe.
-  //
   {
     k: 'India — DPDP Act, 2023',
     v: 'Our position is published in full at /privacy/india, including the parts that are gaps rather than controls: no verifiable parental consent (the Act treats anyone under 18 as a child), no notice translations into Eighth Schedule languages, no Indian data residency, and a grievance contact published as a role rather than a named officer. The consent and rights machinery is implemented; those four are not.',

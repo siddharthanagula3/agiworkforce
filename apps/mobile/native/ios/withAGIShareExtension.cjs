@@ -1,9 +1,3 @@
-// Expo config plugin: generates the iOS Share Extension target.
-//
-// The generated ios/ tree is gitignored, so both the source copy and Xcode
-// target mutation must happen during every prebuild/EAS build. The extension
-// accepts text and web URLs only, previews them natively, and saves a bounded
-// draft to the shared App Group for the containing app's next foreground.
 
 const { withDangerousMod, withXcodeProject, createRunOncePlugin } = require('@expo/config-plugins');
 const fs = require('fs');
@@ -148,9 +142,6 @@ function configureShareExtensionTarget(project, options) {
   const hostTarget = project.getFirstTarget();
   let target = findNativeTarget(project, EXTENSION_NAME);
   if (!target) {
-    // xcode@3 only creates target dependencies when these optional sections
-    // already exist. Initialise them before addTarget and still run the
-    // idempotent dependency check below for existing/generated projects.
     const objects = project.hash.project.objects;
     objects.PBXContainerItemProxy ??= {};
     objects.PBXTargetDependency ??= {};

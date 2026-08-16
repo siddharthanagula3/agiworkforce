@@ -21,14 +21,6 @@ function createResponse() {
   };
 }
 
-/**
- * SVC-GATEWAY-MANAGED-GATE-INVERTED-01: the gateway's gate used to require
- * `AGI_MANAGED_COMPUTE_PRIVATE_BETA === '1'` (closed by default) plus a
- * second `x-agi-managed-compute-beta: 1` header check. Both are retired —
- * managed compute is public alpha, open by default; the env var is an
- * incident-response kill-switch ONLY (0/false/off re-gates). These tests pin
- * the corrected ruling so the inversion can't silently come back.
- */
 describe('managedComputeGate', () => {
   const originalEnv = process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
 
@@ -40,8 +32,6 @@ describe('managedComputeGate', () => {
       process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = originalEnv;
     }
   });
-
-  // ── isManagedComputePrivateBetaEnabled — accepted-value parsing ──────────
 
   it('is open (true) when the env var is unset', () => {
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
@@ -65,8 +55,6 @@ describe('managedComputeGate', () => {
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = 'yes-please';
     expect(isManagedComputePrivateBetaEnabled()).toBe(true);
   });
-
-  // ── buildManagedComputeEligibility ────────────────────────────────────────
 
   it('allows requests when the env is unset (public alpha, open by default)', () => {
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
@@ -102,8 +90,6 @@ describe('managedComputeGate', () => {
   });
 
   it('allows requests regardless of the legacy x-agi-managed-compute-beta header (now a no-op)', () => {
-    // Regression guard: the retired second gate required this header to equal
-    // '1'. It must no longer matter at all — present, absent, or any value.
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
     const withoutHeader = buildManagedComputeEligibility(
       { user: { userId: 'user-1' }, headers: {} } as Request,
@@ -157,8 +143,6 @@ describe('managedComputeGate', () => {
     expect(eligibility.denialMessage?.toLowerCase()).not.toContain('waitlist');
     expect(eligibility.denialMessage?.toLowerCase()).not.toContain('private beta');
   });
-
-  // ── requireManagedComputeEligibility middleware ───────────────────────────
 
   it('calls next() for open (default, no kill-switch) requests', () => {
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];

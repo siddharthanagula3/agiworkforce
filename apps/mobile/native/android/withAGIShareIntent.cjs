@@ -1,19 +1,3 @@
-// Expo config plugin: Android share-sheet / PROCESS_TEXT ingestion.
-//
-// RN's Linking module only surfaces intent *data* URIs. For ACTION_SEND the
-// payload lives in EXTRA_TEXT (data is null) and for ACTION_PROCESS_TEXT in
-// EXTRA_PROCESS_TEXT — so a share/text-selection never reached JS. This plugin
-// patches the generated MainActivity.kt to rewrite both intents onto the app's
-// existing deep-link seam (agiworkforce://intent/share?text=…) that the
-// intent-verb handler in app/_layout.tsx already consumes. Zero permissions —
-// pure system-intent handoff.
-//
-// The android/ directory is generated (gitignored), so this patch MUST live
-// here as a config plugin — direct edits to android/ are erased by the next
-// `expo prebuild`. The SEND / PROCESS_TEXT intent filters themselves are
-// declared in app.config.js `android.intentFilters`.
-//
-// Run: expo prebuild --platform android (or via EAS build)
 
 const { withDangerousMod, createRunOncePlugin } = require('@expo/config-plugins');
 const fs = require('fs');
@@ -70,17 +54,13 @@ const COMPANION_AND_METHODS = `
   }
 `;
 
-// Rewrite before super.onCreate so expo-linking's lifecycle listener (which
-// reads intent.data during onCreate) sees the share as the initial deep link
-// on cold start.
 const ON_CREATE_REWRITE = '    intent?.let { setIntent(rewriteShareIntent(it)) }\n';
 
 function patchMainActivity(contents) {
-  if (contents.includes(PATCH_MARKER)) return contents; // already patched
+  if (contents.includes(PATCH_MARKER)) return contents;
 
   let out = contents;
 
-  // 1. Imports — insert any that are missing after the first import line.
   const missingImports = IMPORTS.filter((imp) => !out.includes(imp));
   if (missingImports.length > 0) {
     const firstImport = out.match(/^import .*$/m);
@@ -90,14 +70,12 @@ function patchMainActivity(contents) {
     out = out.replace(firstImport[0], `${firstImport[0]}\n${missingImports.join('\n')}`);
   }
 
-  // 2. onCreate — rewrite the incoming intent before super.onCreate(...).
   const superOnCreate = out.match(/^(\s*)super\.onCreate\([^)]*\)/m);
   if (!superOnCreate) {
     throw new Error(`${PLUGIN_NAME}: could not find super.onCreate(...) in MainActivity.kt`);
   }
   out = out.replace(superOnCreate[0], `${ON_CREATE_REWRITE}${superOnCreate[0]}`);
 
-  // 3. Companion + onNewIntent + rewriteShareIntent — before getMainComponentName.
   const anchor = out.match(/^[\t ]*\/\*\*[\s\S]*?\*\/\s*^[\t ]*override fun getMainComponentName/m)
     ? out.match(/^[\t ]*\/\*\*[\s\S]*?\*\/\s*(?=^[\t ]*override fun getMainComponentName)/m)
     : out.match(/^[\t ]*(?=override fun getMainComponentName)/m);

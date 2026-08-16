@@ -205,9 +205,6 @@ describe('ConnectorGallery', () => {
 
   it('wires real MCP tool discovery into the per-tool permission view (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01)', async () => {
     vi.mocked(McpClient.listConnectedProviders).mockResolvedValue(['gmail']);
-    // Server name follows the `connector-<id>` convention used by
-    // get_connector_mcp_mapping (apps/desktop-tauri sys/commands/mcp_oauth.rs)
-    // when a connector is actually activated.
     vi.mocked(McpClient.listTools).mockResolvedValue([
       {
         id: 'mcp__connector-gmail__search_emails__',
@@ -249,12 +246,9 @@ describe('ConnectorGallery', () => {
       expect(screen.getByText('delete_email')).toBeInTheDocument();
     });
 
-    // Tools from an unrelated server must not leak into this connector's view.
     expect(screen.queryByText('unrelated_tool')).not.toBeInTheDocument();
     expect(screen.queryByText(/no live tool schema available/i)).not.toBeInTheDocument();
 
-    // The destructive tool (name contains "delete") defaults to Blocked;
-    // the non-destructive one defaults to Needs approval.
     expect(
       screen.getByRole('combobox', { name: /permission for delete_email/i }),
     ).toHaveTextContent(/blocked/i);

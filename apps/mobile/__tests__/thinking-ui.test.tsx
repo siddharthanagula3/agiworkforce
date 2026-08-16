@@ -1,26 +1,8 @@
-/**
- * Tests for ThinkingChip and StreamingIndicator.
- *
- * ThinkingChip:
- *  - Ticks a LIVE "Thinking for Xs" timer while reasoning streams (real
- *    interval-driven state, not a static label)
- *  - Collapses to a static "Thought for Xs" once streaming completes
- *  - Tap expands the raw reasoning text
- *
- * StreamingIndicator:
- *  - Renders with "Generating response" accessibility label
- *  - Has "progressbar" accessibility role
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks — avoid React.createElement(RN.*) inside factories to prevent
-// NativeWind's CSSInterop Babel transform from injecting out-of-scope vars.
-// ---------------------------------------------------------------------------
 
 jest.mock('lucide-react-native', () => ({
   Clock: jest.fn().mockReturnValue(null),
@@ -57,16 +39,8 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Import modules under test
-// ---------------------------------------------------------------------------
-
 import { ThinkingChip } from '../src/features/chat/components/ThinkingChip';
 import { StreamingIndicator } from '../src/features/chat/components/StreamingIndicator';
-
-// ---------------------------------------------------------------------------
-// ThinkingChip tests
-// ---------------------------------------------------------------------------
 
 describe('ThinkingChip', () => {
   beforeEach(() => {
@@ -116,7 +90,6 @@ describe('ThinkingChip', () => {
     );
 
     expect(getByText('Thought for 2s')).toBeTruthy();
-    // No interval keeps running after completion.
     act(() => {
       jest.advanceTimersByTime(10_000);
     });
@@ -138,7 +111,6 @@ describe('ThinkingChip', () => {
       />,
     );
 
-    // Collapsed by default once done.
     expect(queryByText('Step 1: consider the constraints')).toBeNull();
 
     fireEvent.press(getByRole('button'));
@@ -152,10 +124,6 @@ describe('ThinkingChip', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// StreamingIndicator tests
-// ---------------------------------------------------------------------------
-
 describe('StreamingIndicator', () => {
   it('has "Generating response" accessibility label', () => {
     const { getByLabelText } = render(<StreamingIndicator />);
@@ -164,9 +132,6 @@ describe('StreamingIndicator', () => {
   });
 
   it('has "progressbar" accessibility role', () => {
-    // The indicator wraps an animated SVG mark, so it must be a <View> (a <Text>
-    // wrapper renders nothing on iOS). "progressbar" is the correct role for a
-    // loading spinner — matching the sibling TypingIndicator.
     const { getByRole } = render(<StreamingIndicator />);
 
     expect(getByRole('progressbar')).toBeTruthy();

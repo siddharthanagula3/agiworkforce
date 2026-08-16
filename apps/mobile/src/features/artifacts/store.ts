@@ -1,23 +1,3 @@
-/**
- * Artifact Store
- *
- * Persists user-created artifacts extracted from chat messages. Artifacts are
- * first-class outputs and persist independently of the source conversation —
- * deleting a chat does not cascade-delete its artifacts.
- *
- * Extraction happens after each LLM turn (onDone / local finalContent), not
- * per-token. When the stream protocol surfaces structured artifact events,
- * swap the post-hoc parser for the event handler.
- *
- * Storage: MMKV with at-rest encryption via the shared mmkvStorage adapter.
- * Cap: last MAX_ARTIFACTS entries to prevent unbounded growth (mirrors
- * chatMessageStore's partialize strategy).
- *
- * Derivation is delegated to @agiworkforce/artifacts `deriveArtifacts` — the
- * ONE canonical place across web, desktop, and mobile (shared-packages-
- * consolidation-plan-2026-06-21.md §3). Mobile-specific PRESENTATION helpers
- * (kind mapping, accent colors, preview lines, age label) remain here.
- */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -32,10 +12,6 @@ import type {
   MobileArtifactProvenance,
   ScopedMobileArtifact,
 } from './types';
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const MAX_ARTIFACTS = 200;
 const ARTIFACT_STORE_VERSION = 1;
@@ -65,45 +41,22 @@ function requireArtifactProvenance(provenance: MobileArtifactProvenance): Mobile
     : { scope: 'local' };
 }
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-
 interface ArtifactStoreState {
-  /** User-created artifacts, newest first. */
   artifacts: MobileArtifact[];
 
-  /** Add one or more artifacts; duplicates (by id) are silently skipped. */
   addArtifacts: (incoming: MobileArtifact[]) => void;
 
-  /** Remove a single artifact by id. */
   removeArtifact: (id: string) => void;
 
-  /** Clear all user artifacts (e.g. sign-out). */
   clearArtifacts: () => void;
 
-  /**
-   * Remove every Cloud or legacy-unowned artifact while retaining only data
-   * explicitly proven to be Local/device-scoped.
-   */
   clearAccountScopedArtifacts: () => void;
 
-  // --- Cloud-synced artifacts (managed sync, migration 0039) ---
-  // Kept SEPARATE from the locally-derived `artifacts` slice so the derived gallery is
-  // untouched; the render layer merges (mergeCloudArtifacts) when cloud sync is live.
-  /** Pulled cloud artifacts (edited/desktop-authored), keyed by id. */
   cloudArtifacts: CloudArtifact[];
-  /** Clerk owner of the pulled Cloud overlay. Null means the overlay is unusable. */
   cloudArtifactsOwnerId: string | null;
-  /** Apply pulled artifact deltas from `/api/chat/sync` (delegates to the shared logic). */
   applyCloudArtifactDeltas: (deltas: ArtifactWireDelta[], ownerId: string) => void;
-  /** Clear pulled cloud artifacts (sign-out / leaving cloud mode). */
   clearCloudArtifacts: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
 
 export const useArtifactStore = create<ArtifactStoreState>()(
   persist(
@@ -112,8 +65,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
 
       addArtifacts: (incoming) => {
         if (incoming.length === 0) return;
-        // Missing/malformed provenance can only come from an older caller or
-        // persisted legacy data. Do not let it become a new mixed-boundary row.
         const activeOwnerId = captureCloudAccountEpoch()?.ownerId ?? null;
         const safeIncoming = incoming.filter((artifact): artifact is ScopedMobileArtifact => {
           if (!isScopedMobileArtifact(artifact)) return false;
@@ -124,8 +75,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         if (safeIncoming.length === 0) return;
 
         set((state) => {
-          // Remove malformed rows and Cloud rows from any previous account
-          // before deduping. Local artifacts remain device-owned.
           const existing = state.artifacts.filter(
             (artifact): artifact is ScopedMobileArtifact =>
               isScopedMobileArtifact(artifact) &&
@@ -192,7 +141,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
     {
       name: 'artifact-store',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE — skip hydration until encrypted storage is ready.
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[artifactStore] Hydration failed:', error);
@@ -238,19 +186,10 @@ export const useArtifactStore = create<ArtifactStoreState>()(
 
 rehydrateWhenMmkvReady(useArtifactStore, 'artifactStore');
 
-/** Central account-teardown entry point. Local artifacts are preserved. */
 export function clearAccountScopedArtifactState(): void {
   useArtifactStore.getState().clearAccountScopedArtifacts();
 }
 
-// ---------------------------------------------------------------------------
-// Extraction helpers (called from chatExecutionStore after stream completion)
-// ---------------------------------------------------------------------------
-
-/**
- * Map chat Artifact.type (canonical) to MobileArtifactKind (gallery).
- * 'email' and 'image' are closest to 'document' for display purposes.
- */
 function toMobileKind(type: string): MobileArtifactKind {
   switch (type) {
     case 'code':
@@ -266,12 +205,6 @@ function toMobileKind(type: string): MobileArtifactKind {
   }
 }
 
-/**
- * Derive per-kind accent color from the current theme palette.
- * Accepts any object with the four required color keys so this function is
- * usable both inside React components (passing useThemeColors()) and outside
- * (passing the _artifactThemeColors constant in chatExecutionStore).
- */
 export function accentColorForKind(
   kind: MobileArtifactKind,
   themeColors: { teal: string; terraCotta: string; agentThinking: string; agentActive: string },
@@ -290,9 +223,6 @@ export function accentColorForKind(
   }
 }
 
-/**
- * Build the first N non-empty lines from content, used for card previews.
- */
 function buildPreviewLines(content: string, max = 6): string[] {
   return content
     .split('\n')
@@ -301,10 +231,6 @@ function buildPreviewLines(content: string, max = 6): string[] {
     .slice(0, max);
 }
 
-/**
- * Format an ISO date string as a human-readable age label.
- * Produces: "just now", "N min ago", "N hours ago", "N days ago", or a short date.
- */
 export function formatAgeLabel(iso: string): string {
   const now = Date.now();
   const then = new Date(iso).getTime();
@@ -320,13 +246,6 @@ export function formatAgeLabel(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/**
- * Convert a canonical Artifact (from ChatMessage.artifacts) into a
- * MobileArtifact suitable for the gallery. themeColors is passed in so this
- * pure function stays testable without a React context.
- *
- * conversationTitle is used to build sourceLabel; falls back to 'Chat'.
- */
 export function canonicalToMobileArtifact(
   artifact: { id: string; type: string; title: string; content: string; language?: string },
   createdAt: string,
@@ -362,20 +281,11 @@ function mobileToCanonicalArtifact(artifact: MobileArtifact): SharedArtifact {
     title: artifact.title,
     content: artifact.content,
     language: artifact.language,
-    // MobileArtifact is presentation-only and does not persist canonical
-    // version timestamps. These placeholders participate only in the shared
-    // id/tombstone merge; a matching Cloud row replaces them before render.
     version: 1,
     createdAt: '1970-01-01T00:00:00.000Z',
   };
 }
 
-/**
- * Build the visible gallery from locally-derived artifacts plus the
- * server-authoritative Cloud overlay. The shared canonical merge owns
- * identity/tombstone semantics; this adapter preserves Mobile presentation
- * fields for unrelated local artifacts and maps only Cloud winners.
- */
 export function mergeMobileArtifactsForGallery(
   local: ReadonlyArray<MobileArtifact>,
   cloud: ReadonlyArray<CloudArtifact>,
@@ -383,8 +293,6 @@ export function mergeMobileArtifactsForGallery(
   cloudOwnerId?: string | null,
 ): MobileArtifact[] {
   const normalizedOwnerId = normalizedCloudOwnerId(cloudOwnerId);
-  // A pulled Cloud overlay without an owner is legacy/mixed data. Fail closed
-  // rather than showing it to whichever Clerk account happens to sign in.
   const ownedCloud = normalizedOwnerId ? cloud : [];
   const merged = mergeCloudArtifacts(local.map(mobileToCanonicalArtifact), ownedCloud);
   const visibleIds = new Set(merged.map((artifact) => artifact.id));
@@ -422,7 +330,6 @@ export function mergeMobileArtifactsForGallery(
   return [...cloudOnly, ...localSequence];
 }
 
-/** Build the durable Artifacts-panel projection for one generated image turn. */
 export function generatedImageToMobileArtifact(input: {
   messageId: string;
   imagePath: string;
@@ -430,7 +337,6 @@ export function generatedImageToMobileArtifact(input: {
   createdAt: string;
   conversationTitle: string;
   provenance: MobileArtifactProvenance;
-  /** Semantic image accent resolved by the caller's active theme. */
   accentColor: string;
 }): ScopedMobileArtifact {
   const prompt = input.prompt?.trim();
@@ -448,26 +354,6 @@ export function generatedImageToMobileArtifact(input: {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Canonical derivation delegate
-// ---------------------------------------------------------------------------
-
-/**
- * Derive MobileArtifacts from a markdown message by delegating extraction and
- * identity to the shared `deriveArtifacts` service, then mapping each
- * `SharedArtifact` to the mobile presentation type.
- *
- * This is the ONLY call site for artifact extraction. `codeBlocksToMobileArtifacts`
- * and `extractCodeBlocks` have been removed — all derivation is now canonical.
- *
- * - ids: deterministic uuidv5(conversationId:messageId:ordinal) — same as web/desktop.
- * - Gallery policy: include: 'code', minCodeLines: 4 (unchanged from fork).
- * - language: 'text' sentinel (unlabeled blocks) is mapped back to undefined so
- *   the gallery card falls back to the kind label rather than showing "text".
- * - kind: toMobileKind(shared.type) — html/svg/react/mermaid blocks now correctly
- *   map to 'document' instead of the fork's hardcoded 'code'. This is intentional
- *   and matches the future direction (those block types are not code gallery items).
- */
 export function deriveAndMapToMobileArtifacts(
   markdown: string,
   conversationId: string,
@@ -493,8 +379,6 @@ export function deriveAndMapToMobileArtifacts(
       messageId,
       title: s.title,
       kind,
-      // 'text' is the shared service's sentinel for unlabeled blocks; map to
-      // undefined so the gallery card shows the kind label instead of "text".
       language: s.language === 'text' ? undefined : s.language,
       content: s.content,
       ageLabel: formatAgeLabel(s.createdAt),

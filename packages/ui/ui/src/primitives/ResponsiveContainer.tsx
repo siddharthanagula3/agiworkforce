@@ -1,28 +1,10 @@
 'use client';
 
-/**
- * Drift resolution: classified 'identical' — web and desktop copies differed only
- * in the Next.js 'use client' directive and the local cn import path. Ported as-is
- * using the shared package's dependency-free `cn`.
- *
- * The directive is restored. Dropping it is what the drift note recorded as the
- * only difference between the two copies, but it was not a cosmetic one: these
- * components call `React.useState` and `React.useEffect`, and they reach a
- * server graph through `primitives/index.ts` -> the `@agiworkforce/ui` barrel,
- * which server components import (see the `'use client'` note on ../i18n.ts for
- * how one pure-SVG import pulls the whole barrel in).
- *
- * This one is latent rather than fatal, which is why it survived: hooks throw
- * only when a server component RENDERS them, whereas i18n.ts's `createContext`
- * ran at import time and broke the build outright. Same defect, later fuse.
- */
 import * as React from 'react';
 import { cn } from '../cn';
 
 export interface ResponsiveContainerProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Children to render */
   children: React.ReactNode;
-  /** Maximum width of the container */
   maxWidth?:
     | 'xs'
     | 'sm'
@@ -36,15 +18,10 @@ export interface ResponsiveContainerProps extends React.HTMLAttributes<HTMLDivEl
     | '6xl'
     | '7xl'
     | 'full';
-  /** Horizontal padding on mobile */
   mobilePadding?: 'none' | 'sm' | 'md' | 'lg';
-  /** Whether to center the container */
   centered?: boolean;
-  /** Whether content should scroll when overflowing */
   scrollable?: boolean;
-  /** Scroll direction when scrollable is true */
   scrollDirection?: 'vertical' | 'horizontal' | 'both';
-  /** Whether to handle safe areas (for mobile notches) */
   safeArea?: boolean;
 }
 
@@ -70,23 +47,6 @@ const mobilePaddingClasses = {
   lg: 'px-6 sm:px-8',
 };
 
-/**
- * A responsive container component for consistent layouts.
- *
- * Features:
- * - Consistent max-width constraints
- * - Mobile-friendly padding
- * - Safe area handling for notched devices
- * - Scroll handling
- * - Touch-friendly targets
- *
- * Usage:
- * ```tsx
- * <ResponsiveContainer maxWidth="4xl" mobilePadding="md" centered>
- *   <YourContent />
- * </ResponsiveContainer>
- * ```
- */
 function ResponsiveContainer({
   children,
   maxWidth = '4xl',
@@ -124,13 +84,8 @@ function ResponsiveContainer({
 
 ResponsiveContainer.displayName = 'ResponsiveContainer';
 
-/**
- * A responsive grid component for layout.
- */
 export interface ResponsiveGridProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Children to render */
   children: React.ReactNode;
-  /** Number of columns at different breakpoints */
   cols?: {
     default?: number;
     sm?: number;
@@ -138,7 +93,6 @@ export interface ResponsiveGridProps extends React.HTMLAttributes<HTMLDivElement
     lg?: number;
     xl?: number;
   };
-  /** Gap between items */
   gap?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
 }
 
@@ -176,15 +130,9 @@ function ResponsiveGrid({
 
 ResponsiveGrid.displayName = 'ResponsiveGrid';
 
-/**
- * A component for responsive visibility based on breakpoints.
- */
 export interface ResponsiveShowProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Children to render */
   children: React.ReactNode;
-  /** Show above this breakpoint */
   above?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
-  /** Show below this breakpoint */
   below?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
@@ -217,13 +165,8 @@ function ResponsiveShow({ children, above, below, className, ...props }: Respons
 
 ResponsiveShow.displayName = 'ResponsiveShow';
 
-/**
- * A touch-friendly target wrapper that ensures minimum touch target size.
- */
 export interface TouchTargetProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Children to wrap */
   children: React.ReactNode;
-  /** Minimum size (44px is the recommended minimum) */
   minSize?: 'sm' | 'md' | 'lg';
 }
 
@@ -250,9 +193,6 @@ function TouchTarget({ children, minSize = 'md', className, ...props }: TouchTar
 
 TouchTarget.displayName = 'TouchTarget';
 
-/**
- * Hook to detect current breakpoint
- */
 export function useBreakpoint() {
   const [breakpoint, setBreakpoint] = React.useState<'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl'>(
     'xs',
@@ -284,9 +224,6 @@ export function useBreakpoint() {
   return breakpoint;
 }
 
-/**
- * Hook to detect if the device supports touch
- */
 export function useIsTouchDevice() {
   const [isTouch, setIsTouch] = React.useState(false);
 

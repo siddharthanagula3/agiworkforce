@@ -18,24 +18,6 @@ import {
   recordConsentBatch,
 } from '@/lib/server/consent-records';
 
-/**
- * GET  /api/consent — the signed-in user's live consent state, per purpose.
- * POST /api/consent — record one or more consent decisions.
- *
- * This is the withdrawal path as much as the granting path. DPDP s.6(6)
- * requires withdrawing consent to be as easy as giving it, so both directions
- * go through the same route with the same cost: a `granted: false` decision is
- * an ordinary POST, not a support ticket. The consent centre at
- * `/privacy/requests` is the caller.
- *
- * Both a grant and a withdrawal are appended to the ledger — see
- * `lib/server/consent-records.ts` for why nothing here updates in place.
- *
- * Anonymous consent (a visitor with no account) is NOT accepted here. It is
- * collected inline by the intake that needs it — `/api/waitlist/public` — so a
- * consent row can never exist for an address that was never submitted.
- */
-
 const ConsentDecisionSchema = z.object({
   purpose: z.string().refine(isConsentPurpose, 'Unknown consent purpose'),
   granted: z.boolean(),
@@ -60,19 +42,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     noticeVersion: CURRENT_NOTICE_VERSION,
-    // The catalogue travels with the state so the client never hardcodes a
-    // purpose list that could drift from the one the server accepts.
     purposes: CONSENT_PURPOSES,
-    // A purpose absent from this array has never been decided. That is not the
-    // same as a recorded refusal, and the client must not render it as one.
     consents: records,
   });
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfResponse = await requireCsrfToken(request);
-  // `requireCsrfToken` is typed to the web `Response`; every route in this app
-  // narrows it the same way rather than widening its own return type.
   if (csrfResponse) return csrfResponse as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -88,9 +64,6 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid consent payload', parsed.error.flatten());
   }
 
-  // A stale tab must not be able to record consent against a notice revision
-  // the person never saw. 409 tells the client to reload the notice and ask
-  // again rather than silently binding them to newer text.
   if (parsed.data.noticeVersion !== CURRENT_NOTICE_VERSION) {
     return NextResponse.json(
       {

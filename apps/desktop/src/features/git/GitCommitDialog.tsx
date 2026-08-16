@@ -25,15 +25,10 @@ import { ScrollArea } from '@/ui/ScrollArea';
 import { Textarea } from '@/ui/Textarea';
 
 interface GitCommitDialogProps {
-  /** Whether the dialog is open */
   open: boolean;
-  /** Callback when the dialog open state changes */
   onOpenChange: (open: boolean) => void;
-  /** Repository path */
   repoPath: string;
-  /** Callback after successful commit */
   onCommitSuccess?: (commitHash: string) => void;
-  /** Additional CSS classes */
   className?: string;
 }
 
@@ -66,19 +61,16 @@ export function GitCommitDialog({
   const [body, setBody] = useState('');
   const [isCommitting, setIsCommitting] = useState(false);
 
-  // Update repo path when prop changes
   useEffect(() => {
     setRepoPath(repoPath);
   }, [repoPath, setRepoPath]);
 
-  // Refresh status when dialog opens
   useEffect(() => {
     if (open && repoPath) {
       refreshStatus();
     }
   }, [open, repoPath, refreshStatus]);
 
-  // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
       setSubject('');
@@ -91,7 +83,6 @@ export function GitCommitDialog({
       return;
     }
 
-    // Combine subject and body into full message
     const message = body.trim() ? `${subject.trim()}\n\n${body.trim()}` : subject.trim();
 
     setIsCommitting(true);
@@ -109,7 +100,6 @@ export function GitCommitDialog({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Cmd/Ctrl+Enter to commit
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
         if (subject.trim() && !isCommitting && (status?.staged.length ?? 0) > 0) {

@@ -14,11 +14,6 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-/**
- * Usage settings section (source-of-truth IA · DESK-1). Surfaces the real
- * billing-usage dashboard (token budget, plan limits, cost overview) as its own
- * top-level section, per the locked settings spec.
- */
 export function UsageTab() {
   return (
     <Suspense fallback={<Fallback label="Loading usage..." />}>

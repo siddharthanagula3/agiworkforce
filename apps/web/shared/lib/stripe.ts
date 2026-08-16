@@ -1,13 +1,5 @@
-/**
- * Stripe payment integration utilities
- * Handles payment processing, subscriptions, and billing management
- */
 
 import { loadStripe, Stripe, StripeElements, StripeElementsOptions } from '@stripe/stripe-js';
-
-// ========================================
-// Types and Interfaces
-// ========================================
 
 export interface PaymentIntent {
   id: string;
@@ -164,10 +156,6 @@ export interface CheckoutSession {
   expires_at: number;
 }
 
-// ========================================
-// Stripe Configuration
-// ========================================
-
 export interface StripeConfig {
   publishableKey: string;
   appearance?: {
@@ -177,10 +165,6 @@ export interface StripeConfig {
   };
   elements?: StripeElementsOptions;
 }
-
-// ========================================
-// Stripe Service Class
-// ========================================
 
 export class StripeService {
   private static instance: StripeService;
@@ -199,7 +183,6 @@ export class StripeService {
     return StripeService.instance;
   }
 
-  // Initialize Stripe
   async initialize(): Promise<Stripe> {
     if (this.stripe) return this.stripe;
 
@@ -212,12 +195,10 @@ export class StripeService {
     return this.stripe;
   }
 
-  // Get Stripe instance
   getStripe(): Stripe | null {
     return this.stripe;
   }
 
-  // Create Elements instance
   createElements(options?: StripeElementsOptions): StripeElements | null {
     if (!this.stripe) {
       throw new Error('Stripe not initialized');
@@ -231,15 +212,13 @@ export class StripeService {
     return this.elements;
   }
 
-  // Get Elements instance
   getElements(): StripeElements | null {
     return this.elements;
   }
 
-  // Payment Methods
   async createPaymentMethod(params: {
     type: 'card';
-    card: unknown; // Stripe card element
+    card: unknown;
     billing_details?: {
       name?: string;
       email?: string;
@@ -264,7 +243,6 @@ export class StripeService {
     return paymentMethod;
   }
 
-  // Payment Intent
   async confirmPayment(params: {
     elements: StripeElements;
     confirmParams: {
@@ -289,7 +267,6 @@ export class StripeService {
     return paymentIntent;
   }
 
-  // Setup Intent (for saving payment methods)
   async confirmSetup(params: {
     elements: StripeElements;
     confirmParams: {
@@ -308,7 +285,6 @@ export class StripeService {
     return setupIntent;
   }
 
-  // Redirect to Checkout
   async redirectToCheckout(sessionId: string) {
     if (!this.stripe) throw new Error('Stripe not initialized');
 
@@ -319,16 +295,6 @@ export class StripeService {
     }
   }
 }
-
-// ========================================
-// Default Configuration
-// ========================================
-
-// Note: PaymentAPI class and its dependent hooks (usePayment, useSubscription,
-// usePaymentMethods) were removed. Billing UI was rewired to use /api/portal
-// (see features/billing/services/stripe-payments.ts) and React Query hooks
-// (see features/billing/hooks/use-billing-queries.ts). Nothing imported from
-// this file any longer; PaymentAPI had zero external callers.
 
 export const createStripeConfig = (publishableKey: string): StripeConfig => ({
   publishableKey,

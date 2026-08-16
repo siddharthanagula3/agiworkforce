@@ -1,11 +1,3 @@
-/**
- * BillingSettings — the Billing settings section (source-of-truth IA · DESK-1).
- *
- * A focused view of the user's plan, subscription status, current period, and a
- * owner-aware management action. Stripe subscriptions open the Stripe portal;
- * subscriptions owned by Apple, Google, or an organization are described but
- * never offered a second Stripe purchase path.
- */
 import { useState } from 'react';
 import { CreditCard } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';

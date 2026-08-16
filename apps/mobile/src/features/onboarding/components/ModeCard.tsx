@@ -1,6 +1,3 @@
-/**
- * Selectable onboarding mode card for local setup and sign-in-gated Cloud paths.
- */
 import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native';

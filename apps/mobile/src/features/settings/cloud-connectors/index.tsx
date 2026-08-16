@@ -1,24 +1,3 @@
-/**
- * Cloud Connectors Directory Screen
- *
- * Native RN equivalent of the web ConnectorsSection (settings-modal/types.ts
- * SettingsConnector contract). Renders the same connector catalog the web and
- * desktop surfaces use, with real official brand logos — no initial-tiles.
- *
- * Logo resolution order (mirrors ConnectorLogo.tsx in packages/ui/ui):
- *   1. react-native-svg path from the ICON_PATHS map (simple-icons v16 glyphs)
- *   2. Official brand-asset URL via RN <Image source={{ uri }}> with onError
- *      fallback (mirrors CONNECTOR_LOGO_URLS in ConnectorLogo.tsx)
- *   3. Gradient tile + 2-char initials — last resort only
- *
- * Cloud-only — gated behind FEATURES.connectors. When the flag is false a
- * capability-unavailable placeholder is shown rather than a dead list.
- *
- * GET /api/connectors returns both real connected state and the deployment's
- * available provider ids. Only those rows receive a working Connect action;
- * GitHub opens the server-owned App installation flow, custom remote-MCP rows
- * use the encrypted custom route, and unavailable catalog entries stay disabled.
- */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Image, Pressable, Alert, ActivityIndicator, ScrollView } from 'react-native';
@@ -52,19 +31,8 @@ import {
   type ConnectedConnector,
   type ConnectorDirectory,
 } from '@/services/connectors';
-// The OAuth authorize URL points at the PROVIDER's host, not ours, so it goes
-// through the untrusted-URL in-app browser helper (scheme allowlist + system
-// browser fallback) rather than the first-party `openInAppBrowser`. The service
-// has already rejected anything that is not a credential-free https URL.
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 
-// ---------------------------------------------------------------------------
-// simple-icons SVG paths (v16 confirmed present — mirrors ConnectorLogo.tsx)
-// Only the connectors in CATALOG below are included; tree-shaken at build time
-// since Metro does not import the full simple-icons package.
-// ---------------------------------------------------------------------------
-
-// path / hex pairs extracted from simple-icons v16 for each connector id
 const SI: Record<string, { path: string; hex: string }> = {
   gmail: {
     hex: 'EA4335',
@@ -149,19 +117,6 @@ const SI: Record<string, { path: string; hex: string }> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Official brand-asset URL map (mirrors ConnectorLogo.tsx CONNECTOR_LOGO_URLS)
-// Used for brands absent from simple-icons v16
-//
-// Kept in step by scripts/check-connector-logos.mjs. This is a hand-copy of a
-// hand-copy — packages/ui/ui is deliberately self-contained and mobile cannot
-// import it — and it had already drifted: Outlook, OneDrive and Teams still
-// pointed at hashed /wikipedia/commons/x/xx/ paths that Commons re-hashes on
-// rename. All three returned 404, so those three connectors showed plain-letter
-// tiles on Mobile while Web and Desktop showed the real logos. Use the stable
-// Special:FilePath redirect for Commons assets.
-// ---------------------------------------------------------------------------
-
 const LOGO_URLS: Record<string, string> = {
   slack: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
   outlook:
@@ -173,7 +128,6 @@ const LOGO_URLS: Record<string, string> = {
   salesforce: 'https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg',
   openai: 'https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg',
   linkedin: 'https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png',
-  // Was a hashed Commons path that now 404s; matches packages/ui/ui.
   canva: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
   adobe: 'https://upload.wikimedia.org/wikipedia/commons/8/8d/Adobe_Corporate_Logo.png',
   aws: 'https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg',
@@ -187,21 +141,16 @@ const LOGO_URLS: Record<string, string> = {
   plaid: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
 };
 
-// ---------------------------------------------------------------------------
-// Connector catalog — mirrors connectorData.ts + shared SettingsConnector shape
-// ---------------------------------------------------------------------------
-
 interface ConnectorEntry {
   id: string;
   name: string;
   description: string;
   category: string;
-  iconBg?: string; // gradient fallback (only if no glyph / url)
-  iconText?: string; // 2-char fallback
+  iconBg?: string;
+  iconText?: string;
 }
 
 const CATALOG: ConnectorEntry[] = [
-  // Productivity
   {
     id: 'notion',
     name: 'Notion',
@@ -282,7 +231,6 @@ const CATALOG: ConnectorEntry[] = [
     iconBg: '#F24E1E20',
     iconText: 'Fi',
   },
-  // Communication
   {
     id: 'slack',
     name: 'Slack',
@@ -315,7 +263,6 @@ const CATALOG: ConnectorEntry[] = [
     iconBg: '#6264A720',
     iconText: 'MT',
   },
-  // Productivity cloud
   {
     id: 'gmail',
     name: 'Gmail',
@@ -348,7 +295,6 @@ const CATALOG: ConnectorEntry[] = [
     iconBg: '#0078D420',
     iconText: 'OD',
   },
-  // CRM / Finance
   {
     id: 'hubspot',
     name: 'HubSpot',
@@ -377,10 +323,6 @@ const CATALOG: ConnectorEntry[] = [
 
 const CATEGORIES = Array.from(new Set(CATALOG.map((c) => c.category)));
 
-// ---------------------------------------------------------------------------
-// ConnectorLogo — RN equivalent of packages/ui/ui ConnectorLogo.tsx
-// ---------------------------------------------------------------------------
-
 function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?: string }) {
   const colors = useThemeColors();
   const [urlFailed, setUrlFailed] = useState(false);
@@ -389,10 +331,8 @@ function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?
   const siEntry = SI[normalId];
   const logoUrl = LOGO_URLS[normalId];
 
-  // Tier 1: simple-icons SVG path
   if (siEntry?.path) {
     const hex = siEntry.hex.toUpperCase();
-    // Near-black glyphs render in theme foreground for legibility
     const fill =
       hex === '000000' || hex === '181717' || hex === '181818'
         ? colors.textPrimary
@@ -417,7 +357,6 @@ function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?
     );
   }
 
-  // Tier 2: official brand-asset URL image
   if (logoUrl && !urlFailed) {
     return (
       <View
@@ -444,7 +383,6 @@ function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?
     );
   }
 
-  // Tier 3: gradient tile + 2-char initials
   const bg = iconBg ?? colors.neutralSurface;
   const initials = name.slice(0, 2).toUpperCase();
   return (
@@ -463,13 +401,6 @@ function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?
   );
 }
 
-// ---------------------------------------------------------------------------
-// ConnectorCard
-// ---------------------------------------------------------------------------
-
-// Row geometry as named constants, shared with the divider inset below the
-// list so the two can never drift apart. ROW_ICON_SIZE mirrors ConnectorLogo's
-// hardcoded 40x40 tile (see ConnectorLogo above).
 const ROW_PADDING_X = 16;
 const ROW_PADDING_Y = 13;
 const ROW_ICON_SIZE = 40;
@@ -488,11 +419,6 @@ function ConnectorCard({
   entry: ConnectorEntry;
   connected: boolean;
   connectedAt?: string;
-  /**
-   * Server-reported (`/api/connectors`): this OAuth grant's token expired and
-   * cannot be refreshed. The row is still a connection, but its tools will not
-   * work until the user reauthorizes, so it must not read as healthy.
-   */
   needsReauthorization?: boolean;
   available: boolean;
   busy: boolean;
@@ -516,17 +442,6 @@ function ConnectorCard({
       : 'Connected';
 
   return (
-    // No `style` prop on Pressable itself — deliberately. In this stack
-    // (nativewind 4.2.3 + react-native-css-interop 0.2.3), a Pressable's
-    // function-style `style={({pressed}) => ({...})}` callback silently
-    // drops properties (confirmed for flexDirection/alignItems; paddingX/Y
-    // are suspected the same way — the icon rendering flush against the
-    // card's clipped rounded edge is consistent with paddingHorizontal being
-    // dropped there too). Using Pressable's `children`-as-function form
-    // instead routes pressed state through a completely different code path:
-    // every real style below is a plain object literal on a plain View,
-    // which has been verified to render correctly throughout this file.
-    // See known-flaws MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01.
     <Pressable
       onPress={onPress}
       disabled={!actionable}
@@ -587,13 +502,8 @@ function ConnectorCard({
                 <ChevronRight size={17} color={colors.textMuted} />
               </View>
             ) : available || busy ? (
-              // Filled, high-contrast pill — same inverse treatment as the
-              // active filter chip below, so the one actionable control on
-              // the screen is unambiguous at a glance.
               <View
                 style={{
-                  // minHeight so the pill grows with Dynamic Type rather than
-                  // clipping its label vertically.
                   minHeight: 30,
                   paddingVertical: 4,
                   paddingHorizontal: 16,
@@ -618,10 +528,6 @@ function ConnectorCard({
     </Pressable>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Waitlist placeholder — shown when FEATURES.connectors is false
-// ---------------------------------------------------------------------------
 
 function WaitlistPlaceholder() {
   const colors = useThemeColors();
@@ -652,19 +558,9 @@ function WaitlistPlaceholder() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
-
 export default function CloudConnectorsScreen({
   backHref = '/(app)/(tabs)/settings',
 }: {
-  /**
-   * Fallback destination when there's no navigation stack to pop (e.g. a
-   * deep link straight into this screen). Reached from two routes:
-   * settings/cloud-connectors (Settings entry) and (app)/connectors (chat
-   * "Add to Chat" entry) — each passes its own sensible fallback.
-   */
   backHref?: string;
 } = {}) {
   const colors = useThemeColors();
@@ -688,17 +584,10 @@ export default function CloudConnectorsScreen({
   const [loading, setLoading] = useState(false);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Directory filter chips (All | Connected | <category>) + search — mirrors the
-  // reference connectors directory layout.
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [search, setSearch] = useState('');
   const [addCustomVisible, setAddCustomVisible] = useState(false);
 
-  /**
-   * Refresh the directory. Returns the response so a caller that just came back
-   * from an authorization browser can check the REAL post-flow state instead of
-   * reading `directory` out of a stale closure.
-   */
   const load = useCallback(async (): Promise<ConnectorDirectory | null> => {
     const account = captureCloudAccountEpoch();
     if (!account) return null;
@@ -728,10 +617,6 @@ export default function CloudConnectorsScreen({
     setAddCustomVisible(false);
   }, [clerkUserId]);
 
-  // Empty grants are not an authoritative denial until /api/me has completed
-  // at least once for this owner. A cold-start deep link can render before
-  // RootLayout's refresh resolves; keep a loading state and initiate one
-  // owner-bound refresh instead of flashing "not available" to paid users.
   useEffect(() => {
     if (!FEATURES.connectors || !isClerkSignedIn || !clerkUserId || !isCloudModeActive) {
       capabilityRefreshOwnerRef.current = null;
@@ -754,9 +639,6 @@ export default function CloudConnectorsScreen({
     refreshTier,
   ]);
 
-  // guardedFetch blocks cloud requests while chat is in Local mode — skip the
-  // doomed request and show the switch-to-cloud banner instead (same pattern
-  // as the Usage screen).
   useEffect(() => {
     if (
       FEATURES.connectors &&
@@ -803,9 +685,6 @@ export default function CloudConnectorsScreen({
       } else if (!availableIds.has(entry.id)) {
         return;
       } else if (entry.id === 'github') {
-        // GitHub uses a GitHub-App installation with a Clerk-cookie web flow.
-        // Open that vetted flow in a browser (rather than reimplement OAuth
-        // state/CSRF on the client), then refresh so the new installation shows.
         void (async () => {
           try {
             await WebBrowser.openBrowserAsync(getGitHubInstallWebUrl());
@@ -823,10 +702,6 @@ export default function CloudConnectorsScreen({
               await load();
               return;
             }
-            // OAuth provider: the server opened a single-use pending
-            // authorization and handed back the provider's authorize URL. The
-            // grant is written by the hosted callback, so nothing is connected
-            // until the server says so — this branch never reports success.
             const opened = await openUntrustedUrlInAppBrowser(result.authorizeUrl);
             if (!isConnectorActionCurrent(account)) return;
             if (!opened) {
@@ -836,9 +711,6 @@ export default function CloudConnectorsScreen({
               );
               return;
             }
-            // openUntrustedUrlInAppBrowser resolves when the sheet is dismissed,
-            // and a dismissal says nothing about whether consent was granted.
-            // The refreshed directory is the only trustworthy signal.
             const refreshed = await load();
             if (!isConnectorActionCurrent(account) || refreshed === null) return;
             const granted = refreshed.connectors.some((c) => c.connectorId === entry.id);
@@ -864,7 +736,6 @@ export default function CloudConnectorsScreen({
     [availableIds, connectionFor, isConnectorActionCurrent, load, router],
   );
 
-  // Chip options: All + Connected + every catalog category.
   const filters = useMemo(
     () => [
       'All',
@@ -875,7 +746,6 @@ export default function CloudConnectorsScreen({
     [connections],
   );
 
-  // Apply the active chip + search query to the catalog.
   const visibleEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
     const customEntries: ConnectorEntry[] =
@@ -906,9 +776,6 @@ export default function CloudConnectorsScreen({
     router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
   }, [router]);
 
-  // The directory (and therefore its search field) is visible only once the
-  // account, mode and capability gates have all resolved. Named once so the
-  // bottom-anchored field and the list it filters cannot drift apart.
   const directoryVisible =
     FEATURES.connectors &&
     isCloudModeActive &&
@@ -925,11 +792,6 @@ export default function CloudConnectorsScreen({
   }
 
   return (
-    // The shell owns the ScrollView, so the search field cannot be a sibling of
-    // the list the way it is on Chats/Library/Projects. Wrapping the shell lets
-    // the field be pinned over it instead of scrolling away on a long
-    // directory; `pointerEvents="box-none"` keeps the rest of the screen
-    // tappable through the wrapper.
     <View style={{ flex: 1 }}>
       <SettingsScreenShell title="Connectors" backHref={backHref}>
         <SettingsInfo

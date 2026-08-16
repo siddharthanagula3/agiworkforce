@@ -7,7 +7,6 @@ import { Tooltip } from './ui/Tooltip';
 
 export interface ConversationItemProps {
   conversation: Conversation;
-  /** When true the sidebar is collapsed — show only the icon / initial. */
   collapsed?: boolean;
 }
 

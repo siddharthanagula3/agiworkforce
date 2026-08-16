@@ -1,16 +1,3 @@
-/**
- * L1 Security — Provider Routing / No Silent Cloud Routing.
- *
- * This surface has no LLM provider router (desktop is the brain). The
- * equivalent trust-boundary guarantee is: extension source must not perform
- * direct cloud-IPC that bypasses the cloud-unlock gate, and persisted tasks
- * must re-validate their origin against the live allowlist before firing
- * (a removed origin cannot keep driving privileged actions).
- *
- * We assert the real fire-time gate (shouldExecuteScheduledTask) and run the
- * same cloud-IPC source scan the check:no-cloud-ipc guard uses, so the
- * v1 LOCAL-ONLY contract is enforced by a test in this priority level too.
- */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -30,7 +17,7 @@ const CLOUD_IPC_PATTERNS: Array<{ re: RegExp; label: string }> = [
   },
 ];
 const UNLOCK_GUARD_RE = /checkCloudUnlocked|agi_cloud_unlocked|cloudUnlocked/;
-const EXCLUDED_DIR = join(SRC_DIR, 'features', 'cloud-bridge'); // the gate itself
+const EXCLUDED_DIR = join(SRC_DIR, 'features', 'cloud-bridge');
 
 function collectTsFiles(dir: string): string[] {
   const out: string[] = [];
@@ -69,8 +56,8 @@ describe('L1 Security - No silent cloud routing (source scan)', () => {
     for (const file of collectTsFiles(SRC_DIR)) {
       const lines = readFileSync(file, 'utf8').split('\n');
       lines.forEach((line, idx) => {
-        if (/^\s*(\/\/|\*|\/\*)/.test(line)) return; // skip comments
-        if (UNLOCK_GUARD_RE.test(line)) return; // behind the unlock gate
+        if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+        if (UNLOCK_GUARD_RE.test(line)) return;
         for (const { re, label } of CLOUD_IPC_PATTERNS) {
           re.lastIndex = 0;
           if (re.test(line)) offenders.push(`${file}:${idx + 1} — ${label}`);

@@ -423,9 +423,6 @@ export const useVoiceModeStore = create<VoiceModeState>()(
             }
             contextMessages.push({ role: 'user', content: userText });
             const llmResponse = await invoke<VoiceLLMResponse>('llm_send_message', {
-              // The command takes a single `request` object; passing the fields
-              // flat (and as camelCase) made every voice LLM call fail to
-              // deserialize. Inner fields are snake_case (no serde rename_all).
               request: {
                 messages: contextMessages,
                 model: fallbackModel,
@@ -970,17 +967,6 @@ export const useVoiceModeStore = create<VoiceModeState>()(
   ),
 );
 
-// -- VoiceInput Store --
-//
-// CANONICAL voice-dictation store, persisted under 'agiworkforce-voice-input'.
-// Live consumers: `features/voice/VoiceInputOverlay.tsx` (listening/
-// transcribing/preview feedback UI), `features/settings/VoiceSettings.tsx`
-// (hotkey/provider/language settings), the global dictation hotkey
-// (`hooks/useVoiceHotkey.ts`), and the Quick Query voice request
-// (`App.tsx` `handleVoiceInputRequest`). This is now the only Desktop
-// `useVoiceInputStore`; the disconnected duplicate was removed under
-// DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01.
-
 type VoiceInputMode = 'idle' | 'listening' | 'transcribing' | 'processing' | 'preview';
 export type PostProcessingMode = 'ai' | 'basic' | 'none';
 export { detectVoiceCommand };
@@ -993,12 +979,6 @@ interface VoiceTranscriptResult {
   isCommand: boolean;
 }
 
-// The Rust DictationCoordinator is the single lifecycle owner for every
-// dictation path (docs/plans/desktop-system-dictation.md). The in-app webview
-// path claims a session before capturing and reports transitions, so it can
-// never run concurrently with another dictation pipeline. Coordinator
-// transport failures are logged but non-fatal: an IPC hiccup must not brick
-// in-app dictation, only a genuine "another session is active" refusal does.
 async function advanceDictationSession(sessionId: string | null, phase: string): Promise<void> {
   if (!sessionId) return;
   try {
@@ -1017,21 +997,8 @@ async function endDictationSession(sessionId: string | null, outcome: string): P
   }
 }
 
-/**
- * The explicit dictation transcription modes (mirrors the fail-closed parser
- * in `src-tauri/features/speech/dictation/transcription.rs`): Local on-device
- * Whisper, BYOK OpenAI Whisper (the user's key), or AGI managed cloud. There
- * is deliberately no Deepgram option here — Deepgram is streaming-only (voice
- * mode) and recorded dictation sent to it was historically rerouted to
- * managed cloud silently; the backend now refuses it instead.
- */
 export type DictationProvider = 'local_whisper' | 'openai_whisper' | 'managed_cloud';
 
-/**
- * Normalize a persisted provider value. Legacy `deepgram` selections were in
- * fact served by managed cloud, so they migrate to that honest label; any
- * other unknown value falls back to the offline default.
- */
 export function normalizeDictationProvider(value: unknown): DictationProvider {
   if (value === 'local_whisper' || value === 'openai_whisper' || value === 'managed_cloud') {
     return value;
@@ -1040,14 +1007,8 @@ export function normalizeDictationProvider(value: unknown): DictationProvider {
   return 'local_whisper';
 }
 
-/** Hard cap for one in-app dictation recording (bounded buffering). */
 const MAX_DICTATION_RECORDING_BYTES = 50 * 1024 * 1024;
 
-/**
- * Dictation hotkey options. The single source of truth for BOTH the settings
- * picker and any UI that displays the hotkey — `hooks/useVoiceHotkey.ts`
- * listens for exactly these combos and nothing else.
- */
 export type VoiceInputHotkey = 'option' | 'ctrl+space' | 'ctrl+shift+v' | 'caps_lock';
 
 interface VoiceInputState {
@@ -1058,9 +1019,7 @@ interface VoiceInputState {
   voiceError: string | null;
   hotkey: VoiceInputHotkey;
   voiceProvider: DictationProvider;
-  /** Preferred microphone (browser deviceId); null = system default. */
   inputDeviceId: string | null;
-  /** Human-readable label of the preferred microphone, for the settings UI. */
   inputDeviceLabel: string | null;
   voiceLanguage: string;
   postProcessingMode: PostProcessingMode;
@@ -1068,7 +1027,6 @@ interface VoiceInputState {
   _recorder: MediaRecorder | null;
   _audioChunks: Blob[];
   _startAborted: boolean;
-  /** Session ID issued by the Rust dictation coordinator for this capture. */
   _dictationSessionId: string | null;
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
@@ -1104,8 +1062,6 @@ export const useVoiceInputStore = create<VoiceInputState>()(
         _dictationSessionId: null,
 
         startListening: async () => {
-          // Claim the single dictation pipeline before touching the
-          // microphone; the coordinator refuses a second concurrent session.
           let dictationSessionId: string | null = null;
           try {
             dictationSessionId = await invoke<string>('dictation_session_begin', {
@@ -1132,9 +1088,6 @@ export const useVoiceInputStore = create<VoiceInputState>()(
             _dictationSessionId: dictationSessionId,
           });
           try {
-            // Preferred microphone via `ideal`: if the saved device was
-            // unplugged since selection, the browser falls back to the
-            // system default instead of failing (device-change recovery).
             const { inputDeviceId } = get();
             const stream = await navigator.mediaDevices.getUserMedia({
               audio: inputDeviceId ? { deviceId: { ideal: inputDeviceId } } : true,
@@ -1157,15 +1110,10 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               if (e.data.size === 0) return;
               chunks.push(e.data);
               recordedBytes += e.data.size;
-              // Bounded buffering: auto-stop (and transcribe what was
-              // captured) instead of growing without limit.
               if (recordedBytes > MAX_DICTATION_RECORDING_BYTES && get()._recorder === recorder) {
                 void get().stopListening();
               }
             };
-            // Device removal mid-capture ends the audio track; recover the
-            // transcript by stopping cleanly with the captured audio instead
-            // of hanging in the listening state.
             for (const track of stream.getAudioTracks()) {
               track.addEventListener('ended', () => {
                 if (get()._recorder === recorder && get().voiceMode === 'listening') {
@@ -1253,10 +1201,6 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               _startAborted: false,
               _dictationSessionId: null,
             });
-            // The in-app pipeline's work ends at the editable preview; the
-            // user inserts into the composer manually (confirmTranscript), so
-            // the coordinator's injecting phase applies only to system-level
-            // injection (plan phase 4+).
             await endDictationSession(_dictationSessionId, 'completed');
           } catch (e) {
             set({
@@ -1296,8 +1240,6 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               ? 'You are a voice command interpreter. Output ONLY the cleaned command instruction. No explanation.'
               : 'You are a voice transcription editor. Clean up dictation: remove fillers, fix run-ons, add punctuation. Output ONLY cleaned text.';
             const response = await invoke<VoiceLLMResponsePayload>('llm_send_message', {
-              // Wrap in the `request` object the command expects (a flat
-              // payload never deserialized — see the send-message call above).
               request: {
                 messages: [
                   { role: 'system', content: systemContent },
@@ -1343,9 +1285,6 @@ export const useVoiceInputStore = create<VoiceInputState>()(
           const state = (persisted ?? {}) as Partial<VoiceInputState>;
           return {
             ...state,
-            // v0 -> v1: legacy 'deepgram' selections were actually served by
-            // managed cloud; relabel honestly. Unknown values fail safe to
-            // the offline default.
             voiceProvider: normalizeDictationProvider(state.voiceProvider),
           };
         },

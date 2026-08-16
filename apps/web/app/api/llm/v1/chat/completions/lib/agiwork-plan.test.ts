@@ -96,10 +96,6 @@ describe('agiWorkPlanEvent (additive x_agiwork_plan wire)', () => {
 });
 
 describe('reserved progress-id wire contract', () => {
-  // TaskDetailPanel (packages/ui/unified-chat) hardcodes these SAME literals to
-  // lift the goal + plan out of the progress list. They are the cross-package
-  // wire contract; changing either side without the other silently breaks the
-  // /tasks Goal + Plan sections. Pin them here so a rename cannot pass unnoticed.
   it('keeps the goal + plan progress ids stable', () => {
     expect(AGIWORK_GOAL_PROGRESS_ID).toBe('agiwork:goal');
     expect(AGIWORK_PLAN_PROGRESS_ID_PREFIX).toBe('agiwork:plan:');

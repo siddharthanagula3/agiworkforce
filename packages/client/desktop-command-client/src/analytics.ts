@@ -1,10 +1,5 @@
-/**
- * Analytics & Metrics API — typed wrappers for analytics_*, metrics_*, and feature_flag_* commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface TelemetryEvent {
   name: string;
@@ -140,8 +135,6 @@ export interface ExportOptions {
   endDate?: number;
 }
 
-// ---- Analytics ----
-
 export async function analyticsTrackEvent(event: TelemetryEvent): Promise<void> {
   return command<void>('analytics_track_event', { event });
 }
@@ -233,8 +226,6 @@ export async function acknowledgeMilestone(milestoneId: string): Promise<void> {
   return command<void>('acknowledge_milestone', { milestoneId });
 }
 
-// ---- System/App Metrics ----
-
 export async function metricsGetSystem(): Promise<SystemMetrics> {
   return command<SystemMetrics>('metrics_get_system');
 }
@@ -253,8 +244,6 @@ export async function metricsSetMcpServers(count: number): Promise<void> {
 export async function metricsSetCacheHitRate(rate: number): Promise<void> {
   return command<void>('metrics_set_cache_hit_rate', { rate });
 }
-
-// ---- ROI / Comparison Metrics ----
 
 export async function getRealtimeStats(): Promise<RealtimeStats> {
   return command<RealtimeStats>('get_realtime_stats');

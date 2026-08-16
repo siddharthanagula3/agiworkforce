@@ -58,15 +58,6 @@ function renderFrame(props: Partial<React.ComponentProps<typeof ArtifactSandboxF
   );
 }
 
-/**
- * Replace the mounted iframe's `contentWindow` with a spy.
- *
- * jsdom cannot navigate to a cross-origin URL, so the real `contentWindow` is
- * an `about:blank` window whose `postMessage` would deliver to the wrong
- * document. Redefining the property lets us assert the exact `(payload,
- * targetOrigin)` pair the component sends, which is the part that must not
- * regress.
- */
 function stubContentWindow(frame: HTMLIFrameElement) {
   const postMessage = vi.fn();
   const contentWindow = { postMessage } as unknown as Window;
@@ -97,9 +88,6 @@ describe('ArtifactSandboxFrame without a sandbox origin', () => {
   });
 
   it('never grants the fallback allow-same-origin', () => {
-    // allow-scripts + allow-same-origin on a same-origin document defeats the
-    // sandbox by spec. The fallback must stay incapable of that regardless of
-    // what a caller passes for the cross-origin frame.
     renderFrame({ fallbackSandbox: 'allow-scripts' });
     expect(screen.getByTestId('frame').getAttribute('sandbox')).toBe('allow-scripts');
   });
@@ -119,8 +107,6 @@ describe('ArtifactSandboxFrame with a sandbox origin', () => {
 
     expect(frame.getAttribute('src')).toBe(`${SANDBOX_ORIGIN}/`);
     expect(frame.getAttribute('srcdoc')).toBeNull();
-    // Keeping the renderer's own origin is what lets us authenticate its
-    // messages; the two documents stay cross-origin either way.
     expect(frame.getAttribute('sandbox')).toContain('allow-same-origin');
     expect(frame.getAttribute('data-artifact-sandbox-origin')).toBe(SANDBOX_ORIGIN);
   });
@@ -219,7 +205,6 @@ describe('ArtifactSandboxFrame degradation', () => {
     const frame = screen.getByTestId('frame') as HTMLIFrameElement;
     expect(frame.getAttribute('srcdoc')).toBe(FALLBACK_SRCDOC);
     expect(frame.getAttribute('src')).toBeNull();
-    // The host needs this to put back the same-document warning it suppressed.
     expect(onFallback).toHaveBeenCalledTimes(1);
   });
 

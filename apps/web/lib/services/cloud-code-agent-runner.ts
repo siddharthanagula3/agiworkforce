@@ -4,34 +4,16 @@ import type { E2BExecutor } from '@/lib/e2b/types';
 import { routeExecutionTool } from '@/lib/e2b/execution-tools';
 import type { CloudCodeToolOutcome, CloudCodeToolRunner } from './cloud-code-agent-loop';
 
-/**
- * Binds the Cloud Code agent loop to a real E2B session.
- *
- * The loop is deliberately sandbox-ignorant — it takes a `CloudCodeToolRunner`
- * so it can be unit-tested without E2B. This module is the only place the two
- * meet, and it reuses the session's existing executor (built from
- * `managedCloudCodeSessionScope`) rather than provisioning a second sandbox:
- * an agent that read a different filesystem than the terminal transcript shows
- * would be actively misleading.
- *
- * `write_file`, `create_folder` and `execute_code` are delegated to
- * `routeExecutionTool`, keeping `lib/e2b/execution-tools.ts` the single owner
- * of the sandbox tool contract.
- */
-
 const MAX_READ_BYTES = 200_000;
 
 function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 }
 
-/** Reject traversal and absolute paths before they reach the sandbox. */
 function normalizeWorkspacePath(raw: string): string | null {
   const path = raw.trim();
   if (!path || path.includes('\0')) return null;
   if (path.startsWith('/') || path.startsWith('~')) return null;
-  // Reject any `..` segment rather than trying to resolve it: the workspace
-  // root is the sandbox's, not ours, so we cannot verify a resolved path here.
   if (path.split('/').some((segment) => segment === '..')) return null;
   return path;
 }
@@ -85,8 +67,6 @@ export function createCloudCodeToolRunner(
         return { output: 'This sandbox cannot list files.', isError: true };
       }
       try {
-        // `-A` includes dotfiles (config the agent usually needs) but not
-        // `.`/`..`. Bounded so a node_modules tree cannot flood the context.
         const result = await executor.runCommand({
           command: `ls -A1 ${JSON.stringify(relative)} | head -500`,
           cwd: workspacePath,
@@ -103,13 +83,6 @@ export function createCloudCodeToolRunner(
     },
 
     async runCommand(command: string, timeoutMs: number): Promise<CloudCodeToolOutcome> {
-      // NOTE: no risk check here on purpose. `classifyCommandRisk` is the single
-      // owner of that decision and the loop applies it before calling this. A
-      // second check here would invite the two to disagree.
-      //
-      // `timeoutMs` likewise comes from the loop: it is the per-command cap
-      // already clamped to the turn's remaining budget. Substituting a constant
-      // here would let a command outlive the turn that started it.
       if (!executor.runCommand) {
         return { output: 'This sandbox cannot run commands.', isError: true };
       }

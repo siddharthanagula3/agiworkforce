@@ -1,23 +1,6 @@
-/**
- * Pending-edit rollback coordination (data-loss-safe message editing).
- *
- * Editing a user message conceptually rewinds the conversation to that point and
- * lets the user resubmit a revised version. The destructive part — deleting the
- * edited message and every message after it — MUST NOT happen when the user
- * merely clicks "Edit". If it does and the user then abandons the edit (navigates
- * away, reloads, clears the composer), the messages are permanently gone.
- *
- * These two pure helpers split the decision from the side effect:
- *   - `planEditRollback` computes the range to delete and stashes it as a pending
- *     intent (the composer is prefilled separately). Nothing is deleted yet.
- *   - `consumePendingEdit` is called on the next send; only then does the caller
- *     perform the deletion, and only if the send targets the same conversation
- *     the edit began in.
- */
 
 export interface PendingEditRollback {
   conversationId: string;
-  /** Edited user message id + every message id after it, in order. */
   rollbackIds: string[];
 }
 
@@ -26,13 +9,6 @@ interface MinimalMessage {
   role: string;
 }
 
-/**
- * Plan the rollback for an edit of `messageId` within `conversationId`.
- *
- * Returns the pending rollback (edited message + all subsequent messages) or
- * `null` if the target isn't an editable user message. No side effects: the
- * caller stashes the result and defers deletion until resubmission.
- */
 export function planEditRollback(
   messages: readonly MinimalMessage[],
   messageId: string,
@@ -57,14 +33,6 @@ export function planEditRollback(
  */
 export { planRegenerateRollback } from '@agiworkforce/unified-chat';
 
-/**
- * Resolve a stashed rollback at send time.
- *
- * Returns the ids to delete only when a pending edit exists AND the outgoing
- * message targets the conversation the edit began in. Otherwise returns `null`
- * (a normal, non-destructive send). Guarding on the conversation id prevents an
- * abandoned edit in conversation A from truncating conversation B.
- */
 export function consumePendingEdit(
   pending: PendingEditRollback | null,
   sendConversationId: string,

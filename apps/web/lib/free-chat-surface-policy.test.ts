@@ -65,7 +65,6 @@ describe('managed cloud chat surface policy', () => {
     );
   });
 
-  // WEB-AUTH-SURFACE-CLAIM-DISCARDED-01
   describe('credential-proved developer class outranks the caller-declared header', () => {
     it.each(['desktop', 'web', 'mobile'] as const)(
       'refuses to let a developer token escape into %s',
@@ -73,7 +72,6 @@ describe('managed cloud chat surface policy', () => {
         const surface = resolveCloudChatSurface(request({ 'x-agi-surface': claimed }), 'developer');
 
         expect(getCloudChatSurfaceCapability(surface)).toBe('developer_surfaces');
-        // The whole point: Free/Basic must NOT be admitted.
         expect(canUseManagedCloudChatSurface('free', surface)).toBe(false);
         expect(canUseManagedCloudChatSurface('basic', surface)).toBe(false);
         expect(canUseManagedCloudChatSurface('pro', surface)).toBe(true);

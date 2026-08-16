@@ -1,18 +1,9 @@
-/**
- * api.ts — HTTP client for the AGI Workforce LLM API
- *
- * Handles:
- * - Auth token storage via VS Code SecretStorage (never plaintext)
- * - OpenAI-compatible /chat/completions endpoint with SSE streaming
- * - Proper error classification
- */
 
 import * as vscode from 'vscode';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
 import * as https from 'https';
 import { URL } from 'url';
-// AUDIT-FIX: vscode-reorg
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getTokenCounter } from '../data/tokenCounter';
@@ -22,15 +13,6 @@ import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
 import { Config } from '../platform/config';
 import { getExtensionUserAgent } from '../platform/version';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-/**
- * Wire-format message sent to the AGI Workforce LLM API endpoint.
- * Follows the OpenAI chat completions shape (role + content).
- *
- * This is NOT the canonical `ChatMessage` from `@agiworkforce/types`, which
- * represents a persisted UI message with id, conversationId, timestamps, etc.
- */
 export interface LlmChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -70,13 +52,6 @@ export class AgiWorkforceApiError extends Error {
   }
 }
 
-/**
- * Thrown when the API returns HTTP 429 with a structured paywall payload:
- * `{ kind: 'paywall', feature, requiredTier, reason }`.
- *
- * This is distinct from a generic rate-limit 429 — it indicates the user has
- * consumed 150% of their tier cap and must upgrade to continue.
- */
 export class AgiWorkforcePaywallError extends Error {
   public readonly kind = 'paywall' as const;
   public readonly recoveryAction: 'upgrade' | 'manage_billing';
@@ -93,8 +68,6 @@ export class AgiWorkforcePaywallError extends Error {
   }
 }
 
-// ─── Retry helper ─────────────────────────────────────────────────────────────
-
 async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
   try {
     return await fn();
@@ -110,46 +83,24 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): 
   }
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const SECRET_KEY = 'agiWorkforce.apiKey';
-/** Revocable AGI developer token obtained through browser-approved device sign-in. */
 const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
 const ACCOUNT_TOKEN_EXPIRED_KEY = 'agiWorkforce.accountTokenExpired';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
 const DEFAULT_GATEWAY_ORIGIN = 'https://api.agiworkforce.com';
 
-// ─── Secret storage ───────────────────────────────────────────────────────────
-
-/**
- * Retrieve the stored API key from VS Code SecretStorage.
- * Returns undefined if no key has been stored.
- */
 export async function getApiKey(secrets: vscode.SecretStorage): Promise<string | undefined> {
   return secrets.get(SECRET_KEY);
 }
 
-/**
- * Persist an API key into VS Code SecretStorage.
- * The key is encrypted at rest by VS Code / the OS keychain.
- */
 export async function setApiKey(secrets: vscode.SecretStorage, apiKey: string): Promise<void> {
   await secrets.store(SECRET_KEY, apiKey);
 }
 
-/**
- * Remove the stored API key.
- */
 export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> {
   await secrets.delete(SECRET_KEY);
 }
-
-// ─── Account session token (AGI Cloud sign-in) ────────────────────────────────
-//
-// The optional cloud path authenticates with a first-party developer token
-// obtained through the device sign-in flow (features/account-auth/deviceAuth.ts),
-// stored in SecretStorage and sent as the Bearer for every cloud call.
 
 export async function getAccountToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
   const state = await getAccountAuthState(secrets);
@@ -177,12 +128,6 @@ export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
 }
 
-/**
- * Invalidate one observed account credential without racing a newer sign-in.
- * The marker keeps the UI in an actionable "session expired" state until the
- * user signs in again or explicitly signs out; deleting the token alone made
- * the next refresh incorrectly render an ordinary signed-out account.
- */
 async function invalidateAccountToken(
   secrets: vscode.SecretStorage,
   observedToken: string,
@@ -206,8 +151,6 @@ export async function getAccountAuthState(
 
   const rawExpiresAt = await secrets.get(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   if (rawExpiresAt === undefined || rawExpiresAt === '') {
-    // Backward compatibility for account tokens stored by older extension
-    // versions. The server remains authoritative; a 401 will clear it.
     return { status: 'signed-in' };
   }
   const expiresAt = Number(rawExpiresAt);
@@ -239,32 +182,12 @@ async function getCloudCredential(secrets: vscode.SecretStorage): Promise<CloudC
   };
 }
 
-// ─── Trusted-config helper (VSCODE-01 fix) ────────────────────────────────────
-//
-// Security: workspace settings are attacker-controlled in any cloned repo.
-// For security-sensitive settings (endpoint URLs, paths) we MUST ignore the
-// workspace layer and read only from the user's global config.
-//
-// VS Code's `inspect()` returns values split by scope:
-//   { defaultValue, globalValue, workspaceValue, workspaceFolderValue }
-// We use globalValue ?? defaultValue, skipping workspace overrides entirely.
-//
-// Belt-and-suspenders: even if isTrusted is true, we still validate URL shape
-// to defend against a compromised global config or social-engineering.
-
-/** Allowlist of hosts valid for the AGI Workforce API endpoint. */
 const ENDPOINT_ALLOWED_HOSTS = new Set([
   'agiworkforce.com',
   'api.agiworkforce.com',
   'staging.agiworkforce.com',
 ]);
 
-/**
- * Validate that a URL is safe to use as an API endpoint.
- * - Must be https: (or http://localhost/127.0.0.1 which is fine for local dev)
- * - Host must be in the allowlist OR be localhost/127.0.0.1
- * Returns the sanitised URL string (trailing slashes stripped) or undefined if invalid.
- */
 export function validateEndpointUrl(raw: string): string | undefined {
   let parsed: URL;
   try {
@@ -288,37 +211,17 @@ export function validateEndpointUrl(raw: string): string | undefined {
   return raw.replace(/\/+$/, '');
 }
 
-/**
- * Read a setting that must never be overridden by workspace settings.
- * Returns the global value (user settings) → fallback to default.
- * Workspace-scoped values are intentionally ignored.
- */
 function getGlobalConfig<T>(section: string, key: string, defaultValue: T): T {
   const config = vscode.workspace.getConfiguration(section);
   const inspected = config.inspect<T>(key);
-  // Use globalValue (user's own settings) only — ignore workspaceValue / workspaceFolderValue
   return inspected?.globalValue ?? inspected?.defaultValue ?? defaultValue;
 }
 
-// ─── Config helpers ───────────────────────────────────────────────────────────
-
-/**
- * Returns the cloud AI API endpoint. Used for all LLM calls (chat completions).
- * Never routes through the desktop bridge — the bridge is for non-AI operations only.
- *
- * SECURITY (VSCODE-01): reads from global config only. Workspace overrides are
- * silently ignored to prevent API-key exfiltration via a malicious .vscode/settings.json.
- * URL is additionally validated against the host allowlist.
- */
 function getCloudApiEndpoint(): string {
   const raw = getGlobalConfig('agiWorkforce', 'apiEndpoint', DEFAULT_ENDPOINT);
   return validateEndpointUrl(raw) ?? DEFAULT_ENDPOINT;
 }
 
-/**
- * Web app origin (e.g. https://agiworkforce.com) derived from the cloud
- * endpoint. Used by account sign-in for the connect page + device poll.
- */
 export function getCloudWebOrigin(): string {
   try {
     return new URL(getCloudApiEndpoint()).origin;
@@ -327,26 +230,16 @@ export function getCloudWebOrigin(): string {
   }
 }
 
-/** Fixed trusted gateway origin used only for account-token revocation. */
 export function getCloudGatewayOrigin(): string {
   return DEFAULT_GATEWAY_ORIGIN;
 }
 
 function getModel(): string {
-  // SECURITY (audit 219): read global-only, like getCloudApiEndpoint, so a
-  // malicious workspace .vscode/settings.json cannot silently override the
-  // model id (and thus routing/cost/behaviour) for every LLM call.
   return normalizeConfiguredModelId(
     getGlobalConfig<string | undefined>('agiWorkforce', 'model', undefined),
   );
 }
 
-/**
- * Build the exact public Web completion contract used by cloud-backed editor
- * utilities. The canonical endpoint owns output budgets and translates the
- * explicit effort/thinking fields per provider; extension-only metadata is not
- * part of that contract.
- */
 export function buildCloudUtilityChatCompletionRequest(
   messages: LlmChatMessage[],
   overrideModel?: string,
@@ -354,16 +247,11 @@ export function buildCloudUtilityChatCompletionRequest(
   return {
     model: overrideModel ?? getModel(),
     messages,
-    // Utility callers currently consume one final string. Streaming remains an
-    // internal transport choice so users are not offered a false "live output"
-    // control that none of these callers render incrementally.
     stream: true,
     thinking_mode: Config.agentThinking(),
     effort: Config.agentEffort(),
   };
 }
-
-// ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
 const PLAN_GATE_CODES = new Set([
   'developer_surface_plan_required',
@@ -375,7 +263,6 @@ const PLAN_GATE_CODES = new Set([
   'subscription_inactive',
 ]);
 
-/** Convert the Web API's bounded error envelopes into actionable client errors. */
 export function parseCloudCompletionError(statusCode: number, body: string): Error {
   let parsed: Record<string, unknown> | undefined;
   try {
@@ -443,11 +330,6 @@ export function parseCloudCompletionError(statusCode: number, body: string): Err
   );
 }
 
-/**
- * Low-level HTTPS POST for SSE streaming.
- * Calls `onChunk` for each parsed SSE data line, then resolves when the
- * stream ends. Rejects on network errors or non-2xx status codes.
- */
 function httpsPostStream(
   urlString: string,
   headers: Record<string, string>,
@@ -486,7 +368,7 @@ function httpsPostStream(
       }
 
       let buffer = '';
-      const MAX_SSE_BUFFER = 1_000_000; // 1 MB guard against malformed streams
+      const MAX_SSE_BUFFER = 1_000_000;
 
       res.on('data', (chunk: Buffer) => {
         buffer += chunk.toString('utf8');
@@ -500,9 +382,7 @@ function httpsPostStream(
           return;
         }
 
-        // SSE lines are separated by '\n\n' for event boundaries
         const lines = buffer.split('\n');
-        // Keep the last incomplete line in the buffer
         buffer = lines.pop() ?? '';
 
         for (const line of lines) {
@@ -538,7 +418,6 @@ function httpsPostStream(
       reject(err);
     });
 
-    // Handle cancellation — dispose the listener when request completes
     const cancelListener = token.onCancellationRequested(() => {
       cancelListener.dispose();
       req.destroy(new Error('Request cancelled'));
@@ -550,17 +429,11 @@ function httpsPostStream(
   });
 }
 
-// ─── Public API client ────────────────────────────────────────────────────────
-
 interface StreamCallbacks {
   onToken: (token: string) => void;
   onDone: () => void;
 }
 
-/**
- * Send a streaming chat completion request to the AGI Workforce API.
- * Calls `callbacks.onToken` for each streamed content token.
- */
 export async function streamChatCompletion(
   secrets: vscode.SecretStorage,
   messages: LlmChatMessage[],
@@ -585,22 +458,6 @@ export async function streamChatCompletion(
 
   const bodyStr = JSON.stringify(requestBody);
 
-  /*
-   * VSCODE-MANAGED-CHAT-IDEMPOTENCY-MISSING-01.
-   *
-   * Managed Cloud requires this header: `parseManagedUsageIdempotencyKey`
-   * (apps/web/lib/services/managed-usage-request-service.ts:76-93) rejects a
-   * missing header with 400 `idempotency_key_required`, so without it EVERY
-   * cloud editor utility — Explain, Fix, Refactor, diagnostics, terminal,
-   * inline completions — failed before reaching a model. The shape it accepts
-   * is 8-128 chars of [A-Za-z0-9._:-]; this matches the Chrome surface's
-   * `agi.chrome.chat.*` convention (freeTrialClient.ts:779).
-   *
-   * Generated ONCE here, deliberately OUTSIDE the `withRetry` closures below.
-   * A key minted per attempt would make each retry a distinct request to the
-   * server and defeat the idempotency it exists to provide — the reserve/settle
-   * path would bill a retried turn twice.
-   */
   const idempotencyKey = `agi.vscode.chat.${randomUUID()}`;
 
   const authHeaders: Record<string, string> = {
@@ -658,9 +515,6 @@ export async function streamChatCompletion(
   }
 }
 
-/**
- * Send a non-streaming chat completion and return the full response text.
- */
 export async function chatCompletion(
   secrets: vscode.SecretStorage,
   messages: LlmChatMessage[],
@@ -696,17 +550,11 @@ export async function chatCompletion(
   });
 }
 
-// ─── Tier info ────────────────────────────────────────────────────────────────
-
 export interface TierInfo {
-  /** Effective tier after subscription-status enforcement. */
   tier: string;
-  /** Recorded plan when it differs from the effective tier. */
   accountPlanTier?: string;
   subscriptionStatus?: string;
-  /** Plan usage this period as a 0-100 percentage (canonical /api/usage). */
   usagePercentage?: number;
-  /** ISO reset timestamp for the current usage window, when returned. */
   resetsAt?: string;
 }
 
@@ -716,13 +564,9 @@ export interface AccountIdentity {
   accountType: 'Personal account' | 'Organization account';
   planName: string;
   tier: string;
-  /** Server-owned subscription state from the canonical /api/me plan. */
   subscriptionStatus?: string;
-  /** ISO period end when the subscription has a bounded current period. */
   currentPeriodEnd?: string;
-  /** True when access remains entitled until currentPeriodEnd, then ends. */
   cancelAtPeriodEnd?: boolean;
-  /** Billing owner used to direct users to the correct management surface. */
   subscriptionSource?: 'none' | 'stripe' | 'apple' | 'google' | 'manual';
 }
 
@@ -732,7 +576,6 @@ function unixSecondsToIso(value: number | null): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
-/** Validate and project the canonical `/api/me` response into editor-safe identity copy. */
 export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | undefined {
   const parsed = MeResponseSchema.safeParse(raw);
   if (!parsed.success) return undefined;
@@ -763,7 +606,6 @@ export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | un
   };
 }
 
-/** Validate and project the canonical `/api/usage` response into editor state. */
 export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
   const parsed = TierInfoSchema.safeParse(raw);
   if (!parsed.success) return undefined;
@@ -785,11 +627,6 @@ export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
   return tierInfo;
 }
 
-/**
- * Resolve the browser-approved AGI Cloud account behind this editor session.
- * This intentionally uses only the device-account token: an API key may fund a
- * utility request, but it is not proof of a signed-in account identity.
- */
 export async function fetchAccountIdentity(
   secrets: vscode.SecretStorage,
 ): Promise<AccountIdentity | undefined> {
@@ -841,12 +678,6 @@ export async function fetchAccountIdentity(
   });
 }
 
-/**
- * Fetch the current user's tier and usage from the canonical percentage-only
- * GET /api/usage (ManagedUsageSummaryResponse). Never exposes exact token or
- * cent counts. Returns undefined if the request fails (e.g. no key, network
- * error) — callers should treat undefined as "unknown tier".
- */
 export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
   const credential = await getCloudCredential(secrets);
   if (credential.kind === 'none') {
@@ -854,7 +685,6 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
   }
 
   const endpoint = getCloudApiEndpoint();
-  // Strip the /api/llm/v1 suffix to get the root origin, then append /api/usage
   const rootOrigin = endpoint.replace(/\/api\/llm\/v1$/, '').replace(/\/api\/llm$/, '');
   const url = `${rootOrigin}/api/usage`;
 
@@ -890,9 +720,6 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
         try {
           const body = Buffer.concat(chunks).toString('utf8');
           const raw = JSON.parse(body);
-          // Runtime-validate the percentage usage response. A malformed upstream
-          // response resolves to undefined rather than silently overwriting
-          // global tier state with garbage.
           const tierInfo = parseTierInfoResponse(raw);
           if (tierInfo === undefined) {
             resolve(undefined);

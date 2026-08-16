@@ -1,9 +1,5 @@
 'use strict';
 
-/**
- * Jest stub for expo-sqlite (native module, not yet installed).
- * Individual tests override this via jest.mock('expo-sqlite', () => ...).
- */
 const mockDb = {
   execAsync: jest.fn().mockResolvedValue(undefined),
   runAsync: jest.fn().mockResolvedValue({ lastInsertRowId: 0, changes: 0 }),

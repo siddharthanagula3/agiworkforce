@@ -5,14 +5,6 @@ import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/src/ui/theme';
 
-/**
- * Small icon button placed in the ChatInput toolbar.
- * When tapped, toggles temporary-chat mode in the settings store.
- * Current behavior prevents memory learning from the chat; it does not make
- * the whole conversation invisible in local history.
- * In active state shows a purple EyeOff icon and a "Temporary" label.
- * Tooltip/hint is provided via accessibilityHint.
- */
 export function TemporaryChatToggle() {
   const { colors } = useTheme();
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);

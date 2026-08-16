@@ -89,8 +89,6 @@ export function DiffViewer({ contextId, className }: DiffViewerProps) {
     const originalLines = diffData.originalContent.split('\n');
     const modifiedLines = diffData.modifiedContent.split('\n');
 
-    // Build frequency maps for accurate diff-stat that handles
-    // reordered and duplicate lines correctly.
     const origCounts = new Map<string, number>();
     for (const line of originalLines) {
       origCounts.set(line, (origCounts.get(line) ?? 0) + 1);

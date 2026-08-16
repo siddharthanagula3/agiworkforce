@@ -1,29 +1,3 @@
-// Live-interaction, real-native-WebDriver verification for the
-// import_ecosystem_mcp_servers sibling of DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01
-// (see docs/agent-context/known-flaws.md).
-//
-// Before the fix: EcosystemSection.handleImport (DotfileSettings.tsx) called
-// `dotfiles.importEcosystemMcpServers()` and showed a success toast with the
-// scanned count, but `import_ecosystem_mcp_servers` (ecosystem.rs) was a pure
-// scan-and-return function -- it never wrote the discovered servers anywhere,
-// so "Imported N MCP server(s)" was true only of the in-memory scan result,
-// never of any durable state, and the live MCP client never learned about
-// them.
-//
-// This spec creates a synthetic "detected tool" config (a fake Zed
-// `settings.json` with a `context_servers` entry pointing at a real,
-// credential-free, runnable MCP stdio server --
-// `@modelcontextprotocol/server-everything`, the same reference server used
-// by mcp-dotfile-config.spec.ts) at a path this dev machine does not already
-// use, drives the real Settings -> Developer -> "Import MCP Servers" button,
-// and asserts via the app's own live Tauri IPC bridge that the imported
-// server is both (a) durably persisted into ~/.agiworkforce/mcp.json and (b)
-// actually connected by the live MCP client with real, discoverable tools --
-// not just present in the toast's scan result.
-//
-// Cleans up the synthetic Zed config directory, the dotfile entry, and the
-// live connection in an `after()` hook so this is safe to run against a real
-// developer machine.
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -39,8 +13,6 @@ const ZED_SETTINGS_PATH = path.join(ZED_CONFIG_DIR, 'settings.json');
 const ZED_CONFIG_DIR_PREEXISTED = fs.existsSync(ZED_CONFIG_DIR);
 const DOTFILE_MCP_JSON = path.join(os.homedir(), '.agiworkforce', 'mcp.json');
 
-// `source_id("Zed")` in ecosystem.rs -> "zed"; `ImportedMcpServer.name` is
-// `format!("{}:{}", source, name)`.
 const IMPORTED_SERVER_NAME = `zed:${UNIQUE_SUFFIX}`;
 
 interface McpServerInfo {
@@ -136,21 +108,18 @@ function writeSyntheticZedConfig() {
 }
 
 async function cleanup() {
-  // Best-effort: disconnect the live server if it's still connected.
   try {
     await invokeTauri('mcp_disconnect_server', { name: IMPORTED_SERVER_NAME });
   } catch (err) {
     console.log('CLEANUP — mcp_disconnect_server (non-fatal):', err);
   }
 
-  // Remove the dotfile entry via the real command (also reloads the client).
   try {
     await invokeTauri('dotfile_remove_mcp_server', { name: IMPORTED_SERVER_NAME });
   } catch (err) {
     console.log('CLEANUP — dotfile_remove_mcp_server (non-fatal):', err);
   }
 
-  // Absolute fallback: scrub directly from disk.
   try {
     if (fs.existsSync(DOTFILE_MCP_JSON)) {
       const raw = JSON.parse(fs.readFileSync(DOTFILE_MCP_JSON, 'utf-8')) as {
@@ -166,16 +135,11 @@ async function cleanup() {
     console.log('CLEANUP — direct dotfile scrub failed:', err);
   }
 
-  // Remove the synthetic Zed config. This directory did not exist on this
-  // machine before this spec ran (asserted in the suite below), so it is
-  // safe to remove entirely rather than trying to restore prior content.
   try {
     if (!ZED_CONFIG_DIR_PREEXISTED && fs.existsSync(ZED_CONFIG_DIR)) {
       fs.rmSync(ZED_CONFIG_DIR, { recursive: true, force: true });
       console.log('CLEANUP — removed synthetic ~/.config/zed directory');
     } else if (ZED_CONFIG_DIR_PREEXISTED && fs.existsSync(ZED_SETTINGS_PATH)) {
-      // Defensive: only reached if the dir pre-existed, which the suite
-      // guards against with a hard assertion before writing anything.
       fs.rmSync(ZED_SETTINGS_PATH, { force: true });
       console.log('CLEANUP — removed synthetic ~/.config/zed/settings.json');
     }
@@ -186,8 +150,6 @@ async function cleanup() {
 
 describe('import_ecosystem_mcp_servers actually persists and connects (sibling of DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01)', () => {
   before(function () {
-    // Refuse to run if this real dev machine already has a Zed config —
-    // this spec must never touch a developer's real Zed settings.
     if (ZED_CONFIG_DIR_PREEXISTED) {
       throw new Error(
         `Refusing to run: ${ZED_CONFIG_DIR} already exists on this machine. ` +
@@ -212,7 +174,6 @@ describe('import_ecosystem_mcp_servers actually persists and connects (sibling o
     await gear.waitForDisplayed({ timeout: 15000 });
     await gear.click();
 
-    // Nav buttons are disabled while Settings loads; wait for interactivity.
     await waitForSettingsReady();
 
     const clickedDeveloper = await clickButtonWithText(
@@ -225,9 +186,6 @@ describe('import_ecosystem_mcp_servers actually persists and connects (sibling o
 
     await browser.saveScreenshot(`${SCREEN_DIR}/00-developer-tab.png`);
 
-    // Direct IPC confirmation that the synthetic Zed config (written before
-    // Settings was ever opened, so the Ecosystem section's on-mount scan
-    // already picked it up) is detected as a real ecosystem tool.
     const detected = await invokeTauri<Array<{ name: string }>>('detect_ecosystem_tools');
     console.log(
       'detect_ecosystem_tools:',
@@ -235,9 +193,6 @@ describe('import_ecosystem_mcp_servers actually persists and connects (sibling o
     );
     expect(detected.some((t) => t.name === 'Zed')).toBe(true);
 
-    // The Ecosystem section (DotfileSettings) is lazy-loaded inside the
-    // Developer tab's Suspense boundary, so a one-shot click can race the
-    // chunk load — retry until the button exists.
     let clickedImport = false;
     await browser.waitUntil(
       async () => {
@@ -261,8 +216,6 @@ describe('import_ecosystem_mcp_servers actually persists and connects (sibling o
     console.log('Import toast appeared:', toastAppeared);
     await browser.saveScreenshot(`${SCREEN_DIR}/01-after-import-toast.png`);
 
-    // BEFORE this fix, the following would already fail: the dotfile would
-    // never contain the synthetic server at all.
     let dotfileHasEntry = false;
     const dotfileDeadline = Date.now() + 15000;
     while (Date.now() < dotfileDeadline) {
@@ -280,10 +233,6 @@ describe('import_ecosystem_mcp_servers actually persists and connects (sibling o
     console.log(`~/.agiworkforce/mcp.json contains '${IMPORTED_SERVER_NAME}':`, dotfileHasEntry);
     expect(dotfileHasEntry).toBe(true);
 
-    // Prove the live MCP client actually connected it and exposes real
-    // tools — the previously-broken half (persistence alone is necessary
-    // but not sufficient; DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01 was
-    // fixed by also reloading the live client).
     let servers: McpServerInfo[] = [];
     let connected = false;
     const connectDeadline = Date.now() + 90000;

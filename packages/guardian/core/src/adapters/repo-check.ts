@@ -1,30 +1,16 @@
-/**
- * Generic adapter for repository-owned check scripts (`pnpm check:*`).
- *
- * These scripts are the repository's own invariant guards (trust boundaries,
- * model catalog, tenant isolation, LLM failure guards, …). They communicate
- * through exit codes and human-readable output, so the adapter maps:
- *   exit 0            → clean
- *   nonzero, ran      → one finding carrying the output tail as evidence
- *   spawn/other error → scanner-failed (never reported as clean)
- */
 import { toEvidence, type AdapterOutcome } from './types.js';
 import type { FindingCategory, Severity } from '../schema.js';
 
 export interface RepoCheckSpec {
-  /** Root package.json script name, e.g. "check:trust-boundaries". */
   script: string;
   category: FindingCategory;
   severity: Severity;
-  /** One-line statement of what a failure means for the product. */
   impact: string;
 }
 
 export interface RepoCheckExecution {
   exitCode: number | null;
-  /** Combined stdout+stderr tail, already truncated by the runner. */
   outputTail: string;
-  /** True when the process failed to spawn or was killed by a timeout. */
   failedToRun: boolean;
 }
 

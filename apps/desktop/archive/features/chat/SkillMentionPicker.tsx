@@ -1,9 +1,3 @@
-/**
- * SkillMentionPicker Component
- *
- * Dropdown picker that appears when the user types "@" in the chat input.
- * Shows a filtered list of loaded AI skills with keyboard navigation support.
- */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
@@ -16,20 +10,12 @@ export interface MentionSkill {
 }
 
 interface SkillMentionPickerProps {
-  /** Text after the @ symbol used to filter skills */
   query: string;
-  /** Called when a skill is selected */
   onSelect: (skill: MentionSkill) => void;
-  /** Called when the picker should close */
   onClose: () => void;
 }
 
-/**
- * Converts a LoadedSkill to the MentionSkill shape used by the picker UI.
- * Formats the name for display by converting kebab-case to Title Case.
- */
 function toMentionSkill(skill: LoadedSkill): MentionSkill {
-  // Format name for display: "backend-engineer" -> "Backend Engineer"
   const displayName = skill.name
     .split('-')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -52,7 +38,6 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Load bundled skills from disk (cached after first call).
   const allSkills = useMemo(() => {
     try {
       return loadSkills().map(toMentionSkill);
@@ -75,12 +60,10 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
       .slice(0, MAX_RESULTS);
   }, [query, allSkills]);
 
-  // Reset selection when results change
   useEffect(() => {
     setSelectedIndex(0);
   }, [filtered.length, query]);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
@@ -106,7 +89,6 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
     return () => window.removeEventListener('keydown', handleKey, true);
   }, [filtered, selectedIndex, onSelect, onClose]);
 
-  // Scroll selected item into view
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;

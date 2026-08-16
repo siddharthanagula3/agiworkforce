@@ -1,10 +1,3 @@
-/**
- * marketplaceReadme.test.ts — README.md ships byte-identical into the VSIX and
- * becomes the Marketplace "Details" page. 0.3.0 shipped the internal
- * engineering doc there: doc-template metadata, a `pnpm --filter` verification
- * section, and a trust-boundary engineering section. These assertions keep
- * contributor content in docs/CONTRIBUTING-NOTES.md, which .vscodeignore drops.
- */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -14,7 +7,6 @@ import manifest from '../../package.json';
 const extensionRoot = path.resolve(__dirname, '../..');
 const readme = fs.readFileSync(path.join(extensionRoot, 'README.md'), 'utf8');
 
-/** README text with HTML comments stripped — what a Marketplace visitor sees. */
 const rendered = readme.replace(/<!--[\s\S]*?-->/gu, '');
 
 describe('Marketplace README', () => {
@@ -36,8 +28,6 @@ describe('Marketplace README', () => {
     for (const heading of ['## Requirements', '## Quick start', '## Features', '## License']) {
       expect(rendered).toContain(heading);
     }
-    // The Activity Bar entry point is the only discoverable one on a fresh
-    // install, so the listing must name it.
     expect(rendered).toContain('Activity Bar');
   });
 

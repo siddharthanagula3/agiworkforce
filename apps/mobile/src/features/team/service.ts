@@ -1,19 +1,3 @@
-/**
- * Workspace (Team) service.
- *
- * Talks to the same three routes the web Team section uses:
- *   GET    /api/settings/organization   workspace + server-computed access
- *   GET    /api/settings/team           members of a workspace
- *   POST   /api/settings/team           add an existing AGI account by email
- *   PATCH  /api/settings/team/:memberId change a member's role
- *   DELETE /api/settings/team/:memberId remove a member
- *
- * ENTITLEMENT: `access.canManageTeam` is computed SERVER-SIDE and is the only
- * thing this app may gate on. Mobile previously decided for itself with a
- * local `canUseBillingPlanCapability(tier, 'team_admin')` check, which can
- * disagree with the server — showing an admin entry point the API then
- * refuses, or hiding one the account is entitled to.
- */
 import { api } from '@/services/api';
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
@@ -78,8 +62,6 @@ export async function fetchWorkspaceOverview(signal?: AbortSignal): Promise<Work
   const rawAccess = isRecord(response['access']) ? response['access'] : {};
   const access: WorkspaceAccess = {
     plan: asString(rawAccess['plan'], 'free'),
-    // Default CLOSED: an unreadable or missing flag must not open admin
-    // controls the server would then reject.
     canManageTeam: rawAccess['canManageTeam'] === true,
     maxMembers: asNullableCount(rawAccess['maxMembers']),
   };
@@ -116,8 +98,6 @@ export async function fetchWorkspaceMembers(
   return response['members'].flatMap((raw): WorkspaceMember[] => {
     if (!isRecord(raw)) return [];
     const userId = asString(raw['userId']);
-    // A row with no user id cannot be targeted by a role change or a removal,
-    // so rendering it would only offer controls that cannot work.
     if (!userId) return [];
     return [
       {
@@ -140,11 +120,6 @@ export async function addWorkspaceMember(
   await api.post('/api/settings/team', { organizationId, email, role });
 }
 
-/**
- * `memberId` is the composite `"<organizationId>:<userId>"` the list endpoint
- * returns; the server parses the workspace out of it, so neither call takes a
- * separate organization id.
- */
 export async function updateWorkspaceMemberRole(
   memberId: string,
   role: WorkspaceRole,

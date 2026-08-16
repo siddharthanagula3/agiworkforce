@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useMemoryStore } from '@agiworkforce/unified-chat';
 
-// Hermetic auth + csrf so the runtime can build a request without network/env.
 vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn(async () => 'test-token'),
 }));
@@ -12,12 +11,6 @@ vi.mock('@/lib/client/csrf', () => ({
 import { WebChatRuntime } from '../WebChatRuntime';
 import { resetMemoryCapabilityCache } from '../memory-capability';
 
-/**
- * URL-aware fetch stub: the runtime first reads the Memory capability toggle
- * from GET /api/settings/preferences, then POSTs the chat completion. Route the
- * preferences read to a controllable settings doc and the completion to a cheap
- * non-ok response (we only inspect the outgoing body, not a real stream).
- */
 function stubFetch(opts?: { memory?: boolean }): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (url: unknown) => {
     if (typeof url === 'string' && url.includes('/api/settings/preferences')) {
@@ -29,7 +22,6 @@ function stubFetch(opts?: { memory?: boolean }): ReturnType<typeof vi.fn> {
   return fetchMock;
 }
 
-/** Body of the chat-completions POST (skips the preferences GET). */
 function completionsBody(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> {
   const call = fetchMock.mock.calls.find(
     (c) => typeof c[0] === 'string' && (c[0] as string).includes('/chat/completions'),

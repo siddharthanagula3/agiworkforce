@@ -1,18 +1,7 @@
-/**
- * Tests for round-10 field wiring in /api/projects (POST) and
- * /api/projects/[id] (PUT).
- *
- * Covers: each new field round-trips, invalid enum returns 400,
- * invalid allowedSurfaces entries are rejected, partial PUT leaves other
- * fields untouched, POST accepts round-10 fields, mapper output matches
- * PUT response.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { ManagedCloudProjectResponseSchema } from '@agiworkforce/cloud-contracts';
-
-// ── Hoisted mocks (vi.hoisted runs before all imports/mocks) ─────────────────
 
 const {
   mockFrom,
@@ -92,12 +81,8 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
 
-// ── Route imports (after mocks) ───────────────────────────────────────────────
-
 import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
 import { GET as GET_PROJECTS, POST } from '@/app/api/projects/route';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const BASE_DB_ROW = {
   id: 'proj-1',
@@ -138,9 +123,6 @@ function makeListProjectsRequest(): NextRequest {
   return new NextRequest('http://localhost/api/projects?limit=50&offset=0');
 }
 
-// Wire auth mock.
-// vitest.config.ts sets mockReset: true so we must re-register implementations
-// in every beforeEach rather than relying on module-level defaults.
 function wireAuthAndDb() {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockNeonExecute.mockResolvedValue(1);
@@ -148,16 +130,12 @@ function wireAuthAndDb() {
   mockResolveActiveOrganizationId.mockResolvedValue(null);
 }
 
-// Set up neon query chain: db.query() resolves with row array (update/select returning *)
 function setupUpdateChain(resolvedValue: { data: unknown; error: unknown }) {
-  // Route calls db.query(sql, params) and expects row array.
-  // Simulate: first call (with round-10 fields) returns the updated row or PG error.
   if (resolvedValue.error) {
     mockNeonQuery.mockRejectedValue(resolvedValue.error);
   } else {
     mockNeonQuery.mockResolvedValue(resolvedValue.data ? [resolvedValue.data] : []);
   }
-  // Keep cloud database builder chain wired for mockUpdate assertion in allowedSurfaces test
   mockSingle.mockResolvedValue(resolvedValue);
   mockSelect.mockReturnValue({ single: mockSingle });
   mockEq.mockReturnValue({ eq: mockEq, select: mockSelect });
@@ -177,18 +155,12 @@ function setupInsertChain(resolvedValue: { data: unknown; error: unknown }) {
   mockFrom.mockReturnValue({ insert: mockInsert });
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 describe('GET /api/projects · conversation counts', () => {
   beforeEach(() => {
     wireAuthAndDb();
   });
 
   it('returns the canonical count of live conversations for each project', async () => {
-    // The list route now also resolves the caller's org-shared project scope
-    // (migration 0086) before the project read, so the mock must dispatch on the
-    // statement rather than on call order. This caller belongs to no
-    // organization, which is the pre-0086 behaviour: personal projects only.
     mockNeonQuery.mockImplementation(async (sql: string) =>
       String(sql).includes('organization_members')
         ? []
@@ -235,7 +207,6 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
     expect(res.status).toBe(200);
-    // The handler merges starred under metadata rather than a dedicated column.
     const sqlCalls = mockNeonQuery.mock.calls.map((c) => String(c[0]));
     expect(
       sqlCalls.some((sql) => /metadata = coalesce\(metadata/.test(sql) && /starred/.test(sql)),
@@ -368,7 +339,6 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
     expect(res.status).toBe(200);
-    // SQL should reference icon_emoji but NOT default_privacy_mode, default_provider_mode, accent_color
     const callArgs = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     const sql = callArgs[0];
     expect(sql).toContain('icon_emoji');
@@ -379,8 +349,6 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
 
   it('retries without round-10 fields when DB returns 42703 undefined_column', async () => {
     const pgError = { code: '42703', message: 'column does not exist' };
-    // First call (with round-10 fields) rejects; the legacy retry succeeds,
-    // then the route reloads the canonical row with its conversation count.
     mockNeonQuery
       .mockRejectedValueOnce(pgError)
       .mockResolvedValueOnce([BASE_DB_ROW])

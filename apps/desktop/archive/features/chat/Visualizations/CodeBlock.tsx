@@ -4,7 +4,6 @@ import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Copy, Check, Download, Maximize2, WrapText, Terminal } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Language icons and colors mapping
 const LANGUAGE_CONFIG: Record<string, { color: string; icon?: string }> = {
   javascript: { color: '#f7df1e', icon: 'JS' },
   typescript: { color: '#3178c6', icon: 'TS' },

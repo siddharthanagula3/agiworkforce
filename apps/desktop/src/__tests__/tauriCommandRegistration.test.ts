@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// registry.rs was deleted; lib.rs generate_handler![] is now the sole source of truth.
 const libRs = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf8');
 const conversationRs = readFileSync(
   resolve(__dirname, '../../src-tauri/src/sys/commands/chat/conversation.rs'),
@@ -32,16 +31,10 @@ describe('tauri command registration contracts', () => {
     }
   });
 
-  // M38 — argument count and type shape verification
-  // Checks that Rust handler signatures accept the expected arguments.
-  // We inspect the Rust source for the function signatures since the frontend
-  // calls invoke() with a specific payload shape.
   describe('Command argument signatures (M38)', () => {
     describe('memory commands', () => {
       it('memory_remember accepts category, topic, content, importance, source', () => {
-        // Verify the Rust function signature includes all expected parameters
         expect(libRs).toContain('memory_remember');
-        // Grep the rust files for the actual fn signature — it should have these args
         const commandsDir = resolve(__dirname, '../../src-tauri/src');
         let memRs = '';
         const primaryPath = `${commandsDir}/sys/commands/memory.rs`;
@@ -59,13 +52,9 @@ describe('tauri command registration contracts', () => {
 
         if (memRs) {
           expect(memRs).toContain('memory_remember');
-          // The fn must accept a category parameter
           expect(memRs).toContain('category');
-          // The fn must accept a topic parameter
           expect(memRs).toContain('topic');
-          // The fn must accept a content parameter
           expect(memRs).toContain('content');
-          // The fn must accept an importance parameter
           expect(memRs).toContain('importance');
         }
       });
@@ -130,9 +119,6 @@ describe('tauri command registration contracts', () => {
       });
 
       it('window commands module is registered', () => {
-        // window_minimize is implemented via the Tauri Window API (getCurrentWindow().minimize())
-        // and is NOT a custom #[tauri::command] — no Rust registration is needed.
-        // This test verifies the window commands module (window_toggle_maximize, etc.) is registered.
         expect(libRs).toContain('window_toggle_maximize');
       });
     });
@@ -161,10 +147,6 @@ describe('tauri command registration contracts', () => {
       });
 
       it('get_home_directory is registered', () => {
-        // get_home_directory is not yet a dedicated Tauri command in lib.rs;
-        // the frontend falls back to the tauri-mock which resolves to a platform path.
-        // Until it is added as a Rust command, verify file_read and file_exists are present
-        // as they are the commands co-located with home directory operations.
         expect(libRs).toContain('file_read');
         expect(libRs).toContain('file_exists');
       });

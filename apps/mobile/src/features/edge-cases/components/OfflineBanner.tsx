@@ -1,13 +1,3 @@
-/**
- * OfflineBanner — global celebratory banner shown when NetInfo reports offline.
- *
- * Placement: mount once in app/_layout.tsx, above <Slot />.
- * Auto-dismisses on reconnect. Respects reduceMotion.
- *
- * Accessibility:
- *   - accessibilityRole="alert" announces to screen readers on appearance
- *   - accessibilityLiveRegion="polite" so it doesn't interrupt reading
- */
 import { useEffect, useRef } from 'react';
 import { View, Animated, AccessibilityInfo } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
@@ -17,14 +7,6 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { EDGE_COPY } from './copy';
 import { spacing } from '@/src/ui/theme';
 
-/**
- * Renders a slim banner at the top of the screen while the device is offline.
- * The banner slides in (or simply appears when reduceMotion is set) and
- * disappears immediately on reconnect.
- *
- * Wire into the root layout: import and place above <Slot /> inside the
- * GestureHandlerRootView / SafeAreaProvider tree.
- */
 export function OfflineBanner() {
   const colors = useThemeColors();
   const { isOnline } = useNetworkStatus();
@@ -32,7 +14,6 @@ export function OfflineBanner() {
   const opacity = useRef(new Animated.Value(0)).current;
   const reduceMotionRef = useRef(false);
 
-  // Read the system reduce-motion preference once on mount
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled()
       .then((val) => {
@@ -86,7 +67,6 @@ export function OfflineBanner() {
     }
   }, [isOnline, translateY, opacity]);
 
-  // Always render — animated in/out so React tree is stable
   return (
     <Animated.View
       style={{

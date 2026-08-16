@@ -1,13 +1,3 @@
-/**
- * memoryStore.ts — Workspace-scoped memory store for VS Code developer sessions.
- *
- * Persists facts in `vscode.ExtensionContext.workspaceState` ONLY.
- * v1 LOCAL ONLY — no cloud sync. NOT written to consumer chat tables.
- *
- * Schema is intentionally minimal and backward-compatible:
- *   { id, text, createdAt, updatedAt? }
- * Entries written by the R6 QuickPick (pre-updatedAt) default updatedAt to createdAt.
- */
 
 import * as vscode from 'vscode';
 import {
@@ -37,7 +27,6 @@ export interface MemoryContextInput {
 const MAX_MEMORY_FACTS_PER_TURN = 50;
 const MAX_MEMORY_CONTEXT_CHARS = 4_000;
 
-// Change notification so TreeDataProvider can react without polling.
 const _onDidChange = new vscode.EventEmitter<void>();
 export const onMemoryDidChange = _onDidChange.event;
 
@@ -70,11 +59,6 @@ export function loadFacts(workspaceState: MemoryState): MemoryFact[] {
   }));
 }
 
-/**
- * Builds the explicit user-memory input shared by sidebar, editor, and @agi
- * turns. Facts remain user-role data and are bounded/escaped so a stored value
- * cannot close the trust marker or masquerade as a higher-priority instruction.
- */
 export function buildMemoryContextInput(
   workspaceState: MemoryState,
 ): MemoryContextInput | undefined {

@@ -38,7 +38,6 @@ describe('applyResearchMode', () => {
       { role: 'user', content: 'research AI trends' },
     ]);
     applyResearchMode(req);
-    // Should still be exactly 2 messages (no extra system inserted).
     expect(req.messages.length).toBe(2);
     expect(req.messages[0]?.role).toBe('system');
     expect(typeof req.messages[0]?.content).toBe('string');

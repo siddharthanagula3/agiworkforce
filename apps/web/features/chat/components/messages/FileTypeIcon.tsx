@@ -13,24 +13,12 @@ import {
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
-/**
- * FileTypeIcon — per-extension file glyph for tool-call / artifact rows.
- *
- * Matches the Claude/Codex look using lucide-react (the same open library Claude
- * uses) plus a composite "document outline + uppercased extension label" for the
- * code-ish types, exactly the pattern in the reference. No proprietary assets:
- * everything is an open Lucide glyph or plain text. Colours come from Tailwind
- * utility classes / theme tokens — never hex literals (repo rule).
- */
-
 type GlyphEntry = { kind: 'glyph'; Icon: LucideIcon; accent: string };
 type CompositeEntry = { kind: 'composite'; label: string; accent: string };
 type Entry = GlyphEntry | CompositeEntry;
 
 const MUTED = 'text-muted-foreground';
 
-// Extension → rendering. Composite = generic doc + extension label (Claude style);
-// glyph = a faithful single Lucide icon where one reads clearly on its own.
 const MAP: Record<string, Entry> = {
   md: { kind: 'composite', label: 'MD', accent: MUTED },
   mdx: { kind: 'composite', label: 'MDX', accent: MUTED },
@@ -68,7 +56,6 @@ const MAP: Record<string, Entry> = {
   yaml: { kind: 'composite', label: 'YAML', accent: MUTED },
 };
 
-/** Extract the lowercased extension from a filename or path. */
 export function extensionOf(filename: string): string {
   const base = filename.trim().split(/[\\/]/).pop() ?? '';
   const dot = base.lastIndexOf('.');
@@ -77,9 +64,7 @@ export function extensionOf(filename: string): string {
 }
 
 interface FileTypeIconProps {
-  /** File name or path; the extension drives the icon. */
   filename: string;
-  /** Sizing/extra classes for the icon wrapper. Defaults to h-4 w-4. */
   className?: string;
 }
 
@@ -96,7 +81,6 @@ const FileTypeIconComponent = ({ filename, className }: FileTypeIconProps) => {
     return <Icon className={cn('h-4 w-4 shrink-0', entry.accent, className)} aria-hidden="true" />;
   }
 
-  // Composite: plain document outline with the extension printed inside, like Claude.
   return (
     <span
       className={cn('relative inline-flex h-4 w-4 shrink-0 items-center justify-center', className)}

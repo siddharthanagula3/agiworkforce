@@ -1,7 +1,3 @@
-/**
- * Static FAQ and article content for the support centre.
- * These are served from in-memory until a DB-backed CMS is added.
- */
 
 import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 

@@ -14,12 +14,6 @@ export interface LocalRuntimeRestartResult {
   restartedWorkspaces: number;
 }
 
-/**
- * Process ownership boundary for the VS Code surface.
- *
- * A local app-server is scoped to one trusted workspace root, so multi-root
- * windows get one process per root and every chat surface reuses that process.
- */
 export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeClient> {
   private readonly clients = new Map<string, { cwd: string; client: T }>();
   private restartPromise?: Promise<LocalRuntimeRestartResult>;
@@ -43,10 +37,6 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
     return client;
   }
 
-  /**
-   * Dispose all workspace processes and allow them to be recreated lazily.
-   * Used when process-launch configuration changes (for example cliPath).
-   */
   restartAll(): Promise<LocalRuntimeRestartResult> {
     if (this.restartPromise !== undefined) return this.restartPromise;
     if (this.shutdownPromise !== undefined) {

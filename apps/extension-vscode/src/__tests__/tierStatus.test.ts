@@ -1,15 +1,6 @@
-/**
- * tierStatus.test.ts — Paywall/tier compatibility tests.
- *
- * The legacy showTierStatus command delegates to the canonical Account & Usage
- * panel; plan presentation is tested through accountPresentation and the
- * settings webview rather than a second fake item builder here.
- */
 
 import { describe, it, expect } from 'vitest';
 import { AgiWorkforcePaywallError } from '../utils/api';
-
-// ── TierInfo shape tests ──────────────────────────────────────────────────────
 
 describe('TierInfo shape', () => {
   it('constructs a minimal TierInfo with tier only', () => {
@@ -24,12 +15,9 @@ describe('TierInfo shape', () => {
   });
 });
 
-// ── Paywall error cross-reference ─────────────────────────────────────────────
-
 describe('AgiWorkforcePaywallError in tier context', () => {
   it('requiredTier matches the tier that should be displayed in the notification', () => {
     const err = new AgiWorkforcePaywallError('chat', 'basic', 'Cap exceeded');
-    // The canonical Account & Usage recovery path uses this required tier.
     expect(err.requiredTier).toBe('basic');
   });
 

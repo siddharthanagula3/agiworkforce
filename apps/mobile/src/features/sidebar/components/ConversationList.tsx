@@ -16,11 +16,6 @@ interface GroupedConversations {
   conversations: ConversationSummary[];
 }
 
-/**
- * Groups conversations into Pinned / Today / Yesterday / This Week / Older buckets.
- * Pinned conversations appear in a dedicated section at the top and are excluded
- * from the date-based groups to prevent duplication.
- */
 function groupConversations(conversations: ConversationSummary[]): GroupedConversations[] {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -34,7 +29,6 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
     Older: [],
   };
 
-  // Sort by updatedAt descending (most recent first)
   const sorted = [...conversations].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
@@ -49,7 +43,6 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
     const age = todayMs - updated;
 
     if (age < 0) {
-      // Updated today (or in the future)
       groups.Today.push(conv);
     } else if (age < TIME_GROUPS.YESTERDAY) {
       groups.Yesterday.push(conv);
@@ -62,12 +55,10 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
 
   const result: GroupedConversations[] = [];
 
-  // Pinned section always first
   if (pinned.length > 0) {
     result.push({ label: 'Pinned', conversations: pinned });
   }
 
-  // Only return non-empty date groups
   const order: ConversationGroup[] = ['Today', 'Yesterday', 'This Week', 'Older'];
   for (const label of order) {
     if (groups[label].length > 0) {
@@ -81,17 +72,9 @@ function groupConversations(conversations: ConversationSummary[]): GroupedConver
 interface ConversationListProps {
   searchQuery?: string;
   searchResults?: Array<{ conversationId: string; messageId: string; snippet: string }>;
-  /** When set, only show conversations belonging to this project */
   filterProjectId?: string | null;
 }
 
-/**
- * Sidebar conversation list.
- * Groups conversations by recency and renders ConversationItem rows.
- * Pull to refresh loads from server.
- * When searchResults is provided, renders a flat search results list with snippets.
- * When filterProjectId is provided, only conversations in that project are shown.
- */
 export function ConversationList({
   searchQuery,
   searchResults,
@@ -103,7 +86,6 @@ export function ConversationList({
     [allConversations],
   );
 
-  // Apply project filter first, then search filter
   const projectFiltered = filterProjectId
     ? historyVisibleConversations.filter((c) => c.projectId === filterProjectId)
     : historyVisibleConversations;
@@ -122,7 +104,6 @@ export function ConversationList({
     loadConversations();
   }, [loadConversations]);
 
-  // Search results — flat list with snippets
   if (searchResults && searchResults.length > 0 && searchQuery) {
     return (
       <ScrollView className="flex-1 px-3" showsVerticalScrollIndicator={false}>
@@ -156,7 +137,6 @@ export function ConversationList({
     );
   }
 
-  // Search query with no results
   if (searchQuery && searchResults && searchResults.length === 0) {
     return (
       <ScrollView className="flex-1 px-3">
@@ -170,7 +150,6 @@ export function ConversationList({
     );
   }
 
-  // Empty state
   if (conversations.length === 0 && !isLoadingConversations) {
     return (
       <ScrollView

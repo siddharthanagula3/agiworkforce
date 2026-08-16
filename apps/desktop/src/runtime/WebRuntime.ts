@@ -1,15 +1,3 @@
-/**
- * WebRuntime
- *
- * Implements the ChatRuntime interface from @agiworkforce/unified-chat for the web
- * (cloud) deployment. Uses the cloud API gateway for conversation CRUD and
- * SSE streaming for message generation.
- *
- * Streaming pattern:
- *   - sendMessage() calls sendCloudMessage() which opens an SSE connection
- *   - SSE chunks are forwarded to registered onStream callbacks
- *   - Cancellation is handled via AbortController
- */
 
 import type {
   ChatRuntime,
@@ -72,10 +60,6 @@ function failedMessageProjection(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Mapping helpers — cloud API uses snake_case, ChatRuntime uses camelCase
-// ---------------------------------------------------------------------------
-
 function mapConversation(cloud: CloudConversation): Conversation {
   return {
     id: cloud.id,
@@ -128,8 +112,6 @@ export function mapGeneratedFilesPayload(payload: unknown): GeneratedFileEntry[]
         byteCount: f.byte_count,
         kind: f.kind,
         ...(f.checksum_sha256 ? { checksumSha256: f.checksum_sha256 } : {}),
-        // Server-derived classification (file-creation parity Wave A) — the
-        // contract defaults pre-classification payloads. Pass-through only.
         surface: f.surface,
         previewable: f.previewable,
       },
@@ -137,38 +119,20 @@ export function mapGeneratedFilesPayload(payload: unknown): GeneratedFileEntry[]
   });
 }
 
-// ---------------------------------------------------------------------------
-// WebRuntime implementation
-// ---------------------------------------------------------------------------
-
 export class WebRuntime implements ChatRuntime {
-  /** Managed Cloud approval policy is server-owned, not client-selectable. */
   readonly supportsAgentControl = false;
-  // Effort is a model parameter, not a permission control, so it is safe here
-  // even though agent-mode enforcement (Ask/Auto/Plan/Bypass) is not. Desktop
-  // previously had NO reasoning-effort control purely because both lived
-  // behind the single flag above.
   readonly supportsReasoningEffort = true;
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
   private readonly _approvals = new CloudToolApprovalRegistry();
   private readonly _attachmentAssetIds = new Map<string, string>();
 
-  /**
-   * Cloud SSE path supports Continue Generation: `sendMessage` sends the full
-   * `messageHistory` as the thread, so a truncated/stopped turn can be reissued
-   * with the partial + an ephemeral continue instruction and streamed back into
-   * the same message. (TauriRuntime omits this — it drops `messageHistory`.)
-   */
   readonly supportsContinueGeneration = true;
 
-  /** The cloud SSE wire forwards `code_execution` — see `SendMessageOptions.codeExecution`. */
   readonly supportsCodeExecution = true;
 
-  /** The managed cloud wire forwards the exact `research` request field. */
   readonly supportsResearch = true;
 
-  /** Managed search uses the Cloud route's native-or-generic capability gate. */
   readonly supportsManagedWebSearch = true;
 
   readonly attachmentPolicy = {
@@ -187,10 +151,6 @@ export class WebRuntime implements ChatRuntime {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // sendMessage — streams via SSE through the cloud API
-  // -------------------------------------------------------------------------
-
   async sendMessage(
     conversationId: string,
     content: string,
@@ -205,7 +165,6 @@ export class WebRuntime implements ChatRuntime {
     const assistantMessageId = options?.continuationMessageId ?? uuidv7();
     const isContinuation = options?.isContinuation === true;
 
-    // If the caller provided an external signal, chain it
     if (options?.signal) {
       options.signal.addEventListener('abort', () => controller.abort());
     }
@@ -271,7 +230,6 @@ export class WebRuntime implements ChatRuntime {
         content,
         model,
         sink.onChunk,
-        // onDone
         async () => {
           if (runReference) {
             runReference = {
@@ -351,7 +309,6 @@ export class WebRuntime implements ChatRuntime {
             ...(streamError ? { streamError } : {}),
           });
         },
-        // onError
         (err: Error) => {
           const projection = failedMessageProjection(sink.getMessageProjection(), err.message);
           const agentActivity = sink.getAgentActivity();
@@ -410,7 +367,6 @@ export class WebRuntime implements ChatRuntime {
         },
       );
     } catch (err) {
-      // Only emit error if it wasn't an intentional abort
       if (!controller.signal.aborted) {
         const message = err instanceof Error ? err.message : String(err);
         this.emit({ type: 'error', error: message });
@@ -419,10 +375,6 @@ export class WebRuntime implements ChatRuntime {
       this._abortControllers.delete(conversationId);
     }
   }
-
-  // -------------------------------------------------------------------------
-  // resolveToolApproval — resume a turn suspended on x_tool_approval_request
-  // -------------------------------------------------------------------------
 
   async resolveToolApproval(
     conversationId: string,
@@ -513,10 +465,6 @@ export class WebRuntime implements ChatRuntime {
     return this._approvals.hasLiveTurn(conversationId, projection);
   }
 
-  // -------------------------------------------------------------------------
-  // stopGeneration — aborts the in-flight SSE request
-  // -------------------------------------------------------------------------
-
   stopGeneration(conversationId: string): void {
     const controller = this._abortControllers.get(conversationId);
     if (controller) {
@@ -525,18 +473,10 @@ export class WebRuntime implements ChatRuntime {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // onStream — register streaming event callbacks
-  // -------------------------------------------------------------------------
-
   onStream(callback: StreamCallback): () => void {
     this._streamCallbacks.add(callback);
     return () => this._streamCallbacks.delete(callback);
   }
-
-  // -------------------------------------------------------------------------
-  // Conversation CRUD
-  // -------------------------------------------------------------------------
 
   async createConversation(title?: string): Promise<Conversation> {
     const cloud = await createCloudConversation(title ?? 'New Conversation', 'auto');
@@ -550,10 +490,6 @@ export class WebRuntime implements ChatRuntime {
   async renameConversation(conversationId: string, title: string): Promise<void> {
     await updateCloudConversationTitle(conversationId, title);
   }
-
-  // -------------------------------------------------------------------------
-  // Conversation listing
-  // -------------------------------------------------------------------------
 
   async listConversations(): Promise<{ id: string; title: string; updatedAt: string }[]> {
     const conversations = await listCloudConversations();
@@ -569,10 +505,6 @@ export class WebRuntime implements ChatRuntime {
     return conversations.map(mapConversation);
   }
 
-  // -------------------------------------------------------------------------
-  // Message loading
-  // -------------------------------------------------------------------------
-
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
     const conversation = await getCloudConversation(conversationId);
     return (conversation.messages ?? []).map(mapMessage);
@@ -581,10 +513,6 @@ export class WebRuntime implements ChatRuntime {
   async loadMessages(conversationId: string): Promise<ChatMessage[]> {
     return this.getMessages(conversationId);
   }
-
-  // -------------------------------------------------------------------------
-  // Platform identifier
-  // -------------------------------------------------------------------------
 
   getPlatform(): 'desktop' | 'web' | 'mobile' {
     return 'web';

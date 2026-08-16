@@ -1,15 +1,4 @@
-/**
- * ShowcaseScenes · Linear-grade product windows for section visuals.
- *
- * Each scene is a code-rendered recreation of a REAL AGI flow, styled by
- * the agi-dw-* / agi-ap-* classes in globals.css. No bitmaps, no invented
- * features: the diff window mirrors `agi review` / VS Code diff review;
- * the approval panel mirrors the CLI's tool-approval overlay and its
- * Suggest / Auto-edit / Full-auto autonomy modes (per product screenshots
- * 2026-06-11). Strings stay faithful to the product.
- */
 
-/* ── Code-review diff window ────────────────────────────────────────── */
 
 type DiffRow = {
   n: number;
@@ -71,8 +60,6 @@ export function DiffWindow() {
     </figure>
   );
 }
-
-/* ── Tool-approval panel ────────────────────────────────────────────── */
 
 export function ApprovalWindow() {
   return (

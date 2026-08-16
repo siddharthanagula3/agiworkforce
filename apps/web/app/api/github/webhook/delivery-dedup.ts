@@ -2,20 +2,6 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 
-/**
- * GitHub webhook delivery replay protection (migration 0106).
- *
- * GitHub retries deliveries and operators can redeliver manually; both carry
- * the same `X-GitHub-Delivery` id with a valid HMAC. The unique constraint on
- * `github_webhook_deliveries.delivery_id` is the arbiter: exactly one request
- * per delivery id observes `first`; every replay observes `duplicate`.
- *
- * Failure policy: `unavailable` (Neon outage, missing header) fails OPEN —
- * processing continues without replay protection for that request. The
- * downstream review pipeline keeps its own debounce, and dropping legitimate
- * webhooks on a transient DB error would be strictly worse.
- */
-
 export interface DeliveryDedupDb {
   query<T>(sql: string, params?: unknown[]): Promise<T[]>;
 }

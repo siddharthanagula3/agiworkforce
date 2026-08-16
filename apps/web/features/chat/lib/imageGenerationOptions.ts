@@ -21,11 +21,6 @@ const IMAGE_API_TO_PROVIDER: Record<string, ImageModelOption['provider']> = {
   openai: 'openai',
 };
 
-/**
- * Executable image models only. A catalog entry is not picker-ready merely
- * because its modelType is `image`: it must declare image generation, have a
- * wired adapter, be live, and not carry either deprecation marker.
- */
 export const IMAGE_MODELS: ImageModelOption[] = getModels({
   modelTypes: ['image'],
   requireCapabilities: { imageGen: true },
@@ -62,11 +57,6 @@ const IMAGE_ASPECT_OPTIONS: ReadonlyArray<ImageAspectOption> = [
   { id: '21:9', label: 'Ultrawide 21:9' },
 ];
 
-/**
- * Curated picker subsets of the exact ratios each provider adapter can send.
- * The route performs the authoritative model-adapter validation again before
- * billing because client choices are untrusted.
- */
 const IMAGE_PICKER_RATIOS_BY_API: Record<
   ImageModelOption['imageApi'],
   ReadonlySet<ImageAspectRatio>
@@ -107,11 +97,6 @@ export function isImageAspectRatioSupported(
   return getImageAspectOptionsForModel(modelId).some((option) => option.id === aspectRatio);
 }
 
-/**
- * Persisted chat messages can predate the model-specific ratio contract. Never
- * replay one of those legacy pairs verbatim: use the provider's explicit
- * `auto` path when the selected model cannot execute the stored ratio.
- */
 export function normalizeImageAspectRatioForModel(
   modelId: string | undefined,
   aspectRatio: ImageAspectRatio,
@@ -125,11 +110,6 @@ export interface ResolvedImageGenerationRequestOptions {
   model?: string;
 }
 
-/**
- * Convert persisted card metadata back into an executable request. Missing or
- * retired model ids are not evidence for a provider, so they deliberately
- * fall back to the server's configured default with Auto shape.
- */
 export function resolveImageGenerationRequestOptions(
   aspectRatio: ImageAspectRatio,
   modelId?: string,

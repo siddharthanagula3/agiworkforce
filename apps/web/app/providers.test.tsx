@@ -51,8 +51,6 @@ describe('Providers', () => {
     const capabilityProvider = screen.getByTestId('capability-provider');
     const queryProvider = screen.getByTestId('query-provider');
 
-    // Theme state must wrap every client consumer. The pre-hydration bootstrap
-    // itself is owned by the root layout's external beforeInteractive script.
     expect(themeProvider).toContainElement(capabilityProvider);
     expect(capabilityProvider).toContainElement(queryProvider);
     expect(themeProvider.parentElement).toBe(container);

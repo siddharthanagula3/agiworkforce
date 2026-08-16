@@ -1,9 +1,3 @@
-/**
- * MemoryBrowserModal Component
- *
- * Full-screen modal dialog for browsing, searching, and managing
- * memories with advanced filtering and sorting options.
- */
 import { memo, useCallback, useState } from 'react';
 import { Brain } from 'lucide-react';
 import {
@@ -17,11 +11,8 @@ import { Button } from '@/ui/Button';
 import { MemoryManager } from './MemoryManager';
 
 export interface MemoryBrowserModalProps {
-  /** Whether the modal is open */
   open: boolean;
-  /** Callback when modal should close */
   onOpenChange: (open: boolean) => void;
-  /** Project ID for filtering (optional) */
   projectId?: string;
 }
 
@@ -64,9 +55,6 @@ export const MemoryBrowserModal = memo(function MemoryBrowserModal({
   );
 });
 
-/**
- * Hook for managing memory browser modal state
- */
 export function useMemoryBrowserModal() {
   const [open, setOpen] = useState(false);
 

@@ -1,7 +1,3 @@
-/**
- * Electron replacement for `@tauri-apps/api/window`, wired to the real
- * BrowserWindow over IPC so window controls are never dead buttons.
- */
 import { getElectronHostBridge, type ElectronWindowControlAction } from './bridgeContract';
 
 async function control(

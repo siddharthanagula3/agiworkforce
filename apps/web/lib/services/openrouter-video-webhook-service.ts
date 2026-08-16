@@ -60,7 +60,6 @@ function signatureParts(header: string): { timestamp: string; signatures: string
   return { timestamp, signatures };
 }
 
-/** Verify exact raw bytes before any JSON parsing or database access. */
 export function verifyOpenRouterVideoWebhook(input: {
   rawBody: Buffer;
   signatureHeader: string | null;

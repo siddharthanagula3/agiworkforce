@@ -5,7 +5,6 @@ import { feedback } from '@agiworkforce/desktop-command-client';
 interface MessageFeedbackButtonsProps {
   messageId: string;
   conversationId?: string;
-  /** Compact mode — inline with message */
   compact?: boolean;
 }
 
@@ -131,7 +130,6 @@ export function MessageFeedbackButtons({
     );
   }
 
-  // Non-compact (card mode)
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border/30 p-2">
       <div className="flex items-center gap-2">

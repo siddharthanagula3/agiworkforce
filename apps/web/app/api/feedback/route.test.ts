@@ -163,7 +163,6 @@ describe('POST /api/feedback', () => {
     expect(storedSubject).toContain('[redacted:api-key]');
     expect(storedMessage).not.toContain(apiKey);
     expect(storedMessage).toContain('[redacted:api-key]');
-    // The surrounding user prose must survive — redaction, not rejection.
     expect(storedMessage).toContain('into the composer and it failed.');
 
     expect(storedMetadata).not.toContain(apiKey);

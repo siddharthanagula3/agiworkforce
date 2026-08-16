@@ -1,27 +1,7 @@
-/**
- * chatStore unit tests
- *
- * Covers:
- * - conversations: add, update, remove, setConversations — state persists through
- *   repeated mutations (rehydration-equivalent reset via setState)
- * - messages: addMessage, updateMessage, setMessages — keyed by conversationId
- * - streaming: startStreaming resets content, appendToStreamingContent accumulates,
- *   stopStreaming clears isStreaming flag
- * - removeConversation clears activeConversationId when removed id is active
- * - pinConversation / archiveConversation update flags correctly
- * - getGroupedConversations: search filter, archived exclusion, pinned separation,
- *   temporal grouping
- * - conversation-scoped composer draft ownership, append, and clear
- * - setSearchQuery roundtrip
- */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useChatStore } from '../chatStore';
 import type { Conversation, ChatMessage } from '../../lib/types';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
   return {
@@ -45,7 +25,6 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
   };
 }
 
-/** Reset the store to its initial state before each test. */
 function resetStore() {
   useChatStore.setState({
     conversations: [],
@@ -61,10 +40,6 @@ function resetStore() {
     draftsByConversation: {},
   });
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('useChatStore — conversations', () => {
   beforeEach(resetStore);
@@ -102,7 +77,6 @@ describe('useChatStore — conversations', () => {
     useChatStore.getState().updateConversation('conv-1', { title: 'Updated' });
     const stored = useChatStore.getState().conversations.find((c) => c.id === 'conv-1');
     expect(stored?.title).toBe('Updated');
-    // Other fields remain intact
     expect(stored?.id).toBe('conv-1');
   });
 
@@ -143,24 +117,20 @@ describe('useChatStore — conversations', () => {
   });
 
   it('state persists correctly through multiple sequential mutations (rehydration simulation)', () => {
-    // Simulate the store being populated (as if rehydrated from persistence),
-    // then further mutated — all state should remain consistent.
     const initial = [
       makeConversation({ id: 'p1', title: 'Persisted 1' }),
       makeConversation({ id: 'p2', title: 'Persisted 2' }),
     ];
     useChatStore.setState({ conversations: initial });
 
-    // Further mutations on top of rehydrated state
     useChatStore.getState().addConversation(makeConversation({ id: 'p3', title: 'New' }));
     useChatStore.getState().updateConversation('p1', { title: 'Mutated' });
 
     const convs = useChatStore.getState().conversations;
     expect(convs).toHaveLength(3);
-    expect(convs[0]?.id).toBe('p3'); // prepended
+    expect(convs[0]?.id).toBe('p3');
     const mutated = convs.find((c) => c.id === 'p1');
     expect(mutated?.title).toBe('Mutated');
-    // p2 is untouched
     const untouched = convs.find((c) => c.id === 'p2');
     expect(untouched?.title).toBe('Persisted 2');
   });
@@ -216,7 +186,6 @@ describe('useChatStore — streaming', () => {
   beforeEach(resetStore);
 
   it('startStreaming sets isStreaming to true and clears previous content', () => {
-    // Pre-populate content to verify it is cleared
     useChatStore.setState({ streamingContent: 'stale', streamingReasoning: 'stale-r' });
     useChatStore.getState().startStreaming();
     const state = useChatStore.getState();
@@ -246,7 +215,6 @@ describe('useChatStore — streaming', () => {
     useChatStore.getState().stopStreaming();
     const state = useChatStore.getState();
     expect(state.isStreaming).toBe(false);
-    // Content is preserved so callers can read the final accumulated value
     expect(state.streamingContent).toBe('partial');
   });
 
@@ -323,7 +291,6 @@ describe('useChatStore — getGroupedConversations', () => {
   });
 
   it('groups unpinned conversations under a temporal label (Today)', () => {
-    // updatedAt = now → should land in "Today"
     const now = new Date().toISOString();
     useChatStore
       .getState()
@@ -436,21 +403,8 @@ describe('useChatStore — misc state actions', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Persist v1 -> v2 migration (P0-K)
-//
-// The on-disk schema renamed `messages` -> `messagesByConversation` and
-// `currentConversationId` -> `activeConversationId` to match the desktop
-// store. Bumping the version triggers `migrate()` so v1-shaped state on
-// disk is rewritten to v2 shape on first load. This test directly drives
-// the same migrate() implementation that the persist middleware would call.
-// ---------------------------------------------------------------------------
-
 describe('useChatStore — persist v1 -> v2 migration', () => {
   function loadMigrate() {
-    // The persist middleware closes over the migrate fn; we need to invoke
-    // it directly. Re-implement the same shape transformation the store
-    // configures so the test stays decoupled from the persist plumbing.
     return (persistedState: unknown, version: number) => {
       const state = persistedState as Record<string, unknown>;
       if (version < 2) {
@@ -479,7 +433,6 @@ describe('useChatStore — persist v1 -> v2 migration', () => {
       c1: [{ id: 'm1', role: 'user', content: 'hi' }],
     });
     expect(v2['activeConversationId']).toBe('c1');
-    // Old keys removed
     expect('messages' in v2).toBe(false);
     expect('currentConversationId' in v2).toBe(false);
   });

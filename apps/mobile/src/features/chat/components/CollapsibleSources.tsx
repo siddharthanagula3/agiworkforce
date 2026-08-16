@@ -31,14 +31,6 @@ function getDomain(url: string): string {
   }
 }
 
-/**
- * Collapsible sources/citations block.
- *
- * Collapsed: shows "View N sources" with a chevron.
- * Expanded: shows numbered list of sources with domain, title, and tap-to-open.
- *
- * Rendered at the end of an AI message when `message.citations` exists.
- */
 export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
   const { colors: themeColors } = useTheme();
   const [expanded, setExpanded] = useState(false);
@@ -62,8 +54,6 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
     overflow: 'hidden' as const,
   }));
 
-  // Citations open in the in-app browser sheet: dismissing it returns straight
-  // to this message instead of cold-starting the app back into the thread.
   const handleSourcePress = useCallback((url: string) => {
     if (isValidExternalHttpUrl(url)) {
       void openUntrustedUrlInAppBrowser(url);
@@ -124,12 +114,6 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
       <Animated.View style={listStyle}>
         <View style={{ paddingHorizontal: 12, paddingBottom: 8, gap: 2 }}>
           {sources.map((source, index) => (
-            // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
-            // (docs/agent-context/known-flaws.md): a function-style `style` prop
-            // silently drops flexDirection/alignItems/padding in this stack, which
-            // would stack the number badge, source info, and link icon vertically
-            // instead of laying them out as a row. `children`-as-function keeps
-            // pressed state while every real style lives on a plain View.
             <Pressable
               key={`source-${index}`}
               onPress={() => handleSourcePress(source.url)}

@@ -1,23 +1,3 @@
-/**
- * CloudFolderAttachSheet — the consent surface for attaching local folder files
- * to a Managed Cloud conversation.
- *
- * Picking a folder in Cloud mode grants nothing (see `hooks/useFolderSelection`).
- * This sheet is where local bytes actually become cloud-bound, and it is the
- * only place that decision is made, so it carries the whole ceremony the locked
- * trust boundary requires: context selection, secret scan, payload preview,
- * consent, and a visible target.
- *
- * It fires ONCE, at confirm — not per send and not per file. The bytes are
- * frozen into `File` objects at read time, and their byte counts + SHA-256
- * checksums are part of `previewHashSha256`, so the preview is bound to exactly
- * what will upload. Approving later, or re-rendering, cannot change the payload
- * the user agreed to.
- *
- * The reader is injectable because the guarantee this component exists to
- * provide — that blocked content cannot reach the composer — must be testable
- * without a Tauri mock standing between the assertion and the behaviour.
- */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LocalByokHandoffDialog } from '@agiworkforce/unified-chat';
 import { buildLocalToByokHandoffDraft, type LocalToByokHandoffPreview } from '@agiworkforce/utils';
@@ -35,46 +15,26 @@ import {
 import { readFolderFiles, type ApprovedFolderFile } from './readFolderFiles';
 import { listCloudHandoffFiles } from './cloudHandoffGrant';
 
-/** Consent expires so an abandoned sheet cannot be confirmed much later. */
 export const CLOUD_FOLDER_CONSENT_TTL_MS = 15 * 60 * 1000;
 const FOLDER_DISCOVERY_LIMIT = 1000;
 const EXPIRED_PREVIEW_ERROR =
   'This payload preview expired. Change the selection to build a fresh preview, or close and pick the folder again.';
 
 export interface CloudFolderReadResult {
-  /** Files read into immutable browser File objects using their actual sizes. */
   files: ApprovedFolderFile[];
-  /** Defaults re-evaluated after read-time file sizes replace listing metadata. */
   defaultSelectedIds: string[];
-  /** True when glob discovery stopped at its explicit result bound. */
   discoveryTruncated: boolean;
-  /** Eligible discovered/read files left unselected by count or byte caps. */
   omittedForCap: number;
-  /** Selected listing entries dropped because they changed or could not be read. */
   omittedDuringRead: number;
 }
 
 export interface CloudFolderAttachSheetProps {
-  /** Absolute path of the picked folder, or null when the sheet is closed. */
   folderPath: string | null;
-  /** Opaque, expiring capability created by the native folder picker. */
   folderGrantId: string | null;
-  /** Conversation the approved files will ride on. */
   sourceSessionId: string;
-  /**
-   * True only while the same signed-in Managed Cloud account that opened this
-   * sheet remains authoritative. Mode changes, sign-out, and account switches
-   * must flip this false immediately.
-   */
   managedBoundaryActive: boolean;
   onClose: () => void;
-  /** Receives the approved files, already named by their folder-relative path. */
   onApprove: (files: File[]) => void;
-  /**
-   * Test seam. Production reads the folder through Tauri; tests inject
-   * candidates directly so the consent guarantee is asserted against this
-   * component rather than against a mock.
-   */
   readCandidates?: (folderGrantId: string) => Promise<CloudFolderReadResult>;
 }
 
@@ -150,14 +110,10 @@ export function CloudFolderAttachSheet({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // The parent computes this from both app mode and the live authenticated
-  // account id. Rendering nothing is the synchronous guard; closing clears the
-  // retained folder path so the old consent cannot reappear after a switch.
   useEffect(() => {
     if ((folderPath || folderGrantId) && !managedBoundaryActive) onClose();
   }, [folderPath, folderGrantId, managedBoundaryActive, onClose]);
 
-  // Read the folder whenever a new one is picked.
   useEffect(() => {
     if (!folderPath || !folderGrantId || !managedBoundaryActive) {
       setAvailable([]);
@@ -198,8 +154,6 @@ export function CloudFolderAttachSheet({
     [available, selectedIds],
   );
 
-  // Rebuild the preview whenever the selection changes, so unticking a flagged
-  // file clears the block rather than dead-ending the flow on any real repo.
   useEffect(() => {
     if (!folderPath || !folderGrantId || !managedBoundaryActive || selectedFiles.length === 0) {
       setPreview(null);
@@ -209,8 +163,6 @@ export function CloudFolderAttachSheet({
     let cancelled = false;
     setIsBuilding(true);
     setPreview(null);
-    // A later valid selection must not remain blocked by an error from an
-    // earlier preview build.
     setError(null);
     void buildLocalToByokHandoffDraft({
       sourceSessionId,
@@ -220,7 +172,6 @@ export function CloudFolderAttachSheet({
       selectedContext: selectedFiles.map((f) => ({
         id: f.candidate.relativePath,
         kind: 'file' as const,
-        // Relative throughout: the payload never carries a home directory.
         label: f.candidate.relativePath,
         sourceUri: f.candidate.relativePath,
         byteCount: f.candidate.byteCount,
@@ -245,8 +196,6 @@ export function CloudFolderAttachSheet({
     };
   }, [folderPath, folderGrantId, managedBoundaryActive, selectedFiles, sourceSessionId]);
 
-  // Expiry is visible before the user clicks, while handleConfirm below still
-  // performs the authoritative time check in case a timer is delayed.
   useEffect(() => {
     if (!preview) return;
     const expiresAt = Date.parse(preview.draft.expiresAt);
@@ -280,9 +229,6 @@ export function CloudFolderAttachSheet({
   }, []);
 
   const handleConfirm = useCallback(() => {
-    // Defence in depth. The dialog already disables confirm while blocked, but
-    // this component owns the guarantee, so it re-checks rather than trusting
-    // its own UI.
     if (!managedBoundaryActive || !preview || preview.redactionReport.blocked || error) return;
     const expiresAt = Date.parse(preview.draft.expiresAt);
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {

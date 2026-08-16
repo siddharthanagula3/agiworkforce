@@ -89,31 +89,12 @@ export interface ManagedAgentStreamInput {
     userId: string;
     runId: string;
   };
-  /** Durable owner notification, completed before the terminal event is exposed. */
   onTerminal?: (outcome: 'completed' | 'failed' | 'cancelled') => Promise<void>;
-  /** A persisted approval boundary survives a client disconnect. */
   preserveAwaitingInputOnCancel?: () => boolean;
-  /**
-   * AUDIT-FIX SYS-21: the request view of the model that ACTUALLY served, after
-   * any managed-failover rotation inside the loop. Settlement must price by it,
-   * not by the primary that failed. Defaults to `processed`.
-   */
   getServingRequest?: () => ProcessedRequest;
-  /**
-   * AUDIT-FIX BUG-10/STR-5: owner for server-side assistant-turn persistence.
-   * When present (and the request carried `assistant_message_id`), the turn is
-   * written server-side on completion AND on cancellation, so a tab close
-   * mid-stream no longer loses a fully-generated, fully-billed turn.
-   */
   userId?: string;
 }
 
-/**
- * Adapt a custom research/tool generator to a response stream while enforcing
- * the managed-billing terminal invariant: provider usage is durably settled
- * before `[DONE]` becomes visible to the client. Generator-owned terminal
- * events are consumed and exactly one route-owned terminal event is emitted.
- */
 export function buildManagedAgentStream(
   input: ManagedAgentStreamInput,
 ): ReadableStream<Uint8Array> {
@@ -122,10 +103,6 @@ export function buildManagedAgentStream(
   let reportedFailure = false;
   let lastTaskState: AgentTaskState | undefined;
   let terminalReported = false;
-  // AUDIT-FIX BUG-10/STR-5: accumulate the same visible prose the browser
-  // accumulates, so a server-side save reproduces what the user actually saw.
-  // Skipped entirely when the turn is not persistable (no conversation, no
-  // assistant_message_id, or a Temporary Chat) so no work is done for nothing.
   const persistable = Boolean(input.userId) && canPersistAssistantTurn(input.processed);
   let assistantText = '';
   const interactiveCards = new Map<string, InteractiveCard>();
@@ -166,12 +143,6 @@ export function buildManagedAgentStream(
     lastTaskState = state;
   };
 
-  /**
-   * The request view that reflects the model actually serving right now. The
-   * managed-usage reservation and free-trial reservation are the PRIMARY's
-   * (one reservation spans every attempt); only the provider/model used for
-   * pricing and attribution follow the rotation.
-   */
   const servingRequest = (): ProcessedRequest => input.getServingRequest?.() ?? input.processed;
 
   const settle = async (reason: string, outcome: 'completed' | 'failed' | 'cancelled') => {
@@ -185,10 +156,6 @@ export function buildManagedAgentStream(
         usage: input.usage,
         reason,
         cancelled: outcome !== 'completed',
-        // CPST Stage-0 telemetry, MANAGED CLOUD ONLY. Read from the SERVING
-        // request view so a rotated attempt reports the route and retry count
-        // that actually produced the bill. 'cancelled' is the agent's own
-        // terminal signal, which is why it is not derived from the charge.
         cpst: buildCpstUsageFields(serving, {
           billingOutcome: outcome === 'completed' ? 'completed' : 'failed',
           ...(outcome === 'cancelled' ? { cancelled: true } : {}),
@@ -222,8 +189,6 @@ export function buildManagedAgentStream(
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
-        // A generator may already emit [DONE]. Consume it and continue pulling
-        // until the generator itself terminates; only then can settlement run.
         while (true) {
           const next = await input.generator.next();
           if (next.done) {
@@ -328,10 +293,6 @@ export function buildManagedAgentStream(
               input.preserveAwaitingInputOnCancel?.() ? 'awaiting_input' : 'cancelled',
             );
           }
-          // AUDIT-FIX BUG-10/STR-5: an aborted turn is saved as
-          // truncated-but-complete rather than vanishing. Billing has already
-          // settled above, so the user is never charged for a turn with no
-          // record of it.
           await persistTurn(true);
           await reportTerminal('cancelled');
         }

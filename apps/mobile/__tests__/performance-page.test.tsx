@@ -29,10 +29,6 @@
  *    19. Switches have accessibilityRole switch (3 total)
  */
 
-// ---------------------------------------------------------------------------
-// Mocks — must be before any imports
-// ---------------------------------------------------------------------------
-
 const mockStorage = new Map<string, string>();
 
 jest.mock('../lib/mmkv', () => ({
@@ -89,8 +85,6 @@ jest.mock('@agiworkforce/local-llm', () => {
   };
 });
 
-// Inject AGIFoundationModels into the jest-expo NativeModules mock.
-// jest-expo provides a pre-configured react-native mock so we only extend it.
 const { NativeModules } = require('react-native');
 NativeModules.AGIFoundationModels = {
   getThermalState: jest.fn().mockReturnValue(0),
@@ -161,10 +155,6 @@ jest.mock('lucide-react-native', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makePerfEvent(
   overrides: Partial<import('../services/performanceMonitor').PerfEvent> = {},
 ): import('../services/performanceMonitor').PerfEvent {
@@ -178,10 +168,6 @@ function makePerfEvent(
     ...overrides,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Tests — performanceMonitor service
-// ---------------------------------------------------------------------------
 
 import {
   recordPerfEvent,
@@ -207,7 +193,6 @@ describe('performanceMonitor service', () => {
     mockIsThermallyThrottled.mockReturnValue(false);
   });
 
-  // 1. recordPerfEvent stores events
   it('recordPerfEvent stores events and returns them via getPerfEventsLastDays', () => {
     const event = makePerfEvent({ tokensPerSecond: 42 });
     recordPerfEvent(event);
@@ -216,7 +201,6 @@ describe('performanceMonitor service', () => {
     expect(events[0]!.tokensPerSecond).toBe(42);
   });
 
-  // 2. getPerfEventsLastDays filters old events
   it('getPerfEventsLastDays excludes events older than N days', () => {
     const old = makePerfEvent({ ts: Date.now() - 8 * 24 * 60 * 60 * 1000, tokensPerSecond: 5 });
     const recent = makePerfEvent({ ts: Date.now(), tokensPerSecond: 30 });
@@ -227,7 +211,6 @@ describe('performanceMonitor service', () => {
     expect(events[0]!.tokensPerSecond).toBe(30);
   });
 
-  // 3. getRollingStats computes correct averages
   it('getRollingStats returns correct average tok/s and TTFT', () => {
     recordPerfEvent(makePerfEvent({ tokensPerSecond: 10, firstTokenLatencyMs: 100 }));
     recordPerfEvent(makePerfEvent({ tokensPerSecond: 20, firstTokenLatencyMs: 200 }));
@@ -238,7 +221,6 @@ describe('performanceMonitor service', () => {
     expect(stats.avgFirstTokenLatencyMs).toBeCloseTo(200, 1);
   });
 
-  // 4. recordBenchmark + getBenchmarkHistory round-trip
   it('recordBenchmark persists and getBenchmarkHistory returns results newest-first', () => {
     const r1: import('../services/performanceMonitor').BenchmarkResult = {
       ts: 1000,
@@ -256,12 +238,10 @@ describe('performanceMonitor service', () => {
     recordBenchmark(r2);
     const history = getBenchmarkHistory();
     expect(history.length).toBe(2);
-    // Newest first
     expect(history[0]!.ts).toBe(2000);
     expect(history[1]!.ts).toBe(1000);
   });
 
-  // 5. clearPerfData wipes both keys
   it('clearPerfData wipes events and benchmarks', () => {
     recordPerfEvent(makePerfEvent());
     recordBenchmark({
@@ -280,7 +260,6 @@ describe('performanceMonitor service', () => {
     expect(getBenchmarkHistory().length).toBe(0);
   });
 
-  // 6. runBenchmark produces correct shape and persists
   it('runBenchmark calls generate and persists result', async () => {
     const generate = jest
       .fn()
@@ -305,7 +284,6 @@ describe('performanceMonitor service', () => {
     expect(history[0]!.modelId).toBe(DEFAULT_LOCAL_MODEL_ID);
   });
 
-  // 7. getThermalState returns a valid state
   it('getThermalState returns a valid thermal state string', () => {
     const state = getThermalState();
     expect(['nominal', 'fair', 'serious', 'critical']).toContain(state);
@@ -319,10 +297,6 @@ describe('performanceMonitor service', () => {
     expect(getThermalState()).toBe('nominal');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Tests — MMKV bool persistence (via the perf settings keys)
-// ---------------------------------------------------------------------------
 
 import {
   PERF_CHIP_SHOW_KEY,
@@ -342,7 +316,6 @@ describe('perf settings MMKV keys', () => {
     expect(PERF_BATTERY_PAUSE_KEY).toBe('perf-pause-at-battery-v1');
   });
 
-  // 9. Bool round-trip
   it('bool round-trip via raw mmkv storage', () => {
     const { storage } = require('../lib/mmkv');
     storage.set('perf-show-chip-v1', 'false');
@@ -351,10 +324,6 @@ describe('perf settings MMKV keys', () => {
     expect(storage.getString('perf-show-chip-v1')).toBe('true');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Tests — PerformanceScreen rendering
-// ---------------------------------------------------------------------------
 
 import { act, render } from '@testing-library/react-native';
 import PerformanceScreen from '../app/(app)/settings/performance';
@@ -373,13 +342,11 @@ describe('PerformanceScreen rendering', () => {
     jest.clearAllMocks();
   });
 
-  // 10. Renders header
   it('renders the "Performance" header', async () => {
     const { getAllByText } = await renderSettledPerformanceScreen();
     expect(getAllByText('Performance').length).toBeGreaterThanOrEqual(1);
   });
 
-  // 11. Renders Device Tier card
   it('renders the Device Tier card heading', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Device Tier')).toBeTruthy();
@@ -410,31 +377,26 @@ describe('PerformanceScreen rendering', () => {
     expect(queryByText('Unknown')).toBeNull();
   });
 
-  // 12. Renders Active Model card
   it('renders the Active Model card heading', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Active Model')).toBeTruthy();
   });
 
-  // 13. Renders Benchmark CTA
   it('renders "Benchmark This Device" card', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Benchmark This Device')).toBeTruthy();
   });
 
-  // 14. Renders Thermal State card
   it('renders Thermal State card heading', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Thermal State')).toBeTruthy();
   });
 
-  // 15. Renders Inference Settings section
   it('renders the "Inference Settings" section label', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Inference Settings')).toBeTruthy();
   });
 
-  // 16. Renders toggle labels
   it('renders the three toggle labels', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Pause at serious thermal')).toBeTruthy();
@@ -442,20 +404,17 @@ describe('PerformanceScreen rendering', () => {
     expect(getByText('Show performance chip in chat')).toBeTruthy();
   });
 
-  // 17. Renders Run Benchmark button text
   it('renders the Run Benchmark button', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Run Benchmark')).toBeTruthy();
   });
 
-  // 18. Run Benchmark has correct accessibility role
   it('Run Benchmark button has correct accessibility role', async () => {
     const { getByRole } = await renderSettledPerformanceScreen();
     const btn = getByRole('button', { name: 'Run Benchmark' });
     expect(btn).toBeTruthy();
   });
 
-  // 19. Three switches
   it('switches have accessibilityRole switch (3 total)', async () => {
     const { getAllByRole } = await renderSettledPerformanceScreen();
     const switches = getAllByRole('switch');

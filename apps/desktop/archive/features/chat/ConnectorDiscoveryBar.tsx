@@ -1,10 +1,3 @@
-/**
- * ConnectorDiscoveryBar Component
- *
- * Slim discovery bar shown in the empty chat state, prompting users to connect
- * their tools. Clicking opens the connectors settings tab; the X dismisses it
- * and persists the dismissal in localStorage.
- */
 
 import React, { useMemo, useState } from 'react';
 import { Link, X } from 'lucide-react';
@@ -32,7 +25,6 @@ export const ConnectorDiscoveryBar: React.FC<ConnectorDiscoveryBarProps> = ({ cl
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
   const connectedIds = useConnectorsStore((s) => s.connectedIds);
 
-  // Show featured connectors not yet connected, then fall back to featured connectors
   const displayedConnectors = useMemo(() => {
     const featured = CONNECTOR_DEFS.filter((c) => c.featured && !c.comingSoon);
     const unconnected = featured.filter((c) => !connectedIds.includes(c.id));

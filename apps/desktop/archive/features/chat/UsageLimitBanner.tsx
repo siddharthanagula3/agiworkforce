@@ -7,8 +7,6 @@ import {
   selectBudgetPercentage,
 } from '../../stores/billingUsage';
 
-// ── Urgency levels ────────────────────────────────────────────────────────────
-
 type UrgencyLevel = 'info' | 'warning' | 'critical';
 
 function getUrgencyLevel(usagePercent: number): UrgencyLevel {
@@ -16,8 +14,6 @@ function getUrgencyLevel(usagePercent: number): UrgencyLevel {
   if (usagePercent >= 90) return 'warning';
   return 'info';
 }
-
-// ── Time helpers ──────────────────────────────────────────────────────────────
 
 function formatTimeRemaining(resetTimeMs: number): string {
   const now = Date.now();
@@ -38,8 +34,6 @@ function formatTimeRemaining(resetTimeMs: number): string {
   return `${minutes}m`;
 }
 
-// ── UsageLimitBanner ──────────────────────────────────────────────────────────
-
 interface UsageLimitBannerProps {
   usagePercent: number;
   remaining: number;
@@ -47,16 +41,6 @@ interface UsageLimitBannerProps {
   onDismiss: () => void;
 }
 
-/**
- * Inline usage limit banner rendered directly in the chat stream.
- * Mirrors Gemini's pattern of surfacing limits where users feel them,
- * not buried in settings.
- *
- * Urgency thresholds:
- *   > 70%  → subtle info (white/zinc)
- *   > 90%  → warning (orange)
- *   > 95%  → critical (red)
- */
 export function UsageLimitBanner({
   usagePercent,
   remaining,
@@ -122,30 +106,18 @@ export function UsageLimitBanner({
   );
 }
 
-// ── UsageLimitBannerContainer ─────────────────────────────────────────────────
-
 interface UsageLimitBannerContainerProps {
   hasMessages: boolean;
 }
 
 const SHOW_THRESHOLD = 70;
 
-/**
- * Container that reads from billingUsageStore and renders UsageLimitBanner
- * when usage is above the 70% threshold. Dismissed state is session-local
- * (resets on page/app refresh), which avoids the need for persisted state.
- */
 export function UsageLimitBannerContainer({ hasMessages }: UsageLimitBannerContainerProps) {
   const [dismissed, setDismissed] = useState(false);
 
   const budget = useBillingUsageStore(selectBudget);
   const usagePercent = useBillingUsageStore(selectBudgetPercentage);
 
-  // Do not render when:
-  // – No messages yet in the conversation (empty state)
-  // – Budget tracking is not enabled by the user
-  // – Usage is below the visibility threshold
-  // – User dismissed the banner this session
   if (!hasMessages || !budget.enabled || usagePercent < SHOW_THRESHOLD || dismissed) {
     return null;
   }

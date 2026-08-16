@@ -42,9 +42,6 @@ const COLOPHON: { key: string; val: ReactNode }[] = [
   { key: 'Surfaces', val: 'Web · Desktop · Mobile · CLI · Chrome · VS Code' },
   {
     key: 'Model catalog',
-    // Derived from models.json, dated by its own lastUpdated stamp. A dated,
-    // inspectable catalog is the most credible thing to show a technical
-    // reader — an undated "50+" is the least.
     val: `${MARKETING.models.count} models · ${MARKETING.providers.count} provider integrations, as of ${CATALOG_AS_OF}`,
   },
   { key: 'Trust modes', val: 'Local · BYOK · Managed cloud (public alpha)' },
@@ -52,9 +49,6 @@ const COLOPHON: { key: string; val: ReactNode }[] = [
   { key: 'Set in', val: 'Newsreader & Geist' },
   {
     key: 'Compliance',
-    // Never state a bare "SOC 2 planned" without the qualification travelling
-    // with it — an unqualified compliance line in a colophon is what ends up
-    // screenshotted into a security questionnaire.
     val: (
       <>
         No certifications held. SOC 2 is planned with no audit report and no date.{' '}

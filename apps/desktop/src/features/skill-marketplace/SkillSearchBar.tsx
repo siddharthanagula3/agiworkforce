@@ -1,9 +1,3 @@
-/**
- * SkillSearchBar
- *
- * Debounced search input for the Skill Marketplace panel.
- * Fires the store's setSearchQuery action 300 ms after the user stops typing.
- */
 import { Search, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
@@ -20,8 +14,6 @@ export function SkillSearchBar() {
   const pendingValueRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Sync local value when the store changes externally. While the user is
-  // typing, the debounced commit owns the temporary local value.
   useEffect(() => {
     if (pendingValueRef.current !== null) {
       return;

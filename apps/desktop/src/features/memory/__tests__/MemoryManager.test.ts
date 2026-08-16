@@ -1,22 +1,15 @@
-/**
- * MemoryManager Component Tests
- *
- * Tests for the primary memory management interface
- */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useMemoryStore } from '@/stores/memoryStore';
 import type { MemoryEntry } from '@/stores/memoryStore';
 
 describe('MemoryManager', () => {
   beforeEach(() => {
-    // Reset store between tests
     const state = useMemoryStore.getState();
     state.reset();
   });
 
   describe('memory filtering', () => {
     it('should filter memories by category', () => {
-      // Test memories
       const mockMemories = [
         {
           id: 1,
@@ -38,7 +31,6 @@ describe('MemoryManager', () => {
         },
       ];
 
-      // Verify category filtering logic
       const preferences = mockMemories.filter((m) => m.category === 'preference');
       expect(preferences).toHaveLength(1);
       expect(preferences[0]!.category).toBe('preference');

@@ -87,8 +87,6 @@ function isCurrentManagedGeneration(generation: number, boundary: ManagedCloudBo
 
 function publishCompanionSessionEnded(): void {
   if (typeof window !== 'undefined') {
-    // EventTarget dispatch is synchronous. The Cowork runtime uses this to
-    // discard request/task mappings before a replacement account can pair.
     window.dispatchEvent(new Event(MOBILE_COMPANION_SESSION_ENDED_EVENT));
   }
 }
@@ -322,8 +320,6 @@ export const useConnectionStore = create<MobileCompanionState>()(
   devtools(
     subscribeWithSelector((set, get) => {
       const resetRemoteDispatch = () => {
-        // resetDispatchSession now revokes its in-memory authority before its
-        // native cleanup awaits, so no control can cross a boundary transition.
         void resetDispatchSession().catch((error) =>
           console.warn('[connection] dispatch reset failed:', error),
         );
@@ -366,7 +362,6 @@ export const useConnectionStore = create<MobileCompanionState>()(
           pairingAbortController = null;
         }
 
-        // Close signaling client
         if (signalingClient) {
           try {
             signalingClient.close();
@@ -376,7 +371,6 @@ export const useConnectionStore = create<MobileCompanionState>()(
           signalingClient = null;
         }
 
-        // Stop all media tracks and release the stream
         if (localStream) {
           try {
             localStream.getTracks().forEach((track) => {
@@ -421,7 +415,6 @@ export const useConnectionStore = create<MobileCompanionState>()(
             if (!isCurrentPeerSession()) return;
             set({ peerConnected: true, status: 'pairing' });
 
-            // Initialise HMAC session key from the salt mobile sent in metadata.
             const saltInfo = extractDispatchSalt(event.metadata);
             if (saltInfo) {
               const pairingCode = get().pairingCode;
@@ -660,14 +653,6 @@ export const useConnectionStore = create<MobileCompanionState>()(
           const authHeaders = await requestContext.getHeaders();
           if (!isCurrentAttempt()) return;
 
-          // Mobile pairing is a managed-cloud (cross-device sync) operation.
-          // Route through the egress guard so it fails closed in Local/BYOK mode
-          // instead of reaching our signaling/gateway. (Trust-boundary chokepoint.)
-          //
-          // STB-8: /api/pair/* is served only by the Express api-gateway, so this
-          // must target GATEWAY_BASE_URL. Sending it to the Next.js origin 404'd
-          // and the QR code never rendered unless VITE_API_BASE_URL happened to
-          // be overridden at build time.
           const response = await requestContext.fetch(
             `${GATEWAY_BASE_URL.replace(/\/+$/, '')}/api/pair/initiate`,
             {
@@ -798,9 +783,5 @@ function stopCompanionAtInvalidBoundary(): void {
   }
 }
 
-// These subscriptions are deliberately module-owned rather than UI-owned.
-// Closing a panel cannot extend a companion's authority, and every Zustand
-// transition reaches these listeners synchronously before later async work can
-// install an A-owned socket/peer under account B.
 useAppModeStore.subscribe(stopCompanionAtInvalidBoundary);
 useAuthStore.subscribe(stopCompanionAtInvalidBoundary);

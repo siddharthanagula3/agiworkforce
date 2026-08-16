@@ -1,16 +1,3 @@
-/**
- * SIX-25 regression: GA4 must not load without analytics consent.
- *
- * The defect: `CookieConsent` was a complete banner whose only occurrence in
- * the repo was its own declaration, while `app/layout.tsx` rendered
- * `<GoogleAnalytics/>` for every visitor whenever NEXT_PUBLIC_GA_TRACKING_ID
- * was set — no consent check anywhere — against a published /cookies policy
- * that says "Analytics is opt-in".
- *
- * These tests assert the shipped behaviour end to end at the component seam:
- * no stored consent → no gtag.js script; opt in → script; opt back out →
- * script removed.
- */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -30,15 +17,9 @@ import {
   readCookiePreferences,
 } from '@shared/lib/cookie-consent';
 
-// next/script renders nothing useful in jsdom; stand in a real <script> so the
-// assertions are about an actual gtag.js tag in the document.
 vi.mock('next/script', () => ({
   default: ({ src, id, children }: { src?: string; id?: string; children?: string }) =>
     src ? (
-      // Test stand-in for next/script. Use `defer` rather than `async`: React
-      // 19 hoists async scripts into <head>, which would move the tag out of
-      // the render container and make the assertions test React's hoisting
-      // rather than the consent gate. `defer` also keeps this valid HTML.
       <script data-testid="ga-script" src={src} defer />
     ) : (
       <script data-testid={id ?? 'ga-inline'}>{children}</script>
@@ -57,7 +38,6 @@ vi.mock('next/link', () => ({
 
 const TRACKING_ID = 'G-TESTID0000';
 
-/** Queries the whole document: a real gtag.js tag anywhere counts as loaded. */
 function gaScripts(): HTMLScriptElement[] {
   return Array.from(document.querySelectorAll<HTMLScriptElement>('[data-testid="ga-script"]'));
 }
@@ -93,8 +73,6 @@ describe('AnalyticsConsentGate', () => {
   it('inserts no gtag.js script when nothing is stored', async () => {
     render(<AnalyticsConsentGate trackingId={TRACKING_ID} />);
 
-    // The effect runs on mount; give it a tick and assert it still rendered
-    // nothing rather than asserting before the read could have happened.
     await waitFor(() => expect(gaScripts()).toHaveLength(0));
   });
 
@@ -135,10 +113,8 @@ describe('CookieConsent banner drives the gate', () => {
         </>,
       );
 
-      // Nothing stored yet: no analytics before the user has said anything.
       expect(gaScripts()).toHaveLength(0);
 
-      // The banner appears after its 1s settle delay.
       await act(async () => {
         vi.advanceTimersByTime(1200);
       });
@@ -151,7 +127,6 @@ describe('CookieConsent banner drives the gate', () => {
       await waitFor(() => expect(gaScripts()).toHaveLength(1));
       expect(readCookiePreferences()).toEqual({ necessary: true, analytics: true });
 
-      // Withdrawal: reopen preferences from /cookies, switch analytics off, save.
       await act(async () => {
         window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_OPEN_EVENT));
       });
@@ -197,9 +172,6 @@ describe('CookieConsent banner drives the gate', () => {
   });
 
   it('is actually mounted by the root layout, and GA4 only through the gate', () => {
-    // The original defect was a mount, not a logic bug: the banner existed and
-    // nothing rendered it. Assert the mount, and assert the gate is the sole
-    // route to GoogleAnalytics anywhere in the app.
     const webRoot = resolve(__dirname, '../../..');
     const layout = readFileSync(join(webRoot, 'app/layout.tsx'), 'utf8');
     expect(layout).toMatch(/<CookieConsent\s*\/>/);

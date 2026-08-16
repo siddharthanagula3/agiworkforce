@@ -57,7 +57,6 @@ export const TerminalCommandCard: React.FC<TerminalCommandCardProps> = ({
     }
   };
 
-  // Compact mode: Show simple one-line status
   if (compactMode && !showExpanded) {
     return (
       <button

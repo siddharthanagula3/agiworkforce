@@ -1,16 +1,3 @@
-/**
- * Billing account types.
- *
- * These describe the subscription/customer/usage shapes surfaced to the
- * desktop UI. Subscription and customer records are populated by the cloud
- * auth orchestrator from the web `/api/me` response (see
- * `stores/authOrchestrator.ts`); the desktop never talks to Stripe directly.
- *
- * Historically these lived in `services/stripe.ts` alongside a client-side
- * `StripeService` that invoked Tauri billing commands with Stripe secrets.
- * That trust-boundary-violating backend was removed (2026-07-10); the types
- * remain because they model the data the web API returns.
- */
 
 import type { SubscriptionSource } from '../lib/cloudAccountTypes';
 

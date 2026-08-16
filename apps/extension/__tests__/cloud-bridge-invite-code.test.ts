@@ -12,10 +12,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Chrome storage shim — hoisted so module-level code in desktopBridge finds it
-// ---------------------------------------------------------------------------
-
 const chromeMock = vi.hoisted(() => {
   const localStore: Record<string, unknown> = {};
 
@@ -53,10 +49,6 @@ const chromeMock = vi.hoisted(() => {
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
-// ---------------------------------------------------------------------------
-// Imports — after mocks
-// ---------------------------------------------------------------------------
-
 import { waitlistService } from '../src/lib/waitlistService';
 import {
   InviteCodeModal,
@@ -68,10 +60,6 @@ import type {
   InviteCodeTab,
   InviteCodeModalProps,
 } from '../src/features/cloud-bridge/types';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeProps(overrides: Partial<InviteCodeModalProps> = {}): InviteCodeModalProps {
   return {
@@ -85,16 +73,10 @@ function makeProps(overrides: Partial<InviteCodeModalProps> = {}): InviteCodeMod
   };
 }
 
-// ---------------------------------------------------------------------------
-// Reset between tests
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
-  // Clear chrome storage
   for (const k of Object.keys(chromeMock._localStore)) delete chromeMock._localStore[k];
   vi.stubEnv('VITE_API_BASE_URL', 'https://agiworkforce.com');
   vi.clearAllMocks();
-  // Reinstall chrome global after clearAllMocks
   (globalThis as Record<string, unknown>).chrome = chromeMock;
 });
 
@@ -117,10 +99,6 @@ function mockCsrfAndApiResponse(body: unknown, status = 200): void {
     .mockResolvedValueOnce(makeJsonResponse(body, status));
 }
 
-// ---------------------------------------------------------------------------
-// types — shape checks
-// ---------------------------------------------------------------------------
-
 describe('types', () => {
   it('InviteCodeError union covers all 7 codes', () => {
     const codes: InviteCodeError[] = [
@@ -140,10 +118,6 @@ describe('types', () => {
     expect(sources).toHaveLength(4);
   });
 });
-
-// ---------------------------------------------------------------------------
-// waitlistService.redeemInviteCode
-// ---------------------------------------------------------------------------
 
 describe('waitlistService.redeemInviteCode', () => {
   it('returns success + inviteId on valid redemption', async () => {
@@ -237,10 +211,6 @@ describe('waitlistService.redeemInviteCode', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// waitlistService.joinWaitlist
-// ---------------------------------------------------------------------------
-
 describe('waitlistService.joinWaitlist', () => {
   it('posts record to the web API and returns success', async () => {
     mockCsrfAndApiResponse({ ok: true, joined: true });
@@ -289,10 +259,6 @@ describe('waitlistService.joinWaitlist', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// InviteCodeModal — DOM tests
-// ---------------------------------------------------------------------------
-
 describe('InviteCodeModal mount/unmount', () => {
   it('mounts a host element into container', () => {
     const modal = new InviteCodeModal(makeProps());
@@ -320,7 +286,6 @@ describe('InviteCodeModal open/close', () => {
     const modal = new InviteCodeModal(makeProps({ open: true }));
     modal.mount(document.body);
     const shadow = (document.querySelector('[data-agi-cloud-modal]') as HTMLElement).shadowRoot!;
-    // open=true removes the 'hidden' class
     expect(shadow.querySelector('.agi-modal-backdrop')!.classList.contains('hidden')).toBe(false);
     modal.unmount();
   });
@@ -383,15 +348,12 @@ describe('InviteCodeModal invite submit', () => {
     const input = shadow.querySelector('.agi-input.mono') as HTMLInputElement;
     const submitBtn = shadow.querySelector('.agi-btn') as HTMLButtonElement;
 
-    // Type a valid code (>= 6 chars)
     input.value = 'TESTCODE';
     input.dispatchEvent(new Event('input'));
 
-    // Submit should now be enabled
     expect(submitBtn.disabled).toBe(false);
 
     submitBtn.click();
-    // Wait for async resolution
     await vi.waitFor(() => expect(onRedeemed).toHaveBeenCalledWith('inv-xyz'), { timeout: 500 });
 
     modal.unmount();
@@ -448,7 +410,6 @@ describe('InviteCodeModal waitlist submit', () => {
     const shadow = (document.querySelector('[data-agi-cloud-modal]') as Element).shadowRoot!;
     const emailInput = shadow.querySelector('input[type="email"]') as HTMLInputElement;
     const submitBtns = shadow.querySelectorAll('.agi-btn');
-    // Waitlist tab content is the second tab-content; its button is the second .agi-btn
     const waitlistBtn = submitBtns[1] as HTMLButtonElement;
 
     emailInput.value = 'user@example.com';

@@ -1,38 +1,3 @@
-/**
- * OpenAI byte-parity pass (task #34's OpenAI slice, team-lead RULING:
- * Option B -- preserve fidelity, scoped by value).
- *
- * Unlike Anthropic/Google, OpenAI's legacy path (apps/web/lib/llm-providers/
- * openai.ts's `streamRequest`) does ZERO internal reshaping: it returns
- * `response.body` untouched, and `buildStreamResponse` (stream-transform.ts)
- * only rewrites the top-level `model` field for any non-Anthropic provider
- * (confirmed by reading both files directly) -- so the legacy wire is
- * near-verbatim real OpenAI Chat Completions SSE: full `{id, object,
- * created, model, system_fingerprint, service_tier, choices}` envelope, a
- * `role:"assistant"` announcement as the first chunk, `logprobs: null` on
- * every choice, and a trailing usage-only chunk (`choices: []`, `usage`).
- *
- * The canonical adapter path (`translateOpenAIStream` -> `StreamChunk` ->
- * `OpenAIWireAssembler`) round-trips through a narrower representation that
- * can't carry these by default. `OpenAIWireAssembler`'s `wireMode:
- * 'openai-passthrough'` (added for this ruling) closes the gap:
- *   - MUST-FIX (real regressions, reconstructed exactly): the role-
- *     announcement first chunk, and the trailing usage-only chunk.
- *   - SHOULD-PRESERVE (additive passthrough via `StreamChunkResponseMeta`,
- *     packages/ai/providers/openai/src/stream.ts's `translateOpenAIStream`):
- *     real `id`/`created`.
- *   - BEST-EFFORT (cheap, included): `system_fingerprint`, `service_tier`
- *     (via the same `StreamChunkResponseMeta`), and a static `logprobs:
- *     null` (real OpenAI always returns this when the caller never requests
- *     `logprobs: true`, which `translateChatRequest` never does -- a
- *     constant, not per-token data threaded through the pipeline).
- *
- * This suite drives the REAL route functions (`buildStreamResponse`,
- * `buildAdapterStreamResponse` with `wireMode: 'openai-passthrough'`) for
- * the SAME fixture, matching stream-transform.byte-parity.test.ts's
- * (Anthropic) and stream-transform.google-byte-parity.test.ts's rigor, and
- * asserts actual byte parity -- not divergence documentation.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 
@@ -114,9 +79,6 @@ function dataLines(body: string): string[] {
     .filter((line) => line !== 'data: [DONE]');
 }
 
-/** Raw upstream ReadableStream matching what openai.ts's streamRequest
- *  forwards -- fetch's raw response.body, UNMODIFIED (see lib/llm-providers/
- *  openai.ts: `return response.body;`, zero reshaping). */
 function rawOpenAISseStream(chunks: OpenAIChatCompletionChunk[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const lines: string[] = [];
@@ -138,13 +100,6 @@ async function* asChunks(
   for (const chunk of chunks) yield chunk;
 }
 
-/** Realistic real-OpenAI-shaped fixture: role-bearing first delta,
- *  system_fingerprint/service_tier (present on every chunk, matching real
- *  OpenAI's own behavior of repeating stable per-stream metadata) and
- *  logprobs (fields the raw SSE carries), text deltas, a finish chunk, and
- *  a trailing usage-only chunk with `choices: []` (real OpenAI's actual
- *  `stream_options.include_usage` shape -- the usage-only chunk arrives on
- *  its OWN, separate, finish_reason-less chunk, after the finish chunk). */
 const textFixture: OpenAIChatCompletionChunk[] = [
   {
     id: 'chatcmpl-real-openai-id-abc123',
@@ -207,10 +162,6 @@ const textFixture: OpenAIChatCompletionChunk[] = [
   } as unknown as OpenAIChatCompletionChunk,
 ];
 
-/** Tool-call fixture -- a structurally different delta shape (`tool_calls`
- *  instead of `content`) than the text fixture, verified separately since
- *  `chunkEnvelope`'s openai-passthrough branch is generic over `delta` but
- *  worth confirming end-to-end rather than assumed from the text case alone. */
 const toolCallFixture: OpenAIChatCompletionChunk[] = [
   {
     id: 'chatcmpl-real-openai-id-tool456',
@@ -327,7 +278,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
     );
     const adapterBody = await collectBody(adapterResponse as any);
 
-    // Sanity: prove the comparison is non-trivial.
     expect(legacyBody.length).toBeGreaterThan(100);
     expect(dataLines(legacyBody).length).toBe(5);
 
@@ -405,12 +355,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
   });
 
   it('real per-chunk logprobs survive the round-trip when the request set logprobs:true (full passthrough, not a static null)', async () => {
-    // Unlike id/created/system_fingerprint/service_tier (stream-stable,
-    // captured once), logprobs varies PER CHUNK -- OpenAI reports different
-    // token-level data on every chunk. translateChatRequest never sets
-    // logprobs:true today, so every OTHER fixture in this file legitimately
-    // has logprobs:null throughout; this fixture proves the plumbing
-    // reproduces a REAL non-null value too, not just "null stays null."
     const realLogprobs = {
       content: [{ token: 'Cats', logprob: -0.1, bytes: [67, 97, 116, 115], top_logprobs: [] }],
     };
@@ -478,9 +422,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
   });
 
   it('falls back to a synthesized id/created when the producer supplies none (compat providers)', async () => {
-    // No StreamChunkResponseMeta at all -- simulates a provider whose stream
-    // never carries a stable id/created (or a future compat vendor whose
-    // wire doesn't). openai-passthrough must not crash or emit "undefined".
     async function* chunksWithoutMeta(): AsyncIterable<StreamChunk> {
       yield { type: 'text-delta', delta: 'hi' };
       yield { type: 'stop', reason: 'end_turn' };
@@ -503,11 +444,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
   });
 
   it('[DONE] is emitted exactly once, even though OpenAI real Chat Completions SSE already contains its own', async () => {
-    // The official openai SDK (createOpenAIAdapter uses sdk.chat.completions.create())
-    // parses [DONE] internally and ends the async iterable -- it never
-    // surfaces as a yielded chunk for translateOpenAIStream to see or
-    // re-emit, so there is no double-up risk on the input side; this
-    // confirms there's exactly one on the output side too.
     const adapterResponse = await buildAdapterStreamResponse(
       makeRequest() as any,
       translateOpenAIStream(asChunks(textFixture)) as AsyncIterable<StreamChunk>,

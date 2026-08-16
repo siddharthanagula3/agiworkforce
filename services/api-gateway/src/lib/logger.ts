@@ -1,6 +1,3 @@
-/**
- * Structured logging utility using Pino
- */
 
 import pino from 'pino';
 

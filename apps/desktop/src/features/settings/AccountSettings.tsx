@@ -1,18 +1,3 @@
-/**
- * AccountSettings tab content
- *
- * Cloud account identity, plan, linked device, credits, and sign-out.
- *
- * Rendered as hairline-divided rows inside bordered groups — the same pattern
- * DesktopCloudSettingsModal already uses for Capabilities — instead of one
- * short card floating in an otherwise empty 620px pane. Every row is backed by
- * data already in the auth store; nothing is invented and nothing is faked when
- * a field is absent (the row is simply not rendered).
- *
- * Identity itself is Clerk-owned, so name/email are read-only and "Manage
- * account" hands off. Subscription changes stay in the Cloud Billing section;
- * the Plan row only links to the same Stripe portal.
- */
 import { useState } from 'react';
 import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { Button } from '@/ui/Button';
@@ -44,8 +29,6 @@ function initialsOf(name: string): string {
     .slice(0, 2);
 }
 
-/** One hairline-divided row: label + optional description on the left, an
- *  optional control on the right. */
 function Row({
   label,
   description,
@@ -239,9 +222,6 @@ export function AccountSettings() {
   );
 }
 
-/** Shares the meter shape used by the Usage section. Kept local on purpose:
- *  importing it from DesktopCloudSettingsModal would pull the whole settings
- *  modal back into this lazily-loaded chunk (that module lazy-loads this one). */
 function CreditMeter({
   label,
   usedCents,

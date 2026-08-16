@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 
-/** Returns true when the OS/browser `prefers-reduced-motion` media query matches. */
 export function useReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
@@ -16,7 +15,6 @@ export function useReducedMotion(): boolean {
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     } else {
-      // Older Safari fallback
 
       mediaQuery.addListener(handleChange);
 

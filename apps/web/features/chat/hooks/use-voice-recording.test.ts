@@ -1,17 +1,7 @@
-/**
- * Tests for useVoiceRecording hook utilities
- *
- * Tests cover:
- * - Browser support detection
- * - MIME type selection
- * - Permission status types
- * - Hook export validation
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import type { PermissionStatus, VoiceRecordingState } from './use-voice-recording';
 
-// Mock MediaRecorder class for testing
 class MockMediaRecorder {
   state: 'inactive' | 'recording' | 'paused' = 'inactive';
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
@@ -47,7 +37,6 @@ class MockMediaRecorder {
   }
 }
 
-// Mock MediaStream
 class MockMediaStream {
   private tracks: { stop: () => void }[] = [];
 
@@ -60,7 +49,6 @@ class MockMediaStream {
   }
 }
 
-// Mock AudioContext
 class MockAudioContext {
   state: 'running' | 'suspended' | 'closed' = 'running';
 
@@ -233,19 +221,15 @@ describe('useVoiceRecording', () => {
       const stream = new MockMediaStream() as unknown as MediaStream;
       const recorder = new MockMediaRecorder(stream);
 
-      // inactive -> recording
       recorder.start();
       expect(recorder.state).toBe('recording');
 
-      // recording -> paused
       recorder.pause();
       expect(recorder.state).toBe('paused');
 
-      // paused -> recording
       recorder.resume();
       expect(recorder.state).toBe('recording');
 
-      // recording -> inactive
       recorder.stop();
       expect(recorder.state).toBe('inactive');
     });
@@ -261,7 +245,6 @@ describe('useVoiceRecording', () => {
         'audio/ogg',
       ];
 
-      // Find first supported type
       const supported = mimeTypes.find((type) => MockMediaRecorder.isTypeSupported(type));
       expect(supported).toBe('audio/webm;codecs=opus');
     });

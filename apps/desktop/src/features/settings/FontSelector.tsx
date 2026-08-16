@@ -1,11 +1,3 @@
-/**
- * FontSelector — "Chat Font" section for the Settings Appearance tab.
- *
- * Renders 4 clickable "Aa" tiles. Selected tile gets a blue border and a
- * Check icon overlay. Unselected tiles have a subtle border that brightens on
- * hover. Font selection is persisted in settingsStore.windowPreferences.chatFont
- * and applied immediately via the --chat-font-family CSS variable.
- */
 import { Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useSettingsStore, selectChatFont } from '../../stores/settingsStore';

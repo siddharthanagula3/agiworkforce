@@ -1,19 +1,3 @@
-/**
- * Full-screen composer editor (PAR-M05).
- *
- * The inline composer caps its TextInput at ~6 lines, so a long or pasted
- * message scrolls inside a small window with no way to read it whole — the
- * founder's "when we paste large text in input area its width goes very large
- * and only the middle input" report. Both references solve it the same way: once
- * the composer card grows past a couple of lines a diagonal expand button
- * appears pinned inside its top-right corner and opens the message full screen
- * (IMG_0672).
- *
- * This modal deliberately owns NO text state. It renders the composer's own
- * `text` / `onChangeText` and its send handler, so expanding and collapsing is a
- * pure view change: draft persistence, the large-paste-to-attachment
- * conversion, and attachments all keep behaving exactly as they do inline.
- */
 
 import { View, TextInput, Modal, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,17 +8,12 @@ import { SendButton } from './SendButton';
 
 interface ComposerFullScreenEditorProps {
   visible: boolean;
-  /** The composer's text — this editor never forks it. */
   value: string;
   onChangeText: (next: string) => void;
   placeholder?: string;
-  /** Mirrors the composer's right-control state so send/stop stay identical. */
   sendState: 'idle' | 'streaming' | 'queued';
-  /** False when there is nothing to send (empty composer, no attachments). */
   canSend: boolean;
-  /** Collapse back to the inline composer, keeping the message. */
   onClose: () => void;
-  /** The same handler the inline composer's right control runs (send, or stop). */
   onSend: () => void;
 }
 
@@ -51,8 +30,6 @@ export function ComposerFullScreenEditor({
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
 
-  // Mounted only while open: an always-mounted autoFocus field would fight the
-  // inline composer for the keyboard.
   if (!visible) return null;
 
   return (

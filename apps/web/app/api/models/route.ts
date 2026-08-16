@@ -10,21 +10,8 @@ import {
   type ModelMetadata,
 } from '@agiworkforce/types';
 
-/**
- * Model Catalog API
- * Endpoint: GET /api/models
- *
- * Returns the canonical model catalog sourced from @agiworkforce/types (models.json).
- * This is the single source of truth for model metadata consumed by the
- * desktop app, web app, and any external integrations.
- *
- * Response is publicly cacheable (Cache-Control: public, max-age=300) because
- * model metadata changes infrequently (only on model releases/updates).
- */
-
 export const runtime = 'nodejs';
 
-// Capabilities subset exposed in the public API response
 interface ModelCapabilities {
   vision: boolean;
   tools: boolean;
@@ -36,7 +23,6 @@ interface ModelCapabilities {
   search: boolean;
 }
 
-// Pricing in USD per 1M tokens (converted from inputCost/outputCost in models.json)
 interface ModelInputTokenPricingTier {
   thresholdTokens: number;
   inputPerMillion: number;
@@ -47,7 +33,6 @@ interface ModelInputTokenPricingTier {
 }
 
 interface ModelPricing {
-  /** The scalar rates are the model's base band before input-length tiers apply. */
   basis: 'base';
   inputPerMillion: number;
   outputPerMillion: number;
@@ -57,13 +42,11 @@ interface ModelPricing {
   inputTokenPricingTiers: ModelInputTokenPricingTier[];
 }
 
-// Canonical ModelEntry shape returned by this API
 export interface ModelEntry {
   id: string;
   name: string;
   provider: string;
   category: 'chat' | 'code' | 'reasoning' | 'image' | 'video' | 'other';
-  /** Null when token context is not applicable or not proven for this model. */
   contextWindow: number | null;
   maxOutputTokens: number | null;
   pricing: ModelPricing;
@@ -74,18 +57,12 @@ export interface ModelEntry {
   released: string | null;
 }
 
-// Full models.json shape (subset we need)
 interface ModelsJson {
   version: number;
   lastUpdated: string;
   models: Record<string, ModelMetadata>;
 }
 
-/**
- * Map modelType to the category enum expected by clients.
- * The JSON uses 'chat', 'code', 'image', 'video', 'reasoning' - we pass these through
- * and map unknown values to 'other'.
- */
 function toCategory(modelType: string | undefined): ModelEntry['category'] {
   switch (modelType) {
     case 'chat':
@@ -103,9 +80,6 @@ function toCategory(modelType: string | undefined): ModelEntry['category'] {
   }
 }
 
-/**
- * Transform a raw models.json entry into the public ModelEntry shape.
- */
 function toModelEntry(raw: ModelMetadata): ModelEntry {
   const caps = raw.capabilities;
 
@@ -154,13 +128,11 @@ function toModelEntry(raw: ModelMetadata): ModelEntry {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
     return preflightResponse;
   }
 
-  // Rate limiting - generous public limit, fail-open
   const rateLimitResponse = await withRateLimit(request, 'model-catalog');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -181,8 +153,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       {
         status: 200,
         headers: {
-          // Public, short-lived cache: CDN/browser caches for 5 minutes.
-          // stale-while-revalidate keeps serving cached data while refreshing in the background.
           'Cache-Control': 'public, max-age=300, stale-while-revalidate=60',
           ...getCorsHeaders(request),
           ...getSecurityHeaders(),

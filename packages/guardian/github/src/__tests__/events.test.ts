@@ -99,7 +99,6 @@ describe('normalizeWebhookEvent: pull_request', () => {
       ...basePayload,
       pull_request: { ...basePayload.pull_request, title: 'x'.repeat(50_000) },
     });
-    // title is not part of the normalized event; the payload still parses
     expect(event).toMatchObject({ kind: 'pull_request' });
   });
 });

@@ -1,8 +1,3 @@
-/**
- * Regenerating an API key preserves the key's scopes exactly — it never widens
- * them — and hands the new secret back exactly once, flagged so no downstream
- * surface persists it.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,8 +26,6 @@ vi.mock('@/lib/user-connector-tools', () => ({
   getUserGithubInstallations: vi.fn(async () => []),
   getUserCustomConnectorSummaries: vi.fn(async () => []),
 }));
-// Argon2id at OWASP settings costs 64 MB and ~100 ms per call. The KDF is not
-// what this test is about; the real ApiKeyService stays in the loop.
 vi.mock('argon2', () => ({
   default: {
     argon2id: 2,
@@ -71,7 +64,6 @@ describe('support actions — regenerate_api_key', () => {
       conversationRef: null,
     });
 
-    // The user sees the server's own sentence, listing the real consequences.
     expect(proposal.summary).toContain('revoke');
     expect(proposal.effects.join(' ')).toContain('same name and exactly the same scopes');
 
@@ -85,15 +77,12 @@ describe('support actions — regenerate_api_key', () => {
     expect(result.kind).toBe('secret_once');
     if (result.kind !== 'secret_once') throw new Error('unreachable');
     expect(result.fullKey).toMatch(/^sk_live_[0-9a-f]{16}_[0-9a-f]{48}$/u);
-    // The marker downstream surfaces must honour: never write this into a
-    // transcript, an email, an audit detail, or a model prompt.
     expect(result.doNotPersist).toBe(true);
 
     const insert = mocks.db!.callsMatching(/insert into api_keys/iu)[0];
     expect(insert).toBeDefined();
     expect(insert!.params[0]).toBe(USER);
     expect(insert!.params[1]).toBe('Deploy bot');
-    // Scope preservation — no escalation.
     expect(insert!.params[4]).toEqual(['inference:write']);
 
     const revoked = mocks.db!.apiKeys.find((k) => k.id === KEY_ID);
@@ -101,8 +90,6 @@ describe('support actions — regenerate_api_key', () => {
   });
 
   it('never lets a caller choose the scopes of the replacement', async () => {
-    // A body that also names scopes is rejected by the action's strict schema,
-    // so there is no path from a request (or a model) to a wider grant.
     await expect(
       proposeSupportAction({
         userId: USER,

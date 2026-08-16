@@ -1,21 +1,3 @@
-/**
- * Provider request capability resolution (pure, plugin-manifest-free).
- *
- * Simplified port of OpenClaw `src/agents/provider-attribution.ts` (806 LOC).
- * The original dynamically scans plugin manifests at runtime; this version is
- * a single pure function over a hardcoded endpoint/provider table — sufficient
- * for the providers AGI Workforce ships (10+) without the plugin runtime
- * coupling.
- *
- * Used by:
- *   - `anthropic-payload-policy.ts` — to gate `service_tier` on the
- *     anthropic-public + anthropic-messages combination.
- *   - `openai-completions-compat.ts` — to derive max_tokens field, store
- *     support, reasoning format per endpoint family.
- *
- * Ported from OpenClaw (MIT, Peter Steinberger). See THIRD_PARTY_LICENSES.md
- * at repo root for full attribution.
- */
 
 import { readStringValue, normalizeOptionalLowercaseString } from './lib/string-utils';
 import { resolveBundledOpenAIResponsesEndpointClass } from './openai-responses-payload-policy';
@@ -51,7 +33,6 @@ export interface ProviderRequestCapabilitiesInput {
   transport?: ProviderRequestTransport;
   capability?: ProviderRequestCapability;
   modelId?: string | null;
-  /** Per-model compat flags from the model catalog. */
   compat?: unknown;
 }
 
@@ -112,13 +93,6 @@ function isOpenAIResponsesApi(api: string | undefined): boolean {
   return api !== undefined && OPENAI_RESPONSES_APIS.has(api);
 }
 
-/**
- * Resolve the request capabilities for a given (provider, api, baseUrl, model)
- * tuple. Pure function — no IO, no plugin manifests.
- *
- * Adapter authors call this from `buildReplayPolicy`, `normalizeToolSchemas`,
- * and `wrapStreamFn` to pick the right per-vendor behavior.
- */
 export function resolveProviderRequestCapabilities(
   input: ProviderRequestCapabilitiesInput,
 ): ProviderRequestCapabilities {
@@ -149,8 +123,6 @@ export function resolveProviderRequestCapabilities(
   const supportsResponsesStoreField =
     readCompatBoolean(input.compat, 'supportsStore') !== false && isResponsesApi;
 
-  // Suppress unused-parameter warnings for fields we accept but don't yet
-  // branch on. Callers may pass them for future-compat.
   void input.transport;
   void input.capability;
   void input.modelId;

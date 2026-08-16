@@ -1,16 +1,3 @@
-/**
- * Cloud memory sync — unit tests.
- *
- * Verifies the managed-only memory delta-sync loop:
- *  - Managed-cloud gate: zero network I/O in local mode.
- *  - Cursor: memory cursor advances independently from the chat cursor.
- *  - Store separation: a local-mode memory write never touches the cloud store
- *    or the dirty queue (trust-boundary enforcement).
- *  - Tombstone: is_deleted deltas hard-delete from the cloud store.
- *  - Push / ack: server-acked IDs are cleared from the dirty queue; tombstones
- *    that are acked are hard-deleted locally.
- *  - Pagination: follows hasMore until false.
- */
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
@@ -31,14 +18,12 @@ jest.mock('../services/api', () => ({
   api: { get: jest.fn(), post: jest.fn() },
 }));
 
-// Stub uuidv7 so the memory store can import it without a runtime environment.
 jest.mock('@agiworkforce/utils', () => ({
   uuidv7: jest.fn(() => `00000000-0000-7000-8000-${Date.now().toString(16).padStart(12, '0')}`),
   isUuidV7: jest.fn(() => true),
   setUuidV7RandomSource: jest.fn(),
 }));
 
-// Stub SQLite storage so local-mode memory writes don't crash in the test env.
 jest.mock('../storage/memory', () => ({
   insertMemoryFact: jest.fn().mockResolvedValue(undefined),
   listMemoryFacts: jest.fn().mockResolvedValue([]),
@@ -71,8 +56,6 @@ const mockTogglePinMemoryFact = togglePinMemoryFact as jest.MockedFunction<
 const T = '2026-06-22T00:00:00.000Z';
 const MEMORY_SYNC_PATH = '/api/memory/sync';
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
 function emptyMemoryPull(cursor = '0') {
   return { memories: [], cursor, hasMore: false };
 }
@@ -81,12 +64,6 @@ function emptyChatPull() {
   return { conversations: [], messages: [], artifacts: [], cursor: '0', hasMore: false };
 }
 
-/**
- * Contract-valid empty pull for whichever sync endpoint `path` hits. The
- * engine now schema-validates every response, so a chat-shaped page returned
- * for the projects/settings endpoints fails the parse and flips sync status
- * to 'error'.
- */
 function defaultPull(path: string) {
   if (path.startsWith('/api/memory/sync')) return { memories: [], cursor: '0', hasMore: false };
   if (path.startsWith('/api/projects/sync')) return { projects: [], cursor: '0', hasMore: false };
@@ -125,8 +102,6 @@ function seedCloudMemory(id: string, content = 'test', isDeleted = false) {
   });
 }
 
-// ── Setup ──────────────────────────────────────────────────────────────────────
-
 beforeEach(() => {
   jest.clearAllMocks();
   __resetCloudAccountSessionForTests();
@@ -136,13 +111,11 @@ beforeEach(() => {
   useMemorySyncStateStore.getState().resetMemorySync();
   useChatAppModeStore.getState().setAppMode('cloud');
 
-  // Default: chat pull returns empty; memory pull returns empty.
   mockGet.mockImplementation(async (path: string) => {
     if ((path as string).startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
     return defaultPull(path as string) as never;
   });
 
-  // Default: POST acks all submitted items.
   mockPost.mockImplementation(async (path: string, body: Record<string, unknown>) => {
     if ((path as string) === MEMORY_SYNC_PATH) {
       const mems = (body?.memories as Array<{ id: string }>) ?? [];
@@ -153,7 +126,6 @@ beforeEach(() => {
         cursor: '1',
       } as never;
     }
-    // Chat sync ack
     const convs = (body?.conversations as Array<{ id: string }>) ?? [];
     const msgs = (body?.messages as Array<{ id: string }>) ?? [];
     return {
@@ -169,13 +141,10 @@ beforeEach(() => {
   });
 });
 
-// ── Gate tests ─────────────────────────────────────────────────────────────────
-
 describe('memory sync — managed gate', () => {
   it('makes ZERO memory network calls in local mode', async () => {
     useChatAppModeStore.getState().setAppMode('local');
     await syncNow();
-    // No call to /api/memory/sync at all.
     const memoryCalls = mockGet.mock.calls.filter((c) =>
       (c[0] as string).startsWith('/api/memory/sync'),
     );
@@ -196,8 +165,6 @@ describe('memory sync — managed gate', () => {
   });
 });
 
-// ── Cursor advance ─────────────────────────────────────────────────────────────
-
 describe('memory sync — cursor', () => {
   it('starts at "0" and advances to the server cursor after a pull', async () => {
     expect(useMemorySyncStateStore.getState().memoryCursor).toBe('0');
@@ -211,12 +178,10 @@ describe('memory sync — cursor', () => {
     await syncNow();
 
     expect(useMemorySyncStateStore.getState().memoryCursor).toBe('7');
-    // Next pull must pass the new cursor.
     expect(mockGet).toHaveBeenCalledWith('/api/memory/sync?since=0');
   });
 
   it('uses the memory cursor independently from the chat cursor', async () => {
-    // Pre-set the chat cursor to something non-zero.
     useCloudSyncStateStore.getState().setCursor('42');
 
     mockGet.mockImplementation(async (path: string) => {
@@ -267,8 +232,6 @@ describe('memory sync — cursor', () => {
   });
 });
 
-// ── Tombstone application ──────────────────────────────────────────────────────
-
 describe('memory sync — tombstone application', () => {
   it('hard-deletes a memory entry when is_deleted:true is pulled', async () => {
     seedCloudMemory('m-del', 'to be deleted');
@@ -304,8 +267,6 @@ describe('memory sync — tombstone application', () => {
     expect(useCloudMemoryStore.getState().entries.find((e) => e.id === 'm-keep')).toBeDefined();
   });
 });
-
-// ── Push ───────────────────────────────────────────────────────────────────────
 
 describe('memory sync — push', () => {
   it('pushes dirty cloud memories and clears the dirty queue on ack', async () => {
@@ -356,7 +317,6 @@ describe('memory sync — push', () => {
   });
 
   it('does NOT post to /api/memory/sync when dirty queue is empty', async () => {
-    // No memories marked dirty.
     await syncNow();
 
     const memoryCalls = mockPost.mock.calls.filter((c) => c[0] === MEMORY_SYNC_PATH);
@@ -374,9 +334,7 @@ describe('memory sync — push', () => {
       memories: Array<{ id: string; isDeleted: boolean }>;
     };
     expect(body.memories[0]!.isDeleted).toBe(true);
-    // After ack, the entry should be hard-deleted from the cloud store.
     expect(useCloudMemoryStore.getState().entries.find((e) => e.id === 'm-tomb')).toBeUndefined();
-    // Dirty queue cleared.
     expect(useMemorySyncStateStore.getState().dirtyMemoryIds).not.toContain('m-tomb');
   });
 
@@ -384,11 +342,9 @@ describe('memory sync — push', () => {
     seedCloudMemory('m-unacked', 'retry me', true);
     markMemoryForSync('m-unacked');
 
-    // Server returns empty applied list (simulates server rejection).
     mockPost.mockImplementation(async (path: string) => {
       if ((path as string) === MEMORY_SYNC_PATH)
         return { protocolVersion: 2, applied: [], conflicts: [], cursor: '0' } as never;
-      // Chat sync ack
       return {
         protocolVersion: 2,
         applied: { conversations: [], messages: [], artifacts: [] },
@@ -399,29 +355,22 @@ describe('memory sync — push', () => {
 
     await syncNow();
 
-    // The dirty ref should persist so the next syncNow retries it.
     expect(useMemorySyncStateStore.getState().dirtyMemoryIds).toContain('m-unacked');
-    // The tombstone row stays in the cloud store (not hard-deleted until acked).
     const entry = useCloudMemoryStore.getState().entries.find((e) => e.id === 'm-unacked');
     expect(entry).toBeDefined();
     expect(entry?.isDeleted).toBe(true);
   });
 
   it('clears a dead ref (entry absent from cloud store) without crashing', async () => {
-    // Mark an id dirty that does NOT exist in the cloud store.
     markMemoryForSync('ghost-id');
 
     await syncNow();
 
-    // Dead ref should be cleared — nothing to push, no crash.
     expect(useMemorySyncStateStore.getState().dirtyMemoryIds).not.toContain('ghost-id');
-    // Memory POST is not called (nothing to send).
     const memoryCalls = mockPost.mock.calls.filter((c) => c[0] === MEMORY_SYNC_PATH);
     expect(memoryCalls).toHaveLength(0);
   });
 });
-
-// ── Local / cloud store separation ────────────────────────────────────────────
 
 const mockInsertMemoryFact = insertMemoryFact as jest.MockedFunction<typeof insertMemoryFact>;
 
@@ -432,9 +381,7 @@ describe('memory store — local/cloud separation', () => {
 
     await useMemoryStore.getState().addMemory('local fact only');
 
-    // Cloud store must be untouched.
     expect(useCloudMemoryStore.getState().entries).toHaveLength(0);
-    // Dirty queue must be empty.
     expect(useMemorySyncStateStore.getState().dirtyMemoryIds).toHaveLength(0);
   });
 
@@ -444,22 +391,17 @@ describe('memory store — local/cloud separation', () => {
 
     await useMemoryStore.getState().addMemory('cloud fact');
 
-    // Cloud store has the new entry.
     const cloudEntries = useCloudMemoryStore.getState().entries;
     expect(cloudEntries).toHaveLength(1);
     expect(cloudEntries[0]!.content).toBe('cloud fact');
     expect(cloudEntries[0]!.source).toBe('mobile');
     expect(cloudEntries[0]!.isDeleted).toBe(false);
 
-    // SQLite path must NOT have been called.
     expect(mockInsertMemoryFact).not.toHaveBeenCalled();
 
-    // The new id must be in the dirty queue.
     expect(useMemorySyncStateStore.getState().dirtyMemoryIds).toContain(cloudEntries[0]!.id);
   });
 });
-
-// ── Pin persistence (cloud mode) ────────────────────────────────────────────────
 
 describe('memory store — cloud pin/unpin persistence', () => {
   it('a cloud-mode togglePin writes to the cloud store and marks it dirty, not SQLite', async () => {
@@ -493,11 +435,6 @@ describe('memory store — cloud pin/unpin persistence', () => {
   });
 
   it('adopts the server pinned state from a pulled delta (LWW — pinned always on the wire)', async () => {
-    // The /api/memory/sync contract (packages/contracts/cloud-contracts/src/sync.ts)
-    // guarantees `pinned` on every delta, so the old "server omits pinned"
-    // preserve-local fallback is gone. A pulled pinned:true delta must pin the
-    // local entry; a locally-dirty pin is protected by push-before-pull order,
-    // not by field omission (covered by the push test above).
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith('/api/memory/sync')) {
         return {

@@ -1,7 +1,3 @@
-/**
- * Chat State Management Hook
- * Centralizes chat state management and provides stable state updates
- */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -44,7 +40,6 @@ export const useChatState = () => {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Update state with error handling
   const updateState = useCallback((updater: (prev: ChatState) => ChatState) => {
     try {
       setState((prev) => {
@@ -60,7 +55,6 @@ export const useChatState = () => {
     }
   }, []);
 
-  // Add a new tab
   const addTab = useCallback(
     (tab: Omit<ChatTab, 'messages' | 'isActive'>) => {
       updateState((prev) => {
@@ -70,7 +64,6 @@ export const useChatState = () => {
           isActive: true,
         };
 
-        // Deactivate other tabs
         const updatedTabs = prev.tabs.map((t) => ({ ...t, isActive: false }));
 
         return {
@@ -84,7 +77,6 @@ export const useChatState = () => {
     [updateState],
   );
 
-  // Remove a tab
   const removeTab = useCallback(
     (tabId: string) => {
       updateState((prev) => {
@@ -101,7 +93,6 @@ export const useChatState = () => {
     [updateState],
   );
 
-  // Set active tab
   const setActiveTab = useCallback(
     (tabId: string) => {
       updateState((prev) => ({
@@ -113,7 +104,6 @@ export const useChatState = () => {
     [updateState],
   );
 
-  // Add message to a tab
   const addMessage = useCallback(
     (tabId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
       updateState((prev) => ({
@@ -138,7 +128,6 @@ export const useChatState = () => {
     [updateState],
   );
 
-  // Update message (for streaming)
   const updateMessage = useCallback(
     (tabId: string, messageId: string, updates: Partial<ChatMessage>) => {
       updateState((prev) => ({
@@ -158,7 +147,6 @@ export const useChatState = () => {
     [updateState],
   );
 
-  // Set sending state
   const setSending = useCallback(
     (isSending: boolean) => {
       updateState((prev) => ({ ...prev, isSending }));
@@ -166,7 +154,6 @@ export const useChatState = () => {
     [updateState],
   );
 
-  // Set error
   const setError = useCallback(
     (error: string | null) => {
       updateState((prev) => ({ ...prev, error }));
@@ -174,18 +161,14 @@ export const useChatState = () => {
     [updateState],
   );
 
-  // Clear error
   const clearError = useCallback(() => {
     updateState((prev) => ({ ...prev, error: null }));
   }, [updateState]);
 
-  // Get active tab
   const activeTab = state.tabs.find((t) => t.id === state.activeTabId) || null;
 
-  // Get active tab messages
   const activeMessages = activeTab?.messages || [];
 
-  // Auto-clear errors after 5 seconds
   useEffect(() => {
     if (state.error) {
       const timer = setTimeout(() => {
@@ -196,7 +179,6 @@ export const useChatState = () => {
     return undefined;
   }, [state.error, clearError]);
 
-  // Show error toasts
   useEffect(() => {
     if (state.error) {
       toast.error(state.error);
@@ -204,7 +186,6 @@ export const useChatState = () => {
   }, [state.error]);
 
   return {
-    // State
     tabs: state.tabs,
     activeTabId: state.activeTabId,
     activeTab,
@@ -212,7 +193,6 @@ export const useChatState = () => {
     isSending: state.isSending,
     error: state.error,
 
-    // Actions
     addTab,
     removeTab,
     setActiveTab,

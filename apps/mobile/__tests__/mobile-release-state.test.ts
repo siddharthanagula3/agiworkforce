@@ -1,21 +1,3 @@
-/**
- * mobile-release-state.test.ts — CRIT-007
- *
- * The mobile app used to assert its own distribution facts: `subscriptionSource`
- * named "the Apple App Store" and handed out `apps.apple.com` links for an app
- * with zero `v-mobile-*` release tags and no listing on either store.
- *
- * `src/features/release-state/mobileReleaseState.json` is now the only record of that fact and
- * `src/features/release-state/index.ts` the only reader. This suite is the contract on both:
- *
- *   1. the registry may not claim more than the repository can prove (release
- *      tags, and the ids the app actually builds as);
- *   2. it may not disagree with the website's registry
- *      (`SURFACE_STATUS.mobile` in `apps/web/lib/marketing-constants.ts`), so
- *      the two surfaces cannot describe mobile's availability differently;
- *   3. the accessors fail closed — a status flipped without the verified
- *      listing id still surfaces no name, no link, nothing.
- */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -38,7 +20,6 @@ import {
 const mobileRoot = join(__dirname, '..');
 const repoRoot = join(mobileRoot, '..', '..');
 
-/** Release tags are the evidence a surface has shipped, per the web registry. */
 function mobileReleaseTags(): string[] {
   const stdout = execFileSync('git', ['tag', '--list', 'v-mobile-*'], {
     cwd: repoRoot,
@@ -92,8 +73,6 @@ describe('mobile release-state registry', () => {
   });
 
   it('states the same availability the website states', () => {
-    // Website registry -> mobile registry. If /download and /mobile say "Coming
-    // soon", the app may not behave as though it is installable, and vice versa.
     const websiteSaysUnreleased = webMobileStatus() === webComingSoonLabel();
     expect({
       website: webMobileStatus(),
@@ -103,8 +82,6 @@ describe('mobile release-state registry', () => {
   });
 
   it('records the ids the app actually builds as', () => {
-    // app.config.js is CommonJS and evaluated for its side-effect-free export;
-    // the same require is used by __tests__/ios-store-submission-config.test.ts.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const appConfig = require('../app.config.js') as {
       expo: { ios?: { bundleIdentifier?: string }; android?: { package?: string } };
@@ -115,8 +92,6 @@ describe('mobile release-state registry', () => {
 
   it.each(MOBILE_STORE_IDS)('exposes no store surface for %s while it is unpublished', (store) => {
     const record = getStoreDistribution(store);
-    // Guard the guard: if a store is ever legitimately published this case must
-    // stop asserting absence rather than silently pass on a stale expectation.
     expect(record.status).toBe('unpublished');
     expect(record.listingId).toBeNull();
     expect(record.listingUrl).toBeNull();

@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * Public waitlist modal for the marketing site.
- *
- * - `WaitlistModalProvider` mounts once (app/providers.tsx) and owns the
- *   dialog state, so any page or component can open the modal.
- * - `useWaitlistModal()` exposes `open(source?)` for client components.
- * - `WaitlistTrigger` is a drop-in CTA button for server-rendered marketing
- *   pages; it opens the modal and degrades to a /waitlist link when the
- *   provider is missing (e.g. isolated renders in tests).
- *
- * Signups POST to /api/waitlist/public (anonymous; stored in the Neon
- * `cloud_managed_waitlist` table) via joinPublicWaitlist.
- */
-
 import {
   createContext,
   useCallback,
@@ -64,14 +50,11 @@ function WaitlistDialog({
   const [email, setEmail] = useState('');
   const [state, setState] = useState<FormState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  // Empty on every open. Closing and reopening the dialog must re-ask rather
-  // than carry a previous session's ticks forward as a standing agreement.
   const [consented, setConsented] = useState<string[]>([]);
 
   const handleOpenChange = (open: boolean) => {
     onOpenChange(open);
     if (!open) {
-      // Reset for the next visit, but keep success visible while closing.
       setState((prev) => (prev === 'success' ? 'idle' : prev));
       setErrorMsg('');
       setEmail('');
@@ -237,11 +220,6 @@ export function WaitlistModalProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * CTA button that opens the waitlist modal. Safe to embed from server
- * components. Falls back to navigating to /waitlist when no provider is
- * mounted so the action is never dead.
- */
 export function WaitlistTrigger({
   label = 'Enterprise early access',
   source = 'website',

@@ -1,25 +1,5 @@
 import 'server-only';
 
-/**
- * Validation for identity-provider configuration supplied by a customer admin.
- *
- * Everything here is treated as hostile input. Two threat models apply:
- *
- *   SSRF — a metadata or discovery URL is fetched by Clerk (and would be
- *   fetched by us if we ever resolved it), so an attacker-supplied URL must not
- *   be able to name a loopback, private, link-local, or cloud metadata host.
- *
- *   Domain hijack — this deployment creates instance-level Clerk enterprise
- *   connections, so a connection claiming `gmail.com` would capture every
- *   Gmail-addressed sign-in. Public mailbox providers are refused outright and
- *   every other domain must pass DNS ownership verification before activation.
- *
- * SAML XML is never parsed here. Clerk is the SAML implementation; we only
- * bound the payload's size and confirm it is shaped like an EntityDescriptor
- * before forwarding, so a hand-crafted entity-expansion or external-entity
- * payload never meets an XML parser we own.
- */
-
 export class IdpValidationError extends Error {
   readonly field: string;
 
@@ -30,10 +10,6 @@ export class IdpValidationError extends Error {
   }
 }
 
-/**
- * Clerk's SAML attribute mapping accepts exactly these keys. An allowlist keeps
- * an unbounded caller-supplied record from reaching the provider.
- */
 export const ALLOWED_ATTRIBUTE_MAPPING_KEYS = [
   'userId',
   'emailAddress',
@@ -45,10 +21,6 @@ export type AllowedAttributeMappingKey = (typeof ALLOWED_ATTRIBUTE_MAPPING_KEYS)
 
 export type SamlAttributeMapping = Partial<Record<AllowedAttributeMappingKey, string>>;
 
-/**
- * Mailbox providers whose domains are shared by unrelated people. Claiming one
- * would hand the claimant every sign-in on that domain.
- */
 const PUBLIC_MAILBOX_DOMAINS = new Set([
   'aol.com',
   'fastmail.com',
@@ -86,7 +58,6 @@ const PUBLIC_MAILBOX_DOMAINS = new Set([
   'zoho.com',
 ]);
 
-/** Hostnames that name the caller's own network rather than a public IdP. */
 const BLOCKED_HOSTNAMES = new Set([
   'localhost',
   'localhost.localdomain',
@@ -107,25 +78,16 @@ function isDecimal(value: string): boolean {
   return /^\d+$/.test(value);
 }
 
-/**
- * True when the hostname is a literal IP in a range that is not routable on the
- * public internet. DNS names that *resolve* into these ranges cannot be caught
- * here — that is Clerk's fetch, and the domain-verification requirement is what
- * bounds the blast radius — but literal addresses are the cheap, common case.
- */
 export function isPrivateOrReservedHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
 
   if (BLOCKED_HOSTNAMES.has(host)) return true;
   if (BLOCKED_HOSTNAME_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
 
-  // IPv6 (bracket-stripped above).
   if (host.includes(':')) {
     if (host === '::' || host === '::1') return true;
-    // Unique-local fc00::/7 and link-local fe80::/10.
     if (/^f[cd][0-9a-f]{2}:/.test(host)) return true;
     if (/^fe[89ab][0-9a-f]:/.test(host)) return true;
-    // IPv4-mapped ::ffff:a.b.c.d — re-check the embedded address.
     const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host);
     if (mapped) return isPrivateOrReservedHost(mapped[1]!);
     return false;
@@ -135,30 +97,24 @@ export function isPrivateOrReservedHost(hostname: string): boolean {
   if (parts.length === 4 && parts.every(isDecimal)) {
     const octets = parts.map((part) => Number(part));
     if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
-      // Not a valid dotted quad; treat as unusable rather than as a hostname.
       return true;
     }
     const [a, b] = octets as [number, number, number, number];
-    if (a === 0) return true; // "this network"
-    if (a === 10) return true; // RFC1918
-    if (a === 127) return true; // loopback
-    if (a === 169 && b === 254) return true; // link-local + cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return true; // RFC1918
-    if (a === 192 && b === 168) return true; // RFC1918
-    if (a === 192 && b === 0) return true; // IETF protocol assignments
-    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
-    if (a >= 224) return true; // multicast + reserved + broadcast
+    if (a === 0) return true;
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 192 && b === 0) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a >= 224) return true;
     return false;
   }
 
   return false;
 }
 
-/**
- * Accept only an https URL that names a public host. Rejects http, file,
- * data, javascript, embedded credentials, and non-default ports that are a
- * common way to reach an internal service on a public-looking name.
- */
 export function assertSafeIdpUrl(field: string, rawValue: string): string {
   const value = rawValue.trim();
 
@@ -199,7 +155,6 @@ export function assertSafeIdpUrl(field: string, rawValue: string): string {
   return parsed.toString();
 }
 
-/** Normalize and validate the email domain a connection claims. */
 export function assertClaimableDomain(rawValue: string): string {
   const domain = rawValue.trim().toLowerCase().replace(/\.$/, '');
 
@@ -226,14 +181,6 @@ export function assertClaimableDomain(rawValue: string): string {
 
 const MAX_METADATA_XML_BYTES = 500_000;
 
-/**
- * Bound and shape-check SAML metadata without parsing it.
- *
- * We never run an XML parser over this: no DTD processing, no entity
- * expansion, no external entity resolution can occur in our process. Clerk
- * parses it, and a payload that is not plausibly an EntityDescriptor is
- * rejected before it gets that far.
- */
 export function assertSafeMetadataXml(rawValue: string): string {
   const xml = rawValue.trim();
 
@@ -272,15 +219,6 @@ export function assertSafeMetadataXml(rawValue: string): string {
   return xml;
 }
 
-/**
- * Pull the attribute mapping off the *raw* request body rather than a parsed
- * copy.
- *
- * zod silently strips dangerous keys such as `__proto__` while parsing a
- * record. That is safe in itself, but it would let a caller submit a key the
- * API then reports as accepted, so the allowlist below is applied to what was
- * actually sent.
- */
 export function rawAttributeMapping(body: unknown): Record<string, unknown> | undefined {
   if (typeof body !== 'object' || body === null) return undefined;
   const value = Object.getOwnPropertyDescriptor(body, 'attribute_mapping')?.value;
@@ -293,11 +231,6 @@ export function rawAttributeMapping(body: unknown): Record<string, unknown> | un
 
 const MAX_ATTRIBUTE_VALUE_LENGTH = 256;
 
-/**
- * Reduce a caller-supplied mapping to the four keys Clerk accepts, rejecting
- * anything else rather than silently dropping it — silent drops would leave an
- * admin believing an attribute was mapped when it was not.
- */
 export function assertSafeAttributeMapping(
   rawValue: Record<string, unknown> | undefined | null,
 ): SamlAttributeMapping {
@@ -324,8 +257,6 @@ export function assertSafeAttributeMapping(
       );
     }
 
-    // Read through the descriptor: for a key such as `__proto__` a plain
-    // property access can return the prototype rather than the stored value.
     const value = Object.getOwnPropertyDescriptor(rawValue, key)?.value;
     if (typeof value !== 'string') {
       throw new IdpValidationError(

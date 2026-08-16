@@ -1,15 +1,5 @@
 import { waitForDesktopShell } from '../support/desktop-shell';
 
-/**
- * Overlay contract sweep for every shell modal reachable through a UI
- * affordance in Local mode: it opens, it is a real dialog, Escape closes it,
- * and focus returns to the shell (no keyboard trap left behind).
- *
- * Overlays whose only trigger is a global OS shortcut (Quick Query, floating
- * window) are exercised by their own specs; this file covers the in-shell
- * click paths.
- */
-
 async function activeElementDescription(): Promise<string> {
   return browser.execute(() => {
     const el = document.activeElement;
@@ -79,9 +69,6 @@ describe('modal sweep · every in-shell overlay opens, traps focus, and closes',
     await browser.keys(['Meta', 'k']);
     await browser.pause(300);
     if (!(await dialogVisible())) {
-      // The embedded driver's Meta-chord does not always reach the app's
-      // window keydown listener; dispatch the same event synthetically —
-      // App.tsx listens for (metaKey || ctrlKey) + 'k' on window.
       await browser.execute(() => {
         window.dispatchEvent(
           new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }),
@@ -90,8 +77,6 @@ describe('modal sweep · every in-shell overlay opens, traps focus, and closes',
       await browser.pause(300);
     }
     const opened = await dialogVisible();
-    // ⌘K is also the Search shortcut badge; either surface satisfies the
-    // contract as long as SOMETHING opened and closes cleanly.
     expect(opened).toBe(true);
     await expectFocusInsideDialog();
 
@@ -123,8 +108,6 @@ describe('modal sweep · every in-shell overlay opens, traps focus, and closes',
   });
 
   it('Plans modal: opens from the account menu upgrade entry and closes', async function () {
-    // The account footer opens the AccountMenu dropdown; its upgrade entry
-    // opens PlansModal. Menu copy varies by plan, so match loosely.
     const accountBtn = await $('aside[data-v3-sidebar] [data-v3-account-trigger]');
     const fallbackAccountBtn = await $('aside[data-v3-sidebar] button[aria-haspopup="menu"]');
     const trigger = (await accountBtn.isExisting()) ? accountBtn : fallbackAccountBtn;

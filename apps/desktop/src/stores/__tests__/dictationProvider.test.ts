@@ -1,11 +1,3 @@
-/**
- * Dictation provider normalization (plan stage 3, boundary contract): the
- * persisted in-app dictation provider must always land on one of the explicit
- * fail-closed modes the backend accepts. Legacy `deepgram` selections were in
- * fact served by managed cloud (the old blob path silently rerouted them), so
- * they migrate to that honest label; anything unknown falls back to the
- * offline default rather than guessing a cloud destination.
- */
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/tauri-mock', () => ({

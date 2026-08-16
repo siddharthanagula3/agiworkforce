@@ -12,19 +12,11 @@ import type { DirectorySyncConnectionRow } from '@/lib/server/neon-types';
 import { createScimToken, listScimTokens } from '@/lib/server/scim/scim-token-service';
 import { isDirectorySyncAccessFailure, requireDirectorySyncAdmin } from '../directory-sync-access';
 
-// Argon2id is a native module.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/**
- * GET /api/admin/directory-sync/tokens
- *
- * Lists the SCIM credentials for the caller's organization. The raw token is
- * never returned here — it only ever exists in the response to the POST that
- * minted it. The Argon2id hash is not selected at all.
- */
 export async function GET(request: NextRequest) {
   const rateLimited = await withRateLimit(request, 'scim-token-manage');
   if (rateLimited) return rateLimited;
@@ -43,8 +35,6 @@ export async function GET(request: NextRequest) {
         id: token.id,
         connection_id: token.connection_id,
         name: token.name,
-        // The prefix is the public half of the credential: it identifies which
-        // token an IdP is presenting without revealing the secret.
         token_prefix: token.token_prefix,
         created_by_user_id: token.created_by_user_id,
         last_used_at: token.last_used_at,
@@ -60,16 +50,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * POST /api/admin/directory-sync/tokens
- *
- * Mints a SCIM bearer token for one directory sync connection. The raw token
- * is returned EXACTLY ONCE and is not recoverable afterwards — only its
- * Argon2id hash is stored.
- *
- * The issuing admin is recorded on the row and becomes the entitlement subject
- * for every request that token later makes (see scim-auth.ts).
- */
 export async function POST(request: NextRequest) {
   const rateLimited = await withRateLimit(request, 'scim-token-mint');
   if (rateLimited) return rateLimited;
@@ -119,8 +99,6 @@ export async function POST(request: NextRequest) {
 
     const db = getNeonDb();
 
-    // The connection must belong to the caller's organization. Naming another
-    // tenant's connection id must not mint a credential against it.
     const connections = await db.query<Pick<DirectorySyncConnectionRow, 'id'>>(
       'select id from directory_sync_connections where id = $1 and organization_id = $2 limit 1',
       [connectionId, access.organizationId],
@@ -137,7 +115,6 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAtIso,
     });
 
-    // The raw token is NEVER logged — not here, not in the security event.
     await logSecurityEvent({
       userId: access.userId,
       eventType: 'admin_action',
@@ -163,7 +140,6 @@ export async function POST(request: NextRequest) {
           expires_at: token.expires_at,
           created_at: token.created_at,
         },
-        // Shown once. There is no endpoint that can return it again.
         raw_token: rawToken,
         scim_base_url: `${new URL(request.url).origin}/api/scim/v2`,
       },

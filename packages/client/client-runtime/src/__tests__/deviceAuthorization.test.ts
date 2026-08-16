@@ -68,12 +68,6 @@ describe('shared device authorization client', () => {
     ).resolves.toEqual(expected);
   });
 
-  /**
-   * Regression: every non-2xx used to produce "AGI Cloud rejected the device
-   * sign-in request", so a backend 500 told the user their ACCOUNT had been
-   * refused. That is both false and unactionable — retrying is exactly the
-   * right response to a server fault, and the old wording implied it was not.
-   */
   it.each([500, 502, 503, 504])(
     'reports HTTP %s as a service fault, never as an account rejection',
     async (status) => {

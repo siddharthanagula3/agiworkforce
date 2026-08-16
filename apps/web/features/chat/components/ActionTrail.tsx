@@ -1,14 +1,5 @@
 'use client';
 
-/**
- * ActionTrail
- *
- * Vertical timeline showing agent action steps with colored dots, icons,
- * timestamps, durations, and collapsible tool call details.
- *
- * Inspired by the desktop CurrentActionBadge / AgenticLoopStatusBar.
- */
-
 import React, { useState } from 'react';
 import {
   Brain,
@@ -30,10 +21,6 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export type ActionStatus = 'pending' | 'running' | 'completed' | 'error';
 
 export type ActionType =
@@ -52,11 +39,8 @@ export interface ActionTrailEntry {
   status: ActionStatus;
   description: string;
   timestamp: Date;
-  /** Duration in milliseconds (if completed) */
   durationMs?: number;
-  /** Optional tool call details (JSON string or object) */
   toolCallDetails?: string;
-  /** Icon override via display name (e.g. "Read", "Bash", "WebSearch") */
   displayName?: string;
 }
 
@@ -64,10 +48,6 @@ export interface ActionTrailProps {
   entries: ActionTrailEntry[];
   className?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Icon + color mappings
-// ---------------------------------------------------------------------------
 
 const TOOL_ICON_MAP: Record<string, LucideIcon> = {
   Read: FileText,
@@ -98,7 +78,6 @@ function getIcon(entry: ActionTrailEntry): LucideIcon {
   return TYPE_ICON_MAP[entry.type] ?? Play;
 }
 
-/** Dot color for the vertical timeline */
 function getDotColor(status: ActionStatus): string {
   switch (status) {
     case 'completed':
@@ -113,7 +92,6 @@ function getDotColor(status: ActionStatus): string {
   }
 }
 
-/** Text/icon color by status */
 function getStatusColor(status: ActionStatus): string {
   switch (status) {
     case 'completed':
@@ -128,7 +106,6 @@ function getStatusColor(status: ActionStatus): string {
   }
 }
 
-/** Status suffix icon */
 function getStatusIcon(status: ActionStatus) {
   switch (status) {
     case 'completed':
@@ -154,10 +131,6 @@ function formatDuration(ms: number): string {
 function formatTimestamp(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
-
-// ---------------------------------------------------------------------------
-// Individual entry
-// ---------------------------------------------------------------------------
 
 interface ActionTrailItemProps {
   entry: ActionTrailEntry;
@@ -226,10 +199,6 @@ const ActionTrailItem: React.FC<ActionTrailItemProps> = ({ entry, isLast }) => {
     </div>
   );
 };
-
-// ---------------------------------------------------------------------------
-// ActionTrail component
-// ---------------------------------------------------------------------------
 
 export const ActionTrail: React.FC<ActionTrailProps> = ({ entries, className }) => {
   if (entries.length === 0) return null;

@@ -20,7 +20,6 @@ export type AuthGateSuccess = {
   userId: string;
   token: string;
   subscription: SubscriptionInfo;
-  /** Surface class proved by the credential; see AuthResult.surfaceClass. */
   surfaceClass?: AuthenticatedSurfaceClass;
 };
 
@@ -31,7 +30,6 @@ type AuthGateFailure = {
 
 export type AuthGateResult = AuthGateSuccess | AuthGateFailure;
 
-// Narrow helper for route.ts: resolves the union so `if (!authResult.ok) return authResult.response` works
 export type AnyResponse = NextResponse | Response;
 
 function enforceManagedCloudSurface(
@@ -39,9 +37,6 @@ function enforceManagedCloudSurface(
   success: AuthGateSuccess,
 ): AuthGateResult {
   const isApiKey = success.token.startsWith('sk_live_') || success.token.startsWith('sk_test_');
-  // WEB-AUTH-SURFACE-CLAIM-DISCARDED-01: pass the credential-proved class so a
-  // developer token cannot claim `desktop` via `x-agi-surface` and be admitted
-  // under `managed_chat` instead of the Pro-only `developer_surfaces`.
   const surface = isApiKey ? 'api' : resolveCloudChatSurface(request, success.surfaceClass);
   if (canUseManagedCloudChatSurface(success.subscription.plan_tier, surface)) return success;
 
@@ -92,10 +87,6 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const ipRateLimitResponse = await withRateLimit(request, 'llm-completion-ip');
   if (ipRateLimitResponse) return { ok: false, response: ipRateLimitResponse };
 
-  // This route is the LLM chat-completions API · only Bearer-token clients
-  // (desktop, mobile, CLI, third-party API consumers) are valid callers; the
-  // web UI uses a separate session-cookie path. Reject browser-style cookie
-  // requests up front.
   const authHeader = request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return {
@@ -140,9 +131,6 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  // Authenticate the caller before CSRF evaluation. Native Bearer clients do
-  // not carry a browser CSRF cookie, while browser-cookie callers still fail
-  // the authorization-header check above.
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return { ok: false, response: csrfError };
 

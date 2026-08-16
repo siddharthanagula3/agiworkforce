@@ -17,9 +17,6 @@ const MAX_INLINE_VIDEO_BYTES = 32 * 1024 * 1024;
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
 const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
-// Google operation names include a dotted model resource segment. Permit dots
-// inside an opaque segment, while still rejecting traversal, URL syntax,
-// percent-encoding, and path separators.
 const GOOGLE_RESOURCE_SEGMENT_PATTERN = /^[A-Za-z0-9_.-]{1,200}$/;
 
 function isSafeGoogleResourceSegment(segment: string): boolean {
@@ -45,11 +42,6 @@ export class VideoProviderOutputError extends Error {
   }
 }
 
-/**
- * Google long-running operation names are resource paths ending in
- * `operations/{id}`. Preserve safe provider path segments while rejecting URL
- * syntax, dot traversal, encoded separators, and arbitrary endpoint paths.
- */
 export function normalizeGoogleVideoOperationName(
   value: string,
   allowLegacyRawId = true,
@@ -153,7 +145,6 @@ function providerErrorFromHttp(
 
 function boundedProgress(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-  // Runway commonly reports 0..1; Google commonly reports 0..100.
   const normalized = value <= 1 ? value * 100 : value;
   return Math.max(0, Math.min(Math.trunc(normalized), 99));
 }
@@ -276,9 +267,6 @@ async function pollGoogle(providerTaskId: string): Promise<VideoProviderPollResu
   ) {
     return {
       status: 'failed',
-      // Provider diagnostics can contain internal URLs or request details.
-      // Persist only stable product copy; operator evidence stays in provider
-      // logs and the durable task identity, never the client response.
       error: 'Google Veo could not generate this video.',
     };
   }
@@ -335,12 +323,6 @@ export function pollVideoProvider(job: VideoGenerationJob): Promise<VideoProvide
   return pollRunway(job.providerTaskId);
 }
 
-/**
- * Ask Runway to cancel an active task. A 204 only acknowledges the task
- * management request; the reconciler still polls for CANCELED/FAILED before
- * releasing the user's reservation. Google Veo has no documented equivalent
- * on the models.operations surface, so callers must not route Google here.
- */
 export async function requestRunwayVideoCancellation(job: VideoGenerationJob): Promise<void> {
   if (job.provider !== 'runway') {
     throw new VideoProviderOutputError(
@@ -445,8 +427,6 @@ async function fetchProviderVideo(job: VideoGenerationJob, initialUrl: string): 
     if (job.provider === 'google' && googleVideoOutputHostDisposition(url.hostname) === 'api') {
       const apiKey = googleApiKey();
       if (!apiKey) throw new VideoProviderOutputError('Google Veo is not configured.', true);
-      // Never forward the API key to a redirected download host. Signed Google
-      // storage redirects authorize themselves.
       headers['x-goog-api-key'] = apiKey;
     }
     let response: Response;

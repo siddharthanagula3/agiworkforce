@@ -1,16 +1,3 @@
-/**
- * CRIT-014 — the admin console shell must enforce account status, not just role.
- *
- * `POST /api/admin/security?action=suspend-user` writes
- * `profiles.account_status` and deliberately leaves the Clerk session alive
- * (only `ban-user` calls `clerk.users.banUser`). The layout's gate was
- * "signed in AND publicMetadata.role is admin/owner", both of which a suspended
- * admin still satisfies, so the console kept rendering for them.
- *
- * Remove the `assertAccountActive` block from `apps/web/app/admin/layout.tsx`
- * and the first two tests below fail — the layout returns children for a
- * suspended admin instead of redirecting.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -29,8 +16,6 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: async () => ({ users: { getUser: (...args: unknown[]) => mockGetUser(...args) } }),
 }));
 
-// The real `redirect()` signals by throwing; reproduce that so the test proves
-// the layout stops rather than merely calling a spy and continuing.
 class RedirectSignal extends Error {
   constructor(readonly destination: string) {
     super(`NEXT_REDIRECT:${destination}`);

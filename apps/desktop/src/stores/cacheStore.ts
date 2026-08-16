@@ -17,7 +17,6 @@ import {
 } from '../api/cache';
 import type { FileTree, SymbolTable, DependencyGraph, CodebaseCacheStats } from '../api/cache';
 
-// Re-export types from the API layer for backward compatibility
 export type {
   FileTreeEntry,
   FileTree,
@@ -34,44 +33,32 @@ export type {
   CodebaseCacheStats,
 } from '../api/cache';
 
-// --- Store interface ---
-
 interface CacheStoreState {
   codebaseStats: CodebaseCacheStats | null;
   isLoading: boolean;
   error: string | null;
 
-  // Codebase cache stats
   getCodebaseCacheStats: () => Promise<CodebaseCacheStats>;
 
-  // Cache clearing
   clearProjectCache: (projectPath: string) => Promise<number>;
   clearFileCache: (filePath: string) => Promise<number>;
   clearAllCodebaseCache: () => Promise<number>;
   clearExpiredCodebaseCache: () => Promise<number>;
 
-  // File tree cache
   getFileTree: (projectPath: string) => Promise<FileTree | null>;
   setFileTree: (projectPath: string, fileTree: FileTree) => Promise<void>;
 
-  // Symbol cache
   getSymbols: (filePath: string, fileHash?: string) => Promise<SymbolTable | null>;
   setSymbols: (filePath: string, symbols: SymbolTable, fileHash?: string) => Promise<void>;
 
-  // Dependency cache
   getDependencies: (projectPath: string) => Promise<DependencyGraph | null>;
   setDependencies: (projectPath: string, dependencies: DependencyGraph) => Promise<void>;
 
-  // Utility
   calculateFileHash: (content: number[]) => Promise<string>;
 
   clearError: () => void;
 }
 
-// `codebaseStats` is a snapshot of backend cache counters, not a preference:
-// it is only ever produced by `getCodebaseCacheStats()` and is stale the moment
-// the process exits. It used to be written to localStorage, which promised a
-// remembered value that no consumer ever read back.
 export const useCacheStore = create<CacheStoreState>()(
   devtools(
     (set) => ({

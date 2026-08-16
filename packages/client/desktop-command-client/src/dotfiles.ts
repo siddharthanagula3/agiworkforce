@@ -1,11 +1,5 @@
-/**
- * Dotfiles API — typed wrappers for dotfile_*, read_shared_config, write_shared_config,
- * detect_ecosystem_tools, and import_ecosystem_mcp_servers Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface McpServerEntry {
   command?: string;
@@ -39,8 +33,6 @@ export interface SkillEntry {
   source: string;
 }
 
-// ---- Shared Config ----
-
 export async function readSharedConfig(): Promise<Record<string, unknown>> {
   return command<Record<string, unknown>>('read_shared_config');
 }
@@ -48,8 +40,6 @@ export async function readSharedConfig(): Promise<Record<string, unknown>> {
 export async function writeSharedConfig(key: string, value: unknown): Promise<void> {
   return command<void>('write_shared_config', { key, value });
 }
-
-// ---- MCP Servers ----
 
 export async function dotfileListMcpServers(): Promise<Record<string, McpServerEntry>> {
   return command<Record<string, McpServerEntry>>('dotfile_list_mcp_servers');
@@ -63,13 +53,9 @@ export async function dotfileRemoveMcpServer(name: string): Promise<void> {
   return command<void>('dotfile_remove_mcp_server', { name });
 }
 
-// ---- Skills ----
-
 export async function dotfileListSkills(): Promise<SkillEntry[]> {
   return command<SkillEntry[]>('dotfile_list_skills');
 }
-
-// ---- Instructions ----
 
 export async function dotfileReadInstructions(): Promise<string> {
   return command<string>('dotfile_read_instructions');
@@ -79,13 +65,9 @@ export async function dotfileWriteInstructions(content: string): Promise<void> {
   return command<void>('dotfile_write_instructions', { content });
 }
 
-// ---- Memories ----
-
 export async function dotfileReadMemories(): Promise<string> {
   return command<string>('dotfile_read_memories');
 }
-
-// ---- Ecosystem ----
 
 export async function detectEcosystemTools(): Promise<DetectedTool[]> {
   return command<DetectedTool[]>('detect_ecosystem_tools');

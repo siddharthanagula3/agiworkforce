@@ -1,9 +1,3 @@
-/**
- * ReminderCard Component
- *
- * Displays a single reminder or scheduled task with status indicators
- * and action controls for pause/resume, edit, and delete operations.
- */
 import { format, formatDistanceToNow, isPast, parseISO } from 'date-fns';
 import {
   Bell,
@@ -40,15 +34,10 @@ interface ReminderCardProps {
   onDelete: (jobId: string) => Promise<void>;
 }
 
-/**
- * Returns a human-readable description of the schedule.
- */
 function getScheduleDescription(job: ScheduledJob): string {
   const cron = job.schedule;
   if (!cron) return 'Custom schedule';
 
-  // Parse common cron patterns for user-friendly display
-  // Daily at specific time (min hour * * *)
   const dailyMatch = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+\*$/);
   if (dailyMatch && dailyMatch[1] && dailyMatch[2]) {
     const minute = dailyMatch[1];
@@ -58,7 +47,6 @@ function getScheduleDescription(job: ScheduledJob): string {
     return `Daily at ${format(time, 'h:mm a')}`;
   }
 
-  // Weekly (min hour * * dayOfWeek)
   const weeklyMatch = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+(\d)$/);
   if (weeklyMatch && weeklyMatch[1] && weeklyMatch[2] && weeklyMatch[3]) {
     const minute = weeklyMatch[1];
@@ -70,7 +58,6 @@ function getScheduleDescription(job: ScheduledJob): string {
     return `Every ${days[parseInt(dayOfWeek, 10)]} at ${format(time, 'h:mm a')}`;
   }
 
-  // Hourly (min * * * *)
   if (cron.match(/^(\d+)\s+\*\s+\*\s+\*\s+\*$/)) {
     return 'Every hour';
   }
@@ -78,9 +65,6 @@ function getScheduleDescription(job: ScheduledJob): string {
   return `Cron: ${cron}`;
 }
 
-/**
- * Returns the appropriate icon for the action type.
- */
 function getActionIcon(actionType: string) {
   switch (actionType) {
     case 'reminder':
@@ -94,9 +78,6 @@ function getActionIcon(actionType: string) {
   }
 }
 
-/**
- * Returns a badge variant based on the action type.
- */
 function getActionBadgeVariant(actionType: string): 'default' | 'secondary' | 'outline' {
   switch (actionType) {
     case 'reminder':
@@ -154,7 +135,6 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
     }
   };
 
-  // Parse action data for display (now an object, not a JSON string)
   const actionData = job.actionData;
   const actionMessage =
     (actionData?.['message'] as string) || (actionData?.['prompt'] as string) || '';

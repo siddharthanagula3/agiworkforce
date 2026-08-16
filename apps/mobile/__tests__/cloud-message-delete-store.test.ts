@@ -1,13 +1,3 @@
-/**
- * useChatCloudMessageStore.deleteCloudMessage
- *
- * Cloud conversations render from useChatCloudMessageStore (merged into
- * useChatStore.messages in stores/chatStore.ts), not the local chatMessageStore.
- * Delete Message previously only mutated chatMessageStore, which was a silent
- * no-op for Cloud conversations — the deleted message stayed visible forever.
- * This covers the store-level fix: deleteCloudMessage must remove exactly the
- * targeted message from the targeted conversation's cached list.
- */
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 
 const T = '2026-06-20T00:00:00.000Z';
@@ -38,7 +28,6 @@ describe('deleteCloudMessage', () => {
     const conv1Ids = useChatCloudMessageStore.getState().messages['conv-1'].map((m) => m.id);
     expect(conv1Ids).toEqual(['m1', 'm3']);
 
-    // A different conversation's messages (even with a colliding message id) is untouched.
     expect(useChatCloudMessageStore.getState().messages['conv-2']).toHaveLength(1);
   });
 

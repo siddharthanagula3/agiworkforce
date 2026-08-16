@@ -1,10 +1,3 @@
-/**
- * Metro must resolve WebRTC's private event-target-shim dependency.
- *
- * The workspace also contains event-target-shim v5 for other packages. That
- * version does not export Event, so pointing react-native-webrtc at the root
- * copy crashes the app during module evaluation before Expo Router can mount.
- */
 
 jest.mock('expo/metro-config', () => ({
   getDefaultConfig: () => ({

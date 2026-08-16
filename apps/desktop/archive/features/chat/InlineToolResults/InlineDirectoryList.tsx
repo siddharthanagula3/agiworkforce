@@ -1,8 +1,3 @@
-/**
- * InlineDirectoryList Component
- *
- * Renders directory/file listing results from filesystem tools
- */
 
 import React, { useState, useMemo } from 'react';
 import {
@@ -39,11 +34,8 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
 
   const data = result?.data as DirectoryListData | undefined;
 
-  // Hooks must be called unconditionally - call them before any conditional returns
-  // Get entries - wrap in useMemo to keep stable references.
   const entries: DirectoryEntry[] = useMemo(() => data?.entries || [], [data]);
 
-  // Separate directories and files - useMemo always called at top level
   const { directories, files }: { directories: DirectoryEntry[]; files: DirectoryEntry[] } =
     useMemo(() => {
       const dirs: DirectoryEntry[] = [];
@@ -55,7 +47,6 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
           fls.push(entry);
         }
       });
-      // Sort: directories first, then files, both alphabetically
       dirs.sort((a, b) => a.name.localeCompare(b.name));
       fls.sort((a, b) => a.name.localeCompare(b.name));
       return { directories: dirs, files: fls };
@@ -63,7 +54,6 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
 
   const path = data?.path || '';
 
-  // Show running state
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -73,7 +63,6 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
     );
   }
 
-  // Show error state if status indicates failure
   if (status === 'failed' || status === 'error') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -88,12 +77,10 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
     );
   }
 
-  // Handle missing data case - after hooks are called
   if (!data) {
     return null;
   }
 
-  // Handle error state - after hooks are called
   if (!data.success || data.error) {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -169,7 +156,6 @@ export const InlineDirectoryList: React.FC<ToolResultProps> = ({ result, status 
 
           {/* Files */}
           {files.map((file) => {
-            // Determine icon based on extension
             const ext = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : '';
             const isTextFile = [
               'txt',

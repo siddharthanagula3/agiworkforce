@@ -1,14 +1,3 @@
-/**
- * Runtime validation for interactive cards.
- *
- * Mirrors the stated contract of the repo's other delta parsers exactly: parsers
- * NEVER throw; a single-object delta returns null on mismatch; list payloads
- * salvage per item.
- *
- * The types live in `@agiworkforce/types`, which is platform-neutral and has no
- * zod. This module is the untrusted boundary, and it runs on every surface that
- * can take a dependency on zod.
- */
 
 import { z } from 'zod';
 import {
@@ -32,15 +21,6 @@ import {
   type MapSearchAction,
 } from '@agiworkforce/types';
 
-/**
- * https only.
- *
- * Zod's `.url()` is `new URL()`-based and ACCEPTS `javascript:` and `data:` —
- * verified against the pinned zod 4.4.3, not assumed. The React surfaces have a
- * `safeHref` guard, but Chrome's DOMPurify config and VS Code's markdown-it path
- * are separate sanitizers with separate gaps. Close it once, at the contract
- * boundary, so no surface has to remember.
- */
 const HttpsUrlSchema = z
   .string()
   .url()
@@ -66,16 +46,6 @@ const InteractionSchema = z
   })
   .strict();
 
-/**
- * NOTE what is deliberately NOT pinned here: `schemaVersion` is an open int,
- * `kind` is an open string, and `body` is `unknown`. That is the entire
- * old-client story — an envelope for a card family or a schema version this
- * build has never heard of still PARSES and still carries its `fallback`.
- *
- * Pinning `schemaVersion: z.literal(1)` is the single change that would blank
- * cards in the field on the next major bump, because it would discard the card
- * INCLUDING the fallback that exists to cover exactly that case. Do not make it.
- */
 export const InteractiveCardEnvelopeSchema = z.object({
   schemaVersion: z.number().int().positive().max(9_999),
   cardId: z.string().min(1).max(128),
@@ -88,10 +58,6 @@ export const InteractiveCardEnvelopeSchema = z.object({
     .strict(),
   body: z.unknown(),
 });
-
-// ---------------------------------------------------------------------------
-// clarify.v1
-// ---------------------------------------------------------------------------
 
 const ClarifyOptionSchema = z
   .object({
@@ -109,12 +75,6 @@ const ClarifyQuestionSchema = z
     options: z.array(ClarifyOptionSchema).min(CLARIFY_MIN_OPTIONS).max(CLARIFY_MAX_OPTIONS),
     multiSelect: z.boolean(),
     isOther: z.boolean(),
-    /**
-     * Parsed for parity with the existing Rust struct, but the SERVER REJECTS a
-     * card containing a true value at the tool boundary. No renderer may mask an
-     * input — a clarifying-question card must never be able to look like a
-     * credential prompt inside chrome the user trusts.
-     */
     isSecret: z.boolean(),
   })
   .strict();
@@ -218,16 +178,6 @@ export const ClarifyCardBodySchema = z
     }
   });
 
-// ---------------------------------------------------------------------------
-// itinerary.v1
-// ---------------------------------------------------------------------------
-
-/**
- * `.strict()` on BOTH branches is load-bearing: it stops a stray `lat` or
- * `providerPlaceId` riding along on the unresolved branch and being picked up by
- * a permissive consumer. Shape strictness buys presence, not truth — only the
- * resolver round-trip buys truth.
- */
 export const PlaceIdentitySchema = z.discriminatedUnion('status', [
   z
     .object({
@@ -363,10 +313,6 @@ export const ItineraryCardBodySchema = z
     }
   });
 
-// ---------------------------------------------------------------------------
-// map-search.v1
-// ---------------------------------------------------------------------------
-
 const MapSearchActionSchema = z
   .object({
     provider: z.enum(['google_maps', 'openstreetmap']),
@@ -375,12 +321,6 @@ const MapSearchActionSchema = z
   })
   .strict();
 
-/**
- * One canonical allowlist for both contract parsing and host-side openers.
- * Exact origins reject lookalike hosts, credentials, alternate ports, and
- * downgrade attempts; exact paths prevent a valid provider origin from being
- * repurposed into an arbitrary outbound link.
- */
 export function isAllowedMapSearchProviderUrl(
   value: string,
   provider?: MapSearchAction['provider'],
@@ -404,12 +344,6 @@ export function isAllowedMapSearchProviderUrl(
   }
 }
 
-/**
- * Latitude/longitude are validated as FINITE numbers in range, not merely as
- * numbers: `NaN`/`Infinity` survive `z.number()` in zod 4 and would reach the
- * renderer's tile arithmetic, where they silently become `NaN` tile indices and
- * a grid of broken images.
- */
 const LatitudeSchema = z.number().finite().min(-85.05112878).max(85.05112878);
 const LongitudeSchema = z.number().finite().min(-180).max(180);
 
@@ -441,9 +375,6 @@ export const MapSearchCardBodySchema = z
   })
   .strict()
   .superRefine((body, ctx) => {
-    // Pins without a viewport have nothing to paint on, and painting them over
-    // a viewport the server did not compute is how a card would assert a
-    // location it never resolved. Reject rather than silently drop.
     if (!body.view && body.places && body.places.length > 0) {
       ctx.addIssue({ code: 'custom', path: ['places'], message: 'places require a view' });
     }
@@ -461,21 +392,6 @@ export const MapSearchCardBodySchema = z
     }
   });
 
-// ---------------------------------------------------------------------------
-// The single dispatch point every surface calls
-// ---------------------------------------------------------------------------
-
-/**
- * NEVER THROWS.
- *
- * A card that fails body validation is NOT dropped — it degrades to
- * `recognized: false`, keeping its envelope and its fallback. A validation bug
- * costs the user the widget, never the answer.
- *
- * Returns null only when the payload is not an envelope at all. Callers MUST
- * still render `fallback` for any card whose `interaction.awaitingResponse` is
- * true — a suspending card that renders nothing is a silently truncated turn.
- */
 export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | null {
   const envelope = InteractiveCardEnvelopeSchema.safeParse(
     (payload as { card?: unknown } | null | undefined)?.card,
@@ -485,7 +401,6 @@ export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | n
 
   const { kind, body: rawBody, ...common } = envelope.data;
 
-  // A newer MAJOR schema degrades to fallback, it does not vanish.
   if (envelope.data.schemaVersion > INTERACTIVE_CARD_SCHEMA_VERSION) {
     return { ...common, recognized: false, kind };
   }
@@ -502,10 +417,6 @@ export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | n
   return { ...common, recognized: true, kind, body: parsed.data } as InteractiveCard;
 }
 
-/**
- * Read the durable projection. Salvages per card, so one bad card never blanks
- * the list — the same contract the persisted tool-approval reader has.
- */
 export function readPersistedInteractiveCards(metadata: unknown): InteractiveCard[] {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
   const raw = (metadata as Record<string, unknown>)[INTERACTIVE_CARDS_METADATA_KEY];

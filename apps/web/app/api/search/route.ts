@@ -12,8 +12,6 @@ import { logger } from '@/lib/logger';
 import { readJsonBody } from '@/lib/read-json-body';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
-// Postgres SQLSTATE for undefined_function — raised when a called function
-// signature does not exist (e.g. a migration adding/altering it hasn't run).
 const PG_UNDEFINED_FUNCTION = '42883';
 
 const TrackSearchSchema = z.object({
@@ -118,7 +116,6 @@ async function handleGet(request: NextRequest) {
   const q = url.searchParams.get('q') ?? '';
   const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 100);
 
-  // Recent searches
   if (type === 'recent') {
     const rows = await db.query<RecentSearchRow>('select * from get_recent_searches($1, $2, $3)', [
       userId,
@@ -128,9 +125,6 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ searches: rows });
   }
 
-  // Popular searches — scoped to the authenticated user only (see 0045
-  // migration; previously this leaked every user's raw search query text to
-  // every other user).
   if (type === 'popular') {
     const days = parseInt(url.searchParams.get('days') ?? '7', 10);
     try {
@@ -140,13 +134,6 @@ async function handleGet(request: NextRequest) {
       );
       return NextResponse.json({ searches: rows });
     } catch (error) {
-      // The workspace-scoped overload lands with migration 0110. On an
-      // environment where it has not been applied, Postgres raises
-      // undefined_function (42883). Popular searches is a
-      // best-effort pre-fill for the search modal — degrade to an empty list
-      // instead of 500-ing the whole modal open. Mirrors the
-      // PG_UNDEFINED_COLUMN migration-lag fallback in /api/projects/[id] (PUT).
-      // Any other DB error still propagates so real bugs are not masked.
       if ((error as { code?: string } | null)?.code === PG_UNDEFINED_FUNCTION) {
         logger.warn(
           '[search] workspace-scoped get_popular_searches unavailable (migration 0110 not applied?); returning empty list',
@@ -157,7 +144,6 @@ async function handleGet(request: NextRequest) {
     }
   }
 
-  // Search suggestions
   if (type === 'suggestions') {
     if (q.trim().length < 2) return NextResponse.json({ suggestions: [] });
     const rows = await db.query<SuggestionRow>(
@@ -167,19 +153,13 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ suggestions: rows });
   }
 
-  // Full search (default)
   if (!q.trim()) throw createError.validation('q query param required for search');
-
-  // This route uses the privileged adapter because the search RPCs predate the
-  // RLS surface. The durable workspace resolved above is bound to every query;
-  // a client-supplied org is never an authorization input here.
 
   const includeArchived = url.searchParams.get('includeArchived') === 'true';
   const role = url.searchParams.get('role') as 'user' | 'assistant' | 'system' | null;
   const startDate = url.searchParams.get('startDate');
   const endDate = url.searchParams.get('endDate');
 
-  // Search sessions by title
   const sessionParams: unknown[] = [userId, `%${q}%`, organizationId];
   const sessionClauses: string[] = [
     'user_id = $1',
@@ -205,16 +185,6 @@ async function handleGet(request: NextRequest) {
     [...sessionParams, limit],
   );
 
-  // Search projects by name/description, scoped to the authenticated user.
-  // Soft-deleted projects (deleted_at, see 0041_projects_cloud_sync.sql) are
-  // excluded unless includeArchived is set, mirroring the conversation
-  // filter above. Kept in a separate `projects` response array (not merged
-  // into `results`) because the existing search UI (GlobalSearchDialog,
-  // global-search-service.ts) only knows how to render/navigate
-  // 'session' | 'message' result types — it routes every click to
-  // `/chat/${sessionId}`, which would 404 for a project id. Wiring a
-  // dedicated project result card that navigates to `/chat/projects/${id}` is a
-  // follow-up; this keeps the addition purely additive and non-breaking.
   const projectParams: unknown[] = [userId, `%${q}%`, organizationId];
   const projectClauses: string[] = [
     'user_id = $1',
@@ -240,9 +210,6 @@ async function handleGet(request: NextRequest) {
     [...projectParams, limit],
   );
 
-  // Search the user's cataloged files (media_assets — the Library) by display
-  // filename or generation prompt. Owner-scoped, soft-delete-aware. Kept in a
-  // separate `files` array because file results navigate to /library, not /chat.
   const fileParams: unknown[] = [userId, `%${q}%`, organizationId];
   const fileClauses: string[] = [
     'user_id = $1',
@@ -267,24 +234,12 @@ async function handleGet(request: NextRequest) {
     [...fileParams, limit],
   );
 
-  // Message search. Ownership comes from the conversation join (web_messages
-  // has no user_id), so the owner filter belongs on the joined table. This used
-  // to select the caller's conversation ids in a separate unbounded query and
-  // bind them all back as a uuid[] — ~180 KB of parameters at 5,000
-  // conversations, for a restriction the join already applies.
   const msgParams: unknown[] = [userId, `%${q}%`, organizationId];
-  // Every clause is table-qualified: web_messages and web_conversations both
-  // have created_at, so an unqualified date filter is an ambiguous reference
-  // and Postgres rejects the whole query.
   const msgClauses: string[] = [
     'c.user_id = $1',
     'm.content ilike $2',
     'c.organization_id is not distinct from $3::uuid',
   ];
-  // Both tombstones are honoured, on the same includeArchived switch as the
-  // session and project queries above: /api/chat/sync soft-deletes a message by
-  // setting m.deleted_at while preserving its content, so filtering only on the
-  // conversation would keep serving deleted message bodies through search.
   if (!includeArchived) {
     msgClauses.push('c.deleted_at is null');
     msgClauses.push('m.deleted_at is null');
@@ -390,11 +345,6 @@ async function handleGet(request: NextRequest) {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, limit);
 
-  // NOTE: projectMatches/projectResults are intentionally excluded from
-  // stats.totalResults and `results` — see the comment above the project
-  // query. Bumping totalResults here without rendering the extra rows in
-  // `results` would make the UI's "Found N results" count not match the
-  // number of rows actually shown, which is its own visible bug.
   const stats = {
     totalResults: sessionResults.length + messageResults.length,
     sessionMatches: sessionResults.length,
@@ -403,7 +353,6 @@ async function handleGet(request: NextRequest) {
     fileMatches: fileResults.length,
   };
 
-  // Fire-and-forget search tracking
   if (q.trim()) {
     db.query('select track_search($1, $2, $3, $4)', [
       userId,

@@ -1,10 +1,5 @@
-/**
- * Canvas & Design API — typed wrappers for canvas_* and design_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface Canvas {
   id: string;
@@ -62,8 +57,6 @@ export interface AccessibilityReport {
   score: number;
 }
 
-// ---- Canvas ----
-
 export async function canvasCreate(name: string, width: number, height: number): Promise<string> {
   return command<string>('canvas_create', { name, width, height });
 }
@@ -114,8 +107,6 @@ export async function canvasAddText(
 ): Promise<string> {
   return command<string>('canvas_add_text', { canvasId, text, x, y, width, style });
 }
-
-// ---- Design ----
 
 export async function designGenerateCss(request: DesignRequest): Promise<DesignResponse> {
   return command<DesignResponse>('design_generate_css', { request });

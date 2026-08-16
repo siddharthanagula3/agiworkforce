@@ -1,23 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Mobile shared-primitive snapshot tests.
- *
- * Mirrors `packages/ui/unified-chat/src/components/__tests__/SharedPrimitives.snapshot.test.tsx`
- * for the RN-native ProjectHeader. Locks the rendered RN tree so any future
- * layout drift fires a diff. Structural visual-verification step — not
- * pixel parity. Discharges part of the Stop-hook visual-verification debt
- * for the Mobile surface.
- *
- * Round-10 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import { summarizeProjectHeader, type ProjectHeaderPresentation } from '@agiworkforce/types';
 
-// The real palette rather than a hand-listed copy: these mocks omitted
-// whatever token a component reached for next, and a missing key surfaces as
-// `undefined` deep in a style object instead of as a clear failure.
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
   return {

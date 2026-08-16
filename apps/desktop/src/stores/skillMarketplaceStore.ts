@@ -1,16 +1,7 @@
-/**
- * Skill Marketplace Store
- *
- * Manages AGI Workforce skills loaded via the `skill_list` Tauri command.
- * Skills are categorized client-side by inferring category from the skill name/description.
- */
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-/** Shape returned by the `skill_list` Tauri command (camelCase per Tauri IPC rules). */
 export interface SkillInfo {
   name: string;
   description: string;
@@ -22,7 +13,6 @@ export interface SkillInfo {
   contextMode: string;
 }
 
-/** Result of invoking a skill. */
 export interface SkillInvocationResult {
   skillName: string;
   instructions: string;
@@ -30,7 +20,6 @@ export interface SkillInvocationResult {
   contextMode: string;
 }
 
-/** Result of checking skill requirements. */
 export interface RequirementCheckResult {
   satisfied: boolean;
   missingBins: string[];
@@ -38,7 +27,6 @@ export interface RequirementCheckResult {
   osSupported: boolean;
 }
 
-/** Skill match result from message matching. */
 export interface SkillMatchResult {
   skillName: string;
   description: string;
@@ -46,13 +34,11 @@ export interface SkillMatchResult {
   matchReason: string;
 }
 
-/** Slash command definition. */
 export interface SlashCommand {
   name: string;
   description: string;
 }
 
-/** Frontend-augmented skill with derived category and active state. */
 export interface MarketplaceSkill extends SkillInfo {
   category: SkillCategory;
   isActive: boolean;
@@ -71,8 +57,6 @@ export type SkillCategory =
   | 'productivity';
 
 export type ViewMode = 'grid' | 'list';
-
-// ── Category detection ─────────────────────────────────────────────────────────
 
 const CATEGORY_KEYWORDS: Record<Exclude<SkillCategory, 'all'>, string[]> = {
   healthcare: [
@@ -216,8 +200,6 @@ function inferCategory(skill: SkillInfo): Exclude<SkillCategory, 'all'> {
   return 'productivity';
 }
 
-// ── Store ──────────────────────────────────────────────────────────────────────
-
 interface SkillMarketplaceState {
   skills: MarketplaceSkill[];
   slashCommands: SlashCommand[];
@@ -230,7 +212,6 @@ interface SkillMarketplaceState {
   viewMode: ViewMode;
   expandedSkillName: string | null;
 
-  // Core actions
   fetchSkills: () => Promise<void>;
   reloadSkills: () => Promise<void>;
   setCategory: (category: SkillCategory) => void;
@@ -239,7 +220,6 @@ interface SkillMarketplaceState {
   setExpandedSkill: (name: string | null) => void;
   toggleSkillActive: (name: string) => void;
 
-  // Newly wired skill commands
   getSkill: (name: string) => Promise<SkillInfo | null>;
   getSkillInstructions: (name: string) => Promise<string | null>;
   checkRequirements: (name: string) => Promise<RequirementCheckResult | null>;
@@ -306,8 +286,6 @@ export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
           skills: state.skills.map((s) => (s.name === name ? { ...s, isActive: !s.isActive } : s)),
         }));
       },
-
-      // ── Newly wired skill commands ────────────────────────────────────
 
       getSkill: async (name) => {
         try {
@@ -387,7 +365,6 @@ export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
       setWorkspace: async (path) => {
         try {
           await invoke('skill_set_workspace', { path });
-          // Refresh skills after workspace change
           await get().fetchSkills();
         } catch (err) {
           set({ error: err instanceof Error ? err.message : 'Failed to set workspace' });
@@ -406,9 +383,6 @@ export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
   ),
 );
 
-// ── Selectors ──────────────────────────────────────────────────────────────────
-
-/** Returns skills filtered by the current category and search query. */
 export function selectFilteredSkills(state: SkillMarketplaceState): MarketplaceSkill[] {
   const { skills, selectedCategory, searchQuery } = state;
   const query = searchQuery.trim().toLowerCase();
@@ -423,7 +397,6 @@ export function selectFilteredSkills(state: SkillMarketplaceState): MarketplaceS
   });
 }
 
-/** Returns counts per category for the filter sidebar labels. */
 export function selectCategoryCounts(state: SkillMarketplaceState): Record<SkillCategory, number> {
   const { skills } = state;
   const counts: Record<SkillCategory, number> = {

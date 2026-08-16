@@ -89,7 +89,6 @@ describe('plugin registry migration', () => {
     );
     expect(migration).toContain('grant select on public.plugin_registry_entries to app_rls');
     expect(migration).toContain('create policy plugin_registry_entries_public_read');
-    // No write grant and no write policy for the non-privileged role.
     expect(migration).not.toMatch(/grant[^;]*insert[^;]*plugin_registry_entries/);
     expect(migration).not.toMatch(/grant[^;]*update[^;]*plugin_registry_entries/);
     expect(migration).not.toMatch(/grant[^;]*delete[^;]*plugin_registry_entries/);
@@ -102,7 +101,6 @@ describe('plugin registry migration', () => {
   });
 
   it('models no download count, install total, or rating', () => {
-    // Comments are allowed to explain the omission; the SQL must not define one.
     const sql = migration
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('--'))

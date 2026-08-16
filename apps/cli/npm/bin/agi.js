@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-/**
- * AGI Workforce CLI — npm wrapper
- *
- * This thin wrapper resolves and spawns the native Rust binary.
- * The binary is bundled in platform-specific npm packages
- * (e.g., @agiworkforce/cli-darwin-arm64) or in the vendor/ directory.
- */
 
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -20,7 +13,6 @@ const LEGACY_BINARY_NAME = 'agiworkforce';
 const WRAPPER_ENV = 'AGI_CLI_NPM_WRAPPER';
 const BINARY_PATH_ENV = 'AGI_CLI_BINARY_PATH';
 
-// Platform → npm package mapping
 const PLATFORM_PACKAGES = {
   'darwin-arm64': '@agiworkforce/cli-darwin-arm64',
   'darwin-x64': '@agiworkforce/cli-darwin-x64',
@@ -57,7 +49,6 @@ function findBinary() {
     };
   }
 
-  // 1. Try platform-specific npm package
   const packageName = PLATFORM_PACKAGES[platformKey];
   if (packageName) {
     try {
@@ -74,7 +65,6 @@ function findBinary() {
     }
   }
 
-  // 2. Try vendor/ directory (bundled with main package)
   const wrapperDir = dirname(fileURLToPath(import.meta.url));
   for (const name of binaryNames()) {
     const vendorPath = join(wrapperDir, '..', 'vendor', name);

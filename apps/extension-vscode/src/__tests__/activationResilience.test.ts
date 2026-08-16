@@ -1,11 +1,3 @@
-/**
- * activationResilience.test.ts — activate() must never lose the chat view.
- *
- * `setupProviders` and `setupChat` used to run unguarded. Either one throwing
- * aborted activate() before `registerWebviewViewProvider('agi-workforce.sidebar')`
- * ran, so VS Code rendered the AGI container as an empty "no data provider
- * registered" placeholder with no error anywhere the user could see it.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';

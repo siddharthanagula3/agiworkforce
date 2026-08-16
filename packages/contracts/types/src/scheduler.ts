@@ -11,10 +11,6 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Cron Expression
-// ============================================================================
-
 /**
  * A validated cron expression string.
  *
@@ -29,10 +25,6 @@
  * ```
  */
 export type CronExpression = string;
-
-// ============================================================================
-// Schedule Config
-// ============================================================================
 
 /**
  * Configuration for a scheduled task's timing.
@@ -59,34 +51,22 @@ export type CronExpression = string;
  * ```
  */
 export interface ScheduleConfig {
-  /** Schedule type. */
   type: 'cron' | 'once' | 'interval';
 
-  /** Cron expression (required when type is `'cron'`). */
   cron?: CronExpression;
 
-  /** ISO 8601 timestamp for one-time execution (required when type is `'once'`). */
   executeAt?: string;
 
-  /** Interval in milliseconds (required when type is `'interval'`). */
   intervalMs?: number;
 
-  /** IANA timezone identifier (e.g., `"America/New_York"`). */
   timezone?: string;
 
-  /** Whether the schedule is active. */
   enabled: boolean;
 
-  /** ISO 8601 timestamp after which the schedule stops (optional). */
   expiresAt?: string;
 
-  /** Maximum number of executions (optional, 0 = unlimited). */
   maxExecutions?: number;
 }
-
-// ============================================================================
-// Scheduled Task
-// ============================================================================
 
 /**
  * A task that is scheduled for future or recurring execution.
@@ -122,31 +102,22 @@ export interface ScheduleConfig {
  * ```
  */
 export interface ScheduledTask {
-  /** Unique task identifier. */
   id: string;
 
-  /** Human-readable task name. */
   name: string;
 
-  /** Optional task description. */
   description?: string;
 
-  /** Schedule configuration. */
   schedule: ScheduleConfig;
 
-  /** Action to perform when the schedule triggers. */
   action: ScheduledAction;
 
-  /** Current task status. */
   status: 'active' | 'paused' | 'completed' | 'failed' | 'expired';
 
-  /** Number of times this task has been executed. */
   executionCount: number;
 
-  /** ISO 8601 timestamp of the last execution. Null if never executed. */
   lastExecutedAt?: string | null;
 
-  /** ISO 8601 timestamp of the next scheduled execution. Null if completed/paused. */
   nextExecutionAt?: string | null;
 
   /** @deprecated Use `lastExecutedAt`. Kept for compatibility with legacy desktop payloads. */
@@ -155,51 +126,31 @@ export interface ScheduledTask {
   /** @deprecated Use `nextExecutionAt`. Kept for compatibility with legacy desktop payloads. */
   nextRun?: string | null;
 
-  /** Error message from the last failed execution. */
   lastError?: string;
 
-  /** ISO 8601 timestamp when the task was created. */
   createdAt: string;
 
-  /** ISO 8601 timestamp when the task was last updated. */
   updatedAt: string;
 
-  /** User who owns this scheduled task. */
   userId?: string;
 }
 
-// ============================================================================
-// Scheduled Action
-// ============================================================================
-
-/**
- * The action to perform when a scheduled task triggers.
- *
- * Supports agent execution, workflow execution, and simple notifications.
- */
 export interface ScheduledAction {
-  /** Action type. */
   type: 'agent' | 'workflow' | 'notification' | 'command';
 
-  /** Agent configuration (when type is `'agent'`). */
   agentConfig?: {
     name: string;
     model: string;
     provider: string;
   };
 
-  /** Prompt to send to the agent (when type is `'agent'`). */
   prompt?: string;
 
-  /** Workflow ID to execute (when type is `'workflow'`). */
   workflowId?: string;
 
-  /** Notification message (when type is `'notification'`). */
   message?: string;
 
-  /** Shell command to run (when type is `'command'`). */
   command?: string;
 
-  /** Arbitrary action metadata. */
   metadata?: Record<string, unknown>;
 }

@@ -6,8 +6,6 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 
-// The full ArtifactPreview drags in the sandbox/iframe stack; the handoff test
-// only needs to know WHICH viewer the panel chose, so stub it.
 vi.mock('./ArtifactPreview', () => ({
   ArtifactPreview: ({ artifact }: { artifact: { title?: string } }) => (
     <div data-testid="artifact-preview">{artifact.title}</div>
@@ -16,7 +14,6 @@ vi.mock('./ArtifactPreview', () => ({
 
 const CONVERSATION_ID = 'conv-stream-test';
 const MESSAGE_ID = 'msg-stream-test';
-// Deterministic id shared by the streaming placeholder and the persisted artifact.
 const ARTIFACT_ID = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
 
 function setStreaming(content: string) {
@@ -49,7 +46,6 @@ describe('ArtifactsPanel · live artifact streaming', () => {
     expect(screen.getByTestId('streaming-artifact-code').textContent).toContain('<!DOCTYPE html>');
     expect(screen.queryByTestId('artifact-preview')).not.toBeInTheDocument();
 
-    // Simulated stream: more chunks arrive
     act(() => {
       setStreaming('<!DOCTYPE html>\n<html>\n<body><h1>Hi</h1>');
     });
@@ -61,9 +57,6 @@ describe('ArtifactsPanel · live artifact streaming', () => {
     render(<ArtifactsPanel />);
     expect(screen.getByTestId('streaming-artifact')).toBeInTheDocument();
 
-    // Fence closes: the persisted artifact lands under the SAME deterministic
-    // id and the ephemeral streaming entry clears (what MessageBubble's
-    // extraction effects + the sync hook do in production).
     act(() => {
       useArtifactsStore.getState().addArtifactForMessage(
         MESSAGE_ID,
@@ -85,8 +78,6 @@ describe('ArtifactsPanel · live artifact streaming', () => {
   });
 
   it('suppresses the streaming placeholder once a persisted artifact with the same id exists', () => {
-    // Persisted artifact already landed but a stale streaming entry lingers:
-    // the panel must prefer the persisted viewer (no duplicate tab/view).
     useArtifactsStore.getState().addArtifactForMessage(
       MESSAGE_ID,
       {

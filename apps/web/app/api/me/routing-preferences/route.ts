@@ -1,17 +1,3 @@
-/**
- * /api/me/routing-preferences
- *
- * GET  · return the user's current routing_preferences JSONB.
- * PUT  · replace it (validates shape).
- *
- * Auth: requires Bearer JWT (mobile/desktop) OR cookie session (web).
- *       getUserClient(token) is used for both reads and writes so RLS on
- *       profiles is enforced (user can only mutate their own row).
- *
- * Note: lower tiers can set us_only=true but the router ignores it because
- *       TierPolicy.usOnlyRoutingAvailable is false. We still let them store
- *       the preference so a later upgrade doesn't lose the setting.
- */
 
 import 'server-only';
 

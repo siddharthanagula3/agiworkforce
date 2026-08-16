@@ -1,9 +1,3 @@
-/**
- * BrowserInlinePanel Component
- *
- * Displays browser automation results including screenshots, URL, page title,
- * and action history.
- */
 
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';

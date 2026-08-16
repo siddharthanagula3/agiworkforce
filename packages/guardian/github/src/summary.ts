@@ -1,10 +1,3 @@
-/**
- * The single, editable PR summary comment.
- *
- * Guardian maintains exactly one summary comment per PR, identified by a
- * hidden marker. Subsequent runs edit it in place instead of posting a new
- * comment — reposting on every commit is the fastest way to get uninstalled.
- */
 import {
   rankFindings,
   type Finding,
@@ -23,7 +16,6 @@ export interface SummaryInput {
   scannerRuns: readonly ScannerRun[];
 }
 
-/** Find Guardian's existing summary comment among a PR's comments. */
 export function findSummaryComment<T extends { body?: string | null }>(
   comments: readonly T[],
 ): T | undefined {

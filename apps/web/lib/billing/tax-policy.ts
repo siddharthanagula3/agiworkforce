@@ -63,29 +63,18 @@ import type Stripe from 'stripe';
  *   has to carry the buyer's address.
  */
 export const CHECKOUT_TAX_POLICY = {
-  /** Tax is calculated by Stripe Tax, never by a rate table in this repo. */
   engine: 'stripe-tax',
-  /** Catalog prices are net; tax is added on top of them at checkout. */
   priceMode: 'exclusive',
-  /** Business tax IDs are collected so B2B reverse charge / zero rate applies. */
   collectsBusinessTaxIds: true,
-  /** A full billing address is collected for the tax invoice, not just a country. */
   requiresFullBillingAddress: true,
-  /** Tax identifiers and addresses stay on Stripe; this database stores neither. */
   persistsTaxIdentifiers: false,
 } as const;
 
-/**
- * Checkout Session fields that carry regulated buyer data and must never be
- * written into this product's database. Named so the webhook regression test
- * can assert on them instead of restating them.
- */
 export const SESSION_TAX_FIELDS_NEVER_PERSISTED = [
   'customer_details.tax_ids',
   'customer_details.address',
 ] as const;
 
-/** The subset of a Checkout Session create call that implements the tax policy. */
 export type CheckoutTaxParams = Pick<
   Stripe.Checkout.SessionCreateParams,
   'automatic_tax' | 'tax_id_collection' | 'billing_address_collection' | 'customer_update'
@@ -112,29 +101,16 @@ export function buildCheckoutTaxParams(options: {
   };
 
   if (options.hasExistingCustomer) {
-    // `name` is REQUIRED by Stripe alongside tax_id_collection; `address`
-    // persists what the buyer typed so renewals stay taxable.
     params.customer_update = { address: 'auto', name: 'auto' };
   }
 
   return params;
 }
 
-/** What actually happened to tax on a completed Checkout Session. */
 export interface SessionTaxOutcome {
-  /**
-   * `complete` — Stripe calculated tax (an amount of 0 is a valid calculation
-   * for an unregistered jurisdiction or a reverse-charge B2B sale).
-   * `failed` / `requires_location_inputs` — Stripe could not calculate.
-   * `not_requested` — the session was created without automatic tax at all,
-   * which means it did not come from this product's checkout policy.
-   */
   status: 'complete' | 'failed' | 'requires_location_inputs' | 'not_requested';
-  /** True only when Stripe reports a completed calculation. */
   calculated: boolean;
-  /** Tax charged, in the smallest currency unit. Null when not calculated. */
   taxAmountMinor: number | null;
-  /** Tax-ID TYPES the buyer supplied (e.g. `eu_vat`). Never the values. */
   taxIdTypes: string[];
 }
 

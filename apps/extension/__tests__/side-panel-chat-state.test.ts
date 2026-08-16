@@ -178,9 +178,6 @@ describe('side-panel chat state', () => {
 
     expect(messages.filter((entry) => entry.id === 'stream-1')).toHaveLength(1);
     expect(messages.at(-1)).toMatchObject({
-      // The partial answer survives untouched; the failure is recorded beside
-      // it rather than appended into it as "Error: <provider string>", which
-      // rendered a provider message as assistant prose.
       content: 'partial',
       errorText: 'network lost',
       streaming: false,
@@ -240,10 +237,6 @@ describe('side-panel chat state', () => {
     });
 
     it('renders a bubble for a still-streaming message even when its text is empty', () => {
-      // Regression: an agentic run creates the assistant message from a
-      // tool/agent event with empty content but streaming:true, then streams the
-      // answer in. The bubble MUST exist up-front so the in-place streaming
-      // updater has an `sp-bubble-<id>` target — otherwise the reply never paints.
       expect(shouldRenderTextBubble({ text: '', streaming: true })).toBe(true);
       expect(shouldRenderTextBubble({ text: '   ', streaming: true })).toBe(true);
     });

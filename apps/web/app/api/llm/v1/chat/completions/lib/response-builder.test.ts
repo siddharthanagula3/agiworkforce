@@ -10,16 +10,6 @@ import { buildUpstreamErrorResponse } from './response-builder';
 const FIXTURE_MODEL_ID = 'fixture-model';
 
 describe('buildUpstreamErrorResponse', () => {
-  // CHANGED BY AUDIT-FIX SYS-17/SYS-18 — read loudly.
-  //
-  // The original fixture threw a bare `new Error('Google API rate limit
-  // exceeded (429): ...')` with NO `status` property, because the old
-  // implementation derived the HTTP status by SUBSTRING-MATCHING that English
-  // text. That fixture no longer represents what the adapters actually throw:
-  // `adapter-errors.ts` has always set a structured `error.status`, and the
-  // response builder now reads it (via `classifyError`) instead of sniffing
-  // strings. The assertion's intent — 429, `rate_limit_error`, and NO provider
-  // quota payload in the body — is preserved verbatim.
   function upstreamError(message: string, status?: number): Error {
     const error = new Error(message) as Error & { status?: number };
     if (status !== undefined) error.status = status;

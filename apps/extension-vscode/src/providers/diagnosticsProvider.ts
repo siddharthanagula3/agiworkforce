@@ -1,9 +1,3 @@
-/**
- * diagnosticsProvider.ts -- AI-powered diagnostics from code review
- *
- * When the user runs "Code Review", the AI analyzes the selection
- * and creates VS Code diagnostic entries (warnings/info) for issues it finds.
- */
 
 import * as vscode from 'vscode';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
@@ -21,9 +15,6 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
     return this._diagnosticCollection;
   }
 
-  /**
-   * Run an AI code review on the given editor selection and produce diagnostics.
-   */
   async reviewCode(
     editor: vscode.TextEditor,
     secrets: vscode.SecretStorage,
@@ -65,7 +56,6 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
 
     const { diagnostics, summary } = parseReviewResponse(response, editor.document.uri, startLine);
 
-    // Clear old diagnostics for this document, then set new ones
     this._diagnosticCollection.delete(editor.document.uri);
     if (diagnostics.length > 0) {
       this._diagnosticCollection.set(editor.document.uri, diagnostics);
@@ -74,9 +64,6 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
     return { diagnosticCount: diagnostics.length, summary };
   }
 
-  /**
-   * Clear diagnostics for a specific document or all documents.
-   */
   clear(uri?: vscode.Uri): void {
     if (uri !== undefined) {
       this._diagnosticCollection.delete(uri);

@@ -1,11 +1,3 @@
-/**
- * POST /api/support/handoff — end-to-end through the real service.
- *
- * Only the database, Clerk, CSRF/rate-limit wrappers and `fetch` are mocked;
- * config, presence, transcript normalization, the email builder and the Resend
- * client all execute. So this proves the ROUTE actually delivers the honest
- * fallback rather than that a mock returned a nice-looking object.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -151,9 +143,6 @@ describe('POST /api/support/handoff', () => {
 
   it('ignores a client-supplied contactEmail when the caller is signed in', async () => {
     routeMocks.auth.mockResolvedValue({ userId: 'user_real' });
-    // The Clerk lookup inside request-identity is dynamic-imported; without a
-    // verified address the route falls back to the supplied one, so pin the
-    // signed-in case by asserting the OWNER, which is never client-supplied.
     await POST(request(validBody({ contactEmail: 'attacker@example.com' })));
 
     expect(routeMocks.insertHandoffSession).toHaveBeenCalledWith(

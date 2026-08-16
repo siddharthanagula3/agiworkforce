@@ -28,20 +28,6 @@ import {
   type ProvisionedConnection,
 } from '@/lib/server/sso/clerk-enterprise-connections';
 
-/**
- * Single enterprise SSO connection.
- *
- * GET   /api/admin/sso/[id]  - Read one connection (owner or admin)
- * PATCH /api/admin/sso/[id]  - Rotate IdP metadata/certificate, remap
- *                              attributes, and activate or deactivate (owner)
- *
- * PATCH is where a connection actually becomes real: it forwards the validated
- * IdP configuration to Clerk, stores the returned connection reference and the
- * Service Provider values the admin needs, and only then may flip `is_active`.
- * Activation is refused unless the claimed email domain has been verified,
- * because an instance-level connection captures every sign-in on that domain.
- */
-
 export const runtime = 'nodejs';
 
 const ENDPOINT = '/api/admin/sso/[id]';
@@ -72,11 +58,6 @@ async function loadConnection(
   return rows[0] ?? null;
 }
 
-/**
- * Build the payload sent to the identity provider from the stored row plus this
- * request's changes. Returns null when the connection still lacks the minimum
- * configuration its provider type requires.
- */
 function buildProvisionInput(
   row: SSOConnectionRow,
   next: {
@@ -108,9 +89,6 @@ function buildProvisionInput(
   if (!next.oidcDiscoveryUrl || !next.oidcClientId) {
     return { missing: 'oidc_discovery_url and oidc_client_id' };
   }
-  // The client secret is never persisted, so it cannot be recovered from the
-  // row on a later activation — it must accompany any request that provisions
-  // or reprovisions an OIDC connection.
   if (!next.oidcClientSecret) {
     return { missing: 'oidc_client_secret' };
   }
@@ -141,9 +119,6 @@ function providerErrorResponse(error: unknown, context: Record<string, unknown>)
   return null;
 }
 
-/**
- * GET /api/admin/sso/[id]
- */
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -180,9 +155,6 @@ export async function GET(
   }
 }
 
-/**
- * PATCH /api/admin/sso/[id]
- */
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -236,8 +208,6 @@ export async function PATCH(
     );
     if (forbidden) return forbidden;
 
-    // Reject fields that do not belong to this connection's provider type
-    // instead of quietly ignoring them.
     if (
       row.provider_type === 'saml' &&
       (update.oidc_discovery_url || update.oidc_client_id || update.oidc_client_secret)
@@ -272,8 +242,6 @@ export async function PATCH(
         oidcClientId:
           update.oidc_client_id !== undefined ? update.oidc_client_id.trim() : row.oidc_client_id,
         oidcClientSecret: update.oidc_client_secret ?? null,
-        // Validated against the raw body: zod strips keys such as `__proto__`
-        // while parsing a record, which would let a rejected key look accepted.
         attributeMapping:
           update.attribute_mapping !== undefined
             ? assertSafeAttributeMapping(rawAttributeMapping(rawBody))
@@ -290,8 +258,6 @@ export async function PATCH(
 
     const wantsActive = update.is_active ?? row.is_active;
 
-    // Fail closed: an unverified domain can never be activated, whatever else
-    // the request contains.
     if (wantsActive && !row.domain_verified_at) {
       return NextResponse.json(
         {
@@ -311,9 +277,6 @@ export async function PATCH(
       update.attribute_mapping !== undefined ||
       update.display_name !== undefined;
 
-    // Provision when going live, or when live configuration changed. A dormant
-    // draft is only pushed to the provider once it is actually being activated,
-    // so an unverified domain never reaches the IdP.
     const mustReachProvider =
       (wantsActive && !row.is_active) ||
       (changesProviderConfig && row.clerk_connection_id !== null);
@@ -357,9 +320,6 @@ export async function PATCH(
       }
     }
 
-    // Persist only what the provider confirmed. `is_active` mirrors the
-    // provider's answer rather than the caller's request, so the database can
-    // never claim a connection is live that the IdP does not have.
     const effectiveActive = provisioned ? provisioned.active : row.is_active;
 
     const updated = await principal.db.query<SSOConnectionRow>(

@@ -4,20 +4,6 @@ import { useId, useState, type FormEvent } from 'react';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
-/**
- * The DPDP rights-request form.
- *
- * Open to people without an account on purpose: rights under the Act do not
- * depend on holding one, and the people most likely to need erasure are exactly
- * those whose address sits on a list they never made an account for.
- *
- * The success copy is the careful part. Submitting records a row and returns a
- * reference — it does not notify a human, and this page will not imply that it
- * does. "We have received your request" is true; "our team has been notified"
- * would not be, and a compliance surface that overstates itself is worse than
- * one that admits its edges.
- */
-
 const REQUEST_TYPES = [
   {
     id: 'access',
@@ -111,8 +97,6 @@ export function RightsRequestForm() {
       }
 
       const body = (await res.json()) as { reference?: string };
-      // Only shown when the server actually returned one: a reference the
-      // product cannot look up is worse than no reference at all.
       setReference(body.reference ?? null);
       setState('idle');
       setDetails('');

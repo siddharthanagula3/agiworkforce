@@ -1,16 +1,3 @@
-/**
- * ToolCallTimeline — unified, borderless vertical timeline for a message's
- * tool calls: a thin connecting line through small icon circles, a collapsible
- * group-header summary, and per-row inline expansion (Request/Response, or
- * web-search result cards). Modeled on Claude's own inline tool-use UI.
- *
- * Named ToolCallTimeline (not ToolTimeline) to avoid colliding with the
- * unrelated agents-feature ToolTimeline in
- * src/features/agents/components/ToolTimeline.tsx (gated Companion feature).
- *
- * Supersedes the old per-tool bordered-pill rendering (InlineToolCall, now
- * removed) for every tool call in the transcript.
- */
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import { View, Pressable, Modal, ScrollView } from 'react-native';
@@ -97,9 +84,6 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
     return <AlertCircle size={15} strokeWidth={1.75} color={colors.agentError} />;
   }
 
-  // A tool that created/wrote a file gets the file's own extension icon
-  // (matches the reference: build_resume.js shows a JS-file icon, not a
-  // generic write-tool icon), everything else keeps its tool-name icon.
   const Icon = tool.filePath
     ? lucideRNIconByName(getFileExtensionIconName(tool.filePath))
     : lucideRNToolIcon(tool.name);
@@ -400,9 +384,6 @@ function ToolCallTimelineRow({
   );
 }
 
-/** The inline body clamps the response at 12 lines to keep the transcript
- *  auto-fit (no nested scrolling). Offer the fullscreen viewer whenever the
- *  clamp could be hiding content. */
 const FULLSCREEN_OUTPUT_THRESHOLD = 600;
 
 function needsFullScreen(tool: ToolCall): boolean {
@@ -410,11 +391,6 @@ function needsFullScreen(tool: ToolCall): boolean {
   return size > FULLSCREEN_OUTPUT_THRESHOLD || (tool.output?.split('\n').length ?? 0) > 12;
 }
 
-/**
- * Fullscreen tool-detail viewer — a pageSheet modal so the transcript (and the
- * composer under it) stays reachable the moment it's dismissed. The full
- * request/response scrolls HERE, never inline in the message list.
- */
 export function ToolCallDetailsSheet({
   tool,
   onClose,
@@ -543,29 +519,14 @@ export function ToolCallTimeline({
   approvalExpired,
   onResendApproval,
 }: {
-  /** The assistant message this timeline belongs to -- see the `collapsed` state's doc comment. */
   messageId: string;
   toolCalls: ToolCall[];
   summary: string;
-  /** Called when the user taps Allow/Deny on a tool awaiting approval. */
   onResolveApproval?: (toolCallId: string, decision: 'approved' | 'rejected') => void;
-  /**
-   * True when this message's suspended approval turn is no longer live (the
-   * in-memory registry resolveToolApproval consults doesn't survive a cold
-   * start, even though a persisted awaiting_approval tool call does).
-   * Renders an expired notice instead of live Allow/Deny buttons, which
-   * would otherwise render wired but silently no-op.
-   */
   approvalExpired?: boolean;
-  /** Resend affordance shown on an expired approval card. Omit to show text guidance only (no fake availability). */
   onResendApproval?: () => void;
 }) {
   const colors = useThemeColors();
-  // FlashList v2 recycles component instances across list items for
-  // performance -- a bare useState here would bleed a PRIOR message's
-  // collapsed/expanded state, or a stuck-open full-screen tool viewer, onto
-  // whichever message this instance now renders after a recycle.
-  // useRecyclingState resets whenever messageId changes.
   const [collapsed, setCollapsed] = useRecyclingState(false, [messageId]);
   const [fullScreenTool, setFullScreenTool] = useRecyclingState<ToolCall | null>(null, [messageId]);
   const closeFullScreen = useCallback(() => setFullScreenTool(null), [setFullScreenTool]);
@@ -574,24 +535,9 @@ export function ToolCallTimeline({
     [toolCalls],
   );
 
-  /**
-   * Auto-collapse once the run finishes, matching the reference (Claude iOS
-   * shows a finished run as a single tappable summary line in the transcript,
-   * expanding it into its own view on demand).
-   *
-   * Expanded WHILE running is the point — that is the progress indicator. What
-   * was wrong is that it stayed expanded forever, so a ten-step run permanently
-   * buried the answer it produced under its own scaffolding.
-   *
-   * A manual toggle wins permanently. Collapsing something the user just chose
-   * to open is worse than any amount of transcript noise, so the auto-collapse
-   * fires at most once and never fights a deliberate choice.
-   */
   const userToggledRef = useRef(false);
   const autoCollapsedRef = useRef(false);
   useEffect(() => {
-    // messageId is in the dep list so a recycled FlashList instance re-arms
-    // both refs for whichever message it now renders.
     userToggledRef.current = false;
     autoCollapsedRef.current = false;
   }, [messageId]);

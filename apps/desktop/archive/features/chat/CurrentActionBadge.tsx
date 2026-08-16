@@ -37,14 +37,12 @@ const TOOL_ICON_MAP: Record<string, LucideIcon> = {
 };
 
 function getIcon(entry: ActionTrailEntry) {
-  // Prefer display name from tool events (populated by the tool:event listener)
   const displayName = entry.metadata?.['displayName'] as string | undefined;
   if (displayName) {
     const IconComponent = TOOL_ICON_MAP[displayName] ?? Wrench;
     return <IconComponent className="w-3.5 h-3.5" />;
   }
 
-  // Fall back to existing keyword-based matching on the message string
   const lowerMessage = entry.message?.toLowerCase() ?? '';
   if (lowerMessage.includes('screenshot') || lowerMessage.includes('capture')) {
     return <Camera className="w-3.5 h-3.5" />;
@@ -142,21 +140,15 @@ interface CurrentActionBadgeProps {
   className?: string;
 }
 
-/**
- * A compact current action indicator that shows the most recent active action
- * Designed to be displayed in the chat header area for always-visible status
- */
 export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
   const getActiveActionTrail = useUnifiedChatStore((state) => state.getActiveActionTrail);
   const actionTrail = getActiveActionTrail();
   const recentFirstTrail = [...actionTrail].reverse();
 
-  // Get the most recent active action (running, thinking, searching, coding)
   const activeAction = recentFirstTrail.find((entry) =>
     ['thinking', 'searching', 'coding', 'running'].includes(entry.type),
   );
 
-  // Also show recently completed actions for 3 seconds
   const recentCompleted = recentFirstTrail.find(
     (entry) =>
       entry.type === 'completed' && Date.now() - new Date(entry.timestamp).getTime() < 3000,
@@ -232,15 +224,10 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
   );
 }
 
-/**
- * A stacked version showing multiple current actions
- * Useful for the sidecar or when multiple operations run in parallel
- */
 export function CurrentActionStack({ className }: CurrentActionBadgeProps) {
   const getActiveActionTrail = useUnifiedChatStore((state) => state.getActiveActionTrail);
   const actionTrail = getActiveActionTrail();
 
-  // Get all active actions
   const activeActions = actionTrail.filter((entry) =>
     ['thinking', 'searching', 'coding', 'running'].includes(entry.type),
   );

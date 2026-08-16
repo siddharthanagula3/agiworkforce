@@ -1,15 +1,3 @@
-/**
- * DES-C01 — the sidebar footer "Sign in / Cloud sync" row was a dead control.
- *
- * It called `openSettings('account')`, but in Local mode the settings host is
- * `SettingsPanel`, whose `LOCAL_HIDDEN_TABS` contains 'account' and whose
- * `resolveVisibleTab` rewrites it to 'general'. Clicking the only visible
- * sign-in affordance in the shell landed on General settings; the sole working
- * route into Cloud was the Local/Cloud tab strip.
- *
- * It now enters the Cloud workspace, which is what makes `App.tsx` render
- * `AuthPage` (the real device sign-in surface).
- */
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -119,8 +107,6 @@ describe('DES-C01: the sidebar footer sign-in row reaches Cloud', () => {
     await user.click(footerPrimaryButton());
 
     expect(mocks.setMode).toHaveBeenCalledWith('cloud');
-    // The old behavior: openSettings('account'), silently rewritten to
-    // 'general' by SettingsPanel's LOCAL_HIDDEN_TABS.
     expect(mocks.openSettings).not.toHaveBeenCalledWith('account');
     expect(mocks.openSettings).not.toHaveBeenCalled();
     expect(mocks.onOpenAccountMenu).not.toHaveBeenCalled();

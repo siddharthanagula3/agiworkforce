@@ -1,11 +1,3 @@
-/**
- * ReflectionPanel - Shows AI learning, failure analysis, and improvement suggestions
- *
- * This panel surfaces the Reflection Engine's analysis to help non-technical users understand:
- * - Why tasks failed
- * - What the AI learned from failures
- * - Suggested corrections and improvements
- */
 
 import { useState } from 'react';
 import {
@@ -220,10 +212,6 @@ export function ReflectionPanel({ className }: ReflectionPanelProps) {
     </div>
   );
 }
-
-// ============================================================================
-// Sub-components
-// ============================================================================
 
 interface CollapsibleSectionProps {
   title: string;
@@ -505,10 +493,6 @@ function SubGoalCard({ subGoal }: SubGoalCardProps) {
     </div>
   );
 }
-
-// ============================================================================
-// Helper functions
-// ============================================================================
 
 function getFailureCategoryInfo(category: string) {
   const categories: Record<string, { label: string; icon: typeof AlertTriangle; color: string }> = {

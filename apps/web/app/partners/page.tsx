@@ -11,31 +11,6 @@ export const metadata = buildMetadata({
   path: '/partners',
 });
 
-/**
- * WHAT CHANGED AND WHY.
- *
- * This page previously asserted, in the present tense, that "we work with three
- * kinds of partners" and offered two things the repository cannot back:
- *
- *  - "Volume pricing on Enterprise contracts" — no volume or reseller pricing
- *    exists in the billing catalog. Pricing wording also belongs to another
- *    workstream, so no figure appears here at all; /pricing owns that.
- *  - "Embedding our gateway, BYOK posture, or local-mode capability into your
- *    product. Discuss licensing terms." — there is no embeddable gateway SDK
- *    and no OEM licence artifact. /about states the licence is Proprietary.
- *    Selling an integration path that does not exist is the procurement
- *    equivalent of a fabricated customer logo.
- *
- * There is also no partner application route, no partner directory, and no
- * signed reseller anywhere in the repository. So the page is now written in the
- * honest tense — what we are LOOKING FOR — with one genuinely true, useful
- * capability kept and led with: MCP is an open protocol, AGI implements it, and
- * connectors built against it work today without any agreement with us.
- *
- * The page was also the only one still on the legacy `agi-page-*` / `agi-reasons`
- * CSS while every sibling used the flagship `agi-fl-*` system, so it read as a
- * different website. It now uses the shared components.
- */
 const OPPORTUNITIES: {
   meta: string;
   title: string;
@@ -57,11 +32,6 @@ const OPPORTUNITIES: {
   {
     meta: 'Looking for',
     title: 'Local runtime and model ecosystems',
-    // Named runtimes only. An earlier draft added "plus any OpenAI-compatible
-    // endpoint", which the code does not support as a user-facing capability:
-    // there is no generic/custom provider variant and no setting that points
-    // AGI at an arbitrary endpoint. The base-URL override in
-    // `direct_api_provider.rs` is internal and validated per provider.
     body: 'AGI already routes to Ollama, LM Studio, llama.cpp, and vLLM as first-class local runtimes. If you build a local runtime or distribute open models and want AGI to work well with yours, that is a conversation we want.',
     status: 'Case by case',
   },

@@ -1,11 +1,3 @@
-/**
- * Regression tests for profile-name validation in `resolveProfileDir`.
- *
- * Background: prior versions accepted any string as a profile name and
- * `path.join`'d it onto the profile root. A name like `'../../tmp/poison'`
- * resolved outside the root, breaking the package's stated isolation
- * guarantee. These tests pin the regex + relative-path guard.
- */
 
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

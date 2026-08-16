@@ -1,14 +1,3 @@
-/**
- * memoryTreeProvider.ts — Sidebar TreeDataProvider for workspace memory facts.
- *
- * View ID: agi-workforce.memory
- * Subscribes to onMemoryDidChange so the tree stays in sync with the QuickPick.
- *
- * Each leaf node shows:
- *   label:   fact text truncated to MAX_LABEL_CHARS
- *   tooltip: full text + created / updated timestamps
- *   contextValue: 'memoryFact' (drives inline edit + delete menu items)
- */
 
 import * as vscode from 'vscode';
 import { type MemoryFact, loadFacts, onMemoryDidChange } from './memoryStore';
@@ -22,7 +11,6 @@ export class MemoryFactItem extends vscode.TreeItem {
 
     super(label, vscode.TreeItemCollapsibleState.None);
 
-    // Tooltip: full text + timestamps
     const createdLabel = `Created: ${new Date(fact.createdAt).toLocaleString()}`;
     const updatedLabel =
       fact.updatedAt !== undefined && fact.updatedAt !== fact.createdAt
@@ -49,7 +37,6 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<MemoryFactIte
   private readonly _storeChangeDisposable: vscode.Disposable;
 
   constructor(private readonly workspaceState: vscode.ExtensionContext['workspaceState']) {
-    // Refresh tree automatically whenever any memory mutation fires.
     this._storeChangeDisposable = onMemoryDidChange(() => {
       this._onDidChangeTreeData.fire();
     });

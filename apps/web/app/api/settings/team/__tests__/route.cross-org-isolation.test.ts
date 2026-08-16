@@ -41,17 +41,6 @@ import { DELETE, PATCH } from '../[memberId]/route';
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';
 
-/**
- * The membership table as it really is: `org-a-admin` administers ORG_A and has
- * NO row in ORG_B. Every handler below runs against this one fixture, so a
- * handler that forgets its `organization_id` predicate necessarily reads or
- * writes ORG_B rows and the test goes red.
- *
- * These routes run on the privileged `getNeonDb()` connection, which HAS
- * BYPASSRLS (documented in 0037 and in scripts/check-db-isolation.mjs). The
- * 0085 policies are defence in depth behind these predicates, NOT a substitute
- * for them — which is exactly why this file exercises the predicates directly.
- */
 const MEMBERSHIPS: Record<string, Record<string, unknown>> = {
   [`${ORG_A}:org-a-admin`]: {
     organization_id: ORG_A,
@@ -79,13 +68,6 @@ const MEMBERSHIPS: Record<string, Record<string, unknown>> = {
   },
 };
 
-/**
- * Faithful stand-in for the real table: the SQL's own predicates decide what
- * comes back. If a handler stops binding `organization_id`, this returns the
- * caller's row from ANY organization — which is precisely the cross-tenant
- * read the tests below must catch. Keying off the parameters alone would make
- * the tests pass no matter what the SQL said.
- */
 function membershipLookup(sql: string, params?: unknown[]) {
   const text = sql.toLowerCase();
   const scopesOrg = /organization_id\s*=\s*\$1/.test(text);
@@ -109,8 +91,6 @@ function installDatabase() {
       ];
     }
     if (text.includes('left join public.profiles')) {
-      // The member LIST. Same rule: the SQL's predicate decides, so dropping
-      // `where om.organization_id = $1` leaks every organization's roster.
       const organizationId = (params ?? [])[0];
       const scopesOrg = /om\.organization_id\s*=\s*\$1/i.test(text);
       return Object.values(MEMBERSHIPS).filter(
@@ -142,7 +122,6 @@ describe('settings/team cross-organization isolation', () => {
     );
 
     expect(response.status).toBe(403);
-    // The member-list query must never have run for ORG_B.
     expect(
       mockQuery.mock.calls.some(([sql]) => String(sql).includes('left join public.profiles')),
     ).toBe(false);
@@ -183,12 +162,6 @@ describe('settings/team cross-organization isolation', () => {
     expect(mockExecute.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
   });
 
-  /**
-   * `memberId` is client-supplied and shaped "<orgId>:<userId>". An admin of
-   * ORG_A passing a memberId that names ORG_B must be refused BEFORE any row is
-   * read or written — otherwise the composite id alone is a cross-tenant write
-   * primitive on a BYPASSRLS connection.
-   */
   it('refuses to remove a member of another organization via a forged memberId', async () => {
     const memberId = `${ORG_B}:org-b-member`;
     const response = await DELETE(
@@ -219,7 +192,6 @@ describe('settings/team cross-organization isolation', () => {
 
   it('carries both the organization id and the user id on every membership mutation', async () => {
     const memberId = `${ORG_A}:target-user`;
-    // Make the target a real ORG_A member for this one case.
     MEMBERSHIPS[`${ORG_A}:target-user`] = {
       organization_id: ORG_A,
       user_id: 'target-user',

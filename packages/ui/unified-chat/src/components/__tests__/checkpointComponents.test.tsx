@@ -1,13 +1,3 @@
-/**
- * Phase A Slice 3 — smoke render tests for checkpoint + branch components.
- *
- * Covers: CheckpointManager (pure props), BranchNavigator (pure props),
- * RewindTimeline (with conversationId for store-label enrichment).
- *
- * Uses renderToStaticMarkup for pure-props components.
- * Store-connected variants (BranchNavigatorContainer, RewindTimelineContainer)
- * are covered via the store tests in checkpointStore.test.ts.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -18,10 +8,6 @@ import type { BranchItem } from '../BranchNavigator';
 import { RewindTimeline } from '../RewindTimeline';
 import { useCheckpointStore } from '../../stores/checkpointStore';
 import type { Checkpoint } from '../../stores/checkpointStore';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function resetStores() {
   useCheckpointStore.setState({
@@ -50,7 +36,6 @@ function makeBranch(overrides?: Partial<BranchItem>): BranchItem {
   };
 }
 
-// Minimal CheckpointManagerProps for testing
 function makeManagerProps(overrides?: Partial<CheckpointManagerProps>): CheckpointManagerProps {
   return {
     conversationId: 'conv-test',
@@ -62,16 +47,9 @@ function makeManagerProps(overrides?: Partial<CheckpointManagerProps>): Checkpoi
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CheckpointManager
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('CheckpointManager', () => {
-  // CheckpointManager uses useEffect for initial load so it starts in loading state.
-  // In SSR context the loading spinner renders.
   it('renders loading state initially (SSR)', () => {
     const html = renderToStaticMarkup(<CheckpointManager {...makeManagerProps()} />);
-    // Loading indicator OR empty state — either is acceptable in SSR
     expect(typeof html).toBe('string');
     expect(html.length).toBeGreaterThan(0);
   });
@@ -101,13 +79,8 @@ describe('CheckpointManager', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BranchNavigator
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('BranchNavigator', () => {
   it('renders nothing when total relevant branches <= 1', () => {
-    // Only one branch, no fork matches → total = 0, returns null
     const b = makeBranch({ id: 'main', forkPointMessageId: 'other-msg' });
     const html = renderToStaticMarkup(
       <BranchNavigator
@@ -117,7 +90,6 @@ describe('BranchNavigator', () => {
         messageId="msg-fork"
       />,
     );
-    // Only "main" branch included (id==='main'), total=1, returns null
     expect(html).toBe('');
   });
 
@@ -178,10 +150,6 @@ describe('BranchNavigator', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RewindTimeline — deep (Slice 3) checkpoint-aware extension
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('RewindTimeline — Slice 3 conversationId enrichment', () => {
   beforeEach(resetStores);
 
@@ -207,7 +175,6 @@ describe('RewindTimeline — Slice 3 conversationId enrichment', () => {
   });
 
   it('store: adding a checkpoint to conversation provides labelMap data', () => {
-    // Seed the store
     useCheckpointStore
       .getState()
       .setCheckpoints('conv-labelled', [makeCheckpoint({ id: 'cp-1', label: 'Before refactor' })]);
@@ -217,7 +184,6 @@ describe('RewindTimeline — Slice 3 conversationId enrichment', () => {
   });
 
   it('RewindTimeline renders checkpoint count label from toolbar', () => {
-    // SSR starts at loading state which shows "0 checkpoints" before fetch
     const html = renderToStaticMarkup(
       <RewindTimeline
         fetchCheckpoints={vi.fn().mockResolvedValue([])}
@@ -225,7 +191,6 @@ describe('RewindTimeline — Slice 3 conversationId enrichment', () => {
         conversationId="conv-fresh"
       />,
     );
-    // Toolbar always renders even in SSR
     expect(html).toContain('checkpoint');
   });
 });

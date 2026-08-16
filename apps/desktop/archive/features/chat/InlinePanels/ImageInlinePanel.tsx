@@ -1,9 +1,3 @@
-/**
- * ImageInlinePanel Component
- *
- * Displays AI-generated images from the /imagine slash command.
- * Shows a loading spinner while generating, then renders the image(s).
- */
 
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { Download, Copy, Check, Loader2, ImageOff } from 'lucide-react';

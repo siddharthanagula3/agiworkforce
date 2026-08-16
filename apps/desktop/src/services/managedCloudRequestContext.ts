@@ -15,12 +15,6 @@ export interface ManagedCloudRequestContext {
   fetchExternal(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
-/**
- * Captures one account boundary for a complete Desktop Managed Cloud
- * operation. Header lookup may rotate credentials for that same account, but
- * every authenticated transport re-resolves the live token immediately before
- * egress and fails if ownership changed meanwhile.
- */
 export function createManagedCloudRequestContext(label: string): ManagedCloudRequestContext {
   const boundary = captureManagedCloudBoundary(label);
   const assertBoundary = () => assertManagedCloudBoundary(boundary);
@@ -39,10 +33,6 @@ export function createManagedCloudRequestContext(label: string): ManagedCloudReq
       return accountBoundCloudFetch(input, init, boundary.accountId, assertBoundary);
     },
     async fetchExternal(input, init) {
-      // A server-approved external destination receives only its request
-      // payload and explicit headers, never the AGI bearer. Boundary checks
-      // still bracket the request. The subscription actively aborts bytes
-      // already in flight when the account/session/mode authority changes.
       assertBoundary();
       const boundaryController = new AbortController();
       const abortForBoundaryChange = () =>

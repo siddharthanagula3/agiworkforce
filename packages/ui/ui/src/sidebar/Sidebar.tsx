@@ -1,22 +1,5 @@
 'use client';
 
-/**
- * <Sidebar> — the framework-agnostic chat sidebar shared by AGI Desktop and
- * AGI Web. Design ported faithfully from
- * apps/desktop/src/features/chat/Sidebar.tsx (+ ProjectsView / web ChatSidebar):
- *
- *   • ChatGPT-style new-chat / search header + compose affordance
- *   • project-folder filter dropdown (ChatGPT project folders)
- *   • pinned section + temporal grouping (Today / Yesterday / This Week / …)
- *   • archive toggle, per-conversation hover 3-dots actions
- *   • collapsed icon-rail
- *   • footer with local/cloud mode pill + optional usage widget + footerSlot
- *
- * BOUNDARY: pure presentation. NO next/navigation, NO @tauri-apps, NO zustand,
- * NO clerk, NO fetch. ALL data + handlers + surface-specific chrome are props.
- * Navigation is done by the surface inside the injected handlers; surface
- * chrome (account menu, notifications, incognito toggle) goes in `footerSlot`.
- */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
@@ -58,34 +41,23 @@ import type {
 } from './types';
 
 export interface SidebarProps extends SessionItemHandlers {
-  /* ---- data ---- */
   sessions: SidebarSession[];
   activeSessionId?: string;
   projects?: SidebarProject[];
   selectedProjectFilter?: string | null;
-  /** True while the initial session list fetch is in flight. Drives a
-   *  skeleton in place of the empty state so a loading list never reads as
-   *  "you have zero conversations". */
   isLoading?: boolean;
-  /** Non-null when the session list failed to load. Rendered instead of the
-   *  "No conversations yet" empty state so a failed fetch is distinguishable
-   *  from a genuinely empty account. */
   error?: string | null;
 
-  /* ---- layout ---- */
   className?: string;
   collapsed?: boolean;
   width?: number;
   isMobile?: boolean;
-  /** Desktop "Simple Mode": collapses per-row actions to delete only. */
   isSimpleMode?: boolean;
 
-  /* ---- footer ---- */
   mode?: SidebarMode;
   budgetPercent?: number;
   showUsageWidget?: boolean;
 
-  /* ---- handlers (data/IO injected by the surface) ---- */
   onNewChat: () => void;
   onToggleCollapse?: () => void;
   onSelectProjectFilter?: (projectId: string | null) => void;
@@ -95,34 +67,19 @@ export interface SidebarProps extends SessionItemHandlers {
   onModeClick?: () => void;
   onOpenUsage?: () => void;
 
-  /* ---- ChatGPT-style project list handlers (all optional; list hidden when absent) ---- */
-  /** Open/navigate to a project's conversation list. */
   onProjectOpen?: (projectId: string) => void;
-  /** Start a new chat scoped to the given project. */
   onProjectNewChat?: (projectId: string) => void;
-  /** Open rename flow for the project. */
   onProjectRename?: (projectId: string) => void;
-  /** Share the project. */
   onProjectShare?: (projectId: string) => void;
-  /** Open project settings dialog. */
   onProjectSettings?: (projectId: string) => void;
-  /** Toggle pinned state of the project. */
   onProjectPin?: (projectId: string) => void;
-  /** Delete the project (destructive). */
   onProjectDelete?: (projectId: string) => void;
-  /** Create a new project (opens the project-create flow on the surface). */
   onProjectCreate?: () => void;
 
-  /* ---- slots / render props for non-pure chrome ---- */
-  /** Extra nav rows (desktop puts Projects/Skills; web puts Chats/Artifacts/…). */
   navItems?: SidebarNavItem[];
-  /** Renders a nav item — defaults to a <button onClick>. Surface can return next/<Link>. */
   renderNavLink?: (item: SidebarNavItem) => React.ReactNode;
-  /** Below the list, above the footer — e.g. a Free-plan nudge. */
   navExtraSlot?: React.ReactNode;
-  /** Footer chrome: desktop = UserProfile+NotificationCenter+IncognitoToggle; web = UserProfileArea. */
   footerSlot?: React.ReactNode;
-  /** Header chrome injected next to the new-chat button (desktop incognito toggle). */
   headerSlot?: React.ReactNode;
 }
 
@@ -139,8 +96,6 @@ export function Sidebar(props: SidebarProps) {
     className,
     collapsed = false,
     width = 260,
-    // isMobile is part of the public API (surfaces collapse on mobile inside
-    // their own onSelect/onNewChat handlers); the component itself is layout-only.
     isMobile: _isMobile = false,
     isSimpleMode = false,
     mode = 'local',
@@ -167,7 +122,6 @@ export function Sidebar(props: SidebarProps) {
     navExtraSlot,
     footerSlot,
     headerSlot,
-    // SessionItem handlers
     onSelect,
     onRename,
     onDelete,
@@ -194,22 +148,12 @@ export function Sidebar(props: SidebarProps) {
   );
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [showAllProjects, setShowAllProjects] = useState(false);
-  /** Whether the Projects section is collapsed (header chevron toggles). */
   const [projectsSectionCollapsed, setProjectsSectionCollapsed] = useState(false);
-  /** Set of project IDs whose conversation list is expanded in the sidebar. */
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
-  /** Per-project "show more chats" state. */
   const [projectShowAllChats, setProjectShowAllChats] = useState<Set<string>>(new Set());
-  /** Keeps the hover-revealed header actions visible while the "…" menu is open. */
   const [projectsHeaderMenuOpen, setProjectsHeaderMenuOpen] = useState(false);
-  /**
-   * ChatGPT-style "Organize chats" preference: 'by-project' (default) groups
-   * the Chats list by project; 'one-list' shows all chats in a flat list.
-   * This is local state; surfaces may later lift it to their own store.
-   */
   const [organizeMode, setOrganizeMode] = useState<'by-project' | 'one-list'>('by-project');
 
-  // Whether the project list section is enabled (any of the project handlers present)
   const projectListEnabled = Boolean(
     onProjectOpen || onProjectNewChat || onProjectRename || onProjectSettings || onProjectDelete,
   );
@@ -229,7 +173,6 @@ export function Sidebar(props: SidebarProps) {
     ? unpinnedProjects
     : unpinnedProjects.slice(0, PROJECTS_SHOW_LIMIT);
 
-  // Surface can override the search overlay entirely (web uses GlobalSearchDialog).
   const handleOpenSearch = useCallback(() => {
     if (onOpenSearch) onOpenSearch();
     else setInternalSearchOpen(true);
@@ -259,8 +202,6 @@ export function Sidebar(props: SidebarProps) {
     if (selectedProjectFilter) {
       base = base.filter((s) => s.projectId === selectedProjectFilter);
     } else if (organizeMode === 'by-project' && projectListEnabled) {
-      // In "by-project" mode, sessions that belong to a project appear under their
-      // project folder; exclude them from the flat Chats list to avoid duplication.
       base = base.filter((s) => !s.projectId);
     }
     if (!term) return base;
@@ -316,22 +257,9 @@ export function Sidebar(props: SidebarProps) {
     });
   }, []);
 
-  /**
-   * AUDIT-FIX GOV-31: `focusedIndex` used to drive a purely VISUAL ring — this
-   * file contained zero `.focus()` calls and zero `tabIndex`. Assistive tech
-   * therefore never learned that the "focused" conversation had changed, and
-   * the highlight diverged from real Tab focus, so pressing Enter could act on
-   * a different conversation than the one the ring was drawn around.
-   *
-   * The list is now a roving-tabindex composite: exactly one row is tabbable at
-   * a time, arrow keys move REAL DOM focus (which is what the ring follows),
-   * Tabbing into a row syncs the highlight back, and Escape releases the list.
-   */
   const listRef = useRef<HTMLDivElement>(null);
-  /** Set by the arrow-key handler so the layout effect below moves focus. */
   const pendingFocusRef = useRef(false);
 
-  /** Index that owns `tabIndex={0}` when the user has not arrowed yet. */
   const activeRowIndex = useMemo(() => {
     if (focusedIndex >= 0 && focusedIndex < visible.length) return focusedIndex;
     const activeIdx = visible.findIndex((s) => s.id === activeSessionId);
@@ -345,7 +273,6 @@ export function Sidebar(props: SidebarProps) {
     return row?.querySelector<HTMLElement>('button') ?? null;
   }, []);
 
-  // Apply the roving tabindex, and move real focus when an arrow key asked for it.
   useEffect(() => {
     const container = listRef.current;
     if (!container) return;
@@ -366,7 +293,6 @@ export function Sidebar(props: SidebarProps) {
     // move real focus — exactly the divergence this fix exists to remove.
   }, [activeRowIndex, focusedIndex, visible, rowButtonAt]);
 
-  // Keyboard arrow navigation over the visible list (ported from desktop).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -392,15 +318,10 @@ export function Sidebar(props: SidebarProps) {
         pendingFocusRef.current = true;
         setFocusedIndex(visible.length - 1);
       } else if (e.key === 'Escape' && focusedIndex >= 0) {
-        // AUDIT-FIX GOV-31: there was no way to leave the list.
         e.preventDefault();
         rowButtonAt(focusedIndex)?.blur();
         setFocusedIndex(-1);
       } else if (e.key === 'Enter' && focusedIndex >= 0) {
-        // Real focus now sits on the highlighted row, so the browser already
-        // dispatches its click. Only synthesize the activation when focus never
-        // landed there (e.g. the row was unmounted between keystrokes) —
-        // otherwise the conversation would be selected twice.
         const button = rowButtonAt(focusedIndex);
         if (button && button.contains(target)) return;
         e.preventDefault();
@@ -415,11 +336,6 @@ export function Sidebar(props: SidebarProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [internalSearchOpen, visible, focusedIndex, onSelect, rowButtonAt]);
 
-  /**
-   * AUDIT-FIX GOV-31: Tabbing straight into a row (or clicking one) must move
-   * the highlight to that row, otherwise the visual ring and the browser's real
-   * focus point at two different conversations.
-   */
   const handleListFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const row = (event.target as HTMLElement).closest<HTMLElement>('[data-sidebar-session-index]');
     if (!row) return;
@@ -526,7 +442,6 @@ export function Sidebar(props: SidebarProps) {
     return items;
   }, [navItems, onOpenProjects, onOpenSkills, t]);
 
-  /* ---------------- collapsed icon-rail ---------------- */
   if (collapsed) {
     return (
       <div className="flex w-16 flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] transition-all duration-300 ease-in-out">
@@ -572,7 +487,6 @@ export function Sidebar(props: SidebarProps) {
     );
   }
 
-  /* ---------------- expanded sidebar ---------------- */
   return (
     <>
       {!onOpenSearch && (
@@ -1128,10 +1042,6 @@ function RailButton({
   );
 }
 
-// ---------------------------------------------------------------------------
-// ProjectRow — ChatGPT-style folder row with expand/collapse + hover compose + more-menu
-// ---------------------------------------------------------------------------
-
 const PROJECT_CHATS_SHOW_LIMIT = 5;
 
 interface ProjectRowProps {
@@ -1184,7 +1094,6 @@ function ProjectRow({
     });
   }, [project.id, setExpandedProjectIds]);
 
-  // Sessions belonging to this project
   const projectSessions = useMemo(
     () =>
       sessions

@@ -1,13 +1,10 @@
 import { useEffect, useCallback, useRef } from 'react';
 
-// Track active announcement timeouts for cleanup
 const activeAnnouncementTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
-// Mock accessibility service since monitoring was archived
 const accessibilityService = {
   initialize: () => {},
   announce: (message: string) => {
-    // Simple screen reader announcement
     const announcement = document.createElement('div');
     announcement.setAttribute('aria-live', 'polite');
     announcement.setAttribute('aria-atomic', 'true');
@@ -22,7 +19,6 @@ const accessibilityService = {
     }, 1000);
     activeAnnouncementTimeouts.add(timeoutId);
   },
-  // Cleanup function for unmounting
   cleanup: () => {
     activeAnnouncementTimeouts.forEach((timeoutId) => clearTimeout(timeoutId));
     activeAnnouncementTimeouts.clear();
@@ -35,25 +31,19 @@ interface AccessibilityOptions {
   manageFocus?: boolean;
 }
 
-/**
- * Hook for accessibility features
- */
 export const useAccessibility = (options: AccessibilityOptions = {}) => {
   const { announceChanges = true, trackInteractions = true, manageFocus = true } = options;
 
   const previousFocusRef = useRef<Element | null>(null);
 
-  // Initialize accessibility service and cleanup on unmount
   useEffect(() => {
     accessibilityService.initialize();
 
-    // Cleanup any pending announcement timeouts on unmount
     return () => {
       accessibilityService.cleanup();
     };
   }, []);
 
-  // Announce changes to screen readers
   const announce = useCallback(
     (message: string) => {
       if (announceChanges) {
@@ -63,11 +53,9 @@ export const useAccessibility = (options: AccessibilityOptions = {}) => {
     [announceChanges],
   );
 
-  // Track user interactions for accessibility analytics
   const trackInteraction = useCallback(
     (action: string, target: string, properties?: Record<string, unknown>) => {
       if (trackInteractions) {
-        // Integration point: connect to analytics service
         void action;
         void target;
         void properties;
@@ -76,7 +64,6 @@ export const useAccessibility = (options: AccessibilityOptions = {}) => {
     [trackInteractions],
   );
 
-  // Manage focus for better keyboard navigation
   const manageFocusRef = useCallback(
     (element: HTMLElement | null) => {
       if (manageFocus && element) {
@@ -87,7 +74,6 @@ export const useAccessibility = (options: AccessibilityOptions = {}) => {
     [manageFocus],
   );
 
-  // Restore previous focus
   const restoreFocus = useCallback(() => {
     if (manageFocus && previousFocusRef.current) {
       (previousFocusRef.current as HTMLElement).focus();
@@ -95,7 +81,6 @@ export const useAccessibility = (options: AccessibilityOptions = {}) => {
     }
   }, [manageFocus]);
 
-  // Trap focus within an element
   const trapFocus = useCallback((container: HTMLElement) => {
     const focusableElements = container.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
@@ -136,9 +121,6 @@ export const useAccessibility = (options: AccessibilityOptions = {}) => {
   };
 };
 
-/**
- * Hook for keyboard navigation
- */
 export const useKeyboardNavigation = () => {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent, handlers: Record<string, () => void>) => {
@@ -203,9 +185,6 @@ export const useKeyboardNavigation = () => {
   };
 };
 
-/**
- * Hook for ARIA attributes management
- */
 export const useAriaAttributes = () => {
   const setAriaExpanded = useCallback((element: HTMLElement, expanded: boolean) => {
     element.setAttribute('aria-expanded', expanded.toString());
@@ -251,14 +230,9 @@ export const useAriaAttributes = () => {
   };
 };
 
-/**
- * Hook for screen reader announcements
- */
 export const useScreenReaderAnnouncements = () => {
-  // Track pending timeouts for cleanup
   const pendingTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-  // Cleanup on unmount
   useEffect(() => {
     const pendingTimeouts = pendingTimeoutsRef.current;
     return () => {
@@ -315,21 +289,14 @@ export const useScreenReaderAnnouncements = () => {
   };
 };
 
-/**
- * Hook for color contrast checking
- */
 export const useColorContrast = () => {
   const checkContrast = useCallback((foreground: string, background: string): number => {
-    // Simplified contrast ratio calculation
-    // In a real implementation, you'd use a proper color contrast library
     const getLuminance = (color: string): number => {
-      // Convert hex to RGB
       const hex = color.replace('#', '');
       const r = parseInt(hex.substr(0, 2), 16) / 255;
       const g = parseInt(hex.substr(2, 2), 16) / 255;
       const b = parseInt(hex.substr(4, 2), 16) / 255;
 
-      // Apply gamma correction
       const [rs, gs, bs] = [r, g, b].map((c) =>
         c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4),
       );

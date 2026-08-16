@@ -74,26 +74,14 @@ import {
   type ArtifactManifest,
 } from '@agiworkforce/types';
 
-// ============================================================================
-// Public types
-// ============================================================================
-
-/**
- * Minimal artifact shape the publish service needs.
- * Surfaces pass their local artifact store shape; only these fields are used.
- */
 export interface PublishableArtifact {
   id: string;
   title: string;
-  /** Raw content string (code, markdown, SVG, JSON, etc.). */
   content: string;
-  /** Artifact category (html | react | code | markdown | document | svg | etc.). */
   type: string;
-  /** Language identifier for code artifacts (optional). */
   language?: string;
 }
 
-/** Publish succeeded locally — file:// URL is available immediately. */
 export interface LocalPublishResult {
   kind: 'local';
   shareUrl: string;
@@ -101,39 +89,24 @@ export interface LocalPublishResult {
   publishedAt: string;
 }
 
-/** Cloud publish succeeded — the host's publisher returned a hosted URL. */
 export interface CloudPublishResult {
   kind: 'cloud';
   shareUrl: string;
   publishedAt: string;
 }
 
-/**
- * No cloud publisher is wired up on this host, so there is nowhere to publish
- * to. `reason` is user-facing copy: state the capability gap, do not invent a
- * launch gate. The caller should offer the local download path instead.
- */
 export interface CloudUnavailablePublishResult {
   kind: 'unavailable';
   shareUrl: null;
   reason: string;
 }
 
-/** Discriminated union returned by `publishArtifact`. */
 export type PublishResult = LocalPublishResult | CloudPublishResult | CloudUnavailablePublishResult;
 
 export interface PublishArtifactInput {
   artifact: PublishableArtifact;
   privacyMode: PrivacyMode;
   surface: SourceSurface;
-  /**
-   * Host-supplied file:// path writer for the local path.
-   *
-   * Desktop: uses `path::app_data_dir` via Tauri.
-   * Tests: uses an in-memory fake that returns a deterministic file:// URL.
-   *
-   * When `privacyMode !== 'local'` the adapter is never called.
-   */
   localFileWriter?: LocalFileWriter;
   /**
    * Host-supplied cloud publisher for the byok / managed paths.
@@ -149,50 +122,22 @@ export interface PublishArtifactInput {
   cloudPublisher?: CloudPublisher;
 }
 
-/**
- * Platform adapter that writes the artifact content to local storage and
- * returns the resulting `file://` URL. Injected by the host (Desktop Tauri
- * adapter) so the service itself has no platform dependency.
- */
 export type LocalFileWriter = (artifact: PublishableArtifact) => Promise<string>;
 
-/**
- * Platform adapter that uploads the artifact and returns its hosted share URL.
- * Injected by the host so this service keeps zero transport dependencies.
- * AUDIT-FIX ART-27.
- */
 export type CloudPublisher = (
   artifact: PublishableArtifact,
   privacyMode: PrivacyMode,
 ) => Promise<{ shareUrl: string; publishedAt?: string }>;
 
-// ============================================================================
-// Internal helpers
-// ============================================================================
-
-/** Generate a short opaque token from artifact id + timestamp. */
 function makeShareToken(artifactId: string, timestamp: string): string {
-  // Simple deterministic token — not a security primitive; just a correlation
-  // handle for local share bookkeeping.
   const raw = `${artifactId}:${timestamp}`;
   let hash = 5381;
   for (let i = 0; i < raw.length; i++) {
-    // djb2 hash — intentional bitwise, same pattern as artifactSharing.ts.
     hash = ((hash << 5) + hash + raw.charCodeAt(i)) >>> 0;
   }
   return hash.toString(36);
 }
 
-/**
- * Synthesise a minimal `GeneratedFileTrustBoundaryInput` from a local-path
- * artifact so `assertGeneratedFileTrustBoundary` can enforce invariants.
- *
- * All fields are set consistently to `privacyMode: 'local'`,
- * `providerMode: 'Local'`, `storageScope: 'local_device'`, and the URI is
- * set to the supplied `fileUrl` (already a `file://` path). The compute
- * session and artifact manifest use a synthetic session id so the cross-ref
- * checks inside `assertGeneratedFileTrustBoundary` pass.
- */
 function buildTrustBoundaryInput(
   artifact: PublishableArtifact,
   fileUrl: string,
@@ -246,10 +191,6 @@ function buildTrustBoundaryInput(
   return { computeSession, generatedFile, artifactManifest };
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
-
 /**
  * Publish an artifact.
  *
@@ -265,16 +206,8 @@ function buildTrustBoundaryInput(
 export async function publishArtifact(input: PublishArtifactInput): Promise<PublishResult> {
   const { artifact, privacyMode, surface, localFileWriter, cloudPublisher } = input;
 
-  // --- Trust-boundary 1: surface sync rule ---
-  // CLI / VSCode / Chrome are developer-session surfaces; they must not
-  // participate in the consumer-facing artifact publish pipeline.
   assertSurfaceCanSyncChats(surface);
 
-  // --- Cloud path (byok / managed) ---
-  // AUDIT-FIX ART-27: no waitlist gate. Managed cloud is open by default
-  // (founder decision 2026-06-27); the only question left here is whether THIS
-  // host injected a publisher. If it did, publish. If it did not, say exactly
-  // that — an honest capability gap, not a fabricated launch gate.
   if (privacyMode === 'byok' || privacyMode === 'managed') {
     if (!cloudPublisher) {
       return {
@@ -296,7 +229,6 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
     };
   }
 
-  // --- Local path ---
   if (!localFileWriter) {
     throw new Error(
       'publishArtifact: localFileWriter adapter is required when privacyMode is "local".',
@@ -305,10 +237,6 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
 
   const fileUrl = await localFileWriter(artifact);
 
-  // --- Trust-boundary 2: generated-file trust boundary ---
-  // Synthesise minimal GFTBInput and validate consistency. This will throw if
-  // the fileUrl does not start with "file://" or if any other invariant is
-  // broken, giving a loud failure rather than a silent mismatch.
   const trustInput = buildTrustBoundaryInput(artifact, fileUrl);
   assertGeneratedFileTrustBoundary(trustInput);
 

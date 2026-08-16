@@ -38,10 +38,6 @@ function isStorageReturnPath(value: string | undefined): value is StorageReturnP
   return STORAGE_RETURN_PATHS.includes(value as StorageReturnPath);
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -69,10 +65,6 @@ function exportStageLabel(stage: DsarExportProgress['stage']): string {
       return 'Opening share sheet…';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export default function StorageManagerScreen() {
   const c = useThemeColors();
@@ -175,7 +167,6 @@ export default function StorageManagerScreen() {
           text: 'Delete Everything',
           style: 'destructive',
           onPress: () => {
-            // Second confirmation
             Alert.alert(
               'Are you absolutely sure?',
               'All local data will be wiped. You will be signed out and returned to onboarding.',

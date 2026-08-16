@@ -1,8 +1,3 @@
-/**
- * Workspace mode must not be reclassified by provider settings. BYOK is an
- * immutable per-conversation execution mode inside the Local workspace; Cloud
- * always means AGI-managed cloud.
- */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 

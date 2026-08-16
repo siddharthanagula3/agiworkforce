@@ -1,14 +1,3 @@
-/**
- * Route-level smoke test for the `cloud_chat` session-taxonomy labeling
- * added to `POST /api/chat/conversations` (W5 discipline wave 1 stage 2).
- *
- * Pure-function coverage of the label shape and the invariant gate lives in
- * `lib/services/chat-session-label-service.test.ts` — this file exists to
- * prove the ACTUAL route wiring behaves: a normal create request still
- * returns 201 with the exact same response shape as before (additive, no
- * chat-flow behavior change), and the labeling step runs against real
- * insert-returned row data without throwing.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -84,8 +73,6 @@ describe('POST /api/chat/conversations — cloud_chat session labeling', () => {
     expect(res.status).toBe(201);
 
     const body = await res.json();
-    // Same shape the route always returned — labeling must not add or
-    // rename response fields.
     expect(Object.keys(body)).toEqual(['conversation']);
     expect(body.conversation.id).toBe('conv_label_1');
   });

@@ -1,4 +1,3 @@
-// apps/desktop/src/features/chat/ThinkingBlock.tsx
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, ChevronDown } from 'lucide-react';
@@ -8,7 +7,6 @@ interface ThinkingBlockProps {
   content: string;
   isStreaming: boolean;
   defaultExpanded?: boolean;
-  /** Index in a multi-block sequence (0-based). Rendered as "Thought 1", "Thought 2", etc. */
   blockIndex?: number;
 }
 
@@ -19,13 +17,9 @@ export function ThinkingBlock({
   blockIndex,
 }: ThinkingBlockProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  // BUG-TB-001: Track whether the user manually expanded so auto-collapse is skipped
   const [userExpanded, setUserExpanded] = useState(false);
-  // BUG-331: Guard so auto-collapse only fires after streaming transitions from true→false,
-  // not on initial mount when isStreaming is already false (e.g. historical messages)
   const isMountedRef = useRef(false);
 
-  // Live elapsed timer while streaming
   const startRef = useRef<number>(Date.now());
   const [elapsedSec, setElapsedSec] = useState(0);
 
@@ -38,7 +32,6 @@ export function ThinkingBlock({
     return () => clearInterval(id);
   }, [isStreaming]);
 
-  // Auto-collapse when streaming finishes, unless user manually expanded
   useEffect(() => {
     if (!isMountedRef.current) {
       isMountedRef.current = true;
@@ -49,7 +42,6 @@ export function ThinkingBlock({
     }
   }, [isStreaming, userExpanded]);
 
-  // BUG-TB-002: Guard against undefined content before splitting
   if (!content) return null;
 
   const preview =
@@ -69,7 +61,6 @@ export function ThinkingBlock({
       <button
         type="button"
         onClick={() => {
-          // BUG-TB-001: Update userExpanded before toggling so auto-collapse logic is aware
           const next = !expanded;
           setUserExpanded(next);
           setExpanded(next);
@@ -141,10 +132,6 @@ export function ThinkingBlock({
   );
 }
 
-/**
- * Renders multiple ThinkingBlock instances as a vertical flow.
- * Each block is separated by a subtle connector line.
- */
 interface ThinkingBlockFlowProps {
   blocks: Array<{ content: string; isStreaming: boolean }>;
   defaultExpanded?: boolean;

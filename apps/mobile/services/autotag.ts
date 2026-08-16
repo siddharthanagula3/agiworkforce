@@ -1,8 +1,3 @@
-/**
- * Auto-tagging service.
- * Classifies conversations by content type (coding, research, writing, etc.)
- * and provides batch retrieval + filtering.
- */
 
 import { api } from './api';
 
@@ -19,8 +14,8 @@ export type ConversationTag =
 export interface TagInfo {
   id: ConversationTag;
   label: string;
-  color: string; // hex color
-  icon: string; // lucide icon name
+  color: string;
+  icon: string;
 }
 
 export const TAG_CATALOG: TagInfo[] = [
@@ -34,12 +29,10 @@ export const TAG_CATALOG: TagInfo[] = [
   { id: 'general', label: 'General', color: '#6b7280', icon: 'MessageSquare' },
 ];
 
-/** Get tag info by ID. Falls back to 'general' if not found. */
 export function getTagInfo(tagId: ConversationTag): TagInfo {
   return TAG_CATALOG.find((t) => t.id === tagId) ?? TAG_CATALOG[TAG_CATALOG.length - 1];
 }
 
-/** Request auto-classification for a single conversation. */
 export async function classifyConversation(conversationId: string): Promise<ConversationTag> {
   const result = await api.post<{ tag: ConversationTag }>('/api/autotag/classify', {
     conversationId,
@@ -47,7 +40,6 @@ export async function classifyConversation(conversationId: string): Promise<Conv
   return result.tag;
 }
 
-/** Get tags for multiple conversations in one request. */
 export async function batchGetTags(
   conversationIds: string[],
 ): Promise<Record<string, ConversationTag>> {
@@ -57,7 +49,6 @@ export async function batchGetTags(
   return result.tags;
 }
 
-/** Get all conversation IDs that match a specific tag. */
 export async function getConversationsByTag(tag: ConversationTag): Promise<string[]> {
   const params = new URLSearchParams({ tag });
   const result = await api.get<{ conversationIds: string[] }>(

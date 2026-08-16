@@ -1,14 +1,3 @@
-/**
- * useUiTranslation — the contract every shared component depends on.
- *
- * The hook exists because this package is consumed by three hosts that each
- * build their own i18next instance, and a component that renders before (or
- * without) one must not degrade into raw keys or raw `{{placeholders}}`.
- *
- * Hosts initialize the workspace i18next singleton. The shared hook binds to
- * that singleton explicitly so pnpm peer variants cannot split Provider
- * context between React Native and DOM.
- */
 import { describe, it, expect, afterEach, beforeAll } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import i18next from 'i18next';
@@ -67,7 +56,6 @@ describe('useUiTranslation', () => {
 
     expect(screen.getByTestId('plain').textContent).toBe('Speichern');
     expect(screen.getByTestId('interpolated').textContent).toBe('Hallo Ada');
-    // A key the locale does not carry falls back to source copy, not the key.
     expect(screen.getByTestId('missing').textContent).toBe('Untranslated source copy');
   });
 

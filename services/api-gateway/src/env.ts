@@ -21,11 +21,6 @@ function validateOptionalInteger(name: string, minimum: number, maximum: number)
   }
 }
 
-/**
- * Validates that all required startup environment variables are present.
- * Call this once at process start before initialising any services.
- * Throws on the first missing variable so the process exits with a clear error.
- */
 export function validateStartupEnv(): void {
   requireEnv('JWT_SECRET');
   requireEnv('NEON_DATABASE_URL');

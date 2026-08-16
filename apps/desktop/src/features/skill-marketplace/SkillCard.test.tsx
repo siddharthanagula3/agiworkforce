@@ -17,7 +17,6 @@ const runtimeLoadedSkill: MarketplaceSkill = {
   allowedTools: [],
   contextMode: 'main',
   category: 'productivity',
-  // This legacy renderer-only bit must not create a fake execution control.
   isActive: false,
 };
 

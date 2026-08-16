@@ -1,20 +1,3 @@
-/**
- * CanvasPanel
- *
- * The main canvas panel that slides in from the right (~600px wide).
- * Shows the active artifact with a Code/Preview tab layout.
- *
- * Layout:
- * ┌─────────────────────────────┐
- * │ [Title input]  [Type] [Lang]│  ← header
- * ├─────────────────────────────┤
- * │  [Tab: Code] [Tab: Preview] │  ← tabs
- * ├─────────────────────────────┤
- * │   CodeEditor OR Preview     │  ← main content
- * ├─────────────────────────────┤
- * │ [Run ▶] [Copy] [Export] [X] │  ← toolbar
- * └─────────────────────────────┘
- */
 
 import { Check, Code2, Copy, Download, Eye, FileText, Globe, Play, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -41,9 +24,6 @@ import { CodeEditor } from './CodeEditor';
 
 type ActiveTab = 'code' | 'preview';
 
-// ---------------------------------------------------------------------------
-// Type icons
-// ---------------------------------------------------------------------------
 function TypeIcon({ type }: { type: CanvasArtifactType }) {
   switch (type) {
     case 'html':
@@ -57,9 +37,6 @@ function TypeIcon({ type }: { type: CanvasArtifactType }) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// CanvasPanel
-// ---------------------------------------------------------------------------
 interface CanvasPanelProps {
   artifact: CanvasArtifact;
   onClose: () => void;
@@ -162,7 +139,6 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
     [artifact.id, onFixBug],
   );
 
-  // Only show preview tab for html, markdown, document, or code with execution output
   const canPreview =
     artifact.type === 'html' ||
     artifact.type === 'markdown' ||

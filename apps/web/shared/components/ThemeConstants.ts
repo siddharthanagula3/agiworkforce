@@ -1,6 +1,3 @@
-/**
- * Theme constants and utilities
- */
 
 export type Theme = 'light' | 'dark' | 'system';
 

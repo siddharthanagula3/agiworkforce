@@ -10,27 +10,18 @@ interface PremiumLoadingProps {
   className?: string;
 }
 
-/**
- * Get size class based on size prop - uses explicit conditionals to avoid object injection
- */
 function getSizeClass(size: 'sm' | 'md' | 'lg'): string {
   if (size === 'sm') return 'w-6 h-6';
   if (size === 'md') return 'w-8 h-8';
   return 'w-12 h-12';
 }
 
-/**
- * Get text size class based on size prop - uses explicit conditionals to avoid object injection
- */
 function getTextSizeClass(size: 'sm' | 'md' | 'lg'): string {
   if (size === 'sm') return 'text-sm';
   if (size === 'md') return 'text-base';
   return 'text-lg';
 }
 
-/**
- * Get brain icon size class based on size prop
- */
 function getBrainSizeClass(size: 'sm' | 'md' | 'lg'): string {
   if (size === 'sm') return 'h-3 w-3';
   if (size === 'md') return 'h-4 w-4';
@@ -138,7 +129,6 @@ const PremiumLoading: React.FC<PremiumLoadingProps> = ({
   );
 };
 
-// Specialized loading components
 export const DashboardLoading: React.FC<{ className?: string }> = ({ className }) => (
   <div className={cn('flex min-h-[400px] items-center justify-center', className)}>
     <PremiumLoading message="Preparing your dashboard..." variant="sparkles" size="lg" />

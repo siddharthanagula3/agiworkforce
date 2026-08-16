@@ -25,7 +25,6 @@ export interface RunImageGenerationTurnInput {
   displayText: string;
   prompt: string;
   model: string;
-  /** Output shape chosen in the [+] sheet; absent keeps the route's default. */
   aspectRatio?: ImageGenRequest['aspect_ratio'];
   ownerId: string;
   begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
@@ -53,7 +52,6 @@ export type ImageGenerationTurnOutcome = {
 
 let cloudImageGeneration = 0;
 
-/** Invalidate late image callbacks during sign-out/account switch. */
 export function clearCloudImageGenerationState(): void {
   cloudImageGeneration += 1;
 }
@@ -64,7 +62,6 @@ const defaultDependencies: ImageGenerationTurnDependencies = {
   getDurablePath: getDurableGeneratedImagePath,
 };
 
-/** Shared state-transition action for image turns used by both chat screens. */
 export async function runImageGenerationTurn(
   input: RunImageGenerationTurnInput,
   dependencies: ImageGenerationTurnDependencies = defaultDependencies,
@@ -96,9 +93,6 @@ export async function runImageGenerationTurn(
     const result = await dependencies.generate({
       prompt: input.prompt,
       model: input.model,
-      // Omitted rather than defaulted: the route keeps a legacy size-derived
-      // ratio for requests that carry none, and sending a guess here would
-      // override it with something the user never chose.
       ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
     });
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
@@ -116,8 +110,6 @@ export async function runImageGenerationTurn(
     const durablePath = (dependencies.getDurablePath ?? getDurableGeneratedImagePath)(image);
     const persisted = result.persisted !== false && durablePath !== null;
     input.complete(input.conversationId, assistantMessageId, {
-      // Persisted media keeps the canonical relative owner-scoped identity.
-      // Unsaved provider/data URLs are display-only for this in-memory turn.
       imageUrl: durablePath ?? imageUrl,
       persisted,
       ...(!persisted

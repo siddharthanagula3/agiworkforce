@@ -15,10 +15,6 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export type RecurrenceType = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'interval';
 
 export interface Schedule {
@@ -57,13 +53,8 @@ export type CreateScheduleInput = Omit<
   'id' | 'createdAt' | 'updatedAt' | 'lastRunAt' | 'nextRunAt' | 'lastRunStatus'
 >;
 
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
-
 interface ScheduleState {
   schedules: Schedule[];
-  /** Runs keyed by scheduleId to avoid data loss on schedule switch */
   runsBySchedule: Record<string, ScheduleRun[]>;
   runsLoadingBySchedule: Record<string, boolean>;
   runsErrorBySchedule: Record<string, string | null>;
@@ -78,7 +69,6 @@ interface ScheduleState {
   fetchRuns: (scheduleId: string) => Promise<void>;
   getRuns: (scheduleId: string) => ScheduleRun[];
   clearError: () => void;
-  /** Clear every Clerk-account schedule cache on sign-out/account switch. */
   clearAccountSchedules: () => void;
 }
 
@@ -158,7 +148,6 @@ export const useScheduleStore = create<ScheduleState>()(
       deleteSchedule: async (id) => {
         const account = captureCloudAccountEpoch();
         if (!account) return;
-        // Optimistic removal
         const prev = get().schedules;
         set((state) => ({
           schedules: state.schedules.filter((s) => s.id !== id),
@@ -170,7 +159,6 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (error) {
           if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to delete schedule:', error);
-          // Revert on failure
           set({ schedules: prev });
           set({
             error: error instanceof Error ? error.message : 'Failed to delete schedule',
@@ -192,7 +180,6 @@ export const useScheduleStore = create<ScheduleState>()(
           return;
         }
 
-        // Optimistic update
         set((state) => ({
           schedules: state.schedules.map((s) => (s.id === id ? { ...s, isActive: newActive } : s)),
         }));
@@ -203,7 +190,6 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (error) {
           if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to toggle schedule:', error);
-          // Revert on failure
           set((state) => ({
             schedules: state.schedules.map((s) =>
               s.id === id ? { ...s, isActive: !newActive } : s,
@@ -233,7 +219,6 @@ export const useScheduleStore = create<ScheduleState>()(
           if (!isCloudAccountEpochCurrent(account)) return;
           set((state) => {
             const updated = { ...state.runsBySchedule, [scheduleId]: runs };
-            // Evict runs for deleted schedules to prevent unbounded growth
             const activeIds = new Set(state.schedules.map((s) => s.id));
             for (const key of Object.keys(updated)) {
               if (!activeIds.has(key)) delete updated[key];
@@ -283,14 +268,11 @@ export const useScheduleStore = create<ScheduleState>()(
     {
       name: 'schedule-store',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[scheduleStore] Hydration failed:', error);
       },
       partialize: (state) => ({
-        // Persist schedules for offline access
-        // Do NOT persist loading, error, or runs
         schedules: state.schedules,
       }),
     },

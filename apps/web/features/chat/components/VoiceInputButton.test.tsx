@@ -1,20 +1,7 @@
-/**
- * Tests for VoiceInputButton component
- *
- * Tests cover:
- * - Renders mic button in idle state
- * - Shows listening state visual when recognition starts
- * - Calls onTranscript with the final transcript text
- * - Shows tooltip / error message when browser is unsupported
- * - Respects disabled prop
- * - Cleans up SpeechRecognition on unmount
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { VoiceInputButton } from './VoiceInputButton';
-
-// ─── SpeechRecognition mock ────────────────────────────────────────────────────
 
 interface SpeechResultEvent {
   resultIndex: number;
@@ -39,7 +26,6 @@ class MockSpeechRecognition {
   stop = vi.fn();
   abort = vi.fn();
 
-  /** Helper: simulate a successful result */
   triggerResult(transcript: string) {
     this.onresult?.({
       resultIndex: 0,
@@ -52,26 +38,21 @@ class MockSpeechRecognition {
     });
   }
 
-  /** Helper: simulate an error */
   triggerError(errorCode: string) {
     this.onerror?.({ error: errorCode });
   }
 
-  /** Helper: simulate recognition ending */
   triggerEnd() {
     this.onend?.();
   }
 
-  /** Helper: simulate recognition starting */
   triggerStart() {
     this.onstart?.();
   }
 }
 
-// Module-level instance updated in beforeEach
 let recognition: MockSpeechRecognition;
 
-// Regular function constructor (NOT arrow function) · required for `new`
 function SpeechRecognitionCtor(this: MockSpeechRecognition) {
   return recognition;
 }
@@ -98,14 +79,10 @@ function uninstallSpeechRecognition() {
   });
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
-
 describe('VoiceInputButton', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
-  // ── Supported browser ──────────────────────────────────────────────────────
 
   describe('when SpeechRecognition is supported', () => {
     beforeEach(installSpeechRecognition);
@@ -169,10 +146,8 @@ describe('VoiceInputButton', () => {
     it('calls recognition.stop() when clicked while listening', () => {
       render(<VoiceInputButton onTranscript={vi.fn()} />);
       const button = screen.getByRole('button');
-      // Start
       fireEvent.click(button);
       act(() => recognition.triggerStart());
-      // Stop
       fireEvent.click(button);
       expect(recognition.stop).toHaveBeenCalledOnce();
     });
@@ -202,8 +177,6 @@ describe('VoiceInputButton', () => {
     });
   });
 
-  // ── Disabled prop ──────────────────────────────────────────────────────────
-
   describe('disabled prop', () => {
     beforeEach(installSpeechRecognition);
     afterEach(uninstallSpeechRecognition);
@@ -214,8 +187,6 @@ describe('VoiceInputButton', () => {
     });
   });
 
-  // ── className prop ─────────────────────────────────────────────────────────
-
   describe('className prop', () => {
     beforeEach(installSpeechRecognition);
     afterEach(uninstallSpeechRecognition);
@@ -225,8 +196,6 @@ describe('VoiceInputButton', () => {
       expect(screen.getByRole('button').className).toContain('extra-class');
     });
   });
-
-  // ── Unsupported browser ────────────────────────────────────────────────────
 
   describe('when SpeechRecognition is unsupported', () => {
     beforeEach(() => {

@@ -40,7 +40,6 @@ describe('toFolderCandidates', () => {
   });
 
   it('drops types the attachment pipeline has no MIME for', () => {
-    // Surfacing a file the upload will refuse makes the consent meaningless.
     const result = toFolderCandidates([
       match({ relativePath: 'app.wasm' }),
       match({ relativePath: 'notes.md' }),

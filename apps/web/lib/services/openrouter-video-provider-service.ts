@@ -96,7 +96,6 @@ function retryAfterSeconds(response: Response): number | undefined {
   return Number.isFinite(seconds) && seconds > 0 ? Math.max(5, Math.min(seconds, 600)) : undefined;
 }
 
-/** Submit one exact catalog-validated output tuple. */
 export async function submitOpenRouterVideo(input: {
   providerModelId: string;
   prompt: string;
@@ -186,7 +185,6 @@ export type OpenRouterVideoPollResult =
   | { status: 'failed'; error: string }
   | { status: 'completed'; contentIndex: number; actualCostCents: number };
 
-/** Poll provider truth without trusting its unsigned output URLs. */
 export async function pollOpenRouterVideo(
   providerTaskId: string,
 ): Promise<OpenRouterVideoPollResult> {
@@ -270,7 +268,6 @@ export async function pollOpenRouterVideo(
   }
 }
 
-/** Authenticated content URL consumed only by the server-side private-storage path. */
 export function openRouterVideoContentRequest(
   providerTaskId: string,
   index: number,

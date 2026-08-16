@@ -6,18 +6,6 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireAdmin } from '@/lib/auth-guards';
 import { isAppError } from '@/lib/errors';
 
-/**
- * Stripe webhook configuration probe · admin only.
- *
- * WEB-24 / WEB-26 (audit 2026-05-19): the previous shared `verifyDiagnosticSecret`
- * helper accepted any caller when `CRON_SECRET` was unset in a non-production
- * environment. Preview deploys often run with `NODE_ENV=production` but absent
- * secrets, and the duplicate `/api/validate-webhook` endpoint had a wider leak.
- * This endpoint now requires an admin app-metadata role; the duplicate has been
- * deleted. Cron-style probes should use a service-role JWT.
- *
- * Returns env-presence booleans. Never returns raw secret values.
- */
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'admin-security');
   if (rateLimitResponse) return rateLimitResponse;

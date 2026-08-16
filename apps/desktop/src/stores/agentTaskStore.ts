@@ -14,14 +14,8 @@ import { useChatModelStore } from '@agiworkforce/unified-chat';
 
 const MAX_LIVE_TASK_ENTRIES = 100;
 
-/**
- * Parallel agents are not iterations: each one is a separate planning call plus
- * its own sandbox, and the Rust planner only has eight distinct strategies
- * (`clamp_num_agents` in `sys/commands/agi.rs` enforces the same ceiling).
- */
 export const MAX_PARALLEL_AGENTS = 8;
 export const DEFAULT_PARALLEL_AGENTS = 4;
-/** The engine caps `max_steps` at 1000; the launcher stays well inside that. */
 export const MAX_GOAL_ITERATIONS = 20;
 export const DEFAULT_GOAL_ITERATIONS = 10;
 
@@ -33,26 +27,14 @@ const parallelAgentCount = (requested: number | undefined): number =>
     ? DEFAULT_PARALLEL_AGENTS
     : clampInteger(requested, 1, MAX_PARALLEL_AGENTS);
 
-/** `undefined` leaves the engine's own iteration limit in place. */
 const goalIterationLimit = (requested: number | undefined): number | undefined =>
   requested === undefined || !Number.isFinite(requested)
     ? undefined
     : clampInteger(requested, 1, MAX_GOAL_ITERATIONS);
 
-/**
- * TRUST BOUNDARY (desktop-trust-boundary-01): every goal submission carries
- * the active workspace's execution boundary so the Rust AGI subsystem routes
- * LLM calls inside it. Mirrors `selectPrivacyMode` (`local`/`managed`);
- * BYOK is a per-conversation fork in chat, never an ambient agent-task mode.
- */
 const activeTrustMode = (): PrivacyMode => selectPrivacyMode(useAppModeStore.getState());
 
 export interface GoalSubmissionAuthority {
-  /**
-   * Re-checks caller-owned authority at the final native side-effect boundary.
-   * Mobile Companion uses this to prevent an authenticated request from an
-   * expired session launching work after AGI initialization completes.
-   */
   assertCurrent?: () => void;
 }
 
@@ -94,7 +76,6 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
-/** Engine-authored lifecycle shared by every AGI surface. */
 export type AgentTaskStatus = CanonicalAgentTaskState;
 
 export interface AgentTask {
@@ -107,11 +88,8 @@ export interface AgentTask {
   result?: string;
   insights?: string[];
   error?: string;
-  /** Execution mode used: sequential, parallel, swarm, or auto */
   executionMode?: 'sequential' | 'parallel' | 'swarm' | 'auto';
-  /** Swarm execution metrics (only set for swarm tasks) */
   swarmMetrics?: SwarmMetrics;
-  /** Reason the engine paused the task. */
   pauseReason?: string;
 }
 
@@ -150,9 +128,7 @@ interface AgentTaskStoreState {
   submitGoal: (
     goal: string,
     options?: {
-      /** Sequential only: iteration ceiling for the engine's execute/reflect loop. */
       maxIterations?: number;
-      /** Parallel only: how many agents race the goal in their own sandboxes. */
       numAgents?: number;
       parallel?: boolean;
     } & GoalSubmissionAuthority &
@@ -181,13 +157,9 @@ interface AgentTaskStoreState {
   getTaskStatus: (taskId: string) => Promise<AgentTask | null>;
   cancelTask: (taskId: string) => Promise<void>;
   fetchInsights: (taskId: string) => Promise<string[]>;
-  /** Pause a running task */
   pauseTask: (taskId: string, reason?: string) => Promise<void>;
-  /** Resume a paused task */
   resumeTask: (taskId: string) => Promise<void>;
-  /** Get a human-readable label for the current task status */
   getStatusLabel: (status: AgentTaskStatus) => string;
-  /** Clear task state for logout and same-renderer account changes */
   resetOnLogout: () => void;
 }
 
@@ -212,8 +184,6 @@ interface SubmitParallelGoalResponse {
 }
 
 interface GoalStatusResponse {
-  // ExecutionContext is a Rust-native structure and intentionally keeps its
-  // snake_case wire names. Live events use the separate camelCase protocol.
   context: { tool_results: Array<{ result?: unknown; error?: string | null }> };
   state: AgentTaskStatus;
   currentIteration: number;
@@ -489,8 +459,6 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
             const recoveredAt = new Date().toISOString();
 
             set((state) => {
-              // Events can arrive while recovery IPC is in flight. Merge
-              // against the current store, not the snapshot captured above.
               const updatedTasks = goals.map((goal) => {
                 const existing = state.tasks.find((task) => task.id === goal.id);
                 return {
@@ -964,9 +932,6 @@ async function readNativeTaskSnapshot(taskId: string): Promise<NativeTaskSnapsho
   try {
     return await invoke<GoalStatusResponse>('agi_get_goal_status', { goalId: taskId });
   } catch {
-    // Swarm execution has a canonical task state but intentionally does not
-    // retain the sequential engine's ExecutionContext. The state-only command
-    // also returns null when a fresh process has no ownership of this task.
     try {
       const state = await invoke<AgentTaskStatus | null>('agi_get_task_state', { goalId: taskId });
       return state ? { state } : null;
@@ -981,12 +946,6 @@ function mergeNativeTaskSnapshot(
   snapshot: NativeTaskSnapshot,
   recoveredAt: string,
 ): AgentTask {
-  // `?.` on `context` but not on `tool_results`: the type declares the array
-  // required, but this value crosses the Rust IPC boundary, so that is a claim
-  // rather than a guarantee. A context that arrives without the array threw
-  // "Cannot read properties of undefined (reading 'at')" out of pauseTask and
-  // resumeTask, which caught it and surfaced a generic failure toast — so a
-  // paused task looked like a failed one.
   const lastResult = snapshot.context?.tool_results?.at(-1);
   return {
     ...task,

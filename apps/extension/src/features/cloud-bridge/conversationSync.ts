@@ -1,25 +1,3 @@
-/**
- * Account-backed conversation mirroring — orchestrator.
- *
- * Shape of the feature, so the rules below read as consequences rather than
- * arbitrary choices:
- *
- *   • `chrome.storage.local` stays authoritative. The account copy is a
- *     one-way, append-only REPLICA. Server transcript data is never applied to
- *     Chrome, which is what lets the feature exist without a merge/conflict
- *     policy. A legacy binding may perform one active-workspace-scoped detail
- *     read solely to recover `organization_id`; returned messages are discarded.
- *   • Provenance gates persistence. A thread is mirrored only when EVERY turn
- *     in it was inferred in Managed Cloud, and the disqualification is sticky.
- *   • Eligible signed-in Chrome chats are mirrored automatically so they are
- *     available in the shared Web/Mobile/Desktop Cloud conversation history.
- *   • Cloud persistence can never break local chat. Nothing on the chat path
- *     awaits anything in this file; the only coupling is a fire-and-forget
- *     `chrome.runtime.sendMessage` nudge from the panel plus a sweep alarm.
- *
- * SERVICE WORKER ONLY. The side panel must never import this module — see the
- * CORS note in `conversationSyncClient.ts`.
- */
 import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
 import {
   blockCloudPersistence,
@@ -48,9 +26,7 @@ import {
   type ManagedCloudOwner,
 } from './managedCloudAuthority';
 
-/** Durable cloud-DELETE queue, so a user deletion survives a failed attempt. */
 export const CLOUD_SYNC_TOMBSTONE_KEY = 'agi_cloud_sync_tombstones_v1';
-/** Sweep alarm name. Registered by `background.ts`. */
 export const SYNC_SWEEP_ALARM = 'agi-conversation-sync-sweep';
 
 const SYNC_DEBOUNCE_MS = 2_500;
@@ -64,7 +40,6 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 interface CloudSyncTombstone {
   accountId: string;
   cloudConversationId: string;
-  /** Missing only on legacy tombstones, which fail closed and remain queued. */
   organizationId?: string | null;
   queuedAt: number;
 }
@@ -73,7 +48,6 @@ interface ScheduledFlush {
   owner: ManagedCloudOwner;
   conversationId: string;
   timer: ReturnType<typeof setTimeout>;
-  /** Last known "a stream is writing into this thread right now" signal. */
   streaming: boolean;
 }
 
@@ -84,14 +58,6 @@ function flushKey(owner: ManagedCloudOwner, conversationId: string): string {
   return `${managedCloudOwnerKey(owner)}:${conversationId}`;
 }
 
-// ─── Scheduling ────────────────────────────────────────────────────────────
-
-/**
- * Debounced nudge. Safe to call on every persist: the side panel calls
- * `saveMessages()` per display-safe agent event and per routing update, so a
- * single streamed turn produces dozens of calls that must collapse into one
- * flush per conversation.
- */
 export function scheduleConversationSync(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -108,24 +74,13 @@ export function scheduleConversationSync(
   scheduledFlushes.set(key, { owner: { ...owner }, conversationId, timer, streaming });
 }
 
-/**
- * Durable catch-up.
- *
- * An MV3 worker can be evicted mid-debounce, which would silently strand every
- * pending mirror. This runs on worker startup and on a 1-minute alarm and
- * re-derives the work from stored state rather than from memory.
- */
 export async function sweepConversationSync(): Promise<void> {
   try {
     const context = await getManagedCloudAuthContext();
     if (!context) return;
-    // Deletions drain first so an explicit delete is not delayed behind a
-    // backlog of ordinary conversation writes.
     await drainCloudDeletionTombstones(context.owner);
     const entries = await listConversationsNeedingCloudSync(context.owner);
     for (const entry of entries) {
-      // Sequential: parallel flushes would race the shared `chat-message`
-      // rate-limit bucket and the conversation-store lock.
       await flushConversation(context.owner, entry.id, false);
     }
   } catch (error) {
@@ -133,13 +88,6 @@ export async function sweepConversationSync(): Promise<void> {
   }
 }
 
-/**
- * Cancel every in-flight and debounced task and clear module state.
- *
- * This is the authoritative owner fence. The transport-boundary owner check in
- * `conversationSyncClient` is the backstop; this is the one that stops work
- * before it starts.
- */
 export function abortConversationSyncForOwnerChange(): void {
   for (const pending of scheduledFlushes.values()) clearTimeout(pending.timer);
   scheduledFlushes.clear();
@@ -153,19 +101,12 @@ export function abortConversationSyncForOwnerChange(): void {
   inFlightFlushes.clear();
 }
 
-// ─── Flush ─────────────────────────────────────────────────────────────────
-
 function combineTimeoutSignal(controller: AbortController): AbortSignal {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
   return controller.signal;
 }
 
-/**
- * Mirror one conversation. NEVER rejects and NEVER throws — every branch is
- * caught and every local write on the failure path swallows its own error. The
- * chat path does not await this and must not be able to fail because of it.
- */
 export async function flushConversation(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -193,8 +134,6 @@ export async function flushConversation(
     if (!entry) return;
 
     if (!isCloudPersistenceEligible(entry)) {
-      // A Local/BYOK turn landed in this thread. Stop mirroring permanently;
-      // the existing account copy is left in place, never deleted.
       await blockCloudPersistence(owner, conversationId, 'non-cloud-runtime');
       return;
     }
@@ -216,14 +155,9 @@ export async function flushConversation(
   }
 }
 
-/** Messages this pass will send, after the live-stream and batch bounds. */
 function selectFlushableMessages(entry: ConversationEntry, streaming: boolean): HistoryMessage[] {
   const pending = pendingCloudMessages(entry);
   if (pending.length === 0) return [];
-  // Write-amplification fix: while a stream is live the trailing assistant turn
-  // grows on every chunk. Sending it now guarantees a second, superseding write
-  // moments later. Skipping it means a normal turn costs exactly two POSTs
-  // (the user message, then the settled assistant message).
   const last = entry.messages[entry.messages.length - 1];
   const bounded =
     streaming && last !== undefined
@@ -270,9 +204,6 @@ async function flushEligibleConversation(
         {
           id: cloudConversationId,
           title: entry.title,
-          // `auto` is a local routing sentinel, not a model id. Omitting it lets
-          // the contract's registry-derived default apply; a model id is never
-          // invented here.
           ...(entry.routing.currentModelKey && entry.routing.currentModelKey !== 'auto'
             ? { model: entry.routing.currentModelKey }
             : {}),
@@ -280,9 +211,6 @@ async function flushEligibleConversation(
         { signal },
       );
       if (created.organizationId === undefined) {
-        // The create was acknowledged, so it must never be retried as though
-        // the row did not exist. An older server that omits workspace scope is
-        // safe to read locally but cannot support stable background mutation.
         await recordCloudSyncState(owner, conversationId, {
           state: 'blocked',
           blockedReason: 'workspace',
@@ -305,18 +233,12 @@ async function flushEligibleConversation(
     }
   } else if (createAcknowledged !== true) {
     if (organizationId !== undefined) {
-      // Forward-compatible stored binding: the server-confirmed scope is the
-      // important invariant, so normalize its acknowledgement bit locally.
       await recordCloudSyncState(owner, conversationId, {
         state: 'pending',
         createAcknowledged: true,
         lastAttemptAt: Date.now(),
       });
     } else {
-      // Legacy bindings predate persisted workspace scope. Recovery is read
-      // only and remains confined to the account's current workspace. A miss
-      // is ambiguous (deleted vs another workspace), so it is terminal and we
-      // never attempt a create that could resurrect or partially re-home it.
       try {
         const recovered = await client.getConversation(
           cloudConversationId,
@@ -381,9 +303,6 @@ async function flushEligibleConversation(
       await client.saveMessage(
         cloudConversationId,
         {
-          // `id` is MANDATORY. The shared client retries 5xx/network failures,
-          // and that is only non-duplicating because the server upserts on this
-          // id (`on conflict (id) do update`).
           id: cloudMessageId,
           role: message.role,
           content: message.content,
@@ -405,9 +324,6 @@ async function flushEligibleConversation(
               ? { interactiveCards: message.interactiveCards }
               : {}),
           }),
-          // Per-message route only. The conversation continuation may have
-          // advanced since this pending turn was produced, so using it here
-          // would relabel older answers with the wrong model.
           ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
         },
         { signal, organizationId },
@@ -416,16 +332,11 @@ async function flushEligibleConversation(
       await handleFlushError(owner, conversationId, error);
       return;
     }
-    // Commit after EACH message, not once at the end: a mid-batch failure must
-    // not cause already-accepted messages to be re-sent on the next pass.
     await recordCloudMessagesSynced(owner, conversationId, [
       { cloudMessageId, syncedChars, syncedFingerprint },
     ]).catch(() => undefined);
   }
 
-  // The retry-splice in the panel can rewrite the first user message, which
-  // changes the derived title. Only send it once at least one message exists
-  // server-side, so the title write cannot be the thing that creates the row.
   if (entry.title !== entry.cloudSync?.syncedTitle && messages.length > 0) {
     try {
       await client.updateConversation(
@@ -442,20 +353,11 @@ async function flushEligibleConversation(
   }
 }
 
-/**
- * Translate a transport failure into local bookkeeping.
- *
- * The shared client already retried 5xx/network three times with linear
- * backoff, and it deliberately does NOT retry 4xx — so the backoff recorded
- * here is the only thing standing between a 429 and a hot loop.
- */
 async function handleFlushError(
   owner: ManagedCloudOwner,
   conversationId: string,
   error: unknown,
 ): Promise<void> {
-  // A stale account must never write under the new identity — not even an
-  // error record. Fail silently and let the owner fence do its job.
   if (error instanceof ManagedCloudOwnerChangedError) return;
 
   const now = Date.now();
@@ -493,9 +395,6 @@ async function handleFlushError(
   }
 
   if (status === 404) {
-    // The binding remains intact and terminal. Clearing it used to let the
-    // next sweep create a new row, resurrecting a conversation intentionally
-    // deleted on another surface and re-uploading only the still-dirty suffix.
     await recordCloudSyncState(owner, conversationId, {
       state: 'blocked',
       blockedReason: 'not-found',
@@ -512,8 +411,6 @@ async function handleFlushError(
     retryAfter: now + RETRY_AFTER_SERVER_ERROR_MS,
   });
 }
-
-// ─── Deletion tombstones ───────────────────────────────────────────────────
 
 async function readTombstones(): Promise<CloudSyncTombstone[]> {
   try {
@@ -554,13 +451,6 @@ async function readTombstones(): Promise<CloudSyncTombstone[]> {
   }
 }
 
-/**
- * Queue a cloud DELETE that must survive a failed attempt or a worker eviction.
- *
- * This is reached from exactly one place: an explicit user deletion in the
- * history drawer. Local TTL/quota eviction never calls it — see the note on
- * `boundConversationStoreForWrite`.
- */
 export async function queueCloudConversationDeletion(
   owner: ManagedCloudOwner,
   cloudConversationId: string,
@@ -582,9 +472,6 @@ export async function queueCloudConversationDeletion(
         candidate.cloudConversationId === cloudConversationId,
     );
     if (existingIndex < 0 && existing.length >= MAX_TOMBSTONES) {
-      // Local deletion must not proceed when durability cannot be guaranteed.
-      // The caller keeps the visible conversation so the user can retry after
-      // earlier tombstones drain; no pending delete is silently evicted.
       return false;
     }
     const next = existing.slice();
@@ -605,7 +492,6 @@ export async function queueCloudConversationDeletion(
   return true;
 }
 
-/** Issue queued DELETEs for this account. Scoped 404 means already absent. */
 export async function drainCloudDeletionTombstones(owner: ManagedCloudOwner): Promise<void> {
   const tombstones = await readTombstones();
   const mine = tombstones.filter((candidate) => candidate.accountId === owner.accountId);
@@ -615,8 +501,6 @@ export async function drainCloudDeletionTombstones(owner: ManagedCloudOwner): Pr
   const settled = new Set<string>();
   for (const tombstone of mine) {
     if (tombstone.organizationId === undefined) {
-      // A legacy unscoped delete cannot distinguish "already gone" from "the
-      // account switched workspaces". Retain it rather than falsely settling.
       logger.debug('Legacy cloud deletion is waiting for a proven workspace binding');
       continue;
     }
@@ -634,8 +518,6 @@ export async function drainCloudDeletionTombstones(owner: ManagedCloudOwner): Pr
       }
       if (error instanceof ManagedCloudOwnerChangedError) return;
       logger.debug('Cloud conversation deletion failed; will retry on the next sweep', error);
-      // Stop on the first hard failure: the remaining entries stay queued and
-      // a retry storm against a failing endpoint helps nobody.
       break;
     } finally {
       controller.abort();

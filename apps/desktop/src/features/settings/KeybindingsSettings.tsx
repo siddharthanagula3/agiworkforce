@@ -1,17 +1,3 @@
-/**
- * KeybindingsSettings — keyboard shortcut management UI.
- *
- * Features:
- * - Grouped by category
- * - Click "Edit" to capture a new key combo via keydown
- * - Conflict detection warns if the combo is already used
- * - Per-shortcut and global reset to defaults
- * - Search/filter by description
- *
- * In-app shortcuts are stored here and dispatched by the App shell router.
- * OS-level hotkeys are owned by the Rust registry, so their rebinds go through
- * `shortcuts_update` under the backend id and are only kept once it accepts.
- */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Keyboard, RotateCcw, Search, AlertTriangle, X, Eye } from 'lucide-react';
@@ -31,10 +17,6 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useShortcutStore } from '../../stores/shortcutStore';
 import { Button } from '@/ui/Button';
 import { KeyboardShortcutsOverlay } from '@/features/chat/KeyboardShortcutsOverlay';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function describeShortcutError(error: unknown): string {
   if (typeof error === 'string') return error;
@@ -58,10 +40,6 @@ function captureCombo(event: KeyboardEvent): { key: string; modifiers: ShortcutM
     },
   };
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 interface ShortcutRowProps {
   shortcut: ShortcutDefinition;
@@ -171,17 +149,12 @@ function ShortcutRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 export function KeybindingsSettings() {
   const customKeybindings = useSettingsStore((state) => state.customKeybindings);
   const setCustomKeybinding = useSettingsStore((state) => state.setCustomKeybinding);
   const resetCustomKeybinding = useSettingsStore((state) => state.resetCustomKeybinding);
   const resetAllCustomKeybindings = useSettingsStore((state) => state.resetAllCustomKeybindings);
 
-  // Initialize the Rust-side shortcut store on mount to sync backend state
   const shortcutStoreInit = useShortcutStore((s) => s.init);
   const shortcutStoreCleanup = useShortcutStore((s) => s.cleanup);
   const shortcutStoreUpdate = useShortcutStore((s) => s.update);
@@ -198,9 +171,8 @@ export function KeybindingsSettings() {
   const [searchQuery, setSearchQuery] = useState('');
   const [overlayOpen, setOverlayOpen] = useState(false);
 
-  // Build a set of all currently active combos for conflict detection
   const activeCombos = React.useMemo(() => {
-    const map = new Map<string, string>(); // serialized combo → shortcut ID
+    const map = new Map<string, string>();
     for (const shortcut of DEFAULT_SHORTCUTS) {
       const resolved = resolveBinding(shortcut, customKeybindings);
       const combo = serializeCombo(resolved.key, resolved.modifiers);
@@ -221,7 +193,6 @@ export function KeybindingsSettings() {
     (id: string, key: string, modifiers: ShortcutModifiers) => {
       const combo = serializeCombo(key, modifiers);
 
-      // Check conflict (ignore the shortcut being edited)
       const existingId = activeCombos.get(combo);
       if (existingId && existingId !== id) {
         const conflicting = DEFAULT_SHORTCUTS.find((s) => s.id === existingId);
@@ -239,9 +210,6 @@ export function KeybindingsSettings() {
         return;
       }
 
-      // OS-level hotkey: the Rust registry owns it and the OS can refuse the
-      // combo (another app already holds it). Persist only after the registry
-      // confirms, so a row can never advertise a binding nothing took.
       void (async () => {
         try {
           await shortcutStoreUpdate(backendId, toBackendAccelerator(combo));
@@ -281,10 +249,6 @@ export function KeybindingsSettings() {
 
   const handleResetAll = useCallback(() => {
     void (async () => {
-      // `shortcuts_reset` answers with the restored registry. The store turns a
-      // rejected call into an empty list today; catching as well means a future
-      // rethrow still resets the in-app rows and still reports the failure
-      // instead of dying as an unhandled rejection.
       let restored: unknown[] = [];
       try {
         restored = await shortcutStoreReset();
@@ -300,7 +264,6 @@ export function KeybindingsSettings() {
     })();
   }, [resetAllCustomKeybindings, shortcutStoreReset]);
 
-  // Filter and group shortcuts
   const query = searchQuery.toLowerCase();
   const filteredShortcuts = DEFAULT_SHORTCUTS.filter(
     (s) =>
@@ -316,10 +279,9 @@ export function KeybindingsSettings() {
 
   const customizedCount = Object.keys(customKeybindings).length;
 
-  // Conflict map: shortcut ID → conflicting shortcut description
   const conflicts = React.useMemo(() => {
     const result = new Map<string, string>();
-    const seen = new Map<string, string>(); // combo → first shortcut ID
+    const seen = new Map<string, string>();
 
     for (const shortcut of DEFAULT_SHORTCUTS) {
       const resolved = resolveBinding(shortcut, customKeybindings);

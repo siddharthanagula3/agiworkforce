@@ -6,11 +6,9 @@
  * are now defined in ./common.ts and re-exported from ./index.ts
  */
 
-// Re-export common types for backward compatibility
 export type { Status, BaseEntity, ApiError } from './common';
 export type { PaginatedResponse } from './common';
 
-// Store-specific paginated response with items array
 export interface StorePaginatedResponse<T> {
   items: T[];
   pagination: {
@@ -22,10 +20,6 @@ export interface StorePaginatedResponse<T> {
     hasPrev: boolean;
   };
 }
-
-// ========================================
-// User & Authentication Types
-// ========================================
 
 export type UserRole = 'user' | 'admin' | 'moderator';
 export type UserPlan = BillingPlanTier;
@@ -66,17 +60,10 @@ export interface UserBilling {
   paymentMethodId?: string;
 }
 
-// ========================================
-// Chat & Conversation Types
-// ========================================
-
 // Note: MessageRole is now exported from ./common.ts with 'tool' as an additional option
-// Re-export a store-specific subset for backward compatibility
 export type StoreMessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'sending' | 'sent' | 'failed';
 
-// Note: MessageMetadata is now in ./common.ts with more complete fields
-// This is kept for backward compatibility with store implementations
 export interface StoreMessageMetadata {
   model?: string;
   tokensUsed?: number;
@@ -108,10 +95,6 @@ export interface ConversationMetadata {
   shared: boolean;
 }
 
-// ========================================
-// Employee & Marketplace Types
-// ========================================
-
 export type EmployeeTier = 'free' | 'pro' | 'premium';
 export type EmployeeStatus = 'active' | 'inactive' | 'pending' | 'suspended';
 
@@ -122,37 +105,33 @@ export interface EmployeeCapabilities {
   availableHours: {
     timezone: string;
     schedule: Array<{
-      day: number; // 0-6 (Sunday-Saturday)
-      start: string; // HH:MM format
-      end: string; // HH:MM format
+      day: number;
+      start: string;
+      end: string;
     }>;
   };
 }
 
 export interface EmployeePerformance {
   successRate: number;
-  averageResponseTime: number; // in seconds
+  averageResponseTime: number;
   totalJobsCompleted: number;
   averageRating: number;
   totalReviews: number;
-  uptime: number; // percentage
+  uptime: number;
 }
 
 export interface EmployeePricing {
   basePrice: number;
   currency: 'USD' | 'EUR' | 'GBP';
   billingType: 'one-time' | 'subscription' | 'usage-based';
-  trialPeriod?: number; // days
+  trialPeriod?: number;
   discount?: {
     percentage: number;
     validUntil: Date;
     reason?: string;
   };
 }
-
-// ========================================
-// Workforce & Job Types
-// ========================================
 
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'paused' | 'cancelled';
 export type JobPriority = 'low' | 'medium' | 'high' | 'urgent';
@@ -205,10 +184,6 @@ export interface SubTask {
   actualDuration?: number;
 }
 
-// ========================================
-// Notification Types
-// ========================================
-
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
 export type NotificationPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type NotificationCategory =
@@ -243,15 +218,11 @@ export interface NotificationSettings {
   >;
   quietHours: {
     enabled: boolean;
-    start: string; // HH:MM
-    end: string; // HH:MM
+    start: string;
+    end: string;
     timezone: string;
   };
 }
-
-// ========================================
-// UI & Theme Types
-// ========================================
 
 export type Theme = 'light' | 'dark' | 'system';
 export type ColorScheme = 'blue' | 'green' | 'purple' | 'orange' | 'red';
@@ -277,10 +248,6 @@ export interface LayoutConfig {
   containerMaxWidth: number;
 }
 
-// ========================================
-// File & Upload Types
-// ========================================
-
 export type FileType = 'image' | 'document' | 'audio' | 'video' | 'code' | 'data';
 
 export interface FileUpload {
@@ -302,14 +269,10 @@ export interface FileMetadata {
   type: string;
   mimeType: string;
   dimensions?: { width: number; height: number };
-  duration?: number; // for audio/video files
+  duration?: number;
   encoding?: string;
   checksum: string;
 }
-
-// ========================================
-// Analytics & Metrics Types
-// ========================================
 
 export interface MetricPoint {
   timestamp: Date;
@@ -334,10 +297,6 @@ export interface DashboardWidget {
   position: { x: number; y: number; w: number; h: number };
 }
 
-// ========================================
-// Integration Types
-// ========================================
-
 export interface Integration {
   id: string;
   name: string;
@@ -358,10 +317,6 @@ export interface WebhookEvent {
   processed: boolean;
   retryCount: number;
 }
-
-// ========================================
-// Search & Filter Types
-// ========================================
 
 export interface SearchFilters {
   query?: string;
@@ -392,12 +347,5 @@ export interface SearchResult<T = unknown> {
   searchTime: number;
 }
 
-// ========================================
-// Export all types
-// ========================================
-
 // Note: Individual store types are exported from their respective files
-// Import them directly when needed, e.g.:
-// import type { AuthStore } from './unified-auth-store';
-// import type { ChatStore } from './chat-store';
 import type { BillingPlanTier } from '@agiworkforce/types';

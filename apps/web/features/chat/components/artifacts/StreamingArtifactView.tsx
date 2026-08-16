@@ -4,13 +4,6 @@ import { useEffect, useRef } from 'react';
 import { cn } from '@shared/lib/utils';
 import type { StreamingArtifact } from '../../stores/streaming-artifact-store';
 
-/**
- * Live code view for an artifact that is still being streamed (Claude-style
- * "streamed file write"): monospace content that appends as chunks arrive,
- * auto-scrolling to the newest line, with a subtle "Writing…" indicator.
- * Switches to the full ArtifactPreview (Preview tab) automatically once the
- * fence closes — the parent panel swaps this view for the persisted artifact.
- */
 export function StreamingArtifactView({
   artifact,
   className,
@@ -19,7 +12,6 @@ export function StreamingArtifactView({
   className?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Stick to the bottom unless the user scrolled up to inspect earlier lines.
   const stickToBottomRef = useRef(true);
 
   const handleScroll = () => {

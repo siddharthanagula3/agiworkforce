@@ -3,10 +3,6 @@ import { z } from 'zod';
 import { logger } from '../lib/logger';
 import { getRequestId } from './requestContext';
 
-/**
- * Custom error class for operational errors (expected errors)
- * vs programming errors (unexpected errors)
- */
 export class AppError extends Error {
   statusCode: number;
   isOperational: boolean;
@@ -24,10 +20,6 @@ function transportStatus(err: Error): number | undefined {
   return typeof status === 'number' && status >= 400 && status <= 599 ? status : undefined;
 }
 
-/**
- * Global error handler middleware.
- * Must be defined last to catch errors from all previous middleware and route handlers.
- */
 export const errorHandler = (
   err: Error | AppError,
   req: Request,
@@ -36,7 +28,6 @@ export const errorHandler = (
 ) => {
   const requestId = getRequestId(res);
 
-  // Handle Zod validation errors with a 400 response
   if (err instanceof z.ZodError) {
     logger.warn(
       {
@@ -63,7 +54,6 @@ export const errorHandler = (
     return;
   }
 
-  // Log error details
   logger.error(
     {
       error: err.message,
@@ -75,10 +65,8 @@ export const errorHandler = (
     'Request error',
   );
 
-  // Determine status code
   const statusCode = err instanceof AppError ? err.statusCode : (transportStatus(err) ?? 500);
 
-  // Determine error message
   const message =
     err instanceof AppError && err.isOperational
       ? err.message
@@ -88,7 +76,6 @@ export const errorHandler = (
           ? 'Invalid Request'
           : 'Internal Server Error';
 
-  // Send error response
   res.status(statusCode).json({
     error: message,
     ...(requestId ? { requestId } : {}),
@@ -99,11 +86,7 @@ export const errorHandler = (
   });
 };
 
-/**
- * 404 handler for undefined routes
- */
 export const notFoundHandler = (req: Request, res: Response) => {
-  // Truncate and sanitize the reflected path to prevent log injection and content reflection
   const safePath = req.path.slice(0, 200).replace(/[^\w/.-]/g, '');
   res.status(404).json({
     error: 'Not Found',

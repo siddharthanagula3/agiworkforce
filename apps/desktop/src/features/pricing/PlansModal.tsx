@@ -1,16 +1,3 @@
-/**
- * PlansModal — in-app plans/pricing modal.
- *
- * Reachable from:
- *   1. Profile popover "View all plans" / "Try Basic" links
- *      → dispatches CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } })
- *      → App.tsx listens and sets plansModalOpen state
- *   2. Settings → Billing tab and managed-usage warnings
- *
- * Paid upgrades use the same Stripe preview/apply routes as Web. Existing
- * subscribers see the exact prorated charge before confirmation; new
- * subscriptions open Stripe Checkout inside an owned Desktop billing window.
- */
 import { X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/ui/Dialog';
 import { PlanCard } from './PlanCard';
@@ -34,37 +21,20 @@ import { openBillingPortal } from '../../lib/stripeCheckout';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 export interface PlansModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Tier ordering for display
-// ---------------------------------------------------------------------------
-
 const TIER_ORDER: UIPlanTier[] = ['local', 'byok', 'free', 'basic', 'pro', 'max', 'max_15x'];
 
-// The billing catalog names the local tier 'local-only'; the rest match.
 const VISIBLE_TIERS = TIER_ORDER.filter((tier) =>
   isPlanSelectableOnSurface(tier === 'local' ? 'local-only' : tier, 'desktop'),
 );
 
-// ---------------------------------------------------------------------------
-// Map legacy PlanTier → UIPlanTier
-// ---------------------------------------------------------------------------
-
 function legacyToUIPlanTier(raw: string | null | undefined): UIPlanTier | null {
   return raw ? normalizeUIPlanTier(raw, 'byok') : null;
 }
-
-// ---------------------------------------------------------------------------
-// PlansModal
-// ---------------------------------------------------------------------------
 
 export function PlansModal({ open, onOpenChange }: PlansModalProps) {
   const rawPlan = useAuthStore(selectPlan);
@@ -91,7 +61,6 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
       return;
     }
     if (isFreePlan(tier)) {
-      // Already free — nothing to do (CTA should be disabled/current)
       return;
     }
 
@@ -232,10 +201,6 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
     </>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Helper: fire the open-plans-modal event from non-React code
-// ---------------------------------------------------------------------------
 
 export function openPlansModal() {
   window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } }));

@@ -1,18 +1,10 @@
-/**
- * ReminderDialog Component
- *
- * Modal dialog for creating and editing reminders/scheduled tasks.
- * Supports natural language input with schedule preview.
- */
 import { format, parse, setHours, setMinutes } from 'date-fns';
 import { Bell, Calendar, Clock, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { ScheduledJob } from '@/stores/schedulerStore';
 
-/** UI-friendly action types for the reminder dialog (mapped to Rust types by parent) */
 type ReminderActionType = 'reminder' | 'briefing' | 'agent_task' | 'custom';
-/** Schedule type for preview display */
 type ScheduleType = 'cron' | 'interval' | 'once';
 import { Button } from '@/ui/Button';
 import {
@@ -48,14 +40,10 @@ interface SchedulePreview {
   scheduleValue: string;
 }
 
-/**
- * Parses natural language time input and returns a Date object.
- */
 function parseTimeInput(input: string): Date | null {
   const now = new Date();
   const normalizedInput = input.toLowerCase().trim();
 
-  // Check for "in X minutes/hours" format
   const relativePattern = /^in\s+(\d+)\s*(minute|min|hour|hr)s?$/i;
   const relativeMatch = normalizedInput.match(relativePattern);
   if (relativeMatch && relativeMatch[1] && relativeMatch[2]) {
@@ -70,7 +58,6 @@ function parseTimeInput(input: string): Date | null {
     return result;
   }
 
-  // Check for absolute time format: "3pm", "3:30pm", "15:00"
   const absolutePattern = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i;
   const absoluteMatch = normalizedInput.match(absolutePattern);
   if (absoluteMatch && absoluteMatch[1]) {
@@ -88,14 +75,12 @@ function parseTimeInput(input: string): Date | null {
     }
 
     const result = setHours(setMinutes(now, parseInt(minutes, 10)), hour);
-    // If the time is in the past today, schedule for tomorrow
     if (result <= now) {
       result.setDate(result.getDate() + 1);
     }
     return result;
   }
 
-  // Try standard time format
   try {
     const parsed = parse(normalizedInput, 'HH:mm', now);
     if (!isNaN(parsed.getTime())) {
@@ -111,9 +96,6 @@ function parseTimeInput(input: string): Date | null {
   return null;
 }
 
-/**
- * Generates a cron expression from schedule parameters.
- */
 function generateSchedule(
   repeatOption: RepeatOption,
   time: string,
@@ -132,7 +114,6 @@ function generateSchedule(
 
   switch (repeatOption) {
     case 'once': {
-      // For one-time reminders, use the run_at format
       let runAt: Date;
       if (date) {
         runAt = new Date(`${date}T${format(timeDate || new Date(), 'HH:mm')}:00`);
@@ -167,7 +148,7 @@ function generateSchedule(
     }
 
     case 'custom': {
-      const intervalSeconds = parseInt(customInterval, 10) * 60; // Convert minutes to seconds
+      const intervalSeconds = parseInt(customInterval, 10) * 60;
       if (isNaN(intervalSeconds) || intervalSeconds <= 0) {
         return null;
       }
@@ -200,17 +181,15 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
   const [repeatOption, setRepeatOption] = useState<RepeatOption>('once');
   const [time, setTime] = useState('');
   const [date, setDate] = useState('');
-  const [dayOfWeek, setDayOfWeek] = useState('1'); // Monday
-  const [customInterval, setCustomInterval] = useState('30'); // 30 minutes default
+  const [dayOfWeek, setDayOfWeek] = useState('1');
+  const [customInterval, setCustomInterval] = useState('30');
   const [loading, setLoading] = useState(false);
 
-  // Reset form when dialog opens/closes or when editing a different job
   useEffect(() => {
     if (open) {
       if (existingJob) {
         setName(existingJob.name);
 
-        // Parse action data (now an object from Rust, not a JSON string)
         const actionData = existingJob.actionData;
         if (actionData && typeof actionData === 'object') {
           setMessage(
@@ -222,7 +201,6 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
           setMessage(String(actionData ?? ''));
         }
 
-        // Map Rust actionType (camelCase) to UI-friendly type
         const rustToUiType: Record<string, ReminderActionType> = {
           notification: 'reminder',
           agiTask: 'agent_task',
@@ -233,7 +211,6 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
         };
         setActionType(rustToUiType[existingJob.actionType] ?? 'reminder');
 
-        // Parse cron schedule from `schedule` field (cron expression string)
         const cronParts = existingJob.schedule.split(' ');
         if (cronParts.length >= 5) {
           const minute = cronParts[0] ?? '0';
@@ -253,7 +230,6 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
           }
         }
       } else {
-        // Reset to defaults for new reminder
         setName('');
         setMessage('');
         setActionType('reminder');
@@ -284,7 +260,6 @@ export function ReminderDialog({ open, onOpenChange, existingJob, onSave }: Remi
         actionType: actionType,
       });
 
-      // Format the schedule string based on type
       let scheduleString: string;
       if (schedulePreview.scheduleType === 'once') {
         scheduleString = `once:${schedulePreview.scheduleValue}`;

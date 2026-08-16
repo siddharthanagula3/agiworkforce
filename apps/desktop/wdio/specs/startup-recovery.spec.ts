@@ -1,16 +1,7 @@
 describe('AGI Desktop encrypted-database startup recovery', () => {
   it('renders the complete recovery surface without mounting the normal app', async function () {
-    // The Tauri WDIO service probes native window focus before each WebDriver
-    // command. Recovery mode deliberately mounts before the normal Tauri
-    // frontend bridge, so each probe waits for its five-second fallback.
     this.timeout(120000);
 
-    // One app instance serves the whole suite and it boots with a HEALTHY
-    // database, so the recovery surface cannot exist in a normal full-suite
-    // run. This spec is meaningful only in a dedicated lane that launches the
-    // binary with an unopenable database (e.g. seed a profile with one
-    // AGI_DESKTOP_WDIO_DATABASE_KEY, then relaunch with a different one).
-    // Skip — never fake a pass — when the normal shell is what booted.
     const normalShellBooted = await browser.execute(
       () =>
         !!document.querySelector('[data-v3-shell]') ||

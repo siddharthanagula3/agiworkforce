@@ -17,13 +17,6 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-/**
- * Developer settings section (source-of-truth IA · DESK-1: "developer
- * logs/config editing"). Surfaces the real, previously-orphaned config editor
- * (`DotfileSettings` — reads/writes ~/.agiworkforce/config.toml) and advanced
- * agent-execution controls (`AgentExecutionSettings` — approval/stream
- * timeouts). Both panels existed but were unreachable from any nav.
- */
 export function DeveloperTab() {
   return (
     <Suspense fallback={<Fallback label="Loading developer settings..." />}>

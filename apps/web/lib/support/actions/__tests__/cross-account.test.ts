@@ -1,15 +1,3 @@
-/**
- * An action for another user's account is refused.
- *
- * Three directions, because there are three ways to try:
- *   1. name a target that belongs to someone else at PROPOSE time
- *   2. present someone else's confirmation token at CONFIRM time
- *   3. rely on the SQL itself to be user-scoped
- *
- * (3) is asserted on the captured statement text, not just on behaviour, so
- * removing `user_id = $2` from the claim UPDATE fails a test even though the
- * in-memory fake would keep behaving.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -56,8 +44,6 @@ describe('support actions — cross-account refusal', () => {
   });
 
   it('refuses to propose a connector revoke for a connector the caller does not have', async () => {
-    // The connector row belongs to user B; the fake returns it only for the
-    // query the resolver runs, and the resolver is called with user A's id.
     mocks.db = createFakeNeonDb({ connectors: [] });
 
     await expect(
@@ -70,7 +56,6 @@ describe('support actions — cross-account refusal', () => {
       }),
     ).rejects.toMatchObject({ code: 'SUPPORT_ACTION_TARGET_NOT_FOUND' });
 
-    // Nothing was proposed and nothing was mutated.
     expect(mocks.db!.proposals).toHaveLength(0);
     expect(mocks.db!.callsMatching(/update user_connectors/iu)).toHaveLength(0);
   });
@@ -102,8 +87,6 @@ describe('support actions — cross-account refusal', () => {
     expect(mocks.db!.callsMatching(/update api_keys set revoked_at/iu)).toHaveLength(0);
     expect(mocks.db!.callsMatching(/insert into api_keys/iu)).toHaveLength(0);
 
-    // The ownership READ itself is user-scoped: the executor never learns the
-    // key exists rather than merely declining to mutate it.
     const read = mocks.db!.callsMatching(/select id, name, scopes from public\.api_keys/iu)[0];
     expect(read).toBeDefined();
     expect(read!.sql.replace(/\s+/gu, ' ')).toContain('user_id = $2');
@@ -141,11 +124,9 @@ describe('support actions — cross-account refusal', () => {
       }),
     ).rejects.toBeInstanceOf(SupportActionRefusal);
 
-    // The proposal is untouched: user A can still use it.
     expect(mocks.db!.proposals[0]!.consumed_at).toBeNull();
     expect(mocks.db!.proposals[0]!.outcome).toBe('proposed');
 
-    // And the claim really binds the authenticated caller.
     const claim = mocks.db!.callsMatching(/update public\.support_action_proposals/iu)[0];
     expect(claim).toBeDefined();
     const claimSql = claim!.sql.replace(/\s+/gu, ' ');

@@ -19,11 +19,9 @@ describe('tool-permissions-store server sync', () => {
   it('sets locally (sync) and persists to the server via PUT with the wire level', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
     useToolPermissionsStore.getState().setToolPermission('github', 'create_issue', 'deny');
-    // Local write is synchronous.
     expect(useToolPermissionsStore.getState().getToolPermission('github', 'create_issue')).toBe(
       'deny',
     );
-    // Server persistence is fire-and-forget — let the microtasks settle.
     await flush();
     const put = fetchMock.mock.calls.find((c) => (c[1] as RequestInit)?.method === 'PUT');
     expect(put).toBeTruthy();
@@ -35,7 +33,6 @@ describe('tool-permissions-store server sync', () => {
   });
 
   it('hydrateFromServer fills gaps but local wins on conflict', async () => {
-    // Local already holds a value the server disagrees with.
     useToolPermissionsStore.setState({ permissions: { github: { create_issue: 'allow' } } });
     fetchMock.mockResolvedValue({
       ok: true,

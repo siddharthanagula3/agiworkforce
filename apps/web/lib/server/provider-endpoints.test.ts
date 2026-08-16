@@ -100,23 +100,6 @@ describe('provider API root resolution', () => {
   });
 });
 
-/**
- * ANTHROPIC_BASE_URL is read under two incompatible conventions in this repo
- * and neither is going away:
- *
- *   - `packages/ai/providers/anthropic/src/index.ts:75` -> `@anthropic-ai/sdk`,
- *     whose `baseURL` must NOT carry `/v1` (it posts `/v1/messages` itself).
- *     `lib/services/provider-adapter-service.ts:182-201` feeds it the raw
- *     validated override.
- *   - `lib/ai-sdk/providers.ts:106-112` -> `@ai-sdk/anthropic`, whose `baseURL`
- *     MUST carry `/v1` (it appends only `/messages`).
- *
- * So an operator's single value is `/v1`-carrying for one path and not for the
- * other. These direct fetch sites must land on a real endpoint either way:
- * concatenating blindly yields `<root>/messages` (404, missing `/v1`) for the
- * no-`/v1` spelling, or `<root>/v1/v1/messages` for the other. Both spellings
- * must normalize to the same URL.
- */
 describe('ANTHROPIC_BASE_URL is version-agnostic (both repo conventions resolve alike)', () => {
   const EXPECTED = 'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/messages';
 
@@ -157,12 +140,6 @@ describe('providerApiUrl', () => {
   });
 });
 
-/**
- * Call-site coverage: the resolver is worthless if the modules that actually
- * fetch keep their own literal. These assert the request URL a real call path
- * produces, so re-inlining `https://api.openai.com/...` in container-files.ts
- * fails here and not only in the repo-wide guard.
- */
 describe('generated-file fetchers route through the resolved endpoint', () => {
   const fetchSpy = vi.fn();
 
@@ -226,9 +203,6 @@ describe('generated-file fetchers route through the resolved endpoint', () => {
 
     expect(fetchSpy).toHaveBeenCalled();
     const urls = fetchSpy.mock.calls.map((call) => String(call[0]));
-    // Exact URL, not a prefix: the Files API lives under `/v1`, and the
-    // override here is written in the no-`/v1` (@anthropic-ai/sdk) spelling —
-    // a blind join would emit `.../anthropic/files/...` and 404.
     expect(urls).toContain(
       'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/files/file_abc/content',
     );

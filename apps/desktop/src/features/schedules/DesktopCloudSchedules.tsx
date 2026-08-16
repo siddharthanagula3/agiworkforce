@@ -426,11 +426,6 @@ function AuthenticatedDesktopCloudSchedules({
   const [draft, setDraft] = useState<ScheduleDraft>(() => initialDraft());
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  // Escape closes the editor. Without it the only exits were a backdrop click
-  // and a Cancel button that sits below the fold — the dialog is
-  // max-h-[90vh] with internal scroll, so on a short window Cancel is not
-  // visible when the dialog opens. Guarded on `saving` for the same reason the
-  // backdrop handler is: dismissing mid-save would strand the request.
   useEffect(() => {
     if (!editorOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -902,9 +897,6 @@ function AuthenticatedDesktopCloudSchedules({
                           </span>
                         </div>
                         {schedule.description ? (
-                          // Clamped to match the prompt below it, which is
-                          // line-clamp-2. An unclamped description made a long
-                          // one push the prompt and metadata out of the card.
                           <p className="mt-1 line-clamp-2 text-xs text-[var(--chat-text-muted)] [overflow-wrap:anywhere]">
                             {schedule.description}
                           </p>

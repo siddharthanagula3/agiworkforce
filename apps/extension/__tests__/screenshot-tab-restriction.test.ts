@@ -1,15 +1,3 @@
-/**
- * CAPTURE_SCREENSHOT same-tab restriction integration test
- * (H-09 audit 2026-05-19; self-review #3 audit 2026-05-19).
- *
- * Production behavior: a content-script sender's screenshot request is
- * restricted to its own tab. Extension-page senders (popup / side panel)
- * fall back to the active tab. The prior `chrome.tabs.query({active:true})`
- * fallback for content scripts was the cross-tab exfil vector.
- *
- * We assert the predicate behavior — the integration with the full Chrome
- * API surface is verified by manual smoke-test in the PR plan.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -22,11 +10,6 @@ interface SenderShape {
   tab?: { id?: number; windowId?: number };
 }
 
-/**
- * Mirror of the H-09 tab-resolution logic from `background.ts handleMessageAsync`
- * CAPTURE_SCREENSHOT branch. Pure function so it's testable without
- * Chrome API stubs.
- */
 function resolveCaptureTab(
   sender: SenderShape,
   msgTabId: number | undefined,

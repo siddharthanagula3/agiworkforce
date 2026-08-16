@@ -11,23 +11,6 @@ import {
   POLICY_ROUTE_ALIASES,
 } from '@/lib/legal-constants';
 
-/**
- * Guards for the legal and policy set.
- *
- * These are regression guards, not documentation. Each one corresponds to a
- * defect that was actually shipped:
- *
- *  - Three policies existed at two URLs each. Duplicate legal text that drifts
- *    is a liability, so there must be exactly one page per policy and the
- *    aliases must be permanent redirects declared in next.config.ts.
- *  - Policy pages made concrete claims the code contradicted (an email
- *    processor that receives nothing, log/backup retention nothing enforces,
- *    "RLS-enforced" as an absolute, audit trails advertised as delivered). The
- *    prohibited-claim guard fails the build if any of them reappears.
- *  - Policy pages were unreachable from the footer, so a procurement reviewer
- *    could not find the DPA or the cookie policy.
- */
-
 const APP_DIR = path.join(__dirname, '..');
 const WEB_DIR = path.join(APP_DIR, '..');
 
@@ -35,21 +18,6 @@ function readAppFile(...segments: string[]): string {
   return readFileSync(path.join(APP_DIR, ...segments), 'utf8');
 }
 
-/**
- * Strip source comments before scanning for prohibited claims.
- *
- * The policy pages carry a header comment naming each unsupportable claim that
- * was removed and the code reason it could not be supported. That note is the
- * most useful thing in the file for the next editor — it is why the claim does
- * not come back. Scanning raw source made the guard fire on its own
- * documentation, which would have pressured a future editor to delete the
- * explanation to get the build green. Only published copy can mislead a reader,
- * so only published copy is scanned.
- *
- * Block comments are removed wholesale; line comments are removed only when the
- * line starts with `//` or a JSDoc `*` continuation, so that a `https://` inside
- * real page copy is never mangled.
- */
 function readPublishedCopy(...segments: string[]): string {
   return readAppFile(...segments)
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -67,8 +35,6 @@ describe('legal policy set — one canonical page per policy', () => {
   });
 
   it('has no page.tsx for any alias route', () => {
-    // A `redirect()` stub page emits a 307 and renders a React route on every
-    // hit. Aliases belong in next.config.ts, not in the app directory.
     for (const alias of Object.keys(POLICY_ROUTE_ALIASES)) {
       const pagePath = path.join(APP_DIR, alias.replace(/^\//, ''), 'page.tsx');
       expect(
@@ -126,17 +92,12 @@ describe('legal policy set — discoverability', () => {
 });
 
 describe('legal policy set — prohibited claims', () => {
-  // Each entry: the string that must not reappear, and why it was removed.
   const BANNED: { pattern: RegExp; why: string; files: string[] }[] = [
     {
       pattern: /announced via email|notify customers[^.]*30 days in advance/i,
       why: 'No mailing path can reach an arbitrary list of customers, so a promise of emailed notice cannot be performed. (The product CAN send support-escalation and scheduled-task email — see the Resend guard below — but neither can do a broadcast.)',
       files: ['privacy/page.tsx', 'terms/page.tsx', 'subprocessors/page.tsx', 'dpa/page.tsx'],
     },
-    // The `name: 'Resend'` guard used to live here, banning the entry outright.
-    // It was written on a false premise and is INVERTED below into
-    // `required claims` — see that block for the full story. Do not restore a
-    // ban: the provider is wired, and delisting it is the defect.
     {
       pattern: /RLS-enforced;\s*only you can read your rows/i,
       why: 'Database RLS bites on the user-scoped sync paths, not universally. The honest claim is two layers.',
@@ -214,23 +175,8 @@ describe('legal policy set — prohibited claims', () => {
   });
 
   it('discloses the transactional email provider that is actually wired', () => {
-    // INVERTED GUARD. This assertion used to be its own opposite: a BANNED
-    // entry forbidding `name: 'Resend'` on the subprocessor page, on the
-    // reasoning that no email package appears in the dependencies and therefore
-    // no provider existed.
-    //
-    // The premise was true and the conclusion was false.
-    // `lib/support/handoff/resend-client.ts` calls https://api.resend.com/emails
-    // over plain `fetch`, deliberately avoiding an npm dependency — so a
-    // manifest grep could never find it. Meanwhile full support transcripts,
-    // including the user's contact email, were being emailed to an undisclosed
-    // recipient, and three policy pages justified never notifying users of
-    // anything on the strength of "there is no transactional email system".
-    //
-    // A test that enforces a false claim is worse than no test, so this one now
-    // enforces the true one: if the client exists, the page must disclose it.
     const clientPath = path.join(WEB_DIR, 'lib/support/handoff/resend-client.ts');
-    if (!existsSync(clientPath)) return; // provider genuinely removed — nothing to disclose
+    if (!existsSync(clientPath)) return;
 
     const subprocessors = readPublishedCopy('subprocessors', 'page.tsx');
     expect(
@@ -240,12 +186,6 @@ describe('legal policy set — prohibited claims', () => {
   });
 
   it('does not claim the product has no transactional email system', () => {
-    // The claim that justified the delisting. It appears nowhere now, and it
-    // must not come back while the client above exists: it is the sentence that
-    // let an undisclosed recipient of personal data look like a policy choice.
-    // /dpa is in this list because the first version of this guard omitted it,
-    // and the claim survived there for a day after being removed everywhere
-    // else. A guard is only as wide as its file list.
     for (const file of [
       'privacy/page.tsx',
       'terms/page.tsx',
@@ -297,8 +237,6 @@ describe('legal policy set — entity facts come from one place', () => {
   });
 
   it('publishes one notice address across the policy set', () => {
-    // /terms and /privacy said "Austin, Texas, USA" while /mobile/legal said
-    // Sheridan, Wyoming. One company cannot publish two notice addresses.
     for (const file of ['terms/page.tsx', 'privacy/page.tsx']) {
       expect(/Austin, Texas/i.test(readAppFile(...file.split('/'))), file).toBe(false);
     }
@@ -319,8 +257,6 @@ describe('security.txt', () => {
   });
 
   it('has an Expires value in the future', async () => {
-    // RFC 9116 §2.5.5 requires a future timestamp. It is computed per request
-    // rather than checked in, so this guards the computation, not a literal.
     const text = await securityTxt().text();
     const expires = /^Expires: (.+)$/m.exec(text)?.[1];
     expect(expires).toBeDefined();

@@ -1,60 +1,4 @@
-/**
- * Native Clerk Frontend API client for AGI Desktop sign-in.
- *
- * ## Why this exists
- *
- * Desktop used to reuse the CLI's RFC 8628 device-authorization grant: open a
- * child window at the web app's `/auth/device` page and poll. On a real build
- * that child window carries no Clerk browser cookie, so its approval button
- * hangs on "Checking…" forever; the page renders unstyled; and a server 500 was
- * surfaced to the user as "AGI Cloud rejected the device sign-in request",
- * blaming the account for a server fault. Desktop ships a browser engine, so it
- * can authenticate the user directly instead.
- *
- * ## The contract, and where every part of it was verified
- *
- * Everything below is read out of the Clerk SDKs installed in this repo — no
- * endpoint here is guessed.
- *
- * - **Frontend API host** — `node_modules/@clerk/shared` `keys.ts`:
- *   `pk_live_`/`pk_test_` + unpadded base64 of `"<frontendApi>$"`. Decoded in
- *   Rust (`sys/account/clerk_native.rs`), which is also the SSRF boundary.
- * - **Request envelope** — `@clerk/clerk-js@6.25.3` FapiClient: base
- *   `https://{frontendApi}/v1{path}`, query `__clerk_api_version=2026-05-12`
- *   and `_clerk_js_version=6.25.3`, body `application/x-www-form-urlencoded`.
- * - **Native mode** — `@clerk/expo`
- *   `dist/provider/singleton/createClerkInstance.js`: append `_is_native=1`,
- *   omit cookies, send the client JWT in the `authorization` REQUEST header,
- *   and read the rotated client JWT from the `authorization` RESPONSE header.
- * - **Sign-in resource** — `@clerk/clerk-js` `SignIn`: `POST
- *   /v1/client/sign_ins`, then `…/{id}/prepare_first_factor`,
- *   `…/{id}/attempt_first_factor`, `…/{id}/prepare_second_factor`,
- *   `…/{id}/attempt_second_factor`; statuses `needs_identifier`,
- *   `needs_first_factor`, `needs_second_factor`, `needs_new_password`,
- *   `complete`.
- * - **Session token** — `@clerk/clerk-js` `Session`/`Token`: `POST
- *   /v1/client/sessions/{id}/tokens` → `{ jwt }`.
- * - **SSO** — `@clerk/expo` `dist/hooks/useSSO.js`: create the sign-in with
- *   `strategy=oauth_*` + `redirect_url`, open
- *   `first_factor_verification.external_verification_redirect_url`, then reload
- *   the sign-in with the callback's `rotating_token_nonce`.
- * - **Error envelope** — `@clerk/clerk-js` `ClerkAPIError`:
- *   `{ errors: [{ code, message, long_message, meta: { param_name } }] }`.
- * - **Captcha** — `SignIn.shouldRequireCaptcha` returns true only when
- *   `signUpIfMissing` is set. Plain sign-in create needs no captcha token, so a
- *   native client without a captcha widget is a supported caller.
- *
- * ## Credential discipline
- *
- * Passwords, one-time codes, MFA codes, the Clerk client JWT and the Clerk
- * session JWT are never logged, never written to disk here, and never sent
- * anywhere but the Clerk Frontend API. The client JWT lives in module memory
- * for the duration of one sign-in ceremony and is dropped by `resetClerkClient`
- * when the ceremony ends. Durable AGI Cloud credentials are stored by the
- * existing native vault in `cloudAccountAuth`, not here.
- */
 
-/** Clerk sign-in statuses this client understands. */
 export type ClerkSignInStatus =
   | 'needs_identifier'
   | 'needs_first_factor'
@@ -82,18 +26,10 @@ export interface ClerkSignIn {
   createdSessionId: string | null;
   supportedFirstFactors: ClerkFirstFactor[];
   supportedSecondFactors: ClerkSecondFactor[];
-  /** Present for `oauth_*` / `enterprise_sso` first factors. */
   externalVerificationRedirectUrl: string | null;
   firstFactorVerificationStatus: string | null;
 }
 
-/**
- * Every way native sign-in can fail, as a closed set.
- *
- * The critical distinction this type exists to enforce: `server_error` and
- * `network` are NOT `rejected`. Mapping a 5xx onto a rejection message is the
- * exact defect this rewrite removes.
- */
 export type ClerkAuthFailureKind =
   | 'invalid_credentials'
   | 'identifier_not_found'
@@ -127,7 +63,6 @@ export class ClerkAuthError extends Error {
   }
 }
 
-/** Raw transport result. Mirrors `ClerkNativeHttpResponse` on the Rust side. */
 export interface ClerkNativeTransportResponse {
   status: number;
   body: string;
@@ -154,15 +89,6 @@ interface ClerkApiErrorShape {
   meta?: { param_name?: unknown } | null;
 }
 
-/**
- * Publishable key for the Clerk instance the AGI web app uses.
- *
- * Same instance, same users: `apps/web` reads
- * `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, and Desktop must be pointed at the same
- * value via `VITE_CLERK_PUBLISHABLE_KEY`. When it is unset, native sign-in
- * reports `not_configured` and the caller falls back to the device-code path
- * rather than pretending to work.
- */
 export function getClerkPublishableKey(): string | null {
   const raw = (import.meta.env['VITE_CLERK_PUBLISHABLE_KEY'] as string | undefined)?.trim();
   if (!raw) return null;
@@ -174,15 +100,6 @@ export function isNativeClerkSignInConfigured(): boolean {
   return getClerkPublishableKey() !== null;
 }
 
-/**
- * Default transport: the native Rust command.
- *
- * A Clerk production instance validates the browser `Origin` header against the
- * instance's allowed origins, and the Tauri webview origin is not one of them —
- * a direct `fetch` from the webview would be answered `origin_invalid`. The
- * native client sends no `Origin`, matching how Clerk's own React Native client
- * talks to FAPI.
- */
 async function invokeNativeTransport(
   request: ClerkNativeTransportRequest,
 ): Promise<ClerkNativeTransportResponse> {
@@ -199,15 +116,12 @@ async function invokeNativeTransport(
 
 let transportOverride: ClerkNativeTransport | null = null;
 
-/** Test seam. Production code never calls this. */
 export function __setClerkNativeTransportForTests(transport: ClerkNativeTransport | null): void {
   transportOverride = transport;
 }
 
-// The Clerk native client JWT for the in-flight ceremony. Memory only.
 let clientToken: string | null = null;
 
-/** Drop the in-memory Clerk client credential. */
 export function resetClerkClient(): void {
   clientToken = null;
 }
@@ -243,16 +157,6 @@ function firstString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
-/**
- * Map a Clerk failure onto an honest, user-facing message.
- *
- * Rules that are deliberate, not incidental:
- * - `>= 500` is always `server_error` and always says the account service
- *   failed. It must never read as a credential or account rejection.
- * - `429` is `rate_limited`, not "wrong password".
- * - An unrecognised 4xx keeps Clerk's own `long_message`/`message` verbatim
- *   rather than inventing a friendlier lie.
- */
 export function mapClerkFailure(
   status: number,
   body: string,
@@ -375,11 +279,6 @@ async function request(
 
   const transport = transportOverride ?? invokeNativeTransport;
 
-  // Trust boundary. This transport runs in Rust, OUTSIDE `guardedFetch`, so it
-  // does not inherit the webview egress guard — this IS the guard for it. Cloud
-  // sign-in only ever runs from the Cloud workspace; Local and BYOK must never
-  // reach our account service, and Local needs no account at all. Lazy import
-  // keeps the privacyBoundary → appModeStore cycle broken.
   const { isPrivateTrustBoundary } = await import('../stores/privacyBoundary');
   if (isPrivateTrustBoundary()) {
     throw new ClerkAuthError(
@@ -399,7 +298,6 @@ async function request(
       ...(options.search ? { search: options.search } : {}),
     });
   } catch (error) {
-    // A thrown transport is a transport failure — never an account decision.
     throw new ClerkAuthError(
       'network',
       `Could not reach the AGI account service: ${
@@ -473,13 +371,6 @@ const KNOWN_STATUSES: ReadonlySet<string> = new Set<ClerkSignInStatus>([
   'complete',
 ]);
 
-/**
- * Parse the `sign_in` resource out of a FAPI envelope.
- *
- * Clerk answers `{ response: <resource>, client: <client> }`. An unknown status
- * throws rather than being coerced — a silently mis-parsed status is how a
- * sign-in screen ends up in a state nobody wrote UI for.
- */
 export function parseSignInResponse(payload: unknown): ClerkSignIn {
   const envelope = asRecord(payload);
   const resource = asRecord(envelope?.['response']) ?? envelope;
@@ -509,7 +400,6 @@ export function parseSignInResponse(payload: unknown): ClerkSignIn {
   };
 }
 
-/** Start a sign-in with a password. */
 export async function createPasswordSignIn(
   identifier: string,
   password: string,
@@ -522,7 +412,6 @@ export async function createPasswordSignIn(
   );
 }
 
-/** Start a sign-in that will be completed with an emailed one-time code. */
 export async function createIdentifierSignIn(identifier: string): Promise<ClerkSignIn> {
   return parseSignInResponse(
     await request('POST', '/v1/client/sign_ins', {
@@ -532,7 +421,6 @@ export async function createIdentifierSignIn(identifier: string): Promise<ClerkS
   );
 }
 
-/** Ask Clerk to email the one-time code for this sign-in. */
 export async function prepareEmailCode(
   signInId: string,
   emailAddressId: string,
@@ -545,7 +433,6 @@ export async function prepareEmailCode(
   );
 }
 
-/** Submit the emailed one-time code. */
 export async function attemptEmailCode(signInId: string, code: string): Promise<ClerkSignIn> {
   return parseSignInResponse(
     await request('POST', `/v1/client/sign_ins/${signInId}/attempt_first_factor`, {
@@ -555,7 +442,6 @@ export async function attemptEmailCode(signInId: string, code: string): Promise<
   );
 }
 
-/** Submit the password when the sign-in was created without one. */
 export async function attemptPassword(signInId: string, password: string): Promise<ClerkSignIn> {
   return parseSignInResponse(
     await request('POST', `/v1/client/sign_ins/${signInId}/attempt_first_factor`, {
@@ -565,7 +451,6 @@ export async function attemptPassword(signInId: string, password: string): Promi
   );
 }
 
-/** Ask Clerk to send the second-factor code (SMS). TOTP needs no prepare. */
 export async function prepareSecondFactor(
   signInId: string,
   factor: ClerkSecondFactor,
@@ -581,15 +466,11 @@ export async function prepareSecondFactor(
   );
 }
 
-/** Submit a second-factor code (`totp`, `phone_code`, or `backup_code`). */
 export async function attemptSecondFactor(
   signInId: string,
   strategy: string,
   code: string,
 ): Promise<ClerkSignIn> {
-  // `totp`, `phone_code`, and `backup_code` all submit under `code` — verified
-  // against @clerk/clerk-js `SignIn.attemptSecondFactor`, which spreads the
-  // params object straight onto the request body.
   return parseSignInResponse(
     await request('POST', `/v1/client/sign_ins/${signInId}/attempt_second_factor`, {
       form: { strategy, code },
@@ -598,13 +479,6 @@ export async function attemptSecondFactor(
   );
 }
 
-/**
- * Start an OAuth/SSO sign-in and return the URL to open in the system browser.
- *
- * Google, Microsoft, and Apple all forbid OAuth inside embedded webviews, so
- * this hop to the real browser is unavoidable and is the one accepted exception
- * to native sign-in.
- */
 export async function createOauthSignIn(
   strategy: string,
   redirectUrl: string,
@@ -626,14 +500,6 @@ export async function createOauthSignIn(
   return { signIn, authorizationUrl: signIn.externalVerificationRedirectUrl };
 }
 
-/**
- * Re-read the sign-in after the browser hop.
- *
- * `rotating_token_nonce` comes back on the deep-link callback and is what
- * authorises this reload for a native client. Per `@clerk/expo`'s own comment,
- * Clerk only appends the nonce when the redirect URL is allowlisted on the
- * instance.
- */
 export async function reloadSignInWithNonce(
   signInId: string,
   rotatingTokenNonce: string,
@@ -646,7 +512,6 @@ export async function reloadSignInWithNonce(
   );
 }
 
-/** Mint a session JWT for a completed sign-in. */
 export async function createSessionToken(sessionId: string): Promise<string> {
   const payload = await request('POST', `/v1/client/sessions/${sessionId}/tokens`, {
     form: {},
@@ -664,12 +529,6 @@ export async function createSessionToken(sessionId: string): Promise<string> {
   return jwt;
 }
 
-/**
- * Pick the email-code factor for an identifier, if the account has one.
- *
- * Returns `null` when Clerk did not offer `email_code` — the caller must then
- * say so plainly rather than showing a code box that can never be satisfied.
- */
 export function findEmailCodeFactor(signIn: ClerkSignIn): ClerkFirstFactor | null {
   return (
     signIn.supportedFirstFactors.find(

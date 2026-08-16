@@ -69,10 +69,6 @@ export default function ModelsScreen() {
   }, []);
 
   const handleOpenCloudAccess = useCallback(() => {
-    // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
-    // unlocking Cloud means signing in, not redeeming an invite or joining a
-    // waitlist. Route to Clerk sign-in; ClerkTokenBridge flips cloudUnlocked on
-    // success and cloud models become selectable.
     router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
   }, [router]);
 

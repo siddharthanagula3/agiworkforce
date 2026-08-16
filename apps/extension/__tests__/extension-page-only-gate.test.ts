@@ -1,22 +1,3 @@
-/**
- * Integration test for the EXTENSION_PAGE_ONLY_MESSAGE_TYPES message-router
- * gate (C-02/C-03 audit 2026-05-19; self-review #2 audit 2026-05-19).
- *
- * The gate sits inside `background.ts handleMessage`. Unit tests on the
- * Set membership exist in `policy.test.ts`; this file exercises the actual
- * dispatcher with a content-script-shaped sender vs. an extension-page sender
- * and asserts the right rejection happens.
- *
- * Strategy: replicate the gate's predicate as a pure function the test can
- * call directly. The predicate is small and the production check matches
- * byte-for-byte — drift risk is low and the alternative (booting the full
- * service-worker module) is heavy.
- *
- * Note this test is NOT a structure-level "mirror" of the type the H-02
- * postmortem condemned — the underlying Set is imported from policy.ts
- * and the predicate is a 2-line policy gate. We assert behavior of that
- * combination, not the raw Set membership.
- */
 
 import { describe, expect, it } from 'vitest';
 import { EXTENSION_PAGE_ONLY_MESSAGE_TYPES } from '../src/background/policy';
@@ -28,11 +9,6 @@ interface SenderShape {
   tab?: { id?: number; url?: string };
 }
 
-/**
- * Matches the gate at `background.ts handleMessage` line ~700. Two checks:
- *   1. message type is in EXTENSION_PAGE_ONLY_MESSAGE_TYPES
- *   2. sender is NOT an extension page (has tab, or id mismatches)
- */
 function isRejectedByExtensionPageOnlyGate(
   msgType: string,
   sender: SenderShape,

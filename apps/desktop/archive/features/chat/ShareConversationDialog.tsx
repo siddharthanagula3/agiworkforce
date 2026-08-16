@@ -1,11 +1,3 @@
-/**
- * ShareConversationDialog
- *
- * Modal dialog that packages a conversation for sharing via a unique URL.
- * The desktop calls `conversation_share` (Rust) to get the messages + token,
- * then POSTs them to the web app's `/api/shared` endpoint.
- * Anyone with the resulting URL can view the conversation read-only for 30 days.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Copy, Link2, Loader2, Share2, X } from 'lucide-react';
@@ -40,7 +32,6 @@ export function ShareConversationDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  // Share dialog can close mid-fetch; guard post-await setState.
   const isMounted = useIsMounted();
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -54,17 +45,12 @@ export function ShareConversationDialog({
     setIsLoading(true);
     setError(null);
 
-    // BUG-347: Use AbortController with 30s timeout to prevent hanging requests
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
     try {
       const result = await invoke<SharePayload>('conversation_share', { conversationId });
 
-      // Sharing publishes the full conversation to OUR cloud (agiworkforce.com).
-      // Route through the central egress guard so a Local- or BYOK-mode chat can
-      // never be silently uploaded — guardedFetch throws fail-closed before the
-      // network call when privacyMode !== 'managed'. (Trust-boundary P0.)
       const response = await guardedFetch(`${WEB_APP_URL}/api/shared`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +106,6 @@ export function ShareConversationDialog({
   }, [shareUrl, isMounted]);
 
   const handleClose = useCallback(() => {
-    // Reset state when dialog closes so it is fresh on next open
     setShareUrl(null);
     setError(null);
     setCopied(false);
@@ -130,7 +115,6 @@ export function ShareConversationDialog({
   if (!isOpen) return null;
 
   return (
-    /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={(e) => {

@@ -16,7 +16,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ─── Polyfill CSS.escape for jsdom ───────────────────────────────────────────
 if (typeof globalThis.CSS === 'undefined') {
   (globalThis as Record<string, unknown>).CSS = {};
 }
@@ -24,7 +23,6 @@ if (typeof CSS.escape !== 'function') {
   CSS.escape = (value: string) => value.replace(/([^\w-])/g, '\\$1');
 }
 
-// ─── Mock logger ─────────────────────────────────────────────────────────────
 vi.mock('../src/utils', () => ({
   logger: {
     debug: vi.fn(),
@@ -40,8 +38,6 @@ import {
   watchForToolChanges,
   stopWatchingToolChanges,
 } from '../src/webmcp';
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function clearBody(): void {
   document.body.innerHTML = '';
@@ -110,8 +106,6 @@ function cleanNavigator(): void {
   }
 }
 
-// ─── Setup / teardown ────────────────────────────────────────────────────────
-
 beforeEach(() => {
   clearBody();
   cleanNavigator();
@@ -124,10 +118,6 @@ afterEach(() => {
   stopWatchingToolChanges();
   vi.restoreAllMocks();
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Dynamic tool discovery from web page content
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('MCP tool discovery from web page content', () => {
   it('discovers tools from forms injected directly into the DOM', () => {
@@ -181,12 +171,10 @@ describe('MCP tool discovery from web page content', () => {
   });
 
   it('ignores forms that lack the tool-name attribute', () => {
-    // Plain form — should NOT be discovered
     const plain = document.createElement('form');
     plain.innerHTML = '<input name="q" />';
     document.body.appendChild(plain);
 
-    // MCP-annotated form — should be discovered
     addDeclarativeForm({ toolName: 'real-tool', toolDescription: 'Has name' });
 
     const result = discoverAllTools();
@@ -211,10 +199,6 @@ describe('MCP tool discovery from web page content', () => {
     expect(result.timestamp).toBeGreaterThanOrEqual(before);
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Tool execution — all three code paths
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('callTool — execution via modelContextTesting.executeTool', () => {
   it('passes tool name and JSON-serialized arguments', async () => {
@@ -287,8 +271,6 @@ describe('callTool — execution via modelContext.callTool', () => {
 });
 
 describe('callTool — declarative form fallback', () => {
-  // M-06 audit 2026-05-19: stub confirm() to true so the new
-  // user-consent step doesn't short-circuit the existing assertions.
   beforeEach(() => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
@@ -390,29 +372,18 @@ describe('callTool — complex argument shapes', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Error handling for malformed MCP responses
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('error handling for malformed MCP responses', () => {
   it('handles executeTool returning invalid JSON string gracefully', async () => {
     stubModelContextTesting({
       executeTool: vi.fn().mockResolvedValue('{ this is not valid JSON }'),
     });
 
-    // M-03 audit 2026-05-19: invalid JSON used to throw and surface
-    // success: false. The new safeJsonParse returns undefined on parse
-    // failure, which the caller coerces to `null`. Both semantics are
-    // "graceful"; the new one lets the tool finish without an error
-    // (treating bad JSON as "no result") rather than failing the entire
-    // invocation.
     const resp = await callTool({ name: 'bad-json' });
     expect(resp.success).toBe(true);
     expect(resp.result).toBeNull();
   });
 
   it('handles modelContextTesting.listTools returning malformed schema JSON', () => {
-    // This exercises discoverImperativeTools schema parsing
     stubModelContextTesting({
       listTools: () => [{ name: 'broken', description: 'Bad schema', inputSchema: '{{{{not json' }],
     });
@@ -420,7 +391,6 @@ describe('error handling for malformed MCP responses', () => {
     const result = discoverAllTools();
     const tool = result.tools.find((t) => t.name === 'broken');
     expect(tool).toBeDefined();
-    // Malformed schema should be silently dropped — tool still discovered
     expect(tool?.inputSchema).toBeUndefined();
   });
 
@@ -431,7 +401,6 @@ describe('error handling for malformed MCP responses', () => {
       },
     });
 
-    // Should not throw; falls through to modelContext (which is absent)
     const result = discoverAllTools();
     expect(result.tools).toHaveLength(0);
   });
@@ -454,19 +423,13 @@ describe('error handling for malformed MCP responses', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// watchForToolChanges — MutationObserver integration
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('watchForToolChanges — MutationObserver', () => {
   it('invokes callback when a new tool form is added to the DOM', async () => {
     const callback = vi.fn();
     watchForToolChanges(callback);
 
-    // Inject a form with tool-name — should trigger the MutationObserver
     addDeclarativeForm({ toolName: 'dynamic-tool', toolDescription: 'Added later' });
 
-    // Wait for MutationObserver microtask + 300ms debounce to fire
     await new Promise((r) => setTimeout(r, 400));
 
     expect(callback).toHaveBeenCalled();
@@ -483,7 +446,6 @@ describe('watchForToolChanges — MutationObserver', () => {
 
     form.setAttribute('tool-name', 'new-name');
 
-    // Wait for MutationObserver microtask + 300ms debounce
     await new Promise((r) => setTimeout(r, 400));
 
     expect(callback).toHaveBeenCalled();
@@ -496,7 +458,6 @@ describe('watchForToolChanges — MutationObserver', () => {
 
     addDeclarativeForm({ toolName: 'late-tool' });
 
-    // Wait longer than debounce to confirm no callback fires
     await new Promise((r) => setTimeout(r, 500));
 
     expect(callback).not.toHaveBeenCalled();
@@ -507,20 +468,14 @@ describe('watchForToolChanges — MutationObserver', () => {
     watchForToolChanges(callback);
 
     addDeclarativeForm({ toolName: 'tool-1' });
-    // Wait for first debounce to complete
     await new Promise((r) => setTimeout(r, 400));
 
     addDeclarativeForm({ toolName: 'tool-2' });
-    // Wait for second debounce to complete
     await new Promise((r) => setTimeout(r, 400));
 
     expect(callback.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// watchForToolChanges — toolschanged event integration
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('watchForToolChanges — modelContext toolschanged event', () => {
   it('calls callback when toolschanged event fires on modelContext', () => {
@@ -536,7 +491,6 @@ describe('watchForToolChanges — modelContext toolschanged event', () => {
     const callback = vi.fn();
     watchForToolChanges(callback);
 
-    // Simulate the toolschanged event firing
     for (const listener of toolsChangedListeners) {
       listener();
     }
@@ -546,10 +500,6 @@ describe('watchForToolChanges — modelContext toolschanged event', () => {
     expect(tools.some((t) => t.name === 'mc-tool')).toBe(true);
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// watchForToolChanges — modelContextTesting registerToolsChangedCallback
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('watchForToolChanges — modelContextTesting registerToolsChangedCallback', () => {
   it('calls callback when registerToolsChangedCallback fires', () => {
@@ -565,16 +515,11 @@ describe('watchForToolChanges — modelContextTesting registerToolsChangedCallba
     const callback = vi.fn();
     watchForToolChanges(callback);
 
-    // Simulate the callback being invoked by the testing API
     registeredCb?.();
 
     expect(callback).toHaveBeenCalled();
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// stopWatchingToolChanges — cleanup
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('stopWatchingToolChanges', () => {
   it('can be called multiple times without error', () => {
@@ -597,20 +542,10 @@ describe('stopWatchingToolChanges', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Security: attribute-level origin validation
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('security — declarative tool discovery does not execute scripts', () => {
   it('CHROME-MED-5: rejects a tool whose name contains URL-scheme metacharacters', () => {
     addDeclarativeForm({ toolName: 'javascript:alert(1)', toolDescription: 'XSS attempt' });
 
-    // CHROME-MED-5 (audit 2026-05-05): tool names that fail the conservative
-    // identifier pattern `^[A-Za-z][A-Za-z0-9_\-. ]{0,63}$` are dropped at
-    // discovery time. The colon in `javascript:alert(1)` is not in the
-    // allowed character class, so the tool is rejected outright rather than
-    // stored verbatim. The previous test asserted the verbatim-storage
-    // behavior — that contract has changed.
     const result = discoverAllTools();
     expect(result.tools).toHaveLength(0);
   });
@@ -629,28 +564,18 @@ describe('security — declarative tool discovery does not execute scripts', () 
     });
 
     const result = discoverAllTools();
-    // The description is stored as a plain string — no DOM injection.
-    // CHROME-MED-5 also caps it at 500 chars but doesn't strip content
-    // because rendering goes through createTextNode in side_panel.
     expect(result.tools[0].description).toBe('<img src=x onerror=alert(1)>');
   });
 
   it('callTool uses CSS.escape when querying form by tool-name to prevent selector injection', async () => {
-    // If the tool name contains characters like " or ] the CSS.escape call prevents
-    // selector injection. We verify callTool still works correctly with such names.
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     const form = addDeclarativeForm({ toolName: 'tool-with-"quotes"', toolDescription: 'Tricky' });
     form.requestSubmit = vi.fn();
 
     const resp = await callTool({ name: 'tool-with-"quotes"' });
-    // Either success (if CSS.escape handled it) or a well-formed error
     expect(typeof resp.success).toBe('boolean');
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// discoverAllTools() — deduplication edge cases
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('discoverAllTools — deduplication edge cases', () => {
   it('imperative tool overrides declarative tool with the same name', () => {
@@ -704,8 +629,6 @@ describe('discoverAllTools — deduplication edge cases', () => {
     addDeclarativeForm({ toolName: 'dup', toolDescription: 'Second' });
 
     const result = discoverAllTools();
-    // Map iteration ends at last inserted for the key; declarative inserts in order
-    // so the second form's description wins
     expect(result.tools).toHaveLength(1);
   });
 });

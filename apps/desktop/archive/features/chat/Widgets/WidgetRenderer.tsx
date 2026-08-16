@@ -13,14 +13,6 @@ import { cn } from '../../../lib/utils';
 import { WidgetRegistry } from './WidgetRegistry';
 import type { WidgetType, WidgetActionEvent } from './index';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * Generic widget data - accepts any shape with id and type.
- * This allows the renderer to work with different widget data formats.
- */
 export interface GenericWidgetData {
   id: string;
   type: string;
@@ -28,21 +20,12 @@ export interface GenericWidgetData {
 }
 
 export interface WidgetRendererComponentProps {
-  /** Widget data containing type and configuration */
   widget: GenericWidgetData;
-  /** Called when widget emits an action */
   onAction?: (event: WidgetActionEvent) => void;
-  /** Whether the widget is read-only */
   readOnly?: boolean;
-  /** Additional CSS class names */
   className?: string;
-  /** Message ID this widget belongs to */
   messageId?: string;
 }
-
-// ============================================================================
-// Loading Fallback
-// ============================================================================
 
 function WidgetLoadingFallback() {
   return (
@@ -52,10 +35,6 @@ function WidgetLoadingFallback() {
     </div>
   );
 }
-
-// ============================================================================
-// Error Boundary
-// ============================================================================
 
 interface WidgetErrorBoundaryProps {
   children: React.ReactNode;
@@ -103,10 +82,6 @@ class WidgetErrorBoundary extends React.Component<
   }
 }
 
-// ============================================================================
-// Unknown Widget Fallback
-// ============================================================================
-
 interface UnknownWidgetProps {
   type: string;
 }
@@ -125,10 +100,6 @@ function UnknownWidget({ type }: UnknownWidgetProps) {
   );
 }
 
-// ============================================================================
-// Main Component
-// ============================================================================
-
 const WidgetRendererComponent: React.FC<WidgetRendererComponentProps> = ({
   widget,
   onAction,
@@ -136,10 +107,8 @@ const WidgetRendererComponent: React.FC<WidgetRendererComponentProps> = ({
   className,
   messageId,
 }) => {
-  // Get the registered widget
   const registeredWidget = WidgetRegistry.get(widget.type);
 
-  // Handle widget action
   const handleAction = useCallback(
     (event: WidgetActionEvent) => {
       onAction?.(event);
@@ -147,7 +116,6 @@ const WidgetRendererComponent: React.FC<WidgetRendererComponentProps> = ({
     [onAction],
   );
 
-  // If widget type is not registered, show fallback
   if (!registeredWidget) {
     return <UnknownWidget type={widget.type} />;
   }

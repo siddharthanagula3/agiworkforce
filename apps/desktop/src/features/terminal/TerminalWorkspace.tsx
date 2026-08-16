@@ -163,7 +163,6 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
     }
   }, [isHistoryOpen]);
 
-  // WRK-007 fix: Memoize handlers to prevent unnecessary re-renders
   const handleToggleHistory = useCallback(() => {
     if (!activeSessionId) {
       toast.error('Open a terminal session to view history');
@@ -173,7 +172,6 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
     setIsHistoryOpen((prev) => !prev);
   }, [activeSessionId]);
 
-  // WRK-007 fix: Memoize handlers to prevent unnecessary re-renders
   const handleReplayCommand = useCallback(
     async (command: string) => {
       if (!activeSessionId) {
@@ -202,13 +200,11 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
   return (
     <div
       className={cn('flex flex-col h-full bg-background min-h-0 min-w-0', className)}
-      // WRK-008 fix: ARIA labels for accessibility
       role="region"
       aria-label="Terminal workspace"
     >
       <div
         className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/10"
-        // WRK-008 fix: ARIA labels for accessibility
         role="toolbar"
         aria-label="Terminal controls"
       >

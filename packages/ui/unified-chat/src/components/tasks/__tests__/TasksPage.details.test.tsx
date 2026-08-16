@@ -5,9 +5,6 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TasksPage, readTaskJournal } from '../TasksPage';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
-// Root CI executes many package suites concurrently. This two-effect render is
-// fast when focused, but its jsdom worker can be scheduler-starved beyond the
-// 5 s default. Keep the extra budget on this test rather than the whole suite.
 const ROOT_GRAPH_TEST_TIMEOUT_MS = 15_000;
 const DURABLE_PROGRESS_TEST =
   'loads durable progress, generated outputs, and the honest context boundary';

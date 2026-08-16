@@ -16,10 +16,6 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 
-/**
- * Agents tab. The unimplemented Dispatch fallback was removed; disabled
- * releases render the honest unavailable state below.
- */
 export default function AgentsTabScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -29,12 +25,6 @@ export default function AgentsTabScreen() {
 
   const selectAgent = useAgentStore((s) => s.selectAgent);
   const clearCompleted = useAgentStore((s) => s.clearCompleted);
-  // Select the raw (stable-reference) array and filter in a memo — filtering
-  // inline inside the selector returns a brand-new array on every store read,
-  // which Zustand's default reference equality treats as "changed" every
-  // render, causing an infinite resubscribe/re-render loop ("Maximum update
-  // depth exceeded" — this exact pattern crashed app/(app)/companion/index.tsx
-  // and app/(app)/agents/[id].tsx, fixed the same way there).
   const allApprovals = useAgentStore((s) => s.pendingApprovals);
   const pendingApprovals = useMemo(
     () => allApprovals.filter((r) => r.status === 'pending'),

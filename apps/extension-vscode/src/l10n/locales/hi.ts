@@ -1,6 +1,3 @@
-/**
- * Hindi catalog. Key parity with `en` is enforced by l10n.test.ts.
- */
 const hi = {
   'applyEdit.prompt': 'AGI Workforce: {command} का परिणाम लागू करें?',
   'applyEdit.applyInline': 'यहीं लागू करें',

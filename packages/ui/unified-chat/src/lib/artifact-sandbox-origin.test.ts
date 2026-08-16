@@ -28,12 +28,6 @@ import {
 
 type Mutable = Record<string, unknown>;
 
-/**
- * Install Tauri's real `convertFileSrc` implementation (copied from
- * `tauri-2.11.1/scripts/core.js`) for the given platform. Using Tauri's own
- * mapping rather than a hand-written string is the point: if Tauri changes it,
- * this test is the thing that should be updated, not production code.
- */
 function installTauriInternals(osName: 'macos' | 'windows'): void {
   (globalThis as Mutable)['__TAURI_INTERNALS__'] = {
     convertFileSrc(filePath: string, protocol = 'asset') {
@@ -65,9 +59,6 @@ describe('getArtifactSandboxOrigin', () => {
   });
 
   it('derives the Windows mapping from the Tauri runtime', () => {
-    // Regression guard: hard-coding `artifact://localhost` would silently break
-    // every Windows install, where WebView2 serves custom schemes over
-    // `http://<scheme>.localhost`.
     installTauriInternals('windows');
     expect(getArtifactSandboxOrigin()).toBe(`http://${ARTIFACT_SANDBOX_SCHEME}.localhost`);
   });
@@ -125,10 +116,6 @@ describe('getArtifactSandboxOrigin', () => {
   });
 
   it('refuses an origin that is really this app’s own origin', () => {
-    // The frame is mounted with `allow-scripts allow-same-origin`, which is only
-    // safe cross-origin. A misconfigured NEXT_PUBLIC_SANDBOX_ORIGIN pointing at
-    // the app itself would hand an artifact this app's DOM, storage and IPC
-    // bridge — so it must resolve to `null` and fall back to srcDoc instead.
     const here = window.location.origin;
     expect(here).not.toBe('null');
     configureArtifactSandboxOrigin(here);
@@ -154,8 +141,6 @@ describe('isArtifactSandboxMessage', () => {
   });
 
   it('rejects a message from a different window at the right origin', () => {
-    // Another frame on the sandbox origin (or a popup) must not be able to
-    // impersonate this preview's renderer.
     configureArtifactSandboxOrigin(SANDBOX);
     expect(isArtifactSandboxMessage(event(SANDBOX, {}), fakeFrame({}))).toBe(false);
   });
@@ -169,9 +154,6 @@ describe('isArtifactSandboxMessage', () => {
   });
 
   it('accepts an opaque origin only together with the window match', () => {
-    // Some engines report `"null"` for a custom scheme. Window identity is then
-    // the only authentication available — and it is sufficient, because only the
-    // frame we created can be `frame.contentWindow`.
     configureArtifactSandboxOrigin(SANDBOX);
     const win = {};
     expect(isArtifactSandboxMessage(event('null', win), fakeFrame(win))).toBe(true);

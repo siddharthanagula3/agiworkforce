@@ -1,11 +1,3 @@
-/**
- * Finding verification gate.
- *
- * No finding — LLM-sourced above all — may be published until it passes this
- * gate against the exact reviewed head SHA. The gate is pure: all repository
- * state is supplied through VerificationContext so tests can drive it with
- * deterministic fixtures.
- */
 import { matchesIgnorePath, type GuardianConfig } from './config.js';
 import { normalizePath } from './fingerprint.js';
 import type { Finding } from './schema.js';
@@ -17,11 +9,8 @@ export interface DiffRange {
 
 export interface VerificationContext {
   headSha: string;
-  /** Lines per repo-relative path at headSha; absent key = file not present. */
   fileLines: ReadonlyMap<string, number>;
-  /** Changed line ranges per path for the current diff (merge-base..head). */
   diffRanges: ReadonlyMap<string, readonly DiffRange[]>;
-  /** Fingerprints already reported on this PR/branch (open or suppressed). */
   knownFingerprints: ReadonlySet<string>;
   config: GuardianConfig;
 }
@@ -39,13 +28,6 @@ const SPECULATIVE_PATTERNS = [
   /\bconsider (?:reviewing|checking|verifying)\b/i,
 ];
 
-/**
- * Verify one finding against the reviewed head state.
- *
- * Rejections are hard failures (invalid path/lines, duplicate, stale).
- * Demotions keep real but weaker findings out of inline comments while still
- * surfacing them in the check-run summary.
- */
 export function verifyFinding(finding: Finding, ctx: VerificationContext): Verdict {
   const reasons: string[] = [];
   const path = normalizePath(finding.path);
@@ -83,7 +65,6 @@ export function verifyFinding(finding: Finding, ctx: VerificationContext): Verdi
     return { action: 'reject', reasons: ['duplicate: fingerprint already reported'] };
   }
 
-  // Diff relevance: findings outside the changed ranges are contextual debt.
   const inDiff = isInDiff(path, finding.start_line, finding.end_line, ctx.diffRanges);
   if (!inDiff && !ctx.config.review.include_preexisting_context) {
     return {
@@ -92,7 +73,6 @@ export function verifyFinding(finding: Finding, ctx: VerificationContext): Verdi
     };
   }
 
-  // Speculative LLM findings with no concrete failure story never publish.
   if (finding.source_type === 'llm') {
     const hasConcreteEvidence =
       finding.deterministic_evidence.length > 0 ||
@@ -136,7 +116,7 @@ export function isInDiff(
 ): boolean {
   const ranges = diffRanges.get(normalizePath(path));
   if (!ranges || ranges.length === 0) return false;
-  if (startLine === null) return true; // file-level finding on a changed file
+  if (startLine === null) return true;
   const end = endLine ?? startLine;
   return ranges.some((r) => startLine <= r.end && end >= r.start);
 }
@@ -147,7 +127,6 @@ export interface VerifiedBatch {
   rejected: Array<{ finding: Finding; reasons: string[] }>;
 }
 
-/** Verify a batch, updating the known-fingerprint set as findings pass. */
 export function verifyFindings(
   findings: readonly Finding[],
   ctx: VerificationContext,

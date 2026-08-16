@@ -2,29 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Translation coverage guard for the shared locale bundles.
- *
- * The product ships a 12-language picker, and 10 of the 11 non-English locales
- * are only partly translated — overwhelmingly in `pricing.json`, where 115 of
- * 178 keys are English-only everywhere except Spanish.
- *
- * That is a TRANSLATION BACKLOG, not a rendering defect, and the distinction
- * matters: `baseInitOptions.fallbackLng` is `en`, so a missing key renders the
- * English string rather than a raw `pricing.freeTierBody` identifier. A user
- * sees a half-translated page, not a broken one. Machine-filling those keys
- * would be worse than the gap — wrong prices or wrong plan names in a language
- * nobody on the team reads is a billing problem, not a polish problem.
- *
- * So this file does the two things that ARE engineering's job:
- *   1. pin the fallback, because that is the guarantee separating
- *      "half-translated" from "broken";
- *   2. ratchet coverage, so a locale can gain keys but never silently lose them.
- *
- * When you translate a namespace, raise that locale's number here. The test
- * tells you what to change.
- */
-
 const localesDir = resolve(import.meta.dirname, '../../../../packages/ui/i18n/locales');
 
 function readJson(path: string): Record<string, unknown> {
@@ -51,10 +28,6 @@ function coverageFor(locale: string): { translated: number; total: number } {
   return { translated, total };
 }
 
-/**
- * Current translated-key counts, measured 2026-08-05. RATCHET ONLY — raise a
- * number when you add translations; never lower one to make the suite pass.
- */
 const COVERAGE_FLOOR: Record<string, number> = {
   ar: 350,
   de: 350,
@@ -71,8 +44,6 @@ const COVERAGE_FLOOR: Record<string, number> = {
 
 describe('shared i18n bundles', () => {
   it('falls back to English, so a missing key never renders as a raw key', () => {
-    // This is the guarantee that makes partial translation acceptable. Without
-    // it every untranslated string becomes a visible identifier.
     const source = readFileSync(resolve(localesDir, '../src/index.ts'), 'utf8');
     expect(source).toMatch(/fallbackLng:\s*DEFAULT_LANGUAGE/);
     expect(source).toMatch(/DEFAULT_LANGUAGE\s*=\s*'en'/);
@@ -95,8 +66,6 @@ describe('shared i18n bundles', () => {
   });
 
   it('has no locale key that English does not define', () => {
-    // An orphan key is either a typo or a string English dropped; either way it
-    // is dead weight that never renders.
     for (const locale of locales) {
       for (const ns of namespaces) {
         const en = Object.keys(readJson(resolve(localesDir, 'en', ns)));

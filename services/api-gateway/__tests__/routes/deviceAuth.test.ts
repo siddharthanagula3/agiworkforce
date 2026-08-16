@@ -7,8 +7,6 @@ import { errorHandler } from '../../src/middleware/errorHandler';
 
 const neonMock = vi.hoisted(() => {
   const insert = vi.fn().mockResolvedValue({ error: null });
-  // POST /token (below) reads this to simulate an approved/pending/expired
-  // device_authorization_codes row without a real DB.
   const state = {
     deviceRecord: null as Record<string, unknown> | null,
   };
@@ -30,7 +28,6 @@ const neonMock = vi.hoisted(() => {
       };
     }
     if (table === 'profiles') {
-      // /token's best-effort profile-email enrichment lookup.
       return {
         select: () => ({
           eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
@@ -42,8 +39,6 @@ const neonMock = vi.hoisted(() => {
   return { from, insert, state };
 });
 
-// routes/deviceAuth.ts uses the explicit system client because the device-code
-// bootstrap flow starts before the CLI has a cloud account token.
 vi.mock('../../src/lib/neonClients', () => {
   const mockClient = {
     from: neonMock.from,
@@ -101,9 +96,6 @@ describe('Device auth route mounts', () => {
 });
 
 describe('POST /auth/device/token — issued access_token carries `sub`', () => {
-  // P1-GW-RLS: NeonDatabaseAdapter.withUser() (packages/platform/data-layer) decodes
-  // `sub` from the token to bind Postgres RLS — a gateway-issued token
-  // without it would throw there. This is the regression guard for that fix.
   const DEVICE_CODE = '11111111-1111-4111-8111-111111111111';
   const USER_ID = 'user-xyz-789';
 
@@ -130,13 +122,6 @@ describe('POST /auth/device/token — issued access_token carries `sub`', () => 
     const payload = jwt.decode(response.body.access_token) as Record<string, unknown> | null;
     expect(payload).not.toBeNull();
     expect(payload?.['userId']).toBe(USER_ID);
-    // The regression this guards: getUserScopedClient's withUser(token) path
-    // (lib/neonClients.ts) decodes `sub` from the raw token, independent of
-    // whatever authenticateToken separately parsed — so `sub` must be present
-    // AND equal the same user id, or RLS binding fails for every device-paired
-    // session (it safely falls back to the service client, but the RLS
-    // improvement is then inert for this token — see the fallback tests in
-    // __tests__/lib/rlsTenantIsolation.test.ts).
     expect(payload?.['sub']).toBe(USER_ID);
   });
 });

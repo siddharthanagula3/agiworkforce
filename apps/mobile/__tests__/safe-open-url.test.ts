@@ -1,20 +1,3 @@
-/**
- * Regression tests for HIGH-MOB-02 — `Linking.openURL` no-validation
- * (red-team finding 2026-05).
- *
- * Three screens used to call `Linking.openURL(data.url)` directly with a
- * URL returned from `/api/portal`. A MITM (mobile has no cert pinning
- * yet) or compromised backend could return:
- *
- *   - `intent://...`   — Android intent laundering for privilege escalation
- *   - `javascript:...` — XSS in some in-app browsers
- *   - `file:///...`    — local-file disclosure on Android
- *   - `tel:` / `mailto:` / `sms:` — phishing surface
- *   - `https://attacker.com/billing-clone` — credit-card phishing
- *
- * `openExternalUrl()` (lib/safeOpenURL.ts) is the chokepoint that all 3
- * screens now route through. These tests pin the allowlist contract.
- */
 
 const mockOpenURL = jest.fn();
 jest.mock('expo-linking', () => ({
@@ -56,7 +39,6 @@ describe('isAllowedExternalUrl — rejects', () => {
     expect(isAllowedExternalUrl(input)).toBe(false);
   });
 
-  // The exact attacker payloads from the red-team writeup
   it.each([
     ['intent://', 'intent://attacker.com#Intent;scheme=https;end'],
     ['javascript:', 'javascript:alert(1)'],
@@ -89,8 +71,6 @@ describe('isAllowedExternalUrl — rejects', () => {
   });
 
   it('rejects exact "stripe.com" suffix without subdomain content', () => {
-    // `.stripe.com` suffix requires the hostname to be longer than the
-    // suffix itself — `.stripe.com` alone is not a valid hostname.
     expect(isAllowedExternalUrl('https://.stripe.com/x')).toBe(false);
   });
 });

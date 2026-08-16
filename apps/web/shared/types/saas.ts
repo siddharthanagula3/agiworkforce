@@ -32,7 +32,7 @@ export interface AuditLog {
   ip_address?: string;
   user_agent?: string;
   created_at: string;
-  actor_email?: string; // Often joined
+  actor_email?: string;
 }
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';

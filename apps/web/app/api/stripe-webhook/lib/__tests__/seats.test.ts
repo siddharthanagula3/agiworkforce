@@ -38,8 +38,6 @@ describe('resolveCheckoutSessionSeats', () => {
   });
 
   it('returns null when the session carries no expanded line item', () => {
-    // Null, not 1: the caller must be able to tell "no data yet" from "one seat"
-    // so it can fall back to the subscription item, which is authoritative.
     expect(resolveCheckoutSessionSeats({})).toBeNull();
     expect(resolveCheckoutSessionSeats({ line_items: { data: [] } })).toBeNull();
     expect(resolveCheckoutSessionSeats({ line_items: { data: [{ quantity: 0 }] } })).toBeNull();
@@ -56,8 +54,6 @@ describe('buildPurchasedSeatRecord', () => {
   });
 
   it('pins per-account tiers to a single seat whatever Stripe reports', () => {
-    // A quantity on a personal plan must never be interpreted as seats; doing so
-    // would present a Pro subscriber as owning an organization of that size.
     expect(buildPurchasedSeatRecord('pro', { items: { data: [{ quantity: 12 }] } })).toEqual({
       planTier: 'pro',
       seats: 1,

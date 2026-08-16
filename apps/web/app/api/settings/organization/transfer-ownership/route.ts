@@ -18,36 +18,9 @@ import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-acces
 const TransferSchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
   toUserId: z.string().trim().min(1).max(255),
-  /** The successor's new role is always `owner`; the outgoing owner's is this. */
   outgoingOwnerRole: z.enum(['admin', 'member', 'viewer']).default('admin'),
 });
 
-/**
- * POST /api/settings/organization/transfer-ownership
- *
- * # Why this endpoint has to exist
- *
- * 0085 makes "exactly one owner" a database fact: a partial unique index
- * (`idx_org_members_single_owner`) forbids a second owner, and a DEFERRABLE
- * constraint trigger forbids committing an organization with none. The only
- * lawful way to move ownership is therefore to demote and promote inside ONE
- * transaction — which is exactly what this handler does, and why the previous
- * "add a second owner, then demote the first" dance is now rejected at
- * PATCH /api/settings/team/[memberId].
- *
- * # Ordering is load-bearing
- *
- * The unique index is IMMEDIATE (a partial unique index cannot be deferred), so
- * the outgoing owner must be demoted BEFORE the successor is promoted. The
- * at-least-one-owner trigger is DEFERRED, so the transient ownerless state in
- * between is legal and only the committed state is checked.
- *
- * # A sole owner cannot orphan the billing account
- *
- * Demoting or removing the last owner without naming a successor is refused by
- * the route AND, if the route were bypassed, by the deferred constraint
- * trigger. That closes the account-erasure orphan path too.
- */
 async function handleTransfer(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-transfer-ownership');
   if (rateLimitResponse) return rateLimitResponse;
@@ -78,9 +51,6 @@ async function handleTransfer(request: NextRequest) {
         [organizationId],
       );
 
-      // Re-read the caller's role INSIDE the transaction. Both predicates are
-      // present on every membership read in this handler, so an owner of org A
-      // cannot name a user in org B.
       const [requester] = await tx.query<OrganizationMemberRow>(
         `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
            from public.organization_members
@@ -110,7 +80,6 @@ async function handleTransfer(request: NextRequest) {
         );
       }
 
-      // Demote first: the single-owner unique index is immediate.
       await tx.execute(
         `update public.organization_members
             set role = $1

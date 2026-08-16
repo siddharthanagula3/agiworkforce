@@ -5,10 +5,6 @@ import { SonnerToaster } from '../SonnerToaster';
 
 describe('SonnerToaster', () => {
   it('renders without crashing', () => {
-    // Sonner's Toaster renders nothing (null) until a toast is active — this
-    // asserts the mount itself doesn't throw (it previously did, on
-    // window.matchMedia, before this package's next-themes-free theme prop
-    // and jsdom polyfills were added).
     const { container } = render(<SonnerToaster theme="dark" />);
     expect(container).toBeTruthy();
   });

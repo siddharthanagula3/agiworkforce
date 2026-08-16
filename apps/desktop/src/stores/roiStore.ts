@@ -1,12 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * ROI Store
- *
- * Manages ROI (Return on Investment) reports, process/user/tool metrics, and trends.
- * Split from billingUsage.ts for better separation of concerns.
- *
- * Middleware: devtools(subscribeWithSelector(immer(...)))
- */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -14,10 +6,6 @@ import { invoke } from '../lib/tauri-mock';
 import { ErrorSeverity, errorTracking } from '../services/errorTracking';
 import type { UserMetrics } from '../api/analytics';
 import type { AllTimeStats, ChartDataPoint } from '../types/roi';
-
-// ============================================================================
-// Types
-// ============================================================================
 
 interface ROIState {
   roiReport: AllTimeStats | null;
@@ -40,15 +28,10 @@ interface ROIActions {
 
 export type ROIStore = ROIState & ROIActions;
 
-// ============================================================================
-// Store
-// ============================================================================
-
 export const useROIStore = create<ROIStore>()(
   devtools(
     subscribeWithSelector(
       immer((set, get) => ({
-        // State
         roiReport: null,
         processMetrics: [],
         userMetrics: [],
@@ -56,7 +39,6 @@ export const useROIStore = create<ROIStore>()(
         trends: {},
         isLoadingROI: false,
 
-        // Actions
         calculateROI: async (startDate: number, endDate: number) => {
           set({ isLoadingROI: true });
           try {
@@ -126,7 +108,6 @@ export const useROIStore = create<ROIStore>()(
               metric,
               days,
             });
-            // STR-007 fix: Cap trends dictionary at 20 metrics to prevent unbounded growth
             const MAX_TREND_METRICS = 20;
             set((state) => {
               const currentKeys = Object.keys(state.trends);

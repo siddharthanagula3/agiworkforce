@@ -1,18 +1,3 @@
-/**
- * stream-transform.ts · final OpenAI/OpenRouter usage event capture.
- *
- * When stream_options.include_usage=true is set, OpenAI emits a final SSE event
- * before [DONE] that contains a usage object with complete token counts including
- * cache hits and reasoning tokens. This suite verifies that buildStreamResponse
- * extracts and passes those counts to recordModelUsage via the flush handler.
- *
- * Test strategy: inject a ReadableStream containing a sequence of SSE events
- * (including the final usage event), attach a NextRequest stub, and observe the
- * calls to the mocked recordModelUsage.
- *
- * Only the flush path (post-stream analytics) is tested here; the transform
- * path (SSE passthrough) is covered by higher-level integration tests.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -51,7 +36,6 @@ import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
 const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof vi.fn>;
 
-/** Create a minimal ProcessedRequest stub for buildStreamResponse. */
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-test-001',
@@ -73,7 +57,6 @@ function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequ
   } as ProcessedRequest;
 }
 
-/** Build a ReadableStream from an array of SSE data lines. */
 function makeStream(events: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const lines = events.map((e) => `data: ${e}\n`).join('\n') + '\n';
@@ -85,7 +68,6 @@ function makeStream(events: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-/** Minimal NextRequest stub (only headers used by buildStreamResponse). */
 function makeRequest(): Request {
   return new Request('https://example.com/api/llm/v1/chat/completions', {
     method: 'POST',
@@ -93,11 +75,6 @@ function makeRequest(): Request {
   });
 }
 
-/**
- * Consume all chunks from a ReadableStream to trigger the flush handler.
- * buildStreamResponse returns a NextResponse whose body is a streaming SSE;
- * we must fully consume it to guarantee flush() runs.
- */
 async function drainStream(response: Response): Promise<void> {
   if (!response.body) return;
   const reader = response.body.getReader();
@@ -451,7 +428,6 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
 
     await drainStream(response as any);
 
-    // reasoningOutputTokens should be undefined (not 0) when not present
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-007',
       'fixture-model',

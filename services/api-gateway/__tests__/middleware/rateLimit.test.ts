@@ -1,8 +1,3 @@
-/**
- * Rate Limiter Tests
- *
- * Tests for rate limiting middleware
- */
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import express from 'express';
@@ -67,27 +62,22 @@ describe('Rate Limiter Middleware', () => {
 
       const response = await request(app).get('/test');
       expect(response.status).toBe(200);
-      // Standard headers (RFC 6585)
       expect(response.headers).toHaveProperty('ratelimit-limit');
       expect(response.headers).toHaveProperty('ratelimit-remaining');
     });
 
     it('should return 429 when rate limit is exceeded', async () => {
       const app = express();
-      // Use credits-deduct which has max: 5
       app.use(createRateLimiter('credits-deduct'));
       app.get('/test', (_req, res) => res.json({ ok: true }));
 
-      // Make requests up to the limit
       const responses = await Promise.all(
         Array.from({ length: 6 }, () => request(app).get('/test')),
       );
 
-      // At least one should be rate limited
       const rateLimited = responses.filter((r) => r.status === 429);
       expect(rateLimited.length).toBeGreaterThanOrEqual(1);
 
-      // The rate limited response should have the error message
       if (rateLimited[0]) {
         expect(rateLimited[0].body).toHaveProperty('error', 'RATE_LIMIT_EXCEEDED');
       }
@@ -110,11 +100,9 @@ describe('Rate Limiter Middleware', () => {
 
     it('should rate limit IPv6 addresses correctly', async () => {
       const app = express();
-      // Use credits-deduct which has max: 5
       app.use(createRateLimiter('credits-deduct'));
       app.get('/test', (_req, res) => res.json({ ok: true }));
 
-      // Make 6 requests (limit is 5) — supertest uses ::ffff:127.0.0.1 by default
       const responses = [];
       for (let i = 0; i < 6; i++) {
         responses.push(await request(app).get('/test'));
@@ -144,10 +132,7 @@ describe('Rate Limiter Middleware', () => {
 
         for (const key of ['llm-completions', 'cloud-chat-send'] as const) {
           const ceiling = resolveTierRateLimitMax(key, tier);
-          // The ceiling must clear the concurrency the plan page sells...
           expect(ceiling).toBeGreaterThanOrEqual(advertised!);
-          // ...and every one of those turns must get the base budget, not a
-          // share of one flat budget sized for a single-turn Free user.
           expect(ceiling).toBeGreaterThanOrEqual(rateLimitConfigs[key].max * advertised!);
         }
       }
@@ -197,9 +182,6 @@ describe('Rate Limiter Middleware', () => {
     });
 
     it('refuses the Upstash REST URL instead of handing it to ioredis', () => {
-      // The REST endpoint speaks HTTP and carries no password, so a client
-      // built from it never connects — the store silently stayed in memory on
-      // a deploy whose env vars claimed Redis was configured.
       expect(resolveRateLimitRedisUrl({ UPSTASH_REDIS_REST_URL: 'https://db.upstash.io' })).toEqual(
         { url: null, reason: 'rest-url-only' },
       );

@@ -1,17 +1,3 @@
-/**
- * Contract tests for /api/connectors/permissions — server-owned per-tool
- * connector permission persistence.
- *
- * CHANGED BY AUDIT-FIX CON-4/CON-5/CON-9 — read loudly:
- *   - the DB adapter is now mocked at `getUserScopedDb` (RLS-scoped) instead of
- *     `getNeonDb` (unscoped/BYPASSRLS). The old mock asserted the route used a
- *     connection that could read every tenant's verdicts; that was the defect.
- *   - the PUT test no longer asserts the client's `destructive` flag is stored;
- *     it asserts the SERVER-DERIVED verdict is stored (the client never sent
- *     the field, so the column was `false` for every row ever written).
- *   - DELETE coverage is new: revoking an accidental "Always allow" was
- *     impossible anywhere in the product.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -81,15 +67,11 @@ describe('/api/connectors/permissions', () => {
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('insert into public.connector_tool_permissions');
     expect(sql).toContain('on conflict (user_id, connector_id, tool_name)');
-    // user_id=$1 owner-scoped from the RLS binding; level mapped deny -> blocked.
     expect(params[0]).toBe('user-owner');
     expect(params[3]).toBe('blocked');
   });
 
   it('PUT derives `destructive` server-side and ignores the client value (CON-9)', async () => {
-    // post_issue_comment publishes into a third-party system and cannot be
-    // undone — the legacy five-substring guess called it non-destructive, and
-    // the live web client never sent the field at all.
     const res = await PUT(
       req({
         connectorId: 'github',
@@ -103,7 +85,6 @@ describe('/api/connectors/permissions', () => {
     const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(params[4]).toBe(true);
 
-    // A read stays non-destructive even if a client claims otherwise.
     mockQuery.mockClear();
     await PUT(
       req({

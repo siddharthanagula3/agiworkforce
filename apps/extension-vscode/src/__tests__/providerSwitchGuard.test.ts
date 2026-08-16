@@ -1,11 +1,3 @@
-/**
- * providerSwitchGuard.test.ts — Unit tests for the cross-provider switch guard.
- *
- * Tests:
- *   - extractProvider: model ID → normalized provider token
- *   - guardProviderSwitch: allow / upgrade-required decision logic
- *   - tierResolver helpers: tierAtLeast, TIER_ORDER
- */
 
 import { getCoreManualModelOptions } from '@agiworkforce/types';
 import { describe, it, expect } from 'vitest';
@@ -21,8 +13,6 @@ const OPENAI_SECONDARY = requireCatalogModel('openai', 1).id;
 const GOOGLE_PRIMARY = requireCatalogModel('google').id;
 const XAI_PRIMARY = requireCatalogModel('xai').id;
 const SYNTHETIC_UNKNOWN_MODEL_ID = 'fixture-unknown-model';
-
-// ─── extractProvider ──────────────────────────────────────────────────────────
 
 describe('extractProvider', () => {
   it('derives every manual model provider from canonical catalog metadata', () => {
@@ -45,8 +35,6 @@ describe('extractProvider', () => {
     expect(extractProvider('')).toBe('unknown');
   });
 });
-
-// ─── guardProviderSwitch ──────────────────────────────────────────────────────
 
 describe('guardProviderSwitch — same-provider switches are always allowed', () => {
   const TIERS = [
@@ -136,8 +124,6 @@ describe('guardProviderSwitch — unknown provider does not trigger gate', () =>
     );
   });
 });
-
-// ─── tierAtLeast ─────────────────────────────────────────────────────────────
 
 describe('tierAtLeast', () => {
   it('byok is NOT at least max', () => {

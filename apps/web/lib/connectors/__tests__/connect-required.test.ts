@@ -1,8 +1,3 @@
-/**
- * The inline Connect card's payload. It crosses into the tool loop as the tool
- * result's `content`, so its shape is a contract with both the client and the
- * model — and it must never offer a Connect button that cannot work.
- */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));

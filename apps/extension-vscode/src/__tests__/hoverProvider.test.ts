@@ -1,8 +1,3 @@
-/**
- * hoverProvider.test.ts — Tests for AgiHoverProvider logic
- *
- * Tests the hover provider's conditional behavior based on configuration.
- */
 
 import { describe, it, expect } from 'vitest';
 

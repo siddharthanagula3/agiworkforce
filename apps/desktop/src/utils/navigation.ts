@@ -10,8 +10,6 @@ export async function openExternalUrl(url: string) {
     } catch (error) {
       console.error('Failed to open external URL:', error);
       if (isElectronHost) {
-        // The Electron main-process navigation policy denies this in-window
-        // navigation and hands the same HTTP(S) URL to the OS browser.
         const parsed = new URL(url);
         if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw error;
         window.location.href = parsed.toString();

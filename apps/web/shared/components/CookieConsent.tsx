@@ -1,16 +1,5 @@
 'use client';
 
-// SIX-25: this banner is the only thing that can turn analytics on. It was
-// fully built and never mounted while `GoogleAnalytics` loaded gtag.js for
-// every visitor, which contradicted the published /cookies policy ("Analytics
-// is opt-in"). It is now mounted in app/layout.tsx and paired with
-// `AnalyticsConsentGate`.
-//
-// Only the categories the site actually uses are offered. The previous
-// "Marketing Cookies" switch controlled nothing and contradicted /cookies
-// ("Advertising: None. We do not run ads."), so it is gone rather than shipped
-// as a dead control.
-
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { X, Cookie, Settings } from 'lucide-react';
@@ -42,19 +31,14 @@ export const CookieConsent = () => {
   useEffect(() => {
     const stored = readCookiePreferences();
     if (stored) {
-      // Already decided: no banner, but the dialog must open showing the real
-      // stored choice if the user reopens it from /cookies.
       setPreferences(stored);
       return undefined;
     }
 
-    // Short delay so the banner does not fight the first paint.
     const timer = setTimeout(() => setShowBanner(true), 1000);
     return () => clearTimeout(timer);
   }, []);
 
-  // Withdrawing consent has to be as reachable as giving it. The /cookies page
-  // dispatches this event so a decided user can change their mind.
   useEffect(() => {
     const openSettings = () => {
       setPreferences(readCookiePreferences() ?? NECESSARY_ONLY_PREFERENCES);

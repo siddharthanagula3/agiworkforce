@@ -5,7 +5,6 @@ import { Slot } from '@radix-ui/react-slot';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface BreadcrumbProps extends React.ComponentPropsWithoutRef<'nav'> {
   separator?: React.ReactNode;
   ref?: React.Ref<HTMLElement>;

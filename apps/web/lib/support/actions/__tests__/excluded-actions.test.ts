@@ -1,11 +1,3 @@
-/**
- * Excluded actions are never offered and never executable.
- *
- * "Destructive and irreversible actions must NOT be in the allowlist — the
- * agent explains how and links the user to the real control instead." These
- * tests assert all three halves of that: not in the list, not proposable, and
- * the refusal actually carries the control.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -76,8 +68,6 @@ describe('support actions — the exclusion list', () => {
     for (const id of EXCLUDED_SUPPORT_ACTION_IDS) {
       expect(offered.has(id)).toBe(false);
     }
-    // …but it does report them, with the real control, so the agent can point
-    // the user at it instead of silently doing nothing.
     expect(listed.excluded.map((e) => e.id).sort()).toEqual(
       [...EXCLUDED_SUPPORT_ACTION_IDS].sort(),
     );
@@ -106,9 +96,6 @@ describe('support actions — the exclusion list', () => {
       expect(mocks.db!.proposals).toHaveLength(0);
       expect(mocks.db!.calls).toHaveLength(0);
 
-      // The attempt is still recorded. There is no audit event type that means
-      // "the agent was asked to do something forbidden" (see record.ts's
-      // AUDIT-DEP note), so today that record is a structured log line.
       expect(mocks.warn).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'support_action_refused',

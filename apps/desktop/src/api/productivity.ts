@@ -1,21 +1,8 @@
-/**
- * Productivity API
- *
- * TypeScript wrappers for the productivity integration Tauri commands.
- * Provides connections to Notion, Trello, and Asana with unified task
- * management and provider-specific operations.
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Supported productivity providers */
 export type ProductivityProvider = 'notion' | 'trello' | 'asana' | 'todoist' | 'jira';
 
-/** Generic task representation across providers */
 export interface ProductivityTask {
   id: string;
   title: string;
@@ -28,23 +15,16 @@ export interface ProductivityTask {
   url?: string;
 }
 
-/** Response from connecting to a provider */
 export interface ConnectResponse {
   accountId: string;
   success: boolean;
 }
 
-/** Response from creating a task */
 export interface CreateTaskResponse {
   taskId: string;
   success: boolean;
 }
 
-// ============================================================================
-// Core Operations
-// ============================================================================
-
-/** Connect to a productivity provider with credentials */
 export async function productivityConnect(
   provider: ProductivityProvider,
   credentials: Record<string, unknown>,
@@ -64,7 +44,6 @@ export async function productivityConnect(
   }
 }
 
-/** List tasks from a provider */
 export async function productivityListTasks(
   provider: ProductivityProvider,
 ): Promise<ProductivityTask[]> {
@@ -77,7 +56,6 @@ export async function productivityListTasks(
   }
 }
 
-/** Create a task in a provider */
 export async function productivityCreateTask(
   provider: ProductivityProvider,
   task: ProductivityTask,
@@ -94,11 +72,6 @@ export async function productivityCreateTask(
   }
 }
 
-// ============================================================================
-// Notion Operations
-// ============================================================================
-
-/** List all Notion pages */
 export async function productivityNotionListPages(): Promise<unknown[]> {
   try {
     if (!isTauri) throw new Error('Productivity requires Tauri runtime');
@@ -109,7 +82,6 @@ export async function productivityNotionListPages(): Promise<unknown[]> {
   }
 }
 
-/** Query a Notion database with optional filter and sorts */
 export async function productivityNotionQueryDatabase(
   databaseId: string,
   filter?: Record<string, unknown>,
@@ -128,7 +100,6 @@ export async function productivityNotionQueryDatabase(
   }
 }
 
-/** Create a row in a Notion database */
 export async function productivityNotionCreateDatabaseRow(
   databaseId: string,
   properties: Record<string, unknown>,
@@ -145,11 +116,6 @@ export async function productivityNotionCreateDatabaseRow(
   }
 }
 
-// ============================================================================
-// Trello Operations
-// ============================================================================
-
-/** List all Trello boards */
 export async function productivityTrelloListBoards(): Promise<unknown[]> {
   try {
     if (!isTauri) throw new Error('Productivity requires Tauri runtime');
@@ -160,7 +126,6 @@ export async function productivityTrelloListBoards(): Promise<unknown[]> {
   }
 }
 
-/** List cards in a Trello board */
 export async function productivityTrelloListCards(boardId: string): Promise<ProductivityTask[]> {
   try {
     if (!isTauri) throw new Error('Productivity requires Tauri runtime');
@@ -171,7 +136,6 @@ export async function productivityTrelloListCards(boardId: string): Promise<Prod
   }
 }
 
-/** Create a card in a Trello list */
 export async function productivityTrelloCreateCard(
   listId: string,
   name: string,
@@ -190,7 +154,6 @@ export async function productivityTrelloCreateCard(
   }
 }
 
-/** Move a Trello card to a different list */
 export async function productivityTrelloMoveCard(cardId: string, listId: string): Promise<void> {
   try {
     if (!isTauri) throw new Error('Productivity requires Tauri runtime');
@@ -201,7 +164,6 @@ export async function productivityTrelloMoveCard(cardId: string, listId: string)
   }
 }
 
-/** Add a comment to a Trello card */
 export async function productivityTrelloAddComment(cardId: string, text: string): Promise<string> {
   try {
     if (!isTauri) throw new Error('Productivity requires Tauri runtime');
@@ -212,11 +174,6 @@ export async function productivityTrelloAddComment(cardId: string, text: string)
   }
 }
 
-// ============================================================================
-// Asana Operations
-// ============================================================================
-
-/** List Asana projects in a workspace */
 export async function productivityAsanaListProjects(workspaceId: string): Promise<unknown[]> {
   try {
     if (!isTauri) throw new Error('Productivity requires Tauri runtime');
@@ -227,7 +184,6 @@ export async function productivityAsanaListProjects(workspaceId: string): Promis
   }
 }
 
-/** List tasks in an Asana project */
 export async function productivityAsanaListProjectTasks(
   projectId: string,
 ): Promise<ProductivityTask[]> {
@@ -242,7 +198,6 @@ export async function productivityAsanaListProjectTasks(
   }
 }
 
-/** Create a task in Asana */
 export async function productivityAsanaCreateTask(
   name: string,
   notes?: string,
@@ -265,7 +220,6 @@ export async function productivityAsanaCreateTask(
   }
 }
 
-/** Assign an Asana task to a user */
 export async function productivityAsanaAssignTask(
   taskId: string,
   assigneeId: string,
@@ -279,7 +233,6 @@ export async function productivityAsanaAssignTask(
   }
 }
 
-/** Mark an Asana task as complete or incomplete */
 export async function productivityAsanaMarkComplete(
   taskId: string,
   completed: boolean,

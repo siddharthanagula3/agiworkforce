@@ -29,7 +29,6 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [logCount, setLogCount] = useState<number | null>(null);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
-  // Fetch log count when dialog opens and attachLogs is checked
   useEffect(() => {
     if (!open) {
       setLogCount(null);

@@ -1,9 +1,3 @@
-/**
- * PendingMessagesBubbles
- *
- * Renders queued/pending messages as dimmed bubbles above the input.
- * These messages are waiting to be consumed after the current agentic loop finishes.
- */
 import React from 'react';
 import { useChatStore, selectPendingMessages } from '../../stores/chat/chatStore';
 import type { PendingUserMessage } from '../../stores/chat/types';

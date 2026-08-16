@@ -6,14 +6,6 @@ async function isDisplayed(selector: string): Promise<boolean> {
   return (await element.isExisting()) && (await element.isDisplayed());
 }
 
-/**
- * Wait for a real Desktop entry point, not merely for the webview document.
- *
- * A blank webview still reports `document.readyState === "complete"`, which
- * allowed the native startup regression to look like a selector failure. Keep
- * the generous timeout for diagnostics, but enforce a user-facing launch
- * budget once the shell appears.
- */
 export async function waitForDesktopShell(): Promise<number> {
   const startedAt = Date.now();
 
@@ -23,9 +15,6 @@ export async function waitForDesktopShell(): Promise<number> {
         (await isDisplayed('button=Start Local Mode')) ||
         (await isDisplayed('button=Use Local Mode')) ||
         (await isDisplayed('button=New chat')) ||
-        // Collapsed state persists between native sessions. The icon rail is a
-        // fully interactive shell even though it intentionally omits the
-        // expanded rail's text labels and footer Settings button.
         (await isDisplayed('button[aria-label="Expand sidebar"]')) ||
         (await isDisplayed('button[aria-label="Settings"]')),
       {
@@ -48,10 +37,6 @@ export async function waitForDesktopShell(): Promise<number> {
   return elapsedMs;
 }
 
-/**
- * Complete the real first-run Local trust-boundary choice before touching the
- * shell underneath its fixed onboarding overlay.
- */
 export async function enterLocalDesktopShell(): Promise<void> {
   const firstRunLocal = await $('button=Start Local Mode');
   if ((await firstRunLocal.isExisting()) && (await firstRunLocal.isDisplayed())) {

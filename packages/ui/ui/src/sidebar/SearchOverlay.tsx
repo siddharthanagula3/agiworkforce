@@ -1,11 +1,5 @@
 'use client';
 
-/**
- * SearchOverlay — the centered command-palette-style search modal the desktop
- * Sidebar opens. Pure presentation: results + handlers are passed in. Uses a
- * CSS fade (no framer-motion) inside the shared modal primitive so focus,
- * Escape, backdrop dismissal, and background accessibility are consistent.
- */
 import { Search } from 'lucide-react';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';

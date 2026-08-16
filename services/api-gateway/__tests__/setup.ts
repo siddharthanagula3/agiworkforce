@@ -1,10 +1,5 @@
-/**
- * Test setup file for API Gateway
- * Sets up environment variables and mocks for testing
- */
 import { vi, beforeAll, afterAll, afterEach } from 'vitest';
 
-// Set test environment variables
 process.env['JWT_SECRET'] = 'test-jwt-secret-key-for-testing-only';
 process.env['NEON_DATABASE_URL'] = 'postgresql://test:test@localhost:5432/test';
 process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
@@ -12,7 +7,6 @@ process.env['ALLOWED_ORIGINS'] = 'http://localhost:3000,http://localhost:3001';
 process.env['NODE_ENV'] = 'test';
 process.env['MOCK_LLM_RESPONSES'] = process.env['MOCK_LLM_RESPONSES'] || '1';
 
-// Mock pino logger to reduce noise in tests
 vi.mock('../src/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -26,7 +20,6 @@ vi.mock('../src/lib/logger', () => ({
 const originalFetch = globalThis.fetch;
 
 beforeAll(() => {
-  // Deterministic LLM proxy stubbing for tests that call external AI endpoints.
   if (process.env['MOCK_LLM_RESPONSES'] === '1') {
     globalThis.fetch = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;

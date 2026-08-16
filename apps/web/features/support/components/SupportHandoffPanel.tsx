@@ -1,27 +1,5 @@
 'use client';
 
-/**
- * Presence-honest handoff.
- *
- * The rule this component exists to keep: NEVER promise a human who is not
- * there. Concretely —
- *
- *  - The live-chat control is not rendered at all unless the server said
- *    `live: true`. It is not disabled, not greyed, not "try anyway": absent.
- *    Checking, offline, at-capacity, not-configured, 404 and network failure
- *    are indistinguishable to this component because they should be
- *    indistinguishable to the user.
- *  - There is no unbounded waiting state. A `waiting` handoff always carries a
- *    deadline (enforced in `useSupportSession`), and the countdown here shows
- *    the user how long it will last before it converts.
- *  - When email is not configured, the widget says so plainly and links the
- *    published /support page rather than inventing an address. It never claims
- *    something was sent.
- *
- * All reassuring copy in the live/queued/emailed states is SERVER-authored
- * (`headline`/`detail`); the widget cannot compose a promise of its own.
- */
-
 import { useEffect, useState, type FormEvent } from 'react';
 import type { SupportHandoffView, SupportPresenceView } from '../lib/contract';
 import styles from './SupportWidget.module.css';
@@ -200,7 +178,6 @@ export function SupportHandoffPanel({
     );
   }
 
-  // No handoff yet — offer only what is actually true right now.
   const canEmail = presence.fallback.configured;
 
   return (

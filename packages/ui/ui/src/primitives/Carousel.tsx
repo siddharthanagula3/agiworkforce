@@ -40,7 +40,6 @@ function useCarousel() {
   return context;
 }
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface CarouselRootProps extends React.HTMLAttributes<HTMLDivElement>, CarouselProps {
   ref?: React.Ref<HTMLDivElement>;
 }

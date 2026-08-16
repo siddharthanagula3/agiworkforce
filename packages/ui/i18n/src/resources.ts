@@ -1,20 +1,3 @@
-/**
- * Every translation the product ships, for every surface.
- *
- * Web and Desktop each carried their own copy of this corpus. Desktop's had 12
- * locales; web's had 3, so the same language menu offered a different world
- * depending on which app you opened, and a string fixed in one stayed wrong in
- * the other. Mobile had no translations at all.
- *
- * The merge kept both key sets and let web's value win where the two disagreed,
- * since web is the canonical UI reference. Keys that only web had exist in
- * English plus whichever locales web already translated; everywhere else
- * i18next falls back to English, which is the honest behaviour for a string
- * nobody has translated yet.
- *
- * Generated from the merge, then maintained by hand. Add a language by adding
- * its folder under `locales/` and an entry in `SUPPORTED_LANGUAGES`.
- */
 
 import ar_auth from '../locales/ar/auth.json' with { type: 'json' };
 import ar_chat from '../locales/ar/chat.json' with { type: 'json' };

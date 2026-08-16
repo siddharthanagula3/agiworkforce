@@ -6,12 +6,6 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { getModelById } from '@/lib/models';
 
-/**
- * Banner shown above the composer when a premium-tier (Opus-class) model is
- * selected by a free-tier user. Informs them that credits may be limited.
- *
- * Placement: render directly above <Composer /> in the chat[id] screen.
- */
 export function ModelTierWarningBanner() {
   const colors = useThemeColors();
   const selectedModel = useModelStore((s) => s.selectedModel);

@@ -11,18 +11,6 @@ import {
   persistManagedAutoMemoryFacts,
 } from '../managed-memory-context-service';
 
-/**
- * Sensitive-data exclusions are enforced on the WRITE path, before a candidate
- * reaches `user_memories`. The failure this guards is specific: filtering in
- * the UI would leave the fact stored and merely hidden, so the product would
- * tell the user something was excluded while it sat in the database and kept
- * being fed to the model.
- *
- * A settings outage must not silently disable the filter either — that is the
- * same false claim by a different route.
- */
-
-/** Minimal db double that records statements and answers the settings read. */
 function fakeDb(options: { settings?: unknown; inserted?: string[] } = {}) {
   const calls: Array<{ sql: string; params?: unknown[] }> = [];
   const db: ManagedMemoryContextDb & { calls: typeof calls } = {
@@ -41,7 +29,6 @@ function fakeDb(options: { settings?: unknown; inserted?: string[] } = {}) {
   return db;
 }
 
-/** The rows the insert statement was actually given. */
 function insertedBatch(db: ReturnType<typeof fakeDb>) {
   const call = db.calls.find((entry) => entry.sql.includes('insert into user_memories'));
   if (!call) return null;
@@ -57,14 +44,10 @@ describe('normalizeMemoryExclusions', () => {
   });
 
   it('drops terms too short to be meaningful', () => {
-    // A one- or two-character term matches nearly every sentence and would
-    // disable memory wholesale without saying so.
     expect(normalizeMemoryExclusions(['a', 'ab', 'abc'])).toEqual(['abc']);
   });
 
   it('ignores non-strings and non-arrays instead of throwing', () => {
-    // This runs on the write path; a malformed settings blob must not stop the
-    // filter applying to the terms that ARE valid.
     expect(normalizeMemoryExclusions(['valid', 42, null, { a: 1 }])).toEqual(['valid']);
     expect(normalizeMemoryExclusions('nope')).toEqual([]);
     expect(normalizeMemoryExclusions(undefined)).toEqual([]);
@@ -125,8 +108,6 @@ describe('persistManagedAutoMemoryFacts — exclusions', () => {
     const batch = insertedBatch(db);
     expect(batch).toHaveLength(1);
     expect(batch![0]!.content).toBe('User prefers dark mode');
-    // The excluded fact must not appear in the statement at all — not filtered
-    // out afterwards, not written and hidden.
     expect(JSON.stringify(batch)).not.toContain('120000');
     expect(result.excluded).toBe(1);
   });
@@ -141,7 +122,6 @@ describe('persistManagedAutoMemoryFacts — exclusions', () => {
 
     expect(result.excluded).toBe(2);
     expect(result.inserted).toBe(0);
-    // Nothing to insert means no insert statement was issued.
     expect(insertedBatch(db)).toBeNull();
   });
 
@@ -165,7 +145,6 @@ describe('persistManagedAutoMemoryFacts — exclusions', () => {
     const settingsIndex = db.calls.findIndex((c) => c.sql.includes("settings -> 'memory'"));
     const insertIndex = db.calls.findIndex((c) => c.sql.includes('insert into user_memories'));
     expect(settingsIndex).toBeGreaterThanOrEqual(0);
-    // -1 here means no insert happened at all, which is the desired outcome.
     expect(insertIndex === -1 || settingsIndex < insertIndex).toBe(true);
   });
 });

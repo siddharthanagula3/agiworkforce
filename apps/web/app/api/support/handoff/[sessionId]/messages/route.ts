@@ -1,19 +1,3 @@
-/**
- * GET  /api/support/handoff/[sessionId]/messages?after=<seq> — poll for new turns.
- * POST /api/support/handoff/[sessionId]/messages — the user sends a turn.
- *
- * POLLING, NOT SOCKETS — stated plainly rather than hidden. `services/signaling-
- * server` is a separately-deployed device-pairing WS relay (its own Dockerfile,
- * fly.toml, database, and an internal-shared-secret pairing-code handshake); its
- * README says it is not imported by apps or packages. Bending it into browser
- * support chat would mean deploying a second service and inventing a pairing
- * dance for a session that already has a Clerk identity. Vercel serverless also
- * cannot hold a socket open. So both sides poll at the server-dictated
- * `pollIntervalMs`, and the honest cost is written down in the workstream report.
- *
- * Messages are only accepted while the session is `connected` — there is no way
- * to type into a session that no human ever joined.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -96,8 +80,6 @@ async function handlePost(request: NextRequest, context: RouteContext) {
   const parsed = PostSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) throw createError.badRequest('Invalid message');
 
-  // Redact before write: a user pasting their own key into a live chat must not
-  // put it in the database, and the live transcript can still be emailed later.
   const row = await appendHandoffMessage({
     sessionId,
     author: 'user',

@@ -6,10 +6,6 @@ import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 
-/**
- * POST /api/agents/session
- * Retired. Managed chat sessions are owned by the tenant-scoped conversations API.
- */
 async function handler(request: NextRequest): Promise<NextResponse> {
   try {
     await getClerkAuthUser(request);

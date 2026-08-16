@@ -16,8 +16,6 @@ describe('owned Cloud window presentation policy', () => {
   });
 
   it('never capture-protects the read/manage settings window', () => {
-    // DES-C09: a protected account window renders black in screen recording and
-    // conferencing, which hid every bridged settings section during a demo.
     expect(resolveContentProtection('account')).toBe(false);
   });
 
@@ -26,9 +24,6 @@ describe('owned Cloud window presentation policy', () => {
   });
 
   it('never capture-protects the sign-in window', () => {
-    // The demo starts here and the presentation preference cannot rescue it:
-    // that toggle lives in Cloud settings, which requires a session the user
-    // does not have until this window has done its job.
     expect(resolveContentProtection('sign-in')).toBe(false);
   });
 

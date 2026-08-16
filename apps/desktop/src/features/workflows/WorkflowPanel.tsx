@@ -129,7 +129,6 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
 
   const userId = useAuthStore((state) => state.getCurrentUserId());
 
-  // Load workflows on mount
   useEffect(() => {
     if (userId) {
       list(userId).catch((err: unknown) => {
@@ -271,7 +270,6 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
     }
   }, [userId, refresh]);
 
-  // Get active execution for a workflow
   const getActiveExecution = useCallback(
     (workflowId: string): WorkflowExecutionState | undefined => {
       for (const [, state] of activeExecutions) {
@@ -287,7 +285,6 @@ export function WorkflowPanel({ className }: WorkflowPanelProps) {
     [activeExecutions],
   );
 
-  // Sort workflows: running first, then by updated_at
   const sortedWorkflows = useMemo(() => {
     return [...workflows].sort((a, b) => {
       const aActive = getActiveExecution(a.id);

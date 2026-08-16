@@ -1,7 +1,3 @@
-/**
- * English catalog — the source of every key. `MessageKey` is derived from it,
- * so deleting a key here breaks the call sites at compile time.
- */
 const en = {
   'applyEdit.prompt': 'AGI Workforce: Apply {command} result?',
   'applyEdit.applyInline': 'Apply Inline',

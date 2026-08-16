@@ -1,11 +1,3 @@
-/**
- * GET /api/support/handoff/agent/queue — waiting escalations, for a human.
- *
- * ADMIN ONLY. Returns queue metadata only: reference, surface, reason, the
- * agent's one-line summary, and the deadline. It deliberately does NOT return
- * the transcript or the account context — those arrive on CLAIM, so an admin
- * browsing the queue does not read every user's conversation in passing.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';

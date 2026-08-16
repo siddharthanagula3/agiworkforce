@@ -1,22 +1,3 @@
-/**
- * A Cloud settings surface that is still served by agiworkforce.com inside a
- * Desktop-owned window, because no bearer-reachable API exists for it yet.
- *
- * Why this is not just a button: the child webview authenticates with a Clerk
- * BROWSER COOKIE (`apps/web/proxy.ts` redirects every `/settings(.*)` without
- * one to `/login?redirectTo=…`). Desktop's Cloud session is a device bearer and
- * never writes that cookie; only the one-time sign-in window does, and nothing
- * refreshes it. So the window could open onto a sign-in wall while the app still
- * showed the user as signed in — a silent dead end with no explanation and no
- * route out.
- *
- * There is no supported way to read the child window's URL from the main webview
- * (the Tauri JS API exposes no URL getter on `WebviewWindow`), and no server
- * contract exists to exchange the device bearer for a browser cookie
- * (`POST /api/auth/set-token` verifies a Clerk JWT and rejects a device token).
- * So instead of pretending to detect the failure, this component states the
- * separate web sign-in up front and always offers the explicit recovery.
- */
 
 import { useState } from 'react';
 
@@ -25,17 +6,13 @@ import { selectHasCloudAccountSession, useAuthStore } from '../../../stores/auth
 import { PRIMARY_BUTTON, SECONDARY_BUTTON, SectionHeading } from './sectionChrome';
 
 export interface CloudBridgedSectionProps {
-  /** Settings nav key — also the test id suffix. */
   sectionKey: string;
   title: string;
   description: string;
-  /** Same-origin path on the web app, e.g. `/settings/reflect`. */
   path: string;
-  /** Label for the primary open action. */
   action: string;
 }
 
-/** `/login` keeps `redirectTo` through the whole Clerk chain (apps/web/app/login/page.tsx). */
 function reauthPath(path: string): string {
   const query = new URLSearchParams({ redirectTo: path, surface: 'desktop' });
   return `/login?${query.toString()}`;

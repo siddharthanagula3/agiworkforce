@@ -1,10 +1,3 @@
-/**
- * Adapter contract test: createOpenRouterAdapter returns a ProviderAdapter
- * with the expected shape (id, label, auth methods, catalog, stream). No
- * network calls — confirms the adapter wires up without throwing on
- * construction, including with custom attribution headers and a
- * non-allowlisted baseUrl (SSRF fallback).
- */
 
 import { describe, expect, it } from 'vitest';
 

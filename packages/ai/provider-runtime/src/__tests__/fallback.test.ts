@@ -9,9 +9,6 @@ import {
 import { buildFallbackChain } from '../fallback';
 
 describe('buildFallbackChain', () => {
-  // The catalog lives in @agiworkforce/types/models.json — these tests
-  // validate behaviour against the live catalog without hardcoding model
-  // IDs (per locked rule).
 
   it('returns [] when current model is unknown', () => {
     expect(buildFallbackChain('not-a-real-model', 'same-provider-cheaper')).toEqual([]);

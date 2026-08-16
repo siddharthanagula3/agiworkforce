@@ -76,20 +76,13 @@ const mockLibraryImages = [
 ];
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
   useRouter: () => ({ push: mockPush }),
-  // The drawer's icon-only search button hands off here with `focusSearch=1`.
   useLocalSearchParams: () => mockSearchParams,
 }));
 
@@ -103,18 +96,12 @@ jest.mock('../src/navigation/openNearestDrawer', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-  // The screen reads insets to keep the bottom search field and the New chat
-  // button clear of the home indicator.
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  // A Proxy rather than a fixed list: an icon the screen adds later would
-  // otherwise arrive as `undefined`, and the failure surfaces deep inside
-  // nativewind's JSX interop reading `.displayName` off it — nowhere near the
-  // missing name.
   return new Proxy(
     {},
     {
@@ -177,8 +164,6 @@ jest.mock('../src/features/artifacts/store', () => ({
     }),
   mergeMobileArtifactsForGallery: () => mockArtifacts,
   accentColorForKind: () => '#fff',
-  // Chat rows show a relative-time subtitle, reusing the artifact gallery's
-  // formatter rather than carrying a second relative-time implementation.
   formatAgeLabel: () => '2h ago',
 }));
 
@@ -195,9 +180,6 @@ describe('ChatsListScreen', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
   });
 
-  // PAR-M06: the drawer's icon-only search button is a hand-off, not a second
-  // search implementation, so this screen has to honour the param it arrives
-  // with. Without it the button would just dump the user on an unfocused list.
   it('focuses the search field when opened with the drawer search param', () => {
     const unfocused = render(<ChatsListScreen />);
     expect(

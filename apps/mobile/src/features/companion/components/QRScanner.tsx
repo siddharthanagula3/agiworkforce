@@ -15,9 +15,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { isValidPairingCode } from '@/services/companion';
 
 interface QRScannerProps {
-  /** Called when a valid pairing code is detected */
   onScan: (code: string) => void;
-  /** Called when user requests to close the scanner */
   onClose: () => void;
 }
 
@@ -33,7 +31,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   const [manualError, setManualError] = useState<string | null>(null);
   const hasScanned = useRef(false);
 
-  // Animated scanning line
   const scanLineY = useSharedValue(0);
 
   useEffect(() => {
@@ -78,12 +75,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     onScan(trimmed);
   }, [manualCode, onScan]);
 
-  // Permission not yet determined.
-  //
-  // Only the camera preview and the controls that sit ON it are literal dark
-  // (`cameraOverlay*`). Every screen below renders instead of the preview, on
-  // the app's own surface — using the overlay palette here put near-black text
-  // on black in light theme.
   if (!permission) {
     return (
       <View
@@ -95,7 +86,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     );
   }
 
-  // Permission denied
   if (!permission.granted) {
     return (
       <View
@@ -127,7 +117,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     );
   }
 
-  // Manual entry mode
   if (showManualEntry) {
     return (
       <View className="flex-1 px-6 pt-16 gap-6" style={{ backgroundColor: colors.surfaceBase }}>
@@ -212,7 +201,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     );
   }
 
-  // Camera scanner
   return (
     <View className="flex-1 bg-black">
       <CameraView

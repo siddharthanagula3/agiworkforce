@@ -1,11 +1,3 @@
-/**
- * Autotag Classify API
- *
- * POST /api/autotag/classify - Classify a conversation by its content
- *
- * Reads the first 5 messages from a conversation, runs a keyword-based
- * classifier, stores the result in conversation_tags, and returns the tag.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -19,7 +11,6 @@ import { classifyConversationText } from '@/lib/services/conversation-classifica
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 async function handleClassify(request: NextRequest) {
-  // AUDIT-008-006: Enforce CSRF protection for DB-writing endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -42,7 +33,6 @@ async function handleClassify(request: NextRequest) {
     throw createError.validation('conversationId is required');
   }
 
-  // Verify conversation ownership
   const convRows = await db.query<{ id: string }>(
     `select id
      from web_conversations
@@ -56,7 +46,6 @@ async function handleClassify(request: NextRequest) {
     throw createError.notFound('Conversation not found');
   }
 
-  // Get first 5 messages for classification
   let msgRows: { content: string }[];
   try {
     msgRows = await db.query<{ content: string }>(
@@ -72,11 +61,9 @@ async function handleClassify(request: NextRequest) {
     throw createError.internal('Failed to classify conversation');
   }
 
-  // Combine all message content for classification
   const combinedText = msgRows.map((m) => m.content).join('\n');
   const tag = classifyConversationText(combinedText);
 
-  // Upsert the tag (insert or update if already exists)
   try {
     await db.execute(
       `insert into conversation_tags (conversation_id, user_id, tag, confidence, classified_at)

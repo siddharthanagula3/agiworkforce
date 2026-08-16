@@ -1,14 +1,3 @@
-/**
- * @file Confirmation-token primitives.
- *
- * The raw token is a 256-bit random bearer returned EXACTLY ONCE, in the
- * proposal response. Only its SHA-256 is persisted, so a database read cannot
- * confirm anything. Same construction as `lib/server/device-refresh-token.ts`.
- *
- * `hashActionParams` produces a canonical-JSON digest that welds a token to one
- * parameter set. Canonical means sorted keys, so `{a:1,b:2}` and `{b:2,a:1}`
- * cannot be presented as different proposals for the same effect.
- */
 
 import 'server-only';
 
@@ -44,11 +33,6 @@ export function hashActionParams(params: unknown): string {
     .digest('hex');
 }
 
-/**
- * Constant-time comparison for two hex digests. Used for the params-hash
- * re-check at execution time; the token itself is matched by the database's
- * conditional UPDATE, which never returns a hash to compare in the first place.
- */
 export function digestsMatch(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
   try {

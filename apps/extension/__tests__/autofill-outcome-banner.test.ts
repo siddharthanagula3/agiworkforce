@@ -45,8 +45,6 @@ describe('autofill outcome banner', () => {
     const api = buildComputerUsePanel();
     const state = banner(api.panelEl);
 
-    // The build-time headline was the defect: it asserted an outcome the run
-    // had not reached yet, and every later state inherited it.
     expect(state.visible).toBe(false);
     expect(state.title).toBe('');
     expect(state.icon).toBe('');
@@ -90,7 +88,6 @@ describe('autofill outcome banner', () => {
     api.showHandoffBanner('Fast-path autofill stalled.', 'escalation');
     expect(banner(api.panelEl).kind).toBe('escalation');
 
-    // The bug class this guards: state that accumulates instead of replacing.
     api.showHandoffBanner('No agent escalation needed.', 'success');
     const state = banner(api.panelEl);
     expect(state.kind).toBe('success');

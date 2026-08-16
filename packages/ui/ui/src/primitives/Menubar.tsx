@@ -5,12 +5,6 @@ import * as MenubarPrimitive from '@radix-ui/react-menubar';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 import { cn } from '../cn';
 
-// Explicit annotation, reconstructed manually (rather than importing the
-// library's own `MenubarMenuProps`, which didn't resolve consistently
-// across this monorepo's various tsconfigs): the inferred type otherwise
-// reaches into @radix-ui/react-context's internal ScopedProps helper, which
-// tsc can't name portably under this package's `declaration: true` build
-// (TS2742). Shape mirrors @radix-ui/react-menubar's own MenubarMenuProps.
 interface MenubarMenuProps {
   value?: string;
   children?: React.ReactNode;
@@ -25,7 +19,6 @@ const MenubarSub = MenubarPrimitive.Sub;
 
 const MenubarRadioGroup = MenubarPrimitive.RadioGroup;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface MenubarProps extends React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Root> {
   ref?: React.Ref<React.ElementRef<typeof MenubarPrimitive.Root>>;
 }
@@ -95,11 +88,6 @@ interface MenubarSubContentProps extends React.ComponentPropsWithoutRef<
   ref?: React.Ref<React.ElementRef<typeof MenubarPrimitive.SubContent>>;
 }
 
-// Stacking: the portalled surfaces sit on `--z-popover` (350), above `--z-modal`
-// (300), so a menu opened from inside a Dialog is not painted behind it. Portalled
-// overlays are siblings on <body> and are compared against each other, so the
-// layer has to come from the shared scale rather than a per-file guess; the inline
-// fallback keeps the ordering in apps that have not defined the variable.
 function MenubarSubContent({ className, ref, ...props }: MenubarSubContentProps) {
   return (
     <MenubarPrimitive.SubContent

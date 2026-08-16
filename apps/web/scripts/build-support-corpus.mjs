@@ -1,45 +1,4 @@
 #!/usr/bin/env node
-/**
- * Build the support agent's retrieval corpus.
- *
- * Reads `apps/web/content/support/*.md` and emits
- * `apps/web/lib/support/agent/corpus.generated.json` — a committed, plain-JSON
- * artifact so the ENTIRE indexed surface is reviewable in one diff.
- *
- * Deliberate properties:
- *
- * 1. NO USER CONTENT. The only inputs are markdown files checked into the repo.
- *    There is no database read, no crawl, and no runtime fetch anywhere in this
- *    script or in the runtime index that consumes it.
- *
- * 2. PUBLIC ROUTES ONLY. Every document declares a `path`, and the build FAILS
- *    if that path does not resolve to a real `apps/web/app/**\/page.tsx`, or if
- *    it sits under a private prefix (/settings, /admin, /api, /dev, /debug,
- *    /user, /auth). That single rule is what keeps internal engineering docs
- *    (`docs/**`, ADRs, agent-context) out of the corpus by construction: an
- *    internal doc has no public route, so it cannot be indexed and cannot
- *    become a citation.
- *
- * 3. NO TOKENIZATION HERE. Chunk text is emitted raw. Tokenization, document
- *    frequencies, and BM25 statistics are all computed at runtime by
- *    `lib/support/agent/retrieval/`, over the merged corpus (markdown +
- *    `lib/support/static-data.ts`). Keeping exactly one tokenizer
- *    implementation — in TypeScript, covered by tests — is worth more than the
- *    microseconds a precomputed index would save on ~50 chunks; two copies of a
- *    tokenizer is two copies that can drift.
- *
- * 4. DETERMINISTIC. Documents are sorted by id, chunks by ordinal, keys are
- *    written in a fixed order. `corpus-drift.test.ts` re-runs this script into a
- *    temp directory and asserts byte equality with the committed artifact, so
- *    the artifact cannot go stale silently.
- *
- * Dependency-free Node ESM on purpose: the repo has no `tsx`, `ts-node`,
- * `gray-matter`, `yaml`, or `glob`, and `.claude/settings.json` blocks lockfile
- * edits.
- *
- * Usage:
- *   node scripts/build-support-corpus.mjs [--out <path>] [--check] [--content <dir>]
- */
 
 import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -51,17 +10,10 @@ const CONTENT_DIR = join(WEB_ROOT, 'content', 'support');
 const APP_DIR = join(WEB_ROOT, 'app');
 const DEFAULT_OUT = join(WEB_ROOT, 'lib', 'support', 'agent', 'corpus.generated.json');
 
-/** Artifact schema version. Bump when the emitted shape changes. */
 const CORPUS_VERSION = 1;
 
-/** Frontmatter keys. Every one is required; anything else fails the build. */
 const REQUIRED_KEYS = ['id', 'title', 'path', 'category', 'tags', 'updated', 'scope'];
 
-/**
- * Route prefixes a corpus document may never cite. These are authenticated,
- * operator, or machine surfaces: a support answer that cites them is either
- * leaking an internal surface or sending a signed-out visitor to a 404/redirect.
- */
 const FORBIDDEN_PATH_PREFIXES = [
   '/settings',
   '/admin',
@@ -78,16 +30,6 @@ const MAX_CHUNK_CHARS = 2000;
 
 class BuildError extends Error {}
 
-// ---------------------------------------------------------------------------
-// Frontmatter
-// ---------------------------------------------------------------------------
-
-/**
- * Minimal, strict frontmatter reader. Not YAML — a fixed `key: value` block
- * between two `---` fences, one pair per line, no nesting, no anchors, no
- * multiline scalars. A real YAML parser would accept far more than this corpus
- * should ever contain.
- */
 function parseFrontmatter(raw, file) {
   const normalized = raw.replace(/\r\n/g, '\n');
   if (!normalized.startsWith('---\n')) {
@@ -134,10 +76,6 @@ function parseFrontmatter(raw, file) {
   return { data, body };
 }
 
-// ---------------------------------------------------------------------------
-// Path allowlist
-// ---------------------------------------------------------------------------
-
 function assertPublicAppRoute(path, file) {
   if (!path.startsWith('/'))
     throw new BuildError(`${file}: path must start with / (got "${path}")`);
@@ -163,15 +101,6 @@ function assertPublicAppRoute(path, file) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Chunking
-// ---------------------------------------------------------------------------
-
-/**
- * Split a document body on `##` / `###` headings. Each chunk keeps its heading
- * path (`Doc title › Section`) so the retrieval layer can boost heading terms
- * and so a citation snippet reads as a located quote rather than a fragment.
- */
 function chunkBody(body, docTitle, file) {
   const lines = body.split('\n');
   /** @type {{ heading: string | null; lines: string[] }[]} */
@@ -213,10 +142,6 @@ function chunkBody(body, docTitle, file) {
   if (chunks.length === 0) throw new BuildError(`${file}: document has no body content`);
   return chunks;
 }
-
-// ---------------------------------------------------------------------------
-// Build
-// ---------------------------------------------------------------------------
 
 /**
  * @param {string} [contentDir] Override the content directory. Exists so the

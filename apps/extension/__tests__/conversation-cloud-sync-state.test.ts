@@ -56,7 +56,6 @@ const chromeMock = {
 
 (globalThis as unknown as Record<string, unknown>).chrome = chromeMock;
 
-/** A message pair that is fully Managed Cloud, i.e. mirror-eligible. */
 function cloudMessages(at = 1_000): HistoryMessage[] {
   return [
     { role: 'user', content: 'ask', timestamp: at, runtime: 'managed-cloud' },
@@ -169,8 +168,6 @@ describe('conversation cloud-sync state', () => {
       },
     ]);
 
-    // The panel re-persists its window with a GROWN assistant turn and no
-    // cloud fields at all — exactly what `serializeMessagesForHistory` sends.
     await upsertConversation(OWNER, 'conv-carry', [
       { role: 'user', content: 'ask', timestamp: at, runtime: 'managed-cloud' },
       {
@@ -183,7 +180,6 @@ describe('conversation cloud-sync state', () => {
 
     const entry = await getConversation(OWNER, 'conv-carry');
     expect(entry?.cloudSync?.conversationId).toBe(CLOUD_CONVERSATION_ID);
-    // Same id (so the server upserts rather than duplicating) but now dirty.
     expect(entry?.messages[1]?.cloudMessageId).toBe(assistantCloudId);
     expect(entry?.messages[1]?.cloudSyncedChars).toBe('answer'.length);
     expect(pendingCloudMessages(entry!).map((message) => message.content)).toContain(
@@ -211,7 +207,6 @@ describe('conversation cloud-sync state', () => {
     await blockCloudPersistence(OWNER, 'conv-sticky', 'non-cloud-runtime');
     expect(isCloudPersistenceEligible((await getConversation(OWNER, 'conv-sticky'))!)).toBe(false);
 
-    // Sticky: a later "everything is fine" state write must not clear it.
     await recordCloudSyncState(OWNER, 'conv-sticky', { state: 'idle', blockedReason: undefined });
     const after = await getConversation(OWNER, 'conv-sticky');
     expect(after?.cloudSync?.blockedReason).toBe('non-cloud-runtime');
@@ -268,8 +263,6 @@ describe('conversation cloud-sync state', () => {
   });
 
   it('never hands out a cloud-deletion handle for a TTL eviction', async () => {
-    // A bound conversation older than the 30-day TTL. Reading the store prunes
-    // it; nothing about that path may expose `cloudConversationId`.
     writeStoreDirect([
       {
         id: 'conv-expired',
@@ -283,7 +276,6 @@ describe('conversation cloud-sync state', () => {
     ]);
 
     expect(await getConversation(OWNER, 'conv-expired')).toBeUndefined();
-    // The only API that can produce a cloud delete returns nothing for it.
     expect(await deleteConversation(OWNER, 'conv-expired')).toBeUndefined();
   });
 

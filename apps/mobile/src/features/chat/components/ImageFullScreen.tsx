@@ -16,55 +16,16 @@ interface ImageFullScreenProps {
   prompt?: string;
   visible: boolean;
   onClose: () => void;
-  /** Display-only fallback for a response explicitly marked persisted:false. */
   allowEphemeral?: boolean;
 }
 
-/**
- * Chrome colours for the viewer, fixed light-on-dark rather than theme-relative.
- *
- * This surface pins its backdrop to black in BOTH themes, so palette tokens are
- * the wrong source for anything drawn on top of it. In the light palette
- * `neutralSurface` is `rgba(17,17,17,0.08)` and `textSecondary` is
- * `rgba(17,17,17,0.72)` — dark ink — so the close and share buttons were painted
- * black-on-black and the viewer looked like it had no way out (founder
- * 2026-08-13). The bug was invisible in dark mode, where the same tokens are
- * already light. A viewer whose ground is always dark needs chrome that is
- * always light.
- */
-/**
- * URIs the image view can render as-is, with no Cloud round trip.
- *
- * `useGeneratedImageSource` speaks exactly one dialect: the durable
- * `/api/files/<uuid>` path a Cloud generation returns, which it turns into an
- * absolute URL and fetches with a bearer token. Anything else lands on its
- * `invalid` branch.
- *
- * This viewer is also opened for USER ATTACHMENTS (`MessageBubble` passes
- * `attachment.url` straight in), and those are on-device URIs — `file://` from
- * the document picker, `ph://` from the photo library, `content://` on Android,
- * or an inline `data:` payload. None is a durable path, so tapping an attached
- * image in Local Mode rendered "Generated image unavailable" on black: the
- * viewer asking the Cloud about a file that never left the phone.
- *
- * These need no authorization and must never be routed through one — Local Mode
- * is an on-device trust boundary, and fetching an attachment's bytes through
- * Cloud would breach it.
- */
 const DIRECTLY_DISPLAYABLE_URI = /^(file|ph|content|assets-library|data|https?):/i;
 
-/** True when `imageUrl` can be handed to `expo-image` unchanged. */
 function isDirectlyDisplayableUri(imageUrl: string | null): imageUrl is string {
   if (!imageUrl) return false;
-  // A durable generated path is relative (`/api/files/…`), so it can never
-  // match a scheme-prefixed URI — the two sets do not overlap.
   return DIRECTLY_DISPLAYABLE_URI.test(imageUrl.trim());
 }
 
-/**
- * Full-screen image viewer with pinch-to-zoom and double-tap toggle.
- * Overlay pattern matching ArtifactFullScreen.
- */
 export function ImageFullScreen({
   imageUrl,
   prompt,
@@ -79,9 +40,6 @@ export function ImageFullScreen({
     () => (isDirectlyDisplayableUri(imageUrl) ? imageUrl.trim() : null),
     [imageUrl],
   );
-  // Hooks cannot be called conditionally, so the generated-image resolver still
-  // runs — it is fed an empty URL for a direct URI so it settles on `invalid`
-  // without issuing a token request, and its result is then overridden below.
   const { source: generatedSource, status: generatedStatus } = useGeneratedImageSource(
     directUri ? '' : (imageUrl ?? ''),
     allowEphemeral,
@@ -89,7 +47,6 @@ export function ImageFullScreen({
   const source = directUri ? { uri: directUri } : generatedSource;
   const sourceStatus = directUri ? ('ready' as const) : generatedStatus;
 
-  // Zoom state via reanimated shared values
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -97,7 +54,6 @@ export function ImageFullScreen({
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
 
-  // Pinch-to-zoom gesture
   const pinchGesture = Gesture.Pinch()
     .onUpdate((e) => {
       'worklet';
@@ -116,7 +72,6 @@ export function ImageFullScreen({
       }
     });
 
-  // Pan gesture (only when zoomed in)
   const panGesture = Gesture.Pan()
     .minPointers(1)
     .onUpdate((e) => {
@@ -132,7 +87,6 @@ export function ImageFullScreen({
       savedTranslateY.value = translateY.value;
     });
 
-  // Double-tap to toggle zoom
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -174,7 +128,6 @@ export function ImageFullScreen({
   }, [imageUrl]);
 
   const handleClose = useCallback(() => {
-    // Reset zoom before closing
     scale.value = 1;
     savedScale.value = 1;
     translateX.value = 0;
@@ -183,7 +136,7 @@ export function ImageFullScreen({
     savedTranslateY.value = 0;
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose]); // Shared values are stable refs — omit from deps
+  }, [onClose]);
 
   if (!imageUrl) return null;
 

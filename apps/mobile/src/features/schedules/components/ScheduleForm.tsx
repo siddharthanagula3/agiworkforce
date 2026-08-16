@@ -15,10 +15,6 @@ import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface ScheduleFormProps {
   initialData?: Partial<Schedule>;
   onSubmit: (data: Partial<CreateScheduleInput>) => void;
@@ -28,10 +24,6 @@ interface ScheduleFormProps {
   submitError?: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function getDeviceTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -39,10 +31,6 @@ function getDeviceTimezone(): string {
     return 'UTC';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function ScheduleForm({
   initialData,
@@ -56,7 +44,6 @@ export function ScheduleForm({
   const isEditing = Boolean(initialData?.id);
   const initialTimezone = initialData?.timezone ?? getDeviceTimezone();
 
-  // Form state
   const [name, setName] = useState(initialData?.name ?? '');
   const [prompt, setPrompt] = useState(initialData?.prompt ?? '');
   const [model, setModel] = useState(initialData?.model ?? DEFAULT_AUTO_MODE_ID);
@@ -70,7 +57,6 @@ export function ScheduleForm({
   );
   const [timezone, setTimezone] = useState(initialTimezone);
 
-  // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = useCallback((): {
@@ -106,7 +92,6 @@ export function ScheduleForm({
       }
     } else {
       try {
-        // Validate timezone even when no one-time instant needs conversion.
         new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format();
       } catch {
         newErrors.timezone = 'Enter a valid IANA timezone, such as America/Chicago.';
@@ -120,7 +105,6 @@ export function ScheduleForm({
     return { valid: Object.keys(newErrors).length === 0, oneTimeInstant };
   }, [name, prompt, recurrence, scheduledDate, timeOfDay, timezone, daysOfWeek]);
 
-  // Handle recurrence picker changes
   const handleRecurrenceChange = useCallback(
     (
       rec: RecurrenceType,
@@ -140,7 +124,6 @@ export function ScheduleForm({
     [],
   );
 
-  // Submit
   const handleSubmit = useCallback(() => {
     const validation = validate();
     if (!validation.valid) return;

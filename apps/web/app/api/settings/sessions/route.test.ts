@@ -67,7 +67,6 @@ function session(
   };
 }
 
-/** A request that carries a first-party bearer instead of a browser cookie. */
 function bearerRequest(method: 'GET' | 'DELETE', token: string) {
   return new Request('http://localhost:3000/api/settings/sessions', {
     method,
@@ -194,8 +193,6 @@ describe('/api/settings/sessions', () => {
 
   describe('Desktop device-token caller', () => {
     beforeEach(() => {
-      // A first-party HS256 device token is not a Clerk JWT: Clerk's verifier
-      // rejects it, which is exactly how the route learns it has no `sid`.
       mockVerifyToken.mockRejectedValue(new Error('not a clerk token'));
     });
 
@@ -220,8 +217,6 @@ describe('/api/settings/sessions', () => {
     });
 
     it('never lets a cookie riding alongside the bearer decide which row is current', async () => {
-      // The cookie says sess_current is "this device". The bearer is
-      // authoritative and has no Clerk session, so nothing may be marked.
       mockAuth.mockResolvedValue({ userId: 'user-9', sessionId: 'sess_current' });
       mockGetSessionList.mockResolvedValue({ data: [session('sess_current')], totalCount: 1 });
 
@@ -230,7 +225,6 @@ describe('/api/settings/sessions', () => {
       };
 
       expect(body.sessions[0]?.isCurrent).toBe(false);
-      // Identity came from the bearer principal, not from auth().
       expect(mockGetSessionList).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'user-1' }),
       );

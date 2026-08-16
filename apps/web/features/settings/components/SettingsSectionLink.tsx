@@ -68,13 +68,6 @@ export function SettingsSectionLink({
   );
 }
 
-/**
- * A real page navigation launched from the global Settings dialog.
- *
- * The dialog provider intentionally survives App Router page changes. Closing
- * it at this shared boundary prevents the old Settings surface from covering
- * the destination after links such as Team → Pricing are followed.
- */
 export function SettingsPageLink({ onClick, ...props }: ComponentProps<typeof Link>) {
   const navigation = useContext(SettingsSectionNavigationContext);
 

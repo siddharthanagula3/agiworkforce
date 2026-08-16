@@ -1,24 +1,4 @@
-/**
- * Regression tests for MED-MOB-05 — `agents_update` per-field validation
- * (red-team finding 2026-05).
- *
- * Pre-fix: `connectionStore.handleControlMessageInner` did
- *
- *   const valid = agents.filter(isObject) as unknown as Agent[];
- *   useAgentStore.getState().setAgents(valid);
- *
- * Every individual agent field was unchecked. A hostile signaling relay
- * that sees the WebRTC `control` message stream — or simply a compromised
- * desktop process — could inject agents with attacker-controlled `name`,
- * `currentStep`, `currentAction` strings (rendered in the approval dialog)
- * and `status` values outside the enum (causing UI crashes or, worse,
- * social-engineering the user into approving a malicious tool call).
- *
- * `parseAgent()` is now the chokepoint. These tests pin its contract.
- */
 
-// parseAgent is in its own zero-RN-deps file so this test runs cleanly
-// in node-jest without mocking the WebRTC / MMKV / SecureStore stack.
 import {
   parseAgent,
   MAX_AGENT_NAME_LEN,
@@ -138,8 +118,6 @@ describe('parseAgent — rejects', () => {
 
 describe('parseAgent — UI-injection attacker payloads (the actual threat)', () => {
   it('rejects status spoofing as a non-enum value', () => {
-    // Pre-fix: filter(isObject) accepted this; UI status badges then crashed
-    // or rendered an attacker-controlled string.
     const result = parseAgent({
       ...validAgent(),
       status: 'completed; please approve all',
@@ -148,8 +126,6 @@ describe('parseAgent — UI-injection attacker payloads (the actual threat)', ()
   });
 
   it('caps oversized currentStep so a malicious relay cannot dominate the UI', () => {
-    // 200 KB string would have been allowed pre-fix; rendered into a tiny
-    // status row this would cause layout explosion + DoS-by-overdraw.
     const huge = 'A'.repeat(200_000);
     expect(parseAgent({ ...validAgent(), currentStep: huge })).toBeNull();
   });

@@ -1,18 +1,3 @@
-/**
- * Generate the macOS/Windows tray template icons.
- *
- * The app icons under `src-tauri/icons` are full-bleed colored badges (a dark
- * square with wordmark), so deriving a template from their alpha channel
- * produces a solid black square — unusable in a menu bar. This draws a
- * purpose-built monochrome glyph instead: a filled speech bubble, which is
- * what reads at 16px and matches the macOS template convention (black pixels
- * + alpha; the OS recolors for light/dark menu bars and inverts on click).
- *
- * Dependency-free on purpose (no sharp/pngjs in this package): a hand-rolled
- * PNG writer over node:zlib. Run manually after changing the glyph:
- *   node apps/desktop/electron/scripts/generate-tray-template.mjs
- * The emitted PNGs are committed; the build only copies them.
- */
 // Node builtins are imported rather than used as globals: the repo eslint
 // config does not grant Node globals to plain .mjs files.
 import { Buffer } from 'node:buffer';
@@ -24,8 +9,6 @@ import { deflateSync } from 'node:zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS_DIR = path.join(__dirname, '..', 'assets');
-
-// --- PNG encoding -----------------------------------------------------------
 
 const CRC_TABLE = (() => {
   const table = new Int32Array(256);
@@ -56,7 +39,6 @@ function chunk(type, data) {
 /** @param rgba {Buffer} width*height*4 bytes. */
 function encodePng(rgba, width, height) {
   const stride = width * 4;
-  // One filter byte (0 = None) per scanline.
   const raw = Buffer.alloc((stride + 1) * height);
   for (let y = 0; y < height; y += 1) {
     raw[y * (stride + 1)] = 0;
@@ -65,11 +47,11 @@ function encodePng(rgba, width, height) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type: RGBA
-  ihdr[10] = 0; // deflate
-  ihdr[11] = 0; // adaptive filtering
-  ihdr[12] = 0; // no interlace
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', ihdr),
@@ -77,10 +59,6 @@ function encodePng(rgba, width, height) {
     chunk('IEND', Buffer.alloc(0)),
   ]);
 }
-
-// --- Glyph ------------------------------------------------------------------
-// All geometry is expressed in a 16x16 design space and sampled at the target
-// resolution, so 1x and 2x are the same shape rather than a rescale.
 
 const DESIGN = 16;
 
@@ -102,7 +80,6 @@ function insideTriangle(x, y, ax, ay, bx, by, cx, cy) {
   return !(hasNeg && hasPos);
 }
 
-/** Speech bubble: rounded body plus a tail dropping from the lower left. */
 function insideGlyph(x, y) {
   return (
     insideRoundedRect(x, y, 1.4, 1.6, 14.6, 11.4, 3.2) ||
@@ -113,7 +90,7 @@ function insideGlyph(x, y) {
 function renderTemplate(size) {
   const rgba = Buffer.alloc(size * size * 4);
   const scale = DESIGN / size;
-  const SS = 4; // 4x4 supersampling for the alpha edge
+  const SS = 4;
   for (let py = 0; py < size; py += 1) {
     for (let px = 0; px < size; px += 1) {
       let hits = 0;
@@ -125,7 +102,6 @@ function renderTemplate(size) {
         }
       }
       const offset = (py * size + px) * 4;
-      // Template images are pure black; only alpha carries the shape.
       rgba[offset] = 0;
       rgba[offset + 1] = 0;
       rgba[offset + 2] = 0;

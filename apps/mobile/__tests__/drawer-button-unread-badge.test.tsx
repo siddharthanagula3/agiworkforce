@@ -1,13 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M18 — the notification centre needs an always-visible entry point.
- *
- * `app/(app)/notifications` had zero inbound navigation and
- * `useNotificationCenter` had exactly one consumer — the orphaned screen
- * itself — while Tasks and Schedules kept writing into it. Every top-level
- * header now renders the shared DrawerButton, whose unread pip is the second
- * way in (the drawer's Notifications row is the first).
- */
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 
@@ -30,7 +21,6 @@ jest.mock('../src/ui/theme', () => {
 import { DrawerButton } from '../src/shared/components/DrawerButton';
 import { notificationCenterStore } from '../services/notifications';
 
-/** Shaped like the expo-notifications payload the real listener forwards. */
 function pushNotification(id: string) {
   notificationCenterStore.add({
     request: {

@@ -1,12 +1,3 @@
-/**
- * Web-surface wire shapes for search results and generated media stored in
- * chat message metadata.
- *
- * Ported from the deleted core/integrations netlify-proxy handlers
- * (web-search-handler.ts, media-generation-handler.ts): the runtime callers
- * were dead — live search and media generation go through /api/search and
- * /api/media/* — but persisted message metadata still uses these shapes.
- */
 
 export interface SearchResult {
   title: string;
@@ -20,9 +11,7 @@ export interface SearchResult {
 export interface SearchResponse {
   query: string;
   results: SearchResult[];
-  /** AI-generated answer based on search results. */
   answer?: string;
-  /** URLs of sources used in the answer. */
   sources?: string[];
   timestamp: Date;
 }

@@ -1,15 +1,3 @@
-/**
- * POST /api/support/handoff/agent/[sessionId]/claim — a human takes the session.
- *
- * ADMIN ONLY. The claim is a conditional UPDATE (`status = 'waiting' and
- * wait_expires_at > now()`), so the loser of a race gets 409 and two agents can
- * never both be talking to one user — and an expired wait cannot be claimed out
- * from under the email fallback that already owns it.
- *
- * THE RESPONSE CARRIES EVERYTHING: transcript, what the agent already tried, the
- * sources it cited, and the server-derived account context. That is the whole
- * point of live handoff — the user must not have to repeat themselves.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -34,8 +22,6 @@ async function handleClaim(request: NextRequest, context: RouteContext) {
 
   const claim = await claimHandoffForAgent(sessionId, userId);
   if (!claim) {
-    // Distinguish "already taken / already timed out" from "no such session",
-    // because an agent console needs to know which one happened.
     const existing = await getSessionById(sessionId);
     if (!existing) throw createError.notFound('Support request not found');
     throw createError.conflict(
@@ -45,7 +31,6 @@ async function handleClaim(request: NextRequest, context: RouteContext) {
     );
   }
 
-  // Tell the user a person is here, in the transcript they are already polling.
   await appendHandoffMessage({
     sessionId,
     author: 'system',

@@ -1,21 +1,14 @@
-/**
- * Company Hub Store Tests
- *
- * Tests for multi-agent collaboration workspace state management.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useCompanyHubStore } from './company-hub-store';
 import type { AgentAssignment, UpsellRequest } from './company-hub-store';
 
-// Mock crypto.randomUUID
 vi.stubGlobal('crypto', {
   randomUUID: () => `test-uuid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
 });
 
 describe('Company Hub Store', () => {
   beforeEach(() => {
-    // Reset store before each test
     useCompanyHubStore.getState().reset();
     vi.useFakeTimers();
   });
@@ -208,11 +201,9 @@ describe('Company Hub Store', () => {
       assignAgent(agent);
       const firstUpdate = useCompanyHubStore.getState().lastUpdate;
 
-      // Assign same agent with same state
       vi.advanceTimersByTime(1000);
       assignAgent({ ...agent });
 
-      // lastUpdate should not change if agent state is same
       const secondUpdate = useCompanyHubStore.getState().lastUpdate;
       expect(secondUpdate).toEqual(firstUpdate);
     });
@@ -520,7 +511,6 @@ describe('Company Hub Store', () => {
         reset,
       } = useCompanyHubStore.getState();
 
-      // Populate state
       createSession('user-123', 'Task');
       assignAgent({
         agentId: 'agent-1',
@@ -540,7 +530,6 @@ describe('Company Hub Store', () => {
       startOrchestration();
       setError('Error');
 
-      // Reset
       reset();
 
       const state = useCompanyHubStore.getState();
@@ -557,7 +546,6 @@ describe('Company Hub Store', () => {
     it('should handle updating session status for non-existent session', () => {
       const { updateSessionStatus } = useCompanyHubStore.getState();
 
-      // Should not throw
       expect(() => {
         updateSessionStatus('non-existent', 'completed');
       }).not.toThrow();
@@ -566,7 +554,6 @@ describe('Company Hub Store', () => {
     it('should handle completing non-existent session', () => {
       const { completeSession } = useCompanyHubStore.getState();
 
-      // Should not throw
       expect(() => {
         completeSession('non-existent');
       }).not.toThrow();
@@ -576,7 +563,6 @@ describe('Company Hub Store', () => {
       const { startOrchestration, pauseOrchestration, stopOrchestration } =
         useCompanyHubStore.getState();
 
-      // These should not throw even without active session
       expect(() => {
         startOrchestration();
         pauseOrchestration();
@@ -587,7 +573,6 @@ describe('Company Hub Store', () => {
     it('should handle resolving non-existent upsell', () => {
       const { resolveUpsell } = useCompanyHubStore.getState();
 
-      // Should not throw
       expect(() => {
         resolveUpsell('non-existent', 'approved');
       }).not.toThrow();

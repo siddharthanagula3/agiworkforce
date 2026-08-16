@@ -13,10 +13,6 @@ import {
   type MobileSupportedScheduleRecurrence,
 } from '../policy';
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface RecurrencePickerProps {
   value: RecurrenceType;
   daysOfWeek?: number[];
@@ -33,10 +29,6 @@ interface RecurrencePickerProps {
     },
   ) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const RECURRENCE_LABELS: Readonly<Record<MobileSupportedScheduleRecurrence, string>> = {
   once: 'Once',
@@ -68,10 +60,6 @@ function isValidIsoDateInput(value: string): boolean {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function RecurrencePicker({
   value,
   daysOfWeek = [],
@@ -100,7 +88,6 @@ export function RecurrencePicker({
     }
   }, [hapticsEnabled]);
 
-  // --- Recurrence type selector ---
   const handleTypeChange = useCallback(
     (type: RecurrenceType) => {
       haptic();
@@ -109,7 +96,6 @@ export function RecurrencePicker({
     [haptic, onChange],
   );
 
-  // --- Day of week toggle ---
   const handleDayToggle = useCallback(
     (day: number) => {
       haptic();
@@ -124,7 +110,6 @@ export function RecurrencePicker({
     [haptic, daysOfWeek, onChange],
   );
 
-  // --- Day of month ---
   const handleDayOfMonthChange = useCallback(
     (day: number) => {
       haptic();
@@ -133,7 +118,6 @@ export function RecurrencePicker({
     [haptic, onChange],
   );
 
-  // --- Time picker ---
   const handleHourChange = useCallback(
     (h: string) => {
       haptic();
@@ -150,7 +134,6 @@ export function RecurrencePicker({
     [haptic, value, hours, onChange],
   );
 
-  // --- Scheduled date for "once" ---
   const handleDateChange = useCallback(
     (text: string) => {
       setLocalDate(text);

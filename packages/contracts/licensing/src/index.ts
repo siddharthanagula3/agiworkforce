@@ -18,22 +18,15 @@
  * @packageDocumentation
  */
 
-// License claims schema + types (design §2.1). `features[]` is an open string
-// array by design — no product flags are enumerated here.
 export { EditionSchema, LicenseClaimsSchema } from './claims';
 export type { Edition, LicenseClaims } from './claims';
 
-// The signed-container format + reusable verification primitive. Org-policy
-// verification reuses `verifySignedContainer` with the license's `policyKeys`
-// as the authorized key set.
 export { verifySignedContainer } from './container';
 export type { ContainerError, ContainerErrorCode, VerifiedContainer } from './container';
 
-// The offline license verifier.
 export { LICENSE_CONTAINER_FORMAT, verifyLicense } from './verify';
 export type { LicenseError, LicenseErrorCode, LicenseVerifyResult } from './verify';
 
-// Signed org-policy schema, offline verifier, and monotonic-tightening rules.
 export {
   POLICY_CONTAINER_FORMAT,
   OrgPolicyByokSchema,

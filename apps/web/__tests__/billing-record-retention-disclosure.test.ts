@@ -1,19 +1,3 @@
-/**
- * BIZ-046 — the privacy retention schedule must describe what happens to
- * billing records, and must keep agreeing with the erasure code.
- *
- * The schedule at app/privacy/page.tsx §05 listed the account, conversations,
- * temporary chats, files, sandboxes, the security audit log and vendor backups,
- * and nothing about money. That omission is not neutral: `account-erasure.ts`
- * deliberately KEEPS `credit_idempotency_keys` and `credit_settlement_jobs`
- * after an account is erased, and keeps the `organization_usage_ledger` row with
- * the user id nulled — retention a policy is required to disclose.
- *
- * These assertions are two-sided on purpose. The copy assertion fails if the
- * disclosure is deleted; the code assertions fail if erasure changes so that the
- * disclosure becomes false (e.g. someone starts deleting the idempotency keys),
- * which is the moment the sentence has to be rewritten rather than kept.
- */
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';

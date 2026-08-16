@@ -1,16 +1,3 @@
-/**
- * Skill loader: scan a directory, parse SKILL.md files, return Skill records.
- *
- * Two layouts supported:
- *   - **OpenClaw-style**: `<rootDir>/<skill-id>/SKILL.md` — the canonical
- *     subdirectory layout. The directory name is used as a fallback
- *     skill key when frontmatter omits `name`.
- *   - **Flat**: `<rootDir>/<name>.md` — single-file layout for simple cases.
- *     Filename (sans `.md`) is the fallback skill key.
- *
- * Hidden files (`.foo`) and non-`.md` files are skipped. Errors loading any
- * single file don't fail the batch — bad skills are logged and dropped.
- */
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -80,8 +67,6 @@ async function loadSkillFile(
   try {
     ({ data, body } = parseFrontmatter(raw));
   } catch (err) {
-    // AUDIT-FIX: H-1 — a poisoned skill (e.g. reserved-key prototype-pollution
-    // attempt) must not crash the whole skill-load; skip and continue.
     if (err instanceof FrontmatterError) {
       return null;
     }
@@ -90,10 +75,6 @@ async function loadSkillFile(
   const name = asString(data['name']) ?? fallbackName;
   const description = asString(data['description']) ?? `Skill ${name}`;
   const version = readSkillVersion(data);
-  // A packaged skill's scripts/references/assets are what the instructions tell
-  // the agent to run, so they belong inside the integrity envelope. An
-  // unreadable package must not sink the whole catalog load, so drift is
-  // reported as an absent treeHash rather than a thrown error.
   let treeHash: string | undefined;
   if (packageDir !== undefined) {
     try {
@@ -117,10 +98,6 @@ async function loadSkillFile(
   return skill;
 }
 
-/**
- * Load all skills from a single directory. Tries the OpenClaw subdir layout
- * first, then falls back to flat `*.md`.
- */
 export async function loadSkillsFromDir(layer: SkillLayer): Promise<Skill[]> {
   const out: Skill[] = [];
   let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>;
@@ -138,9 +115,6 @@ export async function loadSkillsFromDir(layer: SkillLayer): Promise<Skill[]> {
       if (skill) out.push(skill);
       continue;
     }
-    // A layer root's own documentation is not a skill. Without this, a policy
-    // README.md in a skills directory is offered to the model as a skill named
-    // "README" with a synthesized description.
     if (entry.isFile() && entry.name.toLowerCase() === 'readme.md') continue;
     if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
       const filePath = join(layer.rootDir, entry.name);
@@ -152,7 +126,6 @@ export async function loadSkillsFromDir(layer: SkillLayer): Promise<Skill[]> {
   return out;
 }
 
-/** Load skills from many layers in parallel. Order of `layers` is preserved. */
 export async function loadSkillsFromLayers(layers: SkillLayer[]): Promise<Skill[][]> {
   return Promise.all(layers.map((layer) => loadSkillsFromDir(layer)));
 }

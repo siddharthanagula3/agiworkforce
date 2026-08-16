@@ -47,8 +47,6 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// Proxy, not a hand-listed map: a screen adding one more lucide icon should not
-// blow up unrelated assertions with "Cannot read properties of undefined".
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return new Proxy(
@@ -137,8 +135,6 @@ describe('Settings page', () => {
   });
 
   it('does not duplicate the Skills catalog or expose an unbuilt Plugins setting', () => {
-    // Skills is a supported top-level drawer destination. Plugins remains
-    // unshipped, so neither belongs here as a dead-end settings row.
     const { queryByText } = render(<SettingsTabScreen />);
     expect(queryByText('Skills')).toBeNull();
     expect(queryByText('Plugins')).toBeNull();
@@ -187,14 +183,6 @@ describe('Settings page', () => {
     expect(getByText('Log Out')).toBeTruthy();
   });
 
-  /**
-   * The Workspace row is no longer gated on a local plan check.
-   *
-   * Entitlement is decided server-side (`access.canManageTeam` on
-   * /api/settings/organization) and explained on the screen itself. A row
-   * hidden by a client-side guess can disagree with the server in both
-   * directions, and a missing row cannot tell the user why it is missing.
-   */
   it('always offers the workspace screen rather than gating it on a local plan guess', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
     useTierStore.setState({
@@ -223,7 +211,6 @@ describe('Settings page', () => {
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
     expect(getByText('Billing')).toBeTruthy();
     expect(getByText('Connectors')).toBeTruthy();
-    // Skills is top-level; Plugins remains unshipped.
     expect(getAllByText('Sign in').length).toBeGreaterThan(0);
     expect(queryByText('Log Out')).toBeNull();
   });
@@ -310,9 +297,6 @@ describe('Settings page', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');
   });
 
-  // PAR-M16. Settings opens over whatever the user was reading, so closing it
-  // must return there. `replace('/(app)/(tabs)/chat')` discarded both the entry
-  // point and the back entry, stranding the user on a blank new chat.
   it('closes settings back to the screen it was opened from', () => {
     const { getByLabelText } = render(<SettingsTabScreen />);
 
@@ -334,9 +318,6 @@ describe('Settings page', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  // PAR-M16. The title+close row used to be the first child of the ScrollView,
-  // so on this ~30-row list the X scrolled off-screen — and the tab bar is
-  // hidden on this route, leaving no visible way out.
   it('keeps the close control outside the scrolling list so it cannot scroll away', () => {
     const { getByLabelText } = render(<SettingsTabScreen />);
 
@@ -348,8 +329,6 @@ describe('Settings page', () => {
       return types;
     };
 
-    // The positive case pins the host name down, so the negative case below
-    // cannot pass by asserting against a type string that never renders.
     expect(hostAncestors(getByLabelText('Appearance. System'))).toContain('RCTScrollView');
     expect(hostAncestors(getByLabelText('Close settings'))).not.toContain('RCTScrollView');
   });

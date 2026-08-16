@@ -22,12 +22,9 @@
  * @module MessageBubble
  */
 
-// Re-export everything from the modular directory
 export {
-  // Main component
   MessageBubble,
   default,
-  // Sub-components
   MessageHeader,
   MessageContent,
   MessageActions,
@@ -38,12 +35,10 @@ export {
   ThinkingMessageBlock,
   InlinePanelList,
   WidgetList,
-  // Hooks
   useMessageActions,
   useMessageReactions,
 } from './MessageBubble/index';
 
-// Re-export types
 export type {
   MessageBubbleProps,
   ThinkingMessageMetadata,

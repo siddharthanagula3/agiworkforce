@@ -148,7 +148,6 @@ describe('directory sync admin entitlement gate', () => {
         requiredPlans: ['enterprise'],
       });
 
-      // Nothing was written on any of the refused calls.
       expect(state.directory_sync_connections).toHaveLength(2);
       expect(state.scim_tokens).toHaveLength(0);
     },
@@ -160,9 +159,6 @@ describe('directory sync admin entitlement gate', () => {
   });
 
   it('fails closed on a tier string the catalog does not recognise', async () => {
-    // `business` is marketing copy, not a BillingPlanTier. A tier-order
-    // comparison would have to guess; `canUseBillingPlanCapability` normalizes
-    // the unknown value to `free` and refuses.
     seed({ planTier: 'business' });
     const response = await connectionsGet(jsonRequest(LIST_URL));
     expect(response.status).toBe(403);
@@ -268,7 +264,6 @@ describe('SCIM token administration', () => {
     expect(body['scim_base_url']).toBe('https://app.example.com/api/scim/v2');
     expect(body['token']).not.toHaveProperty('token_hash');
 
-    // Stored hashed, never in the clear.
     expect(state.scim_tokens).toHaveLength(1);
     expect(String(state.scim_tokens[0]?.['token_hash'])).toMatch(/^\$argon2id\$/);
     expect(JSON.stringify(state.scim_tokens[0])).not.toContain(body['raw_token']);
@@ -318,7 +313,6 @@ describe('SCIM token administration', () => {
     expect(revoked.status).toBe(200);
     expect(state.scim_tokens[0]?.['revoked_at']).not.toBeNull();
 
-    // Idempotent: a second revoke is a 404, not a second success.
     const again = await tokenDelete(jsonRequest(`${TOKENS_URL}/${tokenId}`, 'DELETE'), {
       params: Promise.resolve({ tokenId }),
     });

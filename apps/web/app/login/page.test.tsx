@@ -57,11 +57,6 @@ describe('/login Desktop surface', () => {
   });
 
   it('routes an account created from the sign-in card through the terms clickwrap', async () => {
-    // Clerk transfers an OAuth first touch with an unknown identity from SignIn
-    // into a sign-up, so this card creates accounts without /signup ever
-    // rendering. Those accounts must still land on /signup/complete, which shows
-    // the terms and writes the acceptance. Force, not fallback: a preserved
-    // ?redirect_url= outranks signUpFallbackRedirectUrl.
     render(await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
     await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
 

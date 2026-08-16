@@ -19,19 +19,6 @@ type SocketSample = {
   observations: SocketObservation[];
 };
 
-/**
- * Local Mode zero-egress regression signal, measured at the OS socket level.
- *
- * The frontend egress guard is not sufficient evidence because native code can
- * bypass it. This spec therefore observes the native app and its descendants
- * continuously while a real Ollama turn runs. It covers connected TCP and UDP
- * destinations visible to `lsof`; it is deliberately described as a regression
- * signal rather than universal packet-capture proof.
- *
- * Startup/updater traffic is outside this turn-level contract. The baseline is
- * captured only after the shell, Local boundary, model, and composer settle.
- */
-
 function appProcessRows(): Array<{ command: string; pid: string }> {
   let output = '';
   try {
@@ -89,7 +76,6 @@ function connectedNonLoopbackSockets(): SocketObservation[] {
         encoding: 'utf8',
       });
     } catch {
-      // lsof exits non-zero when the process has no network sockets.
       continue;
     }
 
@@ -174,7 +160,6 @@ describe('Local Mode zero-egress (OS socket evidence)', () => {
       },
     );
 
-    // A plain Local turn must not inherit the one-turn network grant.
     const plus = await $('button[aria-label="Add attachment"]');
     await clickElement(plus);
     const searchToggle = await $('button=Search the web');

@@ -1,16 +1,3 @@
-/**
- * GET  /api/settings/2fa  · return 2FA status for the authenticated user
- * DELETE /api/settings/2fa · disable 2FA (requires a valid TOTP code in body)
- *
- * Design note: Clerk supports native TOTP MFA (enrollTotpFactor). We
- * deliberately implement a custom TOTP layer instead because:
- *   1. The full RFC 6238 implementation and encrypted-secret schema already
- *      exist in this repo (encryptTOTPSecret / decryptTOTPSecret).
- *   2. Clerk MFA would require migrating the frontend hooks and settings UI.
- *   3. We need server-side backup-code management independent of Clerk.
- * If Clerk MFA is adopted later, this route family should be removed and the
- * settings service methods updated to call Clerk's SDK directly.
- */
 
 import 'server-only';
 
@@ -29,10 +16,6 @@ import {
 } from '@/features/settings/services/user-preferences';
 import { readJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
-
-// ---------------------------------------------------------------------------
-// Shared DB helper
-// ---------------------------------------------------------------------------
 
 interface TwoFactorRow {
   user_id: string;
@@ -55,10 +38,6 @@ async function getTwoFactorRow(userId: string): Promise<TwoFactorRow | null> {
   return row ?? null;
 }
 
-// ---------------------------------------------------------------------------
-// GET /api/settings/2fa
-// ---------------------------------------------------------------------------
-
 async function handleGet2FAStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
@@ -77,23 +56,10 @@ async function handleGet2FAStatus(request: NextRequest) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// DELETE /api/settings/2fa  · disable 2FA
-// Requires a valid TOTP code (or backup code) to prevent session-hijack escalation.
-// ---------------------------------------------------------------------------
-
 async function handleDisable2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // AUDIT-FIX GOV-16: key the TOTP attempt limit on the authenticated user, not
-  // the source IP. rateLimitConfigs['2fa-verify'] documents itself as "5 attempts
-  // per 15 minutes per user", but withRateLimit falls back to an IP bucket when
-  // no identifier is passed — so the control failed in both directions: an
-  // attacker rotating source IPs got unlimited 6-digit guesses, while colleagues
-  // behind one corporate NAT locked each other out. The limit now runs after
-  // authentication; there is no pre-auth brute-force surface here because
-  // getClerkAuthUser rejects unauthenticated callers before any code is checked.
   const { userId } = await getClerkAuthUser(request);
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
@@ -110,7 +76,6 @@ async function handleDisable2FA(request: NextRequest) {
     return NextResponse.json({ success: true, message: '2FA was not enabled' });
   }
 
-  // Verify TOTP code or backup code
   const secret = await decryptTOTPSecret(row.totp_secret_enc);
   const totpValid = await verifyTOTPCode(secret, code);
   let backupCodeIndex = -1;
@@ -123,11 +88,9 @@ async function handleDisable2FA(request: NextRequest) {
     }
   }
 
-  // Mark 2FA as disabled · keep the row so re-enroll can detect stale setup
   const db = getNeonDb();
 
   if (backupCodeIndex !== -1) {
-    // Consume the backup code (remove from array)
     const updatedCodes = (row.backup_codes_hashed ?? []).filter((_, i) => i !== backupCodeIndex);
     await db.query(
       `update user_two_factor
@@ -153,10 +116,6 @@ async function handleDisable2FA(request: NextRequest) {
 
   logger.info({ userId }, '2FA disabled successfully');
 
-  // Audit: a second factor was removed — a downgrade of the account's own
-  // security posture, so it is warning-level. The submitted TOTP/backup code
-  // is in scope here and is never recorded; only WHICH factor authorised the
-  // change is.
   await recordAuditEvent({
     userId,
     eventType: 'two_factor_disabled',

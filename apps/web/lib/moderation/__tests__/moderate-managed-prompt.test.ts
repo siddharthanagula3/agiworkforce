@@ -27,7 +27,6 @@ describe('moderateManagedPrompt · always-on', () => {
     if (!result.allowed) {
       expect(result.refusal).toBe(PLATFORM_POLICY_REFUSAL);
       expect(result.categories).toContain('csae');
-      // The refusal must not name the detector that fired.
       expect(result.refusal).not.toContain('csae');
     }
   });
@@ -41,12 +40,6 @@ describe('moderateManagedPrompt · always-on', () => {
   });
 });
 
-/**
- * The bypass this exists to close: a managed chat request carries
- * client-authored `system` messages as well as user turns, so a floor that
- * reads only the last user message is defeated by moving the request one
- * message up.
- */
 describe('moderateManagedPrompt · every client-authored segment', () => {
   it('blocks on a non-final segment while the last one is innocuous', () => {
     const result = moderateManagedPrompt({
@@ -58,8 +51,6 @@ describe('moderateManagedPrompt · every client-authored segment', () => {
   });
 
   it('does not let words in separate segments corroborate each other', () => {
-    // "child" and "sexual" land inside one rule's proximity window if the
-    // segments are concatenated. Classified apart, neither segment is a hit.
     const result = moderateManagedPrompt({
       userId: 'user-1',
       segments: ['tell me about child development', 'and about sexual health for adults'],
@@ -84,7 +75,6 @@ describe('moderateManagedPrompt · reporting', () => {
       expect.stringContaining('[moderation]'),
     );
     const [payload] = loggerMock.error.mock.calls[0] as [Record<string, unknown>];
-    // There is no operator switch that puts prompt text in the log.
     expect(Object.values(payload)).not.toContain(segments[0]);
   });
 

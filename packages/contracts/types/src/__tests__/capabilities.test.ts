@@ -28,7 +28,6 @@ const VALID_DOMAINS = [
   'system',
 ];
 
-// The desktop-local capabilities that MUST NOT leak onto web or mobile.
 const DESKTOP_ONLY: PlatformCapability[] = [
   'canUseWorkingDirectory',
   'canUseFileSystem',
@@ -109,7 +108,6 @@ describe('platform capability matrix', () => {
 
   it('getPlatformCapabilities returns a complete row; unknown platform defaults safely', () => {
     expect(getPlatformCapabilities('web')).toBe(PLATFORM_CAPABILITIES.web);
-    // Unknown capability on a known platform → false (defensive default).
     expect(isCapabilityEnabled('web', 'totally-unknown' as PlatformCapability)).toBe(false);
   });
 });

@@ -1,17 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M27 — Dispatch/companion must use the brand palette, not a literal teal.
- *
- * The `teal-*` Tailwind ramp was a real teal (`500: '#21808d'`) with no var()
- * backing, while the `teal` *token* resolves to the neutral foreground or the
- * user's chosen accent. Class-styled and hook-styled halves of the same card
- * therefore rendered in two different colours. The ramp is deleted; these
- * tests keep it deleted and pin the replacements.
- *
- * The viewfinder is a separate hazard: `colors.teal` is #111111 in light theme
- * (and #000000 under high-contrast light), so the corner brackets and scan line
- * drew black over a dark camera image.
- */
 import fs from 'fs';
 import path from 'path';
 
@@ -24,11 +11,6 @@ const MOBILE_ROOT = path.resolve(__dirname, '..');
 const SCANNED_DIRS = ['app', 'components', 'src', 'lib', 'stores', 'services', 'hooks'];
 const SCANNED_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
 
-/**
- * Strips block comments and line comments so the prose that documents the
- * removal (in tailwind.config.js and components/ui/avatar.tsx) is not mistaken
- * for a live class. `//` preceded by `:` is left alone so URLs survive.
- */
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
@@ -50,8 +32,6 @@ describe('PAR-M27 — no literal teal ramp survives', () => {
   it('has removed the teal ramp from tailwind.config.js', () => {
     const config = require('../tailwind.config.js');
     expect(config.theme.extend.colors.teal).toBeUndefined();
-    // The surrounding ramps are untouched — this is a targeted deletion, not a
-    // palette wipe.
     expect(config.theme.extend.colors['terra-cotta']).toBeDefined();
     expect(config.theme.extend.colors.charcoal).toBeDefined();
   });
@@ -82,10 +62,6 @@ describe('PAR-M27 — no literal teal ramp survives', () => {
     expect(files.length).toBeGreaterThan(300);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Rendered replacements
-// ---------------------------------------------------------------------------
 
 jest.mock('expo-camera', () => {
   const { View } = require('react-native');
@@ -129,8 +105,6 @@ jest.mock('@/services/companion', () => ({
   isValidPairingCode: () => true,
 }));
 
-// The whole point of PAR-M27 is that the viewfinder must not follow the accent
-// token — in LIGHT theme that token is #111111, i.e. black on a camera feed.
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
   return {
@@ -181,7 +155,6 @@ describe('PAR-M27 — QR viewfinder stays visible over the camera feed', () => {
       .filter((value): value is string => typeof value === 'string');
 
     expect(bracketBorders).toContain(lightColors.cameraScanRegionBorder);
-    // lightColors.teal is #111111 — a black frame over a dark camera image.
     expect(bracketBorders).not.toContain(lightColors.teal);
     expect(bracketBorders).not.toContain('#111111');
   });
@@ -200,8 +173,6 @@ describe('PAR-M27 — QR viewfinder stays visible over the camera feed', () => {
   });
 
   it('keeps the scan-region token high-contrast in every palette variant', () => {
-    // If a future palette change made this resolve to the foreground again the
-    // black-on-camera defect comes straight back.
     for (const palette of [lightColors, darkColors, highContrastLightColors]) {
       expect(palette.cameraScanRegionBorder).not.toBe(palette.teal);
       expect(palette.cameraScanRegionBorder).not.toBe(palette.textPrimary);

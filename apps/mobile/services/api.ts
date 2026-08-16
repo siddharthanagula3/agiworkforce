@@ -4,17 +4,6 @@ import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
-// FIX-MOB-10: every outbound HTTPS call goes through secureFetch — the
-// chokepoint that the TLS-pinning gate hooks into. Today it's a
-// passthrough; flipping `PINNING_ENFORCED` in lib/pinning.ts (after ops
-// drops SPKI hashes) makes it enforce pin coverage at the JS layer.
-//
-// Zero-leak: every request here targets OUR managed cloud (`${API_URL}/api/...`).
-// Route through guardedFetch so Local mode refuses the call before any network
-// I/O (fail-closed); guardedFetch delegates to secureFetch (TLS pinning) when
-// the request is allowed. The one exception is the presigned chat-attachment
-// PUT in uploadFile(), which targets the storage provider rather than our cloud
-// and is only reachable after the guarded presign call has already succeeded.
 import { guardedFetch } from '@/lib/egressGuard';
 import { invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
@@ -34,10 +23,6 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// Paywall error type
-// ---------------------------------------------------------------------------
-
 export type ApiPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing';
 
 function recoveryActionForPaywallCode(code: string | null): ApiPaywallRecoveryAction {
@@ -46,24 +31,11 @@ function recoveryActionForPaywallCode(code: string | null): ApiPaywallRecoveryAc
   return 'upgrade';
 }
 
-/**
- * Thrown by the HTTP client for a structured quota/paywall response, including
- * HTTP 429 `{ kind: 'paywall', ... }` and the media routes' HTTP 403 plan or
- * subscription error envelopes.
- *
- * Callers should catch this specifically (not the generic `Error`) to
- * distinguish paywall blocks from other network errors.
- */
 export class ApiPaywallError extends Error {
-  /** Which feature is gated (e.g. 'token_cap', 'image_quota', 'video_generation'). */
   readonly feature: string;
-  /** Minimum tier required to use the feature (e.g. 'basic', 'pro', 'max_15x'). */
   readonly requiredTier: string;
-  /** Human-readable description from the server (e.g. '10/10 images used this month'). */
   readonly reason: string;
-  /** Structured server code when this originated from an API error envelope. */
   readonly code: string | null;
-  /** The user action that can actually resolve this refusal. */
   readonly recoveryAction: ApiPaywallRecoveryAction;
 
   constructor(feature: string, requiredTier: string, reason: string, code: string | null = null) {
@@ -77,16 +49,6 @@ export class ApiPaywallError extends Error {
   }
 }
 
-/**
- * Thrown for any non-OK response that is not a paywall.
- *
- * Carries the HTTP status and, when the body used the structured
- * `{ error: { code } }` shape, the server's error code. Callers previously had
- * to regex "HTTP 409" back out of the message to tell one failure from
- * another, and an object-shaped error body left no way to read the code at
- * all. The `message` text is unchanged, so existing message-based handling
- * still behaves the same.
- */
 export class ApiHttpError extends Error {
   readonly status: number;
   readonly code: string | null;
@@ -99,21 +61,6 @@ export class ApiHttpError extends Error {
   }
 }
 
-/**
- * Authenticated HTTP client.
- * Injects a Clerk/Web API bearer token when the gated Cloud path provides one.
- *
- * Global 401 handling:
- *  - On first 401, attempts a session refresh and retries once.
- *  - If refresh fails, clears the local session facade and alerts
- *    the user to sign in again. The companion pairing session is left intact
- *    (the WebRTC/signaling layer is auth-independent) so pairing survives
- *    a token expiry without breaking the data channel.
- *  - Failed requests are NOT automatically queued here — callers that need
- *    offline retry should use the offlineQueue service.
- */
-
-/** Prevent concurrent token refresh races */
 let _refreshing: Promise<boolean> | null = null;
 let _refreshFailures = 0;
 let _refreshBackoffUntil = 0;
@@ -135,11 +82,6 @@ function assertApiAccountGeneration(generation: number): void {
   }
 }
 
-/**
- * Invalidate request/refresh work that captured credentials for the previous
- * Clerk user. Account teardown calls this synchronously before the next
- * account can issue requests.
- */
 export function resetApiAccountState(): void {
   _accountGeneration += 1;
   for (const upload of _activeAccountUploads) {
@@ -193,23 +135,10 @@ async function tryRefreshToken(): Promise<boolean> {
   return operation;
 }
 
-/**
- * Called when all retry attempts are exhausted after a 401.
- * Clears the local cloud session and prompts the user to log in again.
- * The companion pairing WebRTC/signaling session is intentionally preserved —
- * clearing auth tokens does not close the data channel.
- */
 function handleUnrecoverableAuth(): void {
-  // Fail closed immediately. Waiting for Clerk's async signed-out emission
-  // leaves the rejected account's cached conversations, entitlements, and
-  // in-flight callbacks visible long enough to leak into a subsequent login.
   invalidateCloudAccount();
   clearLocalCloudAccountState();
 
-  // v1 local-only: no auth UI exists, so prompting the user to "sign in
-  // again" would dead-end on a redirect-stub login. Silently clear the
-  // session and let the local-mode app shell render; cloud-only callers
-  // will surface their own errors when the user opts into cloud.
   if (!FEATURES.auth) {
     clearAuthSession().catch((err) => {
       console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
@@ -221,9 +150,6 @@ function handleUnrecoverableAuth(): void {
     console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
   });
 
-  // Make the prompt actionable: the Clerk login screen at /(auth)/login works —
-  // it was simply never reached. A bare "OK" stranded the user with no path back
-  // into cloud (the P0 dead-end). Offer a Sign In action that routes there.
   Alert.alert('Session Expired', 'Your session has expired. Please sign in again to continue.', [
     { text: 'Not now', style: 'cancel' },
     {
@@ -249,17 +175,10 @@ interface RequestOptions {
    * app, which is the default.
    */
   baseUrl?: string;
-  /** Extra request headers (e.g. an `x-csrf-token` for state-changing posts). */
   headers?: Record<string, string>;
-  /** Skip the automatic 401 retry (used internally to avoid infinite loops). */
   _skipAuthRetry?: boolean;
 }
 
-/**
- * The 403 plan-upgrade envelope does not currently name its capability. Infer
- * only the two media routes whose feature is unambiguous; an unknown future
- * route must stay generic rather than falsely opening the image paywall.
- */
 function planUpgradeFeatureForPath(
   path: string,
 ): 'image_generation' | 'video_generation' | 'paid_capability' {
@@ -314,22 +233,16 @@ async function request<T>(
     assertApiAccountGeneration(accountGeneration);
 
     if (response.status === 401 && !options._skipAuthRetry) {
-      // Attempt token refresh once, then retry the request
       const refreshed = await tryRefreshToken();
       assertApiAccountGeneration(accountGeneration);
       if (refreshed) {
         return request<T>(path, init, { ...options, _skipAuthRetry: true });
       }
 
-      // Refresh failed — session is truly expired
       handleUnrecoverableAuth();
       throw new Error('HTTP 401: Session expired. Please sign in again.');
     }
 
-    // Detect structured paywall response before the generic !response.ok branch.
-    // The server emits HTTP 429 + { kind: 'paywall', feature, requiredTier, reason }
-    // when a user hits 150% of their tier cap. We parse the JSON here so callers
-    // can catch ApiPaywallError separately from generic network errors.
     if (response.status === 429) {
       const bodyText = await response.text();
       assertApiAccountGeneration(accountGeneration);
@@ -348,7 +261,6 @@ async function request<T>(
         );
       }
 
-      // Not a paywall 429 — surface a friendly rate-limit message.
       const candidate = parsed?.error ?? parsed?.message;
       throw new Error(
         typeof candidate === 'string' && candidate.trim()
@@ -361,11 +273,6 @@ async function request<T>(
       const body = await response.text();
       assertApiAccountGeneration(accountGeneration);
 
-      // Some routes (e.g. image generation) gate on plan tier with a 403 and
-      // an object-shaped `{ error: { code: 'plan_upgrade_required', ... } }`
-      // body instead of the 429 `{ kind: 'paywall' }` shape above. Recognise
-      // this shape too so the caller's ApiPaywallError handling (upgrade
-      // sheet) fires instead of a silent generic-error failure.
       if (response.status === 403) {
         try {
           const parsed = JSON.parse(body) as {
@@ -402,9 +309,6 @@ async function request<T>(
         }
       }
 
-      // Structured JSON error bodies carry a human-readable `error` or `message`
-      // field — surface that instead of dumping the raw JSON payload verbatim,
-      // since callers often show this text directly in chat/error UI.
       let friendlyMessage: string | null = null;
       let errorCode: string | null = null;
       try {
@@ -413,10 +317,6 @@ async function request<T>(
         if (typeof candidate === 'string' && candidate.trim()) {
           friendlyMessage = candidate;
         } else if (candidate && typeof candidate === 'object') {
-          // `{ error: { code, message } }` — the object shape. Its message is
-          // still the friendliest text available, and the code is the only way
-          // a caller can distinguish this failure from another with the same
-          // status.
           const nested = candidate as { code?: unknown; message?: unknown };
           if (typeof nested.code === 'string') errorCode = nested.code;
           if (typeof nested.message === 'string' && nested.message.trim()) {
@@ -429,9 +329,6 @@ async function request<T>(
       if (friendlyMessage) {
         throw new ApiHttpError(friendlyMessage, response.status, errorCode);
       }
-      // Non-JSON bodies (HTML error pages, proxy output) must never reach the
-      // UI verbatim. Log the raw body for diagnostics and surface a generic,
-      // user-readable message instead.
       if (__DEV__) {
         const safeBody = body.length > 500 ? body.slice(0, 500) + '...(truncated)' : body;
         console.warn(`[api] ${init.method ?? 'GET'} ${path} -> HTTP ${response.status}:`, safeBody);
@@ -453,11 +350,6 @@ async function request<T>(
   }
 }
 
-/**
- * Turn a failed upload-step response into a message that is safe to show the
- * user. Structured `{ error }` bodies carry a human-readable string; anything
- * else (HTML error page, proxy output) must never be rendered verbatim.
- */
 async function uploadErrorMessage(response: Response, fileName: string): Promise<string> {
   const body = await response.text().catch(() => '');
   try {
@@ -485,17 +377,11 @@ export interface UploadFileInput {
 }
 
 export interface UploadFileResult {
-  /** Owner-scoped media asset id. This is what the chat wire format references. */
   id: string;
-  /** Same-origin authenticated serve path for the stored bytes. */
   url: string;
-  /** Server-confirmed MIME type. */
   mimeType: string;
-  /** Server-confirmed file name. */
   name: string;
-  /** Server-confirmed byte count. */
   byteCount: number;
-  /** Whether the asset is renderable as an image or handled as a document. */
   type: 'image' | 'file';
 }
 
@@ -514,29 +400,6 @@ export const api = {
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { method: 'DELETE' }, options),
 
-  /**
-   * Upload a chat attachment using the managed-cloud two-step flow.
-   *
-   * STB-4 fix: this previously POSTed multipart/form-data to `/api/upload`, a
-   * route that has never existed in `apps/web/app/api` or the api-gateway. Every
-   * mobile file/image attach 404'd, was retried three times by the caller, and
-   * then failed with a generic alert. The real surface is the same one Web uses:
-   *
-   *   1. POST /api/uploads/presign            -> short-lived direct-to-R2 PUT URL
-   *   2. PUT  <uploadUrl>                     -> raw bytes, no credentials of ours
-   *   3. POST /api/uploads/chat-attachment/complete
-   *                                           -> verifies bytes, registers the
-   *                                              owner-scoped media asset
-   *
-   * Steps 1 and 3 go through `guardedFetch`, so Local mode refuses the upload
-   * before any byte leaves the device. Step 2 targets the storage provider (not
-   * our cloud) and is only reachable once step 1 has already passed that gate.
-   *
-   * Hardened behaviour:
-   *  - 401 on presign: attempts token refresh + one retry (same logic as request())
-   *  - Timeout: aborts and throws a clear "timed out" message
-   *  - Network interruption mid-upload: throws with message; caller retries
-   */
   uploadFile: async (
     file: UploadFileInput,
     options?: RequestOptions,
@@ -573,7 +436,6 @@ export const api = {
     const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     try {
-      // ---- Step 1: presign ------------------------------------------------
       const presignResponse = await guardedFetch(
         `${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH}`,
         {
@@ -620,10 +482,6 @@ export const api = {
         throw new Error(`Refusing an insecure upload destination for "${file.name}".`);
       }
 
-      // ---- Step 2: direct-to-storage PUT ----------------------------------
-      // expo-file-system streams the file from disk instead of materialising a
-      // 12 MiB base64 string in the JS heap. This host is the storage provider,
-      // never our cloud, and is only reachable after step 1 cleared the guard.
       const uploadTask = createUploadTask(uploadUrl.toString(), file.uri, {
         httpMethod: 'PUT',
         uploadType: FileSystemUploadType.BINARY_CONTENT,
@@ -658,7 +516,6 @@ export const api = {
         );
       }
 
-      // ---- Step 3: complete ------------------------------------------------
       const completeResponse = await guardedFetch(
         `${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH}`,
         {

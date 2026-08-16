@@ -1,9 +1,3 @@
-/**
- * Companion to cloud-usage-page.test.tsx, split into its own file because it
- * needs FEATURES.usageDashboard mocked false from module load — mixing that
- * with the dashboard-on tests in one file via jest.resetModules() mid-suite
- * breaks React's module singleton in this test environment.
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';

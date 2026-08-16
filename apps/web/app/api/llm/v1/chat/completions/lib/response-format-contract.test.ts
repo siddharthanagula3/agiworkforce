@@ -5,16 +5,6 @@ vi.mock('server-only', () => ({}));
 import { ChatCompletionRequestSchema, applyJsonObjectMode } from './request-processor';
 import { JSON_OBJECT_DIRECTIVE } from './json-object-mode';
 
-/**
- * The `response_format` contract, as a caller experiences it.
- *
- * The rule this encodes: every accepted value must be a promise the endpoint
- * actually keeps. `json_object` is accepted only where it can be validated
- * before delivery; `json_schema` and streamed `json_object` are refused with a
- * message naming the alternative, because returning unvalidated output for a
- * structured request is the silent failure this whole area exists to remove.
- */
-
 const base = {
   model: 'auto',
   messages: [{ role: 'user' as const, content: 'hello' }],
@@ -48,7 +38,6 @@ describe('response_format — refused', () => {
 
     expect(result.success).toBe(false);
     const message = result.success ? '' : result.error.issues[0]!.message;
-    // An actionable refusal, not a bare "invalid".
     expect(message).toMatch(/json_object/);
     expect(message).toMatch(/tool_choice/);
   });
@@ -59,12 +48,10 @@ describe('response_format — refused', () => {
     expect(result.success).toBe(false);
     const message = result.success ? '' : result.error.issues[0]!.message;
     expect(message).toMatch(/stream: false/);
-    // The reason matters: a stream is delivered before it can be validated.
     expect(message).toMatch(/validated/);
   });
 
   it('still allows a streamed TEXT response', () => {
-    // The stream refusal must be scoped to json_object only.
     expect(parse({ response_format: { type: 'text' }, stream: true }).success).toBe(true);
   });
 });
@@ -83,7 +70,6 @@ describe('applyJsonObjectMode', () => {
 
     const system = request.messages[0]!;
     expect(system.content).toContain('You are helpful.');
-    // Appended, not prepended: the output-format instruction is read last.
     expect(String(system.content).endsWith(JSON_OBJECT_DIRECTIVE)).toBe(true);
   });
 

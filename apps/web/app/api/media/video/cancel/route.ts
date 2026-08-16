@@ -110,10 +110,6 @@ async function handleCancelVideo(request: NextRequest): Promise<NextResponse> {
     return responseForCancellation(request, current, 200);
   }
 
-  // Runway documents DELETE /v1/tasks/{id}; use the shared DB-claimed
-  // reconciler so status requests and Workflow cannot race the cancellation call.
-  // Other providers are deliberately only recorded because their verified
-  // video surfaces have no cancellation method.
   if (requested.provider === 'runway') {
     try {
       const reconciled = await reconcileVideoGenerationJob(scoped.db, requested);

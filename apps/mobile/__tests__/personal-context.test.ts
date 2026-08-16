@@ -1,6 +1,3 @@
-/**
- * Unit tests for buildPersonalContextBlocks — the per-turn system-block composer.
- */
 import {
   buildPersonalContextBlocks,
   renderMemoryBlock,

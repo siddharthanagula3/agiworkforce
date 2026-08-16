@@ -1,34 +1,8 @@
-/**
- * Tests for toolStore event infrastructure.
- *
- * Covers:
- * - ToolEventPayload type shape — all required and optional fields have the
- *   correct types as documented in the Rust `ToolEvent` serde contract.
- * - initializeToolEventListener double-init guard — calling the function
- *   multiple times must only register event listeners once.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ToolEventPayload } from '../stores/chat/toolStore';
 
-// ---------------------------------------------------------------------------
-// Module-level mock wiring
-//
-// The test setup (src/test/setup.ts) already mocks:
-//   - @tauri-apps/api/event  → { listen: vi.fn().mockResolvedValue(() => {}) }
-//   - src/lib/tauri-mock     → { isTauri: false, invoke: ..., isTauriContext: () => false }
-//
-// initializeToolEventListener short-circuits when `isTauri` is false, so the
-// @tauri-apps/api/event mock is only reached if we override isTauri to true.
-// ---------------------------------------------------------------------------
-
 describe('ToolEventPayload type shape', () => {
-  /**
-   * These tests verify that objects shaped like ToolEventPayload satisfy all
-   * required fields and that optional fields default correctly. TypeScript
-   * enforces this at compile time; the runtime assertions confirm the exact
-   * field names match the Rust serde contract (snake_case identifiers).
-   */
 
   it('accepts a minimal "started" event with only required fields', () => {
     const payload: ToolEventPayload = {
@@ -42,7 +16,6 @@ describe('ToolEventPayload type shape', () => {
     expect(payload.id).toBe('tool-exec-001');
     expect(payload.conversation_id).toBe(42);
     expect(payload.message_id).toBe('msg-abc');
-    // Optional fields must be absent when not provided
     expect(payload.tool_name).toBeUndefined();
     expect(payload.display_name).toBeUndefined();
     expect(payload.display_args).toBeUndefined();
@@ -83,7 +56,6 @@ describe('ToolEventPayload type shape', () => {
     expect(payload.type).toBe('progress');
     expect(payload.stdout_chunk).toBe('Processing file 5 of 10...');
     expect(payload.progress_pct).toBe(50);
-    // Fields from other event types must be absent
     expect(payload.success).toBeUndefined();
     expect(payload.duration_ms).toBeUndefined();
   });
@@ -122,8 +94,6 @@ describe('ToolEventPayload type shape', () => {
   });
 
   it('uses snake_case field names matching the Rust serde contract', () => {
-    // Verify the field names are exactly as defined — any rename would be a
-    // breaking change in the frontend/backend protocol.
     const payload: ToolEventPayload = {
       type: 'completed',
       id: 'check',
@@ -142,7 +112,6 @@ describe('ToolEventPayload type shape', () => {
       parallel_group: 'g',
     };
 
-    // All snake_case keys must exist on the object (not camelCase variants).
     const keys = Object.keys(payload);
     expect(keys).toContain('conversation_id');
     expect(keys).toContain('message_id');
@@ -163,7 +132,6 @@ describe('ToolEventPayload type shape', () => {
       conversation_id: 0,
       message_id: 'msg-0',
     };
-    // Must not be undefined — 0 is a valid conversation_id
     expect(payload.conversation_id).toBe(0);
     expect(typeof payload.conversation_id).toBe('number');
   });
@@ -177,19 +145,6 @@ describe('ToolEventPayload type shape', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// initializeToolEventListener — double-init guard
-//
-// The guard is a module-level boolean `toolEventListenerInitialized`.  It is
-// not exported, so we observe it indirectly: the number of `listen` calls
-// emitted by @tauri-apps/api/event tells us whether the function attempted
-// to re-register.
-//
-// Strategy: use vi.resetModules() before each guard test so each test gets a
-// fresh module instance with the flag reset to false.  Then use vi.doMock()
-// before the dynamic import so Vitest picks up our overrides.
-// ---------------------------------------------------------------------------
-
 describe('initializeToolEventListener double-init guard', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -200,8 +155,6 @@ describe('initializeToolEventListener double-init guard', () => {
   });
 
   it('does not call listen when isTauri is false (web/test mode)', async () => {
-    // setup.ts mocks tauri-mock with isTauri = false.  After vi.resetModules()
-    // the fresh module load still hits the vi.mock() factory from setup.ts which
     // evaluates to isTauri: false (no Tauri globals in jsdom).
     const { listen } = await import('@tauri-apps/api/event');
     const listenSpy = vi.mocked(listen);
@@ -210,15 +163,12 @@ describe('initializeToolEventListener double-init guard', () => {
     const { initializeToolEventListener } = await import('../stores/chat/toolStore');
 
     await initializeToolEventListener();
-    await initializeToolEventListener(); // second call
+    await initializeToolEventListener();
 
-    // isTauri = false → guard exits before calling listen.
     expect(listenSpy).not.toHaveBeenCalled();
   });
 
   it('only registers listeners once when called twice with isTauri = true', async () => {
-    // Re-mock tauri-mock so isTauri = true for this test.
-    // Include listen from @tauri-apps/api/event so the spy can observe calls.
     vi.doMock('../lib/tauri-mock', async () => {
       const eventApi = await import('@tauri-apps/api/event');
       return {
@@ -238,18 +188,14 @@ describe('initializeToolEventListener double-init guard', () => {
 
     const { initializeToolEventListener } = await import('../stores/chat/toolStore');
 
-    // First call — registers all event listeners.
     await initializeToolEventListener();
     const callsAfterFirst = listenSpy.mock.calls.length;
 
-    // Guard must prevent a second registration.
     await initializeToolEventListener();
     expect(listenSpy.mock.calls.length).toBe(callsAfterFirst);
   });
 
   it('resets the guard flag when listen rejects so a retry is possible', async () => {
-    // Re-mock tauri-mock so isTauri = true.
-    // Include listen from @tauri-apps/api/event so the spy can observe calls.
     vi.doMock('../lib/tauri-mock', async () => {
       const eventApi = await import('@tauri-apps/api/event');
       return {
@@ -265,16 +211,13 @@ describe('initializeToolEventListener double-init guard', () => {
 
     const { listen } = await import('@tauri-apps/api/event');
     const listenSpy = vi.mocked(listen);
-    // First call rejects; subsequent calls resolve.
     listenSpy.mockRejectedValueOnce(new Error('IPC unavailable')).mockResolvedValue(() => {});
 
     const { initializeToolEventListener } = await import('../stores/chat/toolStore');
 
-    // First attempt — listen throws; implementation catches and resets the flag.
     await initializeToolEventListener();
     const callsAfterFirst = listenSpy.mock.calls.length;
 
-    // Second attempt — flag was reset so the function should enter the body again.
     await initializeToolEventListener();
     expect(listenSpy.mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });

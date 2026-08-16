@@ -1,17 +1,3 @@
-/**
- * recording-value-capture-wiring.test.ts
- *
- * Regression for EXT-RECORDING-VALUE-CAPTURE-DEAD: the content script fully
- * supported recording typed values (SET_RECORDING_VALUE_CAPTURE flips
- * automationState.captureValues; sanitizeRecordedValue redacts password/cc/OTP
- * fields — C-05), but the side panel never sent the message, so captureValues
- * was permanently false and replayed shortcuts typed '' into every input.
- *
- * The wiring crosses side-panel -> background -> content-script contexts (the
- * side_panel.ts entry module is not unit-importable), so — matching the
- * established source-level invariant pattern (computer-use-usage-meter,
- * computer-use-default-ask) — assert the toggle + message exist end to end.
- */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';

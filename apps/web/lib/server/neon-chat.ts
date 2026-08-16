@@ -17,7 +17,6 @@ import {
 
 export type ChatConversationRow = {
   id: string;
-  /** Server-confirmed workspace scope; null is Personal. */
   organization_id?: string | null;
   title: string;
   model: string | null;
@@ -28,11 +27,6 @@ export type ChatConversationRow = {
   is_temporary: boolean;
   created_at: string;
   updated_at: string;
-  /**
-   * Set when the conversation is soft-deleted. Present so the recently-deleted
-   * list can show WHEN something was deleted; null on every normal read, which
-   * filters `deleted_at is null`.
-   */
   deleted_at?: string | null;
 };
 
@@ -61,21 +55,11 @@ export async function requireCurrentUserId(request?: NextRequest): Promise<strin
   if (!userId) {
     throw createError.unauthorized();
   }
-  // Reject suspended/banned accounts (admin suspend-user must actually take effect).
   const { assertAccountActive } = await import('@/lib/api-auth');
   await assertAccountActive(userId);
   return userId;
 }
 
-/**
- * PER-5 — the write-path guard for message metadata.
- *
- * This used to be a bare type check that returned the object unchanged, so a
- * multi-megabyte payload (a `data:` image URL in `metadata.imageUrl`) reached
- * the INSERT and blew up on the request body limit, surfacing as an opaque
- * "Couldn't save this response". Oversized metadata is now rejected here with
- * an actionable 400 that says what to do instead.
- */
 export function normalizeMessageMetadata(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const normalized = { ...(value as Record<string, unknown>) };

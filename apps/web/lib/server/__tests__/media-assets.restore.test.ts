@@ -23,10 +23,8 @@ describe('restoreMediaAsset (Recently-deleted bin restore)', () => {
     expect(ok).toBe(true);
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('set deleted_at = null');
-    // Guards: must be currently soft-deleted AND inside the 30-day recovery window.
     expect(sql).toContain('deleted_at is not null');
     expect(sql).toContain("deleted_at > now() - interval '30 days'");
-    // Owner scoping — id is $1, user is $2.
     expect(sql).toContain('user_id = $2');
     expect(sql).toContain('organization_id is not distinct from $3::uuid');
     expect(params).toEqual(['asset-1', 'user-owner', 'org-1']);

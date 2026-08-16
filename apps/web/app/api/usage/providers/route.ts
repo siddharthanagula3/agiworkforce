@@ -10,7 +10,6 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 
-/** Legacy alias that no longer exposes Managed Cloud provider-cost attribution. */
 async function handleGetProviderUsage(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'usage-providers');
   if (rateLimitResponse) return rateLimitResponse;

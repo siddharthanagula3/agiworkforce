@@ -1,21 +1,3 @@
-/**
- * Directory-sync reconciliation under the conditions a real IdP produces.
- *
- * `scim-routes.test.ts` covers the happy path plus authentication, entitlement
- * and tenant isolation. This suite covers the five failure classes CRIT-012
- * names, none of which are exercised there:
- *
- *   idempotency    — Okta and Entra retry aggressively; replaying a delivered
- *                    operation must converge, not double-apply or 500.
- *   out-of-order   — group membership routinely arrives before the user it
- *                    references, and deletes arrive after deletes.
- *   partial failure— a multi-statement write that fails halfway must leave NO
- *                    partial state, because the IdP will retry the whole call.
- *   rate limiting  — a throttled IdP must receive a parseable SCIM error, not
- *                    an HTML or bare 429 it will treat as a protocol fault.
- *   deletion       — a deprovision must actually remove access, and a repeat
- *                    deprovision must be a clean 404.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -55,7 +37,6 @@ const CONNECTION = '33333333-3333-4333-8333-333333333333';
 const ADMIN = 'admin-user';
 const BASE = 'https://app.example.com/api/scim/v2';
 
-/** A well-formed UUID that is deliberately not any resource in the tenant. */
 const ABSENT_MEMBER_ID = '99999999-9999-4999-8999-999999999999';
 
 interface Harness {
@@ -145,7 +126,6 @@ async function body(response: Response): Promise<Record<string, unknown>> {
   return (await response.json()) as Record<string, unknown>;
 }
 
-/** Provision a linked user and return its SCIM resource id. */
 async function provisionLinkedUser(
   h: Harness,
   overrides: Record<string, unknown> = {},
@@ -163,12 +143,6 @@ function memberRole(state: FakeScimDbState, userId: string): unknown {
   return state.organization_members.find((row) => row['user_id'] === userId)?.['role'];
 }
 
-/**
- * Make one statement fail the way a real outage would — a lock timeout, a
- * constraint the application did not anticipate, a dropped connection.
- *
- * The point is to prove the OTHER statements in the same call did not stick.
- */
 function failStatementsMatching(h: Harness, needle: string): void {
   const adapter = h.adapter as unknown as {
     query: (sql: string, params?: unknown[]) => Promise<unknown>;
@@ -188,10 +162,6 @@ beforeEach(() => {
   mockWithRateLimit.mockResolvedValue(null);
 });
 
-// ---------------------------------------------------------------------------
-// Partial failure
-// ---------------------------------------------------------------------------
-
 describe('SCIM user writes are all-or-nothing', () => {
   it('leaves no unprovisionable resource behind when the membership write fails', async () => {
     const h = await harness();
@@ -204,10 +174,6 @@ describe('SCIM user writes are all-or-nothing', () => {
 
     expect(response.status).toBe(500);
 
-    // The IdP retries a 500 with the identical body. A surviving resource row
-    // would make that retry collide with the userName uniqueness index and
-    // answer 409 from then on — a user who can never be provisioned and whose
-    // resource grants no access.
     expect(h.state.scim_provisioned_users).toHaveLength(0);
     expect(memberRole(h.state, 'clerk_ada')).toBeUndefined();
   });
@@ -233,9 +199,6 @@ describe('SCIM user writes are all-or-nothing', () => {
 
     expect(response.status).toBe(500);
 
-    // The worst half-success in this system: a resource that reads
-    // `active: false` next to a person who still has access. Either both land
-    // or neither does.
     expect(h.state.scim_provisioned_users[0]!['active']).toBe(true);
     expect(memberRole(h.state, 'clerk_ada')).toBe('member');
   });
@@ -260,9 +223,6 @@ describe('SCIM group writes are all-or-nothing', () => {
 
     expect(response.status).toBe(400);
 
-    // The IdP was told the create failed, so it will retry the identical
-    // request. If a row survived here that retry answers 409 uniqueness
-    // forever and the group can never converge.
     expect(h.state.scim_groups).toHaveLength(0);
     expect(h.state.scim_group_members).toHaveLength(0);
   });
@@ -285,7 +245,6 @@ describe('SCIM group writes are all-or-nothing', () => {
     const groupId = String((await body(created))['id']);
     h.state.scim_groups[0]!['mapped_role'] = 'admin';
 
-    // Re-reconcile so the mapping actually lands before the failing PUT.
     await groupPatch(
       scimRequest(`/Groups/${groupId}`, {
         method: 'PATCH',
@@ -305,12 +264,6 @@ describe('SCIM group writes are all-or-nothing', () => {
         token: h.rawToken,
         body: {
           schemas: [SCIM_SCHEMA.group],
-          // The absent id is sent FIRST on purpose. A non-atomic PUT deletes
-          // the whole member set, then fails on the first id it tries to
-          // re-add, so nothing is ever put back. With the bad id last, the
-          // valid member happens to be re-inserted before the throw and the
-          // damage is invisible — this ordering is what makes the assertion
-          // below discriminate.
           members: [{ value: ABSENT_MEMBER_ID }, { value: memberId }],
           displayName: 'Renamed By A Doomed Request',
         },
@@ -320,13 +273,9 @@ describe('SCIM group writes are all-or-nothing', () => {
 
     expect(response.status).toBe(400);
 
-    // A PUT replaces the member set wholesale, so a non-atomic implementation
-    // empties the group before it discovers the bad id — silently stripping
-    // the admin role of everyone who was in it.
     expect(h.state.scim_group_members).toHaveLength(1);
     expect(h.state.scim_group_members[0]!['scim_user_id']).toBe(memberId);
     expect(memberRole(h.state, 'clerk_ada')).toBe('admin');
-    // The rename rode along in the same failed request and must be gone too.
     expect(h.state.scim_groups[0]!['display_name']).toBe('Engineering');
   });
 
@@ -363,8 +312,6 @@ describe('SCIM group writes are all-or-nothing', () => {
     );
 
     expect(response.status).toBe(400);
-    // RFC 7644 §3.5.2: a PATCH is a single atomic operation. The `remove` must
-    // not survive the failure of the `add` that followed it.
     expect(h.state.scim_group_members).toHaveLength(1);
   });
 
@@ -395,7 +342,6 @@ describe('SCIM group writes are all-or-nothing', () => {
     );
     expect(memberRole(h.state, 'clerk_ada')).toBe('admin');
 
-    // The demotion is the statement that fails.
     failStatementsMatching(h, 'insert into organization_members');
 
     const response = await groupDelete(
@@ -404,17 +350,10 @@ describe('SCIM group writes are all-or-nothing', () => {
     );
     expect(response.status).toBe(500);
 
-    // Either the group and the admin role it granted both go, or neither does.
-    // The forbidden outcome is the group vanishing while the elevated role it
-    // justified survives with nothing left to explain or revoke it.
     expect(h.state.scim_groups).toHaveLength(1);
     expect(memberRole(h.state, 'clerk_ada')).toBe('admin');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Out-of-order delivery
-// ---------------------------------------------------------------------------
 
 describe('SCIM tolerates out-of-order delivery', () => {
   it('refuses a membership add for a user the IdP has not created yet', async () => {
@@ -440,9 +379,6 @@ describe('SCIM tolerates out-of-order delivery', () => {
       { params: Promise.resolve({ groupId }) },
     );
 
-    // 400 with a SCIM error, not a 500 and not a silently dropped member: the
-    // IdP retries a 400 after it has created the user, and would never retry a
-    // 200 that quietly did nothing.
     expect(response.status).toBe(400);
     expect((await body(response))['scimType']).toBe('invalidValue');
     expect(h.state.scim_group_members).toHaveLength(0);
@@ -491,10 +427,6 @@ describe('SCIM tolerates out-of-order delivery', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Idempotency
-// ---------------------------------------------------------------------------
-
 describe('SCIM operations are idempotent under retry', () => {
   it('converges when the same deactivate is delivered twice', async () => {
     const h = await harness();
@@ -521,9 +453,8 @@ describe('SCIM operations are idempotent under retry', () => {
     const second = await deactivate();
     expect(second.status).toBe(200);
     expect((await body(second))['active']).toBe(false);
-    // The retry must not re-grant, duplicate, or error.
     expect(memberRole(h.state, 'clerk_ada')).toBeUndefined();
-    expect(h.state.organization_members).toHaveLength(1); // the owner only
+    expect(h.state.organization_members).toHaveLength(1);
   });
 
   it('adds a member to a group exactly once however many times the IdP sends it', async () => {
@@ -559,10 +490,6 @@ describe('SCIM operations are idempotent under retry', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Rate limiting
-// ---------------------------------------------------------------------------
-
 describe('SCIM rate limiting speaks SCIM', () => {
   it('re-shapes a throttled request into a parseable SCIM error', async () => {
     const h = await harness();
@@ -573,21 +500,14 @@ describe('SCIM rate limiting speaks SCIM', () => {
     );
 
     expect(response.status).toBe(429);
-    // An IdP parses the body; a bare text/plain 429 from the shared limiter is
-    // a protocol fault to Okta, not a retry signal.
     expect(response.headers.get('content-type')).toContain('application/scim+json');
     const parsed = await body(response);
     expect(parsed['schemas']).toEqual([SCIM_SCHEMA.error]);
     expect(parsed['scimType']).toBe('tooMany');
 
-    // Throttling happens BEFORE authentication and before any write.
     expect(h.state.scim_provisioned_users).toHaveLength(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Deletion
-// ---------------------------------------------------------------------------
 
 describe('SCIM deletion actually removes access', () => {
   it('revokes the organization membership and the resource together', async () => {
@@ -609,8 +529,6 @@ describe('SCIM deletion actually removes access', () => {
     });
     expect(readBack.status).toBe(404);
 
-    // The deprovision is auditable, which is what lets an admin prove access
-    // was removed at a point in time.
     expect(
       h.state.directory_sync_events.some((row) => row['event_type'] === 'user.deprovisioned'),
     ).toBe(true);
@@ -649,7 +567,6 @@ describe('SCIM deletion actually removes access', () => {
     );
     expect(response.status).toBe(204);
 
-    // Deleting the group that granted admin must take the grant with it.
     expect(memberRole(h.state, 'clerk_ada')).toBe('member');
     expect(h.state.scim_group_members).toHaveLength(0);
   });

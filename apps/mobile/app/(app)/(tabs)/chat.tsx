@@ -3,13 +3,6 @@ import { View, Alert, Keyboard, ScrollView, KeyboardAvoidingView, Platform } fro
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
-// `expo-router`'s re-export, NOT `@react-navigation/native`'s. The monorepo
-// resolves FIVE copies of @react-navigation/native@7.2.0 (built against
-// react-native 0.83.10 and 0.86.2). The app and expo-router's container end
-// up on different module instances, so their React context objects differ and
-// the raw hook throws "Couldn't find a navigation object" — a render error on
-// the chat tab, i.e. app launch. expo-router's export is bound to the instance
-// that actually owns the navigator.
 import { useFocusEffect } from 'expo-router';
 import { Download } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -90,12 +83,6 @@ function getTimeOfDayGreeting(): string {
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 
-/**
- * Chat tab -- composer-first new chat surface.
- * Full history and global search live in the dedicated Chats surface; this
- * screen stays focused on starting work.
- * The hamburger menu opens the app-level drawer navigator.
- */
 export default function ChatTabScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -135,11 +122,6 @@ export default function ChatTabScreen() {
   const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
   const workMode = useChatStore((s) => s.workMode);
 
-  // Error state lives in the shared chat store, not scoped per-conversation --
-  // without this, a stale error banner from a previous conversation (e.g. "no
-  // on-device model ready" from a Local-mode chat) leaks into this empty-state
-  // screen whenever it regains focus (tab switch, back-nav). Previously this
-  // only cleared when the now-removed header "new chat" button was tapped.
   useFocusEffect(
     useCallback(() => {
       clearError();
@@ -177,11 +159,6 @@ export default function ChatTabScreen() {
       clearSelectedSkill();
     }
   }, [clearSelectedSkill, clerkUserId, isClerkLoaded, skillSelection]);
-  // Only a model the picker can actually resolve counts as "ready" (SIX-21).
-  // `readySystemModelIds` reports the OS-resident Tier-1 row (Apple
-  // Intelligence / AICore); those catalog rows now reach LOCAL_MODEL_LIST and
-  // are enabled only by the native capability probe. The same lookup also
-  // rejects an installed id the catalog has since retired.
   const hasReadyLocalModel = useMemo(
     () =>
       [...installedModelIds, ...readySystemModelIds].some((modelId) =>
@@ -195,13 +172,6 @@ export default function ChatTabScreen() {
       ? 'Continue with AGI Cloud. Use Chats for full history and global search.'
       : 'Start privately on this device. Use Chats for full history and global search.';
 
-  /**
-   * The model this screen will ACTUALLY send with. The selection can sit on
-   * the wrong side of the boundary (e.g. a cloud id still selected right after
-   * a switch back to Local), and `handleSend` already corrects for that — the
-   * disclosure has to describe the corrected route, not the stale selection,
-   * so both read the same value.
-   */
   const modelForSend = useMemo(() => {
     if (activeMode === 'cloud') {
       return executionModeForSelection(selectedModel, activeMode) === 'cloud'
@@ -213,11 +183,6 @@ export default function ChatTabScreen() {
       : DEFAULT_LOCAL_MODEL_ID;
   }, [activeMode, selectedModel, subscriptionTier]);
 
-  // Route half of the "what will be sent" disclosure. Mobile is a Local /
-  // sign-in-gated-AGI-Cloud dual-trust surface, so this is the payload-preview
-  // half of the Local -> Cloud consent contract (SIX-20). The composer joins it
-  // with the live draft and staged attachments and renders it above the input.
-  // `modelLabel` must be the human name — the raw wire id is developer output.
   const sendPreviewInput = useMemo<SendPreviewInput>(
     () => ({
       providerMode: (activeMode === 'cloud' ? 'ManagedGateway' : 'Local') satisfies ProviderMode,
@@ -242,20 +207,12 @@ export default function ChatTabScreen() {
         setModel(DEFAULT_LOCAL_MODEL_ID);
         return;
       }
-      // The persisted mode hydrates before Clerk necessarily resolves its
-      // native session. `cloudUnlocked` is deliberately false in that pending
-      // window, even for a signed-in user; treating it as a denial overwrote a
-      // persisted Cloud preference with Local on every cold start. Wait for
-      // definitive auth. A loaded signed-out session still fails closed.
       if (!isClerkLoaded) return;
       if (!isClerkSignedIn) {
         setAppMode('local');
         setModel(DEFAULT_LOCAL_MODEL_ID);
         return;
       }
-      // ClerkTokenBridge publishes cloudUnlocked immediately before
-      // isClerkSignedIn. Keep the preference intact if React observes the
-      // intermediate render; the bridge will unlock the controls next.
       if (!cloudUnlocked) return;
       if (executionModeForSelection(selectedModel, appMode) !== 'cloud') {
         setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
@@ -289,8 +246,6 @@ export default function ChatTabScreen() {
       mode?: TaskChipType,
       dispatchOptions?: { awaitCompletion?: boolean },
     ): Promise<boolean> => {
-      // Returns false when a pre-flight gate blocks the send so the composer
-      // keeps the user's draft; resolves true once the message is committed.
       try {
         if (activeMode === 'cloud' && !FEATURES.cloudChat) {
           Alert.alert(
@@ -299,22 +254,16 @@ export default function ChatTabScreen() {
           );
           return false;
         }
-        // Same value the SendPreview disclosure above the composer describes.
         if (!modelForSend) return false;
         const trimmed = text.trim();
         const skillNameForTurn = activeMode === 'cloud' ? selectedSkillName : undefined;
 
-        // Video is checked BEFORE image: in Video mode every send is a video
-        // request, and the image classifier would otherwise claim prompts that
-        // merely sound visual.
         const videoRequest = skillNameForTurn
           ? ({ status: 'not_requested' } as const)
           : resolveMobileVideoGenerationRequest({
               executionMode: activeMode,
               text: trimmed,
               mediaMode,
-              // Video output shape from the composer sheet; the resolver narrows
-              // these to the wire contract's literal unions.
               aspectRatio: videoAspectRatio,
               resolution: videoResolution,
               subscriptionTier,
@@ -378,9 +327,6 @@ export default function ChatTabScreen() {
               aspectRatio: imageAspectRatio,
             });
 
-        // Image output is a specialist media route, not a chat-completions
-        // response. The canonical classifier handles both /image and natural
-        // language; Local remains isolated and never reaches this resolver.
         if (imageRequest.status === 'blocked') {
           Alert.alert(imageRequest.alert.title, imageRequest.alert.message);
           return false;
@@ -426,10 +372,6 @@ export default function ChatTabScreen() {
           ...(mode ? TASK_CHIP_SEND_CONTEXT[mode] : {}),
           ...(skillNameForTurn ? { skillName: skillNameForTurn } : {}),
         };
-        // Resolve true the moment the store commits the user message so the
-        // home composer clears its "new-chat" draft on acceptance — a send
-        // blocked by a pre-flight gate keeps the text for when the user
-        // returns to this screen.
         if (dispatchOptions?.awaitCompletion) {
           const accepted = await sendMessage(
             conversationId,
@@ -448,8 +390,6 @@ export default function ChatTabScreen() {
               onAccepted,
             }),
           (err) => {
-            // The user has already been routed to the conversation screen —
-            // surface the failure in its SendErrorBanner, never silently.
             console.warn('[ChatTabScreen] sendMessage rejected:', err);
             setSendError('Message could not be sent. Please try again.');
           },
@@ -457,8 +397,6 @@ export default function ChatTabScreen() {
         if (accepted && skillNameForTurn) clearSelectedSkill();
         return accepted;
       } catch (err) {
-        // Conversation creation failed — tell the user and keep the draft so
-        // they can retry (the home tab has no error banner, so Alert here).
         console.warn('[ChatTabScreen] createConversation failed:', err);
         Alert.alert('Could not start the chat', 'Something went wrong. Please try again.');
         return false;
@@ -541,8 +479,6 @@ export default function ChatTabScreen() {
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
-  // Sheet-to-sheet handoff: the "+" sheet must finish closing before the model
-  // picker snaps open, or the second sheet mounts behind the first backdrop.
   const handleSheetModelPicker = useCallback(() => {
     addToChatRef.current?.close();
     setTimeout(() => {
@@ -557,10 +493,6 @@ export default function ChatTabScreen() {
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
-  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
-  // signing in IS the entitlement (no invite, no waitlist). Every cloud-gated entry
-  // point routes a signed-out user to Clerk sign-in; ClerkTokenBridge flips
-  // cloudUnlocked on success. Local stays the free, account-less default.
   const handleOpenCloudAccess = useCallback(() => {
     router.push(beginCloudPostAuthIntent());
   }, [router]);
@@ -571,24 +503,14 @@ export default function ChatTabScreen() {
   }, [setAppMode, setModel]);
 
   const handleTapCloudMode = useCallback(() => {
-    // Fail closed: if managed cloud chat isn't wired (feature off / no cloud model),
-    // stay in Local rather than dangling a dead toggle.
     if (!cloudChatAvailable || !DEFAULT_CLOUD_MODEL_ID) {
       setAppMode('local');
       return;
     }
-    // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
-    // the signed-in entitlement IS the gate. No invite code, no waitlist. A not-yet-
-    // unlocked (signed-out) user is routed to Clerk sign-in; signing in flips
-    // cloudUnlocked via ClerkTokenBridge and Cloud becomes usable. Local stays the
-    // free, account-less default.
     if (!cloudUnlocked) {
       router.push(beginCloudPostAuthIntent());
       return;
     }
-    // The toggle ONLY switches modes — model selection belongs to the
-    // composer's model chip. (It previously re-opened the model picker when
-    // already in Cloud, blurring the two responsibilities.)
     if (activeMode !== 'cloud') {
       setAppMode('cloud');
       setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
@@ -605,7 +527,6 @@ export default function ChatTabScreen() {
 
   const handleOpenConnectors = useCallback(() => {
     if (!FEATURES.connectors) {
-      // Connectors are a managed-cloud feature; gate behind sign-in (public alpha).
       handleOpenCloudAccess();
       return;
     }
@@ -665,8 +586,6 @@ export default function ChatTabScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        // Single source of truth shared with the attach-time validator — the
-        // picker must never advertise a type `isParseableDocument` rejects.
         type: [...PICKABLE_DOCUMENT_MIME_TYPES],
         copyToCacheDirectory: true,
       });
@@ -694,23 +613,14 @@ export default function ChatTabScreen() {
   );
 
   const handleOpenVoiceMode = useCallback(() => {
-    // Dismiss first: the composer keeps focus otherwise and the keyboard sits
-    // on top of the bar we are about to raise.
     Keyboard.dismiss();
-    // The intro carries the recording disclosure, so it has to land BEFORE
-    // anything opens a live microphone — not alongside it.
     if (!useSettingsStore.getState().voiceOnboardingSeen) {
       setVoiceIntroVisible(true);
       return;
     }
-    // Identical to the first-run path below and to chat/[id].tsx: one voice
-    // presentation, whichever entry point reached it.
     setVoiceInlineVisible(true);
   }, []);
 
-  // Intro -> pick a voice -> conversation. The picker only fronts the FIRST
-  // run; afterwards the saved preset is used and the mic opens directly, so a
-  // returning user is not asked to re-choose every time.
   const handleVoiceIntroContinue = useCallback(() => {
     setVoiceIntroVisible(false);
     setVoicePickerVisible(true);
@@ -727,29 +637,18 @@ export default function ChatTabScreen() {
 
   const handleExitInlineVoice = useCallback(() => {
     setVoiceInlineVisible(false);
-    // The composer only mounts on the next frame; defer so leaving voice via
-    // the keyboard pill lands the user in a focused, ready-to-type field.
     requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
   }, []);
 
-  // Voice mode replaces the composer, so the "+" sheet's results would land on
-  // an unmounted ChatInput (its attach ref is null) and vanish silently. Leave
-  // voice first, then open the sheet.
   const handleVoiceAttach = useCallback(() => {
     setVoiceInlineVisible(false);
     handleOpenAddToChat();
   }, [handleOpenAddToChat]);
 
-  // Dismissing without acknowledging must not start voice, and must not mark
-  // the disclosure as seen — the sheet returns next time.
   const handleVoiceIntroDismiss = useCallback(() => {
     setVoiceIntroVisible(false);
   }, []);
 
-  // Compare streams BOTH panes through the managed-cloud gateway, so it only
-  // exists inside the Cloud boundary. Offering `/compare` in Local Mode led
-  // straight into guardedFetch's refusal, rendered verbatim in both panes.
-  // Passing `undefined` is what removes it from the command palette.
   const handleOpenCompare = useCallback(() => {
     router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
   }, [router]);
@@ -758,8 +657,6 @@ export default function ChatTabScreen() {
   const handleVoiceSendMessage = useCallback(
     async (text: string): Promise<string> => {
       try {
-        // Reuse the composer dispatch path so voice receives the same boundary,
-        // Auto, media specialist, network, and paywall behavior as typed input.
         const accepted = await handleSend(text, undefined, undefined, { awaitCompletion: true });
         if (!accepted) {
           throw new Error(useChatStore.getState().error ?? 'Message was not sent.');
@@ -779,9 +676,6 @@ export default function ChatTabScreen() {
     [handleSend],
   );
 
-  // Same hook the /voice companion route uses. `enabled` is what starts and
-  // stops capture, so the bar's visibility IS the session lifecycle — no second
-  // copy of the STT/TTS wiring to drift from the first.
   const {
     phase: inlineVoicePhase,
     muted: inlineVoiceMuted,
@@ -837,10 +731,6 @@ export default function ChatTabScreen() {
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
-            // Centre the greeting block in the free space above the composer
-            // (founder decision 2026-07-29, superseding the 2026-07-19
-            // bottom-anchored variant). Connector-derived cards stay absent
-            // until an explicit, consented source-scan contract exists.
             flexGrow: 1,
             alignItems: 'center',
             justifyContent: 'center',
@@ -864,10 +754,6 @@ export default function ChatTabScreen() {
               style={{
                 fontSize: 26,
                 lineHeight: 30,
-                // Newsreader — the same brand typeface web uses via
-                // `var(--font-newsreader)`. Loaded in app/_layout.tsx. The
-                // weight lives in the family name, so no fontWeight here:
-                // setting one makes iOS synthesise a bolder face over it.
                 fontFamily: 'Newsreader_600SemiBold',
                 letterSpacing: 0.5,
                 color: c.textPrimary,
@@ -1005,10 +891,6 @@ export default function ChatTabScreen() {
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// DownloadModelBanner — shown in local mode when no model is installed yet.
-// ---------------------------------------------------------------------------
 
 interface DownloadModelBannerProps {
   onPress: () => void;

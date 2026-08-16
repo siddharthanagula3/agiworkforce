@@ -46,7 +46,6 @@ describe('buildMemorySystemContent', () => {
   it('respects the total character budget', () => {
     const big = Array.from({ length: 50 }, () => fact('x'.repeat(300)));
     const content = buildMemorySystemContent(big)!;
-    // Guidance preamble is small; the bulk is the bullet list which is budgeted.
     expect(content.length).toBeLessThan(4000 + 500);
   });
 

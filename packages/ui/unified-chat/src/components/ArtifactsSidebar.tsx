@@ -1,14 +1,3 @@
-/**
- * ArtifactsSidebar — 420px right-sidebar artifact viewer.
- *
- * Phase A Slice 4 / Task #16.
- *
- * Self-contained layout component the host mounts to the right of MessageList.
- * Reads from useArtifactStore and renders the correct ArtifactRenderer based on
- * the active artifact's kind. Width: 420px expanded, hideable via onClose prop.
- *
- * The host controls visibility — pass isOpen=false to unmount or hide.
- */
 
 import { ChevronRight, Code2, X } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -18,28 +7,14 @@ import { ArtifactRenderer } from './ArtifactRenderer';
 import type { ArtifactRendererProps } from './ArtifactRenderer';
 
 export interface ArtifactsSidebarProps {
-  /** Controls sidebar visibility. When false the sidebar is not rendered. */
   isOpen: boolean;
-  /** Called when the user closes the sidebar via the X button. */
   onClose?: () => void;
-  /** Optional dark-mode flag forwarded to ArtifactRenderer. */
   isDark?: boolean;
-  /** Optional className override on the root container. */
   className?: string;
-  /** Optional prop forwarded to ArtifactRenderer — desktop file-write callback. */
   onApplyCode?: ArtifactRendererProps['onApplyCode'];
-  /** Optional native export callback forwarded to ArtifactRenderer. */
   onExportNative?: ArtifactRendererProps['onExportNative'];
 }
 
-/**
- * Right-hand sidebar that displays the currently active artifact.
- *
- * The sidebar width is locked to `tokens.spacing.artifactPanelWidth` (420px).
- * The host app is responsible for adjusting the adjacent MessageList layout
- * (e.g. by passing `style={{ marginRight: isOpen ? 420 : 0 }}` or using a
- * CSS grid/flex split).
- */
 export function ArtifactsSidebar({
   isOpen,
   onClose,

@@ -1,13 +1,3 @@
-/**
- * Cloud Privacy Settings Screen
- *
- * Aligns with the web PrivacySection. Shows cloud-scoped privacy controls:
- * data retention acknowledgement, telemetry policy, and links to the full
- * privacy policy. Product-wide guarantees are rendered as policy states, not
- * cosmetic switches.
- *
- * Cloud-only surface. Local privacy is handled by Data Controls.
- */
 
 import { Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';

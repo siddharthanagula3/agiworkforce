@@ -1,10 +1,5 @@
-/**
- * Productivity API — typed wrappers for Notion, Trello, Asana integration commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export type Provider = 'notion' | 'trello' | 'asana';
 export interface ConnectResponse {
@@ -23,8 +18,6 @@ export interface CreateTaskResponse {
   taskId: string;
 }
 
-// ---- Core ----
-
 export async function productivityConnect(
   provider: Provider,
   credentials: unknown,
@@ -40,8 +33,6 @@ export async function productivityCreateTask(
 ): Promise<CreateTaskResponse> {
   return command<CreateTaskResponse>('productivity_create_task', { provider, task });
 }
-
-// ---- Notion ----
 
 export async function productivityNotionListPages(): Promise<unknown[]> {
   return command<unknown[]>('productivity_notion_list_pages');
@@ -59,8 +50,6 @@ export async function productivityNotionCreateDatabaseRow(
 ): Promise<string> {
   return command<string>('productivity_notion_create_database_row', { databaseId, properties });
 }
-
-// ---- Trello ----
 
 export async function productivityTrelloListBoards(): Promise<unknown[]> {
   return command<unknown[]>('productivity_trello_list_boards');
@@ -81,8 +70,6 @@ export async function productivityTrelloMoveCard(cardId: string, listId: string)
 export async function productivityTrelloAddComment(cardId: string, text: string): Promise<string> {
   return command<string>('productivity_trello_add_comment', { cardId, text });
 }
-
-// ---- Asana ----
 
 export async function productivityAsanaListProjects(workspaceId: string): Promise<unknown[]> {
   return command<unknown[]>('productivity_asana_list_projects', { workspaceId });

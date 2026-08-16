@@ -1,20 +1,5 @@
 import { Page, expect } from '@playwright/test';
 
-/**
- * TEST HELPERS & UTILITIES
- *
- * Common utilities for E2E tests:
- * - Chat interactions
- * - Model selection
- * - Error checking
- * - Wait conditions
- * - Assertions
- */
-
-// ============================================
-// CHAT INTERACTION HELPERS
-// ============================================
-
 export async function sendChatMessage(page: Page, message: string, timeout = 30000) {
   const chatInput = page
     .locator('textarea[placeholder*="message"], [data-testid="chat-input"]')
@@ -35,10 +20,8 @@ export async function sendChatMessage(page: Page, message: string, timeout = 300
 
   await sendButton.click();
 
-  // Verify user message appears
   await expect(page.locator('[data-role="user"]').last()).toContainText(message.substring(0, 20));
 
-  // Wait for assistant response
   await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout });
 
   return page.locator('[data-role="assistant"]').last();
@@ -71,10 +54,6 @@ export async function clearChat(page: Page) {
     await page.waitForTimeout(500);
   }
 }
-
-// ============================================
-// MODEL SELECTION HELPERS
-// ============================================
 
 export async function selectModel(page: Page, modelName: string) {
   const modelSelector = page
@@ -123,7 +102,7 @@ export async function toggleThinkingMode(page: Page, enable?: boolean) {
     .first();
 
   if (!(await thinkingToggle.isVisible({ timeout: 2000 }).catch(() => false))) {
-    return null; // Thinking mode not available
+    return null;
   }
 
   const currentState = await thinkingToggle.getAttribute('aria-pressed');
@@ -141,7 +120,7 @@ export async function setConversationMode(page: Page, mode: 'safe' | 'full-contr
   const modeSelector = page.locator('[data-testid="conversation-mode"]').first();
 
   if (!(await modeSelector.isVisible({ timeout: 2000 }).catch(() => false))) {
-    return null; // Mode selector not available
+    return null;
   }
 
   await modeSelector.click();
@@ -161,10 +140,6 @@ export async function setConversationMode(page: Page, mode: 'safe' | 'full-contr
 
   return false;
 }
-
-// ============================================
-// ERROR DETECTION & VALIDATION
-// ============================================
 
 export async function hasErrors(page: Page, filterWarnings = true): Promise<boolean> {
   let errorLocator = page.locator('[role="alert"], .error-message, [data-testid="error-message"]');
@@ -210,10 +185,6 @@ export async function dismissErrors(page: Page) {
   }
 }
 
-// ============================================
-// TOKEN & COST CHECKING
-// ============================================
-
 export async function getTokenCount(page: Page): Promise<number | null> {
   const tokenCounter = page.locator('[data-testid="token-counter"], .token-counter').first();
 
@@ -249,10 +220,6 @@ export async function getBudgetRemaining(page: Page): Promise<number | null> {
   const match = text?.match(/(\d+(?:,\d+)?)/);
   return match ? parseInt(match[1].replace(/,/g, '')) : null;
 }
-
-// ============================================
-// WAIT & POLLING HELPERS
-// ============================================
 
 export async function waitForResponseStreaming(page: Page, timeout = 30000) {
   const streamingIndicator = page.locator('[data-streaming="true"], .streaming').first();
@@ -298,10 +265,6 @@ export async function waitForNewMessage(page: Page, previousCount: number, timeo
   );
 }
 
-// ============================================
-// NAVIGATION & SETUP
-// ============================================
-
 export async function navigateToChat(page: Page, url = 'http://localhost:3000') {
   await page.goto(url);
   await page.waitForLoadState('networkidle');
@@ -334,10 +297,6 @@ export async function getConversationList(page: Page): Promise<string[]> {
   return list;
 }
 
-// ============================================
-// VALIDATION HELPERS
-// ============================================
-
 export async function validateResponseContent(page: Page, minLength = 10): Promise<boolean> {
   const response = await getLastAssistantMessage(page);
   return response.trim().length >= minLength;
@@ -353,14 +312,12 @@ export async function validateMessageFormat(page: Page, hasTimestamp = true, has
   const content = await message.textContent();
 
   if (hasTimestamp) {
-    // Check for time patterns (HH:MM, etc.)
     if (!/\d{1,2}:\d{2}|ago/.test(content || '')) {
       return false;
     }
   }
 
   if (hasModel) {
-    // Check for model indication
     if (!/gpt|claude|gemini|model/i.test(content || '')) {
       return false;
     }
@@ -377,10 +334,6 @@ export async function validateInputCleared(page: Page): Promise<boolean> {
   const value = await chatInput.inputValue();
   return value === '';
 }
-
-// ============================================
-// TOOL & AGI HELPERS
-// ============================================
 
 export async function detectAGIGoal(page: Page, timeout = 5000): Promise<boolean> {
   const agiIndicator = page
@@ -433,10 +386,6 @@ export async function rejectToolExecution(page: Page): Promise<boolean> {
   return false;
 }
 
-// ============================================
-// SCREENSHOT & DEBUGGING
-// ============================================
-
 export async function takeDebugScreenshot(page: Page, name: string) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `debug-${name}-${timestamp}.png`;
@@ -460,10 +409,6 @@ export async function logPageState(page: Page) {
   return state;
 }
 
-// ============================================
-// PERFORMANCE HELPERS
-// ============================================
-
 export async function measureResponseTime(page: Page, message: string): Promise<number> {
   const startTime = Date.now();
 
@@ -486,16 +431,11 @@ export async function measureStreamingTime(page: Page, message: string): Promise
 
   await sendButton.click();
 
-  // Wait for streaming to complete
   await waitForResponseStreaming(page);
 
   const endTime = Date.now();
   return endTime - startTime;
 }
-
-// ============================================
-// BATCH OPERATIONS
-// ============================================
 
 export async function sendMultipleMessages(
   page: Page,

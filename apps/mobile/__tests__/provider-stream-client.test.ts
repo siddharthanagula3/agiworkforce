@@ -65,8 +65,6 @@ describe('provider stream client', () => {
         body: JSON.stringify({ model: 'fixture-provider-model', messages: [] }),
         signal: expect.any(AbortSignal),
       }),
-      // Streaming requests opt into expo/fetch so `res.body` is a real
-      // ReadableStream (token-by-token); guardedFetch threads this to secureFetch.
       { stream: true },
     );
   });

@@ -1,13 +1,3 @@
-/**
- * AgentExecutionSettings
- *
- * Settings section for Wave 1 agent execution features:
- * - Approval timeout seconds (slider, 60-600, default 300)
- * - Approval timeout policy (dropdown: auto-deny, auto-approve, pause)
- * - Stream inactivity timeout seconds (slider, 15-120, default 30)
- *
- * Wired to settingsStore selectors/setters added in Wave 1.
- */
 import { useCallback, useMemo, useState } from 'react';
 import {
   AlertDialog,

@@ -1,20 +1,12 @@
-/**
- * Notification Store Tests
- *
- * Tests for app-wide notification management including toasts,
- * persistent notifications, and settings.
- */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useNotificationStore } from './notification-store';
 
 describe('Notification Store', () => {
   beforeEach(() => {
-    // Reset store to initial state
     useNotificationStore.getState().clearAll();
     useNotificationStore.getState().clearToasts();
     vi.useFakeTimers();
-    // Suppress console logs during tests
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -76,7 +68,6 @@ describe('Notification Store', () => {
 
         expect(useNotificationStore.getState().notifications[id]).toBeDefined();
 
-        // Advance time past autoClose
         vi.advanceTimersByTime(5001);
 
         expect(useNotificationStore.getState().notifications[id]).toBeUndefined();
@@ -121,7 +112,6 @@ describe('Notification Store', () => {
       it('should handle non-existent notification gracefully', () => {
         const { updateNotification } = useNotificationStore.getState();
 
-        // Should not throw
         expect(() => {
           updateNotification('nonexistent', { title: 'Test' });
         }).not.toThrow();
@@ -264,7 +254,6 @@ describe('Notification Store', () => {
         const { addNotification, clearOld } = useNotificationStore.getState();
         const now = new Date();
 
-        // Add a notification
         const id = addNotification({
           type: 'info',
           title: 'Old',
@@ -273,13 +262,11 @@ describe('Notification Store', () => {
           persistent: false,
         });
 
-        // Manually set the timestamp to 10 days ago
         useNotificationStore.setState((state) => {
           state.notifications[id]!.timestamp = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
           return state;
         });
 
-        // Clear notifications older than 7 days
         clearOld(7);
 
         expect(useNotificationStore.getState().notifications[id]).toBeUndefined();
@@ -297,7 +284,6 @@ describe('Notification Store', () => {
           persistent: true,
         });
 
-        // Manually set the timestamp to 10 days ago
         useNotificationStore.setState((state) => {
           state.notifications[id]!.timestamp = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
           return state;
@@ -305,7 +291,6 @@ describe('Notification Store', () => {
 
         clearOld(7);
 
-        // Persistent notification should remain
         expect(useNotificationStore.getState().notifications[id]).toBeDefined();
       });
     });
@@ -499,7 +484,7 @@ describe('Notification Store', () => {
 
         const settings = useNotificationStore.getState().settings;
         expect(settings.enableDesktopNotifications).toBe(false);
-        expect(settings.enableSoundNotifications).toBe(true); // Unchanged
+        expect(settings.enableSoundNotifications).toBe(true);
       });
     });
 
@@ -642,12 +627,10 @@ describe('Notification Store', () => {
           duration: 5000,
         });
 
-        // Should not throw
         expect(() => {
           cleanup();
         }).not.toThrow();
 
-        // Toasts should be cleared
         expect(Object.keys(useNotificationStore.getState().toasts)).toHaveLength(0);
       });
     });

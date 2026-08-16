@@ -5,9 +5,6 @@ jest.mock('../src/features/chat/components/MathBlock', () => ({
   MathBlock: () => null,
 }));
 
-// PAR-M39: http(s) links from assistant output now present the in-app browser
-// sheet instead of backgrounding the app into Safari. `mailto:`/`tel:` handoffs
-// still go to react-native's Linking behind a confirmation alert.
 const mockOpenBrowserAsync = jest.fn();
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: (...args: unknown[]) => mockOpenBrowserAsync(...args),
@@ -62,7 +59,6 @@ describe('MessageContentRenderer', () => {
       'https://docs.example.com',
       expect.objectContaining({ presentationStyle: 'pageSheet' }),
     );
-    // The app must not be backgrounded — that is the whole point of PAR-M39.
     expect(openUrlSpy).not.toHaveBeenCalled();
   });
 
@@ -89,7 +85,6 @@ describe('MessageContentRenderer', () => {
 
     fireEvent.press(getByText('Email us'));
 
-    // Tap alone must not open anything — only the alert confirmation does.
     expect(openUrlSpy).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith(
       'Open in Mail?',
@@ -115,7 +110,6 @@ describe('MessageContentRenderer', () => {
     fireEvent.press(getByText('Call'));
     expect(alertSpy).toHaveBeenCalledWith('Open in Phone?', 'tel:+15551234567', expect.anything());
 
-    // Embedded whitespace disqualifies the URL — no alert, no open.
     fireEvent.press(getByText('Weird'));
     expect(alertSpy).toHaveBeenCalledTimes(1);
     expect(openUrlSpy).not.toHaveBeenCalled();
@@ -177,20 +171,16 @@ describe('MessageContentRenderer', () => {
       <View>{renderMarkdownContent(tableContent, lightColors)}</View>,
     );
 
-    // Verify header cells are present
     expect(getByText('Name')).toHaveStyle({ fontWeight: '500' });
     expect(getByText('Age')).toHaveStyle({ fontWeight: '500' });
     expect(getByText('City')).toHaveStyle({ fontWeight: '500' });
 
-    // Verify body rows have correct values
     expect(getByText('Alice')).toHaveStyle({ color: lightColors.textSecondary });
     expect(getByText('30')).toHaveStyle({ color: lightColors.textSecondary });
     expect(getByText('NYC')).toHaveStyle({ color: lightColors.textSecondary });
     expect(getByText('Bob')).toHaveStyle({ color: lightColors.textSecondary });
     expect(getByText('LA')).toHaveStyle({ color: lightColors.textSecondary });
 
-    // Verify we have 3 instances of empty cell content (one per row with missing value)
-    // Bob's age is empty, so we should render the empty string placeholder
     const allEmptyTexts = getAllByText('');
     expect(allEmptyTexts.length).toBeGreaterThan(0);
   });

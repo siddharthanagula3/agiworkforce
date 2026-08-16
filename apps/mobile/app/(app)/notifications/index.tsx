@@ -1,9 +1,3 @@
-/**
- * Notification Center Screen
- *
- * Lists all in-app notifications with timestamps, priority tiers,
- * and quick actions. Tapping an item deep-links to the relevant screen.
- */
 import { useCallback } from 'react';
 import { View, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -37,10 +31,6 @@ import {
 } from '@/services/notifications';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-
-// ---------------------------------------------------------------------------
-// Priority Icon
-// ---------------------------------------------------------------------------
 
 function getPriorityTone(
   priority: NotificationPriority,
@@ -83,10 +73,6 @@ function getPriorityBadgeColor(priority: NotificationPriority): 'red' | 'yellow'
       return 'gray';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Notification Item
-// ---------------------------------------------------------------------------
 
 interface NotificationItemProps {
   item: NotificationCenterItem;
@@ -178,10 +164,6 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
   );
 }
 
-// ---------------------------------------------------------------------------
-// Notification Center Screen
-// ---------------------------------------------------------------------------
-
 export default function NotificationCenterScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -197,15 +179,10 @@ export default function NotificationCenterScreen() {
       markRead(item.id);
       const route = item.data.route;
 
-      // Deep-link based on notification type
       switch (item.data.type) {
         case 'agent_failed':
         case 'emergency_stop_triggered':
         case 'agent_paused':
-          // /(app)/companion/agent/[id] and /(app)/agents/[id] are gated behind
-          // FEATURES.agents (false in v1) and render <FeatureUnavailable/>, so a
-          // tap there was a dead end (MOBILE-AGENT-NOTIF-DEADEND-01). Route to the
-          // live Cloud tasks/runs list (/(app)/agents, gated by FEATURES.cloudTasks).
           router.push({ pathname: '/(app)/agents' as const });
           break;
         case 'agent_approval_needed':

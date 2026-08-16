@@ -26,10 +26,6 @@ import {
   type LanguagePair,
 } from '@/services/translateService';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface TranslateState {
   isTranslating: boolean;
   result: TranslateResult | null;
@@ -44,15 +40,9 @@ const initialState = (): TranslateState => ({
   tokensAccum: '',
 });
 
-// ---------------------------------------------------------------------------
-// Main Screen
-// ---------------------------------------------------------------------------
-
 export default function TranslateScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  // Prefill from the Siri/App Intents deep link (agiworkforce://intent/translate)
-  // dispatched via app/_layout.tsx. Both params are optional free text from Siri.
   const params = useLocalSearchParams<{ text?: string; targetLanguage?: string }>();
 
   const [sourceLang, setSourceLang] = useState(DEFAULT_SOURCE_LANG);
@@ -503,10 +493,6 @@ export default function TranslateScreen() {
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Language Button
-// ---------------------------------------------------------------------------
 
 interface LanguageButtonProps {
   lang: LanguagePair | undefined;

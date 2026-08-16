@@ -1,11 +1,3 @@
-/**
- * Public render policy for published artifacts (CAP-015 slice 2).
- *
- * A published page is served to anonymous viewers, so "which renderer" is a
- * security decision. These tests pin the decision itself — that scripted kinds
- * can only reach the sandbox frame, that inert kinds never gain a script path,
- * and that every fallback document carries the CSP envelope.
- */
 import { describe, expect, it } from 'vitest';
 import {
   PUBLISHED_SANDBOX_KINDS,
@@ -29,7 +21,6 @@ describe('sandbox policy', () => {
 
 describe('buildPublishedSandboxPayload', () => {
   it('ships React source verbatim so Babel receives JSX, not escaped markup', () => {
-    // AUDIT-FIX ART-1 parity: escaping here made every React artifact throw.
     const source = 'const App = () => <div>hi</div>;';
     expect(buildPublishedSandboxPayload('react', source)).toEqual({
       type: 'render',
@@ -80,7 +71,6 @@ describe('buildPublishedFallbackSrcDoc', () => {
 
   it('neutralises a </script> sequence in React source', () => {
     const doc = buildPublishedFallbackSrcDoc('react', 'const s = "</script><img src=x>";');
-    // The HTML tokenizer must not be able to close the babel block early.
     expect(doc).toContain('<\\/script>');
   });
 });

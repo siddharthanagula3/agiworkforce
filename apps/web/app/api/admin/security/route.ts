@@ -10,7 +10,6 @@ import { createError, isAppError, type AppError } from '@/lib/errors';
 import { assertAccountActive } from '@/lib/api-auth';
 import { readJsonBody } from '@/lib/read-json-body';
 
-/** Convert an AppError to a NextResponse with structured error body. */
 function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
   return NextResponse.json(
     {
@@ -46,25 +45,6 @@ function adminDenied(reason: string, appError: AppError): AdminAccess {
   return { isAdmin: false, reason, appError };
 }
 
-/**
- * CRIT-014: this is the ONLY authenticated entry point on the admin control
- * plane that does not route through `getClerkAuthUser`, so it was also the only
- * one that never read `profiles.account_status`. Every other authenticated
- * route calls `assertAccountActive` inside `getClerkAuthUser` (lib/api-auth.ts);
- * this one verified the Clerk JWT and the `publicMetadata.role` claim and
- * stopped there.
- *
- * That mattered because the suspend action below writes `account_status` and
- * does NOT touch Clerk — only `ban-user` calls `clerk.users.banUser`, which
- * revokes Clerk sessions. So a SUSPENDED admin kept a valid Clerk session, kept
- * `role: 'admin'`, and kept full use of this route: reading the security event
- * feed and suspending, banning, or reactivating other accounts. Suspension was
- * enforced across the entire product except on the surface that issues it.
- *
- * `assertAccountActive` is called with the id proved by the token, and its
- * status distinctions are preserved: 403 for a suspended/banned account, 503
- * when the status lookup itself fails (it fails closed after one retry).
- */
 async function verifyAdminAccess(request: NextRequest): Promise<AdminAccess> {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -76,7 +56,6 @@ async function verifyAdminAccess(request: NextRequest): Promise<AdminAccess> {
     const { clerkClient, verifyToken } = await import('@clerk/nextjs/server');
     const client = await clerkClient();
 
-    // Verify JWT and get user via Clerk
     const payload = await verifyToken(authHeader.slice(7), {
       secretKey: process.env['CLERK_SECRET_KEY'],
     });
@@ -88,7 +67,6 @@ async function verifyAdminAccess(request: NextRequest): Promise<AdminAccess> {
 
     const user = await client.users.getUser(userId);
 
-    // Verify admin via publicMetadata.role (set by Clerk dashboard or admin API only)
     const meta = user.publicMetadata as Record<string, unknown> | null | undefined;
     const role = meta?.['role'];
 
@@ -115,11 +93,9 @@ async function verifyAdminAccess(request: NextRequest): Promise<AdminAccess> {
 
 export async function GET(request: NextRequest) {
   try {
-    // Rate limiting: restrict admin security dashboard reads
     const rateLimitResponse = await withRateLimit(request, 'admin-security');
     if (rateLimitResponse) return rateLimitResponse;
 
-    // Verify admin access
     const access = await verifyAdminAccess(request);
 
     if (!access.isAdmin) {
@@ -209,15 +185,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting: restrict admin security actions
     const rateLimitResponse = await withRateLimit(request, 'admin-security');
     if (rateLimitResponse) return rateLimitResponse;
 
-    // CSRF protection
     const csrfError = await requireCsrfToken(request);
     if (csrfError) return csrfError;
 
-    // Verify admin access
     const access = await verifyAdminAccess(request);
 
     if (!access.isAdmin) {
@@ -227,7 +200,6 @@ export async function POST(request: NextRequest) {
 
     const adminUserId = access.userId;
 
-    // Body size guard: cap admin payloads to prevent memory exhaustion from oversized JSON
     const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
     if (contentLength > 8192) {
       return errorResponse(createError.payloadTooLarge());
@@ -253,11 +225,6 @@ export async function POST(request: NextRequest) {
           reason?: string;
         };
 
-        // AUDIT-FIX STB-14: these were truthy-only checks behind a TypeScript
-        // cast, so a non-string value satisfied them and reached both the SQL
-        // parameter and the Clerk SDK. It also defeated the self-modification
-        // guard below — an object is never === a string, so an admin could ban
-        // their own account by wrapping the id.
         if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
           return errorResponse(createError.badRequest('userId is required and must be a string'));
         }
@@ -284,15 +251,6 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.internal('Failed to update account status'));
         }
 
-        // The Clerk session is intentionally left alive: suspension is enforced
-        // on the NEXT request by `assertAccountActive` (lib/api-auth.ts), which
-        // every authenticated API route reaches through `getClerkAuthUser` —
-        // and, since CRIT-014, which this route reaches through
-        // `verifyAdminAccess` above. It is a read of `profiles.account_status`
-        // — NOT anything in `proxy.ts`, which only decides which routes require
-        // a signed-in session and never reads account status.
-
-        // Log the admin action
         await logSecurityEvent({
           userId: adminUserId,
           eventType: 'admin_action',
@@ -317,11 +275,6 @@ export async function POST(request: NextRequest) {
           reason?: string;
         };
 
-        // AUDIT-FIX STB-14: these were truthy-only checks behind a TypeScript
-        // cast, so a non-string value satisfied them and reached both the SQL
-        // parameter and the Clerk SDK. It also defeated the self-modification
-        // guard below — an object is never === a string, so an admin could ban
-        // their own account by wrapping the id.
         if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
           return errorResponse(createError.badRequest('userId is required and must be a string'));
         }
@@ -348,7 +301,6 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.internal('Failed to update account status'));
         }
 
-        // Belt-and-suspenders: also disable via Clerk in addition to middleware check
         try {
           const { clerkClient } = await import('@clerk/nextjs/server');
           const clerk = await clerkClient();
@@ -360,7 +312,6 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Log the admin action
         await logSecurityEvent({
           userId: adminUserId,
           eventType: 'admin_action',
@@ -385,11 +336,6 @@ export async function POST(request: NextRequest) {
           reason?: string;
         };
 
-        // AUDIT-FIX STB-14: these were truthy-only checks behind a TypeScript
-        // cast, so a non-string value satisfied them and reached both the SQL
-        // parameter and the Clerk SDK. It also defeated the self-modification
-        // guard below — an object is never === a string, so an admin could ban
-        // their own account by wrapping the id.
         if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
           return errorResponse(createError.badRequest('userId is required and must be a string'));
         }
@@ -416,7 +362,6 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.internal('Failed to update account status'));
         }
 
-        // Remove any Clerk-level ban
         try {
           const { clerkClient } = await import('@clerk/nextjs/server');
           const clerk = await clerkClient();
@@ -425,7 +370,6 @@ export async function POST(request: NextRequest) {
           logger.warn({ error: unbanError, targetUserId }, 'Failed to remove Clerk ban');
         }
 
-        // Log the admin action
         await logSecurityEvent({
           userId: adminUserId,
           eventType: 'admin_action',

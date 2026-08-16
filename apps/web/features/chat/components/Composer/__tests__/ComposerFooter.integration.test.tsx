@@ -1,9 +1,3 @@
-/**
- * ComposerFooter · integration tests
- *
- * Verifies that the model selector, style selector, and budget tracker
- * are correctly wired into the ComposerFooter component.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -13,9 +7,6 @@ import React from 'react';
 const toastErrorMock = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }));
 
-// ── Mocks ─────────────────────────────────────────────────────────────────────
-
-// Model store stub
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (
     selector: (s: {
@@ -36,8 +27,6 @@ vi.mock('@shared/stores/model-store', () => ({
     return selector(state);
   },
   AVAILABLE_MODELS: [
-    // ComposerFooter groups by `providerKey` (the lowercase models.json key);
-    // `provider` is the display label only.
     {
       id: 'fixture-primary-model',
       name: 'Primary Model',
@@ -74,21 +63,14 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
   isModelAllowedForTier: (modelId: string) => modelId !== 'fixture-locked-model',
 }));
 
-// BudgetTrackerDisplay · lightweight stub
 vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
   BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
 }));
 
-// StyleSelector stub
 vi.mock('../StyleSelector', () => ({
   StyleSelector: () => <div data-testid="style-selector" />,
 }));
 
-// ComposerFooter (and the wider tree it renders here — BudgetTrackerDisplay etc.)
-// pulls many exports from the @agiworkforce/ui barrel. This integration test only
-// needs Radix Popover stubbed so its content renders inline in jsdom; keep every
-// other barrel export real via importOriginal (matches the pre-migration behavior,
-// which stubbed only @shared/ui/popover).
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -104,7 +86,6 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ),
 }));
 
-// zustand persist · avoid localStorage in jsdom
 vi.mock('zustand/middleware', async () => {
   const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
   return {
@@ -113,11 +94,7 @@ vi.mock('zustand/middleware', async () => {
   };
 });
 
-// ── Subject ───────────────────────────────────────────────────────────────────
-
 import { ComposerFooter } from '../ComposerFooter';
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ComposerFooter · model selector integration', () => {
   beforeEach(() => {
@@ -143,8 +120,6 @@ describe('ComposerFooter · model selector integration', () => {
 
   it('renders grouped model options (a More models section) when the selector is opened', async () => {
     render(<ComposerFooter />);
-    // The grouped options live inside the (closed-by-default) popover. Recommended
-    // models render at the top; the remainder collapse under a "More models" section.
     await userEvent.click(screen.getByRole('button', { name: /change model/i }));
     expect(await screen.findByText('More models')).toBeInTheDocument();
   });

@@ -33,9 +33,6 @@ vi.mock('../../services/cloudAccountAuth', () => ({
   },
 }));
 
-/**
- * Build a canonical Clerk-backed desktop User object, overrideable per test.
- */
 function makeUser(overrides: Partial<User> = {}): User {
   const base: User = {
     id: 'user-1',
@@ -46,9 +43,6 @@ function makeUser(overrides: Partial<User> = {}): User {
   return { ...base, ...overrides };
 }
 
-/**
- * Build a canonical desktop cloud Session, overrideable per test.
- */
 function makeSession(overrides: Partial<Session> = {}): Session {
   const base: Session = {
     access_token: 'token',
@@ -58,10 +52,6 @@ function makeSession(overrides: Partial<Session> = {}): Session {
   return { ...base, ...overrides };
 }
 
-/**
- * Build a canonical AuthState, overrideable per test. The baseline is the
- * "no user signed in" shape so test bodies only set what's load-bearing.
- */
 function makeAuthState(overrides: Partial<AuthState> = {}): AuthState {
   const subscriptionFetchStatus: SubscriptionFetchStatus = 'succeeded';
   const base: AuthState = {

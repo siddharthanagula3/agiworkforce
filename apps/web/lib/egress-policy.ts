@@ -20,76 +20,42 @@ import { ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
-/**
- * Provider hosts on the canonical list that this app must still refuse.
- * MuleRouter was dropped as a gateway on 2026-07-27 and its entry was removed
- * from this file and the Qwen adapter, but `ALLOWED_MANAGED_PROVIDER_HOSTS`
- * still carries it — deriving from that set without subtracting it here would
- * silently re-open a third party we have no relationship with.
- */
 const RETIRED_PROVIDER_HOSTS: ReadonlySet<string> = new Set(['api.mulerouter.ai']);
 
-/**
- * Non-provider services this app calls directly. Kept apart from the provider
- * hosts so that half stays a pure view of the canonical list.
- */
 const ALLOWED_SERVICE_HOSTNAMES: readonly string[] = [
   'api.stripe.com',
   'api.upstash.io',
   // Neon: wildcard for project-specific subdomains
 ];
 
-/**
- * Provider hosts come from `ALLOWED_MANAGED_PROVIDER_HOSTS` rather than a
- * retyped copy: this list gates every `*_BASE_URL` override at
- * request-processor.ts, so a provider missing here 403s a plain send with
- * "Provider endpoint not in approved egress allowlist" even when the override
- * names the provider's own documented endpoint. The retyped copy had drifted
- * five providers short (xAI, DeepSeek, Perplexity, OpenRouter, DashScope).
- *
- * The canonical list's `localhost` / `127.0.0.1` local-dev carve-out rides
- * along, but `validateEgressUrl` runs `isInternalHostname` before consulting
- * the allowlist, so neither is ever reachable through this module.
- */
 const ALLOWED_HOSTNAMES: ReadonlySet<string> = new Set([
   ...[...ALLOWED_MANAGED_PROVIDER_HOSTS].filter((host) => !RETIRED_PROVIDER_HOSTS.has(host)),
   ...ALLOWED_SERVICE_HOSTNAMES,
 ]);
 
-// Hostname strings that always identify the local machine.
 const LOCALHOST_NAMES = new Set(['localhost', 'localhost.localdomain']);
 
 const IPV4_LITERAL = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
-/** True when the four octets fall in a loopback / link-local / private / reserved range. */
 function isInternalIpv4(oct: number[]): boolean {
-  if (oct.length !== 4) return true; // malformed -> block
-  if (oct.some((o) => o < 0 || o > 255 || Number.isNaN(o))) return true; // invalid -> block
+  if (oct.length !== 4) return true;
+  if (oct.some((o) => o < 0 || o > 255 || Number.isNaN(o))) return true;
   const [a, b] = oct as [number, number, number, number];
-  if (a === 10) return true; // 10.0.0.0/8
-  if (a === 127) return true; // 127.0.0.0/8 loopback
-  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-  if (a === 192 && b === 168) return true; // 192.168.0.0/16
-  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local + cloud metadata
-  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
-  if (a === 0) return true; // 0.0.0.0/8
-  if (a >= 224) return true; // 224+ multicast / reserved
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 0) return true;
+  if (a >= 224) return true;
   return false;
 }
 
-/**
- * Decodes an IPv4 address embedded in an IPv6 literal, or null if none.
- * Covers IPv4-mapped (`::ffff:1.2.3.4` / `::ffff:a9fe:a9fe`), IPv4-compatible
- * (`::1.2.3.4`), NAT64 (`64:ff9b::1.2.3.4` / `64:ff9b::a9fe:a9fe`), and their
- * fully-expanded equivalents. Without this, `::ffff:169.254.169.254` (cloud
- * metadata) is misclassified as a public address and passes the egress guard.
- */
 function extractEmbeddedIpv4(ipv6: string): number[] | null {
   const lower = ipv6.toLowerCase();
-  // Any IPv6 literal ending in a dotted-quad embeds an IPv4 address.
   const dotted = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(lower);
   if (dotted) return dotted.slice(1, 5).map((s) => Number(s));
-  // Hex-encoded mapped (`…:ffff:a9fe:a9fe`) or NAT64 (`…:ff9b::a9fe:a9fe`) tail.
   const hex = /(?:ffff|ff9b)(?:::|:)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(lower);
   if (hex) {
     const hi = parseInt(hex[1]!, 16);
@@ -106,35 +72,24 @@ export class EgressPolicyError extends Error {
   }
 }
 
-/**
- * Returns true when the hostname resolves (lexically) to an internal,
- * loopback, link-local, or private-range address. Lexical-only check ·
- * does NOT defend against DNS rebinding for hostnames that look public
- * but resolve internally; that requires a post-DNS check at request time.
- */
 export function isInternalHostname(hostname: string): boolean {
   const host = hostname.toLowerCase();
 
-  // Strip surrounding brackets for IPv6-literal hosts (e.g., `[::1]`).
   const unbracketed = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
 
   if (LOCALHOST_NAMES.has(host)) return true;
 
-  // IPv4 literal · parse octets and reject loopback / link-local / private.
   const m = IPV4_LITERAL.exec(unbracketed);
   if (m) {
     return isInternalIpv4(m.slice(1, 5).map((s) => Number(s)));
   }
 
-  // IPv6 literal · reject ::1, fc00::/7 (ULA), fe80::/10 (link-local), and —
-  // critically — any IPv4 embedded via mapped / compatible / NAT64 notation
-  // (e.g. `::ffff:169.254.169.254`), which would otherwise pass as public.
   if (unbracketed.includes(':')) {
     if (unbracketed === '::1' || unbracketed === '::' || unbracketed === '0:0:0:0:0:0:0:1')
       return true;
-    if (/^fc[0-9a-f]{2}:/i.test(unbracketed)) return true; // ULA
-    if (/^fd[0-9a-f]{2}:/i.test(unbracketed)) return true; // ULA
-    if (/^fe[89ab][0-9a-f]:/i.test(unbracketed)) return true; // link-local
+    if (/^fc[0-9a-f]{2}:/i.test(unbracketed)) return true;
+    if (/^fd[0-9a-f]{2}:/i.test(unbracketed)) return true;
+    if (/^fe[89ab][0-9a-f]:/i.test(unbracketed)) return true;
     const embedded = extractEmbeddedIpv4(unbracketed);
     if (embedded && isInternalIpv4(embedded)) return true;
     return false;
@@ -143,14 +98,6 @@ export function isInternalHostname(hostname: string): boolean {
   return false;
 }
 
-/**
- * Throws if the URL points at an internal/loopback/private address.
- * Cheaper than `validateEgressUrl` · does not enforce the service
- * allowlist, just the never-route-internally invariant. Suitable for
- * URLs that originate from user input (e.g., custom OpenAI-compatible
- * base URLs that users legitimately want to point at any cloud provider,
- * but should never be allowed to point at AWS metadata).
- */
 export function assertNonInternalHostname(urlString: string): void {
   let url: URL;
   try {
@@ -205,8 +152,6 @@ export function validateEgressUrl(urlString: string): void {
     throw new EgressPolicyError(urlString);
   }
 
-  // Defense-in-depth: even if an allowlist entry is overly broad, never
-  // route to internal addresses.
   if (isInternalHostname(url.hostname)) {
     throw new EgressPolicyError(urlString);
   }
@@ -216,10 +161,6 @@ export function validateEgressUrl(urlString: string): void {
   throw new EgressPolicyError(urlString);
 }
 
-// Internal-service ports that user-supplied image URLs MUST NOT target. A
-// remote attacker who controls a DNS record (or just types `1.2.3.4:5432`)
-// can otherwise probe these services through the LLM provider's image
-// fetcher.
 const INTERNAL_SERVICE_PORTS = new Set([
   '22', // ssh
   '23', // telnet
@@ -244,25 +185,6 @@ export function isDataUrl(urlString: string): boolean {
   return urlString.length >= 5 && urlString.slice(0, 5).toLowerCase() === 'data:';
 }
 
-/**
- * Strict validator for USER-SUPPLIED image URLs that flow into provider
- * payloads (Anthropic / OpenAI / Google). Pre-fix the chat completions
- * route forwarded these unchanged, so a request with
- *     image_url.url = "http://169.254.169.254/latest/meta-data/"
- * caused Anthropic's server to fetch IMDS · SSRF amplification (red-team
- * finding WEB-MULTIMODAL-IMAGE-SSRF, 2026-05).
- *
- * Differences from validateEgressUrl():
- * - Allows `data:` URLs (pass-through) since those don't trigger any fetch.
- * - Does NOT enforce the service allowlist (we don't know every legit
- *   image CDN; rejecting them all would break multimodal entirely).
- * - Adds an internal-service-port denylist on top of
- *   `isInternalHostname`, since a public-DNS hostname can still resolve
- *   to a public IP that is hosting `redis://1.2.3.4:6379` (or that the
- *   attacker controls).
- * - Rejects URLs containing userinfo (`https://user:pass@host/`) · that
- *   pattern is overwhelmingly phishing/exfil, never legitimate images.
- */
 export function validateUserImageUrl(urlString: string): void {
   if (typeof urlString !== 'string' || urlString.length === 0) {
     throw new EgressPolicyError(String(urlString));

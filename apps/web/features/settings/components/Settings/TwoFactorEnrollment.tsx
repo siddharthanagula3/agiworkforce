@@ -1,26 +1,5 @@
 'use client';
 
-/**
- * TwoFactorEnrollmentPanel — the authenticator (TOTP) enrollment surface.
- *
- * The server side of 2FA has been complete for a while (POST /api/settings/2fa/setup,
- * /verify, /backup-codes, DELETE /api/settings/2fa), but nothing in the product
- * could reach it: the old security toggle was hardcoded `disabled`. Mobile
- * deliberately sends users here (WEB_SECURITY_URL -> /settings/security), so this
- * panel is the only place in the product where 2FA can be turned on.
- *
- * Truthfulness rules this component follows:
- *   - `enabled` is only ever read back from GET /api/settings/2fa. The panel never
- *     shows "on" because a local step succeeded; POST /verify is what flips the row.
- *   - Backup codes come back in plaintext exactly once (from /setup or
- *     /backup-codes). They are held in component state only, shown behind an
- *     explicit "I saved these" acknowledgement, and dropped on dismiss.
- *   - Failures render the server's own message. Because lib/error-handler.ts
- *     replaces UNAUTHORIZED/BAD_REQUEST messages with generic text, the HTTP
- *     status is used to add the one fact the status genuinely proves (401 = the
- *     code was rejected, 429 = too many attempts).
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import {
@@ -49,20 +28,9 @@ type Stage =
   | { name: 'regenerating' };
 
 interface TwoFactorEnrollmentPanelProps {
-  /**
-   * Called whenever the panel has re-read authoritative status from the server,
-   * so the surrounding security form can mirror the real value instead of the
-   * stale `user_settings.two_factor_enabled` column.
-   */
   onStatusChange?: (status: TwoFactorStatus) => void;
 }
 
-/**
- * Turn a failed 2FA call into copy that does not overstate what is known.
- * `error-handler.ts` only forwards verbatim messages for a small allowlist of
- * codes (VALIDATION_ERROR, RATE_LIMITED, ...), so "Invalid TOTP code" arrives as
- * "Authentication required". The status code is the honest signal.
- */
 function describeCodeFailure(error: string | undefined, status: number | undefined): string {
   if (status === 401) {
     return 'That code was not accepted. Check your authenticator app is showing a current code, then try again.';
@@ -78,13 +46,11 @@ function describeCodeFailure(error: string | undefined, status: number | undefin
   return error ?? 'The request failed.';
 }
 
-/** Render the otpauth URI as an SVG QR image. Returns null if generation fails. */
 async function renderQrDataUri(otpauthUrl: string): Promise<string | null> {
   try {
     const svg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 200 });
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   } catch {
-    // Manual entry (the secret is always rendered as selectable text) is the fallback.
     return null;
   }
 }
@@ -100,8 +66,6 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
   const [acknowledged, setAcknowledged] = useState(false);
   const [copied, setCopied] = useState<'secret' | 'codes' | null>(null);
 
-  // Held in a ref so a parent that re-creates the callback each render cannot
-  // turn the mount effect below into a status-fetch loop.
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
 
@@ -143,7 +107,6 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
       await navigator.clipboard.writeText(text);
       setCopied(what);
     } catch {
-      // Clipboard permission can be denied; the value stays selectable on screen.
       setCopied(null);
     }
   }, []);
@@ -176,7 +139,6 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
       setActionError(describeCodeFailure(error, httpStatus));
       return;
     }
-    // Only now is 2FA real — re-read status from the server rather than assuming.
     setCode('');
     setAcknowledged(false);
     setStage({ name: 'backup-codes', codes: stage.pendingBackupCodes, reason: 'enabled' });
@@ -345,8 +307,6 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
           <div className="space-y-3 rounded-lg border border-border/50 p-4">
             <h4 className="font-medium text-foreground">Scan this in your authenticator app</h4>
             {qrDataUri ? (
-              // Plain <img>, not next/image: the source is a locally generated
-              // data: URI, so there is nothing for the image optimizer to fetch.
               <img
                 src={qrDataUri}
                 alt="QR code containing your two-factor setup key"

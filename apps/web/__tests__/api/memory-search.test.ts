@@ -1,13 +1,7 @@
-/**
- * Memory Search API Tests
- *
- * Tests for GET /api/memory/search?q=... (search user memories by content)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -21,20 +15,16 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Clerk auth mock
 const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockClerkAuth(),
 }));
 
-// Neon DB mock
 const mockQuery = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (sql: string, params: unknown[]) => {
-      // assertAccountActive() in getClerkAuthUser issues its own account_status
-      // lookup ahead of the route's real query; keep it out of mockQuery's queue.
       if (typeof sql === 'string' && sql.includes('account_status')) {
         return Promise.resolve([]);
       }
@@ -56,20 +46,14 @@ const mockMemoryRow = {
   updated_at: '2024-03-15T12:00:00Z',
 };
 
-// Import after all mocks are registered
 import { GET } from '@/app/api/memory/search/route';
 
 describe('Memory Search API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
-    // Default: returns a match
     mockQuery.mockResolvedValue([mockMemoryRow]);
   });
-
-  // ---------------------------------------------------------------------------
-  // Authentication
-  // ---------------------------------------------------------------------------
 
   describe('Authentication', () => {
     it('should return 401 when no session', async () => {
@@ -99,9 +83,6 @@ describe('Memory Search API', () => {
     });
 
     it('should succeed with valid session', async () => {
-      // Cookie-session test: no Authorization header — see
-      // WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01 (a present-but-
-      // unverifiable bearer now rejects rather than falling back to cookie).
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
       });
@@ -110,10 +91,6 @@ describe('Memory Search API', () => {
       expect(response.status).toBe(200);
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // Input Validation
-  // ---------------------------------------------------------------------------
 
   describe('Input Validation', () => {
     it('should return 400 when query parameter q is missing', async () => {
@@ -178,10 +155,6 @@ describe('Memory Search API', () => {
       expect(response.status).toBe(200);
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // Happy Path
-  // ---------------------------------------------------------------------------
 
   describe('Happy Path', () => {
     it('should return 200 with matching memories and echo back query', async () => {
@@ -254,10 +227,6 @@ describe('Memory Search API', () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // Error Handling
-  // ---------------------------------------------------------------------------
-
   describe('Error Handling', () => {
     it('should return 500 when database query throws', async () => {
       mockQuery.mockRejectedValueOnce(new Error('Connection timeout'));
@@ -291,10 +260,6 @@ describe('Memory Search API', () => {
       expect(response.status).toBe(429);
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // LIKE Wildcard Escaping
-  // ---------------------------------------------------------------------------
 
   describe('LIKE Wildcard Escaping', () => {
     it('should handle queries containing LIKE wildcard characters (%) without error', async () => {

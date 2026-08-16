@@ -14,39 +14,6 @@ import {
   type ScimUserFilterAttribute,
 } from './scim-protocol';
 
-/**
- * SCIM provisioning against the product's REAL member model.
- *
- * ## Why a SCIM user is not an account
- *
- * SCIM's contract is "create a user". This product cannot create one: there is
- * no Clerk user-creation call anywhere in the repo, there is no invitation
- * table, and `profiles` rows are minted lazily on first authenticated request
- * (`/api/settings/team` explicitly refuses unknown emails). Pretending POST
- * /Users mints an identity would be a lie the IdP would then act on.
- *
- * So a SCIM user is a first-class resource in `scim_provisioned_users` that
- * LINKS to an account when one with a matching email exists:
- *
- *   - link found  -> an `organization_members` row is written immediately with
- *                    `provisioning_source = 'scim'`
- *   - no link yet -> the resource is PENDING. The IdP gets a real, addressable
- *                    SCIM resource; no membership is granted.
- *
- * Deprovisioning does not depend on linkage: `active: false` or DELETE removes
- * the membership whenever one exists. That is the half of SCIM with real
- * security value, and it works completely.
- *
- * ## Two invariants that are never negotiable
- *
- * 1. An IdP can never create or remove an organization OWNER. A misconfigured
- *    group rule would otherwise be an unrecoverable privilege escalation or an
- *    orphaned organization.
- * 2. Every statement carries an explicit `connection_id`/`organization_id`
- *    predicate. SCIM has no app user, so `app_has_org_role()` cannot authorize
- *    it and RLS cannot be the tenant boundary here — the application is.
- */
-
 export interface ScimConnectionContext {
   connectionId: string;
   organizationId: string;
@@ -54,8 +21,6 @@ export interface ScimConnectionContext {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** SCIM resource ids are our uuids. A non-uuid can only ever be a 404, and
- * feeding it to Postgres would raise 22P02 instead. */
 function assertResourceId(id: string, resource: 'User' | 'Group'): string {
   if (!UUID_PATTERN.test(id)) {
     throw new ScimError(404, `${resource} ${id} not found`);
@@ -101,8 +66,6 @@ function asRecord(value: unknown, field: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-/** Pick the primary email, falling back to the first entry, then to userName
- * when it is itself an address (Okta's default userName mapping). */
 function extractEmail(emails: unknown, userName: string): string | null {
   if (Array.isArray(emails)) {
     const entries = emails
@@ -121,34 +84,8 @@ function extractEmail(emails: unknown, userName: string): string | null {
   return userName.includes('@') ? userName : null;
 }
 
-/**
- * Attribute names stripped from a SCIM payload before it is persisted to
- * `raw_attributes`.
- *
- * RFC 7643 §4.1.1 defines `password` as a WRITABLE attribute of the SCIM User
- * resource, and real IdPs send it — Okta and Entra ID both support pushing a
- * password on create. The provisioning service used to persist the parsed
- * request body verbatim (`JSON.stringify(rawBody)`), so any IdP configured to
- * push credentials wrote them to the database in PLAINTEXT, where they would
- * then be readable by every admin surface that renders raw_attributes and
- * would sit in every backup.
- *
- * We never need the password: provisioning links an existing AGI account by
- * email, and authentication is Clerk's. So it is dropped rather than hashed —
- * storing a hash of a credential we have no use for is still a liability.
- *
- * Matching is case-insensitive because SCIM attribute names are
- * case-insensitive per RFC 7644 §3.10.
- */
 const SCIM_SENSITIVE_ATTRIBUTES = new Set(['password', 'currentpassword', 'newpassword']);
 
-/**
- * Deep-strip credential attributes from a SCIM payload before persistence.
- *
- * Recurses because IdPs place attributes inside schema-extension objects
- * (e.g. `urn:ietf:params:scim:schemas:extension:...`), so a top-level-only
- * filter would miss them.
- */
 export function stripScimSensitiveAttributes(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stripScimSensitiveAttributes);
   if (value === null || typeof value !== 'object') return value;
@@ -228,10 +165,6 @@ export function parseMemberValues(value: unknown): string[] {
   return ids;
 }
 
-// ---------------------------------------------------------------------------
-// Serialization
-// ---------------------------------------------------------------------------
-
 export interface SerializedScimUser {
   schemas: [typeof SCIM_SCHEMA.user];
   id: string;
@@ -249,12 +182,6 @@ export interface SerializedScimUser {
     location: string;
     version: string;
   };
-  /**
-   * Non-standard, deliberately namespaced: whether this SCIM resource is
-   * attached to a real AGI account yet. An admin debugging "SCIM says the user
-   * exists but they cannot sign in" needs this to be visible rather than
-   * inferred, and a custom URN is the spec-sanctioned way to add it.
-   */
   'urn:agiworkforce:params:scim:schemas:extension:2.0:Provisioning': {
     linked: boolean;
     membershipGranted: boolean;
@@ -337,10 +264,6 @@ export function serializeScimGroup(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Sync events
-// ---------------------------------------------------------------------------
-
 export async function recordSyncEvent(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -366,8 +289,6 @@ export async function recordSyncEvent(
       ],
     );
   } catch (error) {
-    // Never fail a provisioning call because the observability write failed —
-    // but never swallow it silently either.
     logger.error({ error, eventType: event.eventType }, 'Failed to record directory sync event');
   }
 }
@@ -383,20 +304,10 @@ async function touchConnection(db: DatabaseAdapter, ctx: ScimConnectionContext):
   }
 }
 
-// ---------------------------------------------------------------------------
-// Membership reconciliation
-// ---------------------------------------------------------------------------
-
 export type ProvisionedRole = 'admin' | 'member' | 'viewer';
 
 const ROLE_PRECEDENCE: Record<ProvisionedRole, number> = { admin: 3, member: 2, viewer: 1 };
 
-/**
- * The strongest role mapped by any group the SCIM user belongs to, or null
- * when no group carries a mapping. Null means "do not touch the existing
- * role" — an org that has not configured group mapping must not have its
- * manually-assigned admins silently demoted the first time their IdP syncs.
- */
 export function strongestMappedRole(
   roles: Array<ProvisionedRole | null | undefined>,
 ): ProvisionedRole | null {
@@ -425,13 +336,6 @@ async function resolveMappedRole(
   return strongestMappedRole(rows.map((row) => row.mapped_role));
 }
 
-/**
- * Attempt to attach a pending SCIM resource to a real account.
- *
- * Matching is by lower(email) against `profiles`, which is exactly how
- * /api/settings/team resolves an invitee today, so SCIM cannot reach an
- * identity the manual path could not.
- */
 async function linkAccount(
   db: DatabaseAdapter,
   row: ScimProvisionedUserRow,
@@ -460,14 +364,6 @@ export interface MembershipOutcome {
   role: ProvisionedRole | null;
 }
 
-/**
- * Reconcile one SCIM user against `organization_members`.
- *
- * `active: true`  -> membership exists (created when an account is linked)
- * `active: false` -> membership removed, whether or not the resource is linked
- *
- * Owners are untouchable in both directions.
- */
 export async function reconcileMembership(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -491,22 +387,11 @@ export async function reconcileMembership(
   }
 
   if (!linkedUserId) {
-    // Honest pending state: the IdP has a resource, nobody gained access.
     return { linkedUserId: null, membershipGranted: false, membershipRevoked: false, role: null };
   }
 
   const mappedRole = await resolveMappedRole(db, ctx, row.id);
 
-  // Role authority, in priority order:
-  //   1. An OWNER is never touched. Losing the last owner to a misconfigured
-  //      group rule would orphan the organization irrecoverably.
-  //   2. A membership this connection already provisioned is IdP-AUTHORITATIVE:
-  //      its role follows the group mapping, and falls back to 'member' when no
-  //      mapping applies. That is what makes removing someone from an
-  //      admin-mapped group actually demote them.
-  //   3. A membership created by hand is only ever RAISED by a mapping, never
-  //      silently demoted — turning on directory sync must not strip the
-  //      manually-appointed admins an organization already has.
   await db.execute(
     `insert into organization_members
        (organization_id, user_id, role, provisioning_source, provisioned_at)
@@ -532,16 +417,10 @@ export async function reconcileMembership(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Users
-// ---------------------------------------------------------------------------
-
 const USER_COLUMNS = `id, connection_id, organization_id, external_id, user_name, email,
        given_name, family_name, display_name, active, linked_user_id, linked_at,
        raw_attributes, version, created_at, updated_at`;
 
-/** Maps an allowlisted filter attribute to a fixed SQL predicate. The value is
- * always bound as `$3`; it is never interpolated. */
 const USER_FILTER_SQL: Record<ScimUserFilterAttribute, string> = {
   userName: 'lower(user_name) = lower($3)',
   externalId: 'external_id = $3',
@@ -623,16 +502,6 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string })?.code === '23505';
 }
 
-/**
- * Create the SCIM resource and its membership as ONE unit.
- *
- * Splitting them meant a failure inside `reconcileMembership` — the
- * `organization_members` write, the only statement here that touches a table
- * SCIM does not own — left a `scim_provisioned_users` row behind after a 500.
- * The IdP retries a 500, and the retry then hit the userName uniqueness index
- * and answered 409 forever: a user who could never be provisioned and whose
- * resource granted no access.
- */
 export async function createScimUser(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -658,7 +527,6 @@ export async function createScimUser(
           input.familyName,
           input.displayName,
           input.active,
-          // Credentials are stripped before persistence — see stripScimSensitiveAttributes.
           JSON.stringify(stripScimSensitiveAttributes(rawBody)),
         ],
       );
@@ -699,10 +567,6 @@ export async function replaceScimUser(
   const existing = await getScimUser(db, ctx, userId);
   if (!existing) throw new ScimError(404, `User ${userId} not found`);
 
-  // The attribute write and the access change are one unit. `active: false` is
-  // a deprovision: persisting it while the `organization_members` delete fails
-  // would leave a resource that READS as deactivated next to a person who still
-  // has access — the most dangerous way for this call to half-succeed.
   const { row, outcome } = await db.transaction(async (tx) => {
     let rows: ScimProvisionedUserRow[];
     try {
@@ -730,7 +594,6 @@ export async function replaceScimUser(
           input.familyName,
           input.displayName,
           input.active,
-          // Credentials are stripped before persistence — see stripScimSensitiveAttributes.
           JSON.stringify(stripScimSensitiveAttributes(rawBody)),
         ],
       );
@@ -761,14 +624,6 @@ export async function replaceScimUser(
   return (await getScimUser(db, ctx, row.id)) ?? row;
 }
 
-/**
- * Attribute paths this service provider honours in PATCH.
- *
- * Entra sends `emails[type eq "work"].value`; the value-filter segment is
- * stripped because this provider stores exactly one address per user. Anything
- * outside this map is refused with `invalidPath` rather than accepted and
- * ignored — an ignored deprovision is the worst possible failure mode.
- */
 const USER_PATCH_PATHS = new Set([
   'username',
   'externalid',
@@ -863,8 +718,6 @@ export function applyUserPatchOperations(
 
   for (const operation of operations) {
     if (operation.path === undefined) {
-      // Path-less add/replace: the value object's keys are the attributes.
-      // This is the shape Microsoft Entra uses for `{"active": false}`.
       if (operation.op === 'remove') {
         throw new ScimError(400, 'A `remove` operation requires a `path`', 'noTarget');
       }
@@ -900,9 +753,6 @@ export async function patchScimUser(
 
   const state = applyUserPatchOperations(existing, operations);
 
-  // PATCH is the shape every IdP uses to deprovision (`replace active false`),
-  // so the attribute write and the membership revocation commit together or
-  // not at all — see replaceScimUser for why the half-applied case is unsafe.
   const { row, outcome } = await db.transaction(async (tx) => {
     let rows: ScimProvisionedUserRow[];
     try {
@@ -958,11 +808,6 @@ export async function patchScimUser(
   return (await getScimUser(db, ctx, row.id)) ?? row;
 }
 
-/**
- * Hard deprovision. The membership goes first: if the resource delete failed
- * afterwards the person would still have lost access, which is the safe
- * direction to fail in.
- */
 export async function deleteScimUser(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -995,10 +840,6 @@ export async function deleteScimUser(
     payload: { scimUserId: userId, membershipRevoked },
   });
 }
-
-// ---------------------------------------------------------------------------
-// Groups
-// ---------------------------------------------------------------------------
 
 const GROUP_COLUMNS = `id, connection_id, organization_id, external_id, display_name,
        mapped_role, version, created_at, updated_at`;
@@ -1079,10 +920,6 @@ export async function getScimGroupMembers(
   );
 }
 
-/**
- * Attach members to a group, refusing ids that belong to another tenant or
- * another connection. A cross-tenant member id is a 400, never a silent skip.
- */
 async function addGroupMembers(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -1117,8 +954,6 @@ async function removeGroupMembers(
   }
 }
 
-/** Re-run membership reconciliation for everyone in a group whose role mapping
- * may have changed. Group edits are the only way a SCIM user's ROLE moves. */
 async function reconcileGroupMembers(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -1130,27 +965,6 @@ async function reconcileGroupMembers(
   }
 }
 
-/**
- * Every group write below runs inside ONE transaction.
- *
- * A group write is never a single statement: it touches `scim_groups`,
- * `scim_group_members`, and — through reconciliation — `organization_members`.
- * Run unwrapped, a member id the IdP has not provisioned yet (which is routine:
- * Okta and Entra do not guarantee user-before-group ordering) made
- * `addGroupMembers` throw 400 partway through, leaving:
- *
- *   - on POST, an orphan `scim_groups` row. The IdP saw a failure, retried the
- *     identical create, and got 409 uniqueness from then on — the group could
- *     never converge.
- *   - on PUT/PATCH-replace, an EMPTIED member set, because the delete lands
- *     before the failing re-add. Everyone whose role came from that group was
- *     silently demoted by a request that returned an error.
- *
- * `touchConnection` and `recordSyncEvent` stay OUTSIDE the transaction and run
- * only after it commits: they are best-effort observability that must not be
- * able to roll back real work, and an event describing a rolled-back write
- * would be a false audit record.
- */
 export async function createScimGroup(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -1224,8 +1038,6 @@ export async function replaceScimGroup(
     const updated = rows[0];
     if (!updated) throw new ScimError(404, `Group ${groupId} not found`);
 
-    // PUT replaces the member set wholesale. The delete and the re-add are one
-    // unit: a bad id in `input.memberIds` must not leave the group emptied.
     await tx.execute(
       'delete from scim_group_members where group_id = $1 and organization_id = $2',
       [groupId, ctx.organizationId],
@@ -1257,11 +1069,6 @@ export async function patchScimGroup(
   const existing = await getScimGroup(db, ctx, groupId);
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
 
-  // RFC 7644 §3.5.2: "the server MUST apply the entire set of operations or
-  // none". Every operation in the list therefore runs in one transaction, so a
-  // list like [remove members, add unknown-member] cannot commit the remove and
-  // then fail — which previously emptied the group and demoted its members on a
-  // request that returned 400.
   const row = await db.transaction(async (tx) => {
     let displayName = existing.display_name;
     let externalId = existing.external_id;
@@ -1287,7 +1094,6 @@ export async function patchScimGroup(
         continue;
       }
 
-      // members
       if (operation.op === 'remove' && operation.value === undefined) {
         const current = await getScimGroupMembers(tx, ctx, groupId);
         current.forEach((member) => affected.add(member.id));
@@ -1358,18 +1164,12 @@ export async function deleteScimGroup(
 
   const members = await getScimGroupMembers(db, ctx, groupId);
 
-  // The delete and the re-reconciliation are one unit. Run apart, a failure in
-  // reconciliation left the group row gone while its members kept the elevated
-  // role it had mapped — a privilege outliving the only thing that justified
-  // it, with nothing left in the schema to explain or revoke it.
   await db.transaction(async (tx) => {
     await tx.execute(
       'delete from scim_groups where id = $1 and connection_id = $2 and organization_id = $3',
       [groupId, ctx.connectionId, ctx.organizationId],
     );
 
-    // Deleting a group can lower the role its members had mapped, so everyone
-    // in it is reconciled against the remaining groups.
     await reconcileGroupMembers(
       tx,
       ctx,

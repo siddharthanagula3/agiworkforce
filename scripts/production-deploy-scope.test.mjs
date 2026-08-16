@@ -189,10 +189,6 @@ test('the baseline is the commit a surface last SHIPPED from, not the last green
     head_repository: { full_name: 'owner/repository' },
   };
 
-  // The exact shape that stranded the argon2 outage fix: the newest run
-  // succeeded overall while its web job SKIPPED, so its commit is not evidence
-  // that web shipped. Taking it as the baseline is what hid every earlier
-  // unshipped web change.
   const runs = [
     { ...base, head_sha: 'newest', jobs: [{ name: WEB, conclusion: 'skipped' }] },
     { ...base, head_sha: 'shipped', jobs: [{ name: WEB, conclusion: 'success' }] },
@@ -220,7 +216,6 @@ test('a failed deploy job is not a baseline, and neither is a foreign run', () =
     null,
   );
 
-  // A fork's run must never set the baseline for this repository.
   assert.equal(
     selectSurfaceBaseline(
       [

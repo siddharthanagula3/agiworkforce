@@ -1,9 +1,3 @@
-/**
- * NotificationsSettings tab content
- *
- * Extracted from SettingsPanel.tsx for code organization.
- * Handles: Desktop Notifications, Sound Effects toggles.
- */
 import { Loader2 } from 'lucide-react';
 import { isCloudWeb } from '@/lib/tauri-mock';
 import { Label } from '@/ui/Label';

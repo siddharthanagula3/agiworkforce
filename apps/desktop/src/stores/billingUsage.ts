@@ -1,21 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Unified Billing & Usage Store
- *
- * State is split into per-domain slices under ./billing/:
- *   costSlice.ts         — cost overview / analytics
- *   usageSlice.ts        — Stripe usage tracking (automations, tokens, storage …)
- *   budgetSlice.ts       — token budget alerts (display only, see below)
- *   analyticsSlice.ts    — performance metrics and ROI
- *
- * `budgetSlice` enforces nothing: it raises warning/danger/exceeded alerts and
- * never blocks a request, and no production caller feeds it — `addTokenUsage`
- * and `setBudgetEnabled` have no callers, so `budget.enabled` stays `false`.
- * The spend cap that actually stops a managed-cloud request is `costSlice`'s
- * `setMonthlyBudget`, persisted to the local `billing.monthly_budget` setting
- * and enforced in Rust by `provider_access.rs::check_billing_and_budget`
- * before send. Wiring the token budget to real usage is ledger BIZ-027.
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
@@ -33,7 +16,6 @@ import type { BudgetSlice } from './billing/budgetSlice';
 import { createAnalyticsSlice } from './billing/analyticsSlice';
 import type { AnalyticsSlice } from './billing/analyticsSlice';
 
-// ── Re-exports so consumers can import named types from this file ─────────────
 export type {
   BudgetPeriod,
   TokenBudget,
@@ -41,13 +23,10 @@ export type {
   TokenUsageDetails,
 } from './billing/budgetSlice';
 
-// ── Combined store type ────────────────────────────────────────────────────────
 type BillingUsageStore = CostSlice & UsageSlice & BudgetSlice & AnalyticsSlice;
 
-// ── Storage helper ─────────────────────────────────────────────────────────────
 const getStorage = () => (typeof window === 'undefined' ? storageFallback : window.localStorage);
 
-// ── Unified Zustand store ──────────────────────────────────────────────────────
 export const useBillingUsageStore = create<BillingUsageStore>()(
   devtools(
     persist(
@@ -79,7 +58,6 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
   ),
 );
 
-// ── Selectors ─────────────────────────────────────────────────────────────────
 export const selectCostOverview = (state: BillingUsageStore) => state.costOverview;
 export const selectCostAnalytics = (state: BillingUsageStore) => state.costAnalytics;
 export const selectCostFilters = (state: BillingUsageStore) => state.costFilters;
@@ -103,7 +81,6 @@ export const selectTokenBreakdown = (state: BillingUsageStore) => ({
   percentage: (state.budget.currentUsage / state.budget.limit) * 100,
 });
 
-// ── Utility functions ──────────────────────────────────────────────────────────
 export function getUsagePercentage(used: number, total: number): number {
   if (total === 0) return 0;
   return Math.round((used / total) * 100);
@@ -114,7 +91,6 @@ export function getRemainingPercentage(used: number, total: number): number {
   return Math.round(((total - used) / total) * 100);
 }
 
-// ── Initialization helpers ─────────────────────────────────────────────────────
 export function initializeUsageStore(): () => void {
   const unsubscribe = useBillingStore.subscribe((state) => {
     const billingUsageStore = useBillingUsageStore.getState();
@@ -173,7 +149,6 @@ export function stopMetricsAutoRefresh() {
   }
 }
 
-// ── Backward-compat aliases ────────────────────────────────────────────────────
 /** @deprecated Use useBillingUsageStore instead */
 export const useCostStore = useBillingUsageStore;
 /** @deprecated Use useBillingUsageStore instead */

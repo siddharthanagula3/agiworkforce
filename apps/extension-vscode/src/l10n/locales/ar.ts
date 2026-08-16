@@ -1,6 +1,3 @@
-/**
- * Arabic catalog. Key parity with `en` is enforced by l10n.test.ts.
- */
 const ar = {
   'applyEdit.prompt': 'AGI Workforce: هل تريد تطبيق نتيجة {command}؟',
   'applyEdit.applyInline': 'تطبيق في المكان',

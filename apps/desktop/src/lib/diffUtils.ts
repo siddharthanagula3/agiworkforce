@@ -1,12 +1,3 @@
-/**
- * diffUtils.ts
- *
- * Pure utility functions for computing and applying line-level diffs between
- * two strings. Uses an LCS (longest common subsequence) based algorithm to
- * group contiguous changed regions into hunks.
- *
- * No side effects — safe to call from any context.
- */
 
 export interface ArtifactDiff {
   hunks: Array<{
@@ -18,19 +9,9 @@ export interface ArtifactDiff {
   changeDescription?: string;
 }
 
-// =============================================================================
-// LCS-based line diff
-// =============================================================================
-
-/**
- * Computes the LCS (longest common subsequence) table for two arrays using
- * dynamic programming. Returns the DP table; each cell dp[i][j] holds the
- * length of the LCS of the first i elements of `a` and first j elements of `b`.
- */
 function buildLcsTable(a: string[], b: string[]): number[][] {
   const m = a.length;
   const n = b.length;
-  // Allocate a (m+1) x (n+1) table initialised to 0
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
 
   for (let i = 1; i <= m; i++) {
@@ -47,9 +28,6 @@ function buildLcsTable(a: string[], b: string[]): number[][] {
 
 type DiffOp = { op: 'equal' | 'delete' | 'insert'; line: string };
 
-/**
- * Back-tracks through the LCS table to produce a list of diff operations.
- */
 function backtrack(dp: number[][], a: string[], b: string[]): DiffOp[] {
   const ops: DiffOp[] = [];
   let i = a.length;
@@ -92,13 +70,9 @@ export function computeLineDiff(original: string, modified: string): ArtifactDif
   const dp = buildLcsTable(originalLines, modifiedLines);
   const ops = backtrack(dp, originalLines, modifiedLines);
 
-  // Convert the flat list of ops into hunks of contiguous changes.
-  // We walk the ops, tracking original-line index and modified-line index.
-  // Whenever we see a sequence of delete/insert ops, we accumulate them into
-  // a hunk; when we hit an 'equal' op we flush any open hunk.
   const hunks: ArtifactDiff['hunks'] = [];
 
-  let origIdx = 0; // current position in originalLines
+  let origIdx = 0;
   let hunkStart = -1;
   let deletedLines: string[] = [];
   let insertedLines: string[] = [];
@@ -125,7 +99,6 @@ export function computeLineDiff(original: string, modified: string): ArtifactDif
       deletedLines.push(op.line);
       origIdx++;
     } else {
-      // insert
       if (hunkStart === -1) hunkStart = origIdx;
       insertedLines.push(op.line);
       // inserts do not advance origIdx
@@ -149,26 +122,19 @@ export function applyDiff(original: string, diff: ArtifactDiff): string {
   if (diff.hunks.length === 0) return original;
 
   const lines = original.split('\n');
-  // Sort hunks by startLine ascending so we process them in order.
   const sorted = [...diff.hunks].sort((a, b) => a.startLine - b.startLine);
 
   let result: string[] = [];
   let cursor = 0;
 
   for (const hunk of sorted) {
-    // Copy lines before this hunk as-is
     result = result.concat(lines.slice(cursor, hunk.startLine));
-    // Insert the new content (may be empty string for deletions).
-    // Split on '\n' so multi-line hunks are pushed as individual lines,
-    // ensuring correct round-trip behaviour with result.join('\n').
     if (hunk.newContent !== '') {
       result.push(...hunk.newContent.split('\n'));
     }
-    // Advance cursor past the replaced region
     cursor = hunk.endLine;
   }
 
-  // Append any remaining lines after the last hunk
   result = result.concat(lines.slice(cursor));
 
   return result.join('\n');

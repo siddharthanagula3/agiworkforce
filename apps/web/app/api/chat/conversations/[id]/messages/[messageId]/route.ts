@@ -1,15 +1,3 @@
-/**
- * Per-message operations
- *
- * PATCH /api/chat/conversations/[id]/messages/[messageId]
- *   Merges a patch into message.metadata. Currently used for user reactions
- *   (thumbsUp | thumbsDown | null) but intentionally generic so other metadata
- *   fields can be patched in future without a schema change.
- *
- * DELETE /api/chat/conversations/[id]/messages/[messageId]
- *   Permanently deletes a single message. Verifies ownership of both the
- *   conversation and the message before deletion.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -92,7 +80,6 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     });
   }
 
-  // Fetch current metadata so we can merge (preserves existing fields)
   const [row] = await db.query<{ metadata: Record<string, unknown> | null }>(
     'select metadata from web_messages where id = $1 and conversation_id = $2 limit 1',
     [messageId, conversationId],
@@ -130,7 +117,6 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
   const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
-  // Verify conversation ownership first (mirrors PATCH pattern)
   const [conv] = await db.query<{ id: string }>(
     `select id
        from web_conversations
@@ -146,7 +132,6 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
     throw createError.notFound('Conversation not found');
   }
 
-  // Verify the message exists in this conversation
   const [msg] = await db.query<{ id: string }>(
     'select id from web_messages where id = $1 and conversation_id = $2 limit 1',
     [messageId, conversationId],

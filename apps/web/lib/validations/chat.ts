@@ -6,12 +6,6 @@ import {
   ManagedCloudUpdateConversationRequestSchema,
 } from '@agiworkforce/cloud-contracts';
 
-/**
- * Chat validation schemas
- *
- * AUDIT-008-002, AUDIT-008-003, AUDIT-008-004: Input validation for chat endpoints
- */
-
 const CHAT_MODEL_TYPES = new Set<ModelType>(['chat', 'code', 'reasoning', 'multimodal', 'search']);
 const MESSAGE_MODEL_TYPES = new Set<ModelType>([...CHAT_MODEL_TYPES, 'image']);
 const AUTO_MODEL_IDS = ['auto', 'auto-economy', 'auto-balanced', 'auto-premium'] as const;
@@ -26,12 +20,6 @@ export const SUPPORTED_MODELS: readonly string[] = [
   ),
 ];
 
-/**
- * Conversations must remain on a text-capable model, but an individual
- * assistant turn can be produced by an image model. Keeping these catalogs
- * separate prevents an image-only model from becoming the conversation
- * default while allowing generated image cards to survive reload.
- */
 export const SUPPORTED_MESSAGE_MODELS: readonly string[] = [
   ...AUTO_MODEL_IDS,
   ...ACTIVE_CANONICAL_MODELS.filter((model) => MESSAGE_MODEL_TYPES.has(model.modelType)).map(
@@ -51,7 +39,6 @@ function isSupportedMessageModel(val: string): val is SupportedModel {
   return SUPPORTED_MESSAGE_MODELS.includes(canonicalModelId);
 }
 
-// AUDIT-008-002: Validation schema for conversation updates
 export const UpdateConversationSchema = ManagedCloudUpdateConversationRequestSchema.extend({
   model: z
     .string()
@@ -63,7 +50,6 @@ export const UpdateConversationSchema = ManagedCloudUpdateConversationRequestSch
 
 export type UpdateConversationInput = z.infer<typeof UpdateConversationSchema>;
 
-// AUDIT-008-003: Validation schema for conversation creation
 export const CreateConversationSchema = ManagedCloudCreateConversationRequestSchema.extend({
   model: z
     .string()
@@ -76,8 +62,6 @@ export const CreateConversationSchema = ManagedCloudCreateConversationRequestSch
 
 export type CreateConversationInput = z.infer<typeof CreateConversationSchema>;
 
-// Valid message roles
-// AUDIT-008-004: Validation schema for message creation
 export const CreateMessageSchema = ManagedCloudCreateMessageRequestSchema.extend({
   model: z
     .string()

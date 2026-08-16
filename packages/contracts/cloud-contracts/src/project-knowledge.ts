@@ -23,8 +23,6 @@ export const ManagedCloudProjectKnowledgePresignResponseSchema = z.object({
   uploadMethod: z.literal('PUT'),
   uploadHeaders: z.record(z.string(), z.string()),
   storageKey: z.string().min(1),
-  // Older servers returned a public URL. Keep it parseable during rollout,
-  // but first-party clients must register the opaque storage key instead.
   publicUrl: z.string().url().optional(),
 });
 

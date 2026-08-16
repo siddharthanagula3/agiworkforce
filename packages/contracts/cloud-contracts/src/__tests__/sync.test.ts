@@ -1,12 +1,3 @@
-/**
- * Schema-correctness tests for the delta-sync cloud contracts
- * (/api/chat/sync, /api/memory/sync, /api/projects/sync, /api/settings/sync).
- *
- * The web-side route contract tests are the server enforcement anchors; these
- * tests pin the schemas themselves (accept the documented wire shape, reject
- * the drifts that actually bit clients before: missing envelopes, tombstone
- * fields dropped, cursor omitted).
- */
 
 import { describe, it, expect } from 'vitest';
 import projectsCasGolden from '../__fixtures__/projects-sync-cas.golden.json';

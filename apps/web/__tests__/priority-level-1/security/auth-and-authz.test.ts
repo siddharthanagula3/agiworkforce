@@ -1,37 +1,19 @@
-/**
- * L1 Security - Authentication & Authorization
- *
- * Exercises the REAL request authenticator:
- *   apps/web/lib/api-auth.ts (getClerkAuthUser)
- *
- * Two trust paths are validated against shipping logic:
- *   1. Clerk session cookie (browser via middleware) → auth()
- *   2. Bearer token (desktop/CLI/mobile) → verifyToken(@clerk/backend)
- *
- * A request with neither a session nor a valid Bearer token must be rejected
- * with a 401-shaped error — never silently treated as authenticated.
- */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-// ─── Clerk session mock (Path 1) ────────────────────────────────────────────
 const mockAuth = vi.fn();
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockAuth(),
 }));
 
-// ─── Clerk Bearer verification mock (Path 2) ────────────────────────────────
 const mockVerifyToken = vi.fn();
 vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-// assertAccountActive (inside getClerkAuthUser) reads profiles.account_status and
-// now fails CLOSED on a lookup error. Provide an active row so the happy-path
-// auth tests exercise identity resolution, not the fail-closed branch.
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({
     query: vi.fn().mockResolvedValue([{ account_status: 'active' }]),
@@ -51,7 +33,6 @@ describe('L1 Security - Auth & Authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['CLERK_SECRET_KEY'] = 'sk_test_clerk';
-    // Default: no session, no valid token.
     mockAuth.mockResolvedValue({ userId: null });
     mockVerifyToken.mockResolvedValue({ sub: undefined });
   });
@@ -60,7 +41,6 @@ describe('L1 Security - Auth & Authorization', () => {
     mockAuth.mockResolvedValue({ userId: 'session-user-1' });
     const result = await getClerkAuthUser(makeRequest());
     expect(result.userId).toBe('session-user-1');
-    // Session path short-circuits — Bearer verification is never consulted.
     expect(mockVerifyToken).not.toHaveBeenCalled();
   });
 
@@ -89,7 +69,6 @@ describe('L1 Security - Auth & Authorization', () => {
     await expect(getClerkAuthUser(makeRequest('Basic abc123'))).rejects.toMatchObject({
       statusCode: 401,
     });
-    // A non-Bearer scheme must not be passed to token verification.
     expect(mockVerifyToken).not.toHaveBeenCalled();
   });
 

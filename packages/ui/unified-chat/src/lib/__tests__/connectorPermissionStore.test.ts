@@ -1,20 +1,3 @@
-/**
- * CON-26: connector permissions must never report a save that did not happen.
- *
- * This file previously tested `CloudStore.set()` — the non-Tauri branch of
- * `getConnectorPermissionStore()`. That store resolved its database client from
- * `globalThis['__agi_cloud_db__']`, a global set nowhere in the repo, and
- * returned early when it was absent. In production every `set()` therefore
- * resolved successfully having written nothing, and `ConnectorDetailView`
- * rendered the new permission level as saved. Its queries were also
- * Supabase-shaped against a stack from which Supabase has been removed.
- *
- * Those tests passed only because they installed the missing global themselves,
- * which is exactly why they never caught the shipping defect. CloudStore is gone;
- * these tests lock in the replacement contract: outside the Tauri desktop runtime
- * every operation REJECTS, so a caller cannot mistake "nowhere to store this" for
- * "stored".
- */
 
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ConnectorPermissionLevel } from '@agiworkforce/types';

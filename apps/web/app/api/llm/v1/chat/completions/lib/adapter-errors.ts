@@ -29,113 +29,24 @@ function providerUpstreamError(
   return error;
 }
 
-/**
- * Bridges an adapter's `{type:'error'}` `StreamChunk` back into a thrown
- * `Error`, reproducing `apps/web/lib/llm-providers/anthropic.ts`'s
- * `handleAnthropicHttpError`'s exact message phrasing for the 4 status
- * codes `buildUpstreamErrorResponse` (response-builder.ts) keyword-sniffs
- * (401/402/429/404) -- that function maps `errorMessage.includes('401')` /
- * `'authentication'` / `'rate limit'` / etc. to HTTP status codes, and this
- * reproduces exactly the substrings it looks for.
- *
- * WHY THIS EXISTS: `createAnthropicAdapter(...).stream()`
- * (packages/ai/providers/anthropic/src/index.ts) never throws -- upstream
- * failures (auth, rate limit, network) are caught internally and surfaced
- * as a clean `{type:'error', code, message, retryable}` chunk followed by
- * `{type:'stop', reason:'error'}`, so callers never have two different
- * failure shapes to handle. But `route.ts`'s existing try/catch around the
- * OLD `LLMProviderFactory.streamRequest`/`sendRequest` calls is what
- * triggers `refundFailedReservation` (refunds the free-trial prompt or
- * reserved credits) AND `buildUpstreamErrorResponse` (a proper 401/429/etc.
- * JSON error instead of a 200 stream). Without bridging the error chunk back
- * into a throw, a request that fails before producing any content would
- * silently become a 200 response with `finish_reason: 'error'`/empty
- * content -- no correct status code, and (this is the actual money bug) the
- * user's reservation is never refunded.
- *
- * Uses `classified.status` (via the chunk's `code` field, set from
- * `classifyError(err).status` in packages/ai/providers/anthropic/src/index.ts)
- * rather than pattern-matching the Anthropic SDK's own raw error message --
- * the SDK's message text isn't verified to contain the substrings
- * `buildUpstreamErrorResponse` looks for, whereas the structured numeric
- * status is reliable and is the actual signal `handleAnthropicHttpError`
- * switched on too.
- */
 export function toUpstreamError(chunk: Extract<StreamChunk, { type: 'error' }>): Error {
   return providerUpstreamError('Anthropic', chunk);
 }
 
-/**
- * Google's sibling of `toUpstreamError`. Reusing `toUpstreamError` directly
- * for Google would print "Anthropic authentication error..." on a Google
- * failure -- a real correctness bug (wrong provider label reaching the
- * client), not just a wording nit.
- *
- * `buildUpstreamErrorResponse` (response-builder.ts) derives its HTTP status
- * from substrings in this message (`'401'`/`'authentication'`,
- * `'429'`/`'rate limit'`, `'402'`/`'insufficient credits'`,
- * `'404'`/`'not found'`) -- the exact numeric code is what has to be right;
- * nothing branches on the surrounding English wording. `chunk.code` is
- * `String(res.status)` (packages/ai/providers/google/src/index.ts), so the
- * `Number(chunk.code)` switch below gets that for free, same shape as
- * `toUpstreamError`.
- *
- * NOT attempting byte-exact reproduction of `apps/web/lib/llm-providers/
- * google.ts`'s legacy wording: `chunk.message` here is `classifyError`'s
- * normalized message, not the raw response body legacy's `sendRequest`/
- * `streamRequest` captured via `response.text()` -- there is no raw body
- * text available at this layer to reproduce verbatim. Disclosed gap, same
- * bucket as this migration's other confirmed-safe wire divergences: nothing
- * in the codebase parses `error.message` structurally (grepped both pinned
- * consumers), only status + `error.type`, both of which this DOES match.
- *
- * A network-level failure (`classifyError` given a thrown fetch error, not
- * an HTTP response) yields an error chunk with NO `code` at all -- falls to
- * the default case here, matching legacy's own behavior for that case (a
- * thrown `TypeError` from `fetch` never carried an HTTP status either).
- */
 export function toGoogleUpstreamError(chunk: Extract<StreamChunk, { type: 'error' }>): Error {
   return providerUpstreamError('Google API', chunk);
 }
 
-/**
- * OpenAI's sibling of `toUpstreamError`/`toGoogleUpstreamError` -- same
- * status-code switch, "OpenAI..." message prefixes so a failure isn't
- * mislabeled as Anthropic or Google. Same caveats as `toGoogleUpstreamError`:
- * `chunk.message` is `classifyError`'s normalized message (not legacy
- * `openai.ts`'s raw `response.text()` body), and only the numeric status
- * matters to `buildUpstreamErrorResponse`'s substring-sniffing, which this
- * matches exactly.
- */
 export function toOpenAIUpstreamError(chunk: Extract<StreamChunk, { type: 'error' }>): Error {
   return providerUpstreamError('OpenAI', chunk);
 }
 
-/**
- * Factory for the 8 openai-compat providers' upstream error mappers (task
- * #34's compat batch). Each provider's mapper has the IDENTICAL status-code
- * switch and message shape as `toOpenAIUpstreamError` above, differing only in
- * the provider label string (`'MiniMax authentication error (401)...'`,
- * `'Moonshot authentication error (401)...'`, etc.). A factory instead of 8
- * hand-copied switch statements; `ADAPTER_PROVIDERS` still references 8
- * distinct NAMED exports
- * below (not the factory directly) so each provider's `mapError` reads as an
- * explicit, greppable function reference, matching `toUpstreamError`/
- * `toGoogleUpstreamError`/`toOpenAIUpstreamError`'s existing convention.
- */
 function makeUpstreamErrorMapper(
   label: string,
 ): (chunk: Extract<StreamChunk, { type: 'error' }>) => Error {
   return (chunk) => providerUpstreamError(label, chunk);
 }
 
-// Labels use each provider's canonical self-label (not assumed uniform with
-// the provider id): Zhipu labels itself "ZhipuAI", xai "XAI". The label wording
-// is a disclosed, functionally-safe divergence, same bucket as
-// toGoogleUpstreamError's: buildUpstreamErrorResponse derives status from
-// substrings ('401'/'authentication'/'429'/'rate limit'/etc.), which this
-// factory's shape satisfies regardless of exact wording, and nothing parses
-// error.message structurally beyond that.
 export const toMinimaxUpstreamError = makeUpstreamErrorMapper('MiniMax');
 export const toMoonshotUpstreamError = makeUpstreamErrorMapper('Moonshot');
 export const toZhipuUpstreamError = makeUpstreamErrorMapper('ZhipuAI');

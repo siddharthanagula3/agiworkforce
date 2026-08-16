@@ -28,54 +28,22 @@ export type StyleOption = WritingStyle;
 export interface AttachmentMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called when user picks "Add files or photos" */
   onAddFiles: () => void;
-  /** Called with a screenshot File when capture succeeds */
   onScreenshot?: (file: File) => void;
-  /**
-   * Called when the user picks "Select folder" / "Change folder". Render-gated
-   * by the `canUseWorkingDirectory` capability (desktop-only) — the native
-   * folder dialog + backend sync live in the host app, not in this package.
-   */
   onSelectFolder?: () => void;
-  /**
-   * Host-owned workflow recorder. Omitted on surfaces that cannot capture
-   * desktop input; the shared menu never imports a native API directly.
-   */
   onRecordSkill?: () => void;
-  /** Display label for the currently scoped folder, if any (host-formatted). */
   currentFolderLabel?: string | null;
-  /** Real host-owned project assignment flow. Omitted when unavailable. */
   onAddToProject?: () => void;
-  /** Real host-owned Google Drive file picker. Omitted when unavailable. */
   onAddFromGoogleDrive?: () => void;
-  /** Real host-owned GitHub file/repository picker. Omitted when unavailable. */
   onAddFromGitHub?: () => void;
-  /** Whether Research mode is currently toggled on */
   researchEnabled: boolean;
   onResearchToggle: () => void;
-  /** Whether the active runtime can transport and execute Research requests. */
   supportsResearch?: boolean;
-  /** One-shot, explicit native/Local Web-search control. */
   explicitWebSearchEnabled?: boolean;
   onExplicitWebSearchToggle?: () => void;
-  /**
-   * Whether the "Run code" toggle is currently toggled on (the persisted
-   * user preference — may be true even when `codeExecutionAvailable` is
-   * false; the row renders disabled rather than un-checking it).
-   */
   codeExecutionEnabled?: boolean;
   onCodeExecutionToggle?: () => void;
-  /**
-   * Whether code execution can actually run for the current model/provider/
-   * deployment right now (see `isCodeExecutionAvailable`). The row is
-   * omitted entirely when `onCodeExecutionToggle` is absent (host doesn't
-   * support the capability at all — e.g. a local/Tauri runtime), and
-   * disabled (but still visible) when present-but-unavailable, so the
-   * control is never a fake affordance the server would ignore.
-   */
   codeExecutionAvailable?: boolean;
-  /** Currently active style, or null for none */
   activeStyle?: StyleOption | null;
   onStyleChange?: (style: StyleOption | null) => void;
   children: React.ReactNode;
@@ -150,22 +118,6 @@ const STYLE_OPTIONS: { value: StyleOption; label: string }[] = [
   { value: 'detailed', label: 'Detailed' },
 ];
 
-/**
- * Shared, capability-aware composer menu — the REFERENCE implementation for how
- * surfaces should gate platform actions (it render-gates "Take a screenshot" via
- * `useCapability('canTakeScreenshot')` and "Select folder" via
- * `useCapability('canUseWorkingDirectory')`).
- *
- * STATUS: this IS the live plus/attachment menu for desktop — mounted by
- * `ChatInput.tsx` (also in this package), which is rendered by `ChatInterface`
- * at the bottom of the composer and is what `DesktopShellV3` (and the legacy
- * `App.tsx` fallback) actually ship. Desktop's `v3/PlusMenu.tsx` is a separate,
- * unmounted component (only consumer is the dead `v3/Composer.tsx` — see
- * `DESKTOP-V3-COMPOSER-DEADCODE-01` in `docs/agent-context/known-flaws.md`).
- * Web and mobile do not currently import this component (they use their own
- * surface-local composers); when they do, the capability gates above already
- * make it a correct drop-in.
- */
 export function AttachmentMenu({
   open,
   onOpenChange,
@@ -192,15 +144,8 @@ export function AttachmentMenu({
   const [styleOpen, setStyleOpen] = useState(false);
   const [screenshotting, setScreenshotting] = useState(false);
 
-  // PLATFORM gate: screen capture (getDisplayMedia) is a desktop-class
-  // affordance. Render-gate so the item is ABSENT on web/mobile rather than
-  // relying on the optional `onScreenshot` prop being omitted.
   const canTakeScreenshot = useCapability('canTakeScreenshot');
 
-  // PLATFORM gate: scoping the session to a local project folder requires a
-  // native file-system dialog (desktop-only, `canUseWorkingDirectory` is false
-  // for web/mobile in the capability matrix). The actual dialog + backend sync
-  // live in the host app and arrive via `onSelectFolder`.
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
   const hasSourceAction = Boolean(onAddToProject || onAddFromGoogleDrive || onAddFromGitHub);
 
@@ -215,7 +160,6 @@ export function AttachmentMenu({
         video: true,
         audio: false,
       });
-      // Render stream into a video element to grab a frame
       const video = document.createElement('video');
       video.srcObject = stream;
       await new Promise<void>((resolve) => {
@@ -224,7 +168,6 @@ export function AttachmentMenu({
           resolve();
         };
       });
-      // Brief pause to ensure first frame is painted
       await new Promise<void>((resolve) => setTimeout(resolve, 150));
 
       const canvas = document.createElement('canvas');

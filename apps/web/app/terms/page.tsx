@@ -25,36 +25,6 @@ export const metadata = buildMetadata({
   path: '/terms',
 });
 
-/*
- * TERMS OF SERVICE
- *
- * EDITING RULES — these exist because the marketing surface previously outran
- * what the code could do:
- *
- * 1. NO PRICES, NO PLAN NAMES. Pricing, plan naming and billing behaviour are
- *    owned elsewhere (/pricing, the billing catalog, checkout/portal). Describe
- *    billing mechanics generically so this page cannot drift against them.
- * 2. NO EMAIL NOTICE PROMISES — but get the REASON right. This rule used to say
- *    "there is no transactional email provider in this repository". That was
- *    false: lib/support/handoff/resend-client.ts calls the Resend HTTP API over
- *    plain `fetch`, which is why a dependency grep never found it. The true
- *    reason is narrower and still sufficient: the three paths that can send
- *    mail (support escalation, scheduled-task notification, operational alerts)
- *    cannot broadcast to a list of customers, so a commitment to email everyone
- *    about a change is still unperformable. Notice is posted here and on
- *    /changelog. A guard in app/__tests__/legal-policy-set.test.ts now fails the
- *    build if the old wording returns.
- * 3. NO ENTERPRISE CONTROL CLAIMS. Do not sell SSO, SCIM, directory sync or an
- *    audit-log export from this page.
- * 4. Entity, address, venue and contact facts come from lib/legal-constants.ts,
- *    not from a string typed into this file.
- */
-
-/**
- * Section list for the contents block. Must stay identical to the rendered
- * eyebrows — they are one piece of copy, not two, and drift makes the contents
- * describe a document that is not there.
- */
 const SECTIONS = [
   '01 &middot; Who these terms are with',
   '02 &middot; Eligibility and age',

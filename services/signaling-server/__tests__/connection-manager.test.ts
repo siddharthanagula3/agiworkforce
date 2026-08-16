@@ -1,23 +1,12 @@
-/**
- * Connection Manager Tests
- *
- * Tests for WebSocket connection management:
- * - Connection tracking
- * - Per-IP limits
- * - Idle timeout handling
- * - Statistics
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 
-// Mock WebSocket class
 class MockWebSocket extends EventEmitter {
-  readyState = 1; // OPEN
+  readyState = 1;
   send = vi.fn();
   close = vi.fn();
 }
 
-// Simplified ConnectionManager for testing
 class TestConnectionManager {
   private connections = new Map<
     MockWebSocket,
@@ -98,7 +87,6 @@ describe('ConnectionManager', () => {
     });
 
     it('should deny connection when at limit', () => {
-      // Add 5 connections from same IP
       for (let i = 0; i < 5; i++) {
         const socket = new MockWebSocket();
         manager.addConnection(socket, '192.168.1.1', `corr-${i}`);
@@ -108,13 +96,11 @@ describe('ConnectionManager', () => {
     });
 
     it('should allow connections from different IPs', () => {
-      // Add 5 connections from IP 1
       for (let i = 0; i < 5; i++) {
         const socket = new MockWebSocket();
         manager.addConnection(socket, '192.168.1.1', `corr-${i}`);
       }
 
-      // IP 2 should still be allowed
       expect(manager.canConnect('192.168.1.2')).toBe(true);
     });
   });
@@ -164,7 +150,6 @@ describe('ConnectionManager', () => {
     it('should handle removing non-existent connection gracefully', () => {
       const socket = new MockWebSocket();
 
-      // Should not throw
       expect(() => manager.removeConnection(socket)).not.toThrow();
     });
   });
@@ -174,13 +159,10 @@ describe('ConnectionManager', () => {
       const socket = new MockWebSocket();
       manager.addConnection(socket, '192.168.1.1', 'test-correlation');
 
-      // Wait a bit
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       manager.updateActivity(socket);
 
-      // Activity should be updated (we can't easily check the internal state,
-      // but the method should not throw)
       expect(() => manager.updateActivity(socket)).not.toThrow();
     });
   });

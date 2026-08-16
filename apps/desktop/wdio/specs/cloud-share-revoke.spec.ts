@@ -1,39 +1,3 @@
-/**
- * DES-C07 — Share must work on a Cloud conversation reopened from history.
- *
- * The defect: `DesktopShellV3.handleShareConversation` sourced its payload from
- * the LEGACY desktop chat store (`src/stores/chat`). Nothing hydrates that
- * store's `messagesByConversation` for a Managed Cloud conversation opened from
- * the sidebar — `loadConversationMessages` has no production caller, and
- * `selectConversation` only reads the cache. The transcript the user is looking
- * at is loaded into the SHARED unified-chat store by `ChatInterface` via
- * `CloudRuntime.getMessages`. So Share was a dead control: it reported "Add a
- * message before sharing this conversation." and minted nothing.
- *
- * This spec drives the real Tauri binary and reproduces exactly that path:
- * refresh (so no transcript survives in memory), enter Cloud with a mocked
- * session, open a conversation that exists ONLY on the mocked server, and press
- * Share. The assertion is the outbound `POST /api/share` body — it must carry
- * the rendered transcript, which is only possible if the handler reads the
- * store that owns it.
- *
- * ── How the Cloud session is mocked ───────────────────────────────────────────
- * `browser.tauri.mock()` cannot be used here: it patches
- * `window.__TAURI__.core.invoke`, while this app imports `invoke` from
- * `@tauri-apps/api/core`, which calls `window.__TAURI_INTERNALS__.invoke`. So
- * the IPC seam is patched directly, and only for the four account commands the
- * device-authorization flow uses — every other command passes through to the
- * real backend, so no local database, settings, or keychain behaviour changes.
- *
- * `window.fetch` is patched in the same script rather than at the network layer,
- * which also sidesteps the packaged CSP for the absolute cloud origin.
- *
- * Both patches live on `window`, so a page load erases them. That is why the
- * `browser.refresh()` happens FIRST, while the app is still in Local mode (a
- * Local boot issues no cloud request), and the mocked Cloud session is entered
- * afterwards through the product's own sign-in affordance. Refreshing after the
- * patches were installed would silently un-mock the session mid-test.
- */
 
 const CONVERSATION_ID = 'b6f1c2d4-7a83-4e15-9c60-2d8f4a1b3e77';
 const CONVERSATION_TITLE = 'WDIO share round-trip';
@@ -49,7 +13,6 @@ interface ShareRequestRecord {
   messages?: Array<{ role: string; content: string; created_at: string }>;
 }
 
-/** Everything the in-page fake needs; `browser.execute` serializes it as JSON. */
 const SEED = {
   conversationId: CONVERSATION_ID,
   conversationTitle: CONVERSATION_TITLE,
@@ -66,10 +29,6 @@ describe('AGI Desktop Cloud conversation sharing', () => {
   it('mints a share link for a Cloud conversation reopened from the sidebar', async function () {
     this.timeout(240_000);
 
-    // ── 1. Reach a Local shell, then reload it ────────────────────────────────
-    // The reload is the point of the regression: it guarantees no transcript is
-    // left in any in-memory store, so the only way Share can see messages is by
-    // reading the store the runtime hydrates on reopen.
     await browser.waitUntil(
       async () =>
         (await $('textarea[aria-label="Chat message input"]').isExisting()) ||
@@ -101,13 +60,11 @@ describe('AGI Desktop Cloud conversation sharing', () => {
       },
     );
 
-    // ── 2. Install the in-page Cloud fakes ────────────────────────────────────
     const installed = await browser.execute((seed) => {
       const scope = window as unknown as Record<string, unknown>;
       scope['__agiWdioShareRequests'] = [];
       scope['__agiWdioCloudOrigin'] = seed.fallbackOrigin;
 
-      // --- Tauri IPC: only the account/device-authorization commands. ---------
       const internals = scope['__TAURI_INTERNALS__'] as
         | { invoke?: (cmd: string, args?: unknown, options?: unknown) => Promise<unknown> }
         | undefined;
@@ -129,16 +86,11 @@ describe('AGI Desktop Cloud conversation sharing', () => {
         const record = (args ?? {}) as Record<string, unknown>;
         switch (cmd) {
           case 'account_store_api_base_url': {
-            // The app hands us the configured cloud origin here, immediately
-            // before requesting a device code. Capture it so the verification
-            // URL we return passes the app's own trusted-origin check instead of
-            // hardcoding an origin this build may not be configured for.
             if (typeof record['apiBaseUrl'] === 'string') {
               scope['__agiWdioCloudOrigin'] = record['apiBaseUrl'];
             }
             return Promise.resolve(null);
           }
-          // Never let the test write to the real OS credential vault.
           case 'account_store_access_token':
           case 'account_store_refresh_token':
           case 'account_clear_tokens':
@@ -148,10 +100,6 @@ describe('AGI Desktop Cloud conversation sharing', () => {
           case 'account_restore_refresh_token':
             return Promise.resolve(null);
           case 'fetch_user_profile':
-            // `authOrchestrator` awaits this between projecting the credential
-            // and writing the plan tier. Left to the real backend it would try
-            // its own network call and stall the sign-in for the 30s
-            // `accountApi.withTimeout` budget.
             return Promise.resolve({ id: seed.accountId, email: seed.accountEmail, credits: null });
           case 'account_start_device_authorization': {
             const origin = String(scope['__agiWdioCloudOrigin']);
@@ -161,7 +109,6 @@ describe('AGI Desktop Cloud conversation sharing', () => {
                 user_code: 'WDIO-CODE',
                 verification_uri: `${origin}/auth/device`,
                 verification_uri_complete: `${origin}/auth/device?user_code=WDIO-CODE`,
-                // Clamped to a 3s floor by `requestDeviceAuthorization`.
                 interval: 1,
                 expires_in: 600,
               }),
@@ -181,7 +128,6 @@ describe('AGI Desktop Cloud conversation sharing', () => {
         }
       };
 
-      // --- Managed Cloud HTTP surface ----------------------------------------
       const nowIso = new Date().toISOString();
       const conversationWire = {
         id: seed.conversationId,
@@ -315,9 +261,6 @@ describe('AGI Desktop Cloud conversation sharing', () => {
           });
         }
 
-        // Everything else the Cloud shell touches (credits, usage, library,
-        // runs) is not part of this assertion; answer it inertly so nothing
-        // escapes to the network.
         return json({}, 200);
       };
 
@@ -326,20 +269,14 @@ describe('AGI Desktop Cloud conversation sharing', () => {
 
     expect(installed.ok).toBe(true);
 
-    // ── 3. Enter Cloud through the product's own affordance ───────────────────
     const cloudTab = await $('button[role="tab"]=Cloud');
     await cloudTab.waitForDisplayed({ timeout: 20_000 });
     await cloudTab.click();
 
-    // Post-redesign (a3b1005c8): the owned-window device flow is behind the
-    // explicit browser-fallback action; "Sign in to AGI Cloud" is now only
-    // the card heading.
     const signInButton = await $('button=Sign in through your browser instead');
     await signInButton.waitForDisplayed({ timeout: 20_000 });
     await signInButton.click();
 
-    // The device loop waits one clamped poll interval (3s floor) before its
-    // first poll, and the owned sign-in window opens and closes around it.
     await browser.waitUntil(
       async () => (await $(`[data-conversation-id="${CONVERSATION_ID}"]`).isExisting()) === true,
       {
@@ -351,29 +288,21 @@ describe('AGI Desktop Cloud conversation sharing', () => {
       },
     );
 
-    // The boundary must not have failed behind the shell.
     const bodyText = await $('body').getText();
     expect(bodyText).not.toContain('Could not open Cloud Mode');
 
-    // ── 4. Reopen the conversation from history ───────────────────────────────
-    // `ConversationRow` puts the select handler on an inner button whose `title`
-    // is the conversation title; the row div itself has no click handler.
     const conversationRow = await $(
       `[data-conversation-id="${CONVERSATION_ID}"] button[title="${CONVERSATION_TITLE}"]`,
     );
     await conversationRow.waitForDisplayed({ timeout: 20_000 });
     await conversationRow.click();
 
-    // The transcript renders from the SHARED store — `ChatInterface` fills it
-    // from `CloudRuntime.getMessages`. The legacy desktop store is never
-    // populated on this path; that is the whole point of the regression.
     await browser.waitUntil(async () => (await $('body').getText()).includes(ASSISTANT_TEXT), {
       timeout: 30_000,
       interval: 500,
       timeoutMsg: 'The reopened Cloud conversation never rendered its transcript',
     });
 
-    // ── 5. Share ──────────────────────────────────────────────────────────────
     const shareButton = await $('button[aria-label="Share conversation"]');
     await shareButton.waitForDisplayed({ timeout: 20_000 });
     await shareButton.click();
@@ -396,7 +325,6 @@ describe('AGI Desktop Cloud conversation sharing', () => {
       },
     );
 
-    // ── 6. Assert the payload, then the user-visible result ───────────────────
     const shareRequests = (await browser.execute(
       () => (window as unknown as Record<string, unknown>)['__agiWdioShareRequests'],
     )) as ShareRequestRecord[];
@@ -404,9 +332,6 @@ describe('AGI Desktop Cloud conversation sharing', () => {
     expect(shareRequests).toHaveLength(1);
     const payload = shareRequests[0] as ShareRequestRecord;
     expect(payload.title).toBe(CONVERSATION_TITLE);
-    // `provider` is only reachable from the transcript rows — no conversation
-    // field carries it — so this is direct proof the payload came from the
-    // rendered messages.
     expect(payload.provider).toBe('anthropic');
     expect(typeof payload.model_id).toBe('string');
     expect(payload.messages).toHaveLength(2);
@@ -426,16 +351,10 @@ describe('AGI Desktop Cloud conversation sharing', () => {
 
     const afterShareText = await $('body').getText();
     expect(afterShareText).toContain(SHARE_URL);
-    // The exact symptom DES-C07 describes: Share reporting there is nothing to
-    // share on a conversation whose transcript is on screen.
     expect(afterShareText).not.toContain('Add a message before sharing this conversation.');
 
     await browser.saveScreenshot('/tmp/agi-desktop-cloud-share.png');
 
-    // ── 7. Leave the shared wdio profile in Local mode ────────────────────────
-    // Specs share one app-data directory; a persisted `cloud` mode boots the
-    // next spec into the sign-in card (the sidebar-navigation -> smoke
-    // poisoning recorded on this branch).
     await browser.execute(() => {
       const scope = window as unknown as Record<string, unknown>;
       const realFetch = scope['__agiWdioRealFetch'];

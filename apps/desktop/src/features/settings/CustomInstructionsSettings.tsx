@@ -16,7 +16,6 @@ import { Label } from '@/ui/Label';
 import { Switch } from '@/ui/Switch';
 
 export function CustomInstructionsSettings() {
-  // Use selectors to prevent unnecessary re-renders
   const globalInstructions = useCustomInstructionsStore((s) => s.globalInstructions);
   const globalInstructionsEnabled = useCustomInstructionsStore((s) => s.globalInstructionsEnabled);
   const maxInstructionsLength = useCustomInstructionsStore((s) => s.maxInstructionsLength);
@@ -25,12 +24,9 @@ export function CustomInstructionsSettings() {
   const [isDirty, setIsDirty] = useState(false);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
 
-  // Track if we've initialized to prevent loops during hydration
   const hasInitialized = useRef(false);
 
   useEffect(() => {
-    // Only sync from store if not dirty (user hasn't made changes)
-    // This prevents overwriting user's edits during hydration
     if (!isDirty && (!hasInitialized.current || localInstructions !== globalInstructions)) {
       hasInitialized.current = true;
       setLocalInstructions(globalInstructions);

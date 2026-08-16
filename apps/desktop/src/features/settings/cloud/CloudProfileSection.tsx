@@ -1,24 +1,3 @@
-/**
- * Cloud profile (Settings → General, account half), rendered inline.
- *
- * Previously this opened `/settings/general` in a child webview gated on a
- * Clerk browser cookie Desktop never holds, so it could land on `/login` while
- * the app showed the user signed in. Both writes it needs are bearer-reachable:
- *
- *   full name        → `PATCH /api/me` (`profiles.display_name`, the PER-8
- *                      single source of truth for the name)
- *   everything else  → `PUT /api/settings/preferences` namespace `general`
- *
- * Precedence matches `apps/web/features/settings/sections/GeneralSection.tsx`:
- * a stored value wins only when it carries information, so an empty stored
- * string falls back to the server-resolved profile instead of locking the field
- * empty forever (PER-10).
- *
- * The `general` namespace is written back WHOLE. `PUT /api/settings/preferences`
- * replaces a namespace's value outright (its SQL merge is shallow and only
- * preserves other namespaces), and web stores `chatFont`/`voice` in this same
- * namespace — so the stored record is spread into every save.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -32,7 +11,6 @@ import { PRIMARY_BUTTON, SectionError, SectionHeading, SectionLoading } from './
 
 const NAMESPACE = 'general';
 
-/** Mirrors WORK_DESCRIPTIONS in the web General section. */
 const WORK_DESCRIPTIONS = [
   'Software engineering',
   'Data science / ML',
@@ -52,7 +30,6 @@ const WORK_DESCRIPTIONS = [
 
 const INSTRUCTIONS_LIMIT = 2000;
 
-/** Trimmed value, or null when the stored value carries no information. */
 function storedText(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -98,7 +75,6 @@ export function CloudProfileSection() {
           '',
       );
       setWorkDescription(storedText(stored['workDescription']) ?? profile.workDescription ?? '');
-      // Free-form: an empty stored value IS the user's answer, so no fallback.
       setInstructions(typeof stored['instructions'] === 'string' ? stored['instructions'] : '');
     } catch (caught) {
       if (generation.current === current) {

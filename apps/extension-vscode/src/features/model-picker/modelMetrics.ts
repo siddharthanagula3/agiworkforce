@@ -1,16 +1,7 @@
-/**
- * modelMetrics.ts — Model performance metrics tracking
- *
- * Singleton that tracks per-model request count, average latency,
- * total tokens, and estimated cost. Persisted in globalState.
- * Also provides a webview panel for the dashboard.
- */
 
 import * as vscode from 'vscode';
 import { MODEL_COST_BLENDED, DEFAULT_BLENDED_RATE } from './modelConstants';
 import { escapeHtml } from '../sidebar-webview/webviewContent';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ModelMetricsEntry {
   model: string;
@@ -24,8 +15,6 @@ function estimateCost(model: string, tokens: number): number {
   const rate = MODEL_COST_BLENDED[model] ?? DEFAULT_BLENDED_RATE;
   return (tokens / 1_000_000) * rate;
 }
-
-// ─── Metrics singleton ────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'agiWorkforce.modelMetrics';
 
@@ -97,8 +86,6 @@ export function getModelMetrics(): ModelMetrics {
 export function initModelMetrics(context: vscode.ExtensionContext): void {
   getModelMetrics().init(context);
 }
-
-// ─── Dashboard webview panel ──────────────────────────────────────────────────
 
 export class ModelMetricsPanel {
   public static currentPanel: ModelMetricsPanel | undefined;
@@ -243,8 +230,6 @@ export class ModelMetricsPanel {
 }
 
 function getNonce(): string {
-  // PR-5A (F-20): nonces must be unpredictable to defeat CSP-defeat XSS.
-  // Using a CSPRNG (randomBytes) instead of Math.random.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { randomBytes } = require('crypto') as typeof import('crypto');
   return randomBytes(24).toString('base64url');

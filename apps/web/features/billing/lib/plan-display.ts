@@ -27,18 +27,12 @@ function limitLabel(limit: BillingPlanLimit, singular: string, plural: string): 
 
 export interface BillingPlanDisplay {
   pricing: BillingPlanPricing;
-  /** Published monthly list price in USD, or `null` when the plan publishes none. */
   monthlyPriceUsd: number | null;
-  /** Published yearly list price in USD, or `null` when the plan publishes none. */
   yearlyPriceUsd: number | null;
   annualAvailable: boolean;
   features: string[];
 }
 
-/**
- * Derive public plan labels from the shared enforceable billing catalog. This
- * keeps every Web plan picker aligned with the API's project/MCP/media gates.
- */
 export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay {
   const pricing = getBillingPlanPricing(plan);
   const monthlyPriceUsd = getPlanPriceUsd(plan, 'monthly');

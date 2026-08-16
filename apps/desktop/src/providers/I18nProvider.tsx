@@ -28,7 +28,6 @@ export function I18nProvider({ children }: I18nProviderProps) {
   const setLanguageStore = useSettingsStore((state) => state.setLanguage);
 
   useEffect(() => {
-    // Sync i18n with settings store language preference
     if (storedLanguage && storedLanguage !== i18n.language) {
       i18n.changeLanguage(storedLanguage);
     }

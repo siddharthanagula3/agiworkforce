@@ -1,10 +1,3 @@
-/**
- * tokenCounter.ts -- Session-level token usage tracking with status bar display
- *
- * Tracks approximate token usage per session and shows a running total
- * in the VS Code status bar with color-coded budget awareness.
- * Resets on extension reload.
- */
 
 import * as vscode from 'vscode';
 import {
@@ -50,10 +43,6 @@ export class TokenCounter implements vscode.Disposable {
     return this._estimatedCostUsd;
   }
 
-  /**
-   * Record token usage from a completion request.
-   * If exact counts are not available, estimates from character count.
-   */
   addUsage(
     promptTokens?: number,
     completionTokens?: number,
@@ -67,14 +56,12 @@ export class TokenCounter implements vscode.Disposable {
     this._completionTokens += completionDelta;
     this._requestCount += 1;
 
-    // Estimate cost based on current model
     const model = this._getCurrentModel();
     const rates = MODEL_COST_RATES[model];
     if (rates !== undefined) {
       this._estimatedCostUsd +=
         (promptDelta / 1_000_000) * rates.input + (completionDelta / 1_000_000) * rates.output;
     } else {
-      // Fallback blended rate
       this._estimatedCostUsd +=
         ((promptDelta + completionDelta) / 1_000_000) * DEFAULT_BLENDED_RATE;
     }
@@ -90,7 +77,6 @@ export class TokenCounter implements vscode.Disposable {
     this._updateDisplay();
   }
 
-  /** Re-render the status bar (e.g. when the model changes and the context limit differs). */
   refreshDisplay(): void {
     this._updateDisplay();
   }
@@ -115,10 +101,8 @@ export class TokenCounter implements vscode.Disposable {
     const limit = this._getContextLimit();
     const pct = this._getUsagePercent();
 
-    // Format as "Tokens: X/Y"
     this._statusBarItem.text = `$(pulse) Tokens: ${formatTokenCount(total)}/${formatTokenCount(limit)}`;
 
-    // Color coding based on usage percentage
     if (pct >= 80) {
       this._statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     } else if (pct >= 50) {
@@ -151,8 +135,6 @@ function formatTokenCount(count: number): string {
   return `${(count / 1_000_000).toFixed(2)}M`;
 }
 
-// ─── Singleton ───────────────────────────────────────────────────────────────
-
 let _instance: TokenCounter | undefined;
 
 export function getTokenCounter(): TokenCounter {
@@ -166,7 +148,6 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
   const counter = getTokenCounter();
   context.subscriptions.push(counter);
 
-  // Reset command
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.resetTokenCounter', () => {
       counter.reset();
@@ -174,7 +155,6 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // Detailed breakdown command (click on status bar)
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.showTokenBreakdown', async () => {
       const items: vscode.QuickPickItem[] = [
@@ -222,11 +202,9 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // Re-render the status bar when the model changes (context limit changes)
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('agiWorkforce.model')) {
-        // Re-render with new model's context limit
         counter.refreshDisplay();
       }
     }),

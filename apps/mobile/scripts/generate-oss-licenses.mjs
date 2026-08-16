@@ -45,7 +45,6 @@ const LICENSE_FILE_NAMES = [
   'COPYING.txt',
 ];
 
-/** First-party workspace code is not third-party attribution. */
 const FIRST_PARTY_SCOPE = '@agiworkforce/';
 
 function resolvePackageJson(name, fromDir) {
@@ -207,8 +206,6 @@ function build() {
       `${packages.length} packages, ${bodies.size} unique license bodies.`,
   );
   if (unresolved.size > 0) {
-    // Unmet optional/peer dependencies are not installed, so they are not
-    // bundled and have nothing to attribute.
     console.log(`Skipped ${unresolved.size} unresolved (optional/peer) dependencies.`);
   }
 }

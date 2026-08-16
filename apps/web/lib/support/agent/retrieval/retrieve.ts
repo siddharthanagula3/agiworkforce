@@ -13,7 +13,6 @@ import { buildBm25Index, scoreBm25, type Bm25Index } from './bm25';
 import { tokenize } from './tokenize';
 
 const DEFAULT_LIMIT = 6;
-/** Cap per document so one long doc cannot monopolise the context window. */
 const MAX_PER_DOCUMENT = 2;
 const SNIPPET_CHARS = 320;
 
@@ -35,16 +34,10 @@ function getIndex(): { index: Bm25Index; chunks: readonly CorpusChunk[] } | null
   return cachedIndex;
 }
 
-/** Test-only: drop the memoized BM25 index. */
 export function __resetRetrievalIndexForTests(): void {
   cachedIndex = null;
 }
 
-/**
- * Citation URLs are ALWAYS `SITE_URL` + a corpus-declared path. Nothing else can
- * produce one, so no document — injected or otherwise — can introduce an
- * attacker-controlled origin into a citation.
- */
 export function buildCitation(chunk: CorpusChunk): SupportCitation {
   const snippet = chunk.text.replace(/\s+/g, ' ').trim();
   return {

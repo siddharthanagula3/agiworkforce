@@ -38,7 +38,5 @@ export const resolveToolHardTimeoutMs = (toolName: string): number => {
 
 export const shouldAbortGenerationOnToolTimeout = (toolName: string): boolean => {
   void toolName;
-  // Keep generation alive by default. Backend tool lifecycle events and model loop
-  // should determine terminal state, avoiding premature frontend aborts.
   return false;
 };

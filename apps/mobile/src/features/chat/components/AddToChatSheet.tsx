@@ -65,16 +65,6 @@ interface AddToChatSheetProps {
 
 const SNAP_POINTS = ['75%'];
 
-/**
- * "Add to Chat" bottom sheet.
- * Opened by the [+] button in ChatInput.
- *
- * Sections:
- * 1. Attachment row (Camera, Photos, File)
- * 2. Session toggles (AGI Work)
- * 3. Tool availability (cloud-gated tools + desktop handoff)
- * 4. Config links (Project, Style, Connectors)
- */
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
   {
     onCamera,
@@ -100,8 +90,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const features = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
-  // The selected media model is UI state, not an imperative lookup: subscribe
-  // to it so a newly picked row receives its checkmark in the same render turn.
   const selectedMediaModel = useChatViewStore((s) => s.selectedMediaModel);
   const setMediaModel = useChatViewStore((s) => s.setMediaModel);
   const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
@@ -116,18 +104,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedModelMetadata = getModelMetadataById(selectedModel);
-  // Code execution has NO row here. It is a standing capability, not a
-  // per-message attachment, and it already has a switch in
-  // Settings > Capabilities bound to the same `features.codeExecution` flag —
-  // this sheet's copy was a duplicate control for one preference. Both
-  // reference apps agree: Claude puts "Code execution and file creation" in
-  // Settings > Capabilities, not the composer's + menu (founder 2026-08-06).
-  // The send path still re-verifies model capability and deployment
-  // availability per turn in chatExecutionStore, so nothing is loosened.
-  // Deep Research: cloud-only, paid, and only for a model that declares BOTH the
-  // `research` capability AND native `search` (the server's research loop needs
-  // web search). Same "never a cosmetic toggle" reasoning as web search / code
-  // execution — gated on the SELECTED model + tier so switching models hides it.
   const showResearchToggle =
     FEATURES.research &&
     appMode === 'cloud' &&
@@ -135,15 +111,8 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     selectedModelMetadata?.capabilities?.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
   const showToolSection = showResearchToggle || FEATURES.computerUse;
-  // Media generation runs only through the Managed Cloud media routes, so both
-  // options are Cloud-only. Each is additionally hidden when the canonical
-  // registry slot has no capable model, so the sheet never offers an output kind
-  // that would fail at send time.
   const imageModelId = resolveMediaModelId('image', selectedMediaModel);
   const videoModelId = resolveMediaModelId('video', selectedMediaModel);
-  // Derived during render, like the Web composer: a model switch must not leave
-  // an unsupported tuple staged for even one frame, because that frame is what
-  // the send would use.
   const videoAspectOptions = useMemo(
     () => getVideoAspectOptionsForModel(videoModelId ?? undefined),
     [videoModelId],
@@ -152,9 +121,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     videoAspectOptions.find((option) => option.id === videoAspectRatio)?.id ??
     videoAspectOptions[0]?.id ??
     '16:9';
-  // Image shapes come from the model's adapter, so switching Gemini -> GPT
-  // Image 2 narrows the list in the same render rather than leaving a ratio
-  // staged that the OpenAI adapter cannot map.
   const imageAspectOptions = useMemo(
     () => getImageAspectOptionsForModel(imageModelId ?? undefined),
     [imageModelId],
@@ -171,9 +137,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     videoQualityOptions.find((option) => option.id === videoResolution)?.id ??
     videoQualityOptions[0]?.id ??
     '720p';
-  // Persisted choices can become invalid when the catalog changes. Reconcile
-  // after render so the stale id is actually removed (and cannot reactivate if
-  // its lifecycle later changes) without mutating Zustand during render.
   useEffect(() => {
     clearInvalidMediaModelSelections();
   }, [selectedMediaModel]);
@@ -183,23 +146,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     imageModelId !== null &&
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(tier, 'image_generation');
-  // Video is Max 15x / Enterprise only — `video_generation` in the billing
-  // catalog. The server enforces it too; this just avoids showing a control that
-  // can only produce a paywall.
   const showVideoOption =
     appMode === 'cloud' &&
     videoModelId !== null &&
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(tier, 'video_generation');
-  // No model name on the Image/Video rows any more: the model list rendered
-  // under the active kind names it, and a second copy up here went stale the
-  // moment the user picked a different one. Defaults remain owned by the
-  // registry's image_generation and video_generation slots.
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
 
-  // Local and cloud projects live in physically separate stores; read the one
-  // matching the active mode so the row never shows a local project name while
-  // the chat is running in Cloud (or vice versa).
   const localActiveProjectId = useProjectStore((s) => s.activeProjectId);
   const localProjects = useProjectStore((s) => s.projects);
   const cloudActiveProjectId = useCloudProjectStore((s) => s.activeProjectId);
@@ -293,10 +246,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [haptic, setFeature],
   );
 
-  // Selecting a media mode swaps the composer's model; selecting the one that
-  // is already active is a no-op rather than a toggle-off, so a double tap
-  // cannot silently drop the user back to text mid-thought. "Back to text chat"
-  // is the explicit way out, mirrored by the composer's MediaModeChip.
   const handleSelectImageMode = useCallback(() => {
     haptic();
     if (mediaMode === 'image') return;
@@ -337,22 +286,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     <BottomSheet
       ref={ref}
       index={-1}
-      // @gorhom/bottom-sheet defaults its content wrapper to an accessible
-      // `adjustable` element. On iOS that turns the wrapper into a leaf and
-      // hides every Camera/Model/Project control from VoiceOver. The handle
-      // remains adjustable; the content wrapper must expose its children.
       accessible={false}
       snapPoints={SNAP_POINTS}
       enablePanDownToClose
-      // Explicit snap points and dynamic sizing are competing contracts: v5
-      // defaults `enableDynamicSizing` to true, which appends the measured
-      // content height to SNAP_POINTS and renumbers the indices, so
-      // `snapToIndex(0)` would stop meaning '75%'. Matches ModelPickerSheet.
       enableDynamicSizing={false}
-      // Belt-and-braces for the keyboard-over-sheet bug fixed at the tap site in
-      // ChatInput: if anything ever raises the keyboard while this sheet is up,
-      // the sheet resizes around it instead of being covered by it, and a blur
-      // restores the previous position rather than leaving a gap.
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
@@ -716,8 +653,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                         <MediaOptionRow
                           key={option.id}
                           label={option.label}
-                          // Surface the duration restriction BEFORE a failed
-                          // send rather than after the route rejects it.
                           hint={
                             option.durationSecs
                               ? `${option.durationSecs.join('/')}s only`
@@ -825,10 +760,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   );
 });
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
 function AttachmentCard({
   icon,
   label,
@@ -864,13 +795,6 @@ function AttachmentCard({
   );
 }
 
-/**
- * A selectable output-kind row (Image / Video).
- *
- * Deliberately NOT a Switch: these are mutually exclusive modes that change the
- * selected model, and a switch would imply they stack on top of the current
- * model — which is exactly the misconception the old toggles created.
- */
 function MediaModeRow({
   icon,
   label,
@@ -921,8 +845,6 @@ function MediaModeRow({
   );
 }
 
-/** One choosable media model. Subtitle carries the price so the cost of the
- *  choice is visible at the point of choosing, not buried in billing. */
 function MediaModelRow({
   modelId,
   selected,
@@ -1160,11 +1082,6 @@ function ConfigLink({
   );
 }
 
-/**
- * A plain selectable row for video aspect/quality. Mirrors `MediaModelRow`'s
- * geometry so the two lists read as one control group, but carries a hint slot
- * instead of a price.
- */
 function MediaOptionRow({
   label,
   hint,

@@ -37,9 +37,6 @@ describe('entitlement · effectivePlanTier', () => {
   });
 
   it('downgrades a paid tier to free once the status is no longer entitled', () => {
-    // The abuse vector: plan_tier is re-derived from the still-paid Stripe price
-    // on every webhook update, so a canceled row keeps a paid plan_tier. Feature
-    // gating must ignore that and treat the user as free.
     expect(effectivePlanTier('pro', 'canceled')).toBe('free');
     expect(effectivePlanTier('max', 'unpaid')).toBe('free');
     expect(effectivePlanTier('pro', 'past_due')).toBe('free');
@@ -52,9 +49,6 @@ describe('entitlement · effectivePlanTier', () => {
   });
 
   it('a canceled subscription with cancel_at_period_end still active is fully entitled', () => {
-    // "Runs to billing end": while Stripe status is still active (cancel scheduled
-    // for period end), the user keeps their paid tier. Downgrade only happens when
-    // status flips to canceled at the terminal deleted event.
     expect(effectivePlanTier('pro', 'active')).toBe('pro');
   });
 });

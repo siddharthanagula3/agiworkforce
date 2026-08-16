@@ -1,12 +1,3 @@
-/**
- * Electron replacement for `@tauri-apps/api/core`.
- *
- * Cloud sign-in commands route to the Electron main process over the preload
- * bridge (the same role `account_clerk_native_request` and the keyring
- * commands play in Rust). Everything else falls through to `tauri-mock.ts`,
- * which routes cloud chat CRUD to the real HTTP API and mocks desktop-only
- * commands — identical to the cloud-web build.
- */
 import { invoke as cloudWebInvoke } from '../tauri-mock';
 import { getElectronHostBridge, isElectronBridgeCommand } from './bridgeContract';
 

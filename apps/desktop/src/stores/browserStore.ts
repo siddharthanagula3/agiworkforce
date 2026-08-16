@@ -139,7 +139,6 @@ export interface RecordedStep {
   timestamp: number;
 }
 
-// Re-export API types for consumers
 export type {
   BrowserCookie,
   BrowserStatusResult,
@@ -166,20 +165,17 @@ interface BrowserState {
   isStreaming: boolean;
   streamIntervalId: number | null;
 
-  // --- Lifecycle ---
   initialize: () => Promise<void>;
   checkStatus: () => Promise<BrowserStatusResult>;
   launchBrowser: (browserType: BrowserType, headless: boolean) => Promise<string>;
   closeBrowser: (sessionId: string) => Promise<void>;
 
-  // --- Tab management ---
   openTab: (url: string) => Promise<string>;
   closeTab: (tabId: string) => Promise<void>;
   switchTab: (tabId: string) => Promise<void>;
   listTabs: () => Promise<ApiTabInfo[]>;
   setActiveSession: (sessionId: string) => void;
 
-  // --- Navigation ---
   navigateTab: (tabId: string, url: string) => Promise<void>;
   goBack: (tabId?: string) => Promise<void>;
   goForward: (tabId?: string) => Promise<void>;
@@ -188,7 +184,6 @@ interface BrowserState {
   getTitle: (tabId?: string) => Promise<string>;
   waitForNavigation: (timeoutMs?: number, tabId?: string) => Promise<void>;
 
-  // --- DOM interaction ---
   clickElement: (tabId: string, selector: string) => Promise<void>;
   typeText: (tabId: string, selector: string, text: string) => Promise<void>;
   getText: (selector: string, tabId?: string) => Promise<string>;
@@ -204,7 +199,6 @@ interface BrowserState {
   getElementState: (selector: string, tabId?: string) => Promise<ElementStateResult>;
   waitForInteractive: (selector: string, timeoutMs?: number, tabId?: string) => Promise<void>;
 
-  // --- Forms ---
   fillForm: (
     selector: string,
     data: Record<string, string | number | boolean>,
@@ -213,58 +207,48 @@ interface BrowserState {
   dragAndDrop: (source: string, target: string, tabId?: string) => Promise<void>;
   uploadFile: (selector: string, paths: string[], tabId?: string) => Promise<void>;
 
-  // --- Screenshots & content ---
   screenshot: (tabId: string) => Promise<string>;
   getPageContent: (tabId: string) => Promise<string>;
   getDOMSnapshot: (tabId: string) => Promise<DOMSnapshot>;
   highlightElement: (tabId: string, selector: string) => Promise<void>;
   clearHighlight: () => void;
 
-  // --- JavaScript execution ---
   executeScript: (tabId: string, script: string) => Promise<unknown>;
   executeAsyncScript: (script: string, tabId?: string) => Promise<unknown>;
   callFunction: (functionName: string, args: unknown, tabId?: string) => Promise<unknown>;
   executeInFrame: (frameId: string, script: string, tabId?: string) => Promise<unknown>;
 
-  // --- Cookies ---
   getCookies: (tabId?: string) => Promise<BrowserCookie[]>;
   setCookie: (cookie: BrowserCookie, tabId?: string) => Promise<void>;
   clearCookies: (tabId?: string) => Promise<void>;
 
-  // --- Frames & performance ---
   getPerformanceMetrics: (tabId?: string) => Promise<PerformanceMetrics>;
   getFrames: (tabId?: string) => Promise<FrameContext[]>;
 
-  // --- Semantic selectors ---
   findSemantic: (query: string, tabId?: string) => Promise<string>;
   findAllSemantic: (query: string, tabId?: string) => Promise<string[]>;
   clickSemantic: (query: string, tabId?: string) => Promise<void>;
   typeSemantic: (query: string, text: string, tabId?: string) => Promise<void>;
 
-  // --- Accessibility ---
   getAccessibilityTree: (tabId?: string) => Promise<unknown>;
   getDomSemanticGraph: (tabId?: string) => Promise<unknown>;
   getInteractiveElements: (tabId?: string) => Promise<string[]>;
   findByRole: (role: string, name?: string, tabId?: string) => Promise<string>;
 
-  // --- Streaming ---
   startStreaming: (tabId: string) => void;
   stopStreaming: () => void;
 
-  // --- Recording ---
   startRecording: () => void;
   stopRecording: () => void;
   addRecordedStep: (step: RecordedStep) => void;
   clearRecording: () => void;
   generatePlaywrightCode: () => string;
 
-  // --- Actions & screenshots state ---
   addAction: (action: BrowserAction) => void;
   addScreenshot: (screenshot: Screenshot) => void;
   clearActions: () => void;
   clearScreenshots: () => void;
 
-  // --- Cleanup ---
   cleanup: () => void;
 }
 
@@ -289,13 +273,8 @@ export const useBrowserStore = create<BrowserState>()(
         isStreaming: false,
         streamIntervalId: null,
 
-        // =====================================================================
-        // Lifecycle
-        // =====================================================================
-
         initialize: async () => {
           try {
-            // STR-005 fix: Clean up any existing listeners before re-initializing
             if (unlistenFunctions.length > 0) {
               unlistenFunctions.forEach((unlisten) => {
                 try {
@@ -396,10 +375,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        // =====================================================================
-        // Tab management
-        // =====================================================================
-
         openTab: async (url: string) => {
           try {
             const tabId = await browserOpenTab(url);
@@ -442,7 +417,6 @@ export const useBrowserStore = create<BrowserState>()(
                     break;
                   }
                 }
-                // WRK-004 fix: Clear screenshots for this tab to prevent memory leak
                 state.screenshots = state.screenshots.filter((s) => s.tabId !== tabId);
               },
               undefined,
@@ -497,10 +471,6 @@ export const useBrowserStore = create<BrowserState>()(
             'browser/setActiveSession',
           );
         },
-
-        // =====================================================================
-        // Navigation
-        // =====================================================================
 
         navigateTab: async (tabId: string, url: string) => {
           try {
@@ -579,10 +549,6 @@ export const useBrowserStore = create<BrowserState>()(
             throw error;
           }
         },
-
-        // =====================================================================
-        // DOM interaction
-        // =====================================================================
 
         clickElement: async (tabId: string, selector: string) => {
           try {
@@ -710,10 +676,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        // =====================================================================
-        // Forms
-        // =====================================================================
-
         fillForm: async (
           selector: string,
           data: Record<string, string | number | boolean>,
@@ -745,10 +707,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        // =====================================================================
-        // Screenshots & content
-        // =====================================================================
-
         screenshot: async (tabId: string) => {
           try {
             const data = await browserScreenshot(undefined, tabId);
@@ -776,7 +734,6 @@ export const useBrowserStore = create<BrowserState>()(
             set(
               (state) => {
                 state.domSnapshots.push(snapshot);
-                // AUDIT-006-002 fix: Cap domSnapshots at 50 entries
                 if (state.domSnapshots.length > 50) {
                   state.domSnapshots = state.domSnapshots.slice(-50);
                 }
@@ -806,10 +763,6 @@ export const useBrowserStore = create<BrowserState>()(
         clearHighlight: () => {
           set({ highlightedElement: null }, undefined, 'browser/clearHighlight');
         },
-
-        // =====================================================================
-        // JavaScript execution
-        // =====================================================================
 
         executeScript: async (tabId: string, script: string) => {
           try {
@@ -848,10 +801,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        // =====================================================================
-        // Cookies
-        // =====================================================================
-
         getCookies: async (tabId?: string) => {
           try {
             return await browserGetCookies(tabId);
@@ -879,10 +828,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        // =====================================================================
-        // Frames & performance
-        // =====================================================================
-
         getPerformanceMetrics: async (tabId?: string) => {
           try {
             return await browserGetPerformanceMetrics(tabId);
@@ -900,10 +845,6 @@ export const useBrowserStore = create<BrowserState>()(
             throw error;
           }
         },
-
-        // =====================================================================
-        // Semantic selectors
-        // =====================================================================
 
         findSemantic: async (query: string, tabId?: string) => {
           try {
@@ -941,10 +882,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        // =====================================================================
-        // Accessibility
-        // =====================================================================
-
         getAccessibilityTree: async (tabId?: string) => {
           try {
             return await getAccessibilityTree(tabId);
@@ -981,10 +918,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        // =====================================================================
-        // Streaming
-        // =====================================================================
-
         startStreaming: (tabId: string) => {
           if (get().isStreaming) {
             return;
@@ -1020,10 +953,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        // =====================================================================
-        // Recording
-        // =====================================================================
-
         startRecording: () => {
           set({ isRecording: true, recordedSteps: [] }, undefined, 'browser/startRecording');
         },
@@ -1036,7 +965,6 @@ export const useBrowserStore = create<BrowserState>()(
           set(
             (state) => {
               state.recordedSteps.push(step);
-              // AUDIT-006-003 fix: Cap recordedSteps at 1000 entries
               if (state.recordedSteps.length > 1000) {
                 state.recordedSteps = state.recordedSteps.slice(-1000);
               }
@@ -1084,15 +1012,10 @@ test('recorded automation', async ({ page }) => {
           return code;
         },
 
-        // =====================================================================
-        // Actions & screenshots state
-        // =====================================================================
-
         addAction: (action: BrowserAction) => {
           set(
             (state) => {
               state.actions.push(action);
-              // STR-003 fix: Cap actions array at 1000 entries
               if (state.actions.length > 1000) {
                 state.actions = state.actions.slice(-1000);
               }
@@ -1117,7 +1040,6 @@ test('recorded automation', async ({ page }) => {
           set(
             (state) => {
               state.screenshots.push(screenshotItem);
-              // Keep max 50 screenshots
               if (state.screenshots.length > 50) {
                 state.screenshots.shift();
               }
@@ -1135,17 +1057,12 @@ test('recorded automation', async ({ page }) => {
           set({ screenshots: [] }, undefined, 'browser/clearScreenshots');
         },
 
-        // =====================================================================
-        // Cleanup
-        // =====================================================================
-
         cleanup: () => {
           const { streamIntervalId } = get();
           if (streamIntervalId !== null) {
             window.clearInterval(streamIntervalId);
           }
 
-          // STR-005 fix: Clean up all event listeners
           unlistenFunctions.forEach((unlisten) => {
             try {
               unlisten();
@@ -1155,7 +1072,6 @@ test('recorded automation', async ({ page }) => {
           });
           unlistenFunctions.length = 0;
 
-          // STR-005 fix: Reset all state to prevent data leaking across sessions
           set(
             {
               sessions: [],
@@ -1184,7 +1100,6 @@ export function cleanupBrowserStore() {
   useBrowserStore.getState().cleanup();
 }
 
-// Selectors
 export const selectBrowserSessions = (state: BrowserState) => state.sessions;
 export const selectActiveSessionId = (state: BrowserState) => state.activeSessionId;
 export const selectBrowserInitialized = (state: BrowserState) => state.initialized;
@@ -1200,7 +1115,6 @@ export const selectRecordedSteps = (state: BrowserState) => state.recordedSteps;
 export const selectIsStreaming = (state: BrowserState) => state.isStreaming;
 export const selectStreamIntervalId = (state: BrowserState) => state.streamIntervalId;
 
-// Derived selectors
 export const selectActiveSession = (state: BrowserState) =>
   state.sessions.find((s) => s.id === state.activeSessionId);
 export const selectSessionById = (sessionId: string) => (state: BrowserState) =>

@@ -1,9 +1,3 @@
-/**
- * TableViewer Component
- *
- * Display tabular data from database queries, API responses, or CSV data.
- * Supports sorting, filtering, pagination, and export to CSV.
- */
 
 import { useEffect, useRef, useState, useMemo } from 'react';
 import {
@@ -49,7 +43,6 @@ export function TableViewer({
     };
   }, []);
 
-  // Filter rows based on search term
   const filteredRows = useMemo(() => {
     if (!searchTerm) return data.rows;
 
@@ -60,7 +53,6 @@ export function TableViewer({
     );
   }, [data.rows, searchTerm]);
 
-  // Sort rows
   const sortedRows = useMemo(() => {
     if (!sortColumn || !sortDirection) return filteredRows;
 
@@ -74,14 +66,12 @@ export function TableViewer({
       const aStr = String(aValue);
       const bStr = String(bValue);
 
-      // Try numeric comparison first
       const aNum = Number(aValue);
       const bNum = Number(bValue);
       if (!isNaN(aNum) && !isNaN(bNum)) {
         return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
       }
 
-      // Fall back to string comparison
       if (sortDirection === 'asc') {
         return aStr.localeCompare(bStr);
       }
@@ -89,7 +79,6 @@ export function TableViewer({
     });
   }, [filteredRows, sortColumn, sortDirection]);
 
-  // Paginate rows
   const paginatedRows = useMemo(() => {
     if (!paginated) return sortedRows;
 
@@ -102,7 +91,6 @@ export function TableViewer({
 
   const handleSort = (columnKey: string) => {
     if (sortColumn === columnKey) {
-      // Cycle through: asc -> desc -> null
       if (sortDirection === 'asc') {
         setSortDirection('desc');
       } else if (sortDirection === 'desc') {
@@ -116,7 +104,6 @@ export function TableViewer({
   };
 
   const handleCopyTable = async () => {
-    // Convert table to TSV (Tab-Separated Values)
     const headers = data.columns.map((col) => col.label).join('\t');
     const rows = sortedRows
       .map((row) => data.columns.map((col) => String(row[col.key] ?? '')).join('\t'))
@@ -130,7 +117,6 @@ export function TableViewer({
   };
 
   const handleExportCSV = () => {
-    // Convert table to CSV
     const escapeCSV = (value: string) => {
       if (value.includes(',') || value.includes('"') || value.includes('\n')) {
         return `"${value.replace(/"/g, '""')}"`;
@@ -144,7 +130,6 @@ export function TableViewer({
       .join('\n');
     const csv = `${headers}\n${rows}`;
 
-    // Create download link
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

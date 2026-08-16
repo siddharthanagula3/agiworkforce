@@ -59,9 +59,6 @@ describe('selectNextCursor', () => {
   });
 
   it('trusts the server safe-frontier cursor rather than a per-row max', () => {
-    // The server bounds the cursor to the slower-paginating table's frontier
-    // even when a row inside the page carries a much higher server_version.
-    // The client must persist the server's cursor, not recompute one.
     expect(selectNextCursor('0', '10')).toBe('10');
   });
 });

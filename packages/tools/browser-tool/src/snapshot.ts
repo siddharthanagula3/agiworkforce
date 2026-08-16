@@ -1,16 +1,3 @@
-/**
- * Page snapshot — produces a compact list of interactive elements with stable
- * `ref` ids the agent can target on subsequent click/type actions.
- *
- * Two modes (mirrors OpenClaw's snapshot modes):
- *   - **aria** — uses Playwright's accessibility tree. Cleanest for typical
- *     web pages with proper labels.
- *   - **ai**  — role-based scan over visible interactive elements
- *     (button, link, textbox, combobox, etc.). Handy when ARIA is sparse.
- *
- * Refs are scoped to a single snapshot; calling snapshot again invalidates
- * the previous refs. Callers should always work from the latest snapshot.
- */
 
 import type { Page, Locator } from 'playwright-core';
 
@@ -60,11 +47,6 @@ export async function takeSnapshot(
   const title = await page.title().catch(() => '');
   const elements: BrowserSnapshotElement[] = [];
 
-  // Both `aria` and `ai` modes use Playwright's role-based selectors. The
-  // older Page.accessibility.snapshot() API was removed in playwright-core
-  // 1.50+. We differentiate the two modes by the order they walk roles:
-  // `aria` prioritizes named elements (button/link/textbox + heading);
-  // `ai` adds menuitem/tab/switch and flat-walks for higher recall.
   const orderedRoles =
     mode === 'aria'
       ? (['button', 'link', 'textbox', 'combobox', 'searchbox', 'heading'] as const)

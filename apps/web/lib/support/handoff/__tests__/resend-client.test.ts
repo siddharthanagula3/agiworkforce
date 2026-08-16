@@ -1,7 +1,3 @@
-/**
- * The transport. It must never throw into a request handler, and it must never
- * report success it did not get.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,11 +58,9 @@ describe('sendSupportEmail', () => {
 
     expect(result).toEqual({ delivered: true, providerMessageId: 'msg-1' });
     const [url, init] = fetchMock.mock.calls[0]!;
-    // Constant URL: no part of it is request-derived, so there is no SSRF surface.
     expect(url).toBe('https://api.resend.com/emails');
     const body = JSON.parse(String((init as { body: string }).body));
     expect(body.to).toEqual(['support@agiworkforce.com']);
-    // Without reply_to the "channel that gets read" is only half-built.
     expect(body.reply_to).toEqual(['customer@example.com']);
     expect(body.from).toBe('support@agiworkforce.com');
   });

@@ -45,17 +45,12 @@ const LMSTUDIO_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface LMStudioAdapterConfig extends ProviderAdapterConfig {
-  /**
-   * Override the default `http://localhost:1234/v1` baseUrl. LMStudio can be
-   * configured to listen on a different port or LAN IP.
-   */
   baseUrl?: string;
 }
 
 export function createLMStudioAdapter(config: LMStudioAdapterConfig = {}): ProviderAdapter {
   const baseURL = config.baseUrl ?? LMSTUDIO_DEFAULT_BASE_URL;
   const sdk = new OpenAI({
-    // LMStudio doesn't require auth by default but the SDK requires _some_ key.
     apiKey: config.apiKey ?? 'lm-studio',
     baseURL,
     ...(config.fetch ? { fetch: config.fetch } : {}),

@@ -1,12 +1,3 @@
-/**
- * Transient post-auth navigation intent.
- *
- * The route param survives the native Clerk screen handoff, while this module's
- * in-memory slot lets the root Clerk bridge consume the intent before it
- * publishes the signed-in signal that redirects out of the auth group. Nothing
- * is persisted: cancel, invalid input, sign-out, or a completed handoff clears
- * the slot.
- */
 
 export const POST_AUTH_INTENT_PARAM = 'postAuthIntent' as const;
 export const CLOUD_CHAT_POST_AUTH_INTENT = 'cloud-chat' as const;

@@ -59,10 +59,6 @@ import {
 import { POST as refreshDeviceSession } from '@/app/api/auth/device/refresh/route';
 import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 
-/**
- * Columns that make a row personal to one account. A table carrying any of
- * them must be classified by account-erasure.ts.
- */
 const SCOPE_COLUMNS = new Set([
   'user_id',
   'owner_id',
@@ -76,10 +72,6 @@ const SCOPE_COLUMNS = new Set([
 
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../db/neon');
 
-/**
- * Read the live schema out of the migrations so the erasure inventory is
- * checked against the database it runs on rather than against itself.
- */
 function schemaColumnsByTable(): Map<string, Set<string>> {
   const tables = new Map<string, Set<string>>();
   const files = readdirSync(MIGRATIONS_DIR)
@@ -87,7 +79,6 @@ function schemaColumnsByTable(): Map<string, Set<string>> {
     .sort();
 
   for (const file of files) {
-    // Line comments carry example DDL (see 0043's manual verification block).
     const sql = readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8').replace(/--[^\n]*/g, '');
 
     for (const match of sql.matchAll(
@@ -188,8 +179,6 @@ describe('account erasure inventory', () => {
     const anonymized = new Set(ANONYMIZED_USER_COLUMNS.map((entry) => entry.table));
     const undeleted = new Set(Object.keys(UNDELETED_USER_TABLES));
 
-    // Sanity check on the derivation itself: a parse that found nothing would
-    // make every assertion below vacuous.
     expect(scoped.size).toBeGreaterThan(50);
 
     const unclassified = [...scoped.keys()]
@@ -216,8 +205,6 @@ describe('account erasure inventory', () => {
     });
 
     for (const [table, index] of seen) {
-      // `profiles` is scoped by its own primary key, so it is not in the
-      // derived set; everything else must be a real, user-scoped table.
       if (table === 'profiles') continue;
       expect(scoped.has(table), `${table} is classified but not user-scoped in the schema`).toBe(
         true,
@@ -544,7 +531,6 @@ describe('POST /api/auth/device/refresh', () => {
         (sql) => sql.includes('SET revoked_at') && sql.includes('family_id = $1'),
       ),
     ).toBe(true);
-    // No replacement credential was minted for an account that no longer exists.
     const queried = mocks.query.mock.calls.map((call) => String(call[0]));
     expect(queried.some((sql) => sql.includes('INSERT INTO device_refresh_tokens'))).toBe(false);
   });

@@ -5,27 +5,6 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { ConsentPurpose } from '@/lib/consent-purposes';
 
-/**
- * The withdrawal surface. DPDP s.6(6) requires withdrawing consent to be as
- * easy as giving it, which rules out a support ticket, an email, and a form
- * that opens a mail client: giving it is one click, so withdrawing it is one
- * click, on this page, against the same ledger.
- *
- * Three states are deliberately distinguished and never collapsed:
- *
- *   granted   — a row exists and the newest one says true
- *   withdrawn — a row exists and the newest one says false
- *   not asked — no row at all
- *
- * "Not asked" is not "declined". Rendering it as an unticked box that claims to
- * be a recorded refusal would be a false statement about what the product
- * holds, so it is labelled as what it is.
- *
- * The purpose catalogue comes from the server response rather than from a
- * client import, so this component can never offer a purpose the API would
- * reject.
- */
-
 interface ConsentRecord {
   purpose: string;
   granted: boolean;
@@ -98,8 +77,6 @@ export function ConsentCentre() {
         });
 
         if (res.status === 409) {
-          // The notice changed under this tab. Reload rather than record a
-          // decision against text the person was not shown.
           setNotice('The privacy notice changed. Reloaded it — please choose again.');
           await load();
           return;

@@ -26,9 +26,6 @@ describe('extractCodeBlocks', () => {
     expect(blocks[1]!.lineCount).toBe(4);
   });
 
-  // AUDIT-FIX ART-2: an info string the old /```(\w*)?\n/ could not match made the
-  // scan resume at that block's CLOSING fence and pair it as an OPENING one,
-  // shifting every later ordinal/startIndex/endIndex in the message.
   it('pairs fences correctly when the info string is not a bare word', () => {
     const md = [
       'intro',
@@ -50,7 +47,6 @@ describe('extractCodeBlocks', () => {
     expect(md.slice(blocks[0]!.startIndex, blocks[0]!.endIndex)).toBe(
       '```html title="x"\n<div>one</div>\n```',
     );
-    // The message is fully closed — no phantom "still writing" fence.
     expect(extractTrailingUnclosedBlock(md)).toBeNull();
   });
 
@@ -72,7 +68,6 @@ describe('computeDerivedArtifactId — deterministic identity (the de-dup/sync k
     const a = computeDerivedArtifactId('c1', 'm1', 0);
     const b = computeDerivedArtifactId('c1', 'm1', 0);
     expect(a).toBe(b);
-    // looks like a uuid
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 
@@ -96,7 +91,7 @@ describe('deriveArtifacts — ids are deterministic (fixes the non-deterministic
     const second = deriveArtifacts(HTML, opts);
     expect(first[0]!.id).toBe(second[0]!.id);
     expect(first[0]!.id).toBe(computeDerivedArtifactId('c1', 'm1', 0));
-    expect(first).toEqual(second); // fully reproducible with a fixed `now`
+    expect(first).toEqual(second);
   });
 });
 
@@ -114,10 +109,9 @@ describe('inclusion policy', () => {
       include: 'code',
       minCodeLines: 4,
     });
-    // HTML(1 line after collapse? it's one line) + PY(4 lines) — only blocks with >=4 non-empty lines
     expect(arts.every((a) => a.content.split('\n').filter((l) => l.trim()).length >= 4)).toBe(true);
     expect(arts.some((a) => a.language === 'python')).toBe(true);
-    expect(arts.some((a) => a.language === 'bash')).toBe(false); // one-liner excluded
+    expect(arts.some((a) => a.language === 'bash')).toBe(false);
   });
 
   it('accepts a custom predicate', () => {
@@ -156,7 +150,7 @@ describe('classification helpers', () => {
 describe('hasArtifacts + removeArtifactBlocks', () => {
   it('hasArtifacts respects the inclusion policy', () => {
     expect(hasArtifacts(HTML)).toBe(true);
-    expect(hasArtifacts(PY)).toBe(false); // renderable default
+    expect(hasArtifacts(PY)).toBe(false);
     expect(hasArtifacts(PY, { include: 'code', minCodeLines: 4 })).toBe(true);
   });
 
@@ -168,10 +162,6 @@ describe('hasArtifacts + removeArtifactBlocks', () => {
     expect(cleaned).toContain('after');
   });
 
-  // Regression: in the live web flow MessageBubble passes artifacts from the STORE, whose
-  // content can drift from the final markdown (an artifact captured mid-stream). The old
-  // exact-content regex then missed, leaving a DUPLICATE raw code block beside the card.
-  // Position-based removal must strip the block even with a stale/partial passed content.
   it('strips a renderable block even when the passed artifact content is stale/partial', () => {
     const body = `before\n${HTML}\nafter`;
     const stale = [{ content: '<!DOCTYPE html><html><head><title>Mini', language: 'html' }];
@@ -224,19 +214,12 @@ describe('extractTrailingUnclosedBlock', () => {
     expect(block).not.toBeNull();
     expect(block!.language).toBe('svg');
     expect(block!.ordinal).toBe(2);
-    // Same deterministic id as the eventual completed artifact
     expect(computeDerivedArtifactId('c1', 'm1', block!.ordinal)).toBe(
       computeDerivedArtifactId('c1', 'm1', 2),
     );
   });
 
   it('stays consistent with extractCodeBlocks fence pairing on fence-like inner text', () => {
-    // AUDIT-FIX ART-2: fences are line-anchored, so a ``` sitting INSIDE a line of
-    // body text no longer closes the block — the fence on its own line does. (The
-    // previous expectation, that the inner ``` closed the block, encoded the
-    // close-paired-as-open defect.) The streaming parser MUST still mirror the
-    // canonical pairing: its ordinal/startIndex have to match what the extractor
-    // produces once the fence closes (id-handoff invariant).
     const md = '```md\nUse ``` to open a fence\n```\n\nnow streaming:\n\n```html\n<div>';
     const closed = extractCodeBlocks(md);
     expect(closed).toHaveLength(1);
@@ -246,7 +229,6 @@ describe('extractTrailingUnclosedBlock', () => {
     expect(block!.language).toBe('html');
     expect(block!.ordinal).toBe(closed.length);
     expect(block!.startIndex).toBeGreaterThanOrEqual(closed[closed.length - 1]!.endIndex);
-    // Once a closing fence arrives, the canonical extractor sees the same block.
     const completed = extractCodeBlocks(md + '\n```');
     expect(completed).toHaveLength(closed.length + 1);
     expect(completed[closed.length]!.ordinal).toBe(block!.ordinal);
@@ -267,9 +249,6 @@ describe('extractTrailingUnclosedBlock', () => {
 });
 
 describe('extractArtifactTitle — linear rewrite parity', () => {
-  // The lazy-quantifier expressions this replaced, kept verbatim so parity is
-  // checked against what actually shipped rather than against a description
-  // of it.
   const LEGACY_TITLE = /<title>(.*?)<\/title>/i;
   const LEGACY_COMMENT = /(?:\/\/|<!--|#)\s*@title:?\s*(.+?)(?:\n|-->)/i;
   const LEGACY_H1 = /<h1[^>]*>(.*?)<\/h1>/i;
@@ -313,9 +292,6 @@ describe('extractArtifactTitle — linear rewrite parity', () => {
     ['unterminated <h1>', `<h1>${'a'.repeat(200_000)}`],
     ['unterminated @title comment', `<!-- @title: ${'a'.repeat(200_000)}`],
   ])('answers immediately on %s, which the old expressions made quadratic', (_label, content) => {
-    // A truncated stream produces exactly this shape, so the pathological
-    // input is the ordinary failure case rather than a crafted attack. The
-    // assertion is on completion, not wall-clock, which would be flaky on CI.
     expect(() => extractArtifactTitle(content)).not.toThrow();
   });
 

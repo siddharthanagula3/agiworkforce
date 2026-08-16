@@ -34,10 +34,6 @@
  * @packageDocumentation
  */
 
-// `bundle-analyzable-paths`: named exports only. We do not re-export the
-// whole module via `export * from` because that defeats some bundlers'
-// tree-shaking heuristics on Next.js Edge.
-
 export { applyConversationContext, classifyTaskLocally, estimateTokens } from './classify';
 export { resolveAutoRoute } from './auto';
 export type {

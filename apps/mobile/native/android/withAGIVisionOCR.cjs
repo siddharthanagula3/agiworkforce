@@ -1,15 +1,3 @@
-// Expo config plugin: wires Android VisionOCR native module into the generated android/ project.
-//
-// What this does at prebuild time:
-//   1. Adds com.google.mlkit:text-recognition:16.0.0 to android/app/build.gradle dependencies.
-//      ML Kit Text Recognition includes Latin script (English + 60+ languages) bundled at compile
-//      time — no model download needed at runtime for Latin. CJK/Devanagari require separate
-//      script-specific deps (not added here — Latin recognizer covers our v1 use-cases).
-//      Coord from: https://dl.google.com/dl/android/maven2/com/google/mlkit/text-recognition/maven-metadata.xml
-//   2. Copies AGIVisionOCR.kt + AGIVisionOCRPackage.kt into the generated source tree.
-//   3. Registers AGIVisionOCRPackage() in MainApplication.kt's getPackages() list.
-//
-// Run: expo prebuild --platform android (or via EAS build)
 
 const {
   withAppBuildGradle,
@@ -22,8 +10,6 @@ const path = require('path');
 const PLUGIN_NAME = 'agi-visionocr-plugin';
 const PLUGIN_VERSION = '1.0.0';
 
-// ML Kit Text Recognition v16.0.0 — latest stable as of Jan 2026.
-// Latin recognizer is included by default; no extra classifier download required.
 const VISIONOCR_DEP = "implementation 'com.google.mlkit:text-recognition:16.0.0'";
 const VISIONOCR_DEP_MARKER = 'com.google.mlkit:text-recognition';
 
@@ -33,7 +19,6 @@ const PACKAGE_REGISTRATION = 'add(AGIVisionOCRPackage())';
 const NATIVE_SRC_DIR = __dirname;
 const KOTLIN_FILES = ['AGIVisionOCR.kt', 'AGIVisionOCRPackage.kt'];
 
-/** Step 1 — inject gradle dependency into android/app/build.gradle */
 function withVisionOCRGradle(config) {
   return withAppBuildGradle(config, (c) => {
     const gradle = c.modResults.contents;
@@ -46,7 +31,6 @@ function withVisionOCRGradle(config) {
   });
 }
 
-/** Step 2 — copy Kotlin source files and patch MainApplication.kt */
 function withVisionOCRMainApplication(config) {
   return withDangerousMod(config, [
     'android',

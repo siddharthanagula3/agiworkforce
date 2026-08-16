@@ -1,8 +1,3 @@
-/**
- * contextPanelProvider.ts — TreeDataProvider for the AI Context panel
- *
- * Shows pinned files + auto-detected open tabs as context for AI requests.
- */
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
@@ -18,10 +13,6 @@ export type WorkspaceContextFileResult =
   | { ok: true; uri: vscode.Uri }
   | { ok: false; message: string };
 
-/**
- * Validates a user-selected context path before it reaches the persistent tree
- * or the privileged app-server. The runtime protocol accepts files only.
- */
 export async function validateWorkspaceContextFile(
   uri: vscode.Uri,
 ): Promise<WorkspaceContextFileResult> {
@@ -374,22 +365,12 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-// ─── Singleton ───────────────────────────────────────────────────────────────
-
 let _contextPanelInstance: ContextPanelProvider | undefined;
 
-/**
- * Set the singleton ContextPanelProvider instance.
- * Called once from extension.ts during activation.
- */
 export function setContextPanelInstance(instance: ContextPanelProvider): void {
   _contextPanelInstance = instance;
 }
 
-/**
- * Get the singleton ContextPanelProvider instance.
- * Returns undefined if not yet initialized.
- */
 export function getContextPanelProvider(): ContextPanelProvider | undefined {
   return _contextPanelInstance;
 }

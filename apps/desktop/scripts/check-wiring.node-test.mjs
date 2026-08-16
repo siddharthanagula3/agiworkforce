@@ -112,9 +112,7 @@ test('a command whose only caller is an unreachable module is reported, not coun
     reachabilityAllowlisted: new Set(),
   });
 
-  // The lexical group stays green - this is exactly why the old check passed.
   assert.deepEqual(unguarded.registeredWithoutFrontend, []);
-  // The reachability group catches it.
   assert.deepEqual(unguarded.registeredWithoutReachableCaller, ['orphan_tree_command']);
 });
 

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SectionErrorBoundary } from '../SectionErrorBoundary';
 
-// Component that throws an error
 const ThrowError = ({ shouldThrow = false }: { shouldThrow?: boolean }) => {
   if (shouldThrow) {
     throw new Error('Test error');
@@ -13,7 +12,6 @@ const ThrowError = ({ shouldThrow = false }: { shouldThrow?: boolean }) => {
 describe('SectionErrorBoundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Suppress console.error for cleaner test output
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 

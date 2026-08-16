@@ -1,27 +1,7 @@
-/**
- * Regression tests for schedulerStore's task-oriented actions (createTask,
- * updateTask, deleteTask, toggleTask, runNow) under a real Tauri native
- * failure.
- *
- * Audit finding: these actions used to apply their optimistic local mutation
- * and persist it to localStorage even when the backing `invoke()` call
- * rejected, with the error silently swallowed — so the UI could show a
- * schedule the Rust backend never actually created/updated/deleted. This
- * file mocks `isTauri: true` (a real desktop build, not the web-preview/dev
- * fallback) and asserts that a rejected invoke now surfaces an error and
- * leaves `tasks` — and the localStorage fallback key — untouched.
- *
- * See `schedulerStore.test.ts` for the pre-existing job-oriented (addJob /
- * removeJob / etc.) command-wiring tests, which already mock `isTauri:
- * false` and continue to exercise the non-Tauri fallback path.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockInvoke = vi.fn();
 
-// This file always runs as if inside a real Tauri build, so any invoke()
-// rejection below must be treated as a genuine native failure — never the
-// "Tauri unavailable" dev/web-preview fallback.
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
   listen: vi.fn().mockResolvedValue(() => {}),
@@ -39,11 +19,6 @@ vi.mock('sonner', () => ({
 
 import { useSchedulerStore, type ScheduledTask } from '../../stores/schedulerStore';
 
-// Private key inside schedulerStore.ts used only by the non-Tauri fallback
-// path (`persistTasksToStorage`/`loadTasksFromStorage`). Asserting against
-// the literal here (rather than importing it) is intentional — it keeps
-// this test bound to the actual on-disk storage key a real failure must
-// never write to.
 const TASKS_FALLBACK_STORAGE_KEY = 'agiworkforce-scheduled-tasks-fallback';
 
 function makeTask(overrides: Partial<ScheduledTask> = {}): ScheduledTask {
@@ -70,9 +45,6 @@ describe('schedulerStore task actions — native (Tauri) failure honesty', () =>
     vi.clearAllMocks();
     setItemSpy = vi.spyOn(window.localStorage, 'setItem');
     useSchedulerStore.setState({ tasks: [], isLoading: false, error: null });
-    // The seed above already went through the persist middleware; clear
-    // the spy record so assertions below only see writes caused by the
-    // action under test, not by seeding.
     setItemSpy.mockClear();
   });
 
@@ -173,8 +145,8 @@ describe('schedulerStore task actions — native (Tauri) failure honesty', () =>
   });
 
   it('on success, createTask refreshes from the backend instead of trusting a local guess', async () => {
-    mockInvoke.mockResolvedValueOnce('backend-job-id'); // scheduler_add_job
-    mockInvoke.mockResolvedValueOnce([]); // scheduler_list_jobs (fetchTasks)
+    mockInvoke.mockResolvedValueOnce('backend-job-id');
+    mockInvoke.mockResolvedValueOnce([]);
 
     await useSchedulerStore.getState().createTask({
       name: 'New Task',

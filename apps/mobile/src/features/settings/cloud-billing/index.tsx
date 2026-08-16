@@ -1,20 +1,3 @@
-/**
- * Cloud Billing Settings Screen
- *
- * Native RN equivalent of the web BillingSection. Shows the user's current
- * plan tier, credit balance, and an upgrade / manage path via the Stripe
- * portal (or the pricing page for free users).
- *
- * BILLING feature flag: the Stripe portal fetch is gated behind
- * FEATURES.billing. Upgrading/adjusting a subscription NEVER opens an
- * external checkout URL (Apple Guideline 3.1.1) — it opens the same
- * in-app PaywallBottomSheet used by the chat paywall, which presents an honest
- * native App Store / Play purchase path when a signed catalog is available,
- * and otherwise fails closed with an unavailable-state explanation.
- * No stub / fake data is shown — the screen is always honest about state.
- *
- * Cloud-only surface.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Alert } from 'react-native';
@@ -59,7 +42,6 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { getSubscriptionOwnerGuard } from '@/src/features/billing/subscriptionSource';
 import { useMobileIap } from '@/src/features/billing/useMobileIap';
 
-// Free-tier feature bullets — mirrors web BillingSection
 const FREE_FEATURES = [
   'Chat on web, iOS, Android, and desktop',
   'Generate code and visualize data',
@@ -115,10 +97,6 @@ export default function CloudBillingScreen() {
     enabled: isClerkLoaded && isClerkSignedIn && isCloudModeActive,
   });
 
-  // guardedFetch blocks every our-cloud call (including this screen's own
-  // tier refresh) while chat is set to Local — see CloudSyncBlockedBanner's
-  // doc comment. Re-fetch as soon as the user switches modes so the banner
-  // disappearing and real data appearing happen together, not on a delay.
   useEffect(() => {
     if (isClerkSignedIn && isCloudModeActive) void refreshTier();
   }, [isClerkSignedIn, isCloudModeActive, refreshTier]);
@@ -126,10 +104,6 @@ export default function CloudBillingScreen() {
   const [portalLoading, setPortalLoading] = useState(false);
   const paywallSheetRef = useRef<BottomSheet>(null);
 
-  // Single source of truth for plan labels (@agiworkforce/types) — keeps this
-  // screen's label in lock-step with account.tsx / web, so no surface invents
-  // its own plan name (the failure this guards against: a hand-written label
-  // for a tier that does not exist in BILLING_PLAN_PRICING).
   const tierLabel = getBillingPlanPricing(billingTier).label;
   const isFreeTier = billingTier === 'free';
   const isEntitled = isEntitledSubscriptionStatus(billingStatus);
@@ -204,14 +178,6 @@ export default function CloudBillingScreen() {
   }, [canBuyNativeSubscription, showSubscriptionOwnerGuard, subscriptionGuard.blocked]);
 
   const handleManageBilling = useCallback(async () => {
-    // Preserve the subscription-owner boundary for recovery as well as plan
-    // changes. An inactive App Store / Play Store subscription cannot be
-    // repaired in AGI's Stripe portal, and sending it there risks a duplicate
-    // purchase while the recorded store subscription still exists.
-    // Stripe is AGI's own recorded Web billing owner, so its authenticated
-    // portal is the correct recovery. Every other recorded owner must remain
-    // at its own management surface (or fail closed when no verified listing
-    // URL exists).
     if (subscriptionGuard.blocked && billingSource !== 'stripe') {
       showSubscriptionOwnerGuard();
       return;
@@ -228,8 +194,6 @@ export default function CloudBillingScreen() {
       }
       return;
     }
-    // No mobile billing-management path yet; keep the user inside the honest
-    // informational sheet.
     paywallSheetRef.current?.expand();
   }, [billingSource, showSubscriptionOwnerGuard, subscriptionGuard.blocked]);
 
@@ -528,9 +492,6 @@ export default function CloudBillingScreen() {
       <SettingsGroup>
         <SettingsRow
           label={isFreeTier ? 'No invoices yet' : 'View invoices'}
-          // FileText (not ExternalLink) for the free-tier disabled state — an
-          // "opens externally" icon on an inert, unpressable row wrongly
-          // implies there's an action to take.
           icon={isFreeTier ? FileText : ExternalLink}
           onPress={
             isFreeTier ? undefined : () => void openExternalUrl('https://agiworkforce.com/billing')

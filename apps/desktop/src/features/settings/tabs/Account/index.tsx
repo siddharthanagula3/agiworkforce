@@ -6,8 +6,6 @@ import { DESKTOP_CLOUD_TAGLINE } from '../../../../constants/cloudAvailability';
 const LazyAccountSettings = lazy(() =>
   import('../../AccountSettings').then((m) => ({ default: m.AccountSettings })),
 );
-// Account identifier, sessions, API keys and account deletion — the controls
-// web has under Account and Desktop had no equivalent for at all (DES-C21).
 const LazyCloudAccountControls = lazy(() =>
   import('./CloudAccountControls').then((m) => ({ default: m.CloudAccountControls })),
 );

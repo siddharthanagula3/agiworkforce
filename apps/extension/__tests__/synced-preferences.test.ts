@@ -69,7 +69,6 @@ async function flushMirrors(): Promise<void> {
 
 const ALLOWLIST_MODULE = join('features', 'background', 'synced-preferences.ts');
 
-/** Every extension source except the allowlist itself, as `{ path, text }`. */
 function extensionSources(): Array<{ path: string; text: string }> {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
   const files: Array<{ path: string; text: string }> = [];
@@ -141,16 +140,10 @@ describe('cross-device Chrome preferences', () => {
     ]);
   });
 
-  // A key no other module writes syncs nothing: the panel toggle keeps updating
-  // its real key while the mirror shuttles an entry that never exists. That is
-  // how `in_page_panel_enabled` shipped as `agi_in_page_panel_enabled` — a dead
-  // allowlist row, invisible because syncing nothing throws nothing.
   it('only lists keys the extension actually stores', () => {
     const sources = extensionSources();
 
     for (const key of SYNCED_PREFERENCE_KEYS) {
-      // Word-boundary match so a longer key containing this one does not vouch
-      // for it (`agi_in_page_panel_enabled` contains `in_page_panel_enabled`).
       const usage = new RegExp(`(?<![A-Za-z0-9_])${key}(?![A-Za-z0-9_])`);
       const owners = sources.filter(({ text }) => usage.test(text)).map(({ path }) => path);
       expect(owners, `no module outside the allowlist references "${key}"`).not.toEqual([]);

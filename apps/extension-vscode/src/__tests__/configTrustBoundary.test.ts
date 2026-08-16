@@ -11,9 +11,6 @@ type InspectedValues = {
 
 function stubConfiguration(values: Record<string, InspectedValues>): void {
   vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-    // Deliberately model VS Code's effective-value lookup here. If a protected
-    // accessor regresses to `.get()`, these tests observe the repository-owned
-    // workspace value and fail.
     get: vi.fn((key: string, fallback?: unknown) => {
       const inspected = values[key];
       return (

@@ -1,12 +1,3 @@
-/**
- * `agiskill-sha256-v1` regression tests.
- *
- * The known-answer vector below is the contract between three independent
- * implementations — this package, `apps/cli/src/skills.rs`, and
- * `scripts/verify-skills-lock.mjs`. If any of them changes its walk order,
- * separator, or exclusion rules, exactly one of the three known-answer tests
- * goes red instead of two "integrity" systems quietly disagreeing.
- */
 
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -22,11 +13,6 @@ import {
 } from '../integrity';
 import { loadSkillsFromDir } from '../loader';
 
-/**
- * Canonical vector. Package layout:
- *   SKILL.md       "---\nname: demo\ndescription: Demo skill.\nversion: 1.2.3\n---\n\nBody.\n"
- *   scripts/run.sh "#!/bin/sh\necho hi\n"
- */
 const VECTOR_SKILL_MD = '---\nname: demo\ndescription: Demo skill.\nversion: 1.2.3\n---\n\nBody.\n';
 const VECTOR_RUN_SH = '#!/bin/sh\necho hi\n';
 const VECTOR_CONTENT_HASH =

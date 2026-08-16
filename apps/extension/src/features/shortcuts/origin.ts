@@ -1,13 +1,11 @@
 import type { SavedShortcut } from '../../types';
 
-/** Canonical web origin used to bind recorded page actions to their source site. */
 export function normalizeShortcutStartUrl(value: unknown): string | null {
   if (typeof value !== 'string' || value.trim().length === 0) return null;
   try {
     const parsed = new URL(value.trim());
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     // Origin is sufficient for replay safety and avoids persisting URL paths,
-    // query strings, or fragments that may contain private page state.
     return parsed.origin;
   } catch {
     return null;
@@ -16,7 +14,6 @@ export function normalizeShortcutStartUrl(value: unknown): string | null {
 
 export type ShortcutReplayTargetResult = { ok: true } | { ok: false; error: string };
 
-/** Fail closed when a page-mutating shortcut is unbound or opened on another site. */
 export function validateShortcutReplayTarget(
   shortcut: Pick<SavedShortcut, 'actions' | 'startUrl'>,
   activeTabUrl: unknown,

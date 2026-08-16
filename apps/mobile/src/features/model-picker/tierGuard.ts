@@ -32,16 +32,7 @@ import {
   isAutoModeModelId,
 } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Result returned by `guardProviderSwitch`. */
 export type ProviderSwitchDecision = 'allow' | 'upgrade-required';
-
-// ---------------------------------------------------------------------------
-// BillingPlanTier → UIPlanTier mapping
-// ---------------------------------------------------------------------------
 
 /**
  * Map the persisted {@link BillingPlanTier} (used by `tierStore` and the
@@ -68,9 +59,6 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
     case 'free':
       return 'local';
     case 'basic':
-      // Basic has real cloud access but a small credit budget — same
-      // restrictive gate as free for mid-thread provider switching, not the
-      // "no cloud at all" local-only case.
       return 'local';
     case 'pro':
       return 'pro';
@@ -80,12 +68,8 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
     case 'max_15x':
       return 'max';
     case 'enterprise':
-      // Enterprise gets the highest gate set; Max is the highest UIPlanTier.
       return 'max';
     default: {
-      // Exhaustiveness check — if a new BillingPlanTier value is added, the
-      // compiler will surface it here. Default fallback is the most-restrictive
-      // local gate.
       const _exhaustive: never = plan;
       void _exhaustive;
       return 'local';
@@ -93,16 +77,6 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Guard
-// ---------------------------------------------------------------------------
-
-/**
- * The minimum UIPlanTier required to switch providers mid-thread. Aligned with
- * the canonical `canSwitchProviderInThread()` gate (max / max_15x /
- * enterprise). Mobile maps max_15x/enterprise → `max`, so `max` is the mapped
- * threshold. The actual gate check delegates to the shared contract below.
- */
 const PROVIDER_SWITCH_MIN_TIER: UIPlanTier = 'max';
 
 /**
@@ -130,19 +104,12 @@ export function guardProviderSwitch(
   nextProvider: string,
   tier: BillingPlanTier,
 ): ProviderSwitchDecision {
-  // No established provider — new conversation, always allow.
   if (currentProvider === null) return 'allow';
 
-  // Canonical Auto selections are provider-agnostic. Unknown strings that only
-  // resemble an old alias must not bypass the provider-switch gate.
   if (isAutoModeModelId(currentProvider) || isAutoModeModelId(nextProvider)) return 'allow';
 
-  // Same provider — no cross-provider switch.
   if (currentProvider === nextProvider) return 'allow';
 
-  // Cross-provider switch: map to UIPlanTier and delegate to the canonical
-  // shared gate (max / max_15x / enterprise). PROVIDER_SWITCH_MIN_TIER documents
-  // the mapped threshold; canSwitchProviderInThread is the source of truth.
   void PROVIDER_SWITCH_MIN_TIER;
   const uiTier = mapBillingPlanToUIPlan(tier);
   if (canSwitchProviderInThread(uiTier)) return 'allow';

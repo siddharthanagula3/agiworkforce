@@ -42,7 +42,6 @@ describe('getToolIconName', () => {
   });
 
   it('only references icon names that exist in the category map keys are valid', () => {
-    // Every direct tool icon should be a non-empty string (sanity).
     for (const name of Object.values(TOOL_ICON_NAME)) {
       expect(typeof name).toBe('string');
       expect(name.length).toBeGreaterThan(0);
@@ -62,7 +61,6 @@ describe('getToolSourceBadge', () => {
   });
 
   it('does not treat a leading mcp__ prefix as the server', () => {
-    // "mcp" itself must never be the badge.
     expect(getToolSourceBadge('mcp__filesystem__x')).not.toBe('M');
   });
 

@@ -1,21 +1,3 @@
-/**
- * LocalByokHandoffDialog — desktop adapter over the canonical
- * @agiworkforce/unified-chat LocalByokHandoffDialog.
- *
- * Preserves desktop's existing flow: this wrapper still owns fetching the
- * conversation's messages and building the redacted preview itself (no
- * per-message context selection UI — the last 20 messages are auto-included,
- * matching desktop's current behavior), and still owns the actual fork
- * action (store mutation + provider-mode switch + navigation). Only the
- * dialog's rendering is now shared with web.
- *
- * Trigger delta (see report): this dialog opens from an explicit, always-
- * available "Fork to BYOK" button on every conversation row in Sidebar.tsx —
- * unlike web's automatic first-send-to-BYOK detection (shouldForkLocalToByok),
- * desktop's trigger does not distinguish a conversation's current provider
- * mode. That trigger-logic asymmetry is out of scope for this consolidation
- * (structural only) and is preserved as-is.
- */
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';

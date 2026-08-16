@@ -1,16 +1,3 @@
-/**
- * Hindi QA harness — validates suite structure and mock adapter wiring.
- *
- * This test does NOT require a live model. A canned mock adapter returns
- * placeholder outputs so CI stays green. When the founder runs the real suite
- * on-device (Settings → Performance → "Run Hindi QA test"), the mock is
- * replaced by the real LLMController.
- *
- * Scoring (BLEU/chrF) is exercised against the mock outputs — the numbers
- * will be near-zero for canned responses, which is expected and correct.
- *
- * v1.1: add Marathi / Bengali / Tamil suites.
- */
 
 import {
   computeUnigramBLEU,
@@ -22,10 +9,7 @@ import {
 import type { QAPrompt, QACategory } from '../services/languageQA';
 import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
-// ── 60-prompt suite ──────────────────────────────────────────────────────────
-
 const QA_SUITE: QAPrompt[] = [
-  // ── Category A: Casual Chat ──────────────────────────────────────────────
   {
     id: 'A-01',
     category: 'chat',
@@ -101,7 +85,6 @@ const QA_SUITE: QAPrompt[] = [
     humanEvalRequired: true,
   },
 
-  // ── Category B: Translation ──────────────────────────────────────────────
   {
     id: 'B-01',
     category: 'translation',
@@ -184,7 +167,6 @@ const QA_SUITE: QAPrompt[] = [
     humanEvalRequired: false,
   },
 
-  // ── Category C: Summarization ────────────────────────────────────────────
   {
     id: 'C-01',
     category: 'summarization',
@@ -266,7 +248,6 @@ const QA_SUITE: QAPrompt[] = [
     humanEvalRequired: true,
   },
 
-  // ── Category D: Hinglish ─────────────────────────────────────────────────
   {
     id: 'D-01',
     category: 'hinglish',
@@ -339,7 +320,6 @@ const QA_SUITE: QAPrompt[] = [
     humanEvalRequired: true,
   },
 
-  // ── Category E: Cultural ─────────────────────────────────────────────────
   {
     id: 'E-01',
     category: 'cultural',
@@ -415,7 +395,6 @@ const QA_SUITE: QAPrompt[] = [
     humanEvalRequired: true,
   },
 
-  // ── Category F: Technical ────────────────────────────────────────────────
   {
     id: 'F-01',
     category: 'technical',
@@ -492,17 +471,12 @@ const QA_SUITE: QAPrompt[] = [
   },
 ];
 
-// ── Mock model adapter ───────────────────────────────────────────────────────
-
 const CANNED_RESPONSE = '[mock] यह एक placeholder response है।';
 
 async function mockModelAdapter(prompt: string): Promise<string> {
-  // Simulate minimal latency so callers can test async flow
   await Promise.resolve();
   return `${CANNED_RESPONSE} Prompt length: ${prompt.length}`;
 }
-
-// ── Suite structure tests ────────────────────────────────────────────────────
 
 describe('Hindi QA suite structure', () => {
   const EXPECTED_TOTAL = 60;
@@ -550,7 +524,6 @@ describe('Hindi QA suite structure', () => {
     const translationWithRef = QA_SUITE.filter(
       (p) => p.category === 'translation' && p.referenceOutput !== undefined,
     );
-    // At least the non-idiom translation prompts should have metric scoring
     const metricScorable = translationWithRef.filter((p) => !p.humanEvalRequired);
     expect(metricScorable.length).toBeGreaterThan(0);
   });
@@ -562,8 +535,6 @@ describe('Hindi QA suite structure', () => {
     }
   });
 });
-
-// ── Mock adapter tests ───────────────────────────────────────────────────────
 
 describe('Mock model adapter', () => {
   it('returns a string for every prompt', async () => {
@@ -580,11 +551,8 @@ describe('Mock model adapter', () => {
   });
 });
 
-// ── QA session lifecycle ─────────────────────────────────────────────────────
-
 describe('QA session lifecycle', () => {
   afterEach(() => {
-    // Clean up any leftover session
     finalizeQASession();
   });
 
@@ -611,13 +579,10 @@ describe('QA session lifecycle', () => {
   });
 
   it('recordQAResult is a no-op outside active session', () => {
-    // No session started
     recordQAResult({ promptId: 'A-01', modelOutput: 'test' });
     // Should not throw
   });
 });
-
-// ── Metric computation tests ─────────────────────────────────────────────────
 
 describe('computeUnigramBLEU', () => {
   it('returns 1.0 for identical strings', () => {
@@ -677,8 +642,6 @@ describe('computeChrF', () => {
   });
 });
 
-// ── Metric scoring on translation prompts with references ────────────────────
-
 describe('Metric scoring on mock outputs', () => {
   it('mock outputs score near-zero BLEU (expected for canned placeholder)', async () => {
     const translationPrompts = QA_SUITE.filter(
@@ -687,7 +650,6 @@ describe('Metric scoring on mock outputs', () => {
     for (const p of translationPrompts) {
       const output = await mockModelAdapter(p.prompt);
       const bleu = computeUnigramBLEU(output, p.referenceOutput!);
-      // Canned mock won't match Hindi reference — score should be very low
       expect(bleu).toBeGreaterThanOrEqual(0);
       expect(bleu).toBeLessThanOrEqual(1);
     }
@@ -711,14 +673,10 @@ describe('Metric scoring on mock outputs', () => {
   });
 });
 
-// ── Deferred language flag ───────────────────────────────────────────────────
-
 describe('v1.1 deferred languages', () => {
   const DEFERRED = ['marathi', 'bengali', 'tamil'];
 
   it('no v1 prompts contain Marathi/Bengali/Tamil text', () => {
-    // Rough check: no Marathi-specific script clusters that differ from Hindi Devanagari
-    // This is a documentation-level guard, not a deep linguistic check
     for (const p of QA_SUITE) {
       for (const lang of DEFERRED) {
         expect(p.expectedCriteria.toLowerCase()).not.toContain(lang);

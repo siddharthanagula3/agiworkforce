@@ -54,9 +54,6 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
-// The memory store is the SQLite/cloud-sync boundary; this screen only reads the
-// loaded entries to date its Memory row, so stub the boundary and keep the real
-// freshness derivation (describeMemoryFreshness) under test.
 const mockMemoryEntries: Array<{
   id: string;
   fact: string;
@@ -166,8 +163,6 @@ describe('Capabilities settings screen', () => {
   });
 
   it('tracks the stored approval mode across all three values', () => {
-    // The row used to render a hardcoded "Ask" while the chat approval card
-    // read a different stored mode.
     const expected: Array<['ask' | 'smart' | 'full', string]> = [
       ['ask', 'Ask'],
       ['smart', 'Low-risk'],
@@ -198,8 +193,6 @@ describe('Capabilities settings screen', () => {
   it('renders no status pill on rows that only navigate', () => {
     const { getByLabelText, queryByText } = render(<CapabilitiesScreen />);
 
-    // Constants rendered inside a status pill read as live state and go stale
-    // against the screen they open, so navigation-only rows carry no pill.
     for (const stale of ['Local', 'Available', 'Beta', 'Desktop']) {
       expect(queryByText(stale)).toBeNull();
     }
@@ -218,8 +211,6 @@ describe('Capabilities settings screen', () => {
   });
 
   it('binds the Web search row to the persisted send-path preference', () => {
-    // PAR-M33: this row used to be a non-interactive "Automatic" pill, so a
-    // privacy-sensitive user had no way to stop an automatic cloud web search.
     useWaitlistStore.setState({ cloudUnlocked: true });
 
     const { getByLabelText } = render(<CapabilitiesScreen />);
@@ -235,7 +226,6 @@ describe('Capabilities settings screen', () => {
 
   it('dates the Memory row from the newest stored memory and claims nothing when empty', () => {
     const { getByLabelText, unmount } = render(<CapabilitiesScreen />);
-    // Empty store: no freshness sentence may be invented.
     expect(
       getByLabelText('Memory. View and manage local memory saved on this device'),
     ).toBeTruthy();

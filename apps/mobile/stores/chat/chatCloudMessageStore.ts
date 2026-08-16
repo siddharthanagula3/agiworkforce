@@ -1,17 +1,3 @@
-/**
- * AGI Cloud conversation store — PHYSICAL SEPARATION from local store.
- *
- * HARD RULE (founder 2026-06-14): Local mode conversations are stored under
- * 'chat-message-store-local'; Cloud mode conversations are stored here under
- * 'chat-message-store-cloud'. These two MMKV keys must NEVER co-mingle.
- *
- * The ONLY permitted crossing is the explicit user-triggered one-time sync
- * option in Settings > Data Controls (see localCloudSyncService.ts).
- *
- * Cloud conversations come exclusively from the AGI Cloud API (Clerk-authed).
- * Local files, local memory, and local personalisation context are never
- * written into this store or sent to the cloud without explicit user consent.
- */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -21,29 +7,19 @@ import type { ManagedCloudConversationHistoryStats } from '@agiworkforce/cloud-c
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 interface CloudMessageState {
-  /** Cloud-only conversations fetched from AGI Cloud API. */
   conversations: ConversationSummary[];
-  /** Messages keyed by cloud conversation ID. */
   messages: Record<string, ChatMessage[]>;
-  /** Server-authoritative totals for all non-temporary Cloud history. */
   historyStats: ManagedCloudConversationHistoryStats | null;
 
-  /** Replace cloud conversation list with the latest server snapshot. */
   setCloudConversations: (
     cloudConversations: ConversationSummary[],
     historyStats?: ManagedCloudConversationHistoryStats,
   ) => void;
-  /** Set cloud messages for a specific conversation. */
   setCloudMessages: (conversationId: string, messages: ChatMessage[]) => void;
-  /** Remove a single message from a cloud conversation's cached message list. */
   deleteCloudMessage: (conversationId: string, messageId: string) => void;
-  /** Add a new cloud conversation (returned from POST /api/chat/conversations). */
   addCloudConversation: (conversation: ConversationSummary) => void;
-  /** Update a cloud conversation's metadata in-place. */
   patchCloudConversation: (id: string, patch: Partial<ConversationSummary>) => void;
-  /** Remove a cloud conversation from local cache. */
   removeCloudConversation: (id: string) => void;
-  /** Clear all cached cloud data (e.g. on sign-out). */
   clearCloudData: () => void;
 }
 
@@ -66,9 +42,6 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
       historyStats: null,
 
       setCloudConversations: (cloudConversations, historyStats) => {
-        // Preserve every locally-dirty mutation so a paginated/stale list snapshot
-        // cannot revert it or drop a create that has not appeared in that page yet.
-        // A later delta tombstone remains authoritative and removes the record.
         const dirtyIds = useCloudSyncStateStore.getState().dirtyConversationIds;
         set((state) => {
           const localById = new Map(state.conversations.map((c) => [c.id, c]));
@@ -150,8 +123,6 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
       },
     }),
     {
-      // SEPARATION-FIX: dedicated MMKV key for Cloud data — never shared with
-      // the local store key 'chat-message-store-local'.
       name: 'chat-message-store-cloud',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
@@ -169,9 +140,6 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
           ids.add(dirty.messageId);
           dirtyMessageIdsByConversation.set(dirty.conversationId, ids);
         }
-        // Only persist cloud conversations — enforced by the executionMode guard
-        // at write-time (setCloudConversations + addCloudConversation). Temporary
-        // conversations are excluded so they never survive relaunch.
         const persistentConversations = state.conversations.filter((c) => !c.temporary);
         const conversations = persistentConversations.slice(0, MAX_CONVERSATIONS);
         const persistedConversationIds = new Set(

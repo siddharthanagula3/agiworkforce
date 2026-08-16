@@ -1,16 +1,3 @@
-/**
- * Regression: usage-accounting double-charge (tokens-as-cents).
- *
- * BUG (proven via ledger forensics 2026-06): the SQL fn `increment_usage`
- * added the raw TOKEN COUNT to credits_used_cents (a CENTS ledger) and ran on
- * every completion via `reconcileUsage`, ON TOP of the authoritative
- * deduct_credits() reservation/reconciliation flow → a 3,531-token request was
- * charged $35.31; one account inflated from $0.31 to $124.20.
- *
- * These are SOURCE/SHAPE assertions (vitest can't run Postgres), labeled as
- * such: they guard against re-introduction of the double-charge call path and
- * verify the 0044 migration neuters the function.
- */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,8 +16,6 @@ describe('usage double-charge regression (call-path removal)', () => {
   it('the completion owners do not depend on the legacy quota or reconciliation path', () => {
     for (const f of completionFiles) {
       const src = read(f);
-      // No call and no import — deduct_credits is the single source of truth for
-      // credits_used_cents. A re-added call would re-introduce the double charge.
       expect(src, `${f} must not depend on the legacy quota module`).not.toMatch(
         /from\s+['"]@\/lib\/assert-quota['"]/,
       );
@@ -40,8 +25,6 @@ describe('usage double-charge regression (call-path removal)', () => {
   });
 
   it('usage/cost report endpoints do not sum abs(amount_cents) (counts refunds as charges)', () => {
-    // abs() over deductions double-counts reservation(+)/reconciliation(-) pairs
-    // AND any bug rows, inflating every figure. Cost must be a NET signed sum.
     const reportFiles = [
       'app/api/usage/providers/route.ts',
       'app/api/usage/analytics/route.ts',
@@ -63,15 +46,12 @@ describe('usage double-charge regression (0044 neuters increment_usage SQL)', ()
   });
 
   it("0044's increment_usage no longer writes the cents ledger (no credits_used_cents update)", () => {
-    // Extract the function body after the redefinition and assert it does not
-    // touch credits_used_cents / flagship_used_today_cents / insert a deduction.
     const idx = migration
       .toLowerCase()
       .indexOf('create or replace function public.increment_usage');
     const body = migration.slice(idx).toLowerCase();
     expect(body).not.toMatch(/credits_used_cents\s*=\s*credits_used_cents\s*\+/);
     expect(body).not.toMatch(/insert\s+into\s+public\.credit_transactions/);
-    // Positive signal that it's intentionally a no-op.
     expect(body).toMatch(/no-op|deprecated/);
   });
 });

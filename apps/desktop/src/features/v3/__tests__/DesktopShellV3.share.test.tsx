@@ -10,18 +10,6 @@ import { DesktopShellV3 } from '../DesktopShellV3';
 
 enableMapSet();
 
-/**
- * DES-C07 regression cover.
- *
- * `handleShareConversation` used to read `messagesByConversation` from the
- * LEGACY desktop chat store (`src/stores/chat`). Nothing hydrates that map for
- * a Managed Cloud conversation reopened from history, so Share was a dead
- * control: it emitted "Add a message before sharing this conversation." and
- * created nothing. These tests pin the payload to the shared unified-chat
- * store — the store `ChatInterface` fills from `CloudRuntime.getMessages` and
- * the store the transcript is rendered from.
- */
-
 const sharedChatMock = vi.hoisted(() => ({
   conversations: [] as Array<Record<string, unknown>>,
   messagesByConversation: {} as Record<string, Array<Record<string, unknown>>>,
@@ -53,8 +41,6 @@ vi.mock('../../../lib/tauri-mock', () => ({
   isTauri: true,
   isCloudWeb: false,
   isDesktopUiDevLocal: false,
-  // tauri-mock re-exports isElectronHost from runtimeEnvironment; a factory
-  // that omits it makes Vitest throw on first read rather than fall through.
   isElectronHost: false,
   supportsLocalAppMode: true,
   isTauriContext: () => true,
@@ -83,9 +69,6 @@ vi.mock('@agiworkforce/unified-chat', async () => {
   const useChatStore = (selector: (state: ReturnType<typeof readState>) => unknown) =>
     selector(readState());
   useChatStore.getState = readState;
-  // `getSelectedModel` is part of the real store's contract (modelStore.ts) and
-  // DesktopShellV3 calls it during render, so a stub without it throws
-  // "state.getSelectedModel is not a function" before anything is asserted.
   const useChatModelStore = (
     selector: (state: {
       models: Array<Record<string, unknown>>;
@@ -140,8 +123,6 @@ describe('DesktopShellV3 Managed Cloud share payload', () => {
     toastMock.success.mockReset();
     toastMock.error.mockReset();
     useProjectStore.setState({ projects: [], activeProjectId: null, loadProjects: async () => {} });
-    // The legacy store stays empty for the whole file: that is precisely the
-    // production state for a Cloud conversation reopened from history.
     useLegacyDesktopChatStore.setState({ conversations: [], messagesByConversation: {} });
   });
 
@@ -224,7 +205,6 @@ describe('DesktopShellV3 Managed Cloud share payload', () => {
 
     expect(shareMock.createDesktopCloudShare).toHaveBeenCalledWith(
       expect.objectContaining({
-        // An untitled conversation still shares, under the server default.
         title: 'Shared Session',
         modelId: 'registry-model-b',
         provider: 'openai',

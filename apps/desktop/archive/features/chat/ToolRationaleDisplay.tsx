@@ -1,11 +1,3 @@
-/**
- * ToolRationaleDisplay Component
- *
- * Displays tool selection reasoning including:
- * - Selected tool and rationale
- * - Alternatives considered
- * - Tool capabilities
- */
 
 import React, { memo } from 'react';
 import { ChevronDown, ChevronRight, Lightbulb, X } from 'lucide-react';

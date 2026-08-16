@@ -1,18 +1,3 @@
-/**
- * Share dialog for a Local-mode desktop artifact.
- *
- * This dialog only ever explains why there is no link; it has no publish path.
- * Keep the copy matched to what desktop actually implements:
- * `features/artifacts/publishAdapter.ts` injects a `localFileWriter` only, and
- * nothing on this surface injects a `CloudPublisher` — the web adapter
- * (`apps/web/features/chat/components/artifacts/publishArtifactClient.ts`,
- * wired in `ArtifactsPanel.tsx:208`) is still the only one in the repo. Cloud
- * mode on desktop does not change that: `DesktopShellV3` renders the shared
- * `@agiworkforce/unified-chat` panel there, and `ChatInterface` passes it no
- * `publishArtifact` prop, so its "Publish" falls back to a clipboard markdown
- * snapshot (`packages/ui/unified-chat/src/components/ArtifactPanel.tsx:558-570`).
- * So the dialog must not send the user to Cloud mode for a hosted link.
- */
 import { Lock, X } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import type { Artifact } from '@/stores/artifactStore';

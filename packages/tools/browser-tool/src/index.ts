@@ -46,7 +46,6 @@ import { clearSnapshotRefs, resolveRef, takeSnapshot } from './snapshot';
 import type { ComputerAction } from '@agiworkforce/types';
 import type { BrowserAction, BrowserToolResult, BrowserSnapshot } from './types';
 
-// AUDIT-FIX: H-4 — typed error for refused navigation schemes.
 export class BrowserToolError extends Error {
   constructor(message: string) {
     super(message);
@@ -74,23 +73,10 @@ export { BrowserProfileNameError } from './profile';
  * config). Field defaults are conservative — secure-by-default.
  */
 export interface BrowserToolConfig {
-  /**
-   * If true, the `evaluate` action is permitted. Default: `false`.
-   *
-   * `evaluate` runs LLM-supplied JavaScript inside the persistent browser
-   * context, which retains cookies / localStorage for every site the agent
-   * has logged in to. Enabling this without an explicit allow-list is a
-   * credential-theft surface. Callers who set this to `true` MUST also
-   * implement their own approval / allow-list / domain-block layer.
-   */
   allowEvaluate?: boolean;
 }
 
 export interface ComputerActionBrowserConfig extends BrowserToolConfig {
-  /**
-   * Browser profile used when the canonical action does not include
-   * `args.profile`. Defaults to the isolated `agiworkforce` profile.
-   */
   defaultProfile?: string;
 }
 
@@ -98,15 +84,6 @@ export type ComputerActionBrowserMapping =
   | { ok: true; action: BrowserAction }
   | { ok: false; reason: string };
 
-/**
- * Convert the suite-level `ComputerAction` protocol into this package's
- * Playwright browser action subset.
- *
- * The mapping is intentionally conservative: browser-safe actions map to
- * `BrowserAction`; desktop-only or approval-only actions return an explicit
- * unsupported result. Callers should route those to Desktop/native computer
- * use rather than guessing in the browser runner.
- */
 export function computerActionToBrowserAction(
   action: ComputerAction,
   config: ComputerActionBrowserConfig = {},
@@ -171,9 +148,6 @@ export function computerActionToBrowserAction(
   }
 }
 
-/**
- * Execute a canonical suite-level `ComputerAction` through the browser runner.
- */
 export async function runComputerAction(
   action: ComputerAction,
   config: ComputerActionBrowserConfig = {},
@@ -222,7 +196,6 @@ export async function runBrowserAction(
         const page = await openProfile(profileName);
         clearSnapshotRefs(profileName);
         const waitUntil = action.waitFor ?? 'load';
-        // AUDIT-FIX: H-4 — refuse file:, javascript:, data:, chrome:, about:, view-source:, etc.
         let parsedScheme: string;
         try {
           parsedScheme = new URL(action.url).protocol;
@@ -249,7 +222,7 @@ export async function runBrowserAction(
           );
         }
         await locator.click({ button: action.button ?? 'left' });
-        clearSnapshotRefs(profileName); // page state may have changed
+        clearSnapshotRefs(profileName);
         return {
           content: [{ type: 'text', text: `Clicked ${action.ref}` }],
           details: { ref: action.ref, url: page.url() },

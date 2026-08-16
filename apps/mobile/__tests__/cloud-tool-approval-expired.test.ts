@@ -1,10 +1,3 @@
-/**
- * chatExecutionStore cloud send — durable tool-approval registry liveness.
- *
- * The server-owned run id and pending approval cards are persisted with the
- * assistant message. A cold start must rebuild the in-memory projection from
- * that durable state so Allow/Deny remains live without replaying the prompt.
- */
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => 'test-token'),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -90,7 +83,7 @@ import {
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
-const CONV_ID = '0190a000-0000-7000-8000-000000000003'; // a valid UUIDv7 conversation id
+const CONV_ID = '0190a000-0000-7000-8000-000000000003';
 const RUN_ID = '0190a000-0000-7000-8000-000000000013';
 const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
 
@@ -102,7 +95,7 @@ beforeEach(() => {
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {} });
-  useChatAppModeStore.getState().setAppMode('local'); // onDone's auto-sync no-ops while asserting
+  useChatAppModeStore.getState().setAppMode('local');
   useChatCloudMessageStore.getState().addCloudConversation({
     id: CONV_ID,
     title: 'Cloud Chat',
@@ -146,9 +139,6 @@ describe('isApprovalTurnLive', () => {
 
     const assistantId = lastAssistantMessage()!.id;
     expect(isApprovalTurnLive(assistantId)).toBe(true);
-    // Sanity: the card that's live is the exact requiresApproval one (mobile
-    // models approval as an independent flag, not a 'status' literal --
-    // status stays 'running' -- see ToolCall's doc comment in types/chat.ts).
     const awaiting = lastAssistantMessage()?.toolCalls?.find((t) => t.requiresApproval);
     expect(awaiting?.toolCallId).toBe('call_1');
   });
@@ -175,8 +165,6 @@ describe('isApprovalTurnLive', () => {
     const assistantId = lastAssistantMessage()!.id;
     expect(isApprovalTurnLive(assistantId)).toBe(true);
 
-    // Simulate a cold start: the process registry resets while the persisted
-    // Cloud message keeps the run reference and approval cards.
     __resetPendingApprovalTurnsForTests();
 
     const stillAwaiting = lastAssistantMessage()?.toolCalls?.some((t) => t.requiresApproval);

@@ -1,21 +1,5 @@
-/**
- * Tutorials API — Tauri command wrappers for tutorials.rs
- *
- * Covers all 21 commands:
- *   get_tutorials, get_tutorial, get_recommended_tutorial,
- *   start_tutorial, complete_tutorial_step, skip_tutorial_step,
- *   complete_tutorial, reset_tutorial, get_tutorial_progress,
- *   get_user_tutorial_progress, get_tutorial_stats, record_step_view,
- *   get_user_rewards, has_reward, has_unlocked_feature, get_user_credits,
- *   populate_sample_data, has_sample_data, clear_sample_data,
- *   submit_tutorial_feedback, record_help_session
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// =============================================================================
-// Types (mirrors Rust structs in ui/onboarding/mod.rs, rewards.rs, sample_data.rs)
-// =============================================================================
 
 export type TutorialCategory =
   | 'getting_started'
@@ -101,8 +85,6 @@ export interface TutorialStats {
   most_common_drop_off_step: string | null;
 }
 
-// --- Rewards ---
-
 export type BadgeRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export interface RewardValue {
@@ -125,8 +107,6 @@ export interface Reward {
   value: RewardValue;
 }
 
-// --- Sample Data ---
-
 export interface SampleDataSummary {
   goals_created: number;
   workflows_created: number;
@@ -134,11 +114,6 @@ export interface SampleDataSummary {
   sample_files_created: number;
 }
 
-// =============================================================================
-// Tutorial Management Commands
-// =============================================================================
-
-/** Get all available tutorials. */
 export async function getTutorials(): Promise<Tutorial[]> {
   try {
     return await invoke<Tutorial[]>('get_tutorials');
@@ -147,7 +122,6 @@ export async function getTutorials(): Promise<Tutorial[]> {
   }
 }
 
-/** Get a single tutorial by ID. */
 export async function getTutorial(tutorialId: string): Promise<Tutorial> {
   try {
     return await invoke<Tutorial>('get_tutorial', { tutorialId });
@@ -156,7 +130,6 @@ export async function getTutorial(tutorialId: string): Promise<Tutorial> {
   }
 }
 
-/** Get the recommended next tutorial for a user. */
 export async function getRecommendedTutorial(userId: string): Promise<Tutorial | null> {
   try {
     return await invoke<Tutorial | null>('get_recommended_tutorial', { userId });
@@ -165,11 +138,6 @@ export async function getRecommendedTutorial(userId: string): Promise<Tutorial |
   }
 }
 
-// =============================================================================
-// Tutorial Progress Commands
-// =============================================================================
-
-/** Start a tutorial for a user. Returns initial progress. */
 export async function startTutorial(
   userId: string,
   tutorialId: string,
@@ -181,7 +149,6 @@ export async function startTutorial(
   }
 }
 
-/** Complete a specific step in a tutorial. Returns updated progress. */
 export async function completeTutorialStep(
   userId: string,
   tutorialId: string,
@@ -198,7 +165,6 @@ export async function completeTutorialStep(
   }
 }
 
-/** Skip a specific step in a tutorial. Returns updated progress. */
 export async function skipTutorialStep(
   userId: string,
   tutorialId: string,
@@ -215,7 +181,6 @@ export async function skipTutorialStep(
   }
 }
 
-/** Complete an entire tutorial and receive rewards. */
 export async function completeTutorial(userId: string, tutorialId: string): Promise<Reward[]> {
   try {
     return await invoke<Reward[]>('complete_tutorial', { userId, tutorialId });
@@ -224,7 +189,6 @@ export async function completeTutorial(userId: string, tutorialId: string): Prom
   }
 }
 
-/** Reset a user's progress on a tutorial. */
 export async function resetTutorial(userId: string, tutorialId: string): Promise<void> {
   try {
     await invoke('reset_tutorial', { userId, tutorialId });
@@ -233,7 +197,6 @@ export async function resetTutorial(userId: string, tutorialId: string): Promise
   }
 }
 
-/** Get progress for a specific tutorial. */
 export async function getTutorialProgress(
   userId: string,
   tutorialId: string,
@@ -245,7 +208,6 @@ export async function getTutorialProgress(
   }
 }
 
-/** Get a user's progress across all tutorials. */
 export async function getUserTutorialProgress(userId: string): Promise<UserTutorialProgress> {
   try {
     return await invoke<UserTutorialProgress>('get_user_tutorial_progress', { userId });
@@ -254,7 +216,6 @@ export async function getUserTutorialProgress(userId: string): Promise<UserTutor
   }
 }
 
-/** Get aggregate stats for a specific tutorial. */
 export async function getTutorialStats(tutorialId: string): Promise<TutorialStats> {
   try {
     return await invoke<TutorialStats>('get_tutorial_stats', { tutorialId });
@@ -263,7 +224,6 @@ export async function getTutorialStats(tutorialId: string): Promise<TutorialStat
   }
 }
 
-/** Record that a user viewed a specific step (analytics). */
 export async function recordStepView(
   userId: string,
   tutorialId: string,
@@ -276,11 +236,6 @@ export async function recordStepView(
   }
 }
 
-// =============================================================================
-// Reward Commands
-// =============================================================================
-
-/** Get all rewards earned by a user. */
 export async function getUserRewards(userId: string): Promise<Reward[]> {
   try {
     return await invoke<Reward[]>('get_user_rewards', { userId });
@@ -289,7 +244,6 @@ export async function getUserRewards(userId: string): Promise<Reward[]> {
   }
 }
 
-/** Check if a user has a specific reward. */
 export async function hasReward(userId: string, rewardId: string): Promise<boolean> {
   try {
     return await invoke<boolean>('has_reward', { userId, rewardId });
@@ -298,7 +252,6 @@ export async function hasReward(userId: string, rewardId: string): Promise<boole
   }
 }
 
-/** Check if a user has unlocked a specific feature. */
 export async function hasUnlockedFeature(userId: string, featureId: string): Promise<boolean> {
   try {
     return await invoke<boolean>('has_unlocked_feature', { userId, featureId });
@@ -307,7 +260,6 @@ export async function hasUnlockedFeature(userId: string, featureId: string): Pro
   }
 }
 
-/** Get a user's total credit balance. */
 export async function getUserCredits(userId: string): Promise<number> {
   try {
     return await invoke<number>('get_user_credits', { userId });
@@ -316,11 +268,6 @@ export async function getUserCredits(userId: string): Promise<number> {
   }
 }
 
-// =============================================================================
-// Sample Data Commands
-// =============================================================================
-
-/** Populate sample data for a new user. */
 export async function populateSampleData(userId: string): Promise<SampleDataSummary> {
   try {
     return await invoke<SampleDataSummary>('populate_sample_data', { userId });
@@ -329,7 +276,6 @@ export async function populateSampleData(userId: string): Promise<SampleDataSumm
   }
 }
 
-/** Check if a user already has sample data. */
 export async function hasSampleData(userId: string): Promise<boolean> {
   try {
     return await invoke<boolean>('has_sample_data', { userId });
@@ -338,7 +284,6 @@ export async function hasSampleData(userId: string): Promise<boolean> {
   }
 }
 
-/** Remove all sample data for a user. */
 export async function clearSampleData(userId: string): Promise<void> {
   try {
     await invoke('clear_sample_data', { userId });
@@ -347,11 +292,6 @@ export async function clearSampleData(userId: string): Promise<void> {
   }
 }
 
-// =============================================================================
-// Feedback & Help Commands
-// =============================================================================
-
-/** Submit feedback for a tutorial. */
 export async function submitTutorialFeedback(
   userId: string,
   tutorialId: string,
@@ -372,7 +312,6 @@ export async function submitTutorialFeedback(
   }
 }
 
-/** Record a help session for analytics. */
 export async function recordHelpSession(
   userId: string,
   context: string,
@@ -393,17 +332,11 @@ export async function recordHelpSession(
   }
 }
 
-// =============================================================================
-// Client object for structured access
-// =============================================================================
-
 export const TutorialClient = {
-  // Tutorial management
   getAll: getTutorials,
   get: getTutorial,
   getRecommended: getRecommendedTutorial,
 
-  // Progress
   start: startTutorial,
   completeStep: completeTutorialStep,
   skipStep: skipTutorialStep,
@@ -414,7 +347,6 @@ export const TutorialClient = {
   getStats: getTutorialStats,
   recordView: recordStepView,
 
-  // Rewards
   rewards: {
     getUserRewards,
     hasReward,
@@ -422,14 +354,12 @@ export const TutorialClient = {
     getUserCredits,
   },
 
-  // Sample data
   sampleData: {
     populate: populateSampleData,
     has: hasSampleData,
     clear: clearSampleData,
   },
 
-  // Feedback
   submitFeedback: submitTutorialFeedback,
   recordHelp: recordHelpSession,
 } as const;

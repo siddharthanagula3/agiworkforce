@@ -58,8 +58,6 @@ vi.mock('react-i18next', () => ({
 describe('DesktopShellV3 real render', () => {
   afterEach(() => {
     cleanup();
-    // `setMode` refuses Local outside Tauri, so the mode is set directly; reset
-    // it the same way so one test's trust boundary does not leak into the next.
     useAppModeStore.setState({ mode: 'cloud' });
   });
 
@@ -68,8 +66,6 @@ describe('DesktopShellV3 real render', () => {
 
     expect(screen.getByText('New chat')).toBeInTheDocument();
     expect(screen.queryByText('Dispatch')).not.toBeInTheDocument();
-    // The v3 empty state has no legacy mode badge; the shell still mounting
-    // (New chat present) proves no error boundary fired.
     expect(screen.queryByText('Cloud Sync')).not.toBeInTheDocument();
   });
 
@@ -97,9 +93,6 @@ describe('DesktopShellV3 real render', () => {
     expect(screen.getByText('New chat')).toBeInTheDocument();
   });
 
-  // The code workspace reads and writes real files through the native FS, so
-  // all three trust-boundary layers are asserted here: nav visibility, the
-  // navigate guard that mounts the panel, and eviction on a switch to Cloud.
   describe('AGI Code panel is Local-only', () => {
     beforeAll(async () => {
       await import('@/features/code/CodeWorkspace');
@@ -148,9 +141,6 @@ describe('DesktopShellV3 real render', () => {
     });
   });
 
-  // CAP-051. The design board keeps every stroke in device-side React state and
-  // has no persistence at all, so it lives on the Local trust boundary next to
-  // the code workspace — and it has to say out loud that nothing is saved.
   describe('Design panel is Local-only and honest about persistence', () => {
     it('opens the board from the Local nav with the session-only notice', async () => {
       act(() => {
@@ -198,10 +188,6 @@ describe('DesktopShellV3 real render', () => {
     });
   });
 
-  // CAP-045. `useResearchStore.startResearch` invokes the native `research_start`
-  // command, which runs the on-device orchestrator in src-tauri/src/core/research
-  // against the local LLM router — no managed cloud route is involved, so this
-  // panel is gated exactly like the other device surfaces.
   describe('Deep research panel is Local-only', () => {
     it('opens deep research from the Local nav', async () => {
       act(() => {

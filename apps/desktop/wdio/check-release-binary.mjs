@@ -1,24 +1,4 @@
 #!/usr/bin/env node
-/**
- * Release-binary test-seam absence check — the inverse of the wdio.conf.ts
- * `onPrepare` guard (which requires the isolated identifier for tests, and
- * refuses production binaries).
- *
- * The wdio plugins are always linked (their permission schemas must stay valid
- * in every profile — see src-tauri/Cargo.toml) but only ever REGISTERED behind
- * `#[cfg(debug_assertions)]` in lib.rs, so a release build must never start
- * the embedded WebDriver server. String-grepping for the plugin crate name is
- * therefore a false positive by design; what a release artifact must NOT
- * contain is the isolated test bundle identifier, and what it must NOT do is
- * open the WebDriver port.
- *
- * Usage:
- *   node wdio/check-release-binary.mjs <path-to-release-binary> [--probe]
- *
- * --probe launches the binary with TAURI_WEBDRIVER_PORT set and fails if the
- * port ever accepts a connection (definitive runtime proof). Without --probe
- * only the static identifier check runs.
- */
 import { spawn, spawnSync } from 'node:child_process';
 import console from 'node:console';
 import process from 'node:process';
@@ -44,8 +24,6 @@ if (!existsSync(binary)) {
 
 let failed = false;
 
-// 1. The isolated test identifier must be absent — its presence means the
-// artifact was built from the wdio harness config, not the release config.
 const grep = spawnSync('grep', ['-aq', WDIO_IDENTIFIER, binary]);
 if (grep.status === 0) {
   console.error(
@@ -57,8 +35,6 @@ if (grep.status === 0) {
   console.log(`ok: no ${WDIO_IDENTIFIER} identifier embedded`);
 }
 
-// 2. Optional runtime probe: a release build must never open the embedded
-// WebDriver port, even when the env asks for one.
 if (flags.includes('--probe')) {
   const child = spawn(binary, [], {
     env: { ...process.env, TAURI_WEBDRIVER_PORT: String(PROBE_PORT) },

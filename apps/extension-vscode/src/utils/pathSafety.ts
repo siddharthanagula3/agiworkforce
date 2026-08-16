@@ -23,11 +23,8 @@ export type SafeResolveResult =
     };
 
 export interface SafeResolveOptions {
-  /** When true, deny paths that match isSensitiveFile (.env, .pem, etc.). Default: true. */
   checkSensitive?: boolean;
-  /** When false, also detect when realpath escapes the workspace via symlink. Default: false (no realpath check). */
   allowSymlinkEscape?: boolean;
-  /** When true, allow absolute paths (still validated against workspace containment). Default: false. */
   allowAbsolute?: boolean;
 }
 
@@ -56,20 +53,16 @@ export async function safeResolveWorkspacePath(
   const allowSymlinkEscape = opts?.allowSymlinkEscape ?? false;
   const allowAbsolute = opts?.allowAbsolute ?? false;
 
-  // Try each workspace folder in turn.
   let lastResult: ContainmentResult | undefined;
   for (const folder of folders) {
     const result = resolveContained(folder.uri.fsPath, input, { allowAbsolute });
     if (result.ok) {
-      // Sensitive-file check (audit F-07, F-09).
       if (checkSensitive && isSensitiveFile(result.resolved)) {
         return { ok: false, reason: 'sensitive' };
       }
-      // Symlink-escape check (audit F-13).
       if (!allowSymlinkEscape) {
         try {
           const real = await fs.realpath(result.resolved);
-          // Re-check containment after realpath resolution.
           const realCheck = resolveContained(folder.uri.fsPath, real, { allowAbsolute: true });
           if (!realCheck.ok) {
             return { ok: false, reason: 'symlink-escape' };
@@ -93,7 +86,6 @@ export async function safeResolveWorkspacePath(
     lastResult = result;
   }
 
-  // No workspace folder contained the input. Map the last failure reason.
   if (lastResult && !lastResult.ok) {
     if (lastResult.reason === 'traversal') return { ok: false, reason: 'traversal' };
     if (lastResult.reason === 'absolute-input') return { ok: false, reason: 'not-in-workspace' };
@@ -101,9 +93,6 @@ export async function safeResolveWorkspacePath(
   return { ok: false, reason: 'not-in-workspace' };
 }
 
-/**
- * Human-readable rejection message for a SafeResolveResult.
- */
 export function describeRejection(
   reason: Exclude<SafeResolveResult, { ok: true }>['reason'],
 ): string {
@@ -125,8 +114,4 @@ export function describeRejection(
   }
 }
 
-/**
- * Re-export `isSensitiveFile` so consumers don't need to also import from
- * `@agiworkforce/utils` directly.
- */
 export { isSensitiveFile } from '@agiworkforce/utils';

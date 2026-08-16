@@ -1,20 +1,5 @@
-/**
- * OCR API
- *
- * TypeScript bindings for the Tesseract-based OCR engine.
- * Wraps the Rust OCR commands: process_image, process_region, get_languages,
- * get_result, process_with_boxes, detect_languages, process_multi_language,
- * preprocess_image.
- *
- * When the "ocr" Cargo feature is disabled the backend returns a user-friendly
- * error string — callers should handle rejected promises gracefully.
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// ---------------------------------------------------------------------------
-// Types (mirror Rust structs — field names are camelCase for IPC)
-// ---------------------------------------------------------------------------
 
 export interface BoundingBox {
   x: number;
@@ -54,10 +39,6 @@ export interface MultiLanguageResult {
   text: string;
   confidence: number;
 }
-
-// ---------------------------------------------------------------------------
-// API functions
-// ---------------------------------------------------------------------------
 
 /**
  * Run OCR on a full image file and persist the result.
@@ -101,16 +82,10 @@ export async function processRegion(
   return invoke<OCRResult>('ocr_process_region', { imagePath, x, y, width, height, language });
 }
 
-/**
- * List all available OCR languages supported by the installed Tesseract data.
- */
 export async function getLanguages(): Promise<Language[]> {
   return invoke<Language[]>('ocr_get_languages');
 }
 
-/**
- * Retrieve a previously-stored OCR result by its capture ID.
- */
 export async function getResult(captureId: string): Promise<OCRResult | null> {
   return invoke<OCRResult | null>('ocr_get_result', { captureId });
 }
@@ -131,9 +106,6 @@ export async function processWithBoxes(
   return invoke<OCRResult>('ocr_process_with_boxes', { imagePath, language, preprocess });
 }
 
-/**
- * Detect the languages present in an image without extracting text.
- */
 export async function detectLanguages(imagePath: string): Promise<LanguageDetection[]> {
   return invoke<LanguageDetection[]>('ocr_detect_languages', { imagePath });
 }

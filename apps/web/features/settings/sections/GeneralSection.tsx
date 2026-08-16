@@ -20,10 +20,6 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const THEME_OPTIONS = [
   { value: 'system' as const, icon: Monitor, label: 'System' },
   { value: 'light' as const, icon: Sun, label: 'Light' },
@@ -49,70 +45,29 @@ const WORK_DESCRIPTIONS = [
 
 type WorkDescription = (typeof WORK_DESCRIPTIONS)[number] | '';
 
-/**
- * PER-8 — the ONE non-DB profile namespace.
- *
- * `displayName` is deliberately NOT stored here: the full name's single source
- * of truth is `profiles.display_name`, written through `PATCH /api/me`. Before
- * this change the name existed in three places at once (this namespace, Clerk
- * `unsafeMetadata`, and the profiles row) and the reader in `/api/me` consulted
- * a different pair than Settings wrote, so editing "Full name" here could not
- * change the greeting, header or sidebar.
- *
- * PER-9: this namespace is now on the cloud-safe sync allowlist, so the
- * "Synced to your account" copy is true in both directions.
- */
 const PREF_NAMESPACE = 'general';
 
-/**
- * `voice` USED TO LIVE HERE and was removed, not migrated. It stored the string
- * 'nova' — an OpenAI TTS voice name — in the server-synced `general` namespace,
- * while web read-aloud runs entirely on the browser's SpeechSynthesis engine,
- * which has never heard of it. The value was loaded into state on every mount
- * and read by nothing. The real control is `ReadAloudVoiceRow` below, and it is
- * deliberately device-local: installed voices differ per OS and browser, so a
- * synced choice resolves to nothing on the next machine.
- *
- * `chatFont` was removed on the same grounds. It defaulted to 'serif', was
- * loaded into component state on every mount and written back to the server on
- * every save, and no control set it and no stylesheet consumed it — so the
- * account carried a typography preference the product could not honour. The
- * text controls that DO exist are `ChatTextSizeRow` and `CodeBlockWrapRow`,
- * both backed by real `html[data-*]` rules in `globals.css`.
- *
- * Any `voice` or `chatFont` key still stored on an account is simply ignored.
- */
 interface GeneralSettings {
   preferredName: string;
   workDescription: WorkDescription;
   instructions: string;
 }
 
-/** Trimmed value, or undefined when the stored value carries no information. */
 function storedText(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
 }
 
-// ---------------------------------------------------------------------------
-// Section component
-// ---------------------------------------------------------------------------
-
 export function GeneralSection() {
   const { theme: nextTheme, setTheme: setNextTheme } = useTheme();
   const user = useBillingStore((s) => s.user);
   const billingInitialized = useBillingStore((s) => s.initialized);
-  // PER-10: `isLoaded` is what distinguishes "Clerk has not answered yet" from
-  // "this user has no name". Without it every field defaulted to '' on mount.
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
 
   const [mounted, setMounted] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
-  // --- Profile state -------------------------------------------------------
-  // PER-8: the server has already resolved the canonical identity; the client
-  // reads it instead of re-deriving a different answer from Clerk metadata.
   const serverProfile = user?.profile;
   const accountEmail = user?.email ?? clerkUser?.primaryEmailAddress?.emailAddress ?? '';
 
@@ -125,13 +80,7 @@ export function GeneralSection() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // --- Preferences state ---------------------------------------------------
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // PER-10: the autosave must fire only after a REAL user edit. It used to fire
-  // as soon as the load effect populated state, so a first-time user's mount
-  // PUT `{displayName: '', preferredName: ''}` — and because the loader merged
-  // `{...fallback, ...serverSettings}`, those stored empty strings then
-  // permanently overrode the correct defaults on every later load.
   const dirtyRef = useRef(false);
   const hydratedRef = useRef(false);
 
@@ -153,10 +102,6 @@ export function GeneralSection() {
     const fallbackPreferredName =
       serverProfile?.preferred_name ?? clerkUser?.firstName ?? fallbackFullName.split(' ')[0] ?? '';
 
-    // Inputs stay disabled until this read settles. Setting identity fallbacks
-    // immediately avoids a blank-looking profile while the preferences request
-    // is in flight, without allowing the user to type into state that hydration
-    // would overwrite.
     setPreferencesLoaded(false);
     setLoadError(null);
     setDisplayName(fallbackFullName);
@@ -165,17 +110,12 @@ export function GeneralSection() {
 
     try {
       const stored = await fetchStoredPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE);
-      // Precedence is explicit: a stored value wins ONLY when it carries
-      // information. An empty stored string falls back to the derived default
-      // instead of silently locking the field empty forever.
       setPreferredName(storedText(stored.preferredName) ?? fallbackPreferredName);
       setWorkDescription(
         (storedText(stored.workDescription) as WorkDescription | undefined) ??
           (serverProfile?.work_description as WorkDescription | null) ??
           '',
       );
-      // Instructions are free-form: an empty stored value IS the user's answer,
-      // so no derived fallback applies.
       setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Failed to load settings');
@@ -185,11 +125,6 @@ export function GeneralSection() {
   }, [accountEmail, clerkUser?.firstName, clerkUser?.fullName, serverProfile, user?.name]);
 
   useEffect(() => {
-    // Hydrate exactly once, and only once both identity sources have actually
-    // resolved. The async load is deliberately not cancelled by React's
-    // development-only effect replay: the replay preserves refs, so cancelling
-    // the first request while the second returns here would leave Settings
-    // permanently loading.
     if (hydratedRef.current) return;
     if (!clerkLoaded || !billingInitialized) return;
     hydratedRef.current = true;
@@ -198,9 +133,6 @@ export function GeneralSection() {
 
   const profilePreferencesReady = preferencesLoaded && loadError === null;
 
-  // Auto-save the `general` namespace with a 400ms debounce, but ONLY after the
-  // user has actually edited something and only when the load succeeded —
-  // persisting over a failed load is how the empty-string corruption spread.
   useEffect(() => {
     if (!mounted || !preferencesLoaded || !dirtyRef.current || loadError !== null) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -213,8 +145,6 @@ export function GeneralSection() {
       void savePreferenceNamespace(PREF_NAMESPACE, next)
         .then(() => {
           setSaveError(null);
-          // The preferred name feeds the greeting; re-read /api/me so the
-          // change is visible without a reload.
           return refreshProfileConsumers();
         })
         .catch((error) => {
@@ -228,7 +158,6 @@ export function GeneralSection() {
 
   const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
-  // Derived: initials for avatar (up to 2 chars)
   const avatarInitials = (() => {
     const name = preferredName || displayName || accountEmail || 'A';
     const parts = name.trim().split(/\s+/);
@@ -246,12 +175,6 @@ export function GeneralSection() {
     setSaving(true);
     setSaveError(null);
     try {
-      // PER-8: exactly two writes, to exactly two owners.
-      //   full name  → profiles.display_name  (PATCH /api/me)
-      //   everything → user_settings.general  (PUT /api/settings/preferences)
-      // The previous third write to Clerk `unsafeMetadata` is gone: nothing
-      // read it, and a third copy of the name is what made the profile
-      // unreconcilable in the first place.
       await saveDisplayName(trimmedFull);
       await savePreferenceNamespace<GeneralSettings>(PREF_NAMESPACE, {
         preferredName: trimmedPreferred,
@@ -260,7 +183,6 @@ export function GeneralSection() {
       });
       setPreferredName(trimmedPreferred);
 
-      // Push the new identity into the greeting/header/sidebar now.
       await refreshProfileConsumers();
       setSavedAt(Date.now());
     } catch (err) {
@@ -491,25 +413,9 @@ export function GeneralSection() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Chat defaults
-// ---------------------------------------------------------------------------
-
 const SELECT_CLASS =
   'h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground';
 
-/**
- * Default model.
- *
- * Writes `model-store.ts`, which is the store the composer actually reads
- * (`ChatComposerNew.tsx`) and the one persisted across sessions. A previous
- * attempt put this on `web-settings-store.defaultModel`, a field with no reader
- * AND no writer — a settings row that looked wired and changed nothing.
- *
- * Only selectable models are offered: `coming_soon` catalogue rows exist so the
- * picker can show them greyed, and defaulting to one would route to a model
- * that cannot serve the request.
- */
 function DefaultModelRow() {
   const selectedModelId = useModelStore((state) => state.selectedModelId);
   const setSelectedModel = useModelStore((state) => state.setSelectedModel);
@@ -538,14 +444,6 @@ function DefaultModelRow() {
 
 const EFFORT_LEVELS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-/**
- * Reasoning effort.
- *
- * Writes `thinking-store.ts` — the single source of truth the composer pill and
- * `ComposerFooter` both already read. "Off" maps to `enabled: false` rather
- * than to a sixth effort level, because that is the shape the store and the
- * request path actually use.
- */
 function ReasoningEffortRow() {
   const enabled = useThinkingStore((state) => state.enabled);
   const effort = useThinkingStore((state) => state.effort);
@@ -575,14 +473,6 @@ function ReasoningEffortRow() {
   );
 }
 
-/**
- * Transcript text size.
- *
- * Backed by a real stylesheet hook — `html[data-chat-text-size]` in
- * `globals.css`, stamped by `AppearancePreferences`. The store field and the
- * CSS rule were added together; a size preference with no rule behind it is a
- * control that moves and changes nothing.
- */
 function ChatTextSizeRow() {
   const chatTextSize = useSettingsStore((state) => state.chatTextSize);
   const setChatTextSize = useSettingsStore((state) => state.setChatTextSize);
@@ -603,7 +493,6 @@ function ChatTextSizeRow() {
   );
 }
 
-/** Soft-wrap fenced code instead of scrolling it horizontally. */
 function CodeBlockWrapRow() {
   const codeBlockWrap = useSettingsStore((state) => state.codeBlockWrap);
   const setCodeBlockWrap = useSettingsStore((state) => state.setCodeBlockWrap);
@@ -631,13 +520,6 @@ function CodeBlockWrapRow() {
   );
 }
 
-/**
- * Keyboard shortcuts.
- *
- * `KeyboardShortcutsDialog` already existed and was reachable ONLY from a
- * shortcut inside the chat page — so the list of shortcuts was itself behind a
- * shortcut you had to already know. Settings is where someone goes to find out.
- */
 function KeyboardShortcutsRow() {
   const [open, setOpen] = useState(false);
 
@@ -659,23 +541,9 @@ function KeyboardShortcutsRow() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Read-aloud voice
-// ---------------------------------------------------------------------------
-
-/**
- * Voice picker for the message "Read aloud" action.
- *
- * Renders nothing when the browser has no SpeechSynthesis — a picker over an
- * empty list, or one whose choice can never be heard, is worse than no control.
- *
- * The value is device-local by design; see the header of `lib/hooks/useTTS.ts`
- * for why a `voiceURI` must not be synced across devices.
- */
 function ReadAloudVoiceRow() {
   const { isSupported, voices, voiceUri, setVoiceUri, speak, stop, isSpeaking } = useTTS();
 
-  // Cancel any preview when the user navigates away mid-utterance.
   useEffect(() => () => stop(), [stop]);
 
   if (!isSupported || voices.length === 0) return null;
@@ -710,10 +578,6 @@ function ReadAloudVoiceRow() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Row helper (Preferences section)
-// ---------------------------------------------------------------------------
-
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex min-h-9 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -723,8 +587,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-// Profile field row: label (+ optional helper) on the left, control on the
-// right, separated by a thin hairline divider (matches the reference layout).
 function FieldRow({
   label,
   helper,

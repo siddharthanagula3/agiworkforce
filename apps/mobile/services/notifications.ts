@@ -9,33 +9,13 @@ import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 import { notificationAllowed } from './notificationGate';
 import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from './notificationCategories';
 
-// LOW-MOB-3 fix (red-team 2026-05): the notification handler used to
-// `safeNavigate` to `/(app)/*` regardless of auth state — a notification
-// that fires before the auth gate has resolved would race the redirect-
-// to-login effect in `_layout.tsx` and the user could land in the
-// authenticated portion of the app for ~one frame, including reading
-// loading-state bound to a yet-unauthenticated context. We now require
-// the layout to push the current session into this module before any
-// notification can navigate. Notifications that fire while no session is
-// known route to /(auth)/login.
-// The real v1 sign-in signal is a boolean bridged from Clerk (isClerkSignedIn);
-// the legacy `useAuthStore.session` is always null in v1, so gating navigation on
-// a session object permanently routes every notification tap to /(auth)/login
-// (#386 migration miss). We track a boolean instead.
 let _isSignedIn = false;
-/** Preferred: feed the real Clerk sign-in boolean from _layout.tsx. */
 export function setSignedIn(value: boolean): void {
   _isSignedIn = value;
 }
-/**
- * Back-compat shim: a non-null session means signed-in. Retained so existing
- * call sites/tests that pass a session object keep working.
- */
 export function setCurrentSession(session: MobileAuthSession | null): void {
   _isSignedIn = session != null;
 }
-
-// --- Notification event types ---
 
 export type NotificationEventType =
   | 'task_completed'
@@ -56,30 +36,15 @@ export type NotificationEventType =
   | 'companion_connected'
   | 'chat_message';
 
-/**
- * Priority tier controls notification urgency.
- *
- * - critical : agent failed / emergency stop — persistent notification + vibrate
- * - high     : approval pending >2min        — sound + banner
- * - normal   : task completed / paused       — silent banner
- * - low      : status updates / heartbeat    — badge only
- */
 export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 
 export interface NotificationData {
   type: NotificationEventType;
   priority?: NotificationPriority;
-  /** Route to navigate to when tapped */
   route?: string;
-  /** Agent ID this notification is about */
   agentId?: string;
-  /** Arbitrary payload from backend */
   [key: string]: unknown;
 }
-
-// ---------------------------------------------------------------------------
-// Android notification channels — one per priority tier
-// ---------------------------------------------------------------------------
 
 const ANDROID_CHANNELS: Record<
   string,
@@ -124,20 +89,10 @@ const ANDROID_CHANNELS: Record<
   },
 };
 
-// ---------------------------------------------------------------------------
-// Notification handler (foreground behavior per priority)
-// ---------------------------------------------------------------------------
-
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
 
-    // Honor the user's Notification Preferences (category toggles + quiet hours)
-    // for foreground presentation too — these settings were previously inert
-    // because no live notification path consulted them. Lazy require (not a top
-    // import) keeps this early, widely-imported module from pulling the store's
-    // secure-storage chain into every consumer's module graph; fail OPEN so a
-    // store load error never silently drops a notification.
     if (data?.type && !notificationAllowed(data.type)) {
       return {
         shouldShowAlert: false,
@@ -168,7 +123,6 @@ Notifications.setNotificationHandler({
           shouldSetBadge: true,
         } as Notifications.NotificationBehavior;
       case 'low':
-        // Badge only — no alert, no sound
         return {
           shouldShowAlert: false,
           shouldPlaySound: false,
@@ -177,10 +131,6 @@ Notifications.setNotificationHandler({
     }
   },
 });
-
-// ---------------------------------------------------------------------------
-// Permission + token registration
-// ---------------------------------------------------------------------------
 
 export interface PushNotificationAccountContext {
   ownerId: string;
@@ -213,7 +163,6 @@ export async function registerForPushNotifications(
     }
 
     if (Platform.OS === 'android') {
-      // Register all four priority channels
       for (const channel of Object.values(ANDROID_CHANNELS)) {
         await Notifications.setNotificationChannelAsync(channel.id, {
           name: channel.name,
@@ -239,19 +188,8 @@ export async function registerForPushNotifications(
 
     return pushToken;
   } catch (err) {
-    // Remote-push registration is a non-fatal CAPABILITY: it legitimately fails on
-    // the iOS Simulator (no "aps-environment" entitlement), on dev builds without a
-    // push capability, when APNs is unreachable, or when the backend token sync
-    // fails. Degrade to "no push token" instead of letting the promise reject —
-    // an uncaught rejection here surfaces as a red error overlay in dev and is a
-    // silent crash risk in prod. Push simply stays off for this session.
     if (__DEV__) {
       const message = err instanceof Error ? err.message : String(err);
-      // A missing "aps-environment" entitlement is the expected, unavoidable
-      // outcome on the Simulator and on dev builds using the minimal
-      // entitlement set — not a defect worth a warning on every launch. Keep
-      // warn for everything else (APNs unreachable, backend token sync failed),
-      // where the diagnostic is the whole point.
       if (message.includes('aps-environment')) {
         console.debug('[push] not available in this build (no aps-environment entitlement)');
       } else {
@@ -261,8 +199,6 @@ export async function registerForPushNotifications(
     return null;
   }
 }
-
-// --- Token backend sync ---
 
 async function sendTokenToBackend(
   token: string,
@@ -290,19 +226,10 @@ async function sendTokenToBackend(
     );
     return accountContextIsCurrent(accountContext);
   } catch {
-    // Non-critical — token will be re-sent on next app launch
     return false;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Local notification dispatch (in-app trigger)
-// ---------------------------------------------------------------------------
-
-/**
- * Schedule a local notification with the appropriate priority tier.
- * Use this for events the mobile app detects directly (e.g., approval escalation).
- */
 export async function scheduleLocalNotification(opts: {
   title: string;
   body: string;
@@ -328,12 +255,10 @@ export async function scheduleLocalNotification(opts: {
     badge: 1,
   };
 
-  // Android: route to the correct channel
   if (Platform.OS === 'android') {
     (content as Record<string, unknown>).channelId = priority;
   }
 
-  // Critical tier on iOS: mark as time-sensitive
   if (Platform.OS === 'ios' && priority === 'critical') {
     (content as Record<string, unknown>).interruptionLevel = 'timeSensitive';
   }
@@ -344,16 +269,6 @@ export async function scheduleLocalNotification(opts: {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Route allowlist — only navigate to known safe app routes
-// ---------------------------------------------------------------------------
-
-// Each prefix may carry a feature gate: a push can only navigate to it when the
-// underlying feature is enabled in this build. Without the gate, a stray push
-// for a disabled feature would
-// route the user to a screen that is gated off. Always-available prefixes use
-// `null`. (Defence-in-depth: those screens now render <FeatureUnavailable/>
-// rather than a blank, but we still avoid navigating to them.)
 const ALLOWED_ROUTE_PREFIXES: ReadonlyArray<{ prefix: string; flag: FeatureKey | null }> = [
   { prefix: '/(app)/companion', flag: 'companion' },
   { prefix: '/(app)/(tabs)/chat', flag: null },
@@ -369,28 +284,12 @@ function isAllowedRoute(route: string): boolean {
   );
 }
 
-// ---------------------------------------------------------------------------
-// App-ready guard for navigation
-// ---------------------------------------------------------------------------
-
-/**
- * Whether the app navigator is ready to accept push calls.
- * Must be set to true by the root layout after the navigator mounts.
- * Prevents "navigate before navigator is ready" crashes on cold-start
- * notification taps.
- */
 let _navigatorReady = false;
 
 export function setNavigatorReady(ready: boolean): void {
   _navigatorReady = ready;
 }
 
-/**
- * Safe wrapper around router.push.
- * If the navigator is not yet ready, queues the navigation to run on the
- * next tick (giving the layout time to mount). If it still fails, the
- * error is caught and logged rather than crashing the app.
- */
 function safeNavigate(route: Parameters<typeof router.push>[0]): void {
   let attempts = 0;
   const maxAttempts = 4;
@@ -401,7 +300,6 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
       router.push(route);
     } catch (err) {
       if (attempts < maxAttempts && !_navigatorReady) {
-        // Exponential backoff: 100ms, 200ms, 400ms
         setTimeout(attemptPush, 100 * Math.pow(2, attempts - 1));
       } else {
         console.warn('[notifications] Navigation failed after retries:', err);
@@ -412,14 +310,9 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
   if (_navigatorReady) {
     attemptPush();
   } else {
-    // Defer until after the current JS turn so the navigator can finish mounting
     setTimeout(attemptPush, 50);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Notification response handler (user tapped a notification)
-// ---------------------------------------------------------------------------
 
 function handleNotificationResponse(response: Notifications.NotificationResponse): void {
   const data = response.notification.request.content.data as NotificationData | undefined;
@@ -433,13 +326,9 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     return;
   }
 
-  // Store the notification in the in-app notification center
   notificationCenterStore.add(response.notification);
 
   if (!_isSignedIn) {
-    // No active session — defer to login screen. We do not pass arbitrary
-    // notification data through to the login screen as a redirect target;
-    // the user will land on the default post-login route.
     safeNavigate({ pathname: '/(auth)/login' as const });
     return;
   }
@@ -448,25 +337,15 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     case 'agent_failed':
     case 'emergency_stop_triggered':
     case 'agent_paused':
-      // Deep link to the live Cloud tasks/runs list. The legacy companion
-      // agent-detail screen (/(app)/companion/agent/[id]) and /(app)/agents/[id]
-      // are both gated behind FEATURES.agents (false in v1) and render
-      // <FeatureUnavailable/>, so a real notification tap there was a dead end
-      // (MOBILE-AGENT-NOTIF-DEADEND-01). /(app)/agents (TasksScreen) is gated by
-      // FEATURES.cloudTasks (true) and is the live runs list. The push agentId is
-      // a companion id, not a cloud run id, so we route to the list rather than a
-      // mismatched detail route.
       safeNavigate({ pathname: '/(app)/agents' as const });
       break;
 
     case 'agent_approval_needed':
     case 'approval_pending_escalation':
-      // Navigate to companion/desktop view for approval (FEATURES.companion is live)
       safeNavigate({ pathname: '/(app)/companion' as const });
       break;
 
     case 'task_completed':
-      // Navigate to the relevant chat if a validated route is provided
       if (data.route && typeof data.route === 'string' && isAllowedRoute(data.route)) {
         safeNavigate(data.route as Parameters<typeof router.push>[0]);
       } else {
@@ -479,10 +358,6 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
 
     case 'schedule_triggered':
     case 'schedule_run':
-      // `/(app)/schedules` is live (FEATURES.schedules === true), so this is a
-      // real destination rather than a <FeatureUnavailable/> dead end. The
-      // push carries `taskId`, but there is no schedule-detail route to open
-      // it with — the list is the deepest screen that exists.
       safeNavigate({ pathname: '/(app)/schedules' as const });
       break;
 
@@ -499,28 +374,20 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
           safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
         }
       } else {
-        // No route provided — fall back to the chat tab. Every other type has a
-        // default destination; a routeless chat_message tap must not be a dead tap.
         safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
       }
       break;
 
     case 'status_update':
     case 'heartbeat_info':
-      // Low priority — navigate to notification center
       safeNavigate({ pathname: '/(app)/notifications' as const });
       break;
 
     default:
-      // Unknown type — open app home
       safeNavigate({ pathname: '/(app)' as const });
       break;
   }
 }
-
-// ---------------------------------------------------------------------------
-// In-app Notification Center store
-// ---------------------------------------------------------------------------
 
 export interface NotificationCenterItem {
   id: string;
@@ -534,7 +401,6 @@ export interface NotificationCenterItem {
 
 type NotificationCenterListener = (items: NotificationCenterItem[]) => void;
 
-/** Lightweight in-memory notification center (not persisted — use MMKV if persistence needed) */
 const notificationCenterStore = (() => {
   let items: NotificationCenterItem[] = [];
   const listeners = new Set<NotificationCenterListener>();
@@ -563,7 +429,6 @@ const notificationCenterStore = (() => {
         read: false,
       };
 
-      // Prepend newest first, cap at 50 items
       items = [item, ...items].slice(0, 50);
       notify();
     },
@@ -594,10 +459,6 @@ const notificationCenterStore = (() => {
 
 export { notificationCenterStore };
 
-// ---------------------------------------------------------------------------
-// React hook for notification center
-// ---------------------------------------------------------------------------
-
 import { useEffect, useState } from 'react';
 
 export function useNotificationCenter(): {
@@ -623,22 +484,13 @@ export function useNotificationCenter(): {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Listener subscriptions
-// ---------------------------------------------------------------------------
-
 let foregroundSubscription: Notifications.Subscription | null = null;
 let responseSubscription: Notifications.Subscription | null = null;
 let tokenSubscription: Notifications.Subscription | null = null;
 
-/**
- * Set up all notification listeners. Call once on app mount.
- * Returns a cleanup function to remove all listeners.
- */
 export function setupNotificationListeners(
   accountContext: PushNotificationAccountContext | null,
 ): () => void {
-  // Guard: if listeners already exist, return existing cleanup to prevent duplicates.
   if (foregroundSubscription || responseSubscription || tokenSubscription) {
     return () => {
       foregroundSubscription?.remove();
@@ -650,14 +502,11 @@ export function setupNotificationListeners(
     };
   }
 
-  // Foreground notification received (for in-app handling like badge updates)
   foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
 
-    // Store in notification center
     notificationCenterStore.add(notification);
 
-    // Update badge for high-priority notifications
     if (
       data?.type === 'agent_approval_needed' ||
       data?.type === 'agent_failed' ||
@@ -670,12 +519,10 @@ export function setupNotificationListeners(
     }
   });
 
-  // User tapped a notification (foreground or background)
   responseSubscription = Notifications.addNotificationResponseReceivedListener(
     handleNotificationResponse,
   );
 
-  // Push token refreshed (re-register with backend)
   tokenSubscription = Notifications.addPushTokenListener((newToken) => {
     if (accountContext && accountContextIsCurrent(accountContext)) {
       void sendTokenToBackend(newToken.data, accountContext);
@@ -692,10 +539,6 @@ export function setupNotificationListeners(
   };
 }
 
-/**
- * Handle the notification that launched the app (cold start).
- * Must be called after listeners are set up.
- */
 export async function handleInitialNotification(): Promise<void> {
   const response = await Notifications.getLastNotificationResponseAsync();
   if (response) {
@@ -703,13 +546,6 @@ export async function handleInitialNotification(): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Infer notification priority from event type.
- */
 function inferPriority(type: NotificationEventType | undefined): NotificationPriority {
   switch (type) {
     case 'agent_failed':
@@ -732,9 +568,6 @@ function inferPriority(type: NotificationEventType | undefined): NotificationPri
   }
 }
 
-/**
- * Get display color for a priority tier.
- */
 export function getPriorityColor(priority: NotificationPriority): string {
   switch (priority) {
     case 'critical':
@@ -748,9 +581,6 @@ export function getPriorityColor(priority: NotificationPriority): string {
   }
 }
 
-/**
- * Get display label for a priority tier.
- */
 export function getPriorityLabel(priority: NotificationPriority): string {
   switch (priority) {
     case 'critical':

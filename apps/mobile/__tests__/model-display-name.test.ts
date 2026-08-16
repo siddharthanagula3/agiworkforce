@@ -1,12 +1,3 @@
-/**
- * Model labels must never fall through to the raw wire id.
- *
- * `allModelMap` holds the local models plus one preview cloud model per
- * provider, not the whole cloud catalog. getDisplayName looked only there, so
- * the Models screen showed a raw wire ID as the active model while the composer
- * chip — which uses getShortDisplayName and its cloud-aware lookup — showed the
- * friendly catalog label for the same selection.
- */
 import {
   getDisplayName,
   getManagedDisplayName,

@@ -3,11 +3,6 @@ export interface RequestFallbackCandidate {
   provider: string;
 }
 
-/**
- * Pick the cheapest candidate for this exact request, independent of the
- * catalog's base-price ordering. Input-length tiers make base ordering
- * insufficient once candidates cross different thresholds.
- */
 export function selectCheapestRequestFallback<T extends RequestFallbackCandidate>(input: {
   currentModelIds: ReadonlySet<string>;
   currentRequestCostCents: number;

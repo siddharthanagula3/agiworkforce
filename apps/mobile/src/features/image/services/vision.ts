@@ -1,25 +1,3 @@
-/**
- * Vision routing service — routes image queries to the best available backend.
- *
- * Local Mode routes, in priority order:
- *   1. On-device VL pack (tier-3 llama.rn multimodal): used ONLY when a
- *      multimodal GGUF model AND its mmproj vision projector are both installed
- *      on disk. This passes the real image into the model via `images` +
- *      `mmprojPath` (llama.rn `initMultimodal`). Effective vision is gated on the
- *      projector actually being present — never on a catalog flag alone (§8).
- *   2. Tier-2 ExecuTorch VLM (single .pte, projector embedded): used only when
- *      the model is actually installed
- *      (`effectiveTier2VisionIn`). The image rides `images` into tier-2's
- *      `mediaPath` plumbing; no mmproj pair exists on this tier.
- *   3. Native OCR over the image + local text-only LLM reasoning (fallback).
- *
- * The VL route stays dormant until the mobile GGUF+mmproj install path lands and
- * writes the artifacts to disk; today that path is device-QA-gated, so real
- * devices resolve to OCR. The routing is honest about which one actually ran.
- *
- * The service never throws on routing fallback — it always returns a result or
- * a descriptive error string so the caller can surface it to the user.
- */
 
 import {
   effectiveTier2VisionIn,
@@ -37,46 +15,30 @@ export type VisionRoute =
   | { kind: 'ocr-fallback'; displayName: string };
 
 export interface VisionQuery {
-  /** Local file URI of the image. */
   imageUri: string;
-  /** User's question about the image. */
   question: string;
-  /** Token callback for streaming. */
   onToken?: (token: string) => void;
 }
 
 export interface VisionResult {
   text: string;
   route: VisionRoute;
-  /** Rough time-to-first-token in ms (best-effort). */
   ttftMs: number;
 }
 
 interface RunnableVisionModel {
   modelId: string;
   displayName: string;
-  /**
-   * Tier-3 GGUF fields. Absent for a tier-2 ExecuTorch VLM, whose artifacts
-   * are preset-cached by the module — the selector routes those by `modelId`.
-   */
   modelPath?: string;
   mmprojPath?: string;
 }
 
-/**
- * Convention for where the mmproj projector is stored relative to the base GGUF.
- * The (future) GGUF install path writes `<base>.gguf` and `<base>.gguf.mmproj.gguf`
- * side by side; keeping the convention here means the VL route lights up
- * automatically once that path lands, with no further change to this file.
- */
 function mmprojSiblingPath(modelPath: string): string {
   return `${modelPath}.mmproj.gguf`;
 }
 
-/** Best-effort file existence check via expo-file-system (legacy API). */
 async function fileExists(uri: string): Promise<boolean> {
   try {
-    // Lazy require so unit tests / non-native runtimes never fail at import time.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('expo-file-system/legacy') as {
       getInfoAsync: (u: string) => Promise<{ exists?: boolean }>;
@@ -89,18 +51,11 @@ async function fileExists(uri: string): Promise<boolean> {
   }
 }
 
-/**
- * Find an installed on-device multimodal model whose base weights AND mmproj
- * projector are both present on disk. Returns null when none is runnable — in
- * which case the caller uses the OCR fallback. Defensive against partial module
- * mocks (the OCR fallback test mocks `@agiworkforce/local-llm` and storage).
- */
 async function resolveInstalledMultimodalModel(): Promise<RunnableVisionModel | null> {
   if (typeof listInstalledModels !== 'function') return null;
   if (typeof getModelById !== 'function' || typeof isMultimodalModel !== 'function') return null;
 
   const installed = await listInstalledModels().catch(() => []);
-  // Pass 1 (preferred): tier-3 llama.rn GGUF+mmproj pack.
   for (const entry of installed) {
     if (!entry.local_path) continue;
 
@@ -132,11 +87,6 @@ async function resolveInstalledMultimodalModel(): Promise<RunnableVisionModel | 
     };
   }
 
-  // Pass 2: tier-2 ExecuTorch VLM (single .pte with embedded projector).
-  // Effective vision requires the model to actually be
-  // installed — the ExecuTorch module preset-caches the artifacts itself, so
-  // the installed_models record (format 'pte', no local_path) is the install
-  // evidence here.
   if (typeof effectiveTier2VisionIn === 'function') {
     for (const entry of installed) {
       if (entry.format !== 'pte') continue;
@@ -167,22 +117,14 @@ async function resolveInstalledMultimodalModel(): Promise<RunnableVisionModel | 
   return null;
 }
 
-/** Resolve which vision route to use, in priority order. */
 export async function resolveVisionRoute(): Promise<VisionRoute> {
   const vl = await resolveInstalledMultimodalModel();
   if (vl) {
     return { kind: 'vl-pack', modelId: vl.modelId, displayName: vl.displayName };
   }
-  // No runnable on-device VL model installed — use native OCR + local text
-  // reasoning. This is the honest route on every device until the GGUF+mmproj
-  // install path ships.
   return { kind: 'ocr-fallback', displayName: 'AGI Standard (OCR)' };
 }
 
-/**
- * Run OCR on the image using the existing native OCR service.
- * Returns the extracted text, or an empty string if nothing was recognised.
- */
 async function runNativeOCR(imageUri: string): Promise<string> {
   try {
     const result = await recognizeText(imageUri);
@@ -193,15 +135,11 @@ async function runNativeOCR(imageUri: string): Promise<string> {
   return '';
 }
 
-/** Execute a vision query and return the model's response. */
 export async function runVisionQuery(query: VisionQuery): Promise<VisionResult> {
   const t0 = Date.now();
 
-  // Preferred path: a real on-device VL model with its mmproj installed.
   const vl = await resolveInstalledMultimodalModel();
   if (vl) {
-    // Tier-3 routes by modelPath + mmprojPath; tier-2 routes by modelId (the
-    // selector resolves its ExecuTorch preset — images ride into mediaPath).
     const result = await localGenerate(vl.modelPath, {
       modelId: vl.modelId,
       prompt: query.question,
@@ -216,7 +154,6 @@ export async function runVisionQuery(query: VisionQuery): Promise<VisionResult> 
     };
   }
 
-  // OCR fallback path:
   const ocrText = await runNativeOCR(query.imageUri);
 
   const prompt = ocrText
@@ -242,7 +179,6 @@ export async function runVisionQuery(query: VisionQuery): Promise<VisionResult> 
   };
 }
 
-/** Human-readable label shown in the PerformanceChip for the active route. */
 export function visionRouteLabel(route: VisionRoute): string {
   switch (route.kind) {
     case 'vl-pack':

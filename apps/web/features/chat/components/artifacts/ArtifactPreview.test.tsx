@@ -3,10 +3,6 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { SharedArtifact } from '@agiworkforce/types';
 import { ArtifactPreview, type ArtifactData } from './ArtifactPreview';
 
-// The renderable-artifact path drags in the cross-origin sandbox iframe; these
-// tests only exercise the PDF (document) path, which never mounts it. No mock
-// needed — a `document`/`pdf` artifact has canPreview === false.
-
 function pdfArtifact(overrides: Partial<ArtifactData> = {}): ArtifactData {
   return {
     id: 'pdf-1',
@@ -29,7 +25,6 @@ function imageArtifact(overrides: Partial<ArtifactData> = {}): ArtifactData {
   };
 }
 
-/** Stub fetch(blobUrl) → a Blob with the given MIME (for blob verification). */
 function mockBlobFetch(type: string) {
   vi.stubGlobal(
     'fetch',
@@ -50,7 +45,6 @@ describe('ArtifactPreview · PDF viewer', () => {
     );
     const iframe = screen.getByTitle('Trip.pdf') as HTMLIFrameElement;
     expect(iframe.getAttribute('src')).toBe('data:application/pdf;base64,JVBERi0=');
-    // The native PDF viewer is blocked in a sandboxed frame — assert it is not sandboxed.
     expect(iframe.getAttribute('sandbox')).toBeNull();
     expect(screen.queryByTestId('artifact-pdf-fallback')).toBeNull();
   });
@@ -70,8 +64,6 @@ describe('ArtifactPreview · PDF viewer', () => {
   });
 
   it('shows an honest fallback (no fake preview) when content is model text, not PDF bytes', () => {
-    // Generated-document case: artifact.content is the model's markdown, which
-    // must NOT be piped into <iframe src> as if it were a PDF.
     render(
       <ArtifactPreview
         artifact={pdfArtifact({ content: '# Trip plan\n\nOption A — The Grand Tour...' })}
@@ -86,14 +78,11 @@ describe('ArtifactPreview · PDF viewer', () => {
     render(
       <ArtifactPreview artifact={pdfArtifact({ content: 'https://evil.example.com/leak.pdf' })} />,
     );
-    // Off-origin https is rejected → fallback, never an iframe pointing off-origin.
     expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy();
     expect(screen.queryByTitle('Trip.pdf')).toBeNull();
   });
 
   it('ACCEPTS a same-origin relative /api/files/{id} uri when the generated file is a PDF', () => {
-    // The generated-file byte pipeline serves persisted bytes from the
-    // authenticated same-origin route — this is the url shape it emits.
     render(
       <ArtifactPreview
         artifact={pdfArtifact({
@@ -308,8 +297,6 @@ describe('ArtifactPreview · Markdown documents', () => {
     render(<ArtifactPreview variant="panel" artifact={markdownArtifact()} />);
 
     expect(screen.getByTestId('artifact-markdown-preview')).toBeInTheDocument();
-    // The heading is a real <h1>, not the literal "# ExecutionPlan" the panel
-    // used to print because `document` had no preview branch at all.
     expect(screen.getByRole('heading', { name: 'ExecutionPlan' })).toBeInTheDocument();
   });
 
@@ -336,8 +323,6 @@ describe('ArtifactPreview · Markdown documents', () => {
           id: 'docx-1',
           language: 'docx',
           title: 'Brief.docx',
-          // This assertion is about renderer selection, not Mammoth's ZIP
-          // parser. Do not feed the Markdown fixture bytes to the DOCX path.
           content: '',
         })}
       />,

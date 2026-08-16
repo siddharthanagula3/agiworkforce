@@ -67,9 +67,7 @@ export interface ManagedCloudSettingsSyncCoordinator {
 interface PersistedSyncState {
   cursor: string;
   lastSyncedSnapshot: string;
-  /** Complete last server winner, including keys this Desktop version does not own. */
   serverSnapshot: CloudSafeSettings;
-  /** Per-user Desktop working copy, including unpushed edits. */
   localSnapshot: CloudSafeSettings;
   updatedAt: string | null;
 }
@@ -112,8 +110,6 @@ function readSyncState(
     };
   }
   const record = raw as Record<string, unknown>;
-  // `cloudSnapshot` was the pre-rebase field that conflated the server winner
-  // with the local working copy. Read it only as a compatibility seed.
   const legacySnapshot = parseSettings(record['cloudSnapshot']) ?? {};
   const serverSnapshot = parseSettings(record['serverSnapshot']) ?? legacySnapshot;
   const localSnapshot = parseSettings(record['localSnapshot']) ?? legacySnapshot;
@@ -252,8 +248,6 @@ export function createManagedCloudSettingsSyncCoordinator(
       const localCurrent = ports.settings.getProjection();
       const rebased = rebaseCloudSafeSettings(response.settings, localRequestBase, localCurrent);
 
-      // Record the surface-owned server baseline before replaying the exact
-      // fields edited while this request was in flight.
       apply(response.settings);
       const serverLocalProjection = ports.settings.getProjection();
       apply(rebased.settings);
@@ -293,9 +287,6 @@ export function createManagedCloudSettingsSyncCoordinator(
     if (!isCurrentContext(context)) return { localRequestBase: current };
 
     if (!response.applied) {
-      // Keep the pre-push cursor so the following pull can retrieve the server
-      // winner. Advancing to response.cursor here would make GET ?since=<same>
-      // return an empty document and silently preserve the stale local value.
       context.state.lastSyncedSnapshot = currentJson;
       persistSyncState();
       return { localRequestBase: current };
@@ -462,10 +453,6 @@ export function projectDesktopCloudSafeSettings(
       occupation: state.personalization.occupation,
       warmth: state.personalization.warmth * 20,
     },
-    // `locale` is the INTERFACE language only — it lands on i18n below. Mobile's
-    // spoken voice language is a separate preference under `speechLocale`
-    // (apps/mobile/services/cloudSettingsMapping.ts); never widen this key to
-    // mean both, or the two surfaces retune each other on every sync cycle.
     language: { locale: state.windowPreferences.language },
     capabilities: {
       memory: state.chatPreferences.memoryEnabled === true,
@@ -548,9 +535,6 @@ export function applyDesktopCloudSafeSettings(settings: CloudSafeSettings): void
         console.error('Failed to apply synced native memory policy:', error);
       });
     }
-    // The Zustand snapshot is already updated synchronously for coordinator
-    // rebasing. Persist the pulled account policy to native settings as well,
-    // so restart/offline behavior cannot fall back to an older local policy.
     void useSettingsStore
       .getState()
       .saveSettings()
@@ -573,11 +557,6 @@ function createSettingsOperationClient(operation: 'pull' | 'push'): ManagedCloud
   });
 }
 
-/**
- * Construct a fresh account-pinned transport for every pull/push operation.
- * Retries within that operation may resolve a rotated token for the same
- * account, but an account/session/mode transition fails before later egress.
- */
 export function createDesktopManagedCloudSettingsClient(): ManagedCloudSettingsClient {
   return {
     pull: (cursor, options) => createSettingsOperationClient('pull').pull(cursor, options),
@@ -585,7 +564,6 @@ export function createDesktopManagedCloudSettingsClient(): ManagedCloudSettingsC
   };
 }
 
-/** Bootstrap the Desktop adapter for authenticated Managed Cloud sessions. */
 export function initManagedCloudSettingsSync(): () => void {
   const coordinator = createManagedCloudSettingsSyncCoordinator({
     client: createDesktopManagedCloudSettingsClient(),

@@ -1,17 +1,5 @@
-/**
- * Voice API — TypeScript wrappers for all Rust voice commands.
- *
- * Covers: transcription, TTS, wake word, PTT, global PTT, Deepgram streaming,
- * barge-in detection, local Whisper/Piper model management, native speech recording.
- *
- * 47 Rust commands wired. All invoke() params use camelCase per Tauri IPC rules.
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// =============================================================================
-// Interfaces — mirror Rust return types with camelCase fields
-// =============================================================================
 
 export interface VoiceTranscription {
   text: string;
@@ -40,12 +28,6 @@ export interface VoiceCapabilities {
   localSttModel: string | null;
   localTtsAvailable: boolean;
   localTtsVoice: string | null;
-  /**
-   * Capability probe for system-wide (outside-the-app) dictation. Stays
-   * false until the release gates in docs/plans/desktop-system-dictation.md
-   * pass (DESKTOP-SYSTEM-DICTATION-UNWIRED-01); the settings UI must present
-   * the global control as unavailable while false.
-   */
   systemDictationAvailable: boolean;
 }
 
@@ -154,11 +136,6 @@ export interface DownloadProgress {
   percentage: number;
 }
 
-// =============================================================================
-// 1. Transcription Commands (3)
-// =============================================================================
-
-/** Transcribe an audio file on disk via the configured provider. */
 export async function voiceTranscribeFile(audioPath: string): Promise<VoiceTranscription> {
   try {
     return await invoke<VoiceTranscription>('voice_transcribe_file', { audioPath });
@@ -167,7 +144,6 @@ export async function voiceTranscribeFile(audioPath: string): Promise<VoiceTrans
   }
 }
 
-/** Transcribe an in-memory audio blob (sent as byte array). */
 export async function voiceTranscribeBlob(
   audioData: number[],
   format: string,
@@ -186,7 +162,6 @@ export async function voiceTranscribeBlob(
   }
 }
 
-/** Transcribe using local Whisper directly (bypasses provider selection). */
 export async function voiceTranscribeLocal(
   audioPath: string,
   language?: string,
@@ -201,11 +176,6 @@ export async function voiceTranscribeLocal(
   }
 }
 
-// =============================================================================
-// 2. Voice Configuration Commands (3)
-// =============================================================================
-
-/** Configure voice provider/model/language on the Rust backend. */
 export async function voiceConfigure(
   provider?: string,
   model?: string,
@@ -222,7 +192,6 @@ export async function voiceConfigure(
   }
 }
 
-/** Get current voice settings from backend. */
 export async function voiceGetSettings(): Promise<VoiceSettings> {
   try {
     return await invoke<VoiceSettings>('voice_get_settings');
@@ -231,7 +200,6 @@ export async function voiceGetSettings(): Promise<VoiceSettings> {
   }
 }
 
-/** Check if local Whisper binary is available on the system. */
 export async function voiceCheckLocalWhisper(): Promise<boolean> {
   try {
     return (await invoke<boolean>('voice_check_local_whisper')) ?? false;
@@ -240,11 +208,6 @@ export async function voiceCheckLocalWhisper(): Promise<boolean> {
   }
 }
 
-// =============================================================================
-// 3. Capabilities (1)
-// =============================================================================
-
-/** Get full voice capabilities (TTS, wake word, PTT, barge-in, local models). */
 export async function voiceGetCapabilities(): Promise<VoiceCapabilities> {
   try {
     return await invoke<VoiceCapabilities>('voice_get_capabilities');
@@ -253,11 +216,6 @@ export async function voiceGetCapabilities(): Promise<VoiceCapabilities> {
   }
 }
 
-// =============================================================================
-// 4. TTS Commands (7)
-// =============================================================================
-
-/** Speak text using the configured TTS provider. */
 export async function voiceTtsSpeak(text: string): Promise<void> {
   try {
     await invoke('voice_tts_speak', { text });
@@ -266,7 +224,6 @@ export async function voiceTtsSpeak(text: string): Promise<void> {
   }
 }
 
-/** Speak text with barge-in support (auto-interrupts if user speaks). */
 export async function voiceTtsSpeakWithBargeIn(text: string): Promise<void> {
   try {
     await invoke('voice_tts_speak_with_barge_in', { text });
@@ -275,7 +232,6 @@ export async function voiceTtsSpeakWithBargeIn(text: string): Promise<void> {
   }
 }
 
-/** Stop TTS playback. Returns true if something was stopped. */
 export async function voiceTtsStop(): Promise<boolean> {
   try {
     return (await invoke<boolean>('voice_tts_stop')) ?? false;
@@ -284,7 +240,6 @@ export async function voiceTtsStop(): Promise<boolean> {
   }
 }
 
-/** Check if TTS is currently playing. */
 export async function voiceTtsIsPlaying(): Promise<boolean> {
   try {
     return (await invoke<boolean>('voice_tts_is_playing')) ?? false;
@@ -293,7 +248,6 @@ export async function voiceTtsIsPlaying(): Promise<boolean> {
   }
 }
 
-/** List available TTS voices. */
 export async function voiceTtsListVoices(): Promise<TtsVoice[]> {
   try {
     return (await invoke<TtsVoice[]>('voice_tts_list_voices')) ?? [];
@@ -302,7 +256,6 @@ export async function voiceTtsListVoices(): Promise<TtsVoice[]> {
   }
 }
 
-/** Configure TTS provider and settings. */
 export async function voiceTtsConfigure(config: TtsConfig): Promise<void> {
   try {
     await invoke('voice_tts_configure', { config });
@@ -311,7 +264,6 @@ export async function voiceTtsConfigure(config: TtsConfig): Promise<void> {
   }
 }
 
-/** Speak text using local Piper TTS. Returns synthesized audio samples. */
 export async function voiceTtsSpeakLocal(
   text: string,
   rate?: number,
@@ -330,11 +282,6 @@ export async function voiceTtsSpeakLocal(
   }
 }
 
-// =============================================================================
-// 5. Wake Word Commands (4)
-// =============================================================================
-
-/** Enable wake word detection with optional config. */
 export async function voiceWakeEnable(config?: WakeWordConfig): Promise<void> {
   try {
     await invoke('voice_wake_enable', {
@@ -345,7 +292,6 @@ export async function voiceWakeEnable(config?: WakeWordConfig): Promise<void> {
   }
 }
 
-/** Disable wake word detection. */
 export async function voiceWakeDisable(): Promise<void> {
   try {
     await invoke('voice_wake_disable');
@@ -354,7 +300,6 @@ export async function voiceWakeDisable(): Promise<void> {
   }
 }
 
-/** Get wake word listening status. */
 export async function voiceWakeStatus(): Promise<boolean> {
   try {
     return (await invoke<boolean>('voice_wake_status')) ?? false;
@@ -363,7 +308,6 @@ export async function voiceWakeStatus(): Promise<boolean> {
   }
 }
 
-/** Configure wake word settings (phrase, sensitivity). */
 export async function voiceWakeConfigure(config: WakeWordConfig): Promise<void> {
   try {
     await invoke('voice_wake_configure', { config });
@@ -372,11 +316,6 @@ export async function voiceWakeConfigure(config: WakeWordConfig): Promise<void> 
   }
 }
 
-// =============================================================================
-// 6. Push-to-Talk Commands (4)
-// =============================================================================
-
-/** Configure push-to-talk settings. */
 export async function voicePttConfigure(config: PttConfig): Promise<void> {
   try {
     await invoke('voice_ptt_configure', { config });
@@ -385,7 +324,6 @@ export async function voicePttConfigure(config: PttConfig): Promise<void> {
   }
 }
 
-/** Get current PTT state (idle/recording). */
 export async function voicePttState(): Promise<string> {
   try {
     return (await invoke<string>('voice_ptt_state')) ?? 'idle';
@@ -394,7 +332,6 @@ export async function voicePttState(): Promise<string> {
   }
 }
 
-/** Simulate PTT key down (begin recording). */
 export async function voicePttKeyDown(): Promise<void> {
   try {
     await invoke('voice_ptt_key_down');
@@ -403,7 +340,6 @@ export async function voicePttKeyDown(): Promise<void> {
   }
 }
 
-/** Simulate PTT key up (end recording). Returns audio length or null. */
 export async function voicePttKeyUp(): Promise<number | null> {
   try {
     return (await invoke<number | null>('voice_ptt_key_up')) ?? null;
@@ -412,11 +348,6 @@ export async function voicePttKeyUp(): Promise<number | null> {
   }
 }
 
-// =============================================================================
-// 7. Global PTT Commands (3)
-// =============================================================================
-
-/** Start global fn-key PTT listener (rdev OS hook). */
 export async function voiceStartGlobalPtt(): Promise<void> {
   try {
     await invoke('voice_start_global_ptt');
@@ -425,7 +356,6 @@ export async function voiceStartGlobalPtt(): Promise<void> {
   }
 }
 
-/** Stop global PTT listener. */
 export async function voiceStopGlobalPtt(): Promise<void> {
   try {
     await invoke('voice_stop_global_ptt');
@@ -434,7 +364,6 @@ export async function voiceStopGlobalPtt(): Promise<void> {
   }
 }
 
-/** Inject text into the OS-focused input field via enigo. */
 export async function voiceInjectText(text: string): Promise<void> {
   try {
     await invoke('voice_inject_text', { text });
@@ -443,11 +372,6 @@ export async function voiceInjectText(text: string): Promise<void> {
   }
 }
 
-// =============================================================================
-// 8. Deepgram Streaming Commands (5)
-// =============================================================================
-
-/** Configure Deepgram streaming settings (API key, model, etc.). */
 export async function voiceDeepgramConfigure(config: DeepgramConfig): Promise<void> {
   try {
     await invoke('voice_deepgram_configure', { config });
@@ -456,7 +380,6 @@ export async function voiceDeepgramConfigure(config: DeepgramConfig): Promise<vo
   }
 }
 
-/** Start Deepgram streaming transcription. Transcripts arrive as Tauri events. */
 export async function voiceStartDeepgramStream(): Promise<void> {
   try {
     await invoke('voice_start_deepgram_stream');
@@ -465,7 +388,6 @@ export async function voiceStartDeepgramStream(): Promise<void> {
   }
 }
 
-/** Stop Deepgram streaming. Returns final stats. */
 export async function voiceStopDeepgramStream(): Promise<DeepgramStreamingStats | null> {
   try {
     return (await invoke<DeepgramStreamingStats | null>('voice_stop_deepgram_stream')) ?? null;
@@ -474,7 +396,6 @@ export async function voiceStopDeepgramStream(): Promise<DeepgramStreamingStats 
   }
 }
 
-/** Send audio data to active Deepgram stream. */
 export async function voiceDeepgramSendAudio(audioData: number[]): Promise<void> {
   try {
     await invoke('voice_deepgram_send_audio', { audioData });
@@ -483,7 +404,6 @@ export async function voiceDeepgramSendAudio(audioData: number[]): Promise<void>
   }
 }
 
-/** Get Deepgram streaming status. */
 export async function voiceDeepgramStatus(): Promise<DeepgramStreamStatus> {
   try {
     return await invoke<DeepgramStreamStatus>('voice_deepgram_status');
@@ -492,11 +412,6 @@ export async function voiceDeepgramStatus(): Promise<DeepgramStreamStatus> {
   }
 }
 
-// =============================================================================
-// 9. Audio Conversion Utility (1)
-// =============================================================================
-
-/** Convert f32 audio samples to PCM 16-bit bytes for Deepgram. */
 export async function voiceConvertAudioToPcm(samples: number[]): Promise<number[]> {
   try {
     return (await invoke<number[]>('voice_convert_audio_to_pcm', { samples })) ?? [];
@@ -505,11 +420,6 @@ export async function voiceConvertAudioToPcm(samples: number[]): Promise<number[
   }
 }
 
-// =============================================================================
-// 10. Barge-In Detection Commands (6)
-// =============================================================================
-
-/** Enable or disable barge-in detection globally. Returns new enabled state. */
 export async function voiceEnableBargeIn(enabled: boolean): Promise<boolean> {
   try {
     return (await invoke<boolean>('voice_enable_barge_in', { enabled })) ?? false;
@@ -518,7 +428,6 @@ export async function voiceEnableBargeIn(enabled: boolean): Promise<boolean> {
   }
 }
 
-/** Set barge-in sensitivity (0.0 - 1.0). Returns clamped value. */
 export async function voiceSetBargeInSensitivity(sensitivity: number): Promise<number> {
   try {
     return (await invoke<number>('voice_set_barge_in_sensitivity', { sensitivity })) ?? 0.5;
@@ -527,7 +436,6 @@ export async function voiceSetBargeInSensitivity(sensitivity: number): Promise<n
   }
 }
 
-/** Get barge-in detection status (enabled, monitoring, stats). */
 export async function voiceGetBargeInStatus(): Promise<BargeInStatus> {
   try {
     return await invoke<BargeInStatus>('voice_get_barge_in_status');
@@ -536,7 +444,6 @@ export async function voiceGetBargeInStatus(): Promise<BargeInStatus> {
   }
 }
 
-/** Configure barge-in parameters (sensitivity, min speech ms, threshold). */
 export async function voiceConfigureBargeIn(
   sensitivity?: number,
   minSpeechMs?: number,
@@ -553,7 +460,6 @@ export async function voiceConfigureBargeIn(
   }
 }
 
-/** Start barge-in monitoring for current TTS playback. */
 export async function voiceStartBargeInMonitoring(): Promise<boolean> {
   try {
     return (await invoke<boolean>('voice_start_barge_in_monitoring')) ?? false;
@@ -562,7 +468,6 @@ export async function voiceStartBargeInMonitoring(): Promise<boolean> {
   }
 }
 
-/** Stop barge-in monitoring. */
 export async function voiceStopBargeInMonitoring(): Promise<boolean> {
   try {
     return (await invoke<boolean>('voice_stop_barge_in_monitoring')) ?? false;
@@ -571,11 +476,6 @@ export async function voiceStopBargeInMonitoring(): Promise<boolean> {
   }
 }
 
-// =============================================================================
-// 11. Native Speech Recording — AGI Dictation (2)
-// =============================================================================
-
-/** Start native audio recording via cpal (OS-level microphone capture). */
 export async function speechStartRecording(
   provider: string = 'cloud',
   device?: string | null,
@@ -587,7 +487,6 @@ export async function speechStartRecording(
   }
 }
 
-/** Cancel native recording, discarding captured audio without transcription. */
 export async function speechCancelRecording(): Promise<void> {
   try {
     await invoke('speech_cancel_recording');
@@ -603,7 +502,6 @@ export interface DictationInputDevice {
   channels: number | null;
 }
 
-/** List audio input devices for the dictation microphone picker. */
 export async function dictationListInputDevices(): Promise<DictationInputDevice[]> {
   try {
     return await invoke<DictationInputDevice[]>('dictation_list_input_devices');
@@ -612,7 +510,6 @@ export async function dictationListInputDevices(): Promise<DictationInputDevice[
   }
 }
 
-/** Stop native recording and return transcription result. */
 export async function speechStopAndTranscribe(
   provider: string = 'cloud',
   language: string = 'en',
@@ -627,11 +524,6 @@ export async function speechStopAndTranscribe(
   }
 }
 
-// =============================================================================
-// 12. Local Whisper STT Model Management (4)
-// =============================================================================
-
-/** Download a Whisper model for local STT. Emits voice:whisper_download_progress events. */
 export async function voiceDownloadWhisperModel(modelSize: string): Promise<string> {
   try {
     return (await invoke<string>('voice_download_whisper_model', { modelSize })) ?? '';
@@ -640,7 +532,6 @@ export async function voiceDownloadWhisperModel(modelSize: string): Promise<stri
   }
 }
 
-/** List available Whisper models (downloaded and available). */
 export async function voiceListWhisperModels(): Promise<WhisperModelInfo[]> {
   try {
     return (await invoke<WhisperModelInfo[]>('voice_list_whisper_models')) ?? [];
@@ -649,7 +540,6 @@ export async function voiceListWhisperModels(): Promise<WhisperModelInfo[]> {
   }
 }
 
-/** Set the active Whisper model size. */
 export async function voiceSetWhisperModel(modelSize: string): Promise<void> {
   try {
     await invoke('voice_set_whisper_model', { modelSize });
@@ -658,7 +548,6 @@ export async function voiceSetWhisperModel(modelSize: string): Promise<void> {
   }
 }
 
-/** Delete a downloaded Whisper model. */
 export async function voiceDeleteWhisperModel(modelSize: string): Promise<void> {
   try {
     await invoke('voice_delete_whisper_model', { modelSize });
@@ -667,11 +556,6 @@ export async function voiceDeleteWhisperModel(modelSize: string): Promise<void> 
   }
 }
 
-// =============================================================================
-// 13. Local Piper TTS Model Management (5)
-// =============================================================================
-
-/** Download a Piper voice. Emits voice:piper_download_progress events. */
 export async function voiceDownloadPiperVoice(voiceId: string): Promise<string> {
   try {
     return (await invoke<string>('voice_download_piper_voice', { voiceId })) ?? '';
@@ -680,7 +564,6 @@ export async function voiceDownloadPiperVoice(voiceId: string): Promise<string> 
   }
 }
 
-/** List available Piper voices (downloaded and available). */
 export async function voiceListPiperVoices(): Promise<PiperVoiceInfo[]> {
   try {
     return (await invoke<PiperVoiceInfo[]>('voice_list_piper_voices')) ?? [];
@@ -689,7 +572,6 @@ export async function voiceListPiperVoices(): Promise<PiperVoiceInfo[]> {
   }
 }
 
-/** Set the active Piper voice. */
 export async function voiceSetPiperVoice(voiceId: string): Promise<void> {
   try {
     await invoke('voice_set_piper_voice', { voiceId });
@@ -698,7 +580,6 @@ export async function voiceSetPiperVoice(voiceId: string): Promise<void> {
   }
 }
 
-/** Delete a downloaded Piper voice. */
 export async function voiceDeletePiperVoice(voiceId: string): Promise<void> {
   try {
     await invoke('voice_delete_piper_voice', { voiceId });
@@ -707,7 +588,6 @@ export async function voiceDeletePiperVoice(voiceId: string): Promise<void> {
   }
 }
 
-/** Download the Piper binary for the current platform. */
 export async function voiceDownloadPiperBinary(): Promise<string> {
   try {
     return (await invoke<string>('voice_download_piper_binary')) ?? '';
@@ -716,11 +596,6 @@ export async function voiceDownloadPiperBinary(): Promise<string> {
   }
 }
 
-// =============================================================================
-// 14. Piper Binary Check (1)
-// =============================================================================
-
-/** Check if the Piper binary is available on the system. */
 export async function voiceCheckPiperBinary(): Promise<boolean> {
   try {
     return (await invoke<boolean>('voice_check_piper_binary')) ?? false;
@@ -729,11 +604,6 @@ export async function voiceCheckPiperBinary(): Promise<boolean> {
   }
 }
 
-// =============================================================================
-// 15. Combined Local Models (1)
-// =============================================================================
-
-/** List all local voice models (Whisper + Piper) with download status. */
 export async function voiceListLocalModels(): Promise<LocalModelsInfo> {
   try {
     return await invoke<LocalModelsInfo>('voice_list_local_models');
@@ -742,21 +612,14 @@ export async function voiceListLocalModels(): Promise<LocalModelsInfo> {
   }
 }
 
-// =============================================================================
-// Convenience: VoiceClient class grouping all commands
-// =============================================================================
-
 export const VoiceClient = {
-  // Transcription
   transcribeFile: voiceTranscribeFile,
   transcribeBlob: voiceTranscribeBlob,
   transcribeLocal: voiceTranscribeLocal,
-  // Configuration
   configure: voiceConfigure,
   getSettings: voiceGetSettings,
   checkLocalWhisper: voiceCheckLocalWhisper,
   getCapabilities: voiceGetCapabilities,
-  // TTS
   ttsSpeak: voiceTtsSpeak,
   ttsSpeakWithBargeIn: voiceTtsSpeakWithBargeIn,
   ttsStop: voiceTtsStop,
@@ -764,50 +627,40 @@ export const VoiceClient = {
   ttsListVoices: voiceTtsListVoices,
   ttsConfigure: voiceTtsConfigure,
   ttsSpeakLocal: voiceTtsSpeakLocal,
-  // Wake word
   wakeEnable: voiceWakeEnable,
   wakeDisable: voiceWakeDisable,
   wakeStatus: voiceWakeStatus,
   wakeConfigure: voiceWakeConfigure,
-  // PTT
   pttConfigure: voicePttConfigure,
   pttState: voicePttState,
   pttKeyDown: voicePttKeyDown,
   pttKeyUp: voicePttKeyUp,
-  // Global PTT
   startGlobalPtt: voiceStartGlobalPtt,
   stopGlobalPtt: voiceStopGlobalPtt,
   injectText: voiceInjectText,
-  // Deepgram
   deepgramConfigure: voiceDeepgramConfigure,
   startDeepgramStream: voiceStartDeepgramStream,
   stopDeepgramStream: voiceStopDeepgramStream,
   deepgramSendAudio: voiceDeepgramSendAudio,
   deepgramStatus: voiceDeepgramStatus,
-  // Audio conversion
   convertAudioToPcm: voiceConvertAudioToPcm,
-  // Barge-in
   enableBargeIn: voiceEnableBargeIn,
   setBargeInSensitivity: voiceSetBargeInSensitivity,
   getBargeInStatus: voiceGetBargeInStatus,
   configureBargeIn: voiceConfigureBargeIn,
   startBargeInMonitoring: voiceStartBargeInMonitoring,
   stopBargeInMonitoring: voiceStopBargeInMonitoring,
-  // Native recording
   startRecording: speechStartRecording,
   stopAndTranscribe: speechStopAndTranscribe,
-  // Whisper models
   downloadWhisperModel: voiceDownloadWhisperModel,
   listWhisperModels: voiceListWhisperModels,
   setWhisperModel: voiceSetWhisperModel,
   deleteWhisperModel: voiceDeleteWhisperModel,
-  // Piper models
   downloadPiperVoice: voiceDownloadPiperVoice,
   listPiperVoices: voiceListPiperVoices,
   setPiperVoice: voiceSetPiperVoice,
   deletePiperVoice: voiceDeletePiperVoice,
   downloadPiperBinary: voiceDownloadPiperBinary,
   checkPiperBinary: voiceCheckPiperBinary,
-  // Combined
   listLocalModels: voiceListLocalModels,
 } as const;

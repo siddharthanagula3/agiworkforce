@@ -70,9 +70,6 @@ vi.mock('../../../stores/unifiedChatStore', () => ({
 vi.mock('../../../stores/chat/chatStore', () => ({
   useChatStore: (selector?: (state: typeof mockChatState) => unknown) =>
     selector ? selector(mockChatState) : mockChatState,
-  // RelevantChatsList (round 19) reads via these selectors. Return safe
-  // empty values so the panel renders without breaking ChatStream's
-  // existing transcript assertions.
   selectConversations: () => [] as unknown[],
   selectActiveConversationId: () => null,
 }));

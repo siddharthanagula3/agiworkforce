@@ -25,8 +25,6 @@ async function handleDeveloperLogout(request: NextRequest): Promise<NextResponse
   const verified = token ? verifyDeveloperTokenSignature(token) : null;
   if (!verified) throw createError.unauthorized();
 
-  // Credential verification must happen before the CSRF helper is allowed to
-  // treat a Bearer request as safe.
   const csrfError = await requireCsrfToken(request, verified.userId);
   if (csrfError) return csrfError as NextResponse;
 
@@ -37,8 +35,6 @@ async function handleDeveloperLogout(request: NextRequest): Promise<NextResponse
       : Promise.resolve(false),
   ]);
 
-  // Audit: developer/desktop sign-out. The actor comes from the verified token
-  // signature; the token itself is never recorded.
   await recordAuditEvent({
     userId: verified.userId,
     eventType: 'logout',

@@ -139,10 +139,6 @@ describe('AGI Desktop local model management', () => {
       },
     );
 
-    // "Save Changes" only enables when the form is dirty. On a fresh profile
-    // the default Ollama URL already equals the value this spec writes, so
-    // there may be nothing to save — close through Escape in that case (any
-    // close path routes through the same requestClose in SettingsPanel).
     const saveSettings = await $('button=Save Changes');
     if ((await saveSettings.isExisting()) && (await saveSettings.isEnabled())) {
       await clickElement(saveSettings);

@@ -74,7 +74,6 @@ export class WebSocketClient {
 
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        // Notify error handlers about the connection error
         const errorHandlers = this.eventHandlers.get('error');
         if (errorHandlers) {
           errorHandlers.forEach((handler) => {
@@ -127,7 +126,6 @@ export class WebSocketClient {
       return true;
     } catch (error) {
       console.error('Failed to send WebSocket event:', error);
-      // Notify error handlers about the send failure
       const errorHandlers = this.eventHandlers.get('error');
       if (errorHandlers) {
         errorHandlers.forEach((handler) => {
@@ -187,7 +185,6 @@ export class WebSocketClient {
     if (this.reconnectAttempts < this.maxReconnectAttempts && this.userId) {
       this.reconnectAttempts++;
 
-      // Use exponential backoff with jitter to prevent thundering herd
       const delay = calculateDelay(this.reconnectAttempts, {
         initialDelayMs: 1000,
         maxDelayMs: 30000,
@@ -209,7 +206,6 @@ export class WebSocketClient {
       }, delay);
     } else {
       console.error('Max reconnection attempts reached');
-      // Notify subscribers about connection failure
       const errorHandlers = this.eventHandlers.get('error');
       if (errorHandlers) {
         errorHandlers.forEach((handler) => {

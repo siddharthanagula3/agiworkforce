@@ -1,14 +1,3 @@
-/**
- * Save-time and replay-time validation of shortcut action plans
- * (C-03 audit 2026-05-19).
- *
- * Attack: an allowlisted origin saves a shortcut whose actions[] contains
- * an unknown `type` ('exfil', 'rm', etc.). Today's content-script switch
- * has a default-case that returns "Unsupported action" per-action — but
- * the rest of the plan still runs. We now reject the plan wholesale at
- * save time, and re-validate at replay/execute time so pre-validator
- * shortcuts (older installs) also get rejected.
- */
 
 import { describe, expect, it } from 'vitest';
 import { validateShortcutActions } from '../src/background/policy';

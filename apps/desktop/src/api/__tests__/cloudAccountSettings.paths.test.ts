@@ -1,15 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * MATCH-005 — the account settings route is owned by the cloud contract.
- *
- * Desktop retyped `/api/settings/preferences` in `cloudAccountSettings.ts`
- * while its sibling `/api/settings/sync` already had
- * `MANAGED_CLOUD_SETTINGS_SYNC_PATH`. `cloudAccountSettings.test.ts` asserts the
- * literal URL, which a retyped string satisfies just as well as a real
- * reference, so it cannot catch drift. Relocating the contract can: a literal
- * keeps the old URL and splits Desktop from Web and Mobile on a route move.
- */
 const { RELOCATED } = vi.hoisted(() => ({ RELOCATED: '/api/relocated-preferences' }));
 
 const mocks = vi.hoisted(() => ({

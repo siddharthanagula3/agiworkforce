@@ -125,7 +125,6 @@ function canonicalJson(value: unknown): string {
     .join(',')}}`;
 }
 
-/** Stable receipt hash independent of object insertion order. */
 export function fingerprintCloudAgentOperation(value: unknown): string {
   return createHash('sha256').update(canonicalJson(value)).digest('hex');
 }
@@ -370,10 +369,6 @@ const ProviderUsageReceiptSchema = z
   })
   .passthrough();
 
-/**
- * Rebuild billable usage from completed provider receipts instead of process
- * memory. This remains correct after a step crash, retry, or deployment.
- */
 export async function getCloudAgentExecutionUsage(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; billingIdempotencyKey: string },

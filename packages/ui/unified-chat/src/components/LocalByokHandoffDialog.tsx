@@ -1,28 +1,3 @@
-// packages/ui/unified-chat/src/components/LocalByokHandoffDialog.tsx
-//
-// Canonical Local-to-BYOK handoff ceremony dialog, shared by web and desktop.
-// Structural consolidation of apps/web/features/chat/components/dialogs/
-// LocalByokHandoffDialog.tsx (candidate/preview state fully controlled by the
-// caller) and apps/desktop/src/features/chat/LocalByokHandoffDialog.tsx (owns
-// its own data-fetching, no context selection). This component is
-// presentational: it owns no transport of its own — building the redacted
-// preview and confirming the fork are both the caller's responsibility,
-// injected via props/callbacks.
-//
-// Ceremony semantics (founder decision 2026-07-08, refines
-// docs/decisions/CURRENT_DECISIONS.md #6): Local mode is one UI bucket
-// (on-device + BYOK), but the FIRST send of an existing on-device chat to an
-// external BYOK provider must show this full ceremony — context, secret
-// scan, payload preview, visible provider label, explicit consent. Chats
-// started on a BYOK model need no ceremony. This component only renders the
-// ceremony UI; WHEN to trigger it is entirely the caller's decision (see
-// each surface's wrapper for its trigger logic).
-//
-// `candidates` is optional: pass it (with `selectedContextIds` +
-// `onToggleContext`) to render the context-selection sidebar (web's current
-// flow, where the user picks which messages to include). Omit it for
-// surfaces that auto-include context without letting the user pick
-// (desktop's current flow: last 20 messages, no selection UI).
 
 import type { HandoffTarget, LocalToByokHandoffPreview } from '@agiworkforce/utils';
 import type { HandoffContextItem } from '@agiworkforce/types';
@@ -42,7 +17,6 @@ import {
 import { cn } from '../lib/utils';
 
 export interface HandoffContextCandidate extends HandoffContextItem {
-  /** Required items (e.g. the outgoing draft message) render as non-deselectable. */
   required?: boolean;
 }
 
@@ -50,36 +24,18 @@ export interface LocalByokHandoffDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preview: LocalToByokHandoffPreview | null;
-  /** True while the redacted preview is being built. */
   isBuilding: boolean;
-  /** True while the confirm action's own async work is in flight. Defaults to false. */
   isConfirming?: boolean;
   error?: string | null;
-  /** Non-blocking disclosure about context that was omitted or truncated. */
   notice?: string | null;
-  /** Selected payload items whose original bytes could not be secret-scanned. */
   unscannedContextCount?: number;
   onConfirm: () => void | Promise<void>;
-  /**
-   * Context items the user can include/exclude. When omitted, the
-   * context-selection sidebar is not rendered and the dialog assumes the
-   * caller already selected context automatically before building `preview`.
-   */
   candidates?: HandoffContextCandidate[];
   selectedContextIds?: string[];
   onToggleContext?: (contextId: string) => void;
-  /** Overrides the default confirm-button label (defaults to "Create {byok} fork" / "Creating fork..."). */
   confirmLabel?: string;
   confirmingLabel?: string;
-  /** Concrete destination provider shown during consent (for example, OpenAI). */
   targetProviderLabel?: string;
-  /**
-   * Where the context is going. Defaults to `'byok'`, which is what this
-   * ceremony was originally built for. Managed Cloud reuses the identical
-   * flow — the same scan, preview, hash and consent — so the only thing that
-   * changes is the destination this dialog names. Mislabelling it would show
-   * the user a boundary they are not actually crossing.
-   */
   target?: HandoffTarget;
 }
 

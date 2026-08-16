@@ -1,12 +1,3 @@
-/**
- * A confirmation cannot be retargeted.
- *
- * This is the test for the shape of the confirm API: the request body carries
- * `{ proposalId, confirmationToken }` and nothing else, and the server reads the
- * action and its parameters back out of the stored row. So even a caller that
- * tries to smuggle an `actionId` and `params` alongside the token gets the
- * effect that was actually proposed.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -67,8 +58,6 @@ describe('support actions — a proposal cannot be swapped for a different effec
       conversationRef: null,
     });
 
-    // The caller's only inputs are the id and the token. There is nowhere to put
-    // a different action — this call site IS the whole confirm surface.
     const { actionId, result } = await confirmSupportAction({
       userId: USER,
       proposalId: proposal.id,
@@ -95,9 +84,6 @@ describe('support actions — a proposal cannot be swapped for a different effec
       conversationRef: null,
     });
 
-    // Simulate the params being altered out from under the proposal (a DB-side
-    // edit, a compromised row). The hash recorded at propose time no longer
-    // matches, so execution must refuse rather than act on the new target.
     const row = mocks.db!.proposals.find((p) => p.id === proposal.id)!;
     row.params = { keyId: '55555555-5555-4555-8555-555555555555' };
     expect(hashActionParams(row.params)).not.toBe(row.params_hash);
@@ -112,8 +98,6 @@ describe('support actions — a proposal cannot be swapped for a different effec
     ).rejects.toMatchObject({ code: 'SUPPORT_ACTION_INVALID_PARAMS' });
 
     expect(mocks.db!.callsMatching(/update api_keys set revoked_at/iu)).toHaveLength(0);
-    // The token is spent even though execution refused — a denied claim is
-    // never rolled back into a reusable grant.
     expect(row.consumed_at).not.toBeNull();
     expect(row.outcome).toBe('denied');
   });

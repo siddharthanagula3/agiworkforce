@@ -10,11 +10,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useThemeColors } from '@/src/ui/theme';
 
-/**
- * Skeleton placeholder for the message list while a conversation's history is
- * loading. Replaces the bare ActivityIndicator with a content-shaped shimmer so
- * the layout doesn't jump when messages arrive. Pure presentational; no data.
- */
 function SkeletonRow({ align }: { align: 'left' | 'right' }) {
   const colors = useThemeColors();
   const pulse = useSharedValue(0.4);

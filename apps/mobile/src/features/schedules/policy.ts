@@ -12,20 +12,8 @@ export type MobileSupportedScheduleRecurrence =
 
 const MOBILE_SUPPORTED_RECURRENCE_SET = new Set<string>(MOBILE_SUPPORTED_SCHEDULE_RECURRENCES);
 
-/**
- * Cadence of the Cloud sweep that actually runs due schedules — the
- * `/api/cron/run-schedules` entry in the repo root `vercel.json`. Mobile cannot
- * import the web's `SWEEP_INTERVAL_MS`, so `__tests__/schedule-policy.test.ts`
- * pins this constant to that cron instead; if the deployed sweep changes speed
- * the test fails until this follows it.
- */
 export const CLOUD_SCHEDULE_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-/**
- * The sweep cadence in words, derived from the constant so the user-facing copy
- * cannot outlive it. These strings were hardcoded as "once daily" and kept
- * claiming a daily window long after the deployed cron moved to hourly.
- */
 export function describeCloudScheduleSweep(): { cadence: string; window: string } {
   const hours = CLOUD_SCHEDULE_SWEEP_INTERVAL_MS / (60 * 60 * 1000);
   if (hours >= 24) {
@@ -55,11 +43,6 @@ export function assertMobileScheduleRecurrenceSupported(recurrence: unknown): vo
   }
 }
 
-/**
- * Quick Schedule deliberately refuses sub-daily phrases instead of falling
- * through to its generic “has a time” daily parser and silently changing the
- * requested cadence.
- */
 export function requestsSubDailySchedule(text: string): boolean {
   const normalized = text.toLowerCase().trim();
   return (

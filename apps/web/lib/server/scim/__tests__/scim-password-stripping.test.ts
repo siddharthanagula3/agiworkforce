@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stripScimSensitiveAttributes } from '../scim-provisioning-service';
 
-/**
- * Regression guard for plaintext credential persistence.
- *
- * The SCIM provisioning service persists the IdP's request body to
- * `scim_provisioned_users.raw_attributes`. RFC 7643 §4.1.1 makes `password` a
- * writable User attribute and real IdPs push it, so persisting the body
- * verbatim wrote plaintext credentials to the database and into every backup.
- */
 describe('stripScimSensitiveAttributes', () => {
   it('removes a top-level password', () => {
     const out = stripScimSensitiveAttributes({
@@ -33,8 +25,6 @@ describe('stripScimSensitiveAttributes', () => {
   });
 
   it('strips passwords nested inside schema extensions', () => {
-    // IdPs put attributes inside extension objects; a top-level-only filter
-    // would leave the credential behind.
     const out = stripScimSensitiveAttributes({
       userName: 'ada@example.com',
       'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User': {

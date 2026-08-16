@@ -12,25 +12,6 @@ vi.mock('../../lib/tauri-mock', () => ({
 import { accountApi } from '../accountApi';
 import { PROFILE_FETCH_TIMEOUT_MS } from '../../constants/timeouts';
 
-/**
- * Reachable path under test:
- *   App.tsx:2078 `initializeAuthOrchestrator()`
- *     -> stores/authOrchestrator.ts `processAuthStateChange`
- *     -> `fetchCreditsWithCache`
- *     -> `accountApi.fetchUserProfile` (the only caller in the app)
- *
- * That await sits between STEP 3 and STEP 4 of the auth-change handler, so the
- * deadline below is how long the unified auth store — plan tier, credits,
- * billing surfaces — stays stale when `fetch_user_profile` hangs.
- *
- * `accountApi.ts` used to declare its own private `DEFAULT_TIMEOUT_MS = 30_000`
- * while `constants/timeouts.ts` declared `PROFILE_FETCH_TIMEOUT_MS = 15_000`
- * for exactly this operation and nothing imported it. These assertions are
- * written against the canonical export rather than a number, so re-introducing
- * a private copy that drifts from the policy fails here.
- */
-
-/** A promise that never settles, standing in for a hung Rust command. */
 function hang(): Promise<never> {
   return new Promise<never>(() => {});
 }

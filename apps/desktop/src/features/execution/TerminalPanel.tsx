@@ -78,7 +78,6 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
     terminal.open(terminalRef.current);
     fitAddon.fit();
 
-    // Load WebGL addon for GPU acceleration (with fallback)
     try {
       const webglAddon = new WebglAddon();
       terminal.loadAddon(webglAddon);
@@ -115,7 +114,6 @@ export function TerminalPanel({ className }: TerminalPanelProps) {
 
     terminal.clear();
 
-    // Strip ANSI escape sequences from untrusted content before writing to xterm
     // eslint-disable-next-line no-control-regex
     const ansiPattern = /\x1b\[[0-9;]*[a-zA-Z]/g;
     const stripAnsi = (text: string) => text.replace(ansiPattern, '');

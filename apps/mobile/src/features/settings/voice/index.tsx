@@ -103,7 +103,6 @@ export default function VoiceSettingsScreen() {
   const colors = useThemeColors();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
-  // Device-global voice settings (same across modes)
   const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
   const setVoiceEnabled = useSettingsStore((s) => s.setVoiceEnabled);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
@@ -113,7 +112,6 @@ export default function VoiceSettingsScreen() {
   const speechPitch = useSettingsStore((s) => s.speechPitch);
   const setSpeechPitch = useSettingsStore((s) => s.setSpeechPitch);
 
-  // Mode-specific: autoListen is a cloud-synced preference
   const localAutoListenEnabled = useLocalSettingsStore((s) => s.autoListenEnabled);
   const localSetAutoListenEnabled = useLocalSettingsStore((s) => s.setAutoListenEnabled);
   const cloudAutoListenEnabled = useCloudSettingsStore((s) => s.autoListenEnabled);

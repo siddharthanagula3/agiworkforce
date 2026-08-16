@@ -1,28 +1,13 @@
-/**
- * E2E Smoke Tests — Agentic Chat Pipeline
- *
- * Covers the core stores that power the agentic chat experience:
- * - ChatStore: conversation lifecycle, message CRUD, tool timeline, agentic loop
- * - ToolStore: tool executions, approvals, streaming, action log, trusted workflows
- * - SettingsStore: LLM config, chat preferences, execution preferences, features
- *
- * All Tauri invoke calls are mocked via the global test setup (src/test/setup.ts).
- */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { enableMapSet } from 'immer';
 
-// Enable Immer's MapSet plugin (required by toolStore which uses Map for activeToolStreams)
 enableMapSet();
 
 import { useChatStore } from '../stores/chat/chatStore';
 import { useToolStore } from '../stores/chat/toolStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAppModeStore } from '../stores/appModeStore';
-
-// ---------------------------------------------------------------------------
-// ChatStore smoke tests
-// ---------------------------------------------------------------------------
 
 describe('ChatStore — conversation lifecycle', () => {
   beforeEach(() => {
@@ -52,7 +37,6 @@ describe('ChatStore — conversation lifecycle', () => {
     expect(state.messages[0]?.id).toBe(msgId);
     expect(state.messages[0]?.role).toBe('user');
 
-    // Title should be auto-generated from first user message (not "New chat")
     const convo = state.conversations.find((c) => c.id === convoId);
     expect(convo?.title).not.toBe('New chat');
     expect(convo?.title).toContain('Help me debug');
@@ -77,7 +61,6 @@ describe('ChatStore — conversation lifecycle', () => {
     useChatStore.getState().createConversation('Chat 2');
     useChatStore.getState().addMessage({ role: 'user', content: 'Second chat' });
 
-    // Switch back to first conversation
     useChatStore.getState().selectConversation(id1);
     const state = useChatStore.getState();
 
@@ -185,10 +168,6 @@ describe('ChatStore — tool timeline and agentic loop', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// ToolStore smoke tests
-// ---------------------------------------------------------------------------
-
 describe('ToolStore — tool executions and approvals', () => {
   beforeEach(() => {
     useToolStore.getState().resetOnLogout();
@@ -211,7 +190,6 @@ describe('ToolStore — tool executions and approvals', () => {
   });
 
   it('manages approval requests — add, approve, reject', () => {
-    // Add an approval request
     useToolStore.getState().addApprovalRequest({
       id: 'approval-1',
       type: 'terminal_command',
@@ -223,11 +201,9 @@ describe('ToolStore — tool executions and approvals', () => {
     expect(useToolStore.getState().pendingApprovals).toHaveLength(1);
     expect(useToolStore.getState().pendingApprovals[0]?.status).toBe('pending');
 
-    // Approve it
     useToolStore.getState().approveOperation('approval-1');
     expect(useToolStore.getState().pendingApprovals).toHaveLength(0);
 
-    // Add another and reject it
     useToolStore.getState().addApprovalRequest({
       id: 'approval-2',
       type: 'file_delete',
@@ -269,7 +245,6 @@ describe('ToolStore — tool executions and approvals', () => {
     expect(useToolStore.getState().isActionTrusted('wf-hash-1', 'unknown-sig')).toBe(false);
     expect(useToolStore.getState().isActionTrusted(undefined, 'action-sig-A')).toBe(false);
 
-    // Record a new action signature
     useToolStore.getState().recordTrustedAction('wf-hash-1', 'action-sig-B');
     expect(useToolStore.getState().isActionTrusted('wf-hash-1', 'action-sig-B')).toBe(true);
   });
@@ -299,10 +274,6 @@ describe('ToolStore — tool executions and approvals', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// SettingsStore smoke tests
-// ---------------------------------------------------------------------------
-
 describe('SettingsStore — configuration persistence', () => {
   it('has sensible defaults for LLM config', () => {
     const state = useSettingsStore.getState();
@@ -319,7 +290,6 @@ describe('SettingsStore — configuration persistence', () => {
     expect(config.temperature).toBe(0.3);
     expect(config.maxTokens).toBe(8192);
 
-    // Reset
     useSettingsStore.getState().setTemperature(0.7);
     useSettingsStore.getState().setMaxTokens(4096);
   });
@@ -329,7 +299,6 @@ describe('SettingsStore — configuration persistence', () => {
     useSettingsStore.getState().setCompactMode(!original);
     expect(useSettingsStore.getState().chatPreferences.compactMode).toBe(!original);
 
-    // Reset
     useSettingsStore.getState().setCompactMode(original);
   });
 
@@ -352,7 +321,6 @@ describe('SettingsStore — configuration persistence', () => {
     useSettingsStore.getState().removeAllowedDirectory('/tmp/sandbox');
     expect(useSettingsStore.getState().allowedDirectories).toEqual(['/home/user/projects']);
 
-    // Cleanup
     useSettingsStore.getState().setAllowedDirectories([]);
   });
 });

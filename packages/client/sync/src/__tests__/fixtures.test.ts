@@ -1,14 +1,3 @@
-/**
- * Golden-fixture replay (suites a/b/c/d — see AGENTS notes in each __fixtures__
- * file). This is the TS side of the cross-language replay: the SAME JSON files
- * under __fixtures__/ are replayed against Rust's native apply fns inside
- * apps/desktop/src-tauri/src/data/cloud_sync.rs's #[cfg(test)] fixture module.
- *
- * Suite (a) — canonical pull-page schema validity — is primarily covered by
- * @agiworkforce/cloud-contracts' sync suite; this file additionally proves
- * every delta embedded in pull-apply.json's `steps` is itself schema-valid
- * (the same JSON drives both the schema check and the apply-outcome check).
- */
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import cursorFixtures from '../__fixtures__/cursor-compare.json';
@@ -33,8 +22,6 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { createInMemoryConversationPort, createInMemoryMessagePort } from './test-ports';
 
-// ── Suite (d): bigint cursor compare ────────────────────────────────────────
-
 describe('fixtures: cursor-compare.json', () => {
   it.each(cursorFixtures.bigintGreaterCases)('bigintGreater — $name', (c) => {
     expect(bigintGreater(c.a, c.b)).toBe(c.expected);
@@ -48,12 +35,6 @@ describe('fixtures: cursor-compare.json', () => {
     expect(selectNextCursor(c.current, c.responseCursor)).toBe(c.expected);
   });
 });
-
-// ── Suite (c): push-body camelCase mapping, pinned against a PushBodySchema mirror ──
-//
-// Mirrors apps/web/app/api/chat/sync/route.ts:128-168 (read-only reference —
-// that file is owned by another Wave 4 lane). Update this mirror if that
-// schema changes; route.contract.test.ts is the server-side enforcement anchor.
 
 const PushConversationSchemaMirror = z.object({
   id: z.string(),
@@ -91,8 +72,6 @@ describe('fixtures: push-body.json', () => {
     expect(() => PushMessageSchemaMirror.parse(item)).not.toThrow();
   });
 });
-
-// ── Suite (b): pull-apply.json — replayed page-by-page via the ports ───────
 
 interface FixtureConversationRecord {
   id: string;
@@ -175,12 +154,6 @@ describe('fixtures: pull-apply.json (TS apply outcome)', () => {
       wireToCloudArtifact(a as Parameters<typeof wireToCloudArtifact>[0]),
     );
 
-    // Orphan-message divergence: with this port, a message pulled ahead of its
-    // parent conversation is visible immediately (no FK, so nothing to buffer)
-    // — check that right after step 1 alone, BEFORE the parent conversation is
-    // applied in step 2. This is the TS side of the documented divergence from
-    // Rust's buffer-until-parent-arrives behavior (see the fixture's
-    // divergenceNote and the Rust fixture-replay module).
     if (c.name === 'orphan_message_then_parent_conversation_arrives') {
       applyMessageDeltas(msgPort, c.steps[0]!.messages as never);
       expect(msgPort.getMessages('c-orphan').map((m) => m.id)).toEqual(['m1']);

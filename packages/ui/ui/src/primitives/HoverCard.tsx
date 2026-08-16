@@ -8,18 +8,12 @@ const HoverCard = HoverCardPrimitive.Root;
 
 const HoverCardTrigger = HoverCardPrimitive.Trigger;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface HoverCardContentProps extends React.ComponentPropsWithoutRef<
   typeof HoverCardPrimitive.Content
 > {
   ref?: React.Ref<React.ElementRef<typeof HoverCardPrimitive.Content>>;
 }
 
-// Stacking: the portalled surface sits on `--z-popover` (350), above `--z-modal`
-// (300), so a menu opened from inside a Dialog is not painted behind it. Portalled
-// overlays are siblings on <body> and are compared against each other, so the
-// layer has to come from the shared scale rather than a per-file guess; the inline
-// fallback keeps the ordering in apps that have not defined the variable.
 function HoverCardContent({
   className,
   align = 'center',

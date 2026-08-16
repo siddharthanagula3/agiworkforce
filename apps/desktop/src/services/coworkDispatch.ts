@@ -282,8 +282,6 @@ async function resolveCompanionApproval(response: CompanionApprovalResponse): Pr
     });
     relayedApprovalIds.delete(response.requestId);
   } catch (error) {
-    // Keep Desktop authoritative and pending when the native resolver fails.
-    // Re-publish the request so Mobile's optimistic state returns to pending.
     relayedApprovalIds.delete(response.requestId);
     queueMicrotask(() => {
       void publishPendingApprovals();
@@ -545,10 +543,6 @@ function resetCoworkDispatchSession(): void {
   resolvingApprovalIds.clear();
 }
 
-/**
- * Installs the one authoritative Desktop consumer for verified companion
- * controls and mirrors native task state back to Mobile.
- */
 export function initializeCoworkDispatchRuntime(): () => void {
   if (typeof window === 'undefined') return () => undefined;
 
@@ -608,9 +602,6 @@ export function initializeCoworkDispatchRuntime(): () => void {
       }
     }
 
-    // addApprovalRequest stamps configurable timeout metadata in a second
-    // synchronous store update. Publish in a microtask so Mobile receives the
-    // final authoritative deadline rather than an intermediate request.
     queueMicrotask(() => {
       void publishPendingApprovals();
     });

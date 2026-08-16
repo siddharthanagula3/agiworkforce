@@ -56,8 +56,6 @@ vi.mock('../../../lib/tauri-mock', () => ({
   isTauri: true,
   isCloudWeb: false,
   isDesktopUiDevLocal: false,
-  // tauri-mock re-exports isElectronHost from runtimeEnvironment; a factory
-  // that omits it makes Vitest throw on first read rather than fall through.
   isElectronHost: false,
   supportsLocalAppMode: true,
   isTauriContext: () => true,
@@ -150,9 +148,6 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     setDraftContent: unifiedChatMock.setDraftContent,
     appendDraftContent: unifiedChatMock.appendDraftContent,
   };
-  // `getSelectedModel` is part of the real store's contract (modelStore.ts) and
-  // DesktopShellV3 calls it during render, so a stub without it throws
-  // "state.getSelectedModel is not a function" before anything is asserted.
   const modelStoreState = {
     models: [] as Array<Record<string, unknown>>,
     selectedModelId: '',
@@ -167,8 +162,6 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     appendDraftContent: unifiedChatMock.appendDraftContent,
   });
   return {
-    // Passthrough provider — the shell wraps its tree in <CapabilityProvider
-    // platform="desktop">. The mock just renders children so the shell mounts.
     CapabilityProvider: (props: { children?: ReactNode }) =>
       React.createElement(React.Fragment, null, props.children),
     ChatInterface: (props: Record<string, unknown>) => {
@@ -273,12 +266,8 @@ describe('DesktopShellV3 duplication ownership', () => {
 
     expect(container.querySelectorAll('[data-v3-sidebar]')).toHaveLength(1);
     expect(screen.getByTestId('chat-interface')).toBeInTheDocument();
-    // Desktop owns the workspace-aware greeting and starters, while the shared
-    // shell still owns the composer and capability-aware category chips.
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
 
-    // Async catalog hydration may re-render ChatInterface; the invariant is
-    // one rendered shell/sidebar with the latest shared-chat contract.
     const props = unifiedChatMock.chatInterfaceProps.at(-1);
     expect(props?.['sidebarSlot']).toBeNull();
     expect(props?.['enableSearchOverlay']).toBe(false);
@@ -632,8 +621,6 @@ describe('DesktopShellV3 duplication ownership', () => {
 
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
-    // Desktop cloud is open (DCL-4): the collapsed toggle is a live "Switch to
-    // Cloud" affordance, not a disabled "coming soon" control.
     const cloudToggle = screen.getByRole('button', { name: 'Switch to Cloud' });
     expect(cloudToggle).toBeInTheDocument();
     expect(cloudToggle).not.toBeDisabled();
@@ -643,8 +630,6 @@ describe('DesktopShellV3 duplication ownership', () => {
   it('shows the expanded Cloud mode as a live, selectable tab on desktop', () => {
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
-    // Local tab is the default selected mode; Cloud is now a normal selectable
-    // tab (DCL-4 opened desktop cloud) — no disabled "Soon" affordance.
     const localTab = screen.getByRole('tab', { name: 'Local' });
     expect(localTab).toHaveAttribute('aria-selected', 'true');
 
@@ -700,8 +685,6 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(screen.queryByText('Gift AGI')).not.toBeInTheDocument();
   });
 
-  // ── Composer work scope (Chat | AGI Work toggle + project/folder picker) ──
-
   function seedPickerProject(id: string, name: string, isArchived = false) {
     return {
       id,
@@ -734,9 +717,6 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(picker.activeProjectId).toBeNull();
     expect(props?.['canUseAgiWork']).toBe(false);
     expect(props?.['agiWorkUnavailableReason']).toBe(
-      // Reworded in 1e858a7f1 (lib/modelCapabilityGates.ts) without updating
-      // this assertion — the same commit that left the VS Code extension mocks
-      // and the webview snapshots stale.
       'Choose a model verified for agentic planning and tool execution. Project chat still works.',
     );
   });
@@ -758,16 +738,7 @@ describe('DesktopShellV3 duplication ownership', () => {
   });
 
   it('offers the folder seam in Cloud mode, but as a scan root rather than a capability grant', () => {
-    // SUPERSEDED CONTRACT: this used to assert Cloud withheld the folder seam
-    // entirely. Cloud now offers it, because the desktop is the local-private
-    // compute host and folder selection is the differentiator over web.
-    //
     // The safety property moved rather than disappearing: useFolderSelection is
-    // constructed in 'cloud' mode, where it performs no `invoke` at all — see
-    // useFolderSelection.test.ts, which asserts the backend folder-scope command
-    // is never called. That command persists allowed_directories to settings.json
-    // and repoints the MCP filesystem root, so calling it from Cloud would widen
-    // filesystem permissions with no consent step.
     useAppModeStore.setState({ mode: 'cloud' });
 
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
@@ -776,8 +747,6 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(props?.['allowModelFallbackModels']).toBe(false);
     expect(props?.['onSelectFolder']).toBeTypeOf('function');
     expect(props?.['onClearFolder']).toBeTypeOf('function');
-    // Record-a-skill stays Local-only: it captures the screen, which Cloud has
-    // no consent surface for.
     expect(props?.['onRecordSkill']).toBeUndefined();
     expect(screen.queryByText('Artifacts')).not.toBeInTheDocument();
     expect(screen.getByText('Scheduled')).toBeInTheDocument();
@@ -996,7 +965,6 @@ describe('DesktopShellV3 duplication ownership', () => {
       ).toContain('conv-1');
     });
 
-    // Clearing unwinds both sides of the seam.
     await act(async () => {
       picker.onSelectProject(null);
     });

@@ -1,14 +1,3 @@
-/**
- * Reflect service.
- *
- * Same endpoint and same wire schema as the web Settings → Reflect section:
- * GET /api/reflect?range=&timezone=. The recap is built server-side on each
- * read, so there is nothing to cache or persist here.
- *
- * The server answers 409 `memory_required` when the account has memory turned
- * off — a normal state to render, not a failure, so it is modelled separately
- * from an error.
- */
 import {
   MANAGED_CLOUD_REFLECT_PATH,
   ManagedCloudReflectRecapSchema,
@@ -43,10 +32,6 @@ function deviceTimezone(): string {
   }
 }
 
-/**
- * A 409 whose code is `memory_required` means the account has memory off —
- * the same signal web branches on.
- */
 function isMemoryRequired(error: unknown): boolean {
   return error instanceof ApiHttpError && error.status === 409 && error.code === 'memory_required';
 }

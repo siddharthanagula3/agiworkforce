@@ -74,7 +74,6 @@ function scheduledExecutionError(result: Record<string, unknown>): string {
   return candidate?.trim().slice(0, 200) || 'Scheduled work failed.';
 }
 
-/** Fail closed unless a scheduled shortcut or Managed Cloud turn explicitly succeeded. */
 export function assertScheduledExecutionSucceeded(result: unknown): void {
   if (!result || typeof result !== 'object') {
     throw new Error('Scheduled work did not return a terminal result.');
@@ -150,11 +149,6 @@ export async function registerTaskAlarm(task: ScheduledTask): Promise<void> {
   });
 }
 
-/**
- * Dispatch a stored prompt and resolve only after its chat execution has
- * reached a terminal state. Notifications and lastRun updates stay with the
- * background action that owns those product transitions.
- */
 export async function dispatchScheduledPrompt<T>(
   task: ScheduledTask,
   dispatch: (prompt: string) => Promise<T>,
@@ -357,7 +351,6 @@ export async function recordScheduledTaskRun(
   });
 }
 
-/** Re-register all task alarms on service worker startup (MV3 restarts kill alarms). */
 export async function restoreScheduledTaskAlarms(): Promise<void> {
   const tasks = await loadScheduledTasks();
   for (const task of tasks) {

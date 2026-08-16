@@ -14,17 +14,10 @@ import type { RoutingDecision } from '@agiworkforce/types';
 interface ModelState {
   models: ModelInfo[];
   selectedModelId: string;
-  /**
-   * Host-owned reachability lifecycle. `models: []` alone cannot distinguish
-   * an in-progress local-runtime probe from a verified empty catalog.
-   * This state is deliberately not persisted: every app launch must verify
-   * the active execution boundary again.
-   */
   modelCatalogStatus: 'idle' | 'loading' | 'ready' | 'error';
   modelCatalogError: string | null;
   thinkingEnabled: boolean;
   recentModelIds: string[];
-  /** Last auto-routing decision — shown as a badge in the model selector. */
   lastRoutingDecision: RoutingDecision | null;
 
   setModels: (models: ModelInfo[]) => void;
@@ -59,9 +52,6 @@ function toModelTier(provider: Provider | string, modelId: string): ModelInfo['t
 
 function buildFallbackModel(provider: Provider, modelId: string | null): ModelInfo | null {
   const metadata = getModelMetadataById(modelId);
-  // Unified Chat uses token context for chat compaction and presentation.
-  // Specialized media models may honestly omit this inapplicable field, so a
-  // row without a published token limit cannot become a chat fallback.
   if (!metadata || metadata.contextWindow === undefined) {
     return null;
   }
@@ -110,8 +100,6 @@ const AUTO_MODE_FALLBACKS: ModelInfo[] = AUTO_ROUTING_PROFILES.flatMap((profile)
   ];
 });
 
-/** Hobby-tier cloud models — auto-routing + specific agentic models.
- * Desktop and web can override these via setModels() with the full catalog. */
 export const CLOUD_FALLBACK_MODELS: ModelInfo[] = [
   ...AUTO_MODE_FALLBACKS,
   ...CORE_CLOUD_PROVIDERS.flatMap((provider) => {
@@ -134,8 +122,6 @@ export const useModelStore = create<ModelState>()(
       recentModelIds: [],
       lastRoutingDecision: null,
 
-      // Existing hosts that publish a complete catalog through `setModels`
-      // retain their historical ready-state behavior.
       setModels: (models) => set({ models, modelCatalogStatus: 'ready', modelCatalogError: null }),
 
       beginModelCatalogLoad: (clearExisting) =>
@@ -177,7 +163,6 @@ export const useModelStore = create<ModelState>()(
       selectModel: (id) =>
         set((state) => {
           const recentIds = [id, ...state.recentModelIds.filter((r) => r !== id)].slice(0, 5);
-          // Clear routing decision when user manually picks a model
           return { selectedModelId: id, recentModelIds: recentIds, lastRoutingDecision: null };
         }),
 
@@ -191,7 +176,6 @@ export const useModelStore = create<ModelState>()(
 
       getSelectedModel: () => {
         const { models, selectedModelId } = get();
-        // Check store models first, then fallback for web mode
         return (
           models.find((m) => m.id === selectedModelId) ??
           CLOUD_FALLBACK_MODELS.find((m) => m.id === selectedModelId)

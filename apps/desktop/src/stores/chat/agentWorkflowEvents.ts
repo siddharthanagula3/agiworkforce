@@ -377,8 +377,6 @@ function resolveGoalProgressPercent(payload: GoalProgressEvent): number {
 
 async function sendBackgroundAgentNotification(title: string, body: string): Promise<void> {
   try {
-    // Respect the user's Settings > Notifications preferences (previously
-    // ignored entirely — toggling "Desktop Notifications" off had no effect).
     const settings = await invoke<NotificationSettings>('notification_get_settings');
     if (!settings.enabled || !settings.desktop_notifications || settings.do_not_disturb) {
       return;

@@ -22,14 +22,8 @@ let mockChatInputOnOpenCompare: (() => void) | undefined;
 let mockChatInputSelectedSkillName: string | undefined;
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -139,10 +133,6 @@ jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
 }));
 
-// Any icon, not a fixed list. The allowlist version broke whenever a component
-// anywhere in this screen's tree started using a seventh icon — the failure
-// surfaced as "Cannot read properties of undefined (reading 'displayName')"
-// from inside the new component, which points at the wrong file entirely.
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
   const Icon = (props: Record<string, unknown>) => <View {...props} />;
@@ -234,7 +224,6 @@ describe('Chat tab mode toggle', () => {
   });
 
   it('switches to Cloud and hides project bar when cloud is unlocked', async () => {
-    // Set up cloud-unlocked state (invite accepted).
     useWaitlistStore.setState({
       joined: true,
       email: 'tester@example.com',
@@ -249,12 +238,10 @@ describe('Chat tab mode toggle', () => {
 
     const { getByTestId, queryByTestId } = render(<ChatTabScreen />);
 
-    // ProjectSelectorBar is visible in Local mode.
     expect(queryByTestId('project-selector-bar')).toBeTruthy();
     expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
     expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(false);
 
-    // Tap Cloud — cloud is unlocked so it should switch (no invite modal).
     fireEvent.press(getByTestId('chat.mode-toggle.cloud'));
 
     await waitFor(() => {
@@ -263,10 +250,7 @@ describe('Chat tab mode toggle', () => {
 
     expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(false);
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
-    // ProjectSelectorBar is mode-aware and now stays visible in Cloud mode too
-    // (it shows CLOUD projects so a cloud chat can be assigned to a project).
     expect(queryByTestId('project-selector-bar')).toBeTruthy();
-    // No sign-in redirect needed since cloud is already unlocked.
     expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
   });
 
@@ -283,7 +267,6 @@ describe('Chat tab mode toggle', () => {
 
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
 
-    // A definitive signed-out result still closes the Cloud boundary.
     act(() => {
       useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
     });
@@ -347,9 +330,6 @@ describe('Chat tab mode toggle', () => {
     expect(useMobileSkillSelectionStore.getState().selection).toBeNull();
   });
 
-  // SIX-23: /compare streams both panes through the managed-cloud gateway.
-  // Offering it in Local Mode dead-ended in guardedFetch's refusal, so the
-  // composer must not receive an onOpenCompare handler outside Cloud.
   it('withholds the /compare command from the composer in Local Mode', () => {
     render(<ChatTabScreen />);
     expect(useChatAppModeStore.getState().appMode).toBe('local');
@@ -390,7 +370,6 @@ describe('Chat tab mode toggle', () => {
   });
 
   it('keeps Local selected and routes to sign-in when cloud is not unlocked (public alpha, no invite/waitlist gate)', async () => {
-    // Cloud not unlocked — sign-in gate should open (fix 0fe0598c3).
     useWaitlistStore.setState({
       joined: false,
       email: undefined,
@@ -465,10 +444,6 @@ describe('Chat tab mode toggle', () => {
       expect(mockGenerateImage).toHaveBeenCalledWith({
         prompt: 'a red circle on a white background',
         model: expect.any(String),
-        // The route accepted and validated `aspect_ratio` all along, but no
-        // surface sent one, so every generated image silently took the legacy
-        // square default. Assert it reaches the wire so the picker cannot
-        // regress to decoration.
         aspect_ratio: expect.any(String),
       });
     });

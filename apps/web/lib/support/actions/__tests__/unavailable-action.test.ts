@@ -1,14 +1,3 @@
-/**
- * An action that cannot honestly be performed is not offered, and cannot be
- * proposed even if a caller names it directly.
- *
- * `resend_verification_email` is the live case: this deployment has no
- * transactional email provider and `@clerk/backend` exposes no server-side
- * prepare-verification call, so there is no honest way to send one. The action
- * stays registered — shape, refusal and tests all real — and resolves
- * unavailable. A test asserting it is EXECUTABLE would be the fake test here;
- * this asserts it is honestly refused.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -45,7 +34,6 @@ describe('support actions — unavailable capabilities fail closed', () => {
     const entry = listed.unavailable.find((a) => a.id === 'resend_verification_email');
     expect(entry).toBeDefined();
     expect(entry!.reason).toMatch(/cannot send verification email/iu);
-    // The refusal must point somewhere real rather than dead-ending.
     expect(entry!.reason).toMatch(/account settings/iu);
   });
 

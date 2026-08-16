@@ -1,14 +1,3 @@
-/**
- * OpenAI reasoning effort resolution per model family.
- *
- * Resolves the supported `reasoning.effort` values from the canonical model
- * registry, with graceful fallbacks when a requested effort isn't supported.
- * Used by openai-responses-payload-policy.ts to decide whether to strip
- * `reasoning: "none"` payloads.
- *
- * Ported from OpenClaw src/agents/openai-reasoning-effort.ts (MIT, Peter Steinberger).
- * See THIRD_PARTY_LICENSES.md at repo root for full attribution.
- */
 
 import { getModelMetadataById } from '@agiworkforce/types';
 

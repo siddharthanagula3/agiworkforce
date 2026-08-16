@@ -8,23 +8,13 @@
  * @packageDocumentation
  */
 
-/**
- * Result of a validation operation.
- */
 export interface ValidationResult {
-  /** Whether the value is valid */
   valid: boolean;
-  /** Error message if invalid */
   error?: string;
 }
 
-/**
- * Result of password validation with strength assessment.
- */
 export interface PasswordValidationResult extends ValidationResult {
-  /** Individual validation errors */
   errors: string[];
-  /** Password strength rating */
   strength: 'weak' | 'medium' | 'strong';
 }
 
@@ -41,18 +31,6 @@ export interface PasswordValidationResult extends ValidationResult {
  * ```
  */
 export function validateEmail(email: string): boolean {
-  // Was /^[^\s@]+@[^\s@]+\.[^\s@]+$/. Anchored, but `[^\s@]+\.[^\s@]+$`
-  // still backtracks polynomially (js/polynomial-redos): on a domain with no
-  // dot the engine retries every split point before failing. Emails arrive
-  // from user input, so the input is exactly the untrusted, attacker-length
-  // kind the rule warns about.
-  //
-  // The structural checks below are the same predicate, evaluated in linear
-  // time: exactly one '@', a non-empty local part, and a domain that contains
-  // a dot with non-empty labels either side. Neither part may contain
-  // whitespace. This deliberately stays as permissive as the original — it is
-  // a shape check, not RFC 5322 validation, and tightening it would reject
-  // addresses that previously passed.
   const at = email.indexOf('@');
   if (at <= 0 || at !== email.lastIndexOf('@')) return false;
 
@@ -68,8 +46,6 @@ export function validateEmail(email: string): boolean {
 function hasWhitespace(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
     const code = value.charCodeAt(i);
-    // space, tab, LF, VT, FF, CR — the ASCII set `\s` matches, which is all
-    // the original expression could reject in practice.
     if (code === 32 || (code >= 9 && code <= 13)) return true;
   }
   return false;
@@ -91,9 +67,7 @@ function hasWhitespace(value: string): boolean {
 export function validateUrl(
   url: string,
   options?: {
-    /** Allow only specific protocols (default: ['http:', 'https:']) */
     allowedProtocols?: string[];
-    /** Block private/internal networks (default: true in production) */
     blockPrivateNetworks?: boolean;
   },
 ): ValidationResult & { sanitized?: string } {
@@ -167,7 +141,6 @@ export function validateFilePath(path: string): ValidationResult {
   const blockedUnixPaths = ['/etc', '/sys', '/proc', '/dev', '/boot', '/root'];
 
   for (const blocked of blockedUnixPaths) {
-    // Use case-insensitive exact match or prefix+separator to avoid false positives (e.g. /etc_config)
     if (
       path.toLowerCase() === blocked.toLowerCase() ||
       path.toLowerCase().startsWith(blocked.toLowerCase() + '/')
@@ -256,9 +229,7 @@ export function validatePassword(password: string): PasswordValidationResult {
 export function validateApiKey(
   apiKey: string,
   options?: {
-    /** Minimum length (default: 20) */
     minLength?: number;
-    /** Allowed character pattern (default: alphanumeric with _ and -) */
     pattern?: RegExp;
   },
 ): boolean {
@@ -319,13 +290,6 @@ export function validateSqlQuery(query: string): ValidationResult {
     }
   }
 
-  // Was one expression: /DELETE\s+FROM\s+.*\s+WHERE\s+1\s*=\s*1/i. The
-  // `.*\s+` there is a polynomial-ReDoS backtracker (js/polynomial-redos) —
-  // on a long DELETE with no matching WHERE the engine retries every split
-  // point. Two anchored linear tests preserve the intent: both halves must be
-  // present. The only behavioural difference is that WHERE 1=1 no longer has
-  // to appear AFTER the DELETE FROM, which for a denylist is the safer
-  // direction — it matches strictly more.
   if (/DELETE\s+FROM\b/i.test(query) && /\bWHERE\s+1\s*=\s*1/i.test(query)) {
     return { valid: false, error: 'Query contains potentially dangerous operation' };
   }
@@ -346,10 +310,6 @@ export function validateSqlQuery(query: string): ValidationResult {
  * ```
  */
 export function sanitizeCommandArgs(args: string[]): string[] {
-  // Strip shell metacharacters via a single denylist regex.
-  // Covers: pipe, background/and, command separator, redirects, backtick, variable
-  // expansion, subshell, newlines, history expansion, tilde, backslash, brace
-  // expansion, and glob wildcards.
   return args.map((arg) => arg.replace(/[|&;<>`$()\n\r!~\\{}*?[\]]/g, ''));
 }
 
@@ -366,7 +326,6 @@ export function sanitizeCommandArgs(args: string[]): string[] {
  * ```
  */
 export function checkForInjection(input: string): { safe: boolean; type?: string } {
-  // SQL injection patterns
   const sqlPatterns = [
     /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/i,
     /(--|;|\/\*|\*\/|xp_)/i,
@@ -380,7 +339,6 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
     }
   }
 
-  // Command injection patterns
   const commandPatterns = [/[;&|`$()]/];
 
   for (const pattern of commandPatterns) {
@@ -389,23 +347,10 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
     }
   }
 
-  // XSS patterns
-  // Note: Script tag patterns must handle variations like </script > or </script/>
   const xssPatterns = [
     /<script\b/i, // Match opening script tag (catches all script tags)
     /<\/script\s*\/?>/i, // Match closing script tag with optional space/slash
     /javascript:/i,
-    // `/on\w+\s*=/i` ran polynomially on input made of many repetitions of
-    // "on" (js/polynomial-redos): "on" matched at every other offset and each
-    // start re-scanned the tail. Requiring a real attribute boundary before
-    // the handler name leaves only genuine start positions, which is linear —
-    // and is strictly more accurate, since it no longer fires on "on" embedded
-    // in a longer attribute name such as `xonclick=` or the `data-onclick=`
-    // data attribute. That narrowing is the one behaviour change, and it is
-    // pinned by tests. Split in two rather than written as
-    // a lookbehind: this package ships to browsers, and a lookbehind is a
-    // parse-time SyntaxError on Safari before 16.4, which would take out the
-    // whole module rather than just this check.
     /^on\w+\s*=/i,
     /[^\w-]on\w+\s*=/i,
     /<iframe/i,
@@ -419,12 +364,6 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
     }
   }
 
-  // Was one entry in the list above: /<svg\b[^>]*\bon\w+/i. `[^>]*` before a
-  // required literal backtracks polynomially on a long unclosed tag
-  // (js/polynomial-redos). Two linear tests keep the same condition — an <svg>
-  // and an on-attribute both present. Dropping the "same tag" adjacency makes
-  // it match strictly more, which for a denylist is the safe direction, and it
-  // does not newly flag a plain <svg> the way testing for the tag alone would.
   if (/<svg\b/i.test(input) && /\bon\w+/i.test(input)) {
     return { safe: false, type: 'XSS' };
   }

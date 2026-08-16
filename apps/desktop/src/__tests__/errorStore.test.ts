@@ -169,30 +169,24 @@ describe('errorStore', () => {
     });
   });
 
-  // M35 — FIFO eviction order tests
   describe('FIFO eviction order (M35)', () => {
     it('evicts oldest errors first when history exceeds maxHistorySize', () => {
       const { addError } = useErrorStore.getState();
 
-      // Add exactly 100 unique errors (fills up to capacity)
       for (let i = 0; i < 100; i++) {
         addError({ type: `UNIQUE_ERROR_${i}`, severity: 'info', message: `Error ${i}` });
       }
 
-      // The store prepends new errors (newest first), so the oldest is at the END
       const errorsBefore = useErrorStore.getState().errors;
       const oldestId = errorsBefore[errorsBefore.length - 1]?.id;
       expect(oldestId).toBeDefined();
 
-      // Add one more to push past the cap — oldest should be evicted
       addError({ type: 'NEW_ERROR', severity: 'info', message: 'Newest error' });
 
       const errorsAfter = useErrorStore.getState().errors;
 
-      // Total count should remain at or below 100
       expect(errorsAfter.length).toBeLessThanOrEqual(100);
 
-      // The oldest error should no longer be present
       const oldestStillExists = errorsAfter.some((e) => e.id === oldestId);
       expect(oldestStillExists).toBe(false);
     });
@@ -200,12 +194,10 @@ describe('errorStore', () => {
     it('retains the newest error after eviction', () => {
       const { addError } = useErrorStore.getState();
 
-      // Fill up to capacity
       for (let i = 0; i < 100; i++) {
         addError({ type: `E_${i}`, severity: 'info', message: `Error ${i}` });
       }
 
-      // Add the newest error that should survive
       addError({ type: 'NEWEST', severity: 'error', message: 'I should survive eviction' });
 
       const errors = useErrorStore.getState().errors;
@@ -216,17 +208,14 @@ describe('errorStore', () => {
     it('evicts in FIFO order — second-oldest is evicted before newest', () => {
       const { addError } = useErrorStore.getState();
 
-      // Add 100 errors so the store is at capacity
       for (let i = 0; i < 100; i++) {
         addError({ type: `BASE_${i}`, severity: 'info', message: `Base error ${i}` });
       }
 
-      // The store prepends (newest first), so the second-oldest is at index [length - 2]
       const at100 = useErrorStore.getState().errors;
       const secondOldestId = at100[at100.length - 2]?.id;
       expect(secondOldestId).toBeDefined();
 
-      // Adding 2 more should evict the last two items (oldest, then second-oldest)
       addError({ type: 'EXTRA_1', severity: 'info', message: 'Extra 1' });
       addError({ type: 'EXTRA_2', severity: 'info', message: 'Extra 2' });
 
@@ -238,7 +227,6 @@ describe('errorStore', () => {
     it('evicted error IDs are distinct from retained error IDs', () => {
       const { addError } = useErrorStore.getState();
 
-      // Overflow the store by 5 entries
       for (let i = 0; i < 105; i++) {
         addError({ type: `ID_TEST_${i}`, severity: 'info', message: `Error ${i}` });
       }
@@ -247,14 +235,12 @@ describe('errorStore', () => {
       const ids = errors.map((e) => e.id);
       const uniqueIds = new Set(ids);
 
-      // All remaining IDs should be unique (no duplicates from eviction logic)
       expect(uniqueIds.size).toBe(ids.length);
     });
 
     it('toast queue also respects FIFO when full', () => {
       const { addError } = useErrorStore.getState();
 
-      // Add enough distinct errors to overflow toast queue (max 5)
       for (let i = 0; i < 7; i++) {
         addError({ type: `TOAST_${i}`, severity: 'error', message: `Toast error ${i}` });
       }
@@ -262,11 +248,9 @@ describe('errorStore', () => {
       const toasts = useErrorStore.getState().toasts;
       expect(toasts.length).toBeLessThanOrEqual(5);
 
-      // The newest toast should be present (most recently added)
       const newestToast = toasts.find((t) => t.message === 'Toast error 6');
       expect(newestToast).toBeDefined();
 
-      // FIFO eviction: the oldest toast (0) should have been evicted first
       const oldestToast = toasts.find((t) => t.message === 'Toast error 0');
       expect(oldestToast).toBeUndefined();
     });

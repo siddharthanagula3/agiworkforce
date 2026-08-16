@@ -1,9 +1,3 @@
-/**
- * DiffViewer Component
- *
- * Display file diffs with syntax highlighting.
- * Shows additions, deletions, and context lines.
- */
 
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Check, FileCode, ChevronRight, ChevronDown } from 'lucide-react';
@@ -37,7 +31,6 @@ export function DiffViewer({
   }, []);
 
   const handleCopy = async () => {
-    // Generate unified diff format
     const lines: string[] = [];
 
     if (data.file_path) {
@@ -79,7 +72,6 @@ export function DiffViewer({
     setExpandedHunks(new Set());
   };
 
-  // Calculate diff stats
   const stats = data.hunks.reduce(
     (acc, hunk) => {
       for (const line of hunk.lines) {

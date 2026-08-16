@@ -14,27 +14,10 @@ import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 
-/**
- * B4 fix: validate that the first 12 bytes of an upload look like a known
- * audio container/codec. MIME type from `multipart/form-data` is
- * client-supplied and trivially forgeable; magic-byte sniffing makes the
- * MIME allowlist a check on actual content rather than the client's claim.
- *
- * Signatures covered:
- *   - ID3 / 0xFFFB / 0xFFF3 / 0xFFF2 · MP3
- *   - "RIFF" ... "WAVE" · WAV
- *   - "OggS" · Ogg (Vorbis/Opus)
- *   - "ftyp" at offset 4 · MP4 / M4A
- *   - "fLaC" · FLAC
- *   - 0x1A 0x45 0xDF 0xA3 · Matroska/WebM (EBML)
- */
 function isLikelyAudio(head: Uint8Array): boolean {
   if (head.length < 4) return false;
-  // ID3v2 (most MP3s)
   if (head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) return true;
-  // MP3 frame sync (0xFFE0..0xFFFF mask)
   if (head[0] === 0xff && (head[1]! & 0xe0) === 0xe0) return true;
-  // RIFF .... WAVE
   if (
     head.length >= 12 &&
     head[0] === 0x52 &&
@@ -47,9 +30,7 @@ function isLikelyAudio(head: Uint8Array): boolean {
     head[11] === 0x45
   )
     return true;
-  // OggS
   if (head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53) return true;
-  // ftyp at offset 4 (MP4 / M4A)
   if (
     head.length >= 8 &&
     head[4] === 0x66 &&
@@ -58,9 +39,7 @@ function isLikelyAudio(head: Uint8Array): boolean {
     head[7] === 0x70
   )
     return true;
-  // fLaC
   if (head[0] === 0x66 && head[1] === 0x4c && head[2] === 0x61 && head[3] === 0x43) return true;
-  // EBML (Matroska / WebM)
   if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) return true;
   return false;
 }
@@ -69,13 +48,6 @@ async function handleTranscriptions(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
 
-  // AUDIT-FIX BUG-20: enforce CSRF on this state-changing, credit-spending
-  // endpoint. getClerkAuthUser accepts a browser __session cookie, so without
-  // this a cross-origin POST rode the victim's ambient session and burned their
-  // managed-compute balance. The sibling /api/media/image/generate route has
-  // always had this check — the omission here was an inconsistency, not a design
-  // decision. requireCsrfToken bypasses only on a cryptographically verified
-  // Bearer, so programmatic API callers are unaffected.
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
@@ -141,12 +113,6 @@ async function handleTranscriptions(request: NextRequest) {
     );
   }
 
-  // SEV-WEB-04 fix: cap upload size and validate MIME type before forwarding
-  // to OpenAI. Without this, an authenticated user can send /dev/zero to
-  // exhaust serverless function memory or upload arbitrary file types
-  // (PDFs, executables) that bypass the proxy's content-type policy.
-  // OpenAI's Whisper API has its own 25 MB limit; rejecting earlier saves
-  // bandwidth and prevents per-request OOM on Vercel functions.
   const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
   const ALLOWED_AUDIO_TYPES = new Set([
     'audio/mpeg',
@@ -178,10 +144,6 @@ async function handleTranscriptions(request: NextRequest) {
       },
     );
   }
-  // B4 fix: default-reject when MIME is missing OR not in the allowlist.
-  // Previously `if (file.type && ...)` short-circuited on falsy `file.type`,
-  // letting an attacker upload arbitrary content with no Content-Type and
-  // bypass the proxy's MIME policy.
   if (!file.type || !ALLOWED_AUDIO_TYPES.has(file.type)) {
     return NextResponse.json(
       {
@@ -199,9 +161,6 @@ async function handleTranscriptions(request: NextRequest) {
       },
     );
   }
-  // B4 fix: MIME is client-supplied and forgeable. Sniff the first 12 bytes
-  // and confirm at least one of the major audio container/codec signatures
-  // matches before forwarding to OpenAI.
   const headBytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
   if (!isLikelyAudio(headBytes)) {
     return NextResponse.json(

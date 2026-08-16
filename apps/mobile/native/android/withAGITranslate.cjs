@@ -1,13 +1,3 @@
-// Expo config plugin: wires Android Translate native module into the generated android/ project.
-//
-// What this does at prebuild time:
-//   1. Adds com.google.mlkit:translate:17.0.3 to android/app/build.gradle dependencies.
-//      ML Kit on-device translation: fully offline once language model is downloaded (~30 MB/pair).
-//      Coord from: https://dl.google.com/dl/android/maven2/com/google/mlkit/translate/maven-metadata.xml
-//   2. Copies AGITranslateModule.kt + AGITranslatePackage.kt into the generated source tree.
-//   3. Registers AGITranslatePackage() in MainApplication.kt's getPackages() list.
-//
-// Run: expo prebuild --platform android (or via EAS build)
 
 const {
   withAppBuildGradle,
@@ -20,7 +10,6 @@ const path = require('path');
 const PLUGIN_NAME = 'agi-translate-plugin';
 const PLUGIN_VERSION = '1.0.0';
 
-// ML Kit on-device Translation (2024-01; stable public release).
 const TRANSLATE_DEP = "implementation 'com.google.mlkit:translate:17.0.3'";
 const TRANSLATE_DEP_MARKER = 'com.google.mlkit:translate';
 
@@ -30,7 +19,6 @@ const PACKAGE_REGISTRATION = 'add(AGITranslatePackage())';
 const NATIVE_SRC_DIR = __dirname;
 const KOTLIN_FILES = ['AGITranslateModule.kt', 'AGITranslatePackage.kt'];
 
-/** Step 1 — inject gradle dependency into android/app/build.gradle */
 function withTranslateGradle(config) {
   return withAppBuildGradle(config, (c) => {
     const gradle = c.modResults.contents;
@@ -43,7 +31,6 @@ function withTranslateGradle(config) {
   });
 }
 
-/** Step 2 — copy Kotlin source files and patch MainApplication.kt */
 function withTranslateMainApplication(config) {
   return withDangerousMod(config, [
     'android',

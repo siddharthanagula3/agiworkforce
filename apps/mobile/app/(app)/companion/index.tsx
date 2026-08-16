@@ -45,15 +45,10 @@ import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 export default function CompanionScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  // MOB-PAIRINGCODE-ORPHAN fix: read pairingCode pushed by deep-link handler
-  // in _layout.tsx (`router.push('/(app)/companion?pairingCode=...')`).
   const { pairingCode: deepLinkCode } = useLocalSearchParams<{ pairingCode?: string }>();
   const [showScanner, setShowScanner] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const hasSeenDemo = useDemoStore((s) => s.hasSeenDemo);
-  // PAR-M28: first entry gets the desktop setup checklist instead of a bare
-  // "Scan QR Code" — prerequisites, a download hand-off, and the remote-
-  // execution risk disclosure all land before any pairing action is possible.
   const hasSeenDispatchSetup = useDispatchSetupStore((s) => s.hasSeenDispatchSetup);
   const {
     currentApproval,
@@ -63,11 +58,6 @@ export default function CompanionScreen() {
     handleDismiss: approvalModalDismiss,
   } = useApprovalModal();
 
-  // Select the raw (stable-reference) array and filter in a memo — filtering
-  // inline inside the selector (`s.pendingApprovals.filter(...)`) returns a
-  // brand-new array on every store read, which Zustand's default reference
-  // equality treats as "changed" every render, causing an infinite
-  // resubscribe/re-render loop ("Maximum update depth exceeded").
   const allApprovals = useAgentStore((s) => s.pendingApprovals);
   const pendingApprovals = useMemo(
     () => allApprovals.filter((r) => r.status === 'pending'),
@@ -94,8 +84,6 @@ export default function CompanionScreen() {
     clearError,
   } = useConnectionStore();
 
-  // MOB-PAIRINGCODE-ORPHAN fix: auto-connect when a pairingCode param is
-  // present (deep-link flow). Status guard prevents double-connect on re-render.
   useEffect(() => {
     if (!FEATURES.companion || !FEATURES.dispatch) return;
     if (deepLinkCode && status === 'disconnected') {

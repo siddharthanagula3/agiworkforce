@@ -85,7 +85,6 @@ describe('useChat durable-run reattachment', () => {
 
   it('does not reattach a turn a client already watched finish', async () => {
     const { runtime, reattachConversation } = makeRuntime();
-    // A recorded finishReason means some client saw this turn end.
     seedAssistantMessage({ cloudAgentRun: openRun, finishReason: 'stop' });
 
     renderHook(() => useChat(runtime));
@@ -138,8 +137,6 @@ describe('useChat durable-run reattachment', () => {
 
   it('still reattaches when the transcript loads after the conversation is selected', async () => {
     const { runtime, reattachConversation } = makeRuntime();
-    // Conversation selected first, messages fetched afterwards — the ordering a
-    // real app produces, and the one a conversation-keyed effect would miss.
     useChatStore.setState({
       activeConversationId: 'conv-1',
       messagesByConversation: {},

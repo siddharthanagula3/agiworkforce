@@ -1,23 +1,3 @@
-/**
- * SendButton — shared 3-state send/stop/queue button for the chat composer.
- *
- * Visual + behavioral mirror of the web composer's SendButton
- * (apps/web/features/chat/components/Composer/SendButton.tsx) so the desktop
- * app — which renders this via the shared ChatInput — matches web pixel-for-pixel:
- *
- *   - send  (idle):       accent-primary (terra-cotta), ArrowUp · submits
- *   - stop  (streaming):  red-500, Square · aborts the active stream
- *   - queue (generating): amber-500, Clock · message sends after current finishes
- *
- * The `queue` mode is part of the shared API for parity with web, but is only
- * reachable on surfaces whose store models a "generating but queueable" state.
- * The desktop chat store exposes only `isStreaming`, so ChatInput computes
- * `isStreaming ? 'stop' : 'send'` and never fabricates `queue` there — an unused
- * mode is not a dead rendered control.
- *
- * Uses the shared `--chat-*` CSS tokens (NOT web's `--chat-bg-elevated` /
- * terra-cotta Tailwind color, which are not defined in this package's theme).
- */
 
 import { ArrowUp, Clock, Loader2, Square } from 'lucide-react';
 import { useUiTranslation } from '@agiworkforce/ui';
@@ -26,19 +6,12 @@ import { cn } from '../lib/utils';
 export type SendButtonMode = 'send' | 'stop' | 'queue';
 
 export interface SendButtonProps {
-  /** Which of the 3 states to render. */
   mode: SendButtonMode;
-  /** True while the send action itself is in-flight (shows spinner in send mode). */
   isSending?: boolean;
-  /** True when there is content to send; disables the send button when false. */
   hasContent?: boolean;
-  /** Whether the button is disabled externally (e.g. no model selected). */
   disabled?: boolean;
-  /** Unified click handler · caller decides the action based on mode. */
   onClick: () => void;
-  /** Optional extra class names forwarded to the root button element. */
   className?: string;
-  /** Human-readable composer shortcut used in the accessible send label. */
   sendShortcutLabel?: string;
 }
 
@@ -53,7 +26,6 @@ export function SendButton({
 }: SendButtonProps) {
   const { t } = useUiTranslation('chat');
 
-  // ── Stop state ──────────────────────────────────────────────────────────
   if (mode === 'stop') {
     return (
       <button
@@ -73,7 +45,6 @@ export function SendButton({
     );
   }
 
-  // ── Queue state ─────────────────────────────────────────────────────────
   if (mode === 'queue') {
     return (
       <button
@@ -99,7 +70,6 @@ export function SendButton({
     );
   }
 
-  // ── Send state (default) ─────────────────────────────────────────────────
   const canSend = hasContent && !disabled && !isSending;
 
   return (

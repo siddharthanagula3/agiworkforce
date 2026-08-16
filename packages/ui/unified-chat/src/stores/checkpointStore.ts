@@ -1,23 +1,7 @@
-/**
- * checkpointStore — surface-agnostic state for conversation checkpoints + branches.
- *
- * Phase A Slice 3: ported from apps/desktop/src/components/UnifiedAgenticChat/.
- *
- * No Tauri, no cloud DB, no auth token. Hosts push data via actions; the store
- * is keyed by conversationId so multiple conversations can coexist in the same
- * package session.
- */
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-/**
- * A named snapshot of the conversation at a particular message.
- * Field names are camelCase (surface-agnostic); hosts map from their
- * wire format (e.g. snake_case DB rows) before calling setCheckpoints.
- */
 export interface Checkpoint {
   id: string;
   messageId: string;
@@ -26,47 +10,26 @@ export interface Checkpoint {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * A conversation branch — one version of the dialogue tree rooted at a
- * particular message fork point.
- */
 export interface Branch {
   id: string;
   rootMessageId: string;
   childMessageIds: string[];
   activeMessageId: string;
-  /** Optional human-readable name (e.g. "main", "try-python-approach"). */
   name?: string;
 }
 
-// ── Store ─────────────────────────────────────────────────────────────────────
-
 interface CheckpointState {
-  /** Conversation-keyed list of checkpoints (ordered newest-first). */
   checkpointsByConversation: Record<string, Checkpoint[]>;
-  /** Conversation-keyed list of branches. */
   branchesByConversation: Record<string, Branch[]>;
-  /** Per-conversation active branch id. */
   activeBranchByConversation: Record<string, string>;
 
-  /** Replace the full checkpoint list for a conversation. */
   setCheckpoints: (conversationId: string, checkpoints: Checkpoint[]) => void;
-  /** Prepend a single checkpoint for a conversation. */
   addCheckpoint: (conversationId: string, checkpoint: Checkpoint) => void;
-  /** Remove a checkpoint by id for a conversation. */
   removeCheckpoint: (conversationId: string, checkpointId: string) => void;
 
-  /** Replace the full branch list for a conversation. */
   setBranches: (conversationId: string, branches: Branch[]) => void;
-  /** Set the active branch id for a conversation. */
   setActiveBranch: (conversationId: string, branchId: string) => void;
-  /**
-   * Fork at a checkpoint: creates a new branch rooted at the checkpoint's
-   * messageId and sets it as active. Returns the new branch id.
-   * The host is responsible for persisting the fork via its own transport.
-   */
   forkAtCheckpoint: (conversationId: string, checkpoint: Checkpoint, newBranchId: string) => void;
-  /** Clear all checkpoint + branch state for a conversation. */
   clearConversation: (conversationId: string) => void;
 }
 
@@ -86,7 +49,6 @@ export const useCheckpointStore = create<CheckpointState>()(
         if (!state.checkpointsByConversation[conversationId]) {
           state.checkpointsByConversation[conversationId] = [];
         }
-        // Prepend so newest appears first.
         state.checkpointsByConversation[conversationId]!.unshift(checkpoint);
       }),
 
@@ -133,8 +95,6 @@ export const useCheckpointStore = create<CheckpointState>()(
       }),
   })),
 );
-
-// ── Selectors ─────────────────────────────────────────────────────────────────
 
 export const selectCheckpoints =
   (conversationId: string) =>

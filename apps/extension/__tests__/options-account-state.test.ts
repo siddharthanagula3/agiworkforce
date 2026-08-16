@@ -12,10 +12,6 @@ describe('options account state', () => {
     const refresh = beginOptionsAccountRefresh(() => token, render);
 
     expect(render).toHaveBeenCalledOnce();
-    // loading:true on the first synchronous render. Previously this asserted
-    // signedIn:false, and the options page acted on it — showing an actionable
-    // "Sign in" row to users who were already signed in until the token
-    // round-trip returned.
     expect(render).toHaveBeenLastCalledWith({
       signedIn: false,
       unavailable: false,
@@ -49,18 +45,6 @@ describe('options account state', () => {
     });
   });
 
-  /**
-   * The case that shipped broken. Rejection was handled; a lookup that NEVER
-   * SETTLES was not, so the row stayed on "Checking your account…" with no Sign
-   * in button — the blank-account state this module exists to prevent.
-   *
-   * It is not hypothetical: ClerkJS retries against a blackholed host instead of
-   * rejecting, which is what `clerk-ci.invalid` produces in CI. The Chrome
-   * extension smoke suite caught it as
-   * `signed-out options account: unexpected controls
-   *  {"signInVisible":false,"logOutVisible":false}` — and that suite had been
-   * skipped for 18 days, so nothing reported it.
-   */
   it('degrades to unavailable when the account lookup never settles', async () => {
     const render = vi.fn();
     const onUnavailable = vi.fn();
@@ -97,7 +81,6 @@ describe('options account state', () => {
       unavailable: false,
       loading: false,
     });
-    // loading + resolved, and nothing from the timeout arm.
     expect(render).toHaveBeenCalledTimes(2);
   });
 });

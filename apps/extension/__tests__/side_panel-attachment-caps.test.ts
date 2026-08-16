@@ -15,8 +15,6 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-// side_panel.ts calls chrome.* and buildUI() at import scope, so the shim has
-// to exist on globalThis before the static import below is evaluated.
 const chromeMock = vi.hoisted(() => {
   const event = () => ({ addListener: vi.fn(), removeListener: vi.fn(), hasListener: vi.fn() });
   const area = {
@@ -69,11 +67,6 @@ const chromeMock = vi.hoisted(() => {
     permissions: { contains: vi.fn(async () => true) },
     action: { onClicked: event() },
     sidePanel: { setPanelBehavior: vi.fn(async () => undefined) },
-    // src/i18n.ts resolves every label through chrome.i18n — in the packaged
-    // extension Chrome serves _locales/en/messages.json, and there is no
-    // second catalog to fall back to. Echo the key: this suite asserts on
-    // attachments, not on copy, and a key rendered where English was expected
-    // fails loudly instead of silently.
     i18n: { getMessage: vi.fn((key: string) => key) },
   };
   (globalThis as Record<string, unknown>).chrome = mock;
@@ -94,11 +87,6 @@ function attachmentBar(): HTMLElement {
   return bar;
 }
 
-/**
- * The data URLs the composer is currently holding, read off the preview chips.
- * Read through getAttribute: jsdom re-parses the URL on the `src` property and
- * that costs seconds on a multi-megabyte data URL.
- */
 function pendingDataUrls(): string[] {
   return Array.from(attachmentBar().querySelectorAll<HTMLImageElement>('.sp-attachment-thumb')).map(
     (img) => img.getAttribute('src') ?? '',
@@ -113,7 +101,6 @@ function imageFile(sizeBytes: number, type = 'image/png', name = 'shot.png'): Fi
   return new File([new Uint8Array(sizeBytes).fill(65)], name, { type });
 }
 
-/** A base64 data URL whose decoded payload is exactly `bytes` long. */
 function dataUrlOfBytes(bytes: number, mime = 'image/png'): string {
   return `data:${mime};base64,${'A'.repeat(Math.ceil(bytes / 3) * 4)}`;
 }
@@ -153,9 +140,6 @@ function captureScreenshot(dataUrl: string): void {
   const screenshotItem =
     item ?? document.querySelector<HTMLElement>('#sp-attach-menu .sp-attach-menu-item');
   if (!screenshotItem) throw new Error('screenshot menu item was never built');
-  // This suite isolates attachment intake from Managed Cloud admission. The
-  // signed-out harness correctly disables public composer controls, so invoke
-  // the real listener directly with a synthetic event.
   screenshotItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
@@ -165,18 +149,11 @@ async function expectPendingCount(count: number): Promise<void> {
   });
 }
 
-/** Drain the composer between tests; the module keeps one pending list. */
 async function clearPending(): Promise<void> {
   dropFiles([imageFile(8, 'image/png', 'reset.png')]);
   await vi.waitFor(() => {
     expect(attachmentBar().querySelector('.sp-attachment-thumb')).not.toBeNull();
   });
-  // A FileReader started by the previous test can still be in flight and will
-  // append a chip after the first drain pass, so drain until the bar stays
-  // empty across TWO consecutive macrotasks. One was not enough: a reader that
-  // resolved during the single settle window appended its chip after the
-  // assertion had already passed, and the next test then started on someone
-  // else's attachments (observed as "expected 2 to have length 1").
   await vi.waitFor(async () => {
     let removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
     while (removeBtn) {
@@ -235,7 +212,6 @@ describe('side panel composer attachment caps', () => {
     );
     await expectPendingCount(MANAGED_CHAT_MAX_ATTACHMENTS);
 
-    // This is the exact call executeChromeManagedChat makes on send.
     expect(() => createMultimodalUserContent('describe these', pendingDataUrls())).not.toThrow();
   });
 
@@ -271,11 +247,6 @@ describe('side panel composer attachment caps', () => {
     expect(pendingDataUrls()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS);
   });
 
-  // HARD-006: the intake pre-filter used to carry its own `10 * 1024 * 1024`
-  // literal, so a 10–12 MiB image the web composer, the mobile composer and the
-  // `/api/uploads/presign` route all accept was turned away here with "Each
-  // image must be under 10 MB". The pre-filter now reads the same
-  // MAX_CHAT_ATTACHMENT_BYTES those clients read.
   it('accepts a file between the retired 10 MB literal and the canonical per-file cap', async () => {
     expect(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES).toBeGreaterThan(10 * 1024 * 1024);
 

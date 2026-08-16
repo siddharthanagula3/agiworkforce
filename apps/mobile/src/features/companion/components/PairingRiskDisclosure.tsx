@@ -1,13 +1,3 @@
-/**
- * Plain-language risk disclosure for Dispatch pairing (PAR-M28).
- *
- * Pairing grants a remote computer the right to run work this phone sends it,
- * so the consequence has to be readable *before* the user can act — the repo's
- * trust-boundary rules do not allow a remote-execution grant to be one
- * unannotated button press. This sits directly beneath the pair button on both
- * the first-run setup screen and the returning disconnected screen, so there is
- * no entry path into scanning that skips it.
- */
 import { useCallback } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { ShieldAlert } from 'lucide-react-native';

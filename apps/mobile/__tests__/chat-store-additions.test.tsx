@@ -1,16 +1,4 @@
-/**
- * Tests for chatStore Wave 2 additions.
- *
- * Validates the new state fields and actions added in Wave 2:
- * - chatMode defaults and setter
- * - chatStyle defaults and setter
- * - toolAccess defaults and setter
- * - features defaults and setFeature toggle
- */
 
-// ---------------------------------------------------------------------------
-// Mocks — declared before imports
-// ---------------------------------------------------------------------------
 
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => null),
@@ -65,16 +53,8 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Imports (after mocks)
-// ---------------------------------------------------------------------------
-
 import { useChatStore } from '../stores/chatStore';
 import { useChatViewStore } from '../stores/chat/chatViewStore';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getState() {
   return useChatStore.getState();
@@ -89,17 +69,11 @@ function resetWave2State() {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('chatStore — Wave 2 additions', () => {
   beforeEach(() => {
     resetWave2State();
     jest.clearAllMocks();
   });
-
-  // ---- chatMode ----
 
   describe('chatMode', () => {
     it('defaults to "chat"', () => {
@@ -122,8 +96,6 @@ describe('chatStore — Wave 2 additions', () => {
       expect(getState().chatMode).toBe('chat');
     });
   });
-
-  // ---- chatStyle ----
 
   describe('chatStyle', () => {
     it('defaults to "concise" for new chats', () => {
@@ -152,8 +124,6 @@ describe('chatStore — Wave 2 additions', () => {
     });
   });
 
-  // ---- toolAccess ----
-
   describe('toolAccess', () => {
     it('defaults to "auto"', () => {
       expect(getState().toolAccess).toBe('auto');
@@ -175,8 +145,6 @@ describe('chatStore — Wave 2 additions', () => {
       expect(getState().toolAccess).toBe('auto');
     });
   });
-
-  // ---- features ----
 
   describe('features', () => {
     it('defaults to { webSearch: true, imageGen: true, health: false }', () => {
@@ -214,8 +182,8 @@ describe('chatStore — Wave 2 additions', () => {
 
       const features = getState().features;
       expect(features.webSearch).toBe(false);
-      expect(features.imageGen).toBe(true); // unchanged
-      expect(features.health).toBe(false); // unchanged
+      expect(features.imageGen).toBe(true);
+      expect(features.health).toBe(false);
     });
 
     it('can toggle multiple features independently', () => {
@@ -230,12 +198,8 @@ describe('chatStore — Wave 2 additions', () => {
     });
   });
 
-  // ---- Type coverage ----
-
   describe('type coverage', () => {
     it('ChatMode type accepts only valid values', () => {
-      // This test ensures the type system works — the store should
-      // accept exactly 'chat', 'research', 'create'
       const validModes = ['chat', 'research', 'create'] as const;
       for (const mode of validModes) {
         getState().setChatMode(mode);

@@ -79,10 +79,6 @@ describe('backgroundFetch Wave 1 approval notification dedupe', () => {
     const first = await mockDefinedTask!();
     const second = await mockDefinedTask!();
 
-    // expo-background-task has no NewData/NoData distinction, so the return
-    // value can no longer witness the dedupe — both runs report Success. The
-    // notification call count is the assertion that actually proves it: the
-    // second run saw the same approval batch and scheduled nothing.
     expect(first).toBe(BackgroundTask.BackgroundTaskResult.Success);
     expect(second).toBe(BackgroundTask.BackgroundTaskResult.Success);
     expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(1);

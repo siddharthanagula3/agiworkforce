@@ -46,43 +46,8 @@ import {
   sanitizePageText,
 } from './background/policy';
 
-// MAX_CONTEXT_HTML_CHARS now imported from policy.ts (L-14 audit 2026-05-19).
-// MAX_CONSOLE_BUFFER removed with the patchConsole feature (M-13 audit 2026-05-19).
-// MAX_CONSOLE_ENTRY_CHARS removed with the patchConsole feature (M-13 audit 2026-05-19).
 const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
-/** Skip outerHTML extraction when the DOM exceeds this many elements to avoid
- *  multi-second event-loop stalls on pathological SPAs. */
 const MAX_DOM_ELEMENTS_FOR_EXTRACTION = 50_000;
-
-/**
- * Safely extract page text content for the desktop LLM context.
- *
- * SECURITY (chrome-CRIT-1, audit 2026-05-04): the previous implementation
- * extracted `document.documentElement.outerHTML` and forwarded up to
- * MAX_CONTEXT_HTML_CHARS of raw markup to the desktop bridge. A hostile page
- * could embed indirect prompt-injection payloads in:
- *   - Hidden DOM nodes (`<div style="display:none">SYSTEM: …</div>`)
- *   - HTML comments (`<!-- SYSTEM: … -->`)
- *   - Inline `<script>` / `<style>` / `<noscript>` blocks
- *   - `aria-hidden` / off-screen elements
- *   - `meta`, `link`, `title` attributes
- * All of those landed verbatim in the LLM's planning context.
- *
- * Switching to `innerText` eliminates that surface in one stroke: the browser
- * computes layout-aware visible text, so script/style content, comments, and
- * `display:none` / `visibility:hidden` nodes are excluded automatically. The
- * function name and field name (`html`) are preserved to keep the wire format
- * stable; the desktop side already treats this slot as opaque text-for-LLM.
- *
- * Two correctness guards remain:
- * 1. Heuristic: skip when the DOM has more than MAX_DOM_ELEMENTS_FOR_EXTRACTION
- *    elements — `innerText` triggers a layout pass that can stall on huge SPAs.
- * 2. Elapsed-time: discard if extraction itself took longer than
- *    PAGE_EXTRACTION_TIMEOUT_MS (DOM access is synchronous and uninterruptible).
- */
-// INVISIBLE_UNICODE_RE and sanitizePageText are now imported from
-// `./background/policy` so tests can share the exact regex and redaction
-// chain that production uses. See self-review #1 in the audit (2026-05-19).
 
 function extractPageHtmlSafely(): string {
   try {
@@ -92,17 +57,11 @@ function extractPageHtmlSafely(): string {
       return '';
     }
     const extractStart = Date.now();
-    // `body.innerText` covers the visible content. Fall back to documentElement
-    // for edge cases (e.g. XML documents, very early DOMContentLoaded) where
-    // `body` may not yet be present.
     const rawText = document.body?.innerText ?? document.documentElement?.innerText ?? '';
     if (Date.now() - extractStart >= PAGE_EXTRACTION_TIMEOUT_MS) {
       logger.warn('Page-text extraction timed out, using empty content');
       return '';
     }
-    // SECURITY (H-06 audit 2026-05-19, self-review #1 audit 2026-05-19):
-    // collapse whitespace, then route through the policy module's
-    // sanitizePageText helper \u2014 single pure function shared with tests.
     const collapsed = rawText
       .replace(/[\t \u00a0]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
@@ -122,27 +81,17 @@ interface ActionExecutionResult {
   [key: string]: unknown;
 }
 
-/**
- * Module-level automation state. JavaScript is single-threaded so true data races
- * are impossible, but async/await yields between message handlers mean interleaving
- * IS possible. All mutation sites use idempotent guards to tolerate this.
- */
 const automationState: AutomationState = {
   isControlled: false,
   highlightedElement: null,
   isRecording: false,
   recordedActions: [],
   connectionStatus: 'disconnected',
-  // SECURITY (C-05 audit 2026-05-19): default selector-only recording.
-  // Flipped via SET_RECORDING_VALUE_CAPTURE which the message router
-  // restricts to extension-page senders (EXTENSION_PAGE_ONLY_MESSAGE_TYPES).
   captureValues: false,
 };
 let lastPointerTarget: Element | null = null;
 
 function initialize(): void {
-  // Wrap DOM injections in error boundaries — CSP-restricted pages or unusual
-  // document states (e.g. XML, SVG, sandboxed iframes) can cause these to throw.
   try {
     addAutomationIndicator();
   } catch (err) {
@@ -157,26 +106,7 @@ function initialize(): void {
   });
 
   void checkConnectionStatus();
-  // TAB_READY is readiness-only. Page context may cross the Chrome boundary
-  // only through the side-panel's explicit redacted preview and approval flow.
   void notifyTabReady();
-
-  // SECURITY (M-13 audit 2026-05-19): console-patch removed entirely, and STAYS
-  // removed. The previous design monkey-patched `console.*` on allowlisted pages
-  // so a console-log buffer could be read back. Two problems made it unsafe even
-  // behind the allowlist gate:
-  //   1. Page scripts can detect the patch (`console.log.toString()` differs)
-  //      — a fingerprint of "AGI Workforce is recording this page".
-  //   2. Replacing the page's own `console` interferes with any page-level
-  //      tool that hooks `console` (Babel-loader source-map injectors,
-  //      logging libraries, dev-tool extensions).
-  //
-  // The vestigial GET_CONSOLE_LOGS / CLEAR_CONSOLE_LOGS handlers and the empty
-  // buffer they answered were removed too (CHR-INPAGE-CONSOLE-PANEL-DEAD): with
-  // patching gone they could only ever return an empty list, and the side-panel
-  // Console viewer that consumed them has been deleted. Do NOT re-add console
-  // patching. If a future flow needs console data, use chrome.debugger / the
-  // DevTools Protocol — a documented per-tab API the user explicitly attaches to.
 
   try {
     initWebMCP();
@@ -190,7 +120,6 @@ function handleMessage(
   sender: chrome.runtime.MessageSender,
   sendResponse: (response?: ExtensionResponse) => void,
 ): boolean {
-  // Validate sender is our own extension — reject messages from other extensions or web pages
   if (sender.id !== chrome.runtime.id) {
     logger.warn('Rejected message from unauthorized sender', { senderId: sender.id });
     sendResponse({ success: false, error: 'Unauthorized sender' } as ExtensionResponse);
@@ -230,7 +159,6 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'CONNECTION_STATUS_CHANGED': {
       const statusMsg = message as ConnectionStatusChangedMessage;
       const newStatus = statusMsg.connected ? 'connected' : 'disconnected';
-      // Idempotent: skip redundant UI updates.
       if (automationState.connectionStatus === newStatus) {
         return { success: true } as ExtensionResponse;
       }
@@ -393,7 +321,6 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
           error: `Invalid or missing URL for navigate action: ${url}`,
         };
       }
-      // Validate that the URL is well-formed beyond the regex check
       try {
         const parsed = new URL(url);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -423,8 +350,6 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
     }
     case 'type':
     case 'input': {
-      // 'input' is recorded by the workflow recorder (change events on inputs);
-      // functionally equivalent to the 'type' action.
       const response = (await handleType({
         type: 'TYPE',
         selector: action.selector ?? '',
@@ -434,9 +359,6 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       return { type: actionType, ...response };
     }
     case 'scroll': {
-      // Recorded scroll actions store "scrollX,scrollY" in action.value.
-      // If selector is 'window' (or absent), scroll the viewport; otherwise
-      // scroll the matched element into view.
       const selector = action.selector ? String(action.selector) : 'window';
       if (selector === 'window' || selector === 'window.location') {
         const coords = String(action.value || '0,0').split(',');
@@ -562,10 +484,6 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       return { type: actionType, ...response };
     }
     case 'key': {
-      // Native keydown+keyup dispatch — `key` is passed as structured event data,
-      // never interpolated into a JS source string (closes CodeQL
-      // js/bad-code-sanitization #451-454 originally fired on the previous
-      // scriptForKey helper).
       const key = action.value ? String(action.value) : '';
       if (!key) {
         return { type: actionType, success: false, error: 'Missing key for key action' };
@@ -576,9 +494,6 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       return { type: actionType, success: true, key };
     }
     case 'hold_key': {
-      // Same as 'key' but with a delay between keydown and keyup. The duration is
-      // explicitly coerced to a finite non-negative number to avoid any chance of
-      // string-shaped data flowing through to setTimeout.
       const key = action.value ? String(action.value) : '';
       if (!key) {
         return { type: actionType, success: false, error: 'Missing key for hold_key action' };
@@ -605,12 +520,6 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
 async function handleRunPageActions(message: RunPageActionsMessage): Promise<ExtensionResponse> {
   const taskId = message.taskId || `task_${Date.now()}`;
   const actions = Array.isArray(message.actions) ? message.actions : [];
-  // SECURITY (C-03 audit 2026-05-19): defense-in-depth — re-validate every
-  // action type before executing the plan. handleSaveShortcut now rejects
-  // bad action types at save time, but stored shortcuts from older
-  // extension versions (pre-validator) may still contain unknown types.
-  // Reject the entire plan rather than the existing per-action `default`
-  // path which silently skipped them while still running siblings.
   if (actions.length > 0 && !validateShortcutActions(actions)) {
     return {
       success: false,
@@ -871,8 +780,6 @@ async function handleType(message: TypeMessage): Promise<ExtensionResponse> {
       element.dispatchEvent(keyEvent);
 
       if ('value' in element) {
-        // Use the native value setter to bypass React's synthetic property
-        // descriptor so controlled inputs detect the change correctly.
         const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
           element instanceof HTMLTextAreaElement
             ? HTMLTextAreaElement.prototype
@@ -949,10 +856,6 @@ async function handleGetAttribute(message: GetAttributeMessage): Promise<Extensi
   }
 }
 
-/**
- * Allowlist of safe attributes for setAttribute.
- * Blocks event handlers (on*) and dangerous URL attributes on sensitive elements.
- */
 const SAFE_ATTRIBUTES = new Set([
   'class',
   'id',
@@ -977,10 +880,8 @@ const SAFE_ATTRIBUTES = new Set([
   'maxlength',
 ]);
 
-/** Attributes that can inject URLs on script/link/form/iframe elements */
 const DANGEROUS_URL_ATTRIBUTES = new Set(['src', 'href', 'action', 'formaction']);
 
-/** Elements where URL attributes are dangerous */
 const SENSITIVE_URL_ELEMENTS = new Set([
   'SCRIPT',
   'LINK',
@@ -994,17 +895,14 @@ const SENSITIVE_URL_ELEMENTS = new Set([
 function isAttributeAllowed(attribute: string, element: Element): boolean {
   const lowerAttr = attribute.toLowerCase();
 
-  // Block all event handler attributes
   if (lowerAttr.startsWith('on')) {
     return false;
   }
 
-  // Allow data-* and aria-* prefixed attributes
   if (lowerAttr.startsWith('data-') || lowerAttr.startsWith('aria-')) {
     return true;
   }
 
-  // Block dangerous URL attributes on sensitive elements
   if (DANGEROUS_URL_ATTRIBUTES.has(lowerAttr) && SENSITIVE_URL_ELEMENTS.has(element.tagName)) {
     return false;
   }
@@ -1053,10 +951,6 @@ async function handleWaitForSelector(message: WaitForSelectorMessage): Promise<E
   }
 }
 
-/**
- * Allowlisted script operations that can be executed via handleExecuteScript.
- * SECURITY: no dynamic code execution APIs are used. Only pre-defined operations are allowed.
- */
 const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown> = {
   navigateTo: (...args: unknown[]) => {
     const url = String(args[0] ?? '');
@@ -1149,13 +1043,6 @@ function handleGetPageInfo(): GetPageInfoResponse {
 
     const html = extractPageHtmlSafely();
 
-    // Structured page metadata (JSON-LD, Open Graph, Twitter Card, canonical,
-    // headings, …) rides along the explicit GET_PAGE_INFO capture so synced page
-    // context actually carries it. This is DATA describing the page, never
-    // instructions — the untrusted-page boundary is unchanged: extractPageMetadata
-    // caps per-block JSON-LD size and recursion depth, and callers must treat the
-    // fields as page content. The disabled implicit SYNC_PAGE_CONTEXT path stays
-    // disabled; metadata only travels the approved page-info channel.
     let metadata: ReturnType<typeof extractPageMetadata> | undefined;
     try {
       metadata = extractPageMetadata();
@@ -1242,7 +1129,6 @@ async function handleFillForm(message: FillFormMessage): Promise<ExtensionRespon
   }
 }
 
-/** Guard to prevent concurrent autofill requests from stomping on each other. */
 let _isAutofillingNow = false;
 
 async function handleAutoFillJobApplication(
@@ -1261,8 +1147,6 @@ async function handleAutoFillJobApplication(
     typeof message.options === 'object' && message.options !== null ? message.options : {};
 
   // Safety gate: autoSubmit always requires explicit user confirmation via a
-  // browser confirm() dialog — ignoring any payload-supplied confirmation flags,
-  // which cannot be trusted (EXT-AUTOSUBMIT-NO-CONFIRM).
   const safeOptions = { ...options };
   if (safeOptions.autoSubmit === true) {
     const confirmed = window.confirm(
@@ -1287,21 +1171,6 @@ async function handleAutoFillJobApplication(
   }
 }
 
-/**
- * AGI_RUN_AUTOFILL handler — runs the fast-path platform autofill and then
- * calls makeEscalationDecision to determine whether the computer-use agent
- * loop should be started.
- *
- * ARCHITECTURE (secure 3-context design):
- *   1. Side panel sends AGI_RUN_AUTOFILL → this content-script handler.
- *   2. Handler runs autofill + returns escalation decision in sendResponse.
- *   3. Side panel checks escalation.shouldEscalate and, if true, sends
- *      AGI_START_COMPUTER_USE to the background service worker.
- *   4. Background (not content script) starts the CDP agent loop.
- *
- * SECURITY: this handler only reads the DOM and fills form fields. It never
- * starts chrome.debugger. The CDP loop stays in the background service worker.
- */
 async function handleRunAutofill(): Promise<ExtensionResponse> {
   try {
     const profile = await loadAutofillProfile();
@@ -1316,7 +1185,6 @@ async function handleRunAutofill(): Promise<ExtensionResponse> {
 
     const { platform, fields } = detection;
 
-    // Run the platform-specific fast-path autofill
     let autofillResult;
     if (platform === 'greenhouse') {
       autofillResult = await autofillGreenhouse(profile);
@@ -1333,7 +1201,6 @@ async function handleRunAutofill(): Promise<ExtensionResponse> {
       } as ExtensionResponse;
     }
 
-    // Build profileValues map for escalation read-back verification
     const profileValues: Record<string, string> = Object.fromEntries(
       fields.map((f) => {
         const v = resolveProfileValue(profile, f.key);
@@ -1341,10 +1208,6 @@ async function handleRunAutofill(): Promise<ExtensionResponse> {
       }),
     );
 
-    // Ashby marks its async typeahead + file-picker fields skipped with a
-    // reason the engine's file_upload trigger doesn't match; without passing the
-    // platform's always-escalate keys the run reports "no escalation needed" and
-    // the resume is never attached. Feed them so those fields trigger escalation.
     const alwaysEscalate = platform === 'ashby' ? ASHBY_ALWAYS_ESCALATE_KEYS : undefined;
     const escalation = makeEscalationDecision(
       autofillResult.filled,
@@ -1549,9 +1412,6 @@ async function handleClickAtCoordinates(
 ): Promise<ExtensionResponse> {
   try {
     const { x, y, button = 'left' } = message;
-    // M-15 audit 2026-05-19: explicit bounds check. `elementFromPoint`
-    // returns null for out-of-viewport coordinates, but a NaN / Infinity
-    // input would propagate through and silently fail. Reject early.
     if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
       return { success: false, error: `Coordinates (${x}, ${y}) out of bounds` };
     }
@@ -1583,10 +1443,6 @@ async function handleClickAtCoordinates(
   }
 }
 
-// SECURITY (M-12 audit 2026-05-19): cap the total number of nodes in the
-// generated accessibility tree. Without this, a hostile page with 100K+
-// nested elements would generate a multi-MB JSON serialization that
-// crosses the message boundary and stalls the renderer.
 const MAX_ACCESSIBILITY_TREE_NODES = 5000;
 
 interface AccessibilityWalkState {
@@ -1653,12 +1509,6 @@ function handleBuildAccessibilityTree(): ExtensionResponse {
   }
 }
 
-/**
- * A recorded user action with a human-friendly shape.
- * Stored separately from the legacy RecordedAction interface in types.ts so
- * the DOM recorder can use precise 'click' | 'input' | 'scroll' | 'navigate'
- * strings without fighting the NativeMessageType union.
- */
 interface UserRecordedAction {
   type: 'click' | 'input' | 'scroll' | 'navigate';
   selector: string;
@@ -1668,20 +1518,11 @@ interface UserRecordedAction {
 
 const _userRecordedActions: UserRecordedAction[] = [];
 
-// ─── C-05 recorded-value sanitization ─────────────────────────────────────────
-//
-// Uses the shared `redactSecrets` SSOT (packages/platform/utils/src/logger.ts).
-
-/**
- * Returns null for fields that should not be recorded at all (passwords),
- * `'[REDACTED]'` for fields whose autocomplete declares sensitive content,
- * and a secret-redacted string for everything else.
- */
 function sanitizeRecordedValue(
   target: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
 ): string | null {
   if (target instanceof HTMLInputElement && target.type === 'password') {
-    return null; // never record password fields, even with [REDACTED] marker
+    return null;
   }
   const autocomplete = (target.getAttribute('autocomplete') ?? '').toLowerCase();
   if (
@@ -1701,10 +1542,6 @@ let _recordingScrollListener: (() => void) | null = null;
 let _recordingNavListener: (() => void) | null = null;
 let _recordingIndicatorHost: HTMLElement | null = null;
 
-/**
- * Build a short CSS selector that uniquely identifies an element.
- * Prefers id > [data-testid] > tag+class combo. Falls back to tag name.
- */
 function buildCssSelector(el: Element): string {
   if (el.id) {
     return `#${CSS.escape(el.id)}`;
@@ -1733,10 +1570,6 @@ function showRecordingIndicator(): void {
 
   const shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
-  // Self-review #6 audit 2026-05-19: visually differentiate value-capture
-  // mode from selector-only via the pill background. Red (danger) means
-  // "values being recorded — passwords/cc dropped, others redacted";
-  // amber means "selector only — values never captured".
   const isValueMode = automationState.captureValues;
   const bgColor = isValueMode ? 'rgba(30,10,10,0.88)' : 'rgba(40,30,5,0.88)';
   const accentColor = isValueMode ? '#ef4444' : '#f59e0b';
@@ -1766,10 +1599,6 @@ function showRecordingIndicator(): void {
   const circle = document.createElement('div');
   circle.className = 'agi-rec-circle';
   badge.appendChild(circle);
-  // SECURITY (C-05 audit 2026-05-19): make the capture mode visible to the
-  // user. "REC" alone hid the difference between selector-only and
-  // value-capture sessions; a value-capture recording can persist API
-  // keys / form contents to chrome.storage.local.
   const modeLabel = automationState.captureValues ? 'REC (values)' : 'REC (selector only)';
   badge.appendChild(document.createTextNode(modeLabel));
   shadow.appendChild(style);
@@ -1806,11 +1635,6 @@ function attachRecordingListeners(): void {
       !(target instanceof HTMLSelectElement)
     )
       return;
-    // SECURITY (C-05 audit 2026-05-19): selector-only by default. When the
-    // user opts in to value capture, password / cc-* / one-time-code /
-    // current-password / new-password fields are redacted, and the
-    // remaining value is run through redactSecrets to catch API-key-shaped
-    // tokens the user might type into a tracked input.
     const action: UserRecordedAction = {
       type: 'input',
       selector: buildCssSelector(target),
@@ -1825,7 +1649,6 @@ function attachRecordingListeners(): void {
     _userRecordedActions.push(action);
   };
 
-  // Throttle scroll recording — at most one entry per 500 ms.
   let _lastScrollTs = 0;
   _recordingScrollListener = () => {
     if (!automationState.isRecording) return;
@@ -1878,8 +1701,6 @@ function detachRecordingListeners(): void {
 function handleSetRecordingValueCapture(message: { enabled?: unknown }): ExtensionResponse {
   const enabled = message.enabled === true;
   automationState.captureValues = enabled;
-  // Re-render the indicator if we're currently recording so the user can
-  // see the change immediately.
   if (automationState.isRecording) {
     hideRecordingIndicator();
     showRecordingIndicator();
@@ -1888,14 +1709,10 @@ function handleSetRecordingValueCapture(message: { enabled?: unknown }): Extensi
 }
 
 function handleStartRecording(): ExtensionResponse {
-  // L-03 audit 2026-05-19: `automationState.recordedActions` is the legacy
-  // typed-state field; `_userRecordedActions` is the live buffer the
-  // recording listeners actually mutate. Resetting both implied dual
-  // ownership; reset only the live buffer here.
   automationState.isRecording = true;
   _userRecordedActions.length = 0;
 
-  detachRecordingListeners(); // defensive cleanup in case of double-start
+  detachRecordingListeners();
   attachRecordingListeners();
   showRecordingIndicator();
 
@@ -1911,10 +1728,6 @@ function handleStopRecording(): ExtensionResponse {
   hideRecordingIndicator();
 
   const actions = [..._userRecordedActions];
-  // The recording consumer (side panel Save flow) reads actions back through the
-  // STOP_RECORDING response and GET_RECORDED_ACTIONS, then persists them as a
-  // saved shortcut via SAVE_SHORTCUT. Nothing ever read `agi_recorded_actions`
-  // from chrome.storage.local, so that write was a persistence illusion — removed.
   chrome.runtime
     .sendMessage({
       type: 'STOP_RECORDING',
@@ -1947,16 +1760,8 @@ async function checkConnectionStatus(): Promise<void> {
   }
 }
 
-// Shadow host kept in module scope so updateIndicatorStatus() can reach the inner element.
-
 let _indicatorShadow: ShadowRoot | null = null;
 
-// SECURITY (M-13 audit 2026-05-19): patchConsole / patchConsoleIfAllowlisted
-// removed and STAY removed. The `consoleLogBuffer` and GET_CONSOLE_LOGS /
-// CLEAR_CONSOLE_LOGS handlers that fed the (deleted) side-panel Console viewer
-// were removed too — see the comment in initialize() for the rationale.
-
-/** Shadow DOM prevents page CSS/JS from hiding or detecting the indicator. */
 function addAutomationIndicator(): void {
   if (!document.body) return;
 
@@ -2020,9 +1825,6 @@ function updateIndicatorStatus(): void {
 }
 
 function initWebMCP(): void {
-  // Delay to let page scripts register their tools first.
-  // Wrapped in a try/catch so a misconfigured page (e.g. strict CSP that blocks
-  // mutation observers) cannot bring down the whole content script.
   setTimeout(() => {
     try {
       const discovery = discoverAllTools();
@@ -2063,8 +1865,6 @@ function initWebMCP(): void {
       logger.debug('WebMCP watchForToolChanges failed (non-fatal)', err);
     }
 
-    // NLWeb detection — async and non-blocking. Runs after WebMCP discovery
-    // to avoid contention on the initial page load network requests.
     detectNLWeb(window.location.href)
       .then((nlwebResult) => {
         if (nlwebResult.supported) {
@@ -2081,7 +1881,6 @@ function initWebMCP(): void {
               timestamp: Date.now(),
             })
             .catch((err) => {
-              // Background may not be listening yet
               logger.debug('NLWeb notification to background failed', err);
             });
         }
@@ -2110,8 +1909,6 @@ async function handleWebMCPCallTool(
   return result as ExtensionResponse;
 }
 
-// [H9 fix] Allowlist of known message types — prevents unknown type strings from being processed
-// Note: CAPTURE_SCREENSHOT is intentionally excluded — it is handled in background.ts, not here.
 const VALID_MESSAGE_TYPES = new Set([
   'CLICK',
   'DOUBLE_CLICK',
@@ -2134,7 +1931,6 @@ const VALID_MESSAGE_TYPES = new Set([
   'CONNECTION_STATUS_CHANGED',
   'TAB_READY',
   'SYNC_PAGE_CONTEXT',
-  // Element interaction messages forwarded from background
   'SELECT_OPTION',
   'CHECK',
   'UNCHECK',
@@ -2144,18 +1940,14 @@ const VALID_MESSAGE_TYPES = new Set([
   'SCROLL',
   'DRAG_DROP',
   'CLICK_AT_COORDINATES',
-  // Accessibility
   'GET_ACCESSIBILITY_TREE',
   'BUILD_ACCESSIBILITY_TREE',
-  // Recording
   'START_RECORDING',
   'STOP_RECORDING',
   'GET_RECORDED_ACTIONS',
   'SET_RECORDING_VALUE_CAPTURE',
-  // WebMCP
   'WEBMCP_DISCOVER_TOOLS',
   'WEBMCP_CALL_TOOL',
-  // Autofill + escalation orchestration (side panel → content script)
   'AGI_RUN_AUTOFILL',
 ]);
 
@@ -2165,11 +1957,9 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   }
 
   const msg = message as Record<string, unknown>;
-  // [H9 fix] Validate type is a non-empty string in the known message type allowlist
   return typeof msg['type'] === 'string' && VALID_MESSAGE_TYPES.has(msg['type']);
 }
 
 initialize();
 
-// Export for testing
 export { automationState, handleMessage, checkConnectionStatus };

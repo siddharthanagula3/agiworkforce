@@ -13,9 +13,6 @@ import { Button } from './Button';
 import { Input } from './Input';
 import { Label } from './Label';
 
-// Identical across web/desktop (only mechanical 'use client' diff — this file is a
-// thin wrapper around Dialog/Button/Input/Label, whose own drift is resolved in
-// their respective files in this package).
 export interface PromptDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;

@@ -1,17 +1,3 @@
-/**
- * Regression test: the Google adapter must send the API key via the
- * `x-goog-api-key` HTTP header — never as a `?key=...` query string.
- *
- * Why: a key in the URL leaks into:
- *   - server access logs (most reverse proxies log full URLs)
- *   - browser history (web targets via the `fetch` polyfill chain)
- *   - HTTP `Referer` headers when the request triggers a redirect
- *   - any HTTPS-terminating proxy in the path (corporate MITM, devtools)
- *
- * The fix uses the documented header path. This test exercises both the
- * `stream()` entrypoint and `fetchGoogleCatalog()` to catch any future
- * regression at either site.
- */
 
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
@@ -45,7 +31,6 @@ function emptySseBody(): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
-      // One minimal SSE frame so the parser has something to terminate on.
       controller.enqueue(
         encoder.encode('data: {"candidates":[{"finishReason":"STOP"}],"usageMetadata":{}}\n\n'),
       );
@@ -67,7 +52,6 @@ describe('Google adapter API key transport', () => {
     };
 
     const ac = new AbortController();
-    // Drain the stream so the fetch call actually fires.
     for await (const _ of adapter.stream(req, ac.signal)) {
       void _;
     }
@@ -75,22 +59,15 @@ describe('Google adapter API key transport', () => {
     expect(calls).toHaveLength(1);
     const call = calls[0]!;
 
-    // URL must NOT carry the key.
     expect(call.url).not.toContain(FAKE_KEY);
     expect(call.url).not.toMatch(/[?&]key=/);
-    // Header MUST carry the key.
     const headers = new Headers(call.init?.headers);
     expect(headers.get('x-goog-api-key')).toBe(FAKE_KEY);
-    // A signal must propagate so cancellation works through the wire. It is now a
-    // COMBINED signal (caller signal + a headers timeout that bounds a hung
-    // upstream), so assert the linkage — aborting the caller aborts the signal the
-    // fetch received — rather than object identity.
     const passedSignal = call.init?.signal;
     expect(passedSignal).toBeInstanceOf(AbortSignal);
     expect(passedSignal?.aborted).toBe(false);
     ac.abort();
     expect(passedSignal?.aborted).toBe(true);
-    // Body shape sanity: POST with a JSON content-type.
     expect(call.init?.method).toBe('POST');
     expect(headers.get('content-type')).toBe('application/json');
   });

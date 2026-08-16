@@ -1,14 +1,3 @@
-/**
- * Parity with references-2 voice-03 / voice-05 and ChatGPT iOS IMG_0674-0678,
- * where voice is a state the chat is IN rather than a screen you enter: the
- * thread stays visible and only the composer changes.
- *
- * What is pinned here is the control set and, more importantly, that exit and
- * mute are distinguishable. In the reference the exit is the one solid white
- * control on the bar; everything else is a dark pill. Collapsing those two —
- * or labelling them ambiguously — means a user trying to mute silently drops
- * out of voice, or worse, thinks they left while the mic is still live.
- */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -21,10 +10,6 @@ import {
 import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 
-// The bar now reads safe-area insets so its exit control clears the home
-// indicator — round 5 found it clipped off the bottom edge entirely, tappable
-// only through the a11y tree. Supply real metrics rather than mocking the hook,
-// so a missing provider stays a visible failure.
 const METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 47, left: 0, right: 0, bottom: 34 },
@@ -44,7 +29,6 @@ function renderBar(props: Partial<React.ComponentProps<typeof VoiceInlineBar>> =
   );
 }
 
-/** Flattened backgroundColor of a control, whichever style form it uses. */
 function backgroundOf(node: { props: { style: unknown } }): string | undefined {
   const style = node.props.style;
   const flat = (Array.isArray(style) ? style : [style]).filter(Boolean) as Array<
@@ -73,8 +57,6 @@ describe('VoiceInlineBar', () => {
   });
 
   it('exits without toggling the mic', () => {
-    // The confusion this guards: exit and mute sitting adjacent means wiring
-    // them to the same handler is an easy mistake and a silent one.
     const onExit = jest.fn();
     const onToggleMic = jest.fn();
     const { getByLabelText } = renderBar({ onExit, onToggleMic });
@@ -97,9 +79,6 @@ describe('VoiceInlineBar', () => {
   });
 
   describe('mute is legible on screen, not just in the handler', () => {
-    // PAR-M04: the mic used to tint from `phase === 'listening'` and never
-    // received `muted` at all, so muting while the model spoke changed nothing.
-    // A user could not tell whether the microphone was live — a privacy defect.
 
     it('announces the action the current state affords', () => {
       expect(renderBar({ muted: false }).getByLabelText('Mute microphone')).toBeTruthy();
@@ -126,8 +105,6 @@ describe('VoiceInlineBar', () => {
     });
 
     it('keeps the listening tint independent of mute', () => {
-      // Two orthogonal signals: "the mic is open at all" and "sound is arriving
-      // right now". Folding them together is what hid the mute state.
       const listening = renderBar({ phase: 'listening', muted: false });
       expect(backgroundOf(listening.getByLabelText('Mute microphone'))).toBe(colors.inputSurface);
 
@@ -139,9 +116,6 @@ describe('VoiceInlineBar', () => {
   });
 
   describe('the composer pill only claims what it can do', () => {
-    // PAR-M02: both shipped call sites omitted `onOpenKeyboard`, so an
-    // input-shaped pill rendered `accessibilityRole="button"` with no handler
-    // and swallowed every tap.
 
     it('is a button only when a handler is supplied', () => {
       const wired = renderBar({ onOpenKeyboard: jest.fn() });
@@ -173,7 +147,6 @@ describe('VoiceInlineBar', () => {
   });
 
   it('omits attachment entirely when the host provides no handler', () => {
-    // Rendered dead, a "+" that does nothing reads as a bug.
     const { queryByLabelText } = renderBar();
     expect(queryByLabelText('Add attachment')).toBeNull();
   });

@@ -17,8 +17,6 @@ import {
   routePathForFile,
 } from './check-surface-invariants.mjs';
 
-// --- keybinding-tolerates-no-args -----------------------------------------
-
 test('a keybinding with no args fails against a handler that requires one', () => {
   const sources = new Map([
     [
@@ -44,7 +42,6 @@ test('a keybinding with no args fails against a handler that requires one', () =
     keybindings: [
       { command: 'ext.needsSession', key: 'escape' },
       { command: 'ext.optionalSession', key: 'ctrl+r' },
-      // Explicit args are how a keybinding legitimately targets an arg-taking command.
       { command: 'ext.needsSession', key: 'ctrl+k', args: 'session-1' },
     ],
     arities,
@@ -85,8 +82,6 @@ test('requiredArity stops at the first optional parameter', () => {
   assert.equal(requiredArity(''), 0);
   assert.equal(requiredArity('{ a, b }: Options'), 1);
 });
-
-// --- route-has-navigation --------------------------------------------------
 
 test('routes are matched against navigation literals, including template prefixes', () => {
   assert.equal(routePathForFile('(app)/settings/index.tsx'), '/settings');
@@ -161,8 +156,6 @@ test('a route file cannot vouch for itself', () => {
   assert.equal(violations.length, 1);
 });
 
-// --- persisted-field-has-reader --------------------------------------------
-
 test('extractPersistedKeys captures persisted fields from both arrow-body shapes', () => {
   const concise = extractPersistedKeys(
     [
@@ -181,14 +174,12 @@ test('extractPersistedKeys captures persisted fields from both arrow-body shapes
   assert.ok(!concise.has('nested'), 'a wrapper object is not itself a persisted field');
   assert.ok(!concise.has('derived'), 'only state-derived properties are persisted fields');
 
-  // A value wrapped in a call still derives from state and is still persisted.
   assert.ok(
     extractPersistedKeys('partialize: (state) => ({ drafts: Array.from(state.drafts) })').has(
       'drafts',
     ),
   );
 
-  // Block body with a conditional return: no brace-depth heuristic may drift.
   const block = extractPersistedKeys(
     [
       'partialize: (state) => {',
@@ -202,8 +193,6 @@ test('extractPersistedKeys captures persisted fields from both arrow-body shapes
   );
   assert.deepEqual([...block].sort(), ['always', 'nativeOnly']);
 });
-
-// --- collection-has-reader -------------------------------------------------
 
 test('a Map that is only written is reported; one that is iterated is not', () => {
   const writeOnly = findWriteOnlyCollections(
@@ -248,8 +237,6 @@ test('a web-storage key with no reader anywhere in the repo is reported', () => 
     'a reader in any module clears the finding',
   );
 });
-
-// --- allowlist plumbing ----------------------------------------------------
 
 test('the invariant allowlist demands a reason and a tracker, and rejects duplicates', () => {
   assert.throws(() => readAllowlist({ schemaVersion: 2, invariants: {} }), /schemaVersion 1/);

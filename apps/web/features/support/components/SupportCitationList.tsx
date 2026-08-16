@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * The only component in the widget that renders an anchor for a reply.
- *
- * Citations arrive already normalized (`normalize-answer.ts` dropped anything
- * whose URL was not a same-origin path or an http(s) URL), so this component's
- * job is presentation: real links, never colour-only, ≥24px targets, and an
- * explicit screen-reader suffix on anything that opens a new tab.
- *
- * Plain `<a>` rather than `next/link` on purpose — a citation click is a
- * deliberate exit from the widget to the documentation, and a plain anchor
- * keeps this component renderable outside a router context (including in
- * isolation tests).
- */
-
 import type { SupportCitation } from '../lib/contract';
 import { isInternalCitationUrl } from '../lib/normalize-answer';
 import styles from './SupportWidget.module.css';

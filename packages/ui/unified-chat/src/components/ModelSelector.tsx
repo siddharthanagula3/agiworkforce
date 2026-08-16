@@ -53,13 +53,6 @@ import { TASK_LABEL } from '../lib/promptClassifier';
 import { getModelsAdmittedForExecutionMode } from '../lib/modelAdmission';
 import { isChatModelSelectable } from '../lib/modelInfo';
 
-// ---------------------------------------------------------------------------
-// Capability tier map — derived from models.json qualityTier (single source
-// of truth per memory/rule-models-json.md). 'fast' -> 'fastest',
-// 'balanced' -> 'balanced', 'best' -> 'most-capable'. Stale hand-typed IDs
-// are dropped automatically; new entries in models.json appear without code
-// edits.
-// ---------------------------------------------------------------------------
 function qualityTierToCapability(tier: ModelQualityTier | undefined): CapabilityTier {
   switch (tier) {
     case 'fast':
@@ -77,7 +70,6 @@ const MODEL_CAPABILITY: Record<string, CapabilityTier> = Object.fromEntries(
   Object.entries(modelsById).map(([id, model]) => [id, qualityTierToCapability(model.qualityTier)]),
 );
 
-/** Map ModelInfo.tier to CapabilityTier for models not in MODEL_CAPABILITY. */
 function tierToCapability(tier: ModelInfo['tier']): CapabilityTier {
   switch (tier) {
     case 'fast':
@@ -93,15 +85,11 @@ function getCapability(model: ModelInfo): CapabilityTier {
   return MODEL_CAPABILITY[model.id] ?? tierToCapability(model.tier);
 }
 
-// ---------------------------------------------------------------------------
-// Simple-Icons SVG logo helper
-// ---------------------------------------------------------------------------
 interface IconData {
   path: string;
   hex: string;
 }
 
-/** Map from normalized provider key to simple-icons data (or null for dot fallback). */
 const SIMPLE_ICON_MAP: Record<string, IconData | null> = {
   anthropic: siAnthropic,
   google: siGoogle,
@@ -111,7 +99,6 @@ const SIMPLE_ICON_MAP: Record<string, IconData | null> = {
   qwen: siQwen,
   ollama: siOllama,
   moonshot: siMoonshotai,
-  // No simple-icons for these — use brand-color dot:
   openai: null,
   xai: null,
   zhipu: null,
@@ -121,9 +108,6 @@ const SIMPLE_ICON_MAP: Record<string, IconData | null> = {
   managed_cloud: null,
 };
 
-// ---------------------------------------------------------------------------
-// Provider brand color — prefers PROVIDER_DISPLAY, fallback to simple-icon hex
-// ---------------------------------------------------------------------------
 function getProviderBrandColor(providerKey: string): string {
   const displayKey = providerKey as ProviderId;
   if (PROVIDER_DISPLAY[displayKey]) {
@@ -134,15 +118,11 @@ function getProviderBrandColor(providerKey: string): string {
   return '#71717A';
 }
 
-// ---------------------------------------------------------------------------
-// Provider label
-// ---------------------------------------------------------------------------
 function getProviderLabel(providerKey: string): string {
   const displayKey = providerKey as ProviderId;
   if (PROVIDER_DISPLAY[displayKey]) {
     return PROVIDER_DISPLAY[displayKey].label;
   }
-  // Fallback for providers not in PROVIDER_DISPLAY (mistral, groq, etc.)
   const fallback: Record<string, string> = {
     managed_cloud: 'AGI Cloud',
     mistral: 'Mistral AI',
@@ -153,17 +133,12 @@ function getProviderLabel(providerKey: string): string {
   return fallback[providerKey] ?? providerKey.charAt(0).toUpperCase() + providerKey.slice(1);
 }
 
-// ---------------------------------------------------------------------------
-// Provider logo — SVG inline or brand-color dot
-// ---------------------------------------------------------------------------
 interface ProviderLogoProps {
   providerKey: string;
   size?: number;
 }
 
 function ProviderLogo({ providerKey, size = 16 }: ProviderLogoProps) {
-  // AGI's own routed-auto provider gets the brand mark, not a generic dot —
-  // matches web's ProviderLogo() convention for the same `managed_cloud` case.
   if (providerKey === 'agi-cloud' || providerKey === 'managed_cloud') {
     return <AgiMark size={size} mono />;
   }
@@ -186,7 +161,6 @@ function ProviderLogo({ providerKey, size = 16 }: ProviderLogoProps) {
     );
   }
 
-  // Brand-color dot fallback
   return (
     <span
       style={{
@@ -202,9 +176,6 @@ function ProviderLogo({ providerKey, size = 16 }: ProviderLogoProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Tier badge (unchanged — kept per spec)
-// ---------------------------------------------------------------------------
 interface TierBadgeProps {
   tier: ModelInfo['tier'];
   className?: string;
@@ -253,9 +224,6 @@ function TierBadge({ tier, className }: TierBadgeProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Context window formatter
-// ---------------------------------------------------------------------------
 function formatContext(tokens: number): string {
   if (tokens <= 0) return 'Unknown';
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(0)}M`;
@@ -263,9 +231,6 @@ function formatContext(tokens: number): string {
   return String(tokens);
 }
 
-// ---------------------------------------------------------------------------
-// Thinking toggle — shown only when the selected model allows reasoning off/on
-// ---------------------------------------------------------------------------
 interface ThinkingToggleProps {
   enabled: boolean;
   enabledEffort: Effort;
@@ -306,9 +271,6 @@ function ThinkingToggle({ enabled, enabledEffort, onChange }: ThinkingToggleProp
   );
 }
 
-// ---------------------------------------------------------------------------
-// "Best (auto)" header row — visually distinct synthetic option
-// ---------------------------------------------------------------------------
 interface BestAutoRowProps {
   isSelected: boolean;
   onSelect: () => void;
@@ -384,41 +346,20 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
   );
 }
 
-// ---------------------------------------------------------------------------
-// ModelSelector props
-// ---------------------------------------------------------------------------
 export interface ModelSelectorProps {
-  /** Called when the user clicks "Manage API Keys" at the bottom of the popover. */
   onSettingsClick?: () => void;
   className?: string;
-  /** When false, an empty host model list shows setup messaging instead of cloud fallback models. */
   allowFallbackModels?: boolean;
-  /** Current effort level for the thinking/reasoning toggle. */
   effort?: Effort | null;
-  /** Called when the user toggles thinking on/off. ON = 'medium', OFF = null. */
   onEffortChange?: (effort: Effort | null) => void;
-  /**
-   * Called when a user whose tier cannot switch provider mid-thread attempts
-   * to pick a model from a different provider. Receives the attempted provider
-   * id and the conversation's current provider. The host typically opens
-   * billing or shows MaxUpgradePrompt. When omitted, the gate falls open
-   * (back-compat — host hasn't wired tier gating yet).
-   *
-   * The admitting tier is owned by `canSwitchProviderInThread()`, not by this
-   * prop's name — keep the name tier-agnostic so it survives pricing changes.
-   */
   onProviderSwitchUpgradeRequired?: (info: {
     attemptedProvider: string;
     currentProvider: string;
     attemptedModelId: string;
   }) => void;
-  /** Prevents model authority changes while the current turn is in flight. */
   disabled?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Provider order — groups shown in this sequence
-// ---------------------------------------------------------------------------
 const PROVIDER_ORDER = [
   'anthropic',
   'openai',
@@ -467,9 +408,6 @@ function providerSortKey(key: string): number {
   return idx === -1 ? PROVIDER_ORDER.length : idx;
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 export function ModelSelector({
   onSettingsClick,
   className,
@@ -487,10 +425,6 @@ export function ModelSelector({
   const activeConversation = useChatStore((state) =>
     state.conversations.find((conversation) => conversation.id === state.activeConversationId),
   );
-  // A conversation carries its own immutable boundary; before one exists the
-  // client runtime owns the answer. This package must not read the host's
-  // storage itself — guessing Cloud there labels a Local workspace with the
-  // managed catalog.
   const executionMode: ChatExecutionMode =
     activeConversation?.executionMode ?? resolveClientChatExecutionMode();
 
@@ -514,10 +448,6 @@ export function ModelSelector({
   const previousConversationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // A host may retain the last verified same-boundary models while it
-    // refreshes reachability. Do not turn a transient discovery state into a
-    // model-authority change; the host clears synchronously on real boundary
-    // switches.
     if (modelCatalogStatus === 'loading') return;
 
     const conversationId = activeConversation?.id ?? null;
@@ -550,18 +480,9 @@ export function ModelSelector({
     selectableModels,
     selectedModelId,
     modelCatalogStatus,
-    // Read above to decide whether an unadmitted selection falls back to the
-    // first selectable model or to none. Omitting it meant a boundary switch
-    // INTO cloud_managed left the selection empty until some other dependency
-    // happened to change, because the effect never re-ran on the switch itself.
     executionMode,
   ]);
 
-  // Provider-switch gate — when a user whose tier cannot switch provider
-  // mid-thread picks a model from a different provider than the conversation's
-  // current one, fire onProviderSwitchUpgradeRequired instead of switching.
-  // The conversation's provider is set by the host once the first message is
-  // sent (see tierStore.setCurrentConversationProvider).
   const guardedSelectModel = (modelId: string) => {
     if (disabled) return;
     const target = displayModels.find((m) => m.id === modelId);
@@ -589,16 +510,8 @@ export function ModelSelector({
     }
   };
 
-  // Track which provider groups are collapsed
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  // Separate out auto / managed_cloud models — "Best (auto)" lives in its own header section.
-  // Everything else goes in provider groups.
-  //
-  // AUDIT-FIX CMP-21: the partition used `m.id.startsWith('auto')`, a string
-  // prefix that both over-matches (any future model id beginning "auto") and
-  // under-matches (an Auto alias the catalog names differently). The catalog
-  // exposes the authoritative predicate.
   const autoModels = displayModels.filter(
     (m) => m.provider === 'managed_cloud' || isAutoModeModelId(m.id),
   );
@@ -606,7 +519,6 @@ export function ModelSelector({
     (m) => m.provider !== 'managed_cloud' && !isAutoModeModelId(m.id),
   );
 
-  // Group by provider, sorted per PROVIDER_ORDER
   const grouped = providerModels.reduce<Record<string, ModelInfo[]>>((acc, m) => {
     const key = m.provider.toLowerCase();
     if (!acc[key]) acc[key] = [];
@@ -618,14 +530,6 @@ export function ModelSelector({
     return providerSortKey(a) - providerSortKey(b);
   });
 
-  // Determine the primary "Best (auto)" model ID to select.
-  //
-  // AUDIT-FIX CMP-21: this hardcoded 'auto' then fell back to 'auto-balanced' —
-  // an alias the catalog marks `selectable: false` in routing-policies.json, so
-  // the fallback could name a profile the catalog deliberately excludes from
-  // pickers. `getAutoRoutingProfiles()` returns exactly the selectable profiles
-  // in catalog order, so the preferred id and its fallbacks all come from the
-  // registry (repo rule: model IDs come from the catalog, never from code).
   const selectableAutoProfileIds = getAutoRoutingProfiles().map((profile) => profile.id);
   const bestAutoId =
     selectableAutoProfileIds.map((id) => autoModels.find((m) => m.id === id)?.id).find(Boolean) ??
@@ -644,8 +548,6 @@ export function ModelSelector({
     }
   }, [effort, onEffortChange, selectedReasoning, selectedRequiresReasoning]);
 
-  // Enabling uses this model's catalog default rather than a provider-wide
-  // hardcoded value (for example, current Claude models default to high).
   const handleThinkingToggle = (enabled: boolean, reasoning: ModelReasoning) => {
     onEffortChange?.(enabled ? defaultEffortFor(reasoning) : null);
   };
@@ -870,12 +772,6 @@ export function ModelSelector({
                     provModels.map((m) => {
                       const isSelected = m.id === selectedModelId;
                       const isSelectable = isChatModelSelectable(m);
-                      // Quality tiers are product claims, so show them only
-                      // for exact catalog entries (or canonical Auto routing
-                      // profiles). Dynamic runtime discovery proves concrete
-                      // capabilities such as vision/function calling, but it
-                      // does not prove that a model is "balanced", "fast", or
-                      // "premium".
                       const hasCatalogQuality =
                         MODEL_CAPABILITY[m.id] !== undefined || isAutoModeModelId(m.id);
                       const capability = hasCatalogQuality ? getCapability(m) : null;

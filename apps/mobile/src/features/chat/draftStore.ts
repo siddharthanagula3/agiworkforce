@@ -1,14 +1,3 @@
-/**
- * Composer draft persistence.
- *
- * Stores the user's unsent composer text per conversation so it survives the
- * screen unmounting, an app backgrounding, or a cold start — matching Claude /
- * ChatGPT, where a half-typed message is never silently lost.
- *
- * Drafts never leave encrypted on-device storage, but their content still
- * inherits the conversation trust boundary. Local drafts survive Cloud
- * sign-out; Cloud drafts are bound to the Clerk account that created them.
- */
 import { mmkvStorage, storage } from '@/lib/mmkv';
 import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
@@ -58,7 +47,6 @@ function parseStoredDraft(raw: string): StoredDraftRecord | null {
     }
     return { version: DRAFT_RECORD_VERSION, text: record.text, provenance };
   } catch {
-    // Raw strings are legacy unowned drafts and must not cross accounts.
     return null;
   }
 }
@@ -68,13 +56,11 @@ function provenanceIsReadable(provenance: DraftProvenance): boolean {
   return captureCloudAccountEpoch()?.ownerId === provenance.ownerId;
 }
 
-/** Read the saved draft for one explicit trust-boundary key, or '' if none. */
 export function getDraft(key: string | undefined, provenance?: DraftProvenance): string {
   if (!key) return '';
   try {
     const safeProvenance = normalizedProvenance(provenance);
     if (!safeProvenance || !provenanceIsReadable(safeProvenance)) {
-      // Raw pre-provenance records are ambiguous and cannot be adopted.
       mmkvStorage.removeItem(PREFIX + key);
       return '';
     }
@@ -83,7 +69,6 @@ export function getDraft(key: string | undefined, provenance?: DraftProvenance):
     if (!raw) return '';
     const record = parseStoredDraft(raw);
     if (!record || !hasSameProvenance(record.provenance, safeProvenance)) {
-      // One-time fail-closed migration for raw or malformed legacy drafts.
       mmkvStorage.removeItem(storageKey);
       return '';
     }
@@ -93,7 +78,6 @@ export function getDraft(key: string | undefined, provenance?: DraftProvenance):
   }
 }
 
-/** Persist (or clear, when empty) the draft for a conversation key. */
 export function setDraft(
   key: string | undefined,
   text: string,
@@ -116,14 +100,10 @@ export function setDraft(
       safeProvenance.scope === 'cloud' &&
       captureCloudAccountEpoch()?.ownerId !== safeProvenance.ownerId
     ) {
-      // Missing or stale ownership is never adopted implicitly. Keeping the
-      // previous value would also risk exposing it under the next account.
       mmkvStorage.removeItem(storageKey);
       return;
     }
 
-    // Delete the old unscoped location on the first safe write. Its contents
-    // cannot be proven Local or tied to the current Cloud owner.
     mmkvStorage.removeItem(PREFIX + key);
     const record: StoredDraftRecord = {
       version: DRAFT_RECORD_VERSION,
@@ -136,7 +116,6 @@ export function setDraft(
   }
 }
 
-/** Remove the saved draft for one explicit trust boundary after a successful send. */
 export function clearDraft(key: string | undefined, provenance?: DraftProvenance): void {
   if (!key) return;
   try {
@@ -144,17 +123,12 @@ export function clearDraft(key: string | undefined, provenance?: DraftProvenance
     if (safeProvenance) {
       mmkvStorage.removeItem(scopedStorageKey(key, safeProvenance));
     }
-    // Always clear the ambiguous pre-provenance location too.
     mmkvStorage.removeItem(PREFIX + key);
   } catch {
     // non-fatal
   }
 }
 
-/**
- * Remove every Cloud, legacy-unowned, or malformed draft while retaining only
- * records explicitly marked Local. Must run after encrypted MMKV is ready.
- */
 export function clearAccountScopedDrafts(): void {
   try {
     const keys = storage.getAllKeys?.() ?? [];

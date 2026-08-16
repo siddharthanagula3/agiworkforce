@@ -12,10 +12,6 @@ import { BarChart2 } from 'lucide-react';
 import { WidgetRegistry } from './WidgetRegistry';
 import type { ChartWidgetData, WidgetRendererProps } from './index';
 
-// ============================================================================
-// Constants
-// ============================================================================
-
 const DEFAULT_COLORS = [
   '#3B82F6', // blue-500
   '#10B981', // emerald-500
@@ -30,10 +26,6 @@ const DEFAULT_COLORS = [
 const CHART_HEIGHT = 200;
 const CHART_PADDING = { top: 20, right: 20, bottom: 40, left: 50 };
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
 function getColor(index: number, customColor?: string): string {
   if (customColor) return customColor;
   return DEFAULT_COLORS[index % DEFAULT_COLORS.length] ?? '#3B82F6';
@@ -44,10 +36,6 @@ function formatValue(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
   return value.toFixed(value % 1 === 0 ? 0 : 1);
 }
-
-// ============================================================================
-// Chart Components
-// ============================================================================
 
 interface ChartDataPoint {
   label: string;
@@ -72,7 +60,6 @@ const BarChart: React.FC<BarChartProps> = memo(
     const barWidth = Math.max(20, (chartWidth / data.length) * 0.7);
     const barGap = (chartWidth - barWidth * data.length) / (data.length + 1);
 
-    // Generate Y-axis ticks
     const yTicks = useMemo(() => {
       const tickCount = 5;
       const step = maxValue / (tickCount - 1);
@@ -197,9 +184,8 @@ const PieChart: React.FC<PieChartProps> = memo(
     const centerX = showLegend ? width * 0.35 : width / 2;
     const centerY = height / 2;
 
-    // Calculate slice paths
     const slices = useMemo(() => {
-      let startAngle = -Math.PI / 2; // Start from top
+      let startAngle = -Math.PI / 2;
       return data.map((point) => {
         const angle = total > 0 ? (point.value / total) * Math.PI * 2 : 0;
         const endAngle = startAngle + angle;
@@ -299,7 +285,6 @@ const LineChart: React.FC<LineChartProps> = memo(
     const minValue = Math.min(...data.map((d) => d.value), 0);
     const valueRange = maxValue - minValue || 1;
 
-    // Calculate points
     const points = useMemo(() => {
       return data.map((point, i) => ({
         x: CHART_PADDING.left + (i / (data.length - 1 || 1)) * chartWidth,
@@ -307,7 +292,6 @@ const LineChart: React.FC<LineChartProps> = memo(
       }));
     }, [data, chartWidth, chartHeight, height, minValue, valueRange]);
 
-    // Generate path
     const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
     const areaPath = filled
@@ -393,10 +377,6 @@ const LineChart: React.FC<LineChartProps> = memo(
 
 LineChart.displayName = 'LineChart';
 
-// ============================================================================
-// Main Component
-// ============================================================================
-
 const ChartWidgetComponent: React.FC<WidgetRendererProps<ChartWidgetData>> = ({
   widget,
   onAction,
@@ -411,7 +391,6 @@ const ChartWidgetComponent: React.FC<WidgetRendererProps<ChartWidgetData>> = ({
     showValues = true,
   } = widget;
 
-  // Prepare data with colors
   const chartData: ChartDataPoint[] = useMemo(() => {
     return data.map((point, i) => ({
       ...point,
@@ -419,7 +398,6 @@ const ChartWidgetComponent: React.FC<WidgetRendererProps<ChartWidgetData>> = ({
     }));
   }, [data]);
 
-  // Handle click events
   const handleClick = useCallback(
     (index: number, point: ChartDataPoint) => {
       onAction?.({
@@ -431,7 +409,6 @@ const ChartWidgetComponent: React.FC<WidgetRendererProps<ChartWidgetData>> = ({
     [widget.id, onAction],
   );
 
-  // Chart dimensions (responsive)
   const width = 400;
   const height = CHART_HEIGHT;
 
@@ -499,7 +476,6 @@ ChartWidgetComponent.displayName = 'ChartWidget';
 
 export const ChartWidget = memo(ChartWidgetComponent);
 
-// Register the widget
 WidgetRegistry.register({
   type: 'chart',
   displayName: 'Chart',

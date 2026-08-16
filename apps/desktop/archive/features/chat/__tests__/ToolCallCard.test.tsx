@@ -1,17 +1,3 @@
-/**
- * ToolCallCard Component Tests (R25 V7 consolidation)
- *
- * Tests cover the canonical ToolCallCard at features/chat/MessageBubble/ToolCallCard.tsx,
- * which renders via @agiworkforce/unified-chat InlineToolCall with iconStyle="badge".
- *
- * Covers:
- * - Tool name rendered in the bar
- * - Badge icon rendered (data-icon-style="badge")
- * - Status → InlineToolCallStatus mapping
- * - Expandable body with Request section (toolCommand)
- * - Approval prompt when requiresApproval=true
- * - Kind inference from tool name
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -117,7 +103,6 @@ describe('ToolCallCard', () => {
       const { container } = render(
         <ToolCallCard messageId="e1" toolName="tool" requiresApproval={false} />,
       );
-      // No expandable body means no role=button on the bar
       expect(container.querySelector('[data-icon-style="badge"] [role="button"]')).toBeNull();
     });
 
@@ -173,7 +158,6 @@ describe('ToolCallCard', () => {
       const { container } = render(
         <ToolCallCard messageId="k1" toolName="click" requiresApproval={false} />,
       );
-      // Browser kind maps to badge letter "B"
       const badge = container.querySelector('[data-badge-kind="letter"]');
       expect(badge?.getAttribute('data-badge-letter')).toBe('B');
     });

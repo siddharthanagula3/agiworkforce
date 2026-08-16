@@ -25,11 +25,6 @@ const DEFAULT_USER: MockCloudAuthUser = {
   name: 'E2E User',
 };
 
-/**
- * Return CORS headers that remain valid for credentialed cross-origin fetches.
- * A wildcard origin is forbidden when `credentials: 'include'`; echoing the
- * browser-supplied Origin keeps the fixture faithful to the shipping API.
- */
 export function mockCloudCorsHeaders(route: Route): Record<string, string> {
   const requestOrigin = route.request().headers()['origin'];
   return {
@@ -150,12 +145,6 @@ export async function mockCloudAccountEndpoints(
     routing_preferences: {},
   } satisfies MeResponse;
 
-  // DES-C14: this was a `'**/api/me'` glob, which Playwright anchors — so the
-  // real request (`<WEB_APP_URL>/api/me?surface=desktop`, from
-  // `cloudAccountAuth.fetchAccountSnapshot`) never matched and went to the
-  // network, logging "[Auth] Failed to refresh Clerk/Neon account data". Match
-  // on the pathname so the query string cannot slip past, and answer with CORS
-  // headers because that call uses the absolute cloud origin, not same-origin.
   await page.route(
     (url) => url.pathname === '/api/me',
     (route) => {

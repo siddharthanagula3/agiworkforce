@@ -1,25 +1,4 @@
 #!/usr/bin/env -S npx tsx
-/**
- * Cross-provider chat demo.
- *
- * Sends the same prompt through every provider that has credentials
- * available, prints the streaming response with a vendor-coloured prefix,
- * and a final usage summary. Demonstrates the differentiator: one
- * `ChatRequest` shape, three vendors.
- *
- * Usage:
- *   npx tsx examples/multi-provider-chat.ts "Write a haiku about TypeScript"
- *   pnpm tsx examples/multi-provider-chat.ts "What's 2+2?"
- *
- * Provider availability:
- *   - Anthropic: requires ANTHROPIC_API_KEY
- *   - OpenAI: requires OPENAI_API_KEY
- *   - Ollama: requires a running daemon at localhost:11434 (or OLLAMA_BASE_URL)
- *     plus at least one pulled model
- *
- * Providers without credentials are skipped with a one-line note. If no
- * providers are available, the demo exits non-zero.
- */
 
 import { createAnthropicAdapter } from '@agiworkforce/providers-anthropic';
 import { createOpenAIAdapter } from '@agiworkforce/providers-openai';
@@ -78,7 +57,6 @@ async function discoverTargets(): Promise<DemoTarget[]> {
     console.error(`${ANSI_DIM}  skip openai: OPENAI_API_KEY not set${ANSI_RESET}`);
   }
 
-  // Ollama: probe for a daemon + pick the first installed model.
   const ollamaBase = process.env['OLLAMA_BASE_URL'] ?? 'http://localhost:11434';
   const ollama = createOllamaAdapter({ baseUrl: ollamaBase });
   try {

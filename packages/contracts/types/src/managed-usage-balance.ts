@@ -1,29 +1,8 @@
-/** Public managed-usage status. Private allocations and ledger units stay server-side. */
 export interface ManagedUsageBalance {
-  /**
-   * Percentage of the active plan allowance already used (0–100).
-   *
-   * `null` on plans whose allowance is INTERNAL (Free, 2026-08-08). Publishing a
-   * number turns a cost control into a quantity the customer can hold you to,
-   * invites gaming of the exact ceiling, and blocks tuning the limit when
-   * provider costs move. Free is told whether it may continue and when the
-   * window resets — never how much is left. Metering is unchanged server-side;
-   * only the disclosure is withheld.
-   *
-   * Suppressed here rather than in the UI on purpose: the response is readable
-   * in devtools, so hiding a rendered meter would not actually withhold it.
-   */
   usage_percentage: number | null;
-  /** When the active allowance resets. Free uses its rolling daily window. */
   reset_at: string | null;
-  /** Whole seconds until the active allowance resets. */
   seconds_until_reset: number;
-  /** Whether another managed request may be admitted under the active allowance. */
   has_usage_remaining: boolean;
-  /**
-   * Whether this plan publishes a usage number at all. False for Free, whose
-   * clients render an upgrade prompt in place of a meter.
-   */
   usage_visible: boolean;
 }
 
@@ -39,7 +18,6 @@ export interface ManagedUsageBalanceResponse {
   credits: ManagedUsageBalance;
 }
 
-/** Percentage-only response from `/api/usage`. */
 export interface ManagedUsageSummaryResponse {
   plan_tier: string;
   usage_percentage: number;
@@ -86,7 +64,6 @@ function readPercentage(record: Record<string, unknown>, key: string): number {
   return value;
 }
 
-/** Validate and project a public summary, dropping every non-contract field. */
 export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSummaryResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError('managed usage summary must be an object');

@@ -1,14 +1,3 @@
-/**
- * RelevantChatsList Component Tests
- *
- * Covers:
- * - Returns null when there are no non-active conversations
- * - Renders conversation titles and last-message previews
- * - Excludes the active conversation from the list
- * - Limits display to maxItems (default 5)
- * - Clicking a conversation calls selectConversation
- * - Snapshot: renders 3 conversations correctly
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -94,8 +83,6 @@ describe('RelevantChatsList', () => {
   });
 
   it('matches snapshot with three conversations', () => {
-    // Freeze the clock just past the most-recent conversation so the
-    // "Xm ago" formatter renders deterministic labels for this snapshot.
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-22T10:02:00Z'));
     const { container } = render(<RelevantChatsList />);

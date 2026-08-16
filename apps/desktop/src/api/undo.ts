@@ -1,25 +1,6 @@
-/**
- * Undo API
- *
- * Provides interfaces for managing undo operations.
- * Two subsystems:
- *   1. File/system change undo (UndoManager)
- *   2. Form submission undo (FormUndoManager)
- *
- * Rust commands (undo.rs):
- *   undo_get_summary, undo_get_changes, undo_change, undo_last, undo_task, undo_can_undo,
- *   coding_checkpoint_create, coding_checkpoint_list, coding_checkpoint_rewind,
- *   form_undo_record, form_undo_attempt, form_undo_can_undo, form_undo_list,
- *   form_undo_list_undoable, form_undo_get, form_undo_clear, form_undo_clear_old,
- *   form_undo_stats
- */
 import { toast } from 'sonner';
 
 import { invoke } from '../lib/tauri-mock';
-
-// ============================================================================
-// Interfaces — File/System Undo
-// ============================================================================
 
 export interface UndoableChange {
   id: string;
@@ -43,20 +24,12 @@ export interface UndoResult {
   message: string;
 }
 
-// ============================================================================
-// Interfaces — Named File Checkpoints
-// ============================================================================
-
 export interface NamedFileCheckpoint {
   id: string;
   name: string;
   paths: string[];
   created_at: string;
 }
-
-// ============================================================================
-// Interfaces — Form Undo
-// ============================================================================
 
 export interface FormSubmission {
   id: string;
@@ -83,11 +56,6 @@ export interface FormUndoStats {
   undoableSubmissions: number;
 }
 
-// ============================================================================
-// File/System Undo Commands
-// ============================================================================
-
-/** Get summary of undo-able changes, optionally filtered by task */
 export const undoGetSummary = async (taskId?: string): Promise<UndoSummary> => {
   try {
     return await invoke<UndoSummary>('undo_get_summary', {
@@ -100,7 +68,6 @@ export const undoGetSummary = async (taskId?: string): Promise<UndoSummary> => {
   }
 };
 
-/** Get list of recent undo-able changes */
 export const undoGetChanges = async (
   taskId?: string,
   limit?: number,
@@ -117,7 +84,6 @@ export const undoGetChanges = async (
   }
 };
 
-/** Undo a specific change by its ID */
 export const undoChange = async (changeId: string): Promise<UndoResult> => {
   try {
     return await invoke<UndoResult>('undo_change', { change_id: changeId });
@@ -128,7 +94,6 @@ export const undoChange = async (changeId: string): Promise<UndoResult> => {
   }
 };
 
-/** Undo the most recent change, optionally scoped to a task */
 export const undoLast = async (taskId?: string): Promise<UndoResult> => {
   try {
     return await invoke<UndoResult>('undo_last', {
@@ -141,7 +106,6 @@ export const undoLast = async (taskId?: string): Promise<UndoResult> => {
   }
 };
 
-/** Undo all changes for a specific task */
 export const undoTask = async (taskId: string): Promise<UndoResult[]> => {
   try {
     return await invoke<UndoResult[]>('undo_task', { task_id: taskId });
@@ -152,7 +116,6 @@ export const undoTask = async (taskId: string): Promise<UndoResult[]> => {
   }
 };
 
-/** Check if there are any changes that can be undone */
 export const undoCanUndo = async (taskId?: string): Promise<boolean> => {
   try {
     return await invoke<boolean>('undo_can_undo', {
@@ -164,11 +127,6 @@ export const undoCanUndo = async (taskId?: string): Promise<boolean> => {
   }
 };
 
-// ============================================================================
-// Named File Checkpoint Commands
-// ============================================================================
-
-/** Create a named checkpoint by snapshotting file contents. Returns checkpoint ID. */
 export const codingCheckpointCreate = async (name: string, paths: string[]): Promise<string> => {
   try {
     return await invoke<string>('coding_checkpoint_create', { name, paths });
@@ -178,7 +136,6 @@ export const codingCheckpointCreate = async (name: string, paths: string[]): Pro
   }
 };
 
-/** List all named file checkpoints in chronological order */
 export const codingCheckpointList = async (): Promise<NamedFileCheckpoint[]> => {
   try {
     return await invoke<NamedFileCheckpoint[]>('coding_checkpoint_list');
@@ -188,7 +145,6 @@ export const codingCheckpointList = async (): Promise<NamedFileCheckpoint[]> => 
   }
 };
 
-/** Rewind files to a named checkpoint. Returns restored file paths. */
 export const codingCheckpointRewind = async (id: string): Promise<string[]> => {
   try {
     return await invoke<string[]>('coding_checkpoint_rewind', { id });
@@ -198,11 +154,6 @@ export const codingCheckpointRewind = async (id: string): Promise<string[]> => {
   }
 };
 
-// ============================================================================
-// Form Undo Commands
-// ============================================================================
-
-/** Record a form submission for potential undo */
 export const formUndoRecord = async (params: {
   url: string;
   formSelector: string;
@@ -228,7 +179,6 @@ export const formUndoRecord = async (params: {
   }
 };
 
-/** Attempt to undo a form submission. Returns instructions for the caller. */
 export const formUndoAttempt = async (submissionId: string): Promise<FormUndoResult> => {
   try {
     return await invoke<FormUndoResult>('form_undo_attempt', { submission_id: submissionId });
@@ -238,7 +188,6 @@ export const formUndoAttempt = async (submissionId: string): Promise<FormUndoRes
   }
 };
 
-/** Check if a specific form submission can be undone */
 export const formUndoCanUndo = async (submissionId: string): Promise<boolean> => {
   try {
     return await invoke<boolean>('form_undo_can_undo', { submission_id: submissionId });
@@ -248,7 +197,6 @@ export const formUndoCanUndo = async (submissionId: string): Promise<boolean> =>
   }
 };
 
-/** List recent form submissions, optionally filtered by task */
 export const formUndoList = async (limit?: number, taskId?: string): Promise<FormSubmission[]> => {
   try {
     return await invoke<FormSubmission[]>('form_undo_list', {
@@ -261,7 +209,6 @@ export const formUndoList = async (limit?: number, taskId?: string): Promise<For
   }
 };
 
-/** Get only the form submissions that can be undone */
 export const formUndoListUndoable = async (): Promise<FormSubmission[]> => {
   try {
     return await invoke<FormSubmission[]>('form_undo_list_undoable');
@@ -271,7 +218,6 @@ export const formUndoListUndoable = async (): Promise<FormSubmission[]> => {
   }
 };
 
-/** Get a specific form submission by ID */
 export const formUndoGet = async (submissionId: string): Promise<FormSubmission | null> => {
   try {
     return await invoke<FormSubmission | null>('form_undo_get', { submission_id: submissionId });
@@ -281,7 +227,6 @@ export const formUndoGet = async (submissionId: string): Promise<FormSubmission 
   }
 };
 
-/** Clear all form submission history */
 export const formUndoClear = async (): Promise<void> => {
   try {
     await invoke<void>('form_undo_clear');
@@ -291,7 +236,6 @@ export const formUndoClear = async (): Promise<void> => {
   }
 };
 
-/** Clear old form submissions (older than specified hours) */
 export const formUndoClearOld = async (maxAgeHours: number): Promise<void> => {
   try {
     await invoke<void>('form_undo_clear_old', { max_age_hours: maxAgeHours });
@@ -301,7 +245,6 @@ export const formUndoClearOld = async (maxAgeHours: number): Promise<void> => {
   }
 };
 
-/** Get form undo statistics */
 export const formUndoStats = async (): Promise<FormUndoStats> => {
   try {
     return await invoke<FormUndoStats>('form_undo_stats');

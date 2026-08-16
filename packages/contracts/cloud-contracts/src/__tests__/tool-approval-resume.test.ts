@@ -1,7 +1,3 @@
-/**
- * Tests for the tool-approval resume request/error contract mirrored from
- * `apps/web/app/api/llm/v1/chat/completions/approve/route.ts`.
- */
 
 import { describe, expect, it } from 'vitest';
 import {

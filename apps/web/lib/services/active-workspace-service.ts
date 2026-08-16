@@ -23,13 +23,6 @@ interface WorkspaceScopedRequest {
   headers: { get(name: string): string | null };
 }
 
-/**
- * Resolve the request workspace. An explicit Managed Cloud selector is strict:
- * it is re-proven against membership and never falls back into another scope.
- * Without one, read the account's durable selection and prove membership in
- * the same query; a stale/deleted saved preference degrades to Personal rather
- * than ever becoming an authorization grant.
- */
 export async function resolveActiveOrganizationId(
   db: DatabaseAdapter,
   userId: string,
@@ -43,9 +36,6 @@ export async function resolveActiveOrganizationId(
     }
     const membershipId = await resolveOrganizationMembershipId(db, userId, requested);
     if (!membershipId) {
-      // An explicit selector is a stable resource binding, not a preference.
-      // Falling back to Personal after membership revocation could write a
-      // background sync into the wrong trust scope.
       throw createError.forbidden('You are not a member of that workspace');
     }
     return membershipId;
@@ -64,7 +54,6 @@ export async function resolveActiveOrganizationId(
   return row?.organization_id ?? null;
 }
 
-/** Resolve one requested organization only when the account is still a member. */
 export async function resolveOrganizationMembershipId(
   db: DatabaseAdapter,
   userId: string,
@@ -108,11 +97,6 @@ export async function listWorkspaceMemberships(
   }));
 }
 
-/**
- * Persist Personal or one membership-owned organization into the existing
- * cross-device settings document. Callers may pass a transaction adapter so a
- * join/create/leave and its resulting selection commit atomically.
- */
 async function writeActiveWorkspaceSelection(
   db: DatabaseAdapter,
   userId: string,
@@ -142,7 +126,6 @@ async function writeActiveWorkspaceSelection(
   );
 }
 
-/** Validate an account-owned selection before writing it. */
 export async function persistActiveWorkspaceSelection(
   db: DatabaseAdapter,
   userId: string,
@@ -157,11 +140,6 @@ export async function persistActiveWorkspaceSelection(
   await writeActiveWorkspaceSelection(db, userId, organizationId);
 }
 
-/**
- * Write a selection after the caller proved or created that membership in the
- * same transaction. This avoids an unnecessary second read while keeping the
- * trust assumption explicit at call sites.
- */
 export async function persistProvenActiveWorkspaceSelection(
   db: DatabaseAdapter,
   userId: string,

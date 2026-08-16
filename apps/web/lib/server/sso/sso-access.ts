@@ -9,13 +9,6 @@ import {
 } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
-/**
- * Entitlement for enterprise SSO configuration.
- *
- * SSO is a managed-cloud enterprise control. It is gated on the shared
- * `enterprise_controls` capability rather than on a plan-string comparison or a
- * tier ordering, so a new tier cannot silently inherit it.
- */
 export interface SSOAdminAccess {
   plan: BillingPlanTier;
   canManageSSO: boolean;
@@ -46,11 +39,6 @@ export interface SSOEntitlementDenial {
   };
 }
 
-/**
- * Resolve entitlement and, when it is absent, return the exact denial payload
- * the route should emit. Returning a value rather than throwing keeps every SSO
- * handler on a single explicit fail-closed branch.
- */
 export async function requireSSOAdminAccess(
   db: DatabaseAdapter,
   userId: string,

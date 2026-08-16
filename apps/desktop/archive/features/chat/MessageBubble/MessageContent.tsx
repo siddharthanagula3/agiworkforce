@@ -1,9 +1,3 @@
-/**
- * MessageContent Component
- *
- * Renders the main message content with markdown, code blocks,
- * math equations, and citation parsing.
- */
 
 import 'katex/dist/katex.min.css';
 import React, { memo, useCallback, useMemo, useState } from 'react';
@@ -36,31 +30,18 @@ const EXECUTABLE_LANGUAGES = new Set([
   'r',
 ]);
 
-/**
- * Strip raw tool-result JSON code blocks from assistant message content.
- * The InlineSearchResults / InlineToolResults components already render these
- * nicely — showing them again as raw code blocks is redundant and confusing.
- *
- * Targets blocks that contain:
- *  - JSON with a "results" array (search_web output)
- *  - JSON with a "query" key (search_web output)
- *  - JSON with a "success" key and a "url" key (browser_navigate output)
- */
 function stripToolResultJsonBlocks(content: string): string {
-  // Remove fenced code blocks (```...```) containing raw tool JSON
   return content.replace(/```(?:json|JSON)?\s*\n?\{[\s\S]*?\}\s*```/g, (block) => {
     try {
-      // Extract JSON body
       const jsonBody = block.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\s*```$/, '');
       const parsed = JSON.parse(jsonBody);
-      // Only strip if it looks like a tool result payload
       if (
         ('results' in parsed && Array.isArray(parsed.results)) ||
         ('query' in parsed && 'results' in parsed) ||
         ('success' in parsed && 'url' in parsed) ||
         ('query' in parsed && 'provider' in parsed)
       ) {
-        return ''; // Remove the block
+        return '';
       }
     } catch {
       // Not valid JSON — leave it alone
@@ -69,7 +50,6 @@ function stripToolResultJsonBlocks(content: string): string {
   });
 }
 
-// Determine the CanvasArtifact type from a code language string
 function inferArtifactType(lang: string): 'code' | 'html' | 'markdown' {
   const l = lang.toLowerCase();
   if (l === 'html') return 'html';
@@ -81,7 +61,6 @@ export interface MessageContentProps {
   message: EnhancedMessage;
   isUser: boolean;
   isStreaming?: boolean;
-  /** When true, this is the last message in the list — source pills are shown for all qualifying messages regardless */
   isLastMessage?: boolean;
 }
 
@@ -97,10 +76,6 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
   );
   const getCitationByIndex = useUnifiedChatStore((state) => state.getCitationByIndex);
 
-  /**
-   * Extract all [N] citation references from the message content and resolve
-   * them against the store. Only resolves for non-streaming assistant messages.
-   */
   const sourcePillCitations = useMemo(() => {
     if (isUser || isStreaming) return [];
     const regex = /\[(\d+)\]/g;
@@ -117,13 +92,10 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
         results.push({ url: citation.url, title: citation.title, index });
       }
     }
-    // Sort by citation index so pills appear in document order
     return results.sort((a, b) => a.index - b.index);
   }, [message.content, isUser, isStreaming, getCitationByIndex]);
 
-  // Map from code-block index → execution result
   const [codeResults, setCodeResults] = useState<Map<string, CodeExecutionResult>>(new Map());
-  // Map from code-block key → running state
   const [runningBlocks, setRunningBlocks] = useState<Set<string>>(new Set());
   const isMountedRef = React.useRef(true);
   React.useEffect(() => {
@@ -135,7 +107,6 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
 
   const handleRunCode = useCallback(async (language: string, code: string, blockKey: string) => {
     setRunningBlocks((prev) => new Set(prev).add(blockKey));
-    // Clear any previous result so the panel shows immediately in loading state
     setCodeResults((prev) => {
       const next = new Map(prev);
       next.delete(blockKey);
@@ -206,8 +177,6 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex]}
-          // Strip raw tool-result JSON blocks before rendering — they are already
-          // displayed by the InlineToolResults renderers (e.g. InlineSearchResults).
           children={isUser ? message.content : stripToolResultJsonBlocks(message.content)}
           components={{
             code(props) {
@@ -220,20 +189,16 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               const code = String(children).replace(/\n$/, '');
               const isBlockCode = inline !== true;
 
-              // Render widget blocks as sandboxed GenerativeWidget iframes
               if (isBlockCode && language === 'widget') {
-                // Extract optional title from className meta, e.g. language-widget:title="..."
                 const titleMatch = /title="([^"]*)"/.exec(className || '');
                 const widgetTitle = titleMatch?.[1];
                 return <GenerativeWidget html={code} title={widgetTitle} />;
               }
 
-              // Use a stable key from code content + language as block index substitute
               const blockKey = `${language}:${code.length}:${code.slice(0, 40)}`;
 
-              // In compact mode, hide ALL code blocks from assistant messages (not user messages)
               if (compactMode && isBlockCode && !isUser) {
-                return null; // Hide all code blocks in compact mode for assistant
+                return null;
               }
 
               if (!isBlockCode) {
@@ -301,7 +266,6 @@ const MessageContentComponent: React.FC<MessageContentProps> = ({
               );
             },
             a({ href, children }) {
-              // Block javascript:, data:, and other dangerous schemes
               const safeHref = href && /^https?:\/\//i.test(href) ? href : '#';
               return (
                 <a

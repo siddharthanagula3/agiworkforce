@@ -1,29 +1,4 @@
-/**
- * Gateway fingerprinting.
- *
- * Multi-provider users frequently route through aggregator gateways
- * (LiteLLM, Helicone, Portkey, Cloudflare AI Gateway, Kong, Braintrust,
- * Databricks AI Gateway). Errors and rate-limit headers from these
- * gateways look superficially like the upstream provider's, but the
- * recovery strategy differs (a Helicone 429 shouldn't fall back to
- * a different model — Helicone enforces user-side limits, not
- * upstream-provider limits).
- *
- * This module fingerprints which gateway (if any) is in front of the
- * provider so:
- *   1. Telemetry attribution is accurate (`provider: openai, gateway: litellm`).
- *   2. The retry generator can choose gateway-aware behaviour.
- *   3. Error messages can name the right party for support hand-off.
- *
- * Citation:
- *   - `tasks/research/deep/m8-services-api.md` §17 #10 (`detectGateway`).
- *   - `tasks/research/gap-matrix/pkg-api-providers-normalize.md`
- *     "detectGateway fingerprinting (P1)".
- */
 
-/**
- * Recognised gateway IDs. `direct` = no gateway in path.
- */
 export type GatewayId =
   | 'direct'
   | 'litellm'
@@ -36,9 +11,7 @@ export type GatewayId =
 
 interface GatewayFingerprint {
   id: GatewayId;
-  /** Header-prefix substring matched (lowercase) — empty when matched by URL. */
   headerPrefix: string;
-  /** Hostname suffix matched — empty when matched by header. */
   hostnameSuffix: string;
 }
 
@@ -66,13 +39,6 @@ const HOSTNAME_SUFFIX_TABLE: ReadonlyArray<{ id: GatewayId; suffix: string }> = 
   { id: 'databricks', suffix: '.databricks.com' },
 ];
 
-/**
- * Fingerprint a gateway from the response headers (preferred — fires on
- * EVERY response) OR the request URL (fallback — useful for quick
- * pre-flight detection).
- *
- * Returns `direct` when no gateway match.
- */
 export function detectGateway(input: {
   responseHeaders?: Headers | Record<string, string | string[] | undefined> | null;
   baseUrl?: string | null;
@@ -129,13 +95,6 @@ function matchHostnameSuffix(baseUrl: string | null): { id: GatewayId; suffix: s
   return null;
 }
 
-/**
- * Returns true when the gateway is known to enforce user-side limits
- * that the upstream provider doesn't see. Used by the retry generator
- * to decide whether a 429 should fall back to a different model
- * (NO — the user has the same limit on the next model) or just
- * exponential-backoff retry (YES).
- */
 export function gatewayEnforcesUserSideLimits(id: GatewayId): boolean {
   switch (id) {
     case 'litellm':

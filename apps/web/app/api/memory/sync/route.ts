@@ -1,27 +1,3 @@
-/**
- * Cross-device cloud MEMORY sync — delta sync (mirrors /api/chat/sync).
- * Design: docs/plans/shared-cloud-state-2026-06-22.md
- *
- *   GET  /api/memory/sync?since=<server_version cursor>
- *        → user_memories rows with server_version > cursor (INCLUDING tombstones,
- *          i.e. is_deleted = true, so deletes propagate), scoped to the
- *          authenticated user, plus the next cursor + hasMore.
- *   GET  /api/memory/sync   (no `since`)
- *        → legacy sync STATUS { lastSync, entriesCount, sources } (back-compat for
- *          the mobile data-controls UI).
- *   POST /api/memory/sync   { protocolVersion: 2, memories: [...] }
- *        → server-version compare-and-swap. user_id is set SERVER-SIDE from the verified
- *          session (never from the body); RLS WITH CHECK is the backstop.
- *          The server owns updated_at and tombstone timestamps; stale base revisions
- *          return the deterministic current server row as a conflict.
- *   POST /api/memory/sync   (no `memories`)
- *        → legacy TRIGGER { synced, conflicts } (back-compat).
- *
- * Hardening: every path runs through getUserScopedDb (RLS-scoped: SET LOCAL ROLE
- * app_rls + bound session sub) — NOT the app-layer-only getNeonDb the placeholder
- * used. Trust boundary: managed-cloud only; Local/BYOK memories have no cloud_id and
- * are never pushed/pulled (enforced client-side per the trust-mode matrix).
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
@@ -39,13 +15,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 const MAX_MEMORIES_PULL = 1000;
 
-// Wire shape from the shared cloud contract (restructure Wave 4) — enforced
-// by route.contract.test.ts, consumed at runtime by mobile's cloudSyncEngine.
 type MemoryDelta = MemoryWireDelta;
-
-// ---------------------------------------------------------------------------
-// GET — delta pull (?since=) OR legacy status (no since)
-// ---------------------------------------------------------------------------
 
 async function handleGet(request: NextRequest) {
   const url = new URL(request.url);
@@ -59,8 +29,6 @@ async function handlePull(request: NextRequest, url: URL) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-scoped: runs as app_rls with the session sub bound, so WITH CHECK / USING
-  // policies enforce isolation (not just the user_id filter).
   const { db, userId } = await getUserScopedDb(request);
 
   const sinceRaw = url.searchParams.get('since') ?? '0';
@@ -122,10 +90,6 @@ async function handleStatus(request: NextRequest) {
   return NextResponse.json({ lastSync, entriesCount: allMemories.length, sources });
 }
 
-// ---------------------------------------------------------------------------
-// POST — delta push ({ memories }) OR legacy trigger (no memories)
-// ---------------------------------------------------------------------------
-
 async function handlePost(request: NextRequest) {
   const { db, userId } = await getUserScopedDb(request);
 
@@ -135,14 +99,12 @@ async function handlePost(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Body is optional: the legacy trigger posts no body. Parse defensively.
   let rawBody: unknown = {};
   try {
     rawBody = await request.json();
   } catch {
     rawBody = {};
   }
-  // Legacy trigger: no `memories` key → return the simple synced count (RLS-scoped).
   if (!hasMemoriesKey(rawBody)) {
     try {
       const [row] = await db.query<{ count: number }>(
@@ -165,9 +127,6 @@ async function handlePost(request: NextRequest) {
   }
   const { memories } = parsed.data;
 
-  // Delta push: server-version compare-and-swap. user_id is forced to the session
-  // user so a client can never write another user's row (RLS WITH CHECK is the
-  // DB-level backstop). Server-owned timestamps/tombstones remove client-clock races.
   const applied: Array<{ id: string; server_version: string }> = [];
   const conflicts: Array<{ id: string; current: MemoryDelta | null }> = [];
   try {
@@ -285,10 +244,6 @@ function syncProtocolUpgradeRequired(): NextResponse {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 /**
  * Compute the SAFE next pull cursor for the single-table memory delta.
  *
@@ -311,7 +266,6 @@ export function computeMemoryPullCursor(
   return bigintGreater(frontier, since) ? frontier : since;
 }
 
-/** Max of a set of bigint-as-string server_versions. */
 function maxServerVersion(
   base: string,
   ...lists: Array<Array<{ server_version: string }>>
@@ -325,7 +279,6 @@ function maxServerVersion(
   return max;
 }
 
-/** Compare two non-negative integer strings without precision loss. */
 function bigintGreater(a: string, b: string): boolean {
   const na = a.replace(/^0+/, '') || '0';
   const nb = b.replace(/^0+/, '') || '0';

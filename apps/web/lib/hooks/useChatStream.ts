@@ -62,7 +62,6 @@ import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/
 import type { ResearchStep } from '@agiworkforce/types';
 import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
 import { parseAgiWorkPlanEvent, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
-// GOV-20: one classifier for every managed quota refusal, free or paid.
 import {
   classifyManagedQuotaErrorCode,
   getNextUpgradeTier,
@@ -86,7 +85,6 @@ import {
 
 interface SendMessageOptions {
   model?: string;
-  /** Stable client ids used by navigation handoffs and server idempotency. */
   userMessageId?: string;
   assistantMessageId?: string;
   temperature?: number;
@@ -99,46 +97,16 @@ interface SendMessageOptions {
   officeCreation?: boolean;
   thinkingEnabled?: boolean;
   thinkingEffort?: Effort;
-  /** Output style hint. When set and not 'normal', a system message is prepended. */
   styleMode?: string;
-  /** Resolved Response-Style instruction (StyleSelector). Takes precedence over styleMode. */
   styleInstruction?: string;
-  /** Exact server-catalog skill name. The browser never loads or sends its body. */
   skillName?: string;
-  /** Deep Research mode: forces web_search and injects a research system prompt. */
   research?: boolean;
-  /**
-   * Material carried forward when retrying a research run that errored or was
-   * interrupted: sources already gathered (their citation numbers stay stable)
-   * and the plan steps that already completed (never re-run). Ignored unless
-   * `research` is true.
-   */
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
     steps: ResearchStep[];
   };
-  /** Validated product mode; AGI Work exposes the paid server-owned tool harness. */
   workMode?: CloudWorkMode;
-  /**
-   * CAP-048: the structured AGI Work goal (objective + optional scope /
-   * deliverable). Sent as `agi_work_goal`; the server validates it, stores it on
-   * the run journal, and threads it into the planning turn. Ignored by the
-   * server unless `workMode === 'agiwork'`.
-   */
   agiWorkGoal?: AgiWorkGoalInput;
-  /**
-   * AUDIT-FIX STR-22: invoked once the new USER turn is durable -- its row has
-   * been written (or the conversation is temporary, so there is nothing to
-   * write). This is the commit point `sendMessage`'s return value documents,
-   * reported as soon as it happens instead of only when the whole stream ends.
-   *
-   * The edit/regenerate replace flow uses it to delete the REPLACED turn's
-   * server rows at exactly that moment: any earlier and a failed save would
-   * destroy the original; any later (the previous behaviour -- stream end) and a
-   * reload mid-regeneration shows a duplicated user message next to the stale
-   * answer. Errors thrown by the callback are swallowed: it is a notification,
-   * never part of the send's success path.
-   */
   onTurnCommitted?: () => void;
 }
 
@@ -155,39 +123,12 @@ const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
   explanatory: 'Be thorough and educational. Explain concepts in detail with examples.',
 };
 
-/** Decision the user made on a single pending tool call. */
 export type ToolApprovalDecision = 'approved' | 'rejected';
 
 export interface UseChatStreamReturn {
-  /**
-   * Send a user message and stream the reply. Resolves to `true` once the new user
-   * turn has been committed to the transcript (added locally + persisting), or `false`
-   * if it bailed before commit (empty content, no conversation, expired session). A
-   * mid-stream failure still resolves `true` — the turn is committed and retryable.
-   * Callers replacing a prior turn (edit/regenerate) use this to delete the old turn's
-   * durable rows ONLY after the new one commits (see sendReplacingMessages).
-   */
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
-  /**
-   * AUDIT-FIX STR-3: stop exactly ONE conversation's turn. Omitting the id
-   * targets the active conversation (a bare user click on the visible Stop
-   * button); a host that can render a Stop control for a conversation other
-   * than the active one MUST pass that conversation's id.
-   */
   stopGeneration: (conversationId?: string) => void;
-  /**
-   * Continue Generation (ChatGPT/Claude parity): resume a truncated or
-   * user-stopped assistant turn. New tokens APPEND to the same assistant
-   * message (never a new bubble) and the merged full text is persisted.
-   * No-op unless the message is continuable (see isMessageContinuable).
-   */
   continueGeneration: (assistantMessageId: string) => Promise<void>;
-  /**
-   * Resolve one pending tool-approval card (see the manual-approval flow). Records
-   * the per-tool_call decision; once EVERY pending tool call in the suspended turn
-   * is decided, POSTs only the durable run id + decisions to the approval
-   * endpoint and streams the continuation into the same assistant message.
-   */
   resolveToolApproval: (
     assistantMessageId: string,
     toolCallId: string,
@@ -199,11 +140,6 @@ export interface UseChatStreamReturn {
 class ChatApiError extends Error {
   code: string | undefined;
   status: number | undefined;
-  /**
-   * GOV-20 — ISO instant the exhausted window refills, when the response
-   * carried one. Undefined otherwise; the paywall card renders a reset time
-   * only when this is present, so it can never invent one.
-   */
   resetAt: string | undefined;
 
   constructor(message: string, options: { code?: string; status?: number; resetAt?: string } = {}) {
@@ -215,13 +151,6 @@ class ChatApiError extends Error {
   }
 }
 
-/**
- * GOV-20 — read a reset instant out of an error response, or undefined.
- *
- * Accepts the two shapes the managed surface can send: an explicit
- * `error.reset_at` ISO instant, or a standard `Retry-After` delta in seconds.
- * Never guesses.
- */
 function readErrorResetAt(payload: unknown, response: Response): string | undefined {
   if (payload && typeof payload === 'object') {
     const body = payload as Record<string, unknown>;
@@ -292,52 +221,12 @@ function buildAssistantErrorContent(message: string): string {
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
 }
 
-/**
- * A tool-only assistant turn (e.g. a connector call or file write with no
- * closing remark) can finish with an empty `fullContent`. `CreateMessageSchema`
- * (lib/validations/chat.ts) rejects empty and whitespace-only content, so an
- * empty string can never reach the DB — but the turn's tool timeline and
- * generated-file metadata still need to persist. U+200B is not stripped by
- * `String.prototype.trim()` (it is not in the Unicode `White_Space` set used
- * by ECMAScript trim semantics, unlike a plain space), so it satisfies the
- * schema's non-whitespace check while rendering as nothing.
- */
 const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
 
-/**
- * Provider that yields a CURRENTLY-valid Clerk session token. Clerk JWTs are
- * short-lived (~60s default), so a token captured when a request STARTS is
- * expired by the time a long web-search / deep-research / long-generation
- * stream finishes — persisting the assistant turn with that stale Bearer then
- * fails (401 on the save route, plus 403 CSRF_VALIDATION_FAILED because an
- * expired Bearer no longer qualifies for the Bearer CSRF-bypass and the
- * cookie-derived session no longer matches the userId-bound CSRF token). The
- * save path therefore takes a PROVIDER, not a captured string, and calls it at
- * save time (and on every retry) so `getToken()` hands back a fresh token.
- */
 type AuthTokenProvider = () => Promise<string>;
 
 type SaveRetryOptions = ManagedCloudSaveMessageOptions;
 
-/**
- * Persist a chat message to the database, returning the saved row id.
- *
- * Durability contract (P1 silent-data-loss fix): the previous implementation
- * swallowed every non-OK response and returned null, so a transient 500 /
- * network blip silently lost the assistant (and sometimes the paired user)
- * turn on reload — the store does not persist messages. This version:
- *   - retries transient failures (5xx / network) with backoff, since most
- *     persistence blips self-heal on a second attempt;
- *   - THROWS on a hard, non-recoverable failure (any non-retryable 4xx
- *     INCLUDING 429, or 5xx / network after exhausting retries) so the caller
- *     surfaces it to the user instead of dropping the turn silently. A 429 here
- *     means the persist write was rate-limited and the turn is NOT saved — there
- *     is no automatic re-save, so it is surfaced like any other failure rather
- *     than swallowed. (Retrying a 429 in-request is futile: the rate-limit
- *     window outlasts the request, so 429 is not retried, only surfaced.)
- * The POST route is idempotent on the client-supplied id (ON CONFLICT), so a
- * retry of an already-committed message cannot create a duplicate.
- */
 async function saveMessageToDb(
   conversationId: string,
   message: {
@@ -382,11 +271,6 @@ async function saveMessageToDb(
   }
 }
 
-/**
- * Surface a message-persistence failure to the user instead of dropping the
- * turn silently. Called from the save callers' catch handlers (a quiet 429
- * returns null and never reaches here).
- */
 function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): void {
   console.error(`[useChatStream] Failed to save ${kind} message:`, error);
   toast.error(
@@ -399,15 +283,6 @@ function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): v
 
 export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLACEHOLDER };
 
-/**
- * AUDIT-FIX ROOT-CAUSE: read ONE conversation's transcript. Every read in this
- * module used to go through `useChatStore.getState().messages`, i.e. whatever
- * conversation happened to be on screen -- so a turn that outlived the user's
- * navigation read (and then persisted) a different chat's state. Falls back to
- * the derived mirror when the bucket has not been created yet, matching the
- * store's own compatibility fallback so a direct `setState({ messages })` seed
- * behaves identically.
- */
 function readConversationMessages(conversationId: string): Message[] {
   const state = useChatStore.getState();
   const bucket = state.messagesByConversation[conversationId];
@@ -415,12 +290,9 @@ function readConversationMessages(conversationId: string): Message[] {
   return state.activeConversationId === conversationId ? state.messages : [];
 }
 
-/** One message inside one conversation's transcript. */
 function findConversationMessage(conversationId: string, messageId: string): Message | undefined {
   return readConversationMessages(conversationId).find((message) => message.id === messageId);
 }
-
-// ─── Shared SSE-stream types + module-level approval registry ───────────────
 
 type MessageContent = ReturnType<typeof buildApiMessageContent>;
 type ApiMessage = {
@@ -430,19 +302,12 @@ type ApiMessage = {
   tool_call_id?: string;
 };
 
-/** One tool call the server suspended for user approval (from x_tool_approval_request). */
 interface PendingApprovalCall {
   toolCallId: string;
   name: string;
   args: Record<string, unknown>;
 }
 
-/**
- * Client projection of a server-owned approval checkpoint. The browser keeps
- * only the durable run identity, visible tool calls, and local decisions; the
- * authoritative transcript and executable arguments never round-trip through
- * the client. Keyed by assistantMessageId so any message card can resolve it.
- */
 interface PendingTurn {
   runId: string;
   model: string;
@@ -450,18 +315,15 @@ interface PendingTurn {
   isTemporaryConversation: boolean;
   calls: PendingApprovalCall[];
   decisions: Map<string, ToolApprovalDecision>;
-  /** Set once the resume request has been dispatched, to prevent double-submit. */
   resolving: boolean;
 }
 
 const pendingTurns = new Map<string, PendingTurn>();
 
-/** TEST-ONLY: clear the module-level pending-approval registry between tests. */
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
 }
 
-/** Whether a persisted approval card can be reconstructed from its run handle. */
 export function isApprovalTurnLive(assistantMessageId: string): boolean {
   return pendingTurns.has(assistantMessageId) || restorePendingTurn(assistantMessageId) !== null;
 }
@@ -565,14 +427,6 @@ function projectPendingTurn(turn: PendingTurn) {
   });
 }
 
-/**
- * Context carrying the tool-approval resolver down to per-message components
- * (MessageBubble) WITHOUT prop-drilling through the memoized message-list layers.
- * The provider is mounted by the chat page (which owns the Clerk-authenticated
- * resolver); `useToolApprovalResolver()` returns `null` when no provider is
- * present, so a standalone/provider-less render (e.g. unit tests) simply leaves
- * the approve/reject affordances unwired instead of calling useAuth and throwing.
- */
 type ResolveToolApprovalFn = UseChatStreamReturn['resolveToolApproval'];
 const ToolApprovalContext = createContext<ResolveToolApprovalFn | null>(null);
 export const ToolApprovalProvider = ToolApprovalContext.Provider;
@@ -580,20 +434,6 @@ export function useToolApprovalResolver(): ResolveToolApprovalFn | null {
   return useContext(ToolApprovalContext);
 }
 
-/**
- * Client-side convenience only: consult the user's saved per-(connector,
- * tool) decision (tool-permissions-store.ts, set from the ToolTimeline
- * approval card's "Remember" picker) and auto-resolve any pending call that
- * already has an 'allow'/'deny' verdict, through the SAME resolveToolApproval
- * path a manual click uses — so the resume/decision bookkeeping (turn.decisions,
- * the "wait for every call" gate) stays in one place. 'ask' (the default) is a
- * no-op: the card is left for a manual decision, exactly like today.
- *
- * The server re-validates every approval on resume regardless of what the
- * client sends — this only saves the user a repeat click, it grants nothing.
- * Non-MCP tool names (parseQualifiedMcpToolName returns null) are untouched;
- * the permission store is connector-scoped only.
- */
 function autoResolvePendingApprovals(
   assistantMessageId: string,
   calls: PendingApprovalCall[],
@@ -613,7 +453,6 @@ function autoResolvePendingApprovals(
 }
 
 interface StreamOutcome {
-  /** True when the turn suspended on a tool-approval request (no final answer yet). */
   suspended: boolean;
   pendingCalls: PendingApprovalCall[];
   runHandle: ManagedCloudAgentRunHandle | null;
@@ -626,24 +465,11 @@ interface ConsumeStreamContext {
   conversationId: string;
   isTemporaryConversation: boolean;
   getAuthToken: AuthTokenProvider;
-  /** Seed the accumulated assistant text (for the resume continuation). */
   seedContent?: string;
-  /** Seed the tool timeline (for the resume continuation, so prior cards persist). */
   seedTools?: MessageToolEntry[];
-  /** Keep the owning hook pointed at the server job while this stream is live. */
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
 }
 
-/**
- * Consume an OpenAI-compatible SSE stream into the given assistant message.
- * Owns the thinking-marker holdback, tool-timeline bookkeeping, x_tool_* event
- * handling, and the terminal persistence + streaming teardown. Shared by
- * `sendMessage` (initial request) and `resolveToolApproval` (resume
- * continuation) so both drive IDENTICAL rendering + persistence.
- *
- * Returns a StreamOutcome describing whether the turn suspended on a
- * tool-approval request and, if so, which tool calls are pending.
- */
 async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<StreamOutcome> {
   const {
     response,
@@ -676,10 +502,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const toolStartTimes = new Map<string, number>();
   const pendingCalls: PendingApprovalCall[] = [];
   let suspended = false;
-  // For a continuation/resume (seedContent set), start from the metadata the
-  // turn already accumulated so the terminal persist (which REPLACES the
-  // metadata jsonb wholesale) does not drop earlier search results, code
-  // output, generated files, or research state.
   const liveMessageMetadata = findConversationMessage(
     conversationId,
     ctx.assistantMessageId,
@@ -691,9 +513,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let currentResearch: MessageResearchState | undefined = seedMetadata?.research
     ? { ...seedMetadata.research }
     : undefined;
-  // CAP-048: the AGI Work plan queue is tracked as a local like `currentResearch`
-  // so the terminal `buildAssistantMetadata` rebuild re-includes it instead of
-  // dropping the mid-stream write when it replaces the metadata bag.
   let currentAgiWorkPlan: MessageMetadata['agiWorkPlan'] = seedMetadata?.agiWorkPlan;
   let currentGeneratedFiles: MessageMetadata['generatedFiles'] = seedMetadata?.generatedFiles;
   let currentAgentActivity: AgentActivityState | undefined = liveMessageMetadata?.agentActivity;
@@ -703,48 +522,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         lastSequence: seedMetadata?.agentActivity?.lastSequence ?? -1,
       }
     : seedMetadata?.cloudAgentRun;
-  /**
-   * How this turn ended, from the OpenAI-wire `finish_reason` (last one seen —
-   * server tool loops emit intermediate 'tool_calls' before the final reason).
-   * 'length' / 'max_tokens' → truncated at the token cap (continuable);
-   * user abort with partial text sets the client-only marker 'stopped'.
-   * Recorded on the message metadata + persisted so the Continue affordance
-   * is honest and survives reload.
-   */
   let finishReason: string | undefined;
-  /**
-   * Classified payload from an additive `x_stream_error` delta: the provider
-   * failed mid-stream (after the response had already committed a 200), so
-   * this turn's [DONE] still arrives normally with no other visible signal —
-   * see `hasStreamError` in packages/ui/unified-chat/src/lib/continue-generation.ts
-   * for why `finish_reason` alone cannot carry this. Sticky (once set, never
-   * cleared) so an isolated retry of the SAME turn can't un-set it before the
-   * terminal persist reads it. `code`/`retryable` ride along when the
-   * provider adapter supplied them.
-   */
   let streamErrorInfo: { message: string; code?: string; retryable?: boolean } | undefined =
     seedMetadata?.streamError;
-  /**
-   * Interactive cards seen this turn, keyed by cardId so a re-emitted card
-   * (the server re-sends one when its state changes from pending to answered)
-   * replaces rather than duplicates. Seeded from the live metadata so a resumed
-   * continuation does not drop the card the user just answered.
-   */
   const interactiveCards = new Map<string, InteractiveCard>(
     (seedMetadata?.interactiveCards ?? [])
       .slice(0, INTERACTIVE_CARDS_MAX_PER_MESSAGE)
       .map((card) => [card.cardId, card]),
   );
 
-  // ── Reasoning (thinking) accumulation ──────────────────────────────────────
-  // updateMessage REPLACES metadata wholesale, so a bare `{ metadata: {...} }`
-  // update wipes everything else already on the bag (thinkingContent, tools,
-  // searchResults). This merge-safe patch reads the current bag and spreads it —
-  // without it, closing a `<thinking>` block erased the accumulated reasoning and
-  // the block vanished on completion (and never persisted).
   const patchMessageMeta = (patch: Partial<MessageMetadata>) => {
-    // AUDIT-FIX ROOT-CAUSE: read AND write this turn's own conversation, never
-    // the globally-active one.
     const current = findConversationMessage(conversationId, assistantMessageId)?.metadata;
     updateMessage(assistantMessageId, { metadata: { ...current, ...patch } }, conversationId);
   };
@@ -784,24 +571,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ cloudAgentRun: { ...currentCloudAgentRun } });
   };
 
-  // AUDIT-FIX STR-9: reasoning is accumulated LOCALLY, exactly like tools,
-  // generatedFiles, searchResults and research. `buildAssistantMetadata` used to
-  // read thinkingContent/thinkingSegments back off the store instead, so when
-  // the message was not in the visible `state.messages` (a background
-  // conversation's turn) the reasoning was silently dropped from the persisted
-  // row. These locals are the source of truth for the terminal persist; the
-  // store writes below remain, but only to drive the live render.
   let thinkingContent = seedMetadata?.thinkingContent ?? '';
   let thinkingStartedAt: string | undefined = seedMetadata?.thinkingStartedAt;
   let thinkingCompletedAt: string | undefined = seedMetadata?.thinkingCompletedAt;
   const seededThinkingDurationSeconds = seedMetadata?.thinkingDurationSeconds;
 
-  // Local ledger of reasoning segments. Published to the store only once a turn
-  // has >= 2 blocks (interleaved thinking around tool calls), so single-block
-  // turns keep their proven single-`thinkingContent` render + persist path and
-  // this stays a no-op for the common case. Seeded from the resume/continuation
-  // metadata (AUDIT-FIX STR-9) so a continuation cannot drop the segments the
-  // first half of the turn already produced.
   const thinkingSegments: NonNullable<MessageMetadata['thinkingSegments']> =
     seedMetadata?.thinkingSegments?.map((segment) => ({ ...segment })) ?? [];
 
@@ -812,7 +586,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const openThinkingSegment = () => {
     const startedAt = new Date().toISOString();
-    thinkingStartedAt = startedAt; // AUDIT-FIX STR-9
+    thinkingStartedAt = startedAt;
     thinkingSegments.push({
       id: `${assistantMessageId}-think-${thinkingSegments.length}`,
       content: '',
@@ -825,7 +599,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   };
 
   const appendThinkingText = (text: string) => {
-    thinkingContent += text; // AUDIT-FIX STR-9: local accumulator is authoritative
+    thinkingContent += text;
     appendToThinking(assistantMessageId, text, conversationId);
     const seg = thinkingSegments[thinkingSegments.length - 1];
     if (seg) {
@@ -836,7 +610,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const closeThinkingSegment = () => {
     const completedAt = new Date().toISOString();
-    thinkingCompletedAt = completedAt; // AUDIT-FIX STR-9
+    thinkingCompletedAt = completedAt;
     const seg = thinkingSegments[thinkingSegments.length - 1];
     if (seg && seg.isStreaming) {
       seg.isStreaming = false;
@@ -937,8 +711,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     error?: string,
   ) => {
     for (const tool of toolTimeline) {
-      // Leave awaiting_approval cards untouched — a suspended turn must not be
-      // force-completed by the trailing flush; it is resolved by the user.
       if (tool.status !== 'pending' && tool.status !== 'running') continue;
       const startedAt = tool.id ? toolStartTimes.get(tool.id) : undefined;
       tool.status = status;
@@ -1009,15 +781,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (streamErrorInfo) {
       metadata.streamError = streamErrorInfo;
     }
-    // Persist reasoning so it survives reload (previously dropped — only the answer
-    // was saved). AUDIT-FIX STR-9: read the accumulated thinking off the LOCAL
-    // accumulators (symmetric with tools / generatedFiles / searchResults /
-    // research above) instead of reading it back off the store's visible message
-    // list — that read returned undefined whenever this turn's conversation was
-    // not the one on screen, silently dropping the reasoning from the saved row.
-    // Always persist isThinkingStreaming:false and a stable duration so a
-    // reloaded turn renders the collapsed "Thought for Ns" summary, never a
-    // stuck live timer.
     if (thinkingSegments.length >= 2) {
       metadata.thinkingSegments = thinkingSegments.map((s) => ({ ...s, isStreaming: false }));
     }
@@ -1044,18 +807,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const persistAssistant = (fullContent: string) => {
     const metadata = buildAssistantMetadata();
     if (metadata) {
-      // Temporary chats skip the database write but still need the exact same
-      // terminal in-memory state, including clearing a resolved approval.
       updateMessage(assistantMessageId, { metadata }, conversationId);
     }
     if (isTemporaryConversation) return;
-    // A tool-only turn (connector call, generated file, code execution) can
-    // finish with no visible closing text — fullContent is then ''. Bailing
-    // out unconditionally here used to drop the tool timeline and generated
-    // file cards on reload along with the (rightfully) skipped empty text.
-    // Persist whenever there is either real content or metadata worth
-    // keeping; see EMPTY_ASSISTANT_CONTENT_PLACEHOLDER for why a metadata-only
-    // turn cannot be saved with content: ''.
     const hasMeaningfulMetadata = Boolean(
       metadata &&
       ((metadata.tools?.length ?? 0) > 0 ||
@@ -1069,10 +823,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         metadata.cloudApproval ||
         metadata.thinkingContent ||
         (metadata.thinkingSegments?.length ?? 0) > 0 ||
-        // A provider failure on the very first token (zero content streamed)
-        // must still persist — otherwise the x_stream_error signal is
-        // silently dropped and the turn looks like it never happened at all
-        // on reload, worse than rendering a clean-looking empty completion.
         metadata.streamError),
     );
     if (!fullContent && !hasMeaningfulMetadata) return;
@@ -1164,17 +914,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
   };
 
-  // Seed the store with any prior tool cards so the resume continuation renders
-  // them alongside new events.
   if (toolTimeline.length > 0) publishToolTimeline();
 
-  /**
-   * The completion request is only one transport for a server-owned run. If
-   * that SSE connection disappears unexpectedly, follow the journal from the
-   * last canonical sequence instead of replacing real partial work with a
-   * generic network error. Text deltas in the journal are explicitly public
-   * answer text; reasoning deltas remain excluded from the transcript.
-   */
   const replayDurableRun = async (): Promise<StreamOutcome> => {
     if (!runHandle) throw new Error('Managed Cloud run handle is unavailable');
 
@@ -1248,10 +989,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return { suspended, pendingCalls, runHandle };
   };
 
-  // AUDIT-FIX BUG-4: SSE makes the space after `data:` OPTIONAL, so matching
-  // 'data: ' (and slicing a hardcoded 6) silently dropped every frame from a
-  // provider that emits `data:{...}`. Strip the field name, then at most one
-  // leading space.
   const collectEventPayloads = (rawEvent: string): string[] => {
     const dataLines: string[] = [];
     for (const rawLine of rawEvent.split('\n')) {
@@ -1261,12 +998,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       dataLines.push(value.startsWith(' ') ? value.slice(1) : value);
     }
     if (dataLines.length <= 1) return dataLines;
-    // AUDIT-FIX BUG-3: multiple `data:` fields in one event belong to a SINGLE
-    // payload joined with '\n' per spec. Our own server
-    // (app/api/llm/v1/chat/completions/lib/stream-transform.ts) instead packs
-    // several independently-valid JSON objects as separate `data:` lines in one
-    // event, which the joined form cannot parse. Try the spec-conformant
-    // payload first, then fall back to per-line payloads, so both framings work.
     const joined = dataLines.join('\n');
     try {
       JSON.parse(joined);
@@ -1276,12 +1007,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
   };
 
-  // AUDIT-FIX BUG-5/BUG-6: events are delimited by a BLANK line, and any of
-  // '\n', '\r\n' or a bare '\r' terminates a line. The previous line-only split
-  // on '\n' never advanced against a bare-'\r' server (buffer grew unbounded,
-  // nothing parsed). `flushAll` is set once the reader reports done so a final
-  // frame that was never terminated by a blank line is still processed instead
-  // of being discarded with the buffer.
   const drainEventPayloads = (flushAll: boolean): string[] => {
     buffer = buffer.replace(/\r\n|\r/g, '\n');
     const payloads: string[] = [];
@@ -1303,8 +1028,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     while (true) {
       const { done, value } = await reader.read();
 
-      // AUDIT-FIX BUG-6: flush the decoder on `done` so a multi-byte character
-      // straddling the last chunk boundary is emitted rather than swallowed.
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
 
       for (const data of drainEventPayloads(done)) {
@@ -1318,14 +1041,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           setSearching(assistantMessageId, false, conversationId);
           setExecutingCode(assistantMessageId, false, conversationId);
           if (finishReason) {
-            // Publish before persisting so the Continue affordance (finish_reason
-            // 'length'/'max_tokens') renders immediately, not only after reload.
             patchMessageMeta({ finishReason });
           }
           if (streamErrorInfo) {
-            // Same "publish before persist" treatment as finishReason above,
-            // so the incomplete-response notice + regenerate affordance
-            // (hasStreamError) renders immediately, not only after reload.
             patchMessageMeta({ streamError: streamErrorInfo });
           }
           completeLocalStartingActivity();
@@ -1338,11 +1056,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         try {
           const parsed = JSON.parse(data);
 
-          // Canonical Cloud activity stream. Runtime validation happens before
-          // projection, and the reducer enforces per-turn monotonic sequence so
-          // retries/reordered chunks cannot duplicate or rewrite visible work.
-          // Legacy x_tool_* parsing below remains during the emitter migration,
-          // but the message renderer prefers this canonical state when present.
           const agentEnvelope = parseAgentEventDelta(parsed.choices?.[0]?.delta?.x_agent_event);
           const duplicateAgentEnvelope = Boolean(
             agentEnvelope &&
@@ -1367,11 +1080,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (!duplicateAgentEnvelope && typeof deltaContent === 'string') {
             chunk = deltaContent;
           } else if (!duplicateAgentEnvelope && deltaContent != null) {
-            // AUDIT-FIX BUG-11: some OpenAI-compatible providers send a
-            // non-string delta.content (e.g. `[]` for an empty delta). It used
-            // to be concatenated straight into the answer, rendering AND
-            // persisting '[object Object]' without throwing, so the surrounding
-            // catch never saw it. Drop it, but log so it stays observable.
             logger.warn('[useChatStream] Ignoring non-string delta.content', {
               type: typeof deltaContent,
               isArray: Array.isArray(deltaContent),
@@ -1385,7 +1093,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             flushContentBuffer(false);
           }
 
-          // Deep Research run status (additive x_research_status event).
           const researchStatus = parsed.choices?.[0]?.delta?.x_research_status;
           if (researchStatus && typeof researchStatus === 'object') {
             const phase = researchStatus.phase;
@@ -1430,8 +1137,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                       ? researchStatus.label
                       : 'Research run failed'
                     : undefined,
-                // The plan and retry material live on their own events; carry
-                // them across status updates instead of dropping them.
                 steps: currentResearch?.steps,
                 sourcesForRetry: currentResearch?.sourcesForRetry,
               };
@@ -1439,9 +1144,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
-          // Deep Research plan queue (additive x_research_plan event). Whole
-          // plan, last-write-wins. A client that ignored this event before
-          // behaved exactly as it does now minus the plan list.
           const researchPlan = parsed.choices?.[0]?.delta?.x_research_plan;
           if (researchPlan) {
             const planSteps = parseResearchPlanEvent(researchPlan);
@@ -1457,9 +1159,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
-          // AGI Work plan queue (additive x_agiwork_plan event, CAP-048). Whole
-          // plan, last-write-wins — same additive contract as x_research_plan, so
-          // a client that ignores it is unchanged.
           const agiWorkPlan = parsed.choices?.[0]?.delta?.x_agiwork_plan;
           if (agiWorkPlan) {
             const planSteps = parseAgiWorkPlanEvent(agiWorkPlan);
@@ -1469,7 +1168,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
-          // Tool status indicators.
           const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
           if (toolStatus?.type === 'server_tool_use') {
             startTool(toolStatus.name, toolStatus.status);
@@ -1495,12 +1193,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             setExecutingCode(assistantMessageId, true, conversationId);
           }
 
-          // Mid-stream provider failure (additive marker — see the
-          // streamErrorInfo declaration above for why this can't ride on
-          // finish_reason alone). Sticky: keep the FIRST payload seen, not
-          // the last, since it identifies the actual failure. Accepts the
-          // current object shape defensively (a stray bare-string sender
-          // would still be classified, though the wire only sends objects).
           const streamErrorDelta = parsed.choices?.[0]?.delta?.x_stream_error;
           if (!streamErrorInfo) {
             if (
@@ -1523,8 +1215,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
-          // Manual-approval request: surface an awaiting_approval card and record
-          // the pending call so the caller can build the resume request.
           const approvalReq = parsed.choices?.[0]?.delta?.x_tool_approval_request;
           if (approvalReq && typeof approvalReq === 'object') {
             const tcId = (approvalReq as Record<string, unknown>)['tool_call_id'];
@@ -1550,17 +1240,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
-          /*
-           * Interactive card.
-           *
-           * `parseInteractiveCardDelta` NEVER throws and never drops a card it
-           * cannot understand: an unknown kind, a newer schemaVersion, or a body
-           * that fails validation all come back `recognized: false` still
-           * carrying the server-authored `fallback`. So this branch has no
-           * error path of its own — a null return means the payload was not an
-           * envelope at all, which is the only case where there is nothing to
-           * show.
-           */
           const cardDelta = parsed.choices?.[0]?.delta?.[INTERACTIVE_CARD_DELTA_KEY];
           if (cardDelta) {
             const card = parseInteractiveCardDelta(cardDelta);
@@ -1574,7 +1253,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
-          // Code execution result.
           const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
           if (codeResultBlock) {
             const content = Array.isArray(codeResultBlock.content)
@@ -1609,7 +1287,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             finishTool('code_execution', 'completed');
           }
 
-          // Web search results.
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
           if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
             const results = (searchResultsBlock.content as Record<string, unknown>[])
@@ -1622,17 +1299,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             if (results.length > 0) {
               currentSearchResults = results;
               setSearchResults(assistantMessageId, results, conversationId);
-              // CAP-045 slice 4: a research run keeps its cumulative sources on
-              // the research state so a Retry can carry them forward and skip
-              // work that already succeeded.
               if (currentResearch) {
                 currentResearch = { ...currentResearch, sourcesForRetry: results };
                 setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
               }
             }
-            // url_fetch sources carry tool:'url_fetch' — their timeline entry is
-            // driven by mcp_tool_use status events, so don't synthesize a
-            // web_search entry for them.
             if (searchResultsBlock.tool !== 'url_fetch') {
               finishTool('web_search', 'completed');
             }
@@ -1650,7 +1321,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
           }
 
-          // Platform-executed tool results (MCP / E2B sandbox).
           const toolResultBlock = parsed.choices?.[0]?.delta?.x_tool_result;
           if (toolResultBlock) {
             const { name, content, is_error } = toolResultBlock as {
@@ -1660,9 +1330,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               is_error?: boolean;
             };
             if (name) {
-              // Include 'failed' so a denial result event (server emits one for a
-              // rejected tool, isError:false) lands on the card the client already
-              // flipped to 'failed' on reject, instead of creating a duplicate.
               let idx = findLastToolIndex(name, [
                 'running',
                 'completed',
@@ -1696,14 +1363,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
 
-          // Generated files (tool/provider runs that produced real bytes).
-          // Emitted once by the server before [DONE] with same-origin
-          // /api/files/{id} uris. UPSERT by file name so a re-harvested file
-          // replaces its earlier descriptor instead of duplicating. Parsed
-          // with the shared cloud contract (desktop WebRuntime and mobile use
-          // the same parseGeneratedFilesDelta) instead of hand-rolled field
-          // coercion, so all surfaces agree on what counts as a valid
-          // descriptor and salvage per-file the same way.
           {
             const incoming = parseGeneratedFilesDelta(
               parsed.choices?.[0]?.delta?.x_generated_files,
@@ -1715,9 +1374,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               byteCount: f.byte_count,
               kind: f.kind,
               ...(f.checksum_sha256 ? { checksumSha256: f.checksum_sha256 } : {}),
-              // Server-derived classification (file-creation parity Wave A).
-              // Always present — the contract defaults pre-classification
-              // payloads to 'file' / not-previewable.
               surface: f.surface,
               previewable: f.previewable,
             }));
@@ -1736,8 +1392,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
             const reason = parsed.choices?.[0]?.finish_reason;
             if (typeof reason === 'string' && reason) {
-              // Keep the LAST reason seen: server tool loops emit intermediate
-              // 'tool_calls' chunks before the final 'stop'/'length'.
               finishReason = reason;
             }
             updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
@@ -1747,12 +1401,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         }
       }
 
-      // AUDIT-FIX BUG-6: break AFTER draining, so the residual frame the old
-      // `if (done) break;` threw away is still delivered.
       if (done) break;
     }
 
-    // Stream ended without an explicit [DONE].
     flushContentBuffer(true);
     if (inThinkingBlock) {
       closeThinkingSegment();
@@ -1771,9 +1422,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     setLoading(false, conversationId);
     return { suspended, pendingCalls, runHandle };
   } catch (error) {
-    // Browsers reject an aborted fetch read with a DOMException named
-    // 'AbortError' -- DOMException is NOT instanceof Error, so a plain
-    // `instanceof Error` check misclassifies user cancellation as a failure.
     const isAbort =
       typeof error === 'object' &&
       error !== null &&
@@ -1798,8 +1446,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       patchMessageMeta({ agentActivity: currentAgentActivity });
     }
 
-    // Flush the held-back content tail so an interrupted turn keeps (and
-    // persists) exactly what streamed, not up-to-11 chars less.
     if (isAbort) {
       flushContentBuffer(true);
     }
@@ -1807,34 +1453,21 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     const researchActive = currentResearch && currentResearch.phase !== 'complete';
 
     if (isAbort && !researchActive) {
-      // User stopped mid-generation with partial text already streamed: record
-      // the client-only 'stopped' marker (drives the Continue affordance) and
-      // persist the partial so it survives reload. Teardown (isStreaming
-      // false, stopStreaming, setLoading) happens in the caller's abort
-      // handling — rethrow below as before.
       if (fullAssistantContent) {
         finishReason = 'stopped';
         patchMessageMeta({ finishReason });
       }
-      // A tool-only cancelled run still carries meaningful canonical metadata
-      // and must survive reload even when no answer token arrived.
       if (fullAssistantContent || currentAgentActivity) {
         persistAssistant(fullAssistantContent);
       }
     }
 
     if (researchActive && isAbort) {
-      // Deep Research cancelled mid-run: record the interruption honestly and
-      // persist the partial report/sources so the run survives reload.
       currentResearch = { ...currentResearch!, phase: 'interrupted' };
       setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
       finishRunningTools();
       persistAssistant(fullAssistantContent);
     } else if (researchActive && !isAbort) {
-      // Deep Research failed mid-run with a partial report already streamed:
-      // keep the partial content, append an honest error note, record the
-      // failure on the research state, persist, and tear down here (rethrowing
-      // would let handleStreamError overwrite the partial with a bare error).
       const errorMessage = getVisibleErrorMessage(terminalError);
       currentResearch = { ...currentResearch!, phase: 'error', error: errorMessage };
       setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
@@ -1856,40 +1489,17 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     throw terminalError;
   } finally {
-    // AUDIT-FIX BUG-2: cancel the body on EVERY exit path. The research-error
-    // `return` above and the `throw terminalError` both used to leave the
-    // response body locked and the connection open, so the server's
-    // ReadableStream.cancel() -- which settles billing and journals the run as
-    // cancelled -- never fired. releaseLock() is NOT a substitute: it unlocks
-    // the stream while the body stays un-cancelled.
     await reader.cancel().catch(() => undefined);
   }
 }
 
-/**
- * Hook for handling SSE streaming chat with the LLM API
- */
 export function useChatStream(): UseChatStreamReturn {
   const { getToken } = useAuth();
-  /**
-   * AUDIT-FIX STR-2/BUG-16: ONE controller per conversation, not one for the
-   * whole app. Previously a single slot was aborted unconditionally at the top
-   * of every `sendMessage`, with no check that it belonged to the conversation
-   * being sent to — so sending in chat B silently truncated chat A's response
-   * and persisted it as `finishReason:'stopped'`.
-   */
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
-  /**
-   * AUDIT-FIX STR-2/BUG-16: same, for the durable Cloud run handle. A single
-   * slot meant a second send orphaned the earlier run: it kept executing (and
-   * billing) server-side with no client able to cancel it, because the handle
-   * needed to call `cancelRun` had already been overwritten.
-   */
   const activeRunsRef = useRef<
     Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string }>
   >(new Map());
 
-  /** Abort (and forget) only the in-flight turn belonging to `conversationId`. */
   const abortConversation = useCallback((conversationId: string): void => {
     const controller = abortControllersRef.current.get(conversationId);
     if (!controller) return;
@@ -1897,7 +1507,6 @@ export function useChatStream(): UseChatStreamReturn {
     controller.abort();
   }, []);
 
-  /** Install a fresh controller for `conversationId`, aborting only its own predecessor. */
   const beginConversationRequest = useCallback(
     (conversationId: string): AbortController => {
       abortConversation(conversationId);
@@ -1908,7 +1517,6 @@ export function useChatStream(): UseChatStreamReturn {
     [abortConversation],
   );
 
-  /** Drop `conversationId`'s controller iff it is still the one we installed. */
   const endConversationRequest = useCallback(
     (conversationId: string, controller: AbortController): void => {
       if (abortControllersRef.current.get(conversationId) === controller) {
@@ -1926,28 +1534,14 @@ export function useChatStream(): UseChatStreamReturn {
   const setLoading = useChatStore((state) => state.setLoading);
   const setError = useChatStore((state) => state.setError);
   const selectedModel = useChatStore((state) => state.selectedModel);
-  // Scoped to the ACTIVE conversation, not the raw global flag -- a
-  // background stream for a conversation the user has switched away from
-  // must not show this conversation as generating (see
-  // streamingConversationIds's doc comment in the store).
   const isStreaming = useChatStore(selectIsActiveConversationStreaming);
 
-  // On unmount, do NOT abort the in-flight stream and do NOT null the ref.
-  // The chatStore is a global singleton, so streamed tokens continue updating
-  // the message list even after the originating component unmounts (e.g.
-  // navigation from /chat to /chat/[id] on the first message).
   useEffect(() => {
     return () => {
       // intentionally empty: preserve controller across unmount
     };
   }, []);
 
-  // Declared before sendMessage (which auto-resolves connector approvals
-  // through this SAME function — see autoResolvePendingApprovals) rather than
-  // after, so it is in scope for sendMessage's closure. Shares the
-  // per-conversation controller map with sendMessage/continueGeneration/
-  // stopGeneration (Finding 4) so Stop cancels a resume exactly like any other
-  // in-flight turn — and, since AUDIT-FIX STR-2, only for ITS conversation.
   const resolveToolApproval = useResolveToolApproval(abortControllersRef);
 
   const sendMessage = useCallback(
@@ -1979,18 +1573,11 @@ export function useChatStream(): UseChatStreamReturn {
               ...(persistedAttachments ? { attachments: persistedAttachments } : {}),
             }
           : undefined;
-      // Provider (not a captured string): every save fetches a fresh token at
-      // call time so a long stream cannot outlive it. See AuthTokenProvider.
       const getAuthToken: AuthTokenProvider = async () => {
         const token = await getToken();
         if (!token) throw new Error('Not authenticated');
         return token;
       };
-      // Pre-flight the token BEFORE adding any message. Previously this threw
-      // uncaught (getToken() null on an expired/revoked session), and since the
-      // composer has already cleared the input, the user's message vanished with
-      // no error shown. Mirror continueGeneration: surface the error and stop
-      // cleanly before mutating the transcript.
       let authToken: string;
       try {
         authToken = await getAuthToken();
@@ -2008,8 +1595,6 @@ export function useChatStream(): UseChatStreamReturn {
         attachments: options.attachments,
         metadata: userMetadata,
       };
-      // AUDIT-FIX ROOT-CAUSE: append to the TARGET conversation's transcript,
-      // not to whatever is on screen when this resolves.
       addMessage(userMessage, conversationId);
 
       const isTemporaryConversation = Boolean(
@@ -2017,9 +1602,6 @@ export function useChatStream(): UseChatStreamReturn {
           .getState()
           .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
       );
-      // AUDIT-FIX STR-22: report the commit point. For a temporary conversation
-      // there is no durable row to wait on, so the turn is committed the moment
-      // it is in the transcript.
       const reportTurnCommitted = () => {
         try {
           options.onTurnCommitted?.();
@@ -2031,10 +1613,6 @@ export function useChatStream(): UseChatStreamReturn {
       };
       if (!isTemporaryConversation) {
         try {
-          // The user row is the paid-turn admission fence. Await it before
-          // creating the assistant placeholder or starting provider egress;
-          // otherwise a slow/failed save can race a successful provider call
-          // and a retry buys the same turn twice with no durable prompt.
           const saved = await saveMessageToDb(
             conversationId,
             {
@@ -2059,9 +1637,6 @@ export function useChatStream(): UseChatStreamReturn {
         reportTurnCommitted();
       }
 
-      // AUDIT-FIX STR-2/BUG-16: abort ONLY this conversation's own previous
-      // turn. Install the controller after the durable admission fence so a
-      // pre-egress persistence failure cannot leave a phantom active request.
       const abortController = beginConversationRequest(conversationId);
 
       const assistantMessageId = resolveClientMessageId(options.assistantMessageId);
@@ -2084,17 +1659,10 @@ export function useChatStream(): UseChatStreamReturn {
       };
       addMessage(assistantMessage, conversationId);
       startStreaming(assistantMessageId, conversationId);
-      // AUDIT-FIX STR-7/BUG-12: scope the `true` write exactly like every
-      // `false` write. Unscoped, a background turn left `isLoading` stuck true
-      // and disabled the composer in every other conversation.
       setLoading(true, conversationId);
       setError(null, conversationId);
 
       try {
-        // AUDIT-FIX BUG-13: build the provider history from the TARGET
-        // conversation. This used to read the globally-active transcript, so a
-        // send explicitly addressed to conversation A was billed against A
-        // while carrying conversation B's messages.
         const currentMessages = readConversationMessages(conversationId);
 
         const apiMessages: ApiMessage[] = [
@@ -2106,8 +1674,6 @@ export function useChatStream(): UseChatStreamReturn {
             })),
         ];
 
-        // StyleSelector's resolved instruction (preset or custom) is
-        // authoritative; keep the legacy styleMode hint only for older callers.
         if (options.styleInstruction) {
           apiMessages.unshift({ role: 'system', content: options.styleInstruction });
         } else if (options.styleMode && options.styleMode !== 'normal') {
@@ -2130,9 +1696,6 @@ export function useChatStream(): UseChatStreamReturn {
         const thinkingState = useThinkingStore.getState();
         const requestedThinking = options.thinkingEnabled ?? thinkingState.enabled;
         const selectedModelMetadata = getModelMetadataById(model);
-        // Unknown/BYOK models preserve the caller's explicit request. Known catalog
-        // models are capability-clamped so a stale persisted preference can never
-        // make an otherwise valid chat fail before provider execution.
         const modelCanThink = selectedModelMetadata?.capabilities.thinking ?? true;
         const thinkingEnabled = modelCanThink ? requestedThinking : undefined;
         const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
@@ -2152,12 +1715,6 @@ export function useChatStream(): UseChatStreamReturn {
             model,
             messages: apiMessages,
             conversation_id: conversationId,
-            // AUDIT-FIX BUG-10/STR-5: send the client-minted assistant message id so
-            // the server can persist the turn under the SAME row the client will
-            // upsert at [DONE]. Without a shared key the two writes cannot collapse
-            // (the messages route upserts `on conflict (id)`), so a server-side
-            // persist would duplicate every assistant message instead of covering
-            // the tab-close case it exists for.
             assistant_message_id: assistantMessageId,
             stream: true,
             [INTERACTIVE_CARD_REQUEST_KEY]: {
@@ -2169,19 +1726,12 @@ export function useChatStream(): UseChatStreamReturn {
             web_search: options.webSearch || options.research || undefined,
             web_fetch: options.webFetch || undefined,
             research: options.research || undefined,
-            // CAP-045 slice 4: retry material for a research run that errored
-            // or was stopped. Sent only alongside research:true; the server
-            // drops it otherwise. This is the NORMAL send path, so the retry
-            // reserves and meters exactly like a first attempt.
             research_resume:
               options.research && options.researchResume ? options.researchResume : undefined,
             code_execution: options.codeExecution || undefined,
             office_creation: options.officeCreation || undefined,
             skill_name: options.skillName,
             work_mode: options.workMode,
-            // CAP-048: only meaningful in AGI Work mode; the server drops it
-            // otherwise. Sent on the normal billed path so the planning turn it
-            // drives meters exactly like the rest of the run.
             agi_work_goal: options.workMode === 'agiwork' ? options.agiWorkGoal : undefined,
             thinking_mode: thinkingEnabled,
             effort:
@@ -2203,27 +1753,11 @@ export function useChatStream(): UseChatStreamReturn {
           throw new ChatApiError(message, {
             code,
             status: response.status,
-            // GOV-20
             resetAt: readErrorResetAt(errorData, response),
           });
         }
 
-        /**
-         * Label the turn with the model that ACTUALLY answered.
-         *
-         * `model` here is what we asked for. Under Auto routing that is the
-         * literal `auto`, which is not a catalog id, so the transcript footer
-         * fell through to "Unavailable model" on every reply. A credit-driven
-         * fallback has the same problem in reverse: the footer would name a
-         * model that never ran. The server reports the routed id in
-         * `X-AGI-Resolved-Model`; trust it when present and keep the requested
-         * value as the fallback for older deployments.
-         */
         const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
-        // The in-memory message was created BEFORE the fetch, stamped with the
-        // requested model, and it is that object the transcript renders. Patch
-        // it now or the footer keeps showing the pre-routing value no matter
-        // what we persist.
         if (resolvedModel !== model) {
           updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
         }
@@ -2236,8 +1770,6 @@ export function useChatStream(): UseChatStreamReturn {
           isTemporaryConversation,
           getAuthToken,
           onRunHandle: (handle) => {
-            // AUDIT-FIX STR-2/BUG-16: keyed by conversation so a concurrent
-            // send elsewhere cannot orphan this run's cancel handle.
             if (handle) {
               activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
             } else {
@@ -2246,7 +1778,6 @@ export function useChatStream(): UseChatStreamReturn {
           },
         });
 
-        // Register the suspended turn so its approval cards can drive a resume.
         if (outcome.suspended && outcome.pendingCalls.length > 0) {
           if (!outcome.runHandle) {
             throw new Error('The managed agent did not return a durable run handle.');
@@ -2284,9 +1815,6 @@ export function useChatStream(): UseChatStreamReturn {
         }
         endConversationRequest(conversationId, abortController);
       }
-      // Committed: the new user turn was added (and is persisting) before the stream
-      // started, so a mid-stream failure never loses it. The caller may now safely
-      // delete any turn this send replaced (see sendReplacingMessages).
       return true;
     },
     [
@@ -2305,33 +1833,16 @@ export function useChatStream(): UseChatStreamReturn {
     ],
   );
 
-  /**
-   * Continue a truncated (finish_reason 'length'/'max_tokens') or user-stopped
-   * ('stopped') assistant turn. Reuses the normal completions route: the
-   * request history ends with the partial assistant message followed by an
-   * ephemeral user instruction to continue in place (never stored/rendered).
-   * consumeAssistantStream is seeded with the existing content + tool timeline
-   * so new tokens APPEND to the same bubble and the terminal persist saves the
-   * merged full text. Shares the per-conversation abort-controller map with
-   * sendMessage so stopGeneration cancels a continuation too -- and, since
-   * AUDIT-FIX STR-2, cancels only the conversation it was asked to stop.
-   */
   const continueGeneration = useCallback(
     async (assistantMessageId: string) => {
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
-      // Scoped to this conversation, not the raw global isStreaming -- a
-      // background stream for a DIFFERENT conversation must not block
-      // continuing generation on the one actually displayed.
       if (conversationId && store.streamingConversationIds.includes(conversationId)) return;
-      // AUDIT-FIX ROOT-CAUSE: read this conversation's own transcript.
       const conversationMessages = conversationId
         ? readConversationMessages(conversationId)
         : store.messages;
       const messageIndex = conversationMessages.findIndex((m) => m.id === assistantMessageId);
       const message = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
-      // No fake availability: only a truncated/stopped assistant turn with
-      // non-empty partial content can continue.
       if (!message || !isMessageContinuable(message)) return;
 
       if (!conversationId) {
@@ -2341,8 +1852,6 @@ export function useChatStream(): UseChatStreamReturn {
       const isTemporaryConversation = Boolean(
         store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
       );
-      // Continue with the model that produced the partial answer so the voice
-      // and capabilities stay coherent; fall back to the current selection.
       const model = message.model || selectedModel;
 
       const getAuthToken: AuthTokenProvider = async () => {
@@ -2358,11 +1867,8 @@ export function useChatStream(): UseChatStreamReturn {
         return;
       }
 
-      // AUDIT-FIX STR-2/BUG-16: cancel only this conversation's own prior turn.
       const abortController = beginConversationRequest(conversationId);
 
-      // Thread: everything up to AND INCLUDING the partial assistant turn,
-      // then the ephemeral continue instruction (request-only, never stored).
       const apiMessages: ApiMessage[] = conversationMessages
         .slice(0, messageIndex + 1)
         .map((m) => ({ role: m.role, content: m.content as MessageContent }));
@@ -2372,15 +1878,12 @@ export function useChatStream(): UseChatStreamReturn {
       const seedTools = message.metadata?.tools?.map((t) => ({ ...t }));
       const priorMetadata = message.metadata;
 
-      // Clear the continuable marker while the continuation streams; it is
-      // re-recorded honestly at stream end (re-offered if truncated again).
       updateMessage(
         assistantMessageId,
         { isStreaming: true, metadata: { ...priorMetadata, finishReason: undefined } },
         conversationId,
       );
       startStreaming(assistantMessageId, conversationId);
-      // AUDIT-FIX STR-7/BUG-12: scoped, matching every paired `false` write.
       setLoading(true, conversationId);
       setError(null, conversationId);
 
@@ -2403,12 +1906,6 @@ export function useChatStream(): UseChatStreamReturn {
             model,
             messages: apiMessages,
             conversation_id: conversationId,
-            // AUDIT-FIX BUG-10/STR-5: send the client-minted assistant message id so
-            // the server can persist the turn under the SAME row the client will
-            // upsert at [DONE]. Without a shared key the two writes cannot collapse
-            // (the messages route upserts `on conflict (id)`), so a server-side
-            // persist would duplicate every assistant message instead of covering
-            // the tab-close case it exists for.
             assistant_message_id: assistantMessageId,
             stream: true,
             use_prompt_cache: true,
@@ -2425,7 +1922,6 @@ export function useChatStream(): UseChatStreamReturn {
           throw new ChatApiError(errMessage, {
             code,
             status: response.status,
-            // GOV-20
             resetAt: readErrorResetAt(errorData, response),
           });
         }
@@ -2433,8 +1929,6 @@ export function useChatStream(): UseChatStreamReturn {
         await consumeAssistantStream({
           response,
           assistantMessageId,
-          // See the send path: label with the model that ANSWERED, not the one
-          // requested, so an Auto-routed turn is not stamped `auto`.
           model: response.headers.get('X-AGI-Resolved-Model')?.trim() || model,
           conversationId,
           isTemporaryConversation,
@@ -2442,7 +1936,6 @@ export function useChatStream(): UseChatStreamReturn {
           seedContent,
           seedTools,
           onRunHandle: (handle) => {
-            // AUDIT-FIX STR-2/BUG-16: keyed by conversation (see sendMessage).
             if (handle) {
               activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
             } else {
@@ -2456,8 +1949,6 @@ export function useChatStream(): UseChatStreamReturn {
           error !== null &&
           (error as { name?: unknown }).name === 'AbortError';
         if (isAbort) {
-          // consumeAssistantStream already flushed + re-marked 'stopped' +
-          // persisted the merged partial; just tear down here.
           updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
@@ -2467,8 +1958,6 @@ export function useChatStream(): UseChatStreamReturn {
         const errorMessage = getVisibleErrorMessage(error);
         const errorCode = error instanceof ChatApiError ? error.code : undefined;
         if (isFreeTrialErrorCode(errorCode)) {
-          // Nothing streamed; leave the partial turn exactly as it was
-          // (marker restored so Continue re-offers once the gate clears).
           if (errorCode === 'free_trial_token_budget_reached') {
             useFreeTrialStore.getState().markLimitReached();
           }
@@ -2483,9 +1972,6 @@ export function useChatStream(): UseChatStreamReturn {
           return;
         }
 
-        // Honest failure without destroying the partial answer: keep whatever
-        // has streamed (original partial + any continuation tokens) and append
-        // an error note, instead of handleStreamError's replace-with-error.
         const streamedSoFar =
           findConversationMessage(conversationId, assistantMessageId)?.content ?? seedContent;
         const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage)}`;
@@ -2503,8 +1989,6 @@ export function useChatStream(): UseChatStreamReturn {
               role: 'assistant',
               content: mergedContent,
               model,
-              // Drop the continuable marker: an errored turn must not re-offer
-              // Continue after reload (Regenerate is the recovery path).
               metadata: { ...priorMetadata, finishReason: undefined },
             },
             getAuthToken,
@@ -2532,14 +2016,6 @@ export function useChatStream(): UseChatStreamReturn {
     ],
   );
 
-  /**
-   * AUDIT-FIX STR-3: Stop now names its target. The old implementation had two
-   * disagreeing targets — it aborted whatever fetch started most recently
-   * (possibly a different conversation's) while `stopStreaming()` /
-   * `setLoading(false)` resolved against `activeConversationId`. Callers pass
-   * the conversation the Stop button belongs to; omitting it falls back to the
-   * active conversation, which is what a bare user-initiated Stop means.
-   */
   const stopGeneration = useCallback(
     (conversationId?: string) => {
       const targetConversationId = conversationId ?? useChatStore.getState().activeConversationId;
@@ -2573,23 +2049,6 @@ export function useChatStream(): UseChatStreamReturn {
   };
 }
 
-/**
- * Lightweight hook exposing ONLY `resolveToolApproval`. It subscribes to no
- * reactive store slice (reads stable actions via getState()), so a component
- * that renders once per message (e.g. MessageBubble) can wire approve/reject
- * without incurring a re-render on every streaming toggle. useChatStream reuses
- * it so there is a single implementation of the resume flow.
- *
- * `sharedAbortControllers` is the SAME per-conversation map
- * `sendMessage`/`continueGeneration` use, passed in by the caller rather than
- * owned here. A resume is just another kind of in-flight turn on the
- * conversation, so it must share one abort target with the rest -- previously
- * this hook kept a private `abortRef` that `stopGeneration` never touched, so
- * clicking Stop during a tool-approval resume did nothing (Finding 4).
- *
- * AUDIT-FIX STR-2/BUG-16: the shared target is now keyed by conversation, so a
- * resume cancels (and is cancelled by) only its OWN conversation's turn.
- */
 export function useResolveToolApproval(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
 ): UseChatStreamReturn['resolveToolApproval'] {
@@ -2597,9 +2056,6 @@ export function useResolveToolApproval(
   const abortControllers = sharedAbortControllers;
 
   return useCallback(
-    // Named (not an anonymous arrow) so it can call itself below when a
-    // resumed turn suspends AGAIN on a further connector call — auto-resolving
-    // that next batch needs the exact same resolver, not a re-derived one.
     async function resolveToolApproval(
       assistantMessageId: string,
       toolCallId: string,
@@ -2621,9 +2077,6 @@ export function useResolveToolApproval(
 
       turn.decisions.set(toolCallId, decision);
 
-      // Persist the selection while the batch remains awaiting input. Keeping
-      // requiresApproval=true makes a partially decided batch reconstructable
-      // after reload; execution state changes only once every call is decided.
       updateToolEntry(
         assistantMessageId,
         toolCallId,
@@ -2631,8 +2084,6 @@ export function useResolveToolApproval(
         turn.conversationId,
       );
 
-      // AUDIT-FIX ROOT-CAUSE: the suspended turn carries its own conversation
-      // id; read and write THAT transcript, not the one currently displayed.
       const selectedMessage = findConversationMessage(turn.conversationId, assistantMessageId);
       const selectedMetadata: MessageMetadata = {
         ...selectedMessage?.metadata,
@@ -2659,15 +2110,7 @@ export function useResolveToolApproval(
         ).catch((error) => notifyPersistenceFailure('assistant', error));
       }
 
-      // Wait until EVERY pending call in the turn is decided before resuming.
       if (turn.decisions.size < turn.calls.length) return;
-      // Claim the resume atomically. Two decisions can be in flight at once — a rapid
-      // double-click on one button, or the last two calls approved near-simultaneously —
-      // and on a persisted conversation each parks at the `await saveMessageToDb` above
-      // with `resolving` still false, so both re-pass the top guard and both reach here
-      // after the batch is complete. This check-and-set has no await between the read and
-      // the write, so it is atomic in JS's single-threaded model: exactly one caller
-      // claims the resume and dispatches a single POST; the other returns here.
       if (turn.resolving) return;
       turn.resolving = true;
 
@@ -2691,8 +2134,6 @@ export function useResolveToolApproval(
         );
       }
 
-      // Provider so the terminal persist after a long resume continuation uses a
-      // fresh token (see AuthTokenProvider), not one captured here.
       let authToken: string;
       try {
         authToken = await getAuthToken();
@@ -2716,8 +2157,6 @@ export function useResolveToolApproval(
         return;
       }
 
-      // AUDIT-FIX STR-2/BUG-16: abort only this conversation's own in-flight
-      // turn before dispatching the resume.
       const previousController = abortControllers.current.get(turn.conversationId);
       if (previousController) {
         abortControllers.current.delete(turn.conversationId);
@@ -2737,7 +2176,6 @@ export function useResolveToolApproval(
         ?.tools;
 
       startStreaming(assistantMessageId, turn.conversationId);
-      // AUDIT-FIX STR-7/BUG-12: scoped, matching every paired `false` write.
       setLoading(true, turn.conversationId);
       setError(null, turn.conversationId);
 
@@ -2772,7 +2210,6 @@ export function useResolveToolApproval(
           throw new ChatApiError(message, {
             code,
             status: response.status,
-            // GOV-20
             resetAt: readErrorResetAt(errorData, response),
           });
         }
@@ -2780,8 +2217,6 @@ export function useResolveToolApproval(
         const outcome = await consumeAssistantStream({
           response,
           assistantMessageId,
-          // Resume path: the resumed leg may route differently from the
-          // original, so prefer what this response reports.
           model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
           conversationId: turn.conversationId,
           isTemporaryConversation: turn.isTemporaryConversation,
@@ -2812,10 +2247,6 @@ export function useResolveToolApproval(
           pendingTurns.delete(assistantMessageId);
         }
       } catch (error) {
-        // A rejected resume never consumed the durable checkpoint: the server
-        // released its lease, so keep the local decisions and return the cards
-        // to a retryable awaiting state. Network/stream failures are handled by
-        // the durable-run replay path (or terminal failure handling) instead.
         if (error instanceof ChatApiError) {
           turn.resolving = false;
           for (const call of turn.calls) {
@@ -2852,9 +2283,6 @@ export function useResolveToolApproval(
           updateMessage,
         });
       } finally {
-        // AUDIT-FIX STR-2/BUG-16: release this conversation's slot iff it is
-        // still the controller we installed, so a settled resume cannot leave a
-        // dead controller behind for a later Stop to act on.
         if (abortControllers.current.get(turn.conversationId) === abortController) {
           abortControllers.current.delete(turn.conversationId);
         }
@@ -2863,8 +2291,6 @@ export function useResolveToolApproval(
     [abortControllers, getToken],
   );
 }
-
-// ─── Error handling shared by sendMessage + resolveToolApproval ─────────────
 
 interface StreamErrorContext {
   assistantMessageId: string;
@@ -2891,13 +2317,10 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     updateMessage,
   } = ctx;
 
-  // DOMException named 'AbortError' is what browsers reject an aborted fetch
-  // with; it is NOT instanceof Error, so check the name shape instead.
   const isAbort =
     typeof error === 'object' &&
     error !== null &&
     (error as { name?: unknown }).name === 'AbortError';
-  // AUDIT-FIX ROOT-CAUSE: read and write the FAILING turn's own conversation.
   const currentMessage = findConversationMessage(conversationId, assistantMessageId);
   const currentActivity = currentMessage?.metadata?.agentActivity;
   if (isAbort) {
@@ -2938,8 +2361,6 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
 
   const errorMessage = getVisibleErrorMessage(error);
 
-  // Mark any in-flight tool cards as failed (a mid-stream error leaves them
-  // running otherwise). awaiting_approval cards are left as-is.
   const failing = findConversationMessage(conversationId, assistantMessageId)?.metadata?.tools;
   if (failing && failing.some((t) => t.status === 'pending' || t.status === 'running')) {
     useChatStore.getState().setToolTimeline(
@@ -2955,35 +2376,15 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
 
   const errorCode = error instanceof ChatApiError ? error.code : undefined;
 
-  // GOV-20: the inline paywall used to render for exactly three free-trial
-  // literals. Every PAID ceiling — rolling 5-hour, rolling weekly, flagship
-  // weekly, insufficient credits, billing period, rate limit — fell through to
-  // a plain error banner with no upgrade path and no reset time, so the users
-  // most likely to convert were the only ones shown no way forward. One
-  // classifier now owns both, and the required tier is the caller's actual
-  // NEXT tier rather than a hardcoded 'basic'.
   const quotaBlock = classifyManagedQuotaErrorCode(errorCode);
   if (quotaBlock) {
     if (errorCode === 'free_trial_token_budget_reached') {
       useFreeTrialStore.getState().markLimitReached();
     }
     const planTier = useBillingStore.getState().subscription?.tier;
-    // Null on the top self-serve tier / a sales-assisted plan: there is no
-    // self-serve upgrade to offer, so the CTA is suppressed rather than
-    // pointing at a tier that does not exist.
     const nextTier = getNextUpgradeTier(planTier);
     const resetAt = error instanceof ChatApiError ? error.resetAt : undefined;
 
-    // Buying credits is offered ONLY when credits actually lift this specific
-    // block (`clearedByCredits`, see billing-catalog.ts) and the account can
-    // reach the purchase control at all. Top-ups require an active Stripe-billed
-    // paid plan, so a free or store-billed account must not be shown the button.
-    //
-    // This is what unblocks the top tier. Previously `showUpgradeCta` was
-    // ANDed with `nextTier !== null`, so a Max 15x subscriber — who by
-    // definition has no plan above them — got a paywall card with no action on
-    // it at all: correctly refused an upgrade, and never offered the credits
-    // that would actually help.
     const canBuyCredits =
       quotaBlock.clearedByCredits &&
       isSelfServePaidPlanTier(planTier) &&
@@ -3000,8 +2401,6 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
             feature: quotaBlock.feature,
             requiredTier: nextTier ?? 'basic',
             reason: errorMessage || quotaBlock.reason,
-            // A credits CTA does not need a higher tier to exist — that is the
-            // whole point of it for someone already at the top.
             showUpgradeCta: quotaBlock.showUpgradeCta && (nextTier !== null || canBuyCredits),
             recoveryAction,
             showResetTime: quotaBlock.showResetTime,

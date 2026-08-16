@@ -22,19 +22,12 @@ export interface LocalizedPlanPrice {
   localized: boolean;
 }
 
-/**
- * Founder-set regional prices. These are public subscription prices, not
- * internal usage budgets. Other currencies come from Stripe multi-currency
- * Price options so the marketing page and Checkout use the same amount.
- */
 const INDIA_MONTHLY_PRICE_MINOR: Readonly<Partial<Record<PublicCheckoutPlan, number>>> =
   Object.freeze({
     basic: 39_900,
     pro: 199_900,
     max: 999_900,
     max_15x: 2_499_900,
-    // Per SEAT per month, mirroring Pro because a Team seat carries Pro's exact
-    // managed-usage allowance. Multiply by the purchased seat count for the bill.
     team: 199_900,
   });
 
@@ -73,8 +66,6 @@ export function resolveLocalizedPlanPrice(
   }
 
   return {
-    // `PublicCheckoutPlan` excludes contract-priced tiers, so this accessor
-    // returns a real published amount with no `?? 0` fallback to fake one.
     amountMinor: getPublishedPlanPriceCents(plan, interval),
     currency: 'usd',
     localized: false,

@@ -60,13 +60,11 @@ interface ChatStreamProps {
 import type { Artifact } from '../../types/chat';
 import type { EnhancedMessage } from '../../stores/chat/types';
 
-// Extended artifact type for message artifacts that may have additional properties
 interface MessageArtifact extends Partial<Artifact> {
   toolName?: string;
   status?: 'running' | 'completed' | 'failed';
 }
 
-// Type for message metadata that may include artifacts
 interface MessageMetadataWithArtifacts {
   artifacts?: MessageArtifact[];
   [key: string]: unknown;
@@ -258,10 +256,6 @@ const ChatMessageItem = React.memo<ChatMessageItemProps>(
           onSuggestionClick={onSuggestionClick}
         />
         {(() => {
-          // Skip inline artifact rendering when the message is a tool call —
-          // the tool timeline inside MessageBubble already renders these results.
-          // Rendering them again here causes ugly duplication (red "Code operation failed"
-          // cards below the clean timeline).
           const msgMeta = (message.metadata ?? {}) as Record<string, unknown>;
           const isToolCallMessage = Boolean(msgMeta['toolCall'] || msgMeta['toolName']);
           if (isToolCallMessage) return null;
@@ -361,10 +355,6 @@ ChatMessageItem.displayName = 'ChatMessageItem';
 const card =
   'rounded-2xl border border-white/10 bg-white/5 px-4 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.35)]';
 
-// Suggestion prompts removed
-
-// Keyboard shortcuts removed
-
 export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggestionClick }) => {
   const prefersReducedMotion = useReducedMotion();
   const messages = useUnifiedChatStore((state) => state.messages);
@@ -386,25 +376,20 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
 
   const items = useMemo(() => messages ?? [], [messages]);
 
-  // Auto-scroll to bottom on new messages or streaming content
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  // Message search state
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Keyboard navigation state
   const [focusedMessageIndex, setFocusedMessageIndex] = useState<number | null>(null);
 
-  // Keyboard navigation between messages
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle when not in search mode and not in an input
       if (showSearch) return;
       const activeElement = document.activeElement;
       if (activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA') return;
@@ -434,7 +419,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showSearch, items.length]);
 
-  // Filter messages based on search
   const searchMatches = useMemo(() => {
     if (!showSearch || !deferredSearchQuery.trim()) return [];
     const query = deferredSearchQuery.toLowerCase();
@@ -443,16 +427,13 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
       .filter(({ msg }) => msg.content.toLowerCase().includes(query));
   }, [items, showSearch, deferredSearchQuery]);
 
-  // AUDIT-005-002 fix: Ref to track focus timeout for cleanup
   const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Handle Cmd/Ctrl+F to open search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
         setShowSearch(true);
-        // AUDIT-005-002 fix: Store timeout ID for cleanup
         if (focusTimeoutRef.current) {
           clearTimeout(focusTimeoutRef.current);
         }
@@ -470,7 +451,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      // AUDIT-005-002 fix: Clear timeout on cleanup
       if (focusTimeoutRef.current) {
         clearTimeout(focusTimeoutRef.current);
         focusTimeoutRef.current = null;
@@ -478,7 +458,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     };
   }, [showSearch]);
 
-  // Scroll to current match
   useEffect(() => {
     if (searchMatches.length > 0 && scrollContainerRef.current) {
       const matchIndex = searchMatches[currentMatchIndex]?.index;
@@ -507,18 +486,14 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     [searchMatches.length],
   );
 
-  // Track if user has scrolled up (disable auto-scroll)
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    // User is considered "at bottom" if within 100px of the bottom
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
     shouldAutoScroll.current = isAtBottom;
-    // Show scroll button when not at bottom and there's content to scroll
     setShowScrollButton(!isAtBottom && scrollHeight > clientHeight + 200);
   }, []);
 
-  // Scroll to bottom function
   const scrollToBottom = useCallback(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo({
@@ -528,32 +503,25 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
     }
   }, []);
 
-  // Track the last message content length for auto-scroll during streaming
   const lastMessageContentLength = useMemo(() => {
     if (items.length === 0) return 0;
     const lastMessage = items[items.length - 1];
     return lastMessage?.content?.length ?? 0;
   }, [items]);
 
-  // Ref to track pending scroll animation frame
   const scrollAnimationRef = useRef<number | null>(null);
 
-  // Auto-scroll effect - debounced during streaming to prevent jitter
   useEffect(() => {
     if (!shouldAutoScroll.current || !scrollContainerRef.current) return;
 
-    // Cancel any pending scroll animation
     if (scrollAnimationRef.current !== null) {
       cancelAnimationFrame(scrollAnimationRef.current);
     }
 
-    // Use requestAnimationFrame to batch scroll updates and prevent jitter
     scrollAnimationRef.current = requestAnimationFrame(() => {
       if (scrollContainerRef.current) {
         scrollContainerRef.current.scrollTo({
           top: scrollContainerRef.current.scrollHeight,
-          // Use instant scroll during streaming to avoid animation queue-up,
-          // smooth scroll only when not streaming (e.g., new message added)
           behavior: isStreaming ? 'auto' : 'smooth',
         });
       }
@@ -577,10 +545,7 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
 
   const handleEditSave = useCallback(
     (messageId: string, newContent: string) => {
-      // Edit the message and remove subsequent messages for regeneration
       editAndRegenerateFromMessage(messageId, newContent);
-      // Trigger regeneration by starting an edit with the new content
-      // This will populate the input and allow the user to send
       startEditingMessage(messageId, newContent);
     },
     [editAndRegenerateFromMessage, startEditingMessage],
@@ -819,7 +784,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
         <UsageLimitBannerContainer hasMessages={items.length > 0} />
 
         {items.length === 0 ? (
-          /* Show appropriate empty state based on mode */
           isSimpleMode ? (
             <SimpleEmptyState onSuggestionClick={onSuggestionClick} />
           ) : (
@@ -844,7 +808,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({ onOpenSidecar, onSuggest
                           ? 'code'
                           : undefined);
 
-              // Check if this message is a search match or keyboard focused
               const isSearchMatch =
                 deferredSearchQuery && searchMatches.some((m) => m.index === messageIndex);
               const isCurrentMatch =

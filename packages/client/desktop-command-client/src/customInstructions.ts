@@ -1,10 +1,5 @@
-/**
- * Custom Instructions API — typed wrappers for custom instruction Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Commands ----
 
 export async function saveCustomInstructions(instructions: string): Promise<void> {
   return command<void>('save_custom_instructions', { instructions });

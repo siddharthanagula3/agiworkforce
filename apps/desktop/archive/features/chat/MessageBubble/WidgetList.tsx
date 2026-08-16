@@ -1,8 +1,3 @@
-/**
- * WidgetList Component
- *
- * Renders a list of embedded widgets for a message (INT-001 integration).
- */
 
 import React, { memo, useCallback } from 'react';
 import { emit, isTauri } from '../../../lib/tauri-mock';
@@ -31,7 +26,6 @@ const WidgetListComponent: React.FC<WidgetListProps> = ({
   const handleWidgetAction = useCallback(
     (event: WidgetActionEvent) => {
       console.debug('[WidgetList] Widget action:', event);
-      // Emit widget action event for handling by chat system
       if (isTauri) {
         emit('widget:action', {
           messageId,

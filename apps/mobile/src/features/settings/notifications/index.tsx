@@ -1,9 +1,3 @@
-/**
- * Notification Preferences Screen
- *
- * Per-category toggles, quiet hours, and vibration settings for push
- * notifications delivered by the companion bridge.
- */
 import { useCallback, useState } from 'react';
 import {
   View,
@@ -44,7 +38,6 @@ import { NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_COPY } from './categorie
 import { useTimeFocusSync } from './useTimeFocusSync';
 import { BREAK_REMINDER_MINUTES, type TimeFocusWeekday } from '@agiworkforce/types';
 
-/** Same order and labels as the web Time & Focus day picker. */
 const QUIET_HOURS_DAYS: ReadonlyArray<{ value: TimeFocusWeekday; label: string; short: string }> = [
   { value: 0, label: 'Sunday', short: 'S' },
   { value: 1, label: 'Monday', short: 'M' },
@@ -59,10 +52,6 @@ function breakReminderLabel(minutes: number | null): string {
   if (minutes === null) return 'Off';
   return minutes < 60 ? `Every ${minutes} min` : `Every ${minutes / 60} hr`;
 }
-
-// ---------------------------------------------------------------------------
-// Category metadata
-// ---------------------------------------------------------------------------
 
 interface CategoryMeta {
   id: NotificationCategory;
@@ -98,10 +87,6 @@ function getCategories(c: ColorScheme): CategoryMeta[] {
   }));
 }
 
-// ---------------------------------------------------------------------------
-// Priority row
-// ---------------------------------------------------------------------------
-
 interface PriorityRowProps {
   label: string;
   priority: 'critical' | 'high' | 'normal' | 'low';
@@ -129,10 +114,6 @@ function PriorityVibrationRow({ label, color, value, onValueChange }: PriorityRo
   );
 }
 
-// ---------------------------------------------------------------------------
-// Quiet hours picker modal
-// ---------------------------------------------------------------------------
-
 interface TimePickerModalProps {
   visible: boolean;
   field: 'start' | 'end';
@@ -154,7 +135,6 @@ function TimePickerModal({
   const modalWidth = Math.min(width - 48, 320);
 
   const handleConfirm = useCallback(() => {
-    // Validate HH:MM format
     const parts = value.split(':');
     const hours = parseInt(parts[0] ?? '', 10);
     const minutes = parseInt(parts[1] ?? '', 10);
@@ -167,14 +147,12 @@ function TimePickerModal({
       minutes >= 0 &&
       minutes <= 59
     ) {
-      // Normalise to 2-digit format
       const normalised = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
       onConfirm(normalised);
       onClose();
     }
   }, [value, onConfirm, onClose]);
 
-  // Quick-select common times
   const QUICK_TIMES =
     field === 'start' ? ['21:00', '22:00', '23:00'] : ['06:00', '07:00', '08:00', '09:00'];
 
@@ -316,10 +294,6 @@ function TimePickerModal({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
-
 export default function NotificationPreferencesScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -357,7 +331,6 @@ export default function NotificationPreferencesScreen() {
   );
 
   const cycleBreakReminder = useCallback(() => {
-    // Off → 30m → 1h → 2h → 4h → Off, matching the web option set.
     const options: Array<(typeof BREAK_REMINDER_MINUTES)[number] | null> = [
       null,
       ...BREAK_REMINDER_MINUTES,

@@ -26,15 +26,7 @@ const trackedIgnoredFiles = new Set(gitLines(['ls-files', '-ci', '--exclude-stan
 const knownGeneratedDebtPatterns = [];
 
 const allowedTrackedIgnoredPatterns = [
-  // Audit scratch deliverables under the gitignored AUDIT_PARTS/ dir are tracked
-  // session debt (already "known root debt" in check:repo-organization). Classified
-  // here so the gate is green; relocate/untrack in a dedicated cleanup pass.
   /^AUDIT_PARTS\//,
-  // reports/generated/ is gitignored as local scratch by default, but specific QA
-  // verification evidence (bug-hunt reports, trust-mode audits, manual-QA captures)
-  // is intentionally force-added and classified keepActive "active-generated-qa-output"
-  // in docs/agent-context/non-md-artifact-status.json. Summarize durable findings into
-  // docs/ and prune stale captures before they accumulate.
   /^reports\/generated\//,
 ];
 

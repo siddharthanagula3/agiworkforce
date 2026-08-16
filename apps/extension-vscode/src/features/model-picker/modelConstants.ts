@@ -1,10 +1,3 @@
-/**
- * modelConstants.ts — catalog-derived model metadata for the VS Code extension
- *
- * Single source of truth lives in `packages/contracts/types/src/models.json`.
- * This module adapts that shared catalog into the small, UI-friendly shape
- * the extension needs for pickers, token tracking, and context budgeting.
- */
 
 import * as vscode from 'vscode';
 import {
@@ -30,38 +23,12 @@ export interface ModelPickerOption {
   label: string;
   description: string;
   detail: string;
-  /**
-   * Catalog availability (absent field in models.json ⇒ "live"). Non-live rows
-   * (`coming_soon` / `unavailable`) are DISPLAY-ONLY: the webview renders them
-   * disabled with a "Coming soon" suffix (mirrors the web picker) and they are
-   * never selectable or routable — same invariant as
-   * `getSelectableModels()` vs `getDisplayModels()` in packages/contracts/types.
-   */
   availability: ModelAvailability;
 }
 
-// ─── Environment-gating helper ────────────────────────────────────────────────
-//
-// Phase A: returns { configured: false } for every environment so any future
-// model that sets `requiresEnvironment` is gated (locked) until Phase B wires
-// the real E2B / local-runtime availability signal.
-//
-// Phase B: replace this stub with real availability checks (e.g. query the
-// managed-compute beta status from the bridge or desktop agent).
-//
-// 2026-08-05 Class-1 review: intentionally NOT wired. No model in
-// packages/contracts/types/src/models.json sets `requiresEnvironment`, so this
-// path is unreachable today, and fail-closed ({ configured: false }) is the
-// correct default for a gate awaiting a real signal — wiring it to a bridge
-// query nothing exercises would be speculative. Revisit when the first
-// environment-gated model ships in the catalog.
 export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
   return { configured: false };
 }
-
-// ─── Provider → ProviderId bridge ─────────────────────────────────────────────
-// The Provider type (used in ModelMetadata.provider) uses snake_case identifiers
-// that mostly overlap with ProviderId from design-system. Map the mismatches.
 
 const PROVIDER_TO_DISPLAY_ID: Partial<Record<string, ProviderId>> = {
   managed_cloud: 'agi-cloud',
@@ -79,8 +46,6 @@ function resolveProviderId(provider: string): ProviderId | null {
   return null;
 }
 
-// ─── Codicon per provider ─────────────────────────────────────────────────────
-
 function codiconForProvider(providerId: ProviderId): string {
   const display = PROVIDER_DISPLAY[providerId];
   if (display.isLocal) return '$(home)';
@@ -88,35 +53,8 @@ function codiconForProvider(providerId: ProviderId): string {
   return '$(cloud)';
 }
 
-// ─── Tier reachability ────────────────────────────────────────────────────────
-//
-// VSCODE-PICKER-TIER-01. The picker previously rendered the entire managed-cloud
-// catalog unconditionally, so a signed-out user (or one in Local mode) saw every
-// cloud model as if it were selectable. That is a trust-boundary presentation
-// bug: it implies managed-cloud reachability that does not exist.
-//
-// The gate reuses the shared catalog's per-model subscription rule after the
-// VS Code surface entitlement is applied. BYOK remains available independently
-// of a managed subscription; the app-server performs provider/key admission.
-// Local mode exposes only CLI-discovered local models. Managed developer access
-// starts at Pro, matching the server-owned AGI Work entitlement.
-//
-// Deliberately NOT filtered out of the list. models.json contains zero
-// ollama/lmstudio rows (local models arrive only via runtime discovery from the
-// app-server), so hiding unreachable rows would leave an EMPTY picker whenever a
-// local runtime is not already running. Unreachable models stay visible and are
-// marked, mirroring the existing `coming_soon` disabled-row treatment.
-
-/** The hint appended to a model the current tier cannot actually reach. */
 export const MODEL_LOCKED_HINT = 'Sign in or add a provider key';
 
-/**
- * True when `tier` can actually route `modelId` today.
- *
- * `tier === undefined` means "caller did not resolve a tier" and preserves the
- * pre-gate behaviour (everything reachable) so existing call sites and tests do
- * not silently start locking rows.
- */
 export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
   if (tier === undefined) return true;
   if (tier === 'byok') return true;
@@ -130,31 +68,12 @@ function getPickerCapabilityLabel(modelId: string, catalogDetail: string): strin
   return catalogDetail === '' ? tierLabel : catalogDetail;
 }
 
-// ─── Grouped QuickPick builder ────────────────────────────────────────────────
-
 export interface GroupedQuickPickItem extends vscode.QuickPickItem {
-  /** undefined for separator items */
   modelId?: string;
-  /**
-   * VS Code's native QuickPick has no disabled-row primitive. Callers must
-   * reject rows with this flag; the custom webview picker renders it directly.
-   */
   disabled?: boolean;
 }
 
-/**
- * Builds a grouped vscode.QuickPickItem array for the model picker.
- *
- * Layout:
- *   1. "Best (auto)" prominent at top
- *   2. Separator
- *   3. Per-provider sections (Separator header + model items)
- *      - Each model item: label = codicon + model name, description = capability
- *        sub-label (+ "· Thinking" when supportsEffort), detail = model ID
- */
 export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[] {
-  // Resolve Auto through the shared BYOK/managed routing policy before applying
-  // this surface's entitlement gate.
   const autoReachable = (autoId: string): boolean =>
     isModelReachableForTier(resolveAutoModeModel(autoId, tier) ?? autoId, tier);
 
@@ -175,10 +94,8 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
     { label: '', kind: vscode.QuickPickItemKind.Separator },
   ];
 
-  // Group manual models by provider in the order they appear in providersInOrder
   const manualOptions = getCoreManualModelOptions();
 
-  // Build ordered provider list from the models that appear in our manual options
   const providerOrder: string[] = [];
   const seenProviders = new Set<string>();
   for (const opt of manualOptions) {
@@ -194,23 +111,14 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
     const providerDisplay = providerId ? PROVIDER_DISPLAY[providerId] : null;
     const providerLabel = providerDisplay?.label ?? provider;
 
-    // Provider section header
     items.push({ label: providerLabel, kind: vscode.QuickPickItemKind.Separator });
 
     const modelsForProvider = manualOptions.filter((o) => String(o.provider) === provider);
     for (const opt of modelsForProvider) {
       const metadata = getModelMetadataById(opt.id);
 
-      // Availability invariant: non-live models (`coming_soon`/`unavailable`)
-      // are NEVER selectable/routable on any surface. QuickPickItem has no
-      // disabled state, so they are excluded here (the webview dropdown shows
-      // them disabled with a "Coming soon" suffix instead, matching web).
       if (metadata != null && (metadata.availability ?? 'live') !== 'live') continue;
 
-      // P3 Phase A: gate models whose `requiresEnvironment` flag is set.
-      // evaluateModelEnvironment is fail-closed: absent flag → selectable: true
-      // (no-op for every current model). Phase B replaces environmentAvailability
-      // with a real availability check.
       const requiredEnv = metadata?.requiresEnvironment;
       if (requiredEnv !== undefined) {
         const envResult = evaluateModelEnvironment(
@@ -226,9 +134,6 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
       if (modelHasThinking) {
         descriptionParts.push('Thinking');
       }
-      // VSCODE-PICKER-TIER-01: mark rows the active tier cannot route rather
-      // than dropping them (see isModelReachableForTier — dropping would empty
-      // the picker, because local models are not in the static catalog).
       const reachable = isModelReachableForTier(opt.id, tier);
       if (!reachable) {
         descriptionParts.push(MODEL_LOCKED_HINT);
@@ -254,15 +159,12 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
   return items;
 }
 
-// ─── Provider info for a given model ID ───────────────────────────────────────
-
 export interface ModelProviderInfo {
   providerId: ProviderId | null;
   providerLabel: string;
   brandColor: string;
 }
 
-/** Theme-safe provider badge fallbacks for host-generated status messages. */
 export const AGI_CLOUD_BRAND_COLOR = 'var(--vscode-activityBarBadge-background)';
 export const UNKNOWN_PROVIDER_BRAND_COLOR = 'var(--vscode-descriptionForeground)';
 
@@ -290,8 +192,6 @@ export function getModelProviderInfo(modelId: string): ModelProviderInfo {
 const DEFAULT_CONTEXT_LIMIT = 128_000;
 
 const AUTO_MODEL_DEFAULTS: Record<'auto', string | null> = {
-  // Representative model for context/cost DISPLAY only; the single Auto
-  // self-routes per task/tier at request time.
   auto: resolveAutoModeModel('auto', 'pro'),
 } as const;
 
@@ -347,23 +247,12 @@ export function getModelPickerOptionsForTier(
   }));
 }
 
-/**
- * SELECTABLE picker ids — auto modes + live catalog models only. Non-live
- * (`coming_soon`/`unavailable`) ids are display-only and must never round-trip
- * through configuration into a request.
- */
 const SELECTABLE_MODEL_PICKER_OPTION_IDS = new Set(
   MODEL_PICKER_OPTIONS.filter((option) => option.availability === 'live').map(
     (option) => option.id,
   ),
 );
 
-/**
- * Normalize a configured model only when it resolves to a currently selectable
- * static picker entry. A `null` result is intentionally distinct from `auto`:
- * callers that also support CLI-discovered local models must verify the raw id
- * against the local runtime instead of silently changing its provider boundary.
- */
 export function normalizeSelectableConfiguredModelId(
   modelId: string | null | undefined,
 ): string | null {
@@ -391,10 +280,8 @@ export const MODEL_COST_RATES: Record<string, { input: number; output: number }>
   auto: getAutoCostRate(AUTO_MODEL_DEFAULTS['auto']),
 };
 
-/** Chars-per-token heuristic used for estimation when exact counts are unavailable. */
 export const CHARS_PER_TOKEN = 4;
 
-/** Blended cost per 1M tokens for rough single-rate estimation (dashboard). */
 export const MODEL_COST_BLENDED: Record<string, number> = Object.fromEntries(
   Object.entries(MODEL_COST_RATES).map(([model, rates]) => [
     model,
@@ -402,7 +289,6 @@ export const MODEL_COST_BLENDED: Record<string, number> = Object.fromEntries(
   ]),
 );
 
-/** Fallback blended rate when model is not in the table. */
 export const DEFAULT_BLENDED_RATE = 5.0;
 
 export { DEFAULT_CONTEXT_LIMIT };

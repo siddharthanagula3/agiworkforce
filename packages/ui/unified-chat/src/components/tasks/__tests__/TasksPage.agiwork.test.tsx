@@ -1,9 +1,3 @@
-/**
- * CAP-048 slice 3 — the AGI Work goal + plan + re-run gaps in the shared /tasks
- * detail panel. Goal and plan ride the durable journal as ordinary
- * `progress-update` events under reserved ids, so the panel reconstructs them
- * with no new event variant and no migration.
- */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
@@ -43,9 +37,6 @@ function event(sequence: number, value: AgentEventEnvelope['event']): AgentEvent
   };
 }
 
-// The exact events the server emits at run start (see agiwork-plan.ts):
-// a goal progress event, then one progress event per plan step, then ordinary
-// work progress.
 const journal: AgentEventEnvelope[] = [
   event(0, {
     type: 'progress-update',
@@ -107,8 +98,6 @@ describe('Tasks — AGI Work goal + plan', () => {
     expect(plan.textContent).toContain('1. Identify the competitors');
     expect(plan.textContent).toContain('2. Collect published prices');
 
-    // The goal + plan entries are lifted OUT of the generic Progress list; only
-    // the real work step remains there.
     expect(screen.getByText('Compiled the table')).toBeTruthy();
     expect(screen.getByText('Progress · 1')).toBeTruthy();
   });

@@ -1,7 +1,3 @@
-/**
- * BudgetAlertsPanel — renders dismissible alerts pushed to budgetStore.
- * Shown wherever a host wants threshold notifications (sidebar, header, etc).
- */
 import { AlertCircle, AlertTriangle, X, XCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '../lib/utils';

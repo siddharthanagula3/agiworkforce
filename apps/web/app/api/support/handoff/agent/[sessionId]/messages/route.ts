@@ -1,14 +1,3 @@
-/**
- * GET  /api/support/handoff/agent/[sessionId]/messages?after=<seq>
- * POST /api/support/handoff/agent/[sessionId]/messages
- *
- * The agent side of the live conversation. ADMIN ONLY, and scoped to the agent
- * who actually claimed the session — an admin cannot type into a colleague's
- * conversation, so the user always talks to exactly one person.
- *
- * Without this route "live handoff" would be one-way and the whole feature would
- * be the lie it exists to prevent.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';

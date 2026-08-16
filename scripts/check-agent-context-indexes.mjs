@@ -1,15 +1,4 @@
 #!/usr/bin/env node
-/**
- * Drift check for docs/agent-context/generated/*.json (see
- * scripts/generate-agent-context-indexes.mjs for what these are and how
- * they're built). Regenerates all three indexes into an isolated temp
- * directory — never touches the committed tree — and diffs byte-for-byte
- * against what's checked in. Mirrors the missing/stale/changed reporting
- * pattern in scripts/generate-protocol-types.mjs's --check mode.
- *
- * Usage:
- *   node scripts/check-agent-context-indexes.mjs
- */
 
 import fs from 'node:fs';
 import os from 'node:os';

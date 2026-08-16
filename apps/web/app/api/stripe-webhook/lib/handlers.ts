@@ -60,8 +60,6 @@ export async function dispatchStripeEvent(
       const stripeCustomerId = session.customer as string | null;
       logger.warn({ sessionId: session.id }, 'Async payment failed');
 
-      // A one-time top-up failure does not make the recurring subscription
-      // past due. The customer bought no balance and can explicitly try again.
       if (session.metadata?.['type'] === 'credit_topup') break;
 
       if (stripeSubId) {
@@ -105,55 +103,16 @@ export async function dispatchStripeEvent(
         ? new Date(subscription.canceled_at * 1000).toISOString()
         : new Date().toISOString();
 
-      // Resolve the affected account BEFORE the row is downgraded so the audit
-      // row can name a subject. The actor here is Stripe, not a user — there is
-      // no request, no IP and no user-agent to record, and the Stripe event
-      // payload (customer PII, price internals) must never be echoed.
       const [ownerRow] = await db.query<{ user_id: string | null; plan_tier: string | null }>(
         'select user_id, plan_tier from subscriptions where stripe_subscription_id = $1 limit 1',
         [stripeSubId],
       );
 
       await db.execute(
-        // Reset plan_tier to 'free' as well · a deleted subscription must
-        // revoke entitlement. Entitlement reads gate on `status` (see
-        // lib/entitlement.ts) so this is belt-and-suspenders, but keeping the
-        // stored tier honest avoids a paid label on a canceled row.
-        //
-        // Cancellation policy (founder, 2026-07): cancellations run to the end
-        // of the paid billing period with NO mid-period cutoff and NO prorated
-        // adjustment. Stripe fires `customer.subscription.deleted` at period
-        // end (portal is configured to cancel at period end), so downgrading
-        // here does not cut the user off early. We deliberately do NOT claw
-        // back remaining credits on cancellation — the user keeps what they
-        // paid for (including any separately-purchased top-up balance) through
-        // the period. Credit clawback stays ONLY for refunds and disputes
-        // (money genuinely returned), handled in their own events below.
         "update subscriptions set status = 'canceled', plan_tier = 'free', canceled_at = $1 where stripe_subscription_id = $2",
         [canceledAt, stripeSubId],
       );
 
-      // Release the organization's binding to this now-dead subscription.
-      //
-      // `persistPurchasedSeatsOnOrganization` only writes seats when the
-      // organization is unbound or already bound to the INCOMING subscription
-      // (seats.ts WHERE clause). Nothing used to clear the binding on
-      // cancellation, so an organization kept the cancelled subscription's id
-      // forever — and a customer who later re-subscribed to Team paid for N
-      // seats, hit the mismatch branch, and had NONE of them attach. The
-      // failure was silent to them and surfaced only as a CRITICAL log line.
-      //
-      // The guard itself is right: one organization must not be hijacked by a
-      // different subscription. It simply could not tell "bound to a different
-      // ACTIVE subscription" from "bound to a DEAD one". Clearing the binding
-      // here supplies that distinction at the only moment we know the answer.
-      //
-      // `licensed_seats` is deliberately left alone. Cancellation policy is no
-      // mid-period cutoff, this event fires at period end, and lowering the
-      // ceiling below `seats_consumed` would trip the
-      // organizations_seats_within_license CHECK and abort the webhook
-      // transaction. Membership is what should shrink, and that is a separate
-      // decision, not a side effect of a Stripe event.
       await db.execute(
         `update public.organizations
             set stripe_subscription_id = null,
@@ -208,22 +167,6 @@ export async function dispatchStripeEvent(
       const charge = event.data.object as Stripe.Charge;
       const stripeCustomerId = charge.customer as string | null;
 
-      // Returning the money has to return the entitlement it bought. Revoking
-      // only credits left a fully refunded customer on their paid plan: refunds
-      // are issued by hand in the Stripe dashboard (see /refund-policy) and a
-      // dashboard refund never fires a cancellation event of its own, so nothing
-      // downstream ever downgraded the row.
-      //
-      // Only a FULL refund revokes. A partial one is a goodwill adjustment on a
-      // period the customer still holds, and cutting them off for it would be
-      // worse than the bug. `charge.refunded` is Stripe's own fully-refunded
-      // flag; the amount comparison covers payloads that omit it.
-      //
-      // Credit top-ups are carved out because they buy credits, not a plan —
-      // handle_refund below is the entire remedy for those. Stripe removed
-      // `Charge.invoice` in API 2026-04-22, so a top-up checkout MUST stamp
-      // `payment_intent_data.metadata.type = 'credit_topup'`; that metadata is
-      // the only thing left that tells the two kinds of charge apart here.
       const isCreditTopUpCharge = charge.metadata?.['type'] === 'credit_topup';
       const fullyRefunded =
         charge.refunded === true || (charge.amount > 0 && charge.amount_refunded >= charge.amount);
@@ -238,9 +181,6 @@ export async function dispatchStripeEvent(
         ) {
           throw new Error(`Invalid credit top-up refund metadata for Charge ${charge.id}`);
         }
-        // Stripe's refunded amount includes sales tax; only the purchased
-        // balance belongs in the usage ledger. Partial refunds revoke the same
-        // fraction of purchased balance, and a full refund revokes it exactly.
         refundedCreditTarget = fullyRefunded
           ? purchasedCents
           : Math.floor((purchasedCents * charge.amount_refunded) / charge.amount);
@@ -263,24 +203,6 @@ export async function dispatchStripeEvent(
 
         const profile = profiles[0];
         if (profile?.id) {
-          // `charge.amount_refunded` is the running CUMULATIVE total refunded on
-          // this charge, and `charge.refunded` fires once per refund carrying it,
-          // so revoking that number on every event double-revokes multiple partial
-          // refunds ($10 then $5 would revoke $10 + $15 = $25 for $15 returned).
-          // The per-refund amount is not in this payload to subtract instead:
-          // since API version 2022-11-15 Stripe stopped including the `refunds`
-          // list on a Charge by default (it is expand-only, and webhook payloads
-          // cannot be expanded), and this deployment pins 2026-04-22.dahlia — see
-          // Stripe's 2024-10-28 changelog, "you couldn't find refund details in
-          // the charge.refunded event".
-          //
-          // So the delta comes from our own ledger: revoke the cumulative total
-          // minus what was already revoked for this charge. Cumulative targets are
-          // monotonic, so a replayed or out-of-order delivery computes a delta of
-          // zero instead of clawing back the same money twice. handle_refund
-          // clamps each call to the balance actually left, so a later refund on
-          // the same charge can still collect a shortfall an earlier one could not
-          // — never more, in total, than the money Stripe returned.
           const refundLedgerDescription = `Refund for charge ${charge.id}`;
           const [revoked] = await db.query<{ revoked_cents: string | number | null }>(
             `select coalesce(sum(-amount_cents), 0) as revoked_cents
@@ -316,15 +238,6 @@ export async function dispatchStripeEvent(
               [stripeCustomerId],
             );
 
-            // `past_due`, not `canceled`, deliberately. Entitlement gates on
-            // status and neither is entitled (lib/entitlement.ts), but
-            // `canceled` is treated as TERMINAL by the ordering guard in
-            // updateSubscriptionFromStripeSubscription: writing it here for a
-            // subscription Stripe is still billing would refuse every later
-            // renewal and lock the customer out permanently. `past_due` heals
-            // itself — if the subscription survives the refund, the next paid
-            // invoice re-derives the tier from the Price. This also matches how
-            // charge.dispute.created already records money going back out.
             await db.execute(
               `update subscriptions
                   set status = 'past_due', plan_tier = 'free', cancel_at_period_end = true
@@ -417,19 +330,6 @@ export async function dispatchStripeEvent(
             );
           }
 
-          // A dispute revokes entitlement (status -> past_due, no renewal) and
-          // claws back every remaining credit. Until this call the only record
-          // of that was a server log the customer and support cannot read, so
-          // the account simply stopped working with no stated cause — the
-          // "fraud control as silent authorization policy" failure. The audit
-          // row carries a stable reason code and the Stripe dispute id, and the
-          // affected customer can read it back: both GET /api/settings/activity
-          // and GET /api/settings/audit-logs select from security_audit_logs
-          // filtered to the requester's own user_id and return `details`
-          // verbatim. `resourceId` is the dispute reference support quotes
-          // back; Stripe's own dispute reason ('fraudulent',
-          // 'product_not_received', …) is deliberately left in Stripe rather
-          // than mirrored into a customer-readable row.
           await recordAuditEvent({
             userId: profile.id,
             eventType: 'plan_changed',

@@ -1,13 +1,3 @@
-/**
- * Language QA runtime hook — debug-only.
- *
- * Enabled via Settings → Performance → "Run Hindi QA test".
- * Logs model outputs against the 60-prompt Hindi QA suite so the founder
- * can dogfood quality on a real device. Stripped from production builds by
- * the __DEV__ guard; no-op in release.
- *
- * v1.1: add Marathi / Bengali / Tamil suites.
- */
 
 export type QACategory =
   | 'chat'
@@ -22,19 +12,15 @@ export interface QAPrompt {
   category: QACategory;
   prompt: string;
   expectedCriteria: string;
-  /** BLEU/chrF reference translation — only set for translation/summarization */
   referenceOutput?: string;
-  /** Whether scoring requires human evaluation (non-metric categories) */
   humanEvalRequired: boolean;
 }
 
 export interface QAResult {
   promptId: string;
   modelOutput: string;
-  /** Populated when referenceOutput is set and metric can be computed */
   bleuScore?: number;
   chrFScore?: number;
-  /** Founder fills this in during dogfood session */
   humanScore?: 0 | 1 | 2 | 3;
   timestampMs: number;
 }
@@ -46,8 +32,6 @@ export interface QASession {
   completedAtMs?: number;
   results: QAResult[];
 }
-
-// ── In-memory session storage (debug only) ───────────────────────────────────
 
 let activeSession: QASession | null = null;
 
@@ -79,12 +63,6 @@ export function getActiveSession(): QASession | null {
   return activeSession;
 }
 
-// ── BLEU / chrF heuristics (lightweight, no external deps) ───────────────────
-
-/**
- * Unigram BLEU approximation against a single reference.
- * Good enough for pass/fail threshold; not a substitute for sacrebleu.
- */
 export function computeUnigramBLEU(hypothesis: string, reference: string): number {
   const hypTokens = tokenize(hypothesis);
   const refTokens = new Set(tokenize(reference));
@@ -96,12 +74,7 @@ export function computeUnigramBLEU(hypothesis: string, reference: string): numbe
   return brevityPenalty * precision;
 }
 
-/**
- * Character F-score (chrF) approximation — character n-gram F1, n=6.
- * Suitable for morphologically rich languages like Hindi.
- */
 export function computeChrF(hypothesis: string, reference: string, n = 6): number {
-  // Fast path: identical strings always score 1.0 regardless of length vs n.
   if (hypothesis === reference && hypothesis.length > 0) return 1.0;
   const hypNgrams = charNgrams(hypothesis, n);
   const refNgrams = charNgrams(reference, n);
@@ -134,16 +107,9 @@ function charNgrams(text: string, n: number): Set<string> {
   return ngrams;
 }
 
-// ── Acceptance threshold constants (founder sets after dogfood) ──────────────
-
-/** Placeholder — founder updates after running the 60-prompt suite. */
 export const HINDI_ACCEPTANCE_THRESHOLD = {
-  /** Minimum average human score across all 60 prompts */
   minOverallHumanScore: NaN,
-  /** Minimum per-category average human score */
   minPerCategoryScore: NaN,
-  /** BLEU threshold for translation category */
   minBleu: NaN,
-  /** chrF threshold for translation / summarization */
   minChrF: NaN,
 } as const;

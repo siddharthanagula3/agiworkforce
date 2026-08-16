@@ -1,9 +1,3 @@
-/**
- * Unit tests for the E2B generated-file harvest (lib/e2b/generated-files.ts):
- * baseline snapshot → turn-end diff → persist → wire descriptors. Media layer
- * and executor are mocked; the harvest itself is exercised for the behaviors
- * that guard real user outcomes (only new/changed files, caps, best-effort).
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { E2BExecutor, SandboxFileEntry } from '../types';
@@ -90,8 +84,6 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
 
     expect(failedCount).toBe(0);
     expect(files).toHaveLength(1);
-    // The wire uri is the SAME-ORIGIN authenticated serve route, not the raw
-    // R2 URL — the renderer gates only accept same-origin sources.
     expect(files[0]).toMatchObject({
       file_name: 'report.pdf',
       mime_type: 'application/pdf',
@@ -173,7 +165,6 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
     });
     expect(files).toHaveLength(1);
     expect(files[0]!.file_name).toBe('good.txt');
-    // The unreadable file is COUNTED so the tool loop can surface an honest note.
     expect(failedCount).toBe(1);
   });
 });

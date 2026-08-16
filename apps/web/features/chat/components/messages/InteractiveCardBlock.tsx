@@ -1,21 +1,5 @@
 'use client';
 
-/**
- * InteractiveCardBlock — the web transcript's renderer for interactive cards.
- *
- * Slice 1 ships the DEGRADATION path only, deliberately and before any producer
- * exists. Every card currently renders its server-authored `fallback.text`
- * inside card chrome; kind-specific renderers register later and this file does
- * not change shape when they do.
- *
- * Shipping this first is the point. A degradation path retrofitted under
- * deadline pressure is a degradation path that does not work, and this one has
- * to carry four separate cases: a kind this build has never heard of, a
- * schemaVersion from a newer server, a body that failed validation, and a kind
- * this surface deliberately does not render. All four land here, so the path is
- * exercised constantly rather than only in the emergency it exists for.
- */
-
 import { memo } from 'react';
 import { isAllowedMapSearchProviderUrl } from '@agiworkforce/cloud-contracts';
 import {
@@ -27,13 +11,6 @@ import { cn } from '@shared/lib/utils';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
 import { MapSearchCard } from './cards/MapSearchCard';
 
-/**
- * Kind-specific renderers.
- *
- * `clarify.v1` and the identity-neutral `map-search.v1` have live producers.
- * `itinerary.v1` still has no resolver-backed producer, so it keeps falling
- * back rather than pretending model-authored place names are verified places.
- */
 const WEB_CARD_REGISTRY: InteractiveCardRegistry<React.ReactNode> = {
   'clarify.v1': ({ card, body, ctx }) => (
     <ClarifyCard card={card} body={body} ctx={ctx as ClarifyCardContext} />
@@ -59,9 +36,6 @@ const SingleCard = memo(function SingleCard({ card }: SingleCardProps) {
   const renderer = resolveInteractiveCardRenderer(WEB_CARD_REGISTRY, card);
 
   if (renderer && card.recognized) {
-    // The cast is confined to this one line: `resolveInteractiveCardRenderer`
-    // has already proven the kind matches an entry in the registry, but TS
-    // cannot carry that correlation across the lookup.
     return (
       <>
         {(
@@ -79,12 +53,6 @@ const SingleCard = memo(function SingleCard({ card }: SingleCardProps) {
     );
   }
 
-  /*
-   * Fallback. `fallback.text` is PLAIN TEXT by contract — not markdown — so it
-   * renders through `whitespace-pre-wrap` rather than the markdown pipeline.
-   * Running it through markdown would turn an itinerary's literal asterisks
-   * into bullets on some surfaces and leave them visible on others.
-   */
   return (
     <section
       aria-label={card.fallback.headline}

@@ -1,24 +1,5 @@
 'use client';
 
-/**
- * AddSourcesModal - ChatGPT-style "Add sources" dialog for a project.
- *
- * Buttons and what each does:
- *   Upload       - Opens a file picker and delegates to the shared project-knowledge
- *                  upload service (presigned R2 PUT + server registration/extraction).
- *                  The parent supplies the canonical shared attachment accept contract.
- *   Text input   - Shows a textarea; on submit, the text is converted to a UTF-8 Blob
- *                  and uploaded as "<title>.txt" via the same upload path.
- *   Google Drive - Closes the modal and routes to /connectors so the user can connect
- *                  their Google Drive connector. We do NOT have a Drive import pipeline;
- *                  this is an explicit "Connect in Settings" affordance.
- *   Slack        - Same as Google Drive: routes to /connectors.
- *
- * The drag-drop area and the Upload button share the same handleUpload() function
- * passed by SourcesPanel; both reachable project views ultimately use the same
- * project-knowledge upload service.
- */
-
 import { useEffect, useRef, useState } from 'react';
 import { Upload, FileText, HardDrive, MessageSquare, X, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -26,13 +7,9 @@ import { useRouter } from 'next/navigation';
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** Called with a File object; the parent handles the actual upload + state. */
   onUploadFile: (file: File) => Promise<void>;
-  /** Called with text content and a title; parent converts to blob and uploads. */
   onUploadText: (text: string, title: string) => Promise<void>;
-  /** Whether an upload is currently in progress (disable submit during upload). */
   isUploading?: boolean;
-  /** Accepted MIME types for the file picker (comma-separated). */
   accept?: string;
 }
 
@@ -56,7 +33,6 @@ export function AddSourcesModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Reset inner state when modal opens/closes
   useEffect(() => {
     if (open) {
       setView('main');
@@ -68,7 +44,6 @@ export function AddSourcesModal({
     }
   }, [open]);
 
-  // Escape key to close
   useEffect(() => {
     if (!open) return;
     function handleKey(e: KeyboardEvent) {
@@ -84,7 +59,6 @@ export function AddSourcesModal({
     return () => document.removeEventListener('keydown', handleKey);
   }, [open, onClose, view]);
 
-  // Lock body scroll while open
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -94,7 +68,6 @@ export function AddSourcesModal({
     };
   }, [open]);
 
-  // Focus textarea when switching to text-input view
   useEffect(() => {
     if (view === 'text-input' && textInputRef.current) {
       textInputRef.current.focus();
@@ -370,7 +343,6 @@ export function AddSourcesModal({
               ) : null}
             </>
           ) : (
-            /* Text input view */
             <>
               <div style={{ marginBottom: 12 }}>
                 <label
@@ -500,10 +472,6 @@ export function AddSourcesModal({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// SourceButton sub-component
-// ---------------------------------------------------------------------------
 
 interface SourceButtonProps {
   icon: React.ReactNode;

@@ -1,9 +1,3 @@
-/**
- * PastedBadge — small chip rendered above a user message body when the
- * message metadata indicates the content originated from a clipboard paste.
- *
- * Checks: `metadata.pasted`, `metadata.pastedFromClipboard`.
- */
 
 import { Clipboard } from 'lucide-react';
 import { cn } from '../../../lib/utils';
@@ -29,7 +23,6 @@ export function PastedBadge({ className }: PastedBadgeProps) {
   );
 }
 
-/** Returns true when the message metadata marks content as clipboard-pasted. */
 export function isPastedMessage(metadata?: Record<string, unknown> | null): boolean {
   if (!metadata) return false;
   return Boolean(metadata['pasted'] || metadata['pastedFromClipboard']);

@@ -1,8 +1,3 @@
-/**
- * Live entry point for the in-page panel, imported directly by content.ts.
- * The launcher/panel implementations live under
- * `features/content/in-page-panel/` and are imported from there directly.
- */
 
 import {
   createLauncher,
@@ -12,18 +7,12 @@ import {
 } from '../features/content/in-page-panel/launcher';
 import { createPanel } from '../features/content/in-page-panel/panel';
 
-/** Storage key that enables / disables the in-page panel. */
 export const IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 
-/**
- * Check whether the in-page panel is enabled.
- * Defaults to true if the key has never been set.
- */
 export async function isPanelEnabled(): Promise<boolean> {
   try {
     const result = await chrome.storage.local.get(IN_PAGE_PANEL_ENABLED_KEY);
     const val = result[IN_PAGE_PANEL_ENABLED_KEY];
-    // Treat undefined (first-run) as enabled
     return val !== false;
   } catch {
     return true;
@@ -43,20 +32,12 @@ export async function setupInPagePanel(logger?: {
   debug: (msg: string, ...args: unknown[]) => void;
   warn: (msg: string, ...args: unknown[]) => void;
 }): Promise<void> {
-  // Protocol guard — don't inject on extension / devtools / pdf pages
   if (!/^https?:/.test(location.protocol)) return;
 
-  // Idempotency guard — content scripts run once per navigation but guard anyway
   if (document.querySelector('[data-agi-launcher]') || document.querySelector('[data-agi-panel]')) {
     return;
   }
 
-  // SECURITY (M-14 audit 2026-05-19): only inject the FAB launcher on
-  // allowlisted origins. The launcher was previously injected on every
-  // http(s) page regardless of allowlist; clicking it on a non-allowlisted
-  // page got the user a confusing "site not on your allowlist" error from
-  // background.handleMessage. The launcher also acts as a fingerprint
-  // (the `data-agi-launcher` attribute) on every page the user visits.
   let allowlist: Set<string>;
   try {
     const res = await chrome.storage.local.get('agi_site_allowlist');
@@ -73,7 +54,6 @@ export async function setupInPagePanel(logger?: {
     return;
   }
 
-  // Feature flag check
   const enabled = await isPanelEnabled();
   if (!enabled) {
     logger?.debug('in-page panel disabled via storage flag');
@@ -81,27 +61,21 @@ export async function setupInPagePanel(logger?: {
   }
 
   try {
-    // ── Panel ────────────────────────────────────────────────────────────────
     const panel = createPanel();
     const { host: panelHost } = panel;
     document.body.appendChild(panelHost);
 
-    // ── Launcher ─────────────────────────────────────────────────────────────
     const launcher = createLauncher(() => {
       panel.setReturnFocus(launcher.button);
       panel.toggle();
     });
     const { host: launcherHost } = launcher;
 
-    // Load persisted position and apply it
     const pos = await loadPosition();
     applyPosition(launcherHost, pos);
 
     document.body.appendChild(launcherHost);
 
-    // Attach scroll-hide behaviour and hold the cleanup ref (not currently used
-    // since content scripts don't unload on SPA navigation, but keeping it for
-    // future teardown support).
     attachScrollBehaviour(launcherHost);
   } catch (err) {
     logger?.warn('setupInPagePanel failed (non-fatal)', err);

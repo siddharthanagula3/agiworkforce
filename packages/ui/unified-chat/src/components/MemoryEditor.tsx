@@ -3,41 +3,19 @@ import { Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
 
-/**
- * MemoryEditor — list / add / edit / delete cross-conversation memory facts
- * the assistant should remember about the user. Round-2 audit P0 #8.
- *
- * Surface-agnostic: uses the shared local memory store by default and accepts
- * a host-owned adapter when a surface has a different trust boundary (for
- * example, Desktop Managed Cloud account memory).
- *
- * The default store remains local-first. An external adapter owns both data
- * and mutations; this component never mirrors cloud facts into device-local
- * storage.
- */
-
 const MAX_FACT_CHARS = 280;
 
 export interface MemoryEditorProps {
-  /** Optional title override. Set to null to hide the header. */
   title?: string | null;
-  /** Optional descriptive copy shown under the title. */
   description?: string;
-  /** When true, hides the "Forget everything" destructive button. */
   hideClearAll?: boolean;
-  /** Optional className for the outer container. */
   className?: string;
-  /**
-   * Optional host-owned persistence boundary. Desktop Cloud supplies an
-   * authenticated account adapter; omitting it keeps the local shared store.
-   */
   adapter?: MemoryEditorDataAdapter;
 }
 
 export type MemoryEditorSyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
 
 export interface MemoryEditorDataAdapter {
-  /** Determines truthful local-vs-account copy; adapters are not inherently cloud-backed. */
   scope?: 'local' | 'cloud';
   facts: MemoryFact[];
   syncStatus: MemoryEditorSyncStatus;
@@ -77,9 +55,6 @@ export function MemoryEditor({
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
 
-  // Hydrate the selected adapter on mount. Account adapters pull cross-device
-  // facts; native adapters load their device database; the shared fallback is
-  // a no-op where sync is unavailable.
   useEffect(() => {
     void hydrateFromServer().catch(() => undefined);
   }, [hydrateFromServer]);
@@ -119,7 +94,6 @@ export function MemoryEditor({
       const next = editDraft.trim();
       void runMutation(async () => {
         if (!next) {
-          // Empty value deletes the fact — matches Claude's confirm-then-erase pattern.
           await remove(id);
         } else {
           await update(id, next);
@@ -138,7 +112,6 @@ export function MemoryEditor({
 
   const onClearAll = useCallback(() => {
     if (facts.length === 0) return;
-    // Lightweight confirm — host apps can wrap with their own modal if needed.
     const ok =
       typeof globalThis.confirm === 'function'
         ? globalThis.confirm(

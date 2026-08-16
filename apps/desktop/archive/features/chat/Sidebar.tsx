@@ -66,7 +66,6 @@ import { useSimpleModeStore, selectIsSimpleMode } from '../../stores/ui';
 import { SimpleModeToggle } from '@/features/simple-mode';
 import { NotificationCenter } from '@/features/notifications';
 import { ShareConversationDialog } from './ShareConversationDialog';
-// SidebarFeaturesPopover removed — features accessible via chat or Cmd+K
 import { TransferDialog } from './TransferDialog';
 import { LocalByokHandoffDialog } from './LocalByokHandoffDialog';
 import { IncognitoToggle } from './IncognitoToggle';
@@ -104,12 +103,6 @@ interface SidebarProps {
 
 type TemporalGroup = 'today' | 'yesterday' | 'thisWeek' | 'last7Days' | 'last30Days' | 'older';
 
-/**
- * Memoized conversation item component to prevent unnecessary re-renders.
- * PERFORMANCE OPTIMIZATION: Each conversation item in the sidebar can trigger
- * re-renders when the parent state changes. By memoizing this component,
- * we only re-render when the specific conversation data changes.
- */
 interface ConversationItemProps {
   conv: ConversationSummary;
   isActive: boolean;
@@ -118,7 +111,6 @@ interface ConversationItemProps {
   showArchived: boolean;
   editingId: string | null;
   editingTitle: string;
-  /** Project name for attribution badge — undefined when no project assigned */
   projectName?: string;
   onSelect: (id: string) => void;
   onStartEdit: (conv: ConversationSummary) => void;
@@ -418,31 +410,25 @@ export function Sidebar({
   onOpenMcpBundles: _onOpenMcpBundles,
   onOpenCanvas: _onOpenCanvas,
 }: SidebarProps) {
-  // Platform-aware modifier key: ⌘ on Mac, Ctrl on Windows/Linux
   const modKeySymbol =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
 
-  // Local/Managed mode — drives the indicator pill in the footer
   const mode = useAppModeStore(selectMode);
   const setMode = useAppModeStore((s) => s.setMode);
 
-  // Usage data for the sidebar widget (only shown when > 50%)
   const budgetPct = useBillingUsageStore(selectBudgetPercentage);
   const budgetEnabled = useBillingUsageStore((s) => s.budget.enabled);
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
   const clampedBudgetPct = Math.min(Math.max(budgetPct, 0), 100);
   const showUsageWidget = budgetEnabled && clampedBudgetPct > 50;
 
-  // Migration: All store hooks now use useChatStore (modular store) instead of useUnifiedChatStore
   // Using exported selectors for optimal re-render performance
   const conversations = useChatStore(selectConversations);
   const activeConversationId = useChatStore(selectActiveConversationId);
   const activeView = useChatStore(selectActiveView);
 
-  // Simple mode state - hide advanced features
   const isSimpleMode = useSimpleModeStore(selectIsSimpleMode);
 
-  // Conversation actions - renamed selectConversation to avoid conflict with selector
   const selectConversationFn = useChatStore((state) => state.selectConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
@@ -453,7 +439,6 @@ export function Sidebar({
   const createConversation = useChatStore((state) => state.createConversation);
   const setActiveView = useChatStore((state) => state.setActiveView);
   const ensureActiveConversation = useChatStore((state) => state.ensureActiveConversation);
-  // Message loading functions
   const messagesByConversation = useChatStore((state) => state.messagesByConversation);
   const loadConversationMessages = useChatStore((state) => state.loadConversationMessages);
 
@@ -465,7 +450,6 @@ export function Sidebar({
         return;
       }
 
-      // Create and trigger download
       const blob = new Blob([markdown], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -539,37 +523,30 @@ export function Sidebar({
     title: string;
   } | null>(null);
 
-  // Get projects for filtering - use useShallow to prevent re-renders from array reference changes
   const projects = useProjectStore(useShallow(selectActiveProjects));
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
 
-  // Sync with active project from project store
   useEffect(() => {
     if (activeProjectId && !selectedProjectFilter) {
       setSelectedProjectFilter(activeProjectId);
     }
   }, [activeProjectId, selectedProjectFilter]);
 
-  // Get archived conversations - filter directly from conversations array
-  // to avoid dependency on store function which may cause re-render loops
   const archivedConversations = useMemo(
     () => conversations.filter((c) => c.archived === true),
     [conversations],
   );
 
-  // Run once on mount - ensureActiveConversation is a stable store function
   useEffect(() => {
     ensureActiveConversation();
   }, [ensureActiveConversation]);
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
-    // Filter out archived conversations from main list (unless showing archived)
     let baseList = showArchived
       ? conversations.filter((c) => c.archived === true)
       : conversations.filter((c) => !c.archived);
 
-    // Filter by project if selected
     if (selectedProjectFilter) {
       baseList = baseList.filter((c) => c.projectId === selectedProjectFilter);
     }
@@ -581,13 +558,11 @@ export function Sidebar({
     });
   }, [conversations, searchQuery, showArchived, selectedProjectFilter]);
 
-  // Get selected project details
   const selectedProject = useMemo(
     () => (selectedProjectFilter ? projects.find((p) => p.id === selectedProjectFilter) : null),
     [projects, selectedProjectFilter],
   );
 
-  // Build a lookup map: projectId → project name, for O(1) attribution badge lookup
   const projectNameById = useMemo<Map<string, string>>(() => {
     const map = new Map<string, string>();
     projects.forEach((p) => map.set(p.id, p.name));
@@ -647,15 +622,10 @@ export function Sidebar({
     }
   }, [createConversation, isIncognito, isMobile, onCollapsedChange, onNewChat, setActiveView]);
 
-  // Track the latest conversation selection to avoid race conditions when
-  // the user rapidly clicks different conversations.  Only the most recent
-  // selection should apply its loaded messages.
   const latestSelectionRef = useRef<string | null>(null);
 
   const handleSelectConversation = useCallback(
     (id: string) => {
-      // Mark this as the latest selection — any in-flight load for a
-      // previously-selected conversation will bail out via the stale check.
       latestSelectionRef.current = id;
 
       selectConversationFn(id);
@@ -664,33 +634,25 @@ export function Sidebar({
         onCollapsedChange(true);
       }
 
-      // Check if messages need to be loaded from the backend
-      // selectConversation sets isLoadingMessages=true when cache is empty
       const cachedMessages = messagesByConversation[id];
       if (!cachedMessages || cachedMessages.length === 0) {
-        // Get user ID for the API call
         const userId =
           useAppModeStore.getState().mode === 'cloud'
             ? cloudAccountAuth.getUser()?.id
             : resolveDesktopChatOwnerId();
         if (userId) {
-          // Load messages from backend asynchronously
           loadConversationMessages(id, userId)
             .then(() => {
-              // If the user clicked a different conversation while this was
-              // loading, discard the result to prevent stale data overwriting
-              // the newer selection.
               if (latestSelectionRef.current !== id) {
-                return; // stale — a newer selection superseded this one
+                return;
               }
             })
             .catch((error) => {
-              if (latestSelectionRef.current !== id) return; // stale
+              if (latestSelectionRef.current !== id) return;
               console.error('[Sidebar] Failed to load conversation messages:', error);
               toast.error('Failed to load conversation messages');
             });
         } else {
-          // BUG-342: Surface an error instead of silently skipping
           console.warn('[Sidebar] Cannot load messages: user not authenticated');
           toast.error('Please sign in to load conversation messages');
         }
@@ -750,7 +712,6 @@ export function Sidebar({
     }
   }, [deleteConfirmDialog, deleteConversation]);
 
-  // Stable callback handlers for ConversationItem to prevent re-renders
   const handleCancelEdit = useCallback(() => {
     setEditingId(null);
     setEditingTitle('');
@@ -762,12 +723,6 @@ export function Sidebar({
 
   const handleTransfer = useCallback(
     (id: string, title: string) => {
-      // PA-3 / DESK-CLOUD-COPY-01: transferring a local conversation "to cloud"
-      // would call transfer_local_to_cloud → cloud_create_conversation, which
-      // fails closed with ERR_CLOUD_NOT_IMPLEMENTED. Desktop managed cloud is
-      // not implemented yet, so block the local→cloud transfer with the honest
-      // interim message instead of opening the dialog. (On desktop the runtime
-      // is always Local mode, so this is the only reachable transfer direction.)
       if (isTauri && mode === 'local') {
         toast.info(DESKTOP_CLOUD_TAGLINE);
         return;
@@ -799,13 +754,11 @@ export function Sidebar({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Guard: don't steal keystrokes from text inputs or editable elements
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
 
-      // Handle Escape - close search and reset state
       if (e.key === 'Escape') {
         setShowSearch(false);
         setSearchQuery('');
@@ -813,10 +766,8 @@ export function Sidebar({
         return;
       }
 
-      // Skip arrow navigation if editing or in search mode
       if (editingId || showSearch) return;
 
-      // Handle arrow navigation
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setFocusedIndex((prev) => {
@@ -843,7 +794,6 @@ export function Sidebar({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingId, showSearch, focusedIndex, visibleConversations, handleSelectConversation]);
 
-  // Render conversation item using the memoized component
   const renderConversationItem = useCallback(
     (conv: ConversationSummary, isKeyboardFocused: boolean) => (
       <ConversationItem
@@ -1413,8 +1363,6 @@ export function Sidebar({
                 type="button"
                 onClick={() => {
                   if (mode === 'local') {
-                    // Managed Cloud is a real, account-scoped workspace. The
-                    // Cloud shell prompts for in-app sign-in when needed.
                     setMode('cloud');
                     return;
                   }

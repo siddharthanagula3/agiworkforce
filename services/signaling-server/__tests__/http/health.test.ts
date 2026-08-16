@@ -1,11 +1,3 @@
-/**
- * Health Endpoint Tests
- *
- * Tests for health and monitoring endpoints:
- * - GET /health
- * - GET /ready
- * - GET /live
- */
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
@@ -16,12 +8,10 @@ function createHealthTestApp() {
   let isReady = true;
   let isShuttingDown = false;
 
-  // Liveness probe
   app.get('/live', (_req, res) => {
     res.status(200).json({ status: 'alive', timestamp: Date.now() });
   });
 
-  // Readiness probe
   app.get('/ready', (_req, res) => {
     if (isShuttingDown) {
       return res.status(503).json({ status: 'shutting_down', timestamp: Date.now() });
@@ -32,7 +22,6 @@ function createHealthTestApp() {
     return res.status(200).json({ status: 'ready', timestamp: Date.now() });
   });
 
-  // Detailed health check
   app.get('/health', (_req, res) => {
     const memUsage = process.memoryUsage();
 
@@ -59,7 +48,6 @@ function createHealthTestApp() {
     return res.status(httpStatus).json(healthStatus);
   });
 
-  // Helper to set state for testing
   (app as express.Application & { setReady: (r: boolean) => void }).setReady = (r: boolean) => {
     isReady = r;
   };

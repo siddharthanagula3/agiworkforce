@@ -39,13 +39,9 @@ describe('AGI Desktop main-window lifecycle', () => {
       ),
     );
 
-    // dispatchEvent returns false when the app intercepted and prevented the
-    // WebKit default close behavior.
     expect(eventAccepted).toBe(false);
 
     await browser.pause(500);
-    // tauri.conf.json ships `productName: "AGI"` / window title "AGI"; the
-    // old "AGI Workforce" expectation predated the rebrand.
     expect(await browser.getTitle()).toBe('AGI');
 
     const restored = await browser.execute(async () => {

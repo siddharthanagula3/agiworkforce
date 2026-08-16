@@ -1,15 +1,3 @@
-/**
- * Client-side reduction of the additive `x_agiwork_plan` SSE event (CAP-048).
- *
- * The server re-emits the WHOLE plan on every change (last-write-wins, like
- * `x_research_plan`), so reduction is a replace, not a merge — a client that
- * joined late still ends up with the complete queue.
- *
- * Every field is validated: the payload is model-influenced server output
- * arriving over the wire, so a malformed step is dropped rather than rendered.
- * A payload with no usable step returns null, which callers treat as "no
- * update" so a garbage event cannot erase a good plan.
- */
 
 export type AgiWorkPlanStepStatus =
   | 'pending'
@@ -24,23 +12,12 @@ export interface AgiWorkPlanStep {
   status: AgiWorkPlanStepStatus;
 }
 
-/**
- * The structured goal the composer captures in AGI Work mode and sends with the
- * request. `goal` is the composed message (the headline objective); the two
- * optional fields let the user pin down scope and the concrete deliverable. The
- * server re-validates it (see `AgiWorkGoalSchema`) before storing or planning.
- */
 export interface AgiWorkGoalInput {
   goal: string;
   constraints?: string;
   deliverable?: string;
 }
 
-/**
- * Build the wire goal from the composed message plus the optional fields, or
- * return undefined when there is nothing worth sending. Trims and drops empty
- * optional fields so `{ goal }` and `{ goal, constraints: '' }` are identical.
- */
 export function buildAgiWorkGoalInput(
   message: string,
   fields?: { constraints?: string; deliverable?: string },
@@ -94,15 +71,12 @@ export function parseAgiWorkPlanEvent(payload: unknown): AgiWorkPlanStep[] | nul
       description: description.slice(0, MAX_DESCRIPTION_CHARS),
       status,
     });
-    // Bound: the loop emits at most a handful of steps, but the wire is not
-    // trusted to stay that way.
     if (steps.length >= MAX_STEPS) break;
   }
 
   return steps.length > 0 ? steps : null;
 }
 
-/** Count of steps in a terminal status, for a compact "3/5 done" summary. */
 export function agiWorkPlanProgress(steps: AgiWorkPlanStep[] | undefined): {
   completed: number;
   total: number;

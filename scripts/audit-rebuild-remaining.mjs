@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// Rebuild AUDIT_MANIFEST.txt and the remaining batch lists (130+) after the
-// 2026-06-10 deletion. Done files = union of recovered AUDIT_BATCHES/batch-001..129
-// lists. Remaining = current find output minus done, classified and ordered with
-// the same category logic as scripts/audit-classify-manifest.mjs, sliced into 20s.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -48,7 +44,7 @@ for (let i = 1; i <= 129; i++) {
 
 const currentSet = new Set(current);
 const remaining = current.filter((p) => !done.has(p));
-const vanishedDone = [...done].filter((p) => !currentSet.has(p)); // scanned, since deleted
+const vanishedDone = [...done].filter((p) => !currentSet.has(p));
 const GENERATED =
   /(\/dist-web\/|\/\.vercel\/|\/\.playwright-mcp\/|\/\.expo\/|\/\.firecrawl\/|\/\.minimax\/|pnpm-lock\.yaml|Cargo\.lock|\/snapshots\/|\.snap$|\/_archive\/|\/archive\/)/i;
 const TESTISH =
@@ -132,7 +128,6 @@ function categorize(p) {
 const entries = remaining.map((p) => ({ cat: categorize(p), p }));
 entries.sort((a, b) => a.cat - b.cat || a.p.localeCompare(b.p));
 
-// manifest = done (preserved as scanned evidence) + remaining, marked
 fs.writeFileSync(
   path.join(ROOT, 'AUDIT_MANIFEST.txt'),
   [...done].sort().join('\n') + '\n' + remaining.join('\n') + '\n',

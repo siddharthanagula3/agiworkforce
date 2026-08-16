@@ -1,24 +1,5 @@
 import type { BillingPlanTier } from '@agiworkforce/types';
 
-// 2026-07-02: 'hobby' (target $5/mo) and 'pro_plus' were removed from the
-// shared catalog (packages/contracts/types/src/billing-catalog.ts, commit 343457c8d,
-// "no users, fresh start"). This file wasn't updated at the time, so it kept
-// referencing both — silently falling back to $0 via normalizeBillingPlanTier
-// (getPlanPriceUsd('hobby', ...) → unknown tier → 'free' → $0), while still
-// pointing 'hobby' at a REAL, active, live-mode Stripe price
-// (price_1Sgwx10zEfO6BZMh7thtFU77, confirmed via `stripe prices retrieve
-// --live`: $10.00/mo, lookup_key "Hobby_month" — not the $5 the old comment
-// claimed, and not the $8 the new Basic tier prices at). Replaced with the
-// current 'basic' tier and its own dedicated Stripe prices (test-mode IDs
-// below; see the platform-lead handoff notes for the live-mode equivalents
-// pending explicit approval to create real production prices).
-// NOTE: these desktop IDs are reference metadata only — actual checkout runs on the
-// canonical WEB pricing page (the plan CTAs open it), so nothing here charges a card.
-// 2026-07-29: fixed the display($7)/charge($8) mismatch below. The real $7/mo test-mode
-// Stripe price (basic_monthly_usd) was created 2026-07-11 during the Stripe test-account
-// price-catalog alignment pass; this file just hadn't been updated to point at it yet.
-// Swapped the old $8 price object (price_1ToutN0zEfO6BZMhHloQY5RM) for the real $7 one.
-// If this ever looks wrong, verify against the Stripe dashboard/API directly.
 export const STRIPE_PRICE_IDS = {
   basic_monthly_usd: 'price_1Ts6mR0zEfO6BZMhi1hSumHd', // test mode — $7/mo (matches catalog)
   basic_monthly_inr: 'price_1ToutS0zEfO6BZMhdWLMNOd2', // test mode — ₹399/mo (matches catalog)
@@ -29,20 +10,8 @@ export const STRIPE_PRICE_IDS = {
   max_yearly: 'price_1Sgwx40zEfO6BZMhYS63EnfW',
 } as const;
 
-/**
- * Canonical tier IDs come from the shared billing catalog.
- */
 export type PlanId = BillingPlanTier;
 
-// 2026-08-09 (BIZ-020 repair): `monthlyPrice`, `yearlyPrice` and
-// `monthlyPriceInr` were removed from this shape. Nothing in the desktop app
-// ever read them — `getPlanById` has exactly one consumer,
-// `apps/desktop/src/utils/featureGates.ts` (imported at line 1, called at 91 and
-// 216), and it reads only `plan.limits`. Desktop renders plan prices in
-// `apps/desktop/src/features/pricing/PlanCard.tsx`, which pulls them straight
-// from the shared catalog. Carrying a second, unread copy of the price here is
-// what let a `0` placeholder for Enterprise sit unnoticed; the fix for unread
-// price data is to delete it, not to re-type it.
 export interface PricingPlan {
   id: PlanId;
   name: string;
@@ -50,7 +19,6 @@ export interface PricingPlan {
   stripePriceId: {
     monthly: string | null;
     yearly: string | null;
-    /** INR-currency Price object for the same plan, when it has one (currently only 'basic'). */
     monthlyInr?: string | null;
   };
   features: string[];
@@ -145,12 +113,6 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 100,
       storage: 1024,
       teamMembers: 1,
-      // Managed-usage budget is now server-authoritative (moved to web's
-      // managed-usage-policy; getPlanUsageBudgetCents was intentionally removed from the
-      // shared @agiworkforce/types). This client-side field is inert — no desktop code
-      // reads plan.limits.tokenCredits (checkUsageLimit is only invoked for automations/
-      // apiCalls/storage) — so it carries the same 0 as the other plans. The stale import
-      // that referenced the removed fn crashed pricing.ts at module init.
       tokenCredits: 0,
     },
   },
@@ -206,7 +168,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Max 15x',
     description: 'The highest individual managed usage tier, including video generation.',
     stripePriceId: {
-      // Checkout is server-owned; Desktop never embeds Stripe price ids for this tier.
       monthly: null,
       yearly: null,
     },
@@ -229,7 +190,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     name: 'Team',
     description: 'Contracted managed capacity with shared team administration.',
     stripePriceId: {
-      // Team provisioning is sales-assisted until organization-linked seats are complete.
       monthly: null,
       yearly: null,
     },
@@ -250,8 +210,6 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: 'enterprise',
     name: 'Enterprise',
     description: 'Custom solutions for large organizations',
-    // Priced per signed contract — there is no published amount, and this file
-    // no longer carries one for any tier (see the PricingPlan note above).
     stripePriceId: {
       monthly: null,
       yearly: null,
@@ -272,7 +230,6 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
 ];
 
-// no trials per platform spec
 export const HOBBY_TRIAL_PERIOD_DAYS = 0;
 
 export const GRACE_PERIOD_DAYS = 7;
@@ -286,9 +243,3 @@ export function getStripePriceId(planId: string, interval: 'monthly' | 'yearly')
   return plan?.stripePriceId[interval] ?? null;
 }
 
-// Removed with BIZ-020: calculateYearlySavings/calculateYearlySavingsPercentage/
-// formatPrice/formatPricePerMonth had no call site anywhere in the repo and all
-// four treated `0` as a real amount — `formatPrice(0)` printed "Free", which is
-// exactly how a contract-priced plan would have been advertised as free. Desktop
-// renders plan prices in features/pricing/PlanCard.tsx from the shared catalog;
-// there is no second formatter to keep in step.

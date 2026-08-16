@@ -1,8 +1,3 @@
-/**
- * Smoke test for the re-export shim only. Full behavioral coverage lives at
- * the canonical implementation: packages/ai/search/src/__tests__/web-search-support.test.ts
- * (moved there 2026-07-11, WP4 — see this file's header for why).
- */
 
 import { describe, it, expect } from 'vitest';
 import {

@@ -1,15 +1,3 @@
-/**
- * Local-mode settings store — MMKV key 'settings-store-local'.
- *
- * Holds the cloud-safe preference fields for LOCAL mode. Never synced to the
- * cloud. A change here is completely independent from the cloud-mode store
- * (`cloudSettingsStore`).
- *
- * MIGRATION: On first run (when the MMKV key doesn't exist yet), this store
- * seeds its fields from the legacy 'settings-store' so existing users keep
- * their preferences. Cloud store starts from defaults (server pull populates it
- * from prior sync sessions).
- */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -23,33 +11,16 @@ import type {
 
 export type { ThemeMode, AccentColor, FontPreference, Personalization };
 
-// ── State shape ──────────────────────────────────────────────────────────────
-
 export interface LocalSettingsState {
-  /** Theme mode: dark, light, or follow system */
   themeMode: ThemeMode;
-  /** Accent color used by selected controls and highlights */
   accentColor: AccentColor;
-  /** Font preference */
   fontPreference: FontPreference;
-  /** Enable push notifications (local-mode preference) */
   notificationsEnabled: boolean;
-  /** Language prefix for voice filtering (e.g. 'en', 'fr') */
   speechLanguage: string;
-  /** Auto-listen after AI speaks in voice conversation mode */
   autoListenEnabled: boolean;
-  /**
-   * Master memory switch for this device. When false, no turn sent from this
-   * device reads saved memories or past-chat excerpts and no new memory is
-   * written, regardless of the two switches below. Existing entries are kept
-   * (memory is disabled, not erased) so turning it back on restores them.
-   */
   memoryEnabled: boolean;
-  /** Search prior Local chats and use relevant saved memories while answering */
   referencePastChats: boolean;
-  /** Generate durable Local memories from eligible chat turns */
   generateMemoryFromHistory: boolean;
-  /** User personalization preferences (local profile, never sent to cloud) */
   personalization: Personalization;
 
   setThemeMode: (mode: ThemeMode) => void;
@@ -64,8 +35,6 @@ export interface LocalSettingsState {
   setPersonalization: (partial: Partial<Personalization>) => void;
 }
 
-// ── Defaults ─────────────────────────────────────────────────────────────────
-
 const defaultPersonalization: Personalization = {
   fullName: '',
   nickname: '',
@@ -78,8 +47,6 @@ const defaultPersonalization: Personalization = {
   emoji: 50,
 };
 
-// ── Store ────────────────────────────────────────────────────────────────────
-
 export const useLocalSettingsStore = create<LocalSettingsState>()(
   persist(
     (set, get) => ({
@@ -89,8 +56,6 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       notificationsEnabled: true,
       speechLanguage: 'en',
       autoListenEnabled: true,
-      // Preserve the pre-preference Local behavior. Local history never leaves
-      // this device.
       memoryEnabled: true,
       referencePastChats: true,
       generateMemoryFromHistory: true,
@@ -112,9 +77,6 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       name: 'settings-store-local',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
-      // Deep-merge personalization so a persisted object from before a new field
-      // (e.g. `style`) existed still gets the default for that field instead of
-      // `undefined`, without needing a version-bump migration for every addition.
       merge: (persisted, current) => {
         const persistedState = (persisted ?? {}) as Partial<LocalSettingsState>;
         return {
@@ -131,14 +93,8 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
           console.warn('[localSettingsStore] Hydration failed:', error);
           return;
         }
-        // state is undefined when the MMKV key doesn't exist (first run of the
-        // split store). Seed from the legacy 'settings-store' so existing users
-        // keep their local preferences.
         if (state === undefined) {
           try {
-            // Use storage.getString (typed as string | undefined, synchronous) rather
-            // than mmkvStorage.getItem (StateStorage interface types it as
-            // string | Promise<string | null>).
             const legacyRaw = storage.getString('settings-store');
             if (legacyRaw) {
               const parsed = JSON.parse(legacyRaw) as { state?: Partial<LocalSettingsState> };

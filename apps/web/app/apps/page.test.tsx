@@ -34,9 +34,6 @@ describe('/apps navigation', () => {
   });
 
   it('never bounces a signed-out visitor back to the page whose CTA sent them here', () => {
-    // /integrations' primary CTA points at /apps. If /apps answered a signed-out
-    // visitor by replacing with /integrations, the button would be a closed
-    // loop: /integrations -> /apps -> /integrations, rendering null in between.
     useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
 
     render(<AppsPage />);

@@ -1,20 +1,4 @@
-/**
- * Native Clerk Frontend API transport for the Electron cloud shell.
- *
- * Line-for-line mirror of `src-tauri/src/sys/account/clerk_native.rs` — read
- * that file's header for the full rationale. Short version: Clerk production
- * instances reject browser requests whose `Origin` is not allowlisted
- * (`origin_invalid`), so the renderer cannot call FAPI itself. Node's fetch in
- * the main process sends no `Origin` header, matching Clerk's own native
- * (Expo) client contract: `_is_native=1`, no cookies, client JWT in the
- * `authorization` request header, rotated client JWT read back from the
- * `authorization` response header.
- *
- * The path allowlist keeps this a sign-in transport, never a general Clerk
- * proxy. Credentials transit headers/bodies only and are never logged.
- */
 
-/** Pinned to the same `@clerk/clerk-js` contract the Rust transport pins. */
 const CLERK_API_VERSION = '2026-05-12';
 const CLERK_JS_VERSION = '6.25.3';
 
@@ -33,7 +17,6 @@ export interface ClerkNativeResponse {
   clientToken: string | null;
 }
 
-/** Decode `pk_live_` / `pk_test_` + base64("<fapi-host>$") into the FAPI host. */
 export function frontendApiFromPublishableKey(publishableKey: string): string {
   const key = publishableKey.trim();
   const encoded = key.startsWith('pk_live_')
@@ -61,14 +44,12 @@ export function frontendApiFromPublishableKey(publishableKey: string): string {
   if (host === '' || host.includes('$') || !host.includes('.')) {
     throw new Error('The Clerk publishable key does not name a frontend API host.');
   }
-  // SSRF boundary: bare host only — no scheme, path, port, userinfo, or query.
   if (!/^[A-Za-z0-9.-]+$/.test(host)) {
     throw new Error('The Clerk publishable key names an invalid frontend API host.');
   }
   return host;
 }
 
-/** Allowlist the exact Clerk routes native sign-in needs. */
 export function validateClerkPath(path: string): void {
   const refuse = () => {
     throw new Error('Refusing an unsupported Clerk request path.');
@@ -107,8 +88,6 @@ function clerkQueryParams(extra: string | null | undefined): URLSearchParams {
   params.set('_clerk_js_version', CLERK_JS_VERSION);
   params.set('_is_native', '1');
 
-  // The only caller-supplied query parameter native sign-in needs is the SSO
-  // callback's `rotating_token_nonce`.
   if (extra) {
     for (const pair of extra.replace(/^\?/, '').split('&')) {
       if (pair === '') continue;
@@ -170,8 +149,6 @@ export async function executeClerkNativeRequest(
       signal: AbortSignal.timeout(30_000),
     });
   } catch (error) {
-    // Transport failure — the caller maps this to a network message, never to
-    // "your account was rejected".
     throw new Error(`Could not reach the AGI account service: ${String(error)}`);
   }
 

@@ -1,14 +1,3 @@
-/**
- * UsageDashboard — usage dashboard for the Settings Account tab.
- *
- * Shows:
- * - Plan usage limits: session token budget with colour-coded progress bar
- * - Model limits: per-model/provider breakdown with mini bars
- * - Cost tracking: monthly spend vs budget with "Adjust limit" action
- *
- * Data is sourced from useBillingUsageStore (budget, usageStats, costOverview).
- * When no data is available an empty state is shown.
- */
 import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, RefreshCw, SlidersHorizontal, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,9 +11,6 @@ import {
   selectBudgetPercentage,
 } from '../../stores/billingUsage';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-/** Returns Tailwind class for a given usage percentage. */
 function barColorClass(pct: number): string {
   if (pct > 95) return 'bg-red-500';
   if (pct >= 80) return 'bg-amber-500';
@@ -32,7 +18,6 @@ function barColorClass(pct: number): string {
   return 'bg-green-500';
 }
 
-/** Returns text colour class matching barColorClass. */
 function textColorClass(pct: number): string {
   if (pct > 95) return 'text-red-500';
   if (pct >= 80) return 'text-amber-500';
@@ -40,12 +25,10 @@ function textColorClass(pct: number): string {
   return 'text-green-500';
 }
 
-/** Formats a timestamp (ms) as a short locale string. */
 function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/** Formats milliseconds to "Xh Ym" or "Xm" string. */
 function formatTimeRemaining(futureMs: number): string {
   const diffMs = Math.max(0, futureMs - Date.now());
   const totalMinutes = Math.floor(diffMs / 60_000);
@@ -54,8 +37,6 @@ function formatTimeRemaining(futureMs: number): string {
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
-
-// ── sub-components ────────────────────────────────────────────────────────────
 
 interface UsageRowProps {
   label: string;
@@ -117,8 +98,6 @@ function ModelRow({ name, tokens, cost, pct }: ModelRowProps) {
   );
 }
 
-// ── empty state ───────────────────────────────────────────────────────────────
-
 function EmptyUsageState() {
   return (
     <div className="flex flex-col items-center justify-center py-10 gap-3">
@@ -134,8 +113,6 @@ function EmptyUsageState() {
     </div>
   );
 }
-
-// ── main component ────────────────────────────────────────────────────────────
 
 export function UsageDashboard() {
   const budget = useBillingUsageStore(selectBudget);
@@ -154,7 +131,6 @@ export function UsageDashboard() {
   const [budgetInputValue, setBudgetInputValue] = useState('');
   const [showBudgetInput, setShowBudgetInput] = useState(false);
 
-  // Load cost overview on mount
   useEffect(() => {
     void loadCostOverview();
   }, [loadCostOverview]);
@@ -190,13 +166,11 @@ export function UsageDashboard() {
     }
   }, [budgetInputValue, setMonthlyBudget]);
 
-  // Determine whether we have any real data to display
   const hasTokenData = budget.currentUsage > 0 || budget.enabled;
   const hasModelData = (usageStats?.model_usage?.length ?? 0) > 0;
   const hasCostData = costOverview !== null;
   const hasAnyData = hasTokenData || hasModelData || hasCostData;
 
-  // Derive session reset label from budget periodEnd
   const sessionResetLabel =
     budget.periodEnd > Date.now()
       ? `Resets in ${formatTimeRemaining(budget.periodEnd)}`
@@ -204,11 +178,9 @@ export function UsageDashboard() {
         ? `Reset ${formatDate(budget.periodEnd)}`
         : null;
 
-  // Per-model data for the breakdown section
   const modelUsage = usageStats?.model_usage ?? [];
   const maxModelCost = modelUsage.length > 0 ? Math.max(...modelUsage.map((m) => m.cost_usd)) : 0;
 
-  // Cost tracking values
   const monthTotal = costOverview?.month_total ?? 0;
   const monthlyBudget = costOverview?.monthly_budget ?? null;
   const budgetSpendPct =

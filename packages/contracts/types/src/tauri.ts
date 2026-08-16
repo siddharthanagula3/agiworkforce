@@ -8,34 +8,14 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Event Types
-// ============================================================================
-
-/**
- * Generic payload wrapper for Tauri events.
- */
 export interface TauriEventPayload<T = unknown> {
   payload: T;
 }
 
-/**
- * Event listener function type with typed payload.
- */
 export type TauriEventListener<T = unknown> = (event: TauriEventPayload<T>) => void;
 
-/**
- * Function to unsubscribe from an event.
- */
 export type TauriUnlisten = () => void;
 
-// ============================================================================
-// Browser Automation Types
-// ============================================================================
-
-/**
- * Browser action event payload.
- */
 export interface BrowserActionPayload {
   id: string;
   type: 'navigate' | 'click' | 'type' | 'extract' | 'screenshot' | 'scroll' | 'wait' | 'execute';
@@ -53,18 +33,12 @@ export interface BrowserActionPayload {
   screenshotId?: string;
 }
 
-/**
- * Console log event payload from browser automation.
- */
 export interface BrowserConsolePayload {
   level: 'log' | 'warn' | 'error' | 'info';
   message: string;
   timestamp: number;
 }
 
-/**
- * Network request event payload from browser automation.
- */
 export interface BrowserNetworkPayload {
   url: string;
   method: string;
@@ -73,13 +47,6 @@ export interface BrowserNetworkPayload {
   timestamp: number;
 }
 
-// ============================================================================
-// Database Types
-// ============================================================================
-
-/**
- * SQL query result from Tauri backend.
- */
 export interface SqlQueryResult {
   columns?: string[];
   rows?: SqlRowValue[][];
@@ -87,42 +54,20 @@ export interface SqlQueryResult {
   execution_time_ms?: number;
 }
 
-/**
- * Allowed SQL row value types.
- */
 export type SqlRowValue = string | number | boolean | null;
 
-/**
- * MongoDB document type.
- */
 export type MongoDocument = Record<string, unknown>;
 
-/**
- * MongoDB query filter.
- */
 export type MongoFilter = Record<string, unknown>;
 
-/**
- * MongoDB update operations.
- */
 export type MongoUpdate = Record<string, unknown>;
 
-/**
- * MongoDB operation result.
- */
 export interface MongoResult {
   matched_count?: number;
   modified_count?: number;
   upserted_id?: string;
 }
 
-// ============================================================================
-// Performance Entry Types
-// ============================================================================
-
-/**
- * Extended performance entry for first input delay.
- */
 export interface PerformanceEventTimingEntry extends PerformanceEntry {
   processingStart: number;
   processingEnd: number;
@@ -131,9 +76,6 @@ export interface PerformanceEventTimingEntry extends PerformanceEntry {
   target?: EventTarget | null;
 }
 
-/**
- * Extended performance entry for layout shift.
- */
 export interface LayoutShiftEntry extends PerformanceEntry {
   value: number;
   hadRecentInput: boolean;
@@ -141,22 +83,12 @@ export interface LayoutShiftEntry extends PerformanceEntry {
   sources: LayoutShiftAttribution[];
 }
 
-/**
- * Layout shift attribution details.
- */
 export interface LayoutShiftAttribution {
   node?: Node;
   previousRect: DOMRectReadOnly;
   currentRect: DOMRectReadOnly;
 }
 
-// ============================================================================
-// Analytics Types
-// ============================================================================
-
-/**
- * Timeseries data point for cost analytics.
- */
 export interface TimeseriesDataPoint {
   date: string;
   total_cost: number;
@@ -164,9 +96,6 @@ export interface TimeseriesDataPoint {
   token_count?: number;
 }
 
-/**
- * Provider usage data for analytics.
- */
 export interface ProviderUsageData {
   provider: string;
   total_cost: number;
@@ -174,9 +103,6 @@ export interface ProviderUsageData {
   percentage?: number;
 }
 
-/**
- * Conversation usage data for analytics.
- */
 export interface ConversationUsageData {
   conversation_id: string;
   title?: string;
@@ -184,29 +110,15 @@ export interface ConversationUsageData {
   message_count?: number;
 }
 
-// ============================================================================
-// Workflow Types
-// ============================================================================
-
-/**
- * Generic workflow node data.
- * For type-safe usage, prefer specific node data types.
- */
 export interface WorkflowNodeData {
   label: string;
   [key: string]: unknown;
 }
 
-/**
- * Generic workflow execution data.
- */
 export interface WorkflowExecutionData {
   [key: string]: unknown;
 }
 
-/**
- * Workflow log event data.
- */
 export interface WorkflowLogData {
   message?: string;
   error?: string;
@@ -214,14 +126,6 @@ export interface WorkflowLogData {
   duration_ms?: number;
 }
 
-// ============================================================================
-// Configuration Types
-// ============================================================================
-
-/**
- * Default value type for configuration fields.
- * Supports primitives, arrays, and objects.
- */
 export type ConfigDefaultValue =
   | string
   | number
@@ -230,9 +134,6 @@ export type ConfigDefaultValue =
   | ConfigDefaultValue[]
   | { [key: string]: ConfigDefaultValue };
 
-/**
- * MCP server configuration.
- */
 export interface MCPServerConfig {
   name: string;
   command?: string;
@@ -243,22 +144,12 @@ export interface MCPServerConfig {
   enabled?: boolean;
 }
 
-// ============================================================================
 // Error Types (re-exported from errors.ts for backwards compatibility)
-// ============================================================================
 
 // Note: Error types are now defined in errors.ts and re-exported from index.ts.
-// New code should import from '@agiworkforce/types' directly.
 export type { CodedError } from './errors';
 export { isCodedError } from './errors';
 
-// ============================================================================
-// React Flow Types
-// ============================================================================
-
-/**
- * React Flow node with typed data.
- */
 export interface TypedReactFlowNode<T = WorkflowNodeData> {
   id: string;
   type: string;
@@ -268,9 +159,6 @@ export interface TypedReactFlowNode<T = WorkflowNodeData> {
   dragging?: boolean;
 }
 
-/**
- * React Flow edge type.
- */
 export interface TypedReactFlowEdge {
   id: string;
   source: string;
@@ -282,13 +170,6 @@ export interface TypedReactFlowEdge {
   style?: Record<string, string | number>;
 }
 
-// ============================================================================
-// Message Metadata Types
-// ============================================================================
-
-/**
- * Extended metadata for chat messages.
- */
 export interface ExtendedMessageMetadata {
   thinkingSummary?: string;
   summary?: string;
@@ -298,21 +179,8 @@ export interface ExtendedMessageMetadata {
   [key: string]: unknown;
 }
 
-// ============================================================================
-// Subscription Types
-// ============================================================================
-
-/**
- * Valid subscription status values.
- */
 export type SubscriptionStatus = 'none' | 'active' | 'past_due' | 'canceled' | 'trialing';
-// ============================================================================
-// DOMPurify Config Types
-// ============================================================================
 
-/**
- * DOMPurify configuration options.
- */
 export interface DOMPurifyConfig {
   ALLOWED_TAGS?: string[];
   ALLOWED_ATTR?: string[];

@@ -1,14 +1,5 @@
 'use client';
 
-/**
- * The floating launcher button.
- *
- * A real `<button>` (not a div with a click handler), 48×48 minimum — double
- * the 24px floor — with `aria-haspopup="dialog"`, `aria-expanded` and
- * `aria-controls` wired to the panel, and an always-present accessible name
- * even when the visible label collapses below 400px.
- */
-
 import { forwardRef } from 'react';
 import styles from './SupportWidget.module.css';
 

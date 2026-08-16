@@ -2,10 +2,6 @@ import { useEffect } from 'react';
 import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 
-// `agiworkforce:` is the Tauri shell's scheme; `agiworkforce-cloud:` is the
-// Electron cloud shell's (distinct so both installed apps can coexist —
-// see apps/desktop/electron/config.ts). Each OS registration only ever
-// delivers its own scheme, so accepting either here is safe for both shells.
 const ALLOWED_DEEP_LINK_SCHEMES = new Set(['agiworkforce:', 'agiworkforce-cloud:']);
 const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
   'github',
@@ -17,17 +13,6 @@ const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
   'atlassian',
 ]);
 
-/**
- * Deep-link path Clerk redirects to after a social/SSO sign-in completes in the
- * system browser. Google, Microsoft, and Apple all refuse OAuth inside embedded
- * webviews, so that hop is unavoidable — this is how the result comes home.
- *
- * Clerk appends `rotating_token_nonce` only when the redirect URL is
- * allowlisted on the Clerk instance (see `@clerk/expo` `useSSO`). A callback
- * without the nonce is therefore surfaced as an error rather than silently
- * dropped, so a missing dashboard entry is visible instead of looking like a
- * hang.
- */
 export const CLOUD_SSO_CALLBACK_PATH = '/sso-callback';
 
 export type ParsedDeepLink =
@@ -75,17 +60,15 @@ export function useDeepLink(enabled = true) {
     const setupListener = async () => {
       try {
         const unlisten = await onOpenUrl((urls) => {
-          if (!isMounted) return; // Guard against unmounted callbacks
+          if (!isMounted) return;
           for (const url of urls) {
             handleDeepLink(url);
           }
         });
 
-        // Only store unlisten if we're still mounted
         if (isMounted) {
           unlistenFn = unlisten;
         } else {
-          // Component unmounted while setting up - cleanup immediately
           unlisten();
         }
       } catch (error) {
@@ -117,18 +100,11 @@ export function parseDeepLink(url: string): ParsedDeepLink | null {
       return null;
     }
 
-    // Extract params from query string
     const queryParams = Object.fromEntries(parsed.searchParams.entries());
 
     const allParams = queryParams;
     const normalizedPathname = normalizeDeepLinkPath(parsed);
 
-    // Cloud social/SSO sign-in return leg.
-    //
-    // Accept both `agiworkforce://sso-callback` (host form, which normalizes to
-    // a trailing slash) and `agiworkforce:///sso-callback` (path form). Which
-    // one arrives depends on how the OS hands the URL over, and a
-    // one-character difference must not silently drop a completed sign-in.
     if (normalizedPathname.replace(/\/$/, '') === CLOUD_SSO_CALLBACK_PATH) {
       const error = allParams['error'];
       if (error) {
@@ -161,9 +137,6 @@ export function parseDeepLink(url: string): ParsedDeepLink | null {
       };
     }
 
-    // Check for MCP OAuth callback URLs
-    // Pattern: agiworkforce://oauth/mcp/{provider}?code={code}&state={state}
-    // Or error: agiworkforce://oauth/mcp/{provider}?error={error}&error_description={description}
     const mcpOAuthMatch = normalizedPathname.match(/^\/oauth\/mcp\/([a-zA-Z0-9_-]+)$/);
     if (mcpOAuthMatch) {
       const provider = mcpOAuthMatch[1]!.toLowerCase();

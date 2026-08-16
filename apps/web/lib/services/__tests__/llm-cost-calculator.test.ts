@@ -4,22 +4,8 @@ import { listCanonicalModels, resolveEffectiveModelPricing } from '@agiworkforce
 
 import { LLMCostCalculator } from '../llm-cost-calculator';
 
-/**
- * Regression coverage for stable pricing, dated pricing, and cache-write
- * billing without coupling the calculator unit to a concrete release name.
- *
- * The catalog lookup is mocked only to ADD a synthetic scheduled model
- * (`fixture-scheduled-model`) used to prove the dated-window mechanism on
- * arbitrary dates. A separate catalog-derived assertion below proves the
- * generated multi-band metadata reaches this calculator.
- */
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
-  /**
-   * SYNTHETIC fixture. Its window dates are arbitrary and belong to no product
-   * price: the mechanism must stay covered without a live promotional window to
-   * lean on, and no shipped rate may be reachable by editing this fixture.
-   */
   const fixture = {
     id: 'fixture-scheduled-model',
     provider: 'anthropic',
@@ -239,11 +225,6 @@ describe('LLMCostCalculator — input-length pricing tiers', () => {
 
 const STABLE_ANTHROPIC_MODEL = 'fixture-anthropic-standard';
 
-/**
- * A stable synthetic model proves that the absence of a schedule produces the
- * same rate on every date. Product pricing itself remains owned and verified in
- * the canonical catalog, so replacing a live model never rewrites this unit.
- */
 describe('LLMCostCalculator — stable unscheduled pricing', () => {
   const PIN_DATES = [
     new Date('2020-01-01T00:00:00.000Z'),
@@ -259,8 +240,6 @@ describe('LLMCostCalculator — stable unscheduled pricing', () => {
       expect(pricing.cachedInputCostPer1MTokens).toBe(0.3);
       expect(pricing.cachedWriteCostPer1MTokens).toBe(3.75);
       expect(pricing.cachedWrite1hCostPer1MTokens).toBe(6);
-      // Field-by-field equality across dates, so a future window that moves any
-      // single rate fails here too.
       expect(pricing).toEqual(
         LLMCostCalculator.getPricing('anthropic', STABLE_ANTHROPIC_MODEL, PIN_DATES[0]),
       );
@@ -276,7 +255,6 @@ describe('LLMCostCalculator — stable unscheduled pricing', () => {
       cacheCreationInputTokens: 1_000_000,
     };
 
-    // Standard: (1M*$3) + (1M*$15) + (1M*$0.3) + (1M*$3.75) = $22.05 → 2205 cents.
     for (const date of PIN_DATES) {
       expect(
         LLMCostCalculator.calculateCost('anthropic', STABLE_ANTHROPIC_MODEL, usage, date),
@@ -304,7 +282,6 @@ describe('LLMCostCalculator — stable unscheduled pricing', () => {
       expect(LLMCostCalculator.getInputCostPerMtok('anthropic', STABLE_ANTHROPIC_MODEL, date)).toBe(
         3,
       );
-      // 1M input tokens * $3/M = 300 cents.
       expect(
         LLMCostCalculator.estimateCost('anthropic', STABLE_ANTHROPIC_MODEL, 1_000_000, 0, date),
       ).toBe(300);
@@ -335,12 +312,6 @@ describe('LLMCostCalculator — stable unscheduled pricing', () => {
   });
 });
 
-/**
- * The dated-pricing MECHANISM, proved against the synthetic fixture above so it
- * is covered whether or not any shipped model currently schedules a price.
- * `effectiveFrom`/`effectiveUntil` are UTC calendar days, inclusive; the
- * changeover happens at UTC midnight.
- */
 describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', () => {
   const SCHEDULED_MODEL = 'fixture-scheduled-model';
   const INSIDE_FIRST_WINDOW = new Date('2030-02-15T00:00:00.000Z');
@@ -368,7 +339,6 @@ describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', ()
   });
 
   it('falls back to the top-level rates for fields the covering window omits', () => {
-    // The second window declares only its start date.
     const pricing = LLMCostCalculator.getPricing(
       'anthropic',
       SCHEDULED_MODEL,
@@ -389,11 +359,9 @@ describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', ()
       cacheCreationInputTokens: 1_000_000,
     };
 
-    // First window: (1M*$2) + (1M*$10) + (1M*$0.2) + (1M*$2.5) = $14.70.
     expect(
       LLMCostCalculator.calculateCost('anthropic', SCHEDULED_MODEL, usage, INSIDE_FIRST_WINDOW),
     ).toBe(1470);
-    // Second window: (1M*$3) + (1M*$15) + (1M*$0.3) + (1M*$3.75) = $22.05.
     expect(
       LLMCostCalculator.calculateCost(
         'anthropic',
@@ -413,7 +381,6 @@ describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', ()
       cacheCreation1hInputTokens: 1_000_000,
     };
 
-    // First window 1h write $4/M; second window inherits the standard $6/M.
     expect(
       LLMCostCalculator.calculateCost('anthropic', SCHEDULED_MODEL, usage, INSIDE_FIRST_WINDOW),
     ).toBe(400);
@@ -442,11 +409,6 @@ describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', ()
   });
 });
 
-/**
- * Cache-write billing keys off the catalog's declared price rather than a
- * concrete model family. Inclusive providers that declare none keep writes at
- * the plain input rate, so each prompt token is billed exactly once.
- */
 describe('LLMCostCalculator — cache-write billing', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
 
@@ -474,13 +436,6 @@ describe('LLMCostCalculator — cache-write billing', () => {
   });
 
   it('bills an inclusive-prompt OpenAI request once per token, writes at the declared rate', () => {
-    // This request is above the catalog threshold, so it uses the published
-    // highest fixture rates: input $3/M, cache read $0.3/M, cache write $3.75/M.
-    // OpenAI prompt_tokens INCLUDE both cache buckets, so:
-    //   plain input (1M - 400k - 200k) 400k * $3    = $1.20
-    //   cache read                     400k * $0.3  = $0.12
-    //   cache write                    200k * $3.75 = $0.75
-    //   exact total = $2.07; the existing whole-ledger-cent policy rounds up.
     const cents = LLMCostCalculator.calculateCost(
       'openai',
       'fixture-tiered-pricing',
@@ -515,8 +470,6 @@ describe('LLMCostCalculator — cache-write billing', () => {
   });
 
   it('bills a cache READ at the full input rate when the catalog prices none', () => {
-    // The fixture publishes no cached_input. Billing a guessed discount would
-    // disagree with every other calculator and undercharge the request.
     const pricing = LLMCostCalculator.getPricing(
       'xai',
       'fixture-inclusive-unpriced-cache',
@@ -524,7 +477,6 @@ describe('LLMCostCalculator — cache-write billing', () => {
     );
     expect(typeof pricing.cachedInputCostPer1MTokens).not.toBe('number');
 
-    // 1M prompt served entirely from cache: 1M * $2 = 200 cents, not 20.
     const cents = LLMCostCalculator.calculateCost(
       'xai',
       'fixture-inclusive-unpriced-cache',
@@ -549,9 +501,6 @@ describe('LLMCostCalculator — cache-write billing', () => {
         .cacheTokensDisjointFromInput,
     ).toBe(false);
 
-    // The disjoint fixture uses input $5/M, read $0.5/M, and write $6.25/M. The
-    // cache buckets are ADDITIONAL to promptTokens, so nothing is subtracted:
-    // $5.00 + $0.50 + $6.25 = $11.75 → 1175 cents.
     const cents = LLMCostCalculator.calculateCost(
       'anthropic',
       'fixture-anthropic-premium',

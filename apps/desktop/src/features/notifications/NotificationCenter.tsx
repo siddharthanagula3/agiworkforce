@@ -1,9 +1,3 @@
-/**
- * NotificationCenter Component
- *
- * A comprehensive in-app notification center that displays notifications
- * with support for reading, deleting, and managing notification settings.
- */
 import {
   Bell,
   BellOff,
@@ -49,22 +43,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/ui/Popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 type FilterType = 'all' | 'unread';
 
 interface NotificationCenterProps {
-  /** Additional CSS classes */
   className?: string;
-  /** Callback when clicking on a notification action */
   onActionClick?: (notification: Notification) => void;
 }
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 function getNotificationIcon(type: NotificationType) {
   switch (type) {
@@ -145,10 +129,6 @@ function getPriorityConfig(priority: NotificationPriority) {
       };
   }
 }
-
-// ============================================================================
-// Sub-components
-// ============================================================================
 
 interface NotificationItemProps {
   notification: Notification;
@@ -308,16 +288,10 @@ function NotificationItem({
   );
 }
 
-// ============================================================================
-// Main Component
-// ============================================================================
-
 export function NotificationCenter({ className, onActionClick }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
-  // Default navigation handler: parse actionUrl like "task:abc-123", "approval:xyz", etc.
-  // and open the settings dialog at the relevant tab or emit a navigation event.
   const handleNavigate = useCallback(
     (notification: Notification) => {
       if (onActionClick) {
@@ -328,13 +302,11 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
       const url = notification.actionUrl;
       if (!url) return;
 
-      // Simple scheme-based routing
       const [scheme, id] = url.split(':', 2);
       switch (scheme) {
         case 'task':
         case 'approval':
         case 'workflow': {
-          // Emit a custom event that the app shell can listen to for routing
           window.dispatchEvent(
             new CustomEvent('notification:navigate', { detail: { scheme, id, notification } }),
           );
@@ -345,7 +317,6 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
           break;
         }
         default:
-          // For plain URLs, open externally
           if (url.startsWith('http')) {
             window.open(url, '_blank', 'noopener,noreferrer');
           }
@@ -368,7 +339,6 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
   const storeList = useNotificationStore((s) => s.list);
   const page = useNotificationStore((s) => s.page);
 
-  // Initialize the notification store on mount
   useEffect(() => {
     const store = useNotificationStore.getState();
     void store.init();
@@ -378,7 +348,6 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
     };
   }, []);
 
-  // Filter notifications based on active tab
   const filteredNotifications = useMemo(() => {
     if (activeFilter === 'unread') {
       return notifications.filter((n) => !n.read);

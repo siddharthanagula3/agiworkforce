@@ -1,10 +1,3 @@
-/**
- * Adapter contract test: createMinimaxAdapter returns a ProviderAdapter with
- * the expected shape (id, label, auth methods, catalog, stream). No network
- * calls — confirms the adapter wires up without throwing on construction for
- * every supported base-URL shape (api.minimax.io default, and a rejected/SSRF
- * host that falls back silently).
- */
 
 import { describe, expect, it } from 'vitest';
 

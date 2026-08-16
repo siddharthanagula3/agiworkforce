@@ -1,13 +1,5 @@
-/**
- * codeActionProvider.test.ts — Tests for AgiCodeActionProvider logic
- *
- * Validates the code action provider returns correct actions based on
- * diagnostics and selection state.
- */
 
 import { describe, it, expect } from 'vitest';
-
-// Since we cannot import the vscode module directly, we test the provider logic pattern
 
 describe('AgiCodeActionProvider logic', () => {
   interface MockRange {
@@ -127,7 +119,7 @@ describe('AgiCodeActionProvider logic', () => {
     const diagnostics: MockDiagnostic[] = [{ message: 'unused variable', severity: 1 }];
 
     const actions = provideCodeActions(selection, diagnostics);
-    expect(actions).toHaveLength(4); // 1 fix + 3 selection
+    expect(actions).toHaveLength(4);
   });
 
   it('returns empty array when no diagnostics and no selection', () => {
@@ -161,6 +153,6 @@ describe('AgiCodeActionProvider logic', () => {
     };
 
     const actions = provideCodeActions(range, []);
-    expect(actions).toHaveLength(3); // Selection-based actions
+    expect(actions).toHaveLength(3);
   });
 });

@@ -15,14 +15,6 @@ import { ProductFrame, type ProductFrameVariant } from './ProductFrame';
 import { HeroAppWindow } from './HeroAppWindow';
 import { ChromeMockup, MobileMockup, VSCodeMockup } from './SurfaceMockups';
 
-/**
- * The exact-size contract: every mockup renders one canonical device root
- * (`.agi-dev`) whose geometry comes from DEVICE_GEOMETRY, with the shared
- * window-chrome DNA. Proportional scaling itself is CSS (container
- * queries) and is verified by the Playwright evidence run; here we pin
- * the structure that makes irregular shapes impossible.
- */
-
 function deviceRoot(container: HTMLElement): HTMLElement {
   const root = container.querySelector<HTMLElement>('.agi-dev');
   expect(root).not.toBeNull();
@@ -58,12 +50,10 @@ describe('DeviceMockups geometry contract', () => {
     for (const [type, { width, height }] of Object.entries(DEVICE_GEOMETRY)) {
       const ratio = width / height;
       if (type === 'phone') {
-        // 19.5:9 portrait
         expect(height / width).toBeCloseTo(19.5 / 9, 3);
       } else if (type === 'panel') {
-        expect(ratio).toBeLessThan(1); // portrait side panel
+        expect(ratio).toBeLessThan(1);
       } else {
-        // landscape windows between 4:3 and 16:9
         expect(ratio).toBeGreaterThanOrEqual(4 / 3);
         expect(ratio).toBeLessThanOrEqual(16 / 9);
       }

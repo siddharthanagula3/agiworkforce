@@ -1,24 +1,13 @@
-/**
- * `verifyLicense` — the offline, pure license-verification entry point
- * (design §2.1). No I/O, never throws, never blocks data access.
- *
- * The design invariant is load-bearing: data access is NEVER license-gated —
- * only enterprise *features* are. So an expired-past-grace or otherwise invalid
- * license resolves to a structured `{ ok: false }` verdict that the caller uses
- * to degrade to the free Local tier. It must never throw and never brick.
- */
 
 import { bytesToUtf8 } from './bytes';
 import { LicenseClaims, LicenseClaimsSchema } from './claims';
 import { verifySignedContainer } from './container';
 
-/** The `format` discriminator for `.agilicense` containers. */
 export const LICENSE_CONTAINER_FORMAT = 'agilicense-v1';
 
 const MS_PER_DAY = 86_400_000;
 
 export type LicenseErrorCode =
-  /** Not a well-formed container, or claims JSON/schema invalid. */
   | 'malformed'
   /** Well-formed, but no root key verifies the signature. */
   | 'bad_signature'
@@ -36,10 +25,6 @@ export type LicenseVerifyResult =
   | {
       ok: true;
       claims: LicenseClaims;
-      /**
-       * True when now is past `expiresAt` but still inside the grace window.
-       * The license is still valid; callers should surface a renewal warning.
-       */
       graceActive: boolean;
     }
   | { ok: false; error: LicenseError };
@@ -61,8 +46,6 @@ export function verifyLicense(
 ): LicenseVerifyResult {
   const container = verifySignedContainer(fileBytes, rootPublicKeys, LICENSE_CONTAINER_FORMAT);
   if (!container.ok) {
-    // ContainerErrorCode ('malformed' | 'bad_signature') is a subset of
-    // LicenseErrorCode, so the code carries through unchanged.
     return { ok: false, error: { code: container.error.code, message: container.error.message } };
   }
 

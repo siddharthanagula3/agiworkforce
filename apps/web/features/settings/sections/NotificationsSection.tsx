@@ -8,37 +8,8 @@ import {
 } from '@/app/settings/_lib/preferences-client';
 import { Switch } from '@agiworkforce/ui';
 
-/**
- * NotificationsSection · push + email notification preferences. Round-2
- * audit P0 #7 (web settings depth) + follow-up QA fix: wired into the
- * in-app Settings modal (was previously only reachable by bare URL at
- * /settings/notifications). Account settings are persisted through
- * /api/settings/preferences backed by Neon. Missing or failed persistence is
- * surfaced to the user instead of falling back to client-only state.
- */
-
 const NAMESPACE = 'notifications';
 
-// The former 'Email' and 'Mobile push' groups (emailSecurityAlerts,
-// emailWeeklyDigest, emailProductUpdates, mobilePushReplyReady,
-// mobilePushAgentDone) and 'browserAgentDone' are removed: none had a
-// backend consumer anywhere in the repo (no email sender, no push
-// dispatcher, and no agent-task-finished listener exists at all) — each
-// persisted a preference that nothing ever read, so toggling them changed
-// nothing. Re-add a group once its underlying send path actually exists.
-// 'browserReplyReady' is consumed in WebChatPage.tsx.
-//
-// 'mobilePushScheduleDone' was RE-ADDED on 2026-08-06 under the rule stated
-// above — its send path now exists. `lib/services/push-notification-service.ts`
-// dispatches to Expo using the `mobile_devices.push_token` rows that
-// `POST /api/mobile/push-token` had been collecting and nothing read, and
-// `lib/services/schedule-notification-service.ts` calls it after a scheduled
-// run is finalized. It defaults to OFF: installing the app registers a device,
-// which is not the same as agreeing to be pushed.
-//
-// 'emailScheduleDone' was RE-ADDED under the same rule: its sender is
-// `lib/services/notification-email-service.ts`, called from the same
-// `notifyScheduleCompleted` dispatch. Also OFF by default.
 export type NotifKey = 'browserReplyReady' | 'mobilePushScheduleDone' | 'emailScheduleDone';
 
 interface NotifSpec {
@@ -48,8 +19,6 @@ interface NotifSpec {
   defaultValue: boolean;
   managedOnly?: boolean;
 }
-
-// ─── Channel groups ────────────────────────────────────────────────────────────
 
 interface ChannelGroup {
   heading: string;
@@ -81,7 +50,6 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
         label: 'Scheduled task finished',
         description:
           'Email when one of your scheduled tasks completes or fails. The email says what finished and links to the run — it never contains the task output.',
-        // OFF by default, like every other notification channel here.
         defaultValue: false,
       },
     ],
@@ -95,7 +63,6 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
         label: 'Scheduled task finished',
         description:
           'Push notification when one of your scheduled tasks completes or fails. Scheduled runs happen on the server while you are away, so this is the one result you cannot see in the app.',
-        // OFF by default: registering a device is not consent to be pushed.
         defaultValue: false,
       },
     ],
@@ -108,8 +75,6 @@ function defaultNotificationState(): Record<NotifKey, boolean> {
     {} as Record<NotifKey, boolean>,
   );
 }
-
-// ─── Component ─────────────────────────────────────────────────────────────────
 
 export function NotificationsSection() {
   const subscription = useBillingStore((s) => s.subscription);

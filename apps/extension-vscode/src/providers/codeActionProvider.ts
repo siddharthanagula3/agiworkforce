@@ -1,10 +1,3 @@
-/**
- * codeActionProvider.ts — Code actions (lightbulb quick-fixes) for AGI Workforce
- *
- * Registers AGI Workforce actions in the VS Code lightbulb/refactor menu:
- * - "Fix with AGI Workforce" on diagnostic errors
- * - "Explain", "Refactor", "Generate Tests" on any selection
- */
 
 import * as vscode from 'vscode';
 
@@ -27,7 +20,6 @@ export class AgiCodeActionProvider implements vscode.CodeActionProvider {
         ? !range.isEmpty
         : range.start.line !== range.end.line || range.start.character !== range.end.character;
 
-    // Quick fix actions on diagnostics
     if (context.diagnostics.length > 0) {
       const fixAction = new vscode.CodeAction(
         'Fix with AGI Workforce',
@@ -42,7 +34,6 @@ export class AgiCodeActionProvider implements vscode.CodeActionProvider {
       actions.push(fixAction);
     }
 
-    // Selection-based actions
     if (hasSelection) {
       const refactorAction = new vscode.CodeAction(
         'Refactor with AGI Workforce',

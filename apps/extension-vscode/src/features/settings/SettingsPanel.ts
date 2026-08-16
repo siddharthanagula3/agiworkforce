@@ -134,10 +134,6 @@ export class SettingsPanel {
           fetchAccountIdentity(this.context.secrets),
           fetchTierInfo(this.context.secrets),
         ]);
-    // Either concurrent account request may discover a revoked credential and
-    // clear it from SecretStorage. Re-read the authoritative local session
-    // state before publishing the snapshot so the settings UI never renders a
-    // stale signed-in state for a token that a 401 has already invalidated.
     const currentAccountAuth = accountConnected
       ? await getAccountAuthState(this.context.secrets)
       : accountAuth;
@@ -164,10 +160,6 @@ export class SettingsPanel {
       } else {
         await clearAccountTierCache(this.context);
       }
-      // Updating the read-only currentTier setting can synchronously schedule a
-      // newer refresh through onDidChangeConfiguration. Only the newest epoch
-      // may publish, and it must snapshot after the cache write so the visible
-      // diagnostic tier agrees with model admission.
       if (sequence !== this.refreshSequence) return;
       await this.post({
         type: 'settings.snapshot',

@@ -18,58 +18,15 @@ import {
   unshareProject,
 } from '@/lib/services/org-sharing-service';
 
-/**
- * Share / un-share one project with the caller's organization, and set
- * per-member access on it.
- *
- *   PUT    /api/settings/organization/shared/projects/:projectId  — share
- *   PATCH  /api/settings/organization/shared/projects/:projectId  — member access
- *   DELETE /api/settings/organization/shared/projects/:projectId  — un-share
- *
- * TENANCY. `projectId` is client-supplied and is treated as untrusted: it is
- * shape-validated as a uuid here, and every statement pairs it with the
- * SERVER-DERIVED `organizationId` from `organization_members`. An admin of
- * org A passing a project shared into org B therefore matches zero rows —
- * and the RLS policies on `app_rls` refuse it a second time, because
- * `app_org_resource_is_manageable(organization_id)` resolves membership inside
- * the database.
- *
- * OWNERSHIP. Sharing is restricted to a project the CALLER owns. An admin
- * cannot conscript another member's personal project into the org's shared set
- * — that would retroactively expose that member's instructions and knowledge
- * files to the whole organization without their action. See
- * org-sharing-service.ts for the SQL that enforces it.
- *
- * WHAT SHARING EXPOSES. A shared project's `instructions` and its
- * `project_knowledge_files` (including extracted text) become readable by every
- * member who is not explicitly denied. Conversations under the project stay
- * PERSONAL: nothing here touches `web_conversations`, and no policy in 0086
- * widens it.
- */
-
 export const runtime = 'nodejs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/**
- * READ-ONLY IN THIS SLICE — and the wire says so.
- *
- * `organization_shared_projects.default_access` and
- * `organization_project_access.access` both accept `'write'` at the schema
- * level, but nothing honours it yet: 0086's `user_projects_org_shared_read`
- * policy is `FOR SELECT` only, and PUT/DELETE on /api/projects/[id] still match
- * `where id = $1 and user_id = $2`. Accepting `'write'` here would sell an
- * admin a permission the product does not grant, so the wire vocabulary is
- * narrowed to what actually works. Widening it is a deliberate follow-up that
- * must change the policy, the routes, and this schema together.
- */
 const ShareSchema = z.object({}).strict();
 
 const MemberAccessSchema = z
   .object({
     userId: z.string().trim().min(1).max(255),
-    // `inherit` removes the override so the member falls back to the share's
-    // default; `none` is an explicit denial that RLS itself honours.
     access: z.enum(['read', 'none', 'inherit']),
   })
   .strict();

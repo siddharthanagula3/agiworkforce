@@ -3,44 +3,20 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { CloudWorkMode } from '@agiworkforce/types';
 
-/** Chat mode — determines how the AI processes the conversation. */
 export type ChatMode = 'chat' | 'research' | 'create';
 
-/** Per-chat response style. */
 export type ChatStyle = 'normal' | 'concise' | 'detailed' | 'creative';
 
-/** Per-chat tool loading strategy. */
 export type ToolAccess = 'auto' | 'on-demand' | 'always';
 
-/** Feature toggles available in the "Add to Chat" sheet. */
 export interface ChatFeatures {
-  /**
-   * User preference for automatic web search, owned by the Capabilities screen
-   * (`src/features/settings/capabilities`). It is ANDed with the deployment
-   * flag, the account capability grant, and the model capability clamp at send
-   * time (`chatExecutionStore`), so turning it on can never force search onto a
-   * model or plan that cannot execute it — but turning it OFF always suppresses
-   * the `web_search` request field.
-   */
   webSearch: boolean;
   imageGen: boolean;
   health: boolean;
-  /** Server-side code execution (E2B sandbox) for this turn — cloud only. */
   codeExecution: boolean;
-  /** Deep Research (multi-turn cited synthesis) for this turn — cloud, paid. */
   research: boolean;
 }
 
-/**
- * What kind of output the composer is currently aimed at.
- *
- * This replaced the old `features.imageGen` boolean as the USER-FACING control
- * (founder 2026-08-06): picking Image or Video in the [+] sheet switches the
- * selected model to the registry's media model for that slot rather than
- * setting a flag on a text model. `features.imageGen` survives as the
- * capability gate the send path still checks; it is no longer a toggle anyone
- * flips by hand.
- */
 export type MediaMode = 'text' | 'image' | 'video';
 
 export interface ConversationSearchResult {
@@ -62,27 +38,9 @@ interface ViewState {
   features: ChatFeatures;
   /** Output kind the composer is aimed at. See {@link MediaMode}. */
   mediaMode: MediaMode;
-  /**
-   * The model the user picked for each media kind, when they picked one.
-   * Absent means "use the registry's slot default". Keyed by kind so switching
-   * image -> video -> image does not lose either choice.
-   */
   selectedMediaModel: { image?: string; video?: string };
-  /**
-   * Video output shape. Mobile previously sent only `{ prompt, model }`, so a
-   * phone silently took the route's 16:9/720p defaults with no way to change
-   * them while Web exposed both. Options are derived from the shared model
-   * catalog, so a model that publishes no 4k size never offers it here either.
-   */
   videoAspectRatio: string;
   videoResolution: string;
-  /**
-   * Image output shape. Same gap as video: the managed image route has accepted
-   * `aspect_ratio` and validated it per adapter all along, but no surface sent
-   * one, so every generated image silently took the route's legacy square
-   * default. Options come from the shared catalog keyed by the model's
-   * `imageApi`, so each model offers only ratios its adapter can map.
-   */
   imageAspectRatio: string;
 
   searchConversations: (query: string) => void;
@@ -91,24 +49,16 @@ interface ViewState {
   setChatStyle: (style: ChatStyle) => void;
   setToolAccess: (access: ToolAccess) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
-  /**
-   * Set the composer's output kind. The media model it resolves to lives in
-   * `src/features/chat/actions/mediaMode.ts`; the user's chat-model selection
-   * in `useModelStore` is deliberately left alone.
-   */
   setMediaMode: (mode: MediaMode) => void;
-  /** Pick the model for one media kind. */
   setMediaModel: (kind: 'image' | 'video', modelId: string) => void;
   setVideoAspectRatio: (aspectRatio: string) => void;
   setVideoResolution: (resolution: string) => void;
   setImageAspectRatio: (aspectRatio: string) => void;
-  /** Clear account-scoped server search state while preserving device preferences. */
   clearCloudSearchState: () => void;
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Build a highlighted snippet + match offsets from a piece of text. */
 function buildSnippet(
   text: string,
   query: string,
@@ -128,7 +78,6 @@ function buildSnippet(
   };
 }
 
-/** Server search result row shape from `GET /api/search` (apps/web/app/api/search/route.ts). */
 interface ServerSearchRow {
   type: 'session' | 'message';
   sessionId: string;
@@ -138,17 +87,6 @@ interface ServerSearchRow {
   contextAfter?: string;
 }
 
-/**
- * Run a conversation search for the current app mode and write results.
- *
- * TRUST BOUNDARY:
- *   - Local mode → in-memory search over the on-device message store ONLY. Local
- *     chats never existed on the server, so no network call is made.
- *   - Cloud mode (signed in) → the server full-text search `GET /api/search`,
- *     which covers messages synced across devices. `api.get` routes through
- *     guardedFetch, so a Local-mode call could never leak — but we don't make one.
- * Any failure falls back to the local in-memory search so search never dead-ends.
- */
 async function runSearch(
   trimmed: string,
   set: (partial: Partial<ViewState>) => void,
@@ -187,7 +125,6 @@ async function runSearch(
     }
   }
 
-  // Local in-memory search over the on-device message store.
   const { useChatMessageStore } =
     require('@/stores/chat/chatMessageStore') as typeof import('@/stores/chat/chatMessageStore');
   /* eslint-enable @typescript-eslint/no-require-imports */
@@ -241,15 +178,6 @@ export const useChatViewStore = create<ViewState>()(
         webSearch: true,
         imageGen: true,
         health: false,
-        // ON by default, matching the capability reference ("Code execution and
-        // file creation" ships enabled). It was false, and the only control is a
-        // row inside Settings > Capabilities, so in practice nobody ever turned
-        // it on — "run this code" and "create a CSV" both failed with
-        // "I do not have file creation tools available" and nothing on screen
-        // explained why. Nothing is loosened by the default: the send path still
-        // requires the model to declare the capability, the deployment to have
-        // the sandbox reachable, and the account to be entitled, and the server
-        // meters every run.
         codeExecution: true,
         research: false,
       },
@@ -305,11 +233,7 @@ export const useChatViewStore = create<ViewState>()(
     {
       name: 'chat-view-store',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
-      // `mediaMode` is deliberately NOT persisted: relaunching straight into
-      // video mode would silently spend a Max-tier generation on whatever the
-      // returning user typed first. Cold start always begins in 'text'.
       partialize: (state) => ({
         chatMode: state.chatMode,
         workMode: state.workMode,
@@ -327,7 +251,6 @@ export const useChatViewStore = create<ViewState>()(
 
 rehydrateWhenMmkvReady(useChatViewStore, 'chat-view-store');
 
-/** Dev-only inspection handle — see the note in src/features/billing/store.ts. */
 if (__DEV__) {
   (globalThis as unknown as { __AGI_DEBUG__?: Record<string, unknown> }).__AGI_DEBUG__ = {
     ...((globalThis as unknown as { __AGI_DEBUG__?: Record<string, unknown> }).__AGI_DEBUG__ ?? {}),

@@ -29,26 +29,6 @@ import {
   ClerkNotProvisionedError,
 } from '@/lib/server/sso/clerk-enterprise-connections';
 
-/**
- * Enterprise SSO connection management (managed cloud only).
- *
- * GET    /api/admin/sso                - Connections for orgs the caller administers
- * GET    /api/admin/sso?orgId=<uuid>   - Connections for one org (owner or admin)
- * POST   /api/admin/sso                - Register a connection draft (owner only)
- * DELETE /api/admin/sso?id=<uuid>      - Deactivate, or &hard=true to remove (owner only)
- *
- * Every handler is gated on `enterprise_controls`. A connection created here is
- * dormant: it is not provisioned with the identity provider and cannot sign
- * anyone in until the claimed email domain is proven by DNS TXT
- * (POST /api/admin/sso/verify-domain) and the connection is configured and
- * activated (PATCH /api/admin/sso/[id]).
- *
- * This deployment does not use Clerk Organizations, so Clerk enterprise
- * connections are instance-level and route every sign-in on a matching email
- * domain. Domain verification is therefore a security precondition, not a
- * formality.
- */
-
 export const runtime = 'nodejs';
 
 const ENDPOINT = '/api/admin/sso';
@@ -67,11 +47,6 @@ const CreateSSOConnectionSchema = z
   })
   .strict();
 
-/**
- * Normalize and harden the caller's payload. Every externally supplied value
- * that could reach an outbound fetch, an XML parser, or an authentication
- * routing decision is validated here before it touches the database.
- */
 function normalizeCreateInput(
   input: z.infer<typeof CreateSSOConnectionSchema>,
   rawMapping: Record<string, unknown> | undefined,
@@ -129,9 +104,6 @@ function validationResponse(error: IdpValidationError): Response {
   return NextResponse.json({ error: error.message, field: error.field }, { status: 400 });
 }
 
-/**
- * GET /api/admin/sso
- */
 export async function GET(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
@@ -191,9 +163,6 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 }
 
-/**
- * POST /api/admin/sso
- */
 export async function POST(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'api-key-create');
   if (rateLimitResponse) return rateLimitResponse;
@@ -282,7 +251,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       });
     }
 
-    // No IdP metadata, certificate, or client secret is ever logged.
     logger.info(
       { userId: principal.userId, organization_id, domain: normalized.domain, provider_type },
       'SSO connection draft created',
@@ -314,9 +282,6 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 }
 
-/**
- * DELETE /api/admin/sso?id=<uuid>[&hard=true]
- */
 export async function DELETE(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'api-key-revoke');
   if (rateLimitResponse) return rateLimitResponse;
@@ -357,9 +322,6 @@ export async function DELETE(request: NextRequest): Promise<Response> {
     );
     if (forbidden) return forbidden;
 
-    // Tear the connection down at the identity provider FIRST. If the local row
-    // were removed first and the Clerk call then failed, a live connection would
-    // keep routing sign-ins with nothing left to reconcile it against.
     if (conn.clerk_connection_id) {
       try {
         if (hardDelete) {

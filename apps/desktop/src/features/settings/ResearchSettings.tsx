@@ -1,14 +1,3 @@
-/**
- * ResearchSettings
- *
- * Settings section for the Deep Research module.
- * - Perplexity API key (stored via SecretManager — never in plaintext)
- * - Research mode: quick / standard / deep / comprehensive
- * - Max sources slider (1-20)
- *
- * Persists via the Rust SecretManager (`secret_manager_set`)
- * and a plain user-preference key (`set_user_preference`).
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Loader2, AlertCircle, FlaskConical } from 'lucide-react';
 import { Label } from '@/ui/Label';
@@ -87,12 +76,10 @@ export function ResearchSettings() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Perplexity key input state
   const [keyInput, setKeyInput] = useState('');
   const [keyStatus, setKeyStatus] = useState<SaveStatus>('idle');
   const [keyError, setKeyError] = useState<string>('');
 
-  // Pref save status
   const [prefStatus, setPrefStatus] = useState<SaveStatus>('idle');
   const keyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,10 +150,6 @@ export function ResearchSettings() {
       setPrefStatus('saving');
       try {
         await Promise.all([
-          // `category` and `data_type` are required (non-Option) by the Rust
-          // command and must satisfy its CHECK constraints; omitting them made
-          // every research preference fail to persist. 'behavior'/'string' are
-          // the allowed values for a free-form behavior toggle.
           invoke('set_user_preference', {
             key: 'research_mode',
             value: next.mode,

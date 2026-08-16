@@ -21,7 +21,6 @@ describe('dedupeResearchSources', () => {
     ]);
     expect(result).toHaveLength(1);
     expect(result[0]?.citationIndex).toBe(1);
-    // First occurrence keeps its metadata.
     expect(result[0]?.title).toBe('first');
   });
 

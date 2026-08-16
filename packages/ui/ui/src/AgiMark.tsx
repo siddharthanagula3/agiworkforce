@@ -1,18 +1,3 @@
-/*
- * AGI MARK · the brand symbol.
- *
- * Twelve thin spokes radiating from a center point. Eleven spokes share the
- * ink color (currentColor); one spoke at the 12 o'clock position uses amber.
- * Twelve-fold rotational symmetry means rotation animates ONLY the amber
- * spoke visually · the white spokes appear static. This reads as
- * "the router is selecting a provider," which is the brand semantic.
- *
- * Use as:
- *   <AgiMark />                 · static, with one amber accent
- *   <AgiMark mono />            · pure monochrome, no accent (favicons, tiny)
- *   <AgiMark spinning />        · loading-state rotation (~3s per revolution)
- *   <AgiMark size={64} />       · any pixel size
- */
 
 import type { CSSProperties } from 'react';
 
@@ -21,7 +6,6 @@ const INNER_R = 4.6;
 const OUTER_R = 9;
 const STROKE_W = 1.5;
 
-// Pre-compute spoke endpoints once.
 const SPOKES = Array.from({ length: SPOKE_COUNT }, (_, i) => {
   const angle = (i * 360) / SPOKE_COUNT;
   const rad = (angle * Math.PI) / 180;

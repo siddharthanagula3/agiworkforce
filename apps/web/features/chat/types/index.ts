@@ -1,13 +1,6 @@
-/**
- * Chat Types for Enhanced MGX-style Interface
- *
- * Re-exports common types from @shared/types and defines chat-specific types.
- * Import pattern: import { ChatMessage, ChatMode } from '@features/chat/types';
- */
 
 import type { AIEmployeeBasic, AIEmployeePerformance } from '@shared/types';
 
-// Re-export common types for convenience
 export type {
   MessageRole,
   ToolCallStatus,
@@ -26,19 +19,8 @@ export type {
   MessageReaction,
 } from '@shared/types';
 
-// ============================================================================
-// CHAT-SPECIFIC TYPES
-// ============================================================================
-
-/**
- * Chat mode for different conversation styles
- */
 export type ChatMode = 'team' | 'engineer' | 'research' | 'race' | 'solo';
 
-/**
- * Extended AI Employee type for chat feature
- * Extends AIEmployeeBasic from common types with chat-specific fields
- */
 export interface ChatAIEmployee extends AIEmployeeBasic {
   role: string;
   capabilities: string[];
@@ -51,9 +33,6 @@ export interface ChatAIEmployee extends AIEmployeeBasic {
  */
 export type AIEmployee = ChatAIEmployee;
 
-/**
- * Chat-specific message metadata extension
- */
 export interface ChatMessageMetadata {
   mode?: ChatMode;
   model?: string;
@@ -64,9 +43,6 @@ export interface ChatMessageMetadata {
   [key: string]: unknown;
 }
 
-/**
- * Feature-specific chat session with metadata
- */
 export interface FeatureChatSession {
   id: string;
   title: string;

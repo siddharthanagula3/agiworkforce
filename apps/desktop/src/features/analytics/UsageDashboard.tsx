@@ -36,7 +36,6 @@ import { normalizeUIPlanTier, PLAN_LABEL } from '@agiworkforce/types';
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 export const UsageDashboard: React.FC = () => {
-  // Use individual selectors to prevent re-renders on unrelated state changes
   const systemMetrics = useBillingUsageStore((state) => state.systemMetrics);
   const appMetrics = useBillingUsageStore((state) => state.appMetrics);
   const analyticsUsageStats = useBillingUsageStore((state) => state.analyticsUsageStats);
@@ -48,7 +47,6 @@ export const UsageDashboard: React.FC = () => {
 
   const billingUsageStats = useBillingUsageStore((state) => state.usageStats);
   const subscription = useBillingStore((state) => state.subscription);
-  // Use useShallow for object selectors to prevent re-renders from reference changes
   const account = useAccountStore(useShallow((state) => state.account));
   const { credits, plan } = account;
 

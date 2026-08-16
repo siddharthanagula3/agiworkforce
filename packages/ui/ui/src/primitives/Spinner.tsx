@@ -1,12 +1,5 @@
 'use client';
 
-/**
- * Drift resolution: desktop had dropped `role="status"` and the visually-hidden
- * `<span className="sr-only">Loading...</span>` that web renders inside the
- * spinner div. Resolved toward web — the sr-only text and role="status" are real
- * accessibility semantics (screen reader announcement that content is loading);
- * desktop's simplification was almost certainly an accidental regression.
- */
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../cn';

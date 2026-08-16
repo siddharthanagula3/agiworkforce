@@ -1,4 +1,3 @@
-/** Vitest configuration for the platform-neutral search capability package. */
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({

@@ -18,8 +18,6 @@ import { requireCatalogModel } from './catalogModelFixtures';
 
 const CATALOG_BASE_MODEL_ID = requireCatalogModel().id;
 
-// ─── Suite 1: Pure unit — no mocks ───────────────────────────────────────────
-
 describe('environmentAvailability (Phase A stub)', () => {
   it('returns { configured: false } for e2b', () => {
     expect(environmentAvailability('e2b')).toEqual({ configured: false });
@@ -57,7 +55,6 @@ describe('evaluateModelEnvironment — logic', () => {
   });
 
   it('fail-closed: e2b model with configured=true but available=false is NOT selectable', () => {
-    // evaluateModelEnvironment: available defaults to configured; explicit false blocks.
     const result = evaluateModelEnvironment('e2b', { configured: true, available: false });
     expect(result.selectable).toBe(false);
   });
@@ -75,8 +72,6 @@ describe('buildGroupedQuickPickItems — real catalog, no flagged models', () =>
     const pickerIds = new Set(items.map((i) => i.modelId).filter(Boolean));
 
     for (const opt of manualOptions) {
-      // Availability invariant: `coming_soon`/`unavailable` catalog entries are
-      // display-only and must NEVER surface as selectable quick-pick items.
       expect(pickerIds.has(opt.id), `picker selectability mismatch for ${opt.id}`).toBe(
         isModelSelectable(opt.id),
       );
@@ -84,15 +79,12 @@ describe('buildGroupedQuickPickItems — real catalog, no flagged models', () =>
   });
 });
 
-// ─── Suite 3: Synthetic flagged model — gating property ──────────────────────
-
 describe('buildGroupedQuickPickItems — e2b-flagged synthetic model is filtered out', () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
   it('filters out a model with requiresEnvironment: e2b', async () => {
-    // Synthetic model ID that won't collide with real catalog entries.
     const SYNTH_ID = '__test_synth_e2b_model__';
 
     vi.doMock('@agiworkforce/types', async (importOriginal) => {
@@ -124,7 +116,6 @@ describe('buildGroupedQuickPickItems — e2b-flagged synthetic model is filtered
       };
     });
 
-    // Dynamic import AFTER vi.doMock so the mock is applied.
     const { buildGroupedQuickPickItems } = await import('../features/model-picker/modelConstants');
 
     const items = buildGroupedQuickPickItems();

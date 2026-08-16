@@ -1,11 +1,3 @@
-/**
- * MessageGeneratedFiles — message-level generated-file section.
- *
- * Pins: entry → GeneratedFileCard presentation mapping (completed status so
- * Download is enabled), download through the host bridge's authed
- * fetchCloudFile, the same-origin fetch fallback, and the honest inline
- * error state when the download fails (no silent no-op buttons).
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -49,7 +41,6 @@ function renderWithBridge(
   );
 }
 
-/** Deferred promise helper so tests can hold a download in flight. */
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (err: unknown) => void;
@@ -61,8 +52,6 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
-  // jsdom logs "Not implemented: navigation" when the download anchor is
-  // clicked; the click itself is the browser's job, not under test.
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 });
 
@@ -223,7 +212,6 @@ describe('pending execution state (isRunning wiring)', () => {
     renderWithBridge(null, runningMessage);
     const pending = screen.getByTestId('generated-files-pending');
     expect(pending.textContent).toContain('Running code…');
-    // Honest: no file card, no Download action — nothing claims a file exists.
     expect(screen.queryByTestId('generated-file-card')).toBeNull();
     expect(screen.queryByRole('button', { name: /download/i })).toBeNull();
   });
@@ -312,7 +300,6 @@ describe('per-file retry', () => {
       ).toBe(true),
     );
     held.reject(new Error('HTTP 500'));
-    // After settling, the retry affordance re-enables for another attempt.
     await waitFor(() =>
       expect(
         (

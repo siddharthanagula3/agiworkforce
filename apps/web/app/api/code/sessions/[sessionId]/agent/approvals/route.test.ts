@@ -1,23 +1,3 @@
-/**
- * Contract tests for `/api/code/sessions/[sessionId]/agent/approvals`, driven
- * through the real route handlers and the real approval service.
- *
- * WHAT THESE ARE FOR
- * An approval row and the turn row it gates are written by SEPARATE statements,
- * so they can disagree. `decideCloudCodeAgentApproval` refuses any turn that is
- * not `awaiting_approval`; before this suite existed, the GET path happily
- * listed pending rows whose turn had already failed, so the product showed an
- * approval prompt that every attempt to answer returned 409 for — permanently.
- * `cloud-code-agent-service` produces exactly that state on its reservation and
- * executor failure paths, which mark a turn 'failed' with no state guard.
- *
- * HOW THEY DISCRIMINATE
- * The fake adapter applies only the predicates the statement it was handed
- * actually contains. Deleting `t.state <> 'awaiting_approval'` from the sweep,
- * `and t.state = 'awaiting_approval'` from the list, or the retire-on-decide
- * UPDATE makes the corresponding test below fail rather than pass on the fake's
- * own good manners.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -46,8 +26,6 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: vi.fn(() => 'anthropic'),
 }));
-// The sandbox half of the turn is not what this route owns; stubbing it keeps
-// the test on the decidability contract and off E2B.
 vi.mock('@/lib/services/cloud-code-agent-service', () => ({
   executePersistedAgentTurn: mockExecute,
 }));
@@ -63,13 +41,6 @@ const SESSION_ID = '22222222-2222-4222-8222-222222222222';
 const STEP_INDEX = 4;
 const COMMAND = 'rm -rf build';
 
-/**
- * The two rows this surface turns on, plus a predicate-reading query fake.
- *
- * `failTurnAfterSweep` reproduces the interleaving the list predicate exists
- * for: the turn is still suspended when the read-path sweep runs and has failed
- * by the time the SELECT runs, so the sweep cannot have retired the row.
- */
 function fakeDb(options: {
   turnState?: string;
   approvalState?: 'pending' | 'approved' | 'rejected' | 'expired';
@@ -84,10 +55,8 @@ function fakeDb(options: {
 
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     const text = sql.replace(/\s+/g, ' ').trim();
-    /** True only when the statement itself asks for the predicate. */
     const asks = (predicate: string) => text.includes(predicate);
 
-    // Read-path sweep.
     if (text.startsWith('update cloud_code_agent_approvals a')) {
       const pending = !asks("and a.state = 'pending'") || approval.state === 'pending';
       const byExpiry = asks('a.expires_at <= now()') && approval.expired;
@@ -128,7 +97,6 @@ function fakeDb(options: {
       ];
     }
 
-    // Retire-on-decide, and the expiry transition on the decide path.
     if (text.startsWith("update cloud_code_agent_approvals set state = 'expired'")) {
       if (asks("and state = 'pending'") && approval.state !== 'pending') return [];
       approval.state = 'expired';
@@ -213,17 +181,12 @@ describe('GET only offers approvals the decide path will actually accept', () =>
   });
 
   it('retires a pending approval whose turn already failed, instead of listing it forever', async () => {
-    // Exactly the state cloud-code-agent-service leaves behind when a turn is
-    // marked 'failed' by the reservation or executor path while its approval row
-    // is still pending.
     const harness = fakeDb({ turnState: 'failed' });
     useDb(harness);
     const response = await GET(getRequest(), context);
     expect(response.status).toBe(200);
     const body = (await response.json()) as { approvals: unknown[] };
     expect(body.approvals).toHaveLength(0);
-    // The sweep — not the SELECT — is what must have moved the row, or it comes
-    // back on the next load.
     expect(harness.approval.state).toBe('expired');
   });
 
@@ -232,8 +195,6 @@ describe('GET only offers approvals the decide path will actually accept', () =>
     useDb(harness);
     const response = await GET(getRequest(), context);
     const body = (await response.json()) as { approvals: unknown[] };
-    // The sweep ran while the turn was healthy, so the row is still pending here
-    // and only the SELECT's own turn-state predicate can keep it hidden.
     expect(harness.approval.state).toBe('pending');
     expect(body.approvals).toHaveLength(0);
   });
@@ -260,8 +221,6 @@ describe('POST refuses an undecidable approval and does not leave it pending', (
     const body = (await response.json()) as { error?: { message?: string } };
     expect(JSON.stringify(body)).toContain('not waiting for an approval');
     expect(mockExecute).not.toHaveBeenCalled();
-    // Without this the row stays 'pending' for a client that only ever POSTs,
-    // and the same approval is offered again on the next list.
     expect(harness.approval.state).toBe('expired');
   });
 

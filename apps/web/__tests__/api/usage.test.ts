@@ -2,10 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/usage/route';
 
-// Mock server-only module
 vi.mock('server-only', () => ({}));
 
-// Mock rate limiting — pass through by default
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
   withRateLimitHandler: vi.fn(
@@ -15,7 +13,6 @@ vi.mock('@/lib/rate-limit', () => ({
   ),
 }));
 
-// Mock logger
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -25,7 +22,6 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock CORS helper
 vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
@@ -33,24 +29,20 @@ vi.mock('@/lib/cors', () => ({
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
-// Mock env utility
 vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `test-${key}`),
   getOptionalEnv: vi.fn(() => undefined),
 }));
 
-// Mock Clerk auth — getClerkAuthUser returns { userId, email? } or throws
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Mock cloud database server client (used for service calls)
 vi.mock('@/services/neon-db', () => ({
   createNeonServerClient: vi.fn().mockResolvedValue({}),
 }));
 
-// Mock CreditService
 const mockGetBalance = vi.fn();
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
@@ -58,7 +50,6 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-// Mock SubscriptionService
 const mockGetSubscription = vi.fn();
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: {
@@ -71,15 +62,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   getFreeTrialPublicUsage: (...args: unknown[]) => mockGetFreeTrialPublicUsage(...args),
 }));
 
-// Mock the rolling-usage helper (session/weekly/flagship-weekly, added
-// 2026-07-05) — real spend is 0 with no oldest transaction by default; tests
-// only assert on the monthly-credit fields this file already covers.
 const mockGetRollingUsage = vi.fn();
 vi.mock('@/lib/server/rolling-usage', () => ({
   getRollingUsage: (...args: unknown[]) => mockGetRollingUsage(...args),
 }));
 
-// Mock error utilities
 vi.mock('@/lib/errors', () => {
   class AppError extends Error {
     code: string;
@@ -145,10 +132,8 @@ describe('GET /api/usage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user via Clerk
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: 'test@example.com' });
 
-    // Default: successful service responses
     mockGetBalance.mockResolvedValue(MOCK_BALANCE);
     mockGetSubscription.mockResolvedValue(MOCK_SUBSCRIPTION);
     mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
@@ -164,7 +149,7 @@ describe('GET /api/usage', () => {
       Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
     );
 
-    const request = makeGetRequest(); // no auth header
+    const request = makeGetRequest();
     const response = await GET(request);
 
     expect(response.status).toBe(401);
@@ -191,11 +176,10 @@ describe('GET /api/usage', () => {
       email: 'cookie@example.com',
     });
 
-    const request = makeGetRequest(); // no Bearer token — Clerk session auth
+    const request = makeGetRequest();
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    // CreditService and SubscriptionService should have been called with the user's ID.
     expect(mockGetBalance).toHaveBeenCalledWith('cookie-user-456');
     expect(mockGetSubscription).toHaveBeenCalledWith('cookie-user-456');
   });
@@ -208,7 +192,7 @@ describe('GET /api/usage', () => {
     const data = await response.json();
 
     expect(data.plan_tier).toBe('pro');
-    expect(data.usage_percentage).toBeCloseTo(25, 1); // 300/1200 * 100 = 25%
+    expect(data.usage_percentage).toBeCloseTo(25, 1);
     expect(data.subscription_status).toBe('active');
     expect(data).not.toHaveProperty('credits_allocated_cents');
     expect(data).not.toHaveProperty('credits_used_cents');
@@ -241,7 +225,6 @@ describe('GET /api/usage', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
 
-    // Should fall back to subscription period dates (serialized to ISO string in JSON)
     expect(data.period_start).toBe(MOCK_SUBSCRIPTION.current_period_start.toISOString());
     expect(data.period_end).toBe(MOCK_SUBSCRIPTION.current_period_end.toISOString());
   });
@@ -316,7 +299,6 @@ describe('GET /api/usage', () => {
     const request = makeGetRequest(FAKE_BEARER);
     await GET(request);
 
-    // Both should have been called (order may vary since they're parallel)
     expect(callOrder).toContain('balance');
     expect(callOrder).toContain('subscription');
     expect(mockGetBalance).toHaveBeenCalledOnce();

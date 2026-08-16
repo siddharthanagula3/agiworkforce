@@ -35,7 +35,6 @@ export const useMediaStore = create<MediaState>()(
 
       addJob: (job) =>
         set((state) => ({
-          // Keep at most 50 jobs
           jobs: [job, ...state.jobs].slice(0, 50),
         })),
 
@@ -53,7 +52,6 @@ export const useMediaStore = create<MediaState>()(
       name: 'agiworkforce-web-media',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Only persist completed jobs — not in-flight ones
         jobs: state.jobs.filter((j) => j.status === 'completed').slice(0, 20),
       }),
     },

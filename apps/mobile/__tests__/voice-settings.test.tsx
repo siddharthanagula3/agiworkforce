@@ -38,8 +38,6 @@ jest.mock('expo-status-bar', () => ({
   StatusBar: () => null,
 }));
 
-// Proxy, not a hand-listed map: a screen adding one more lucide icon should not
-// blow up unrelated assertions with "Cannot read properties of undefined".
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return new Proxy(
@@ -71,9 +69,6 @@ describe('Voice settings', () => {
     });
   });
 
-  // PAR-M20. The Cloud provider option was permanently `disabled` — half the
-  // Speech card advertising an engine that has no synthesis path on mobile.
-  // Removing it leaves one engine, so the card collapses to a caption.
   it('offers no provider option that can never be selected', () => {
     const { queryByLabelText, queryAllByRole } = render(<VoiceSettingsScreen />);
 
@@ -90,9 +85,6 @@ describe('Voice settings', () => {
     expect(
       getByText('Spoken by the system speech engine, using voices installed on this device.'),
     ).toBeTruthy();
-    // Regression for MOBILE-VOICE-CLOUD-TTS-DISABLED: neither the old
-    // "Requires AGI Cloud access." copy nor its honest replacement should
-    // survive, because there is no Cloud engine to describe at all.
     expect(queryByText("Cloud voice isn't available on mobile yet.")).toBeNull();
     expect(queryByText('Requires AGI Cloud access.')).toBeNull();
   });

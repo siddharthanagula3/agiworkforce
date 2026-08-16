@@ -10,10 +10,6 @@ const { dbHolder, verifyScimTokenMock, recordSyncEventMock, getSubscriptionMock 
   () => ({
     dbHolder: { current: null as unknown },
     verifyScimTokenMock: vi.fn(),
-    // Rest parameter, not `()`: the mock is invoked through a spread below, and
-    // a zero-arg signature makes that spread a TS2556 compile error that vitest
-    // never sees but `tsc --noEmit` — and therefore the production build —
-    // does.
     recordSyncEventMock: vi.fn(async (..._args: unknown[]) => {}),
     getSubscriptionMock: vi.fn(),
   }),
@@ -46,17 +42,6 @@ const RAW_TOKEN = 'scim_0123456789abcdef_'.concat('a'.repeat(48));
 
 type Row = Record<string, unknown>;
 
-/**
- * A database that answers the membership lookup with the row it holds,
- * regardless of any role predicate in the statement text.
- *
- * That is the point of this stub. `organization_members` is keyed on
- * `(organization_id, user_id)`, so the row the route gets back is decided by
- * those two bound parameters alone; whether a non-administering role is
- * refused has to be decided by the route. A stub that re-implemented a
- * `role in ('owner', 'admin')` filter would only be asserting that the test
- * and the query string agree with each other.
- */
 function createDb(membership: Row | null): DatabaseAdapter {
   const query = vi.fn(async (sql: string) => {
     const text = sql.trim().toLowerCase();
@@ -129,8 +114,6 @@ describe('authenticateScimRequest issuer role gate', () => {
   });
 
   it('does not decide the role in the SQL it sends', async () => {
-    // The admin role set is a contract shared with the API gateway and the RLS
-    // helpers. A literal here would drift from it silently, so pin its absence.
     dbHolder.current = createDb({ role: 'owner' });
 
     await authenticateScimRequest(scimRequest());

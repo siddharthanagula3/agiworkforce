@@ -37,8 +37,6 @@ const mobileNativeColors = {
     purple: '#7c3aed',
     purpleSurface: 'rgba(124, 58, 237, 0.12)',
     progressTrack: 'rgba(17, 17, 17, 0.08)',
-    // Brand amber, identical in both palettes on purpose: it identifies the
-    // product rather than a surface, and matches `--agi-amber` on web.
     brandAmber: '#f0a84a',
     white: '#ffffff',
     black: '#000000',
@@ -256,7 +254,5 @@ export const radii = {
   full: 9999,
 } as const;
 
-/** Grouped list-row cards (settings sections, profile header, info cards). */
 export const cardRadius = radii['2xl'];
-/** Top corners of full-width bottom sheets / modals. */
 export const sheetRadius = radii['3xl'];

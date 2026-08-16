@@ -30,7 +30,6 @@ export function UpdateSettings() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // Format last check time
   const formatLastCheck = () => {
     if (!lastCheckTime) return 'Never';
     const date = new Date(lastCheckTime);
@@ -46,7 +45,6 @@ export function UpdateSettings() {
     return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
   };
 
-  // Get status display info
   const getStatusInfo = () => {
     switch (status) {
       case 'checking':

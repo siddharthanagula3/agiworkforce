@@ -119,11 +119,6 @@ import { useProjectStore } from './stores/projectStore';
 import { applyTheme, getThemeById } from './themes/index';
 import { getDesktopSubscriptionOwnerPolicy } from './lib/subscriptionOwnership';
 
-// Managed Cloud turns stream through the SHARED unified-chat store, not the
-// desktop execution store, so the Local/Cloud mode-switch guard in
-// `appModeStore.setMode` cannot see them on its own. Registering it here (the
-// shell is the only module that owns both sides) makes a mid-stream Cloud
-// toggle refuse instead of disposing CloudRuntime under a live response.
 registerChatStoreStateReader(useSharedChatStore);
 
 const VisualizationLayer = lazy(() =>
@@ -268,8 +263,6 @@ function resolveDesktopWindowMode(): DesktopWindowMode {
   return 'default';
 }
 
-// Renderer zoom is document font scaling. The native View menu and the zoom
-// shortcuts turn the same dial, so both go through these.
 const ZOOM_STEP = 1.1;
 
 function zoomBy(factor: number) {
@@ -303,16 +296,13 @@ const DesktopShell = () => {
   const isSearchModalOpen = useSearchModal((state) => state.isOpen);
   const { theme, setTheme } = useThemeContext();
 
-  // Onboarding state - mode selection is the trust-boundary gate.
   const hasSelectedMode = useAppModeStore((s) => s.hasSelectedMode);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Show mode picker whenever no Local/BYOK/Cloud mode has been selected.
   useEffect(() => {
     setShowOnboarding(!hasSelectedMode);
   }, [hasSelectedMode]);
 
-  // Apply dyslexic font class from persisted settings on mount
   const dyslexicFont = useSettingsStore((s) => s.windowPreferences?.dyslexicFont ?? false);
   const uiScale = useSettingsStore((s) => s.windowPreferences?.uiScale ?? 100);
   const reduceMotion = useSettingsStore((s) => s.windowPreferences?.reduceMotion ?? false);
@@ -370,9 +360,6 @@ const DesktopShell = () => {
     [],
   );
 
-  // Hydrate the conversation set owned by the active execution boundary.
-  // `chatStorageMode` is a separate, explicit synchronization preference and
-  // must never be rewritten as a side effect of switching Local/Cloud mode.
   useEffect(() => {
     let cancelled = false;
     const boundaryKey = expectedConversationBoundaryKey;
@@ -400,11 +387,6 @@ const DesktopShell = () => {
 
       if (appMode === 'cloud') {
         if (!hasCloudSession || !authenticatedUserId) return;
-        // Projects are NOT part of the chat boundary: a 429/500/cold-start on
-        // `/api/projects` must not decide whether chat can open. `loadProjects`
-        // already records its own `error` on the project store for the projects
-        // surface to render, so it is loaded without `throwOnError` and only a
-        // conversation-list failure can reach the boundary error path below.
         await Promise.all([
           useDesktopChatStore.getState().loadConversations(authenticatedUserId),
           useProjectStore.getState().loadProjects(),
@@ -426,8 +408,6 @@ const DesktopShell = () => {
         return;
       }
 
-      // Same reasoning as the cloud branch: a project-list failure is scoped to
-      // the projects surface and must never gate Local chat either.
       await Promise.all([
         useDesktopChatStore.getState().loadConversations(resolveDesktopChatOwnerId()),
         useProjectStore.getState().loadProjects(),
@@ -451,22 +431,10 @@ const DesktopShell = () => {
           const boundaryCanCompose =
             appMode !== 'cloud' || (hasCloudSession && Boolean(authenticatedUserId));
 
-          // Loading an empty conversation list leaves activeConversationId
-          // null. The shared picker can still project the persisted Cloud mode,
-          // but useChat deliberately requires an explicit conversation
-          // executionMode before sending. Seed one boundary-owned draft before
-          // mounting the shell so an empty or degraded boundary never exposes
-          // a composer whose Send action only produces a fail-closed toast.
           if (boundaryIsCurrent && boundaryCanCompose) {
             useDesktopChatStore.getState().ensureActiveConversation();
           }
 
-          // A failed hydration must NOT strand the app on the boot skeleton or
-          // a full-screen alert. Once the boundary itself has been established
-          // (stores reset + ref claimed) the shell mounts and the failure is
-          // reported inline, so composer, sidebar and ChatInterface stay usable
-          // (web precedent: `useConversations` only calls setError and the chat
-          // page keeps rendering).
           setConversationBoundaryReady(boundaryIsCurrent);
         }
       });
@@ -481,11 +449,6 @@ const DesktopShell = () => {
     conversationBoundaryRetry,
   ]);
 
-  // Hard 8 s boot timeout: if sessionValidated is still false (for example,
-  // cloud auth warm-up stalls), move to a recoverable state.
-  // unreachable and the auth-state listener never fires), force it true so
-  // the skeleton never hangs indefinitely. Uses setSessionValidated so that
-  // the clearAuth path already ran — this is a last-resort guard only.
   useEffect(() => {
     if (sessionValidated) return;
     const id = window.setTimeout(() => {
@@ -496,18 +459,11 @@ const DesktopShell = () => {
     return () => window.clearTimeout(id);
   }, [sessionValidated]);
 
-  // Mode selection is handled inside the OnboardingWizard (single onboarding flow).
-  // The legacy `hasSelectedMode` flag is still flipped by the wizard for any
-  // downstream consumers that read it from the appModeStore.
-
   const subscriptionFetchStatus = useAccountStore((state) => state.subscriptionFetchStatus);
   const modelCatalogBoundaryKey =
     appMode === 'local'
       ? 'local:device'
       : `cloud:${authenticatedUserId ?? 'signed-out'}:${cloudSessionEpoch}`;
-  // Local reachability must not be restarted by unrelated account-plan
-  // hydration. Cloud retains those dependencies because they determine the
-  // entitled catalog for the current signed-in owner.
   const modelCatalogDependencyKey =
     appMode === 'local'
       ? modelCatalogBoundaryKey
@@ -515,7 +471,6 @@ const DesktopShell = () => {
           accountPlan ?? 'resolving'
         }:${subscriptionFetchStatus}`;
 
-  // Track when subscription fetch fails so we can show the degraded-state banner
   useEffect(() => {
     if (!isCloudMode) {
       setSubscriptionFetchFailed(false);
@@ -567,10 +522,9 @@ const DesktopShell = () => {
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;
 
-      // Suppress known Tauri internal errors that occur during event cleanup
       if (message.includes('listeners[eventId]')) {
         console.debug('[Tauri] Suppressed internal event cleanup error');
-        return; // Don't show error dialog for this known issue
+        return;
       }
 
       addError({
@@ -615,7 +569,6 @@ const DesktopShell = () => {
       errorReportingService.trackAction(action);
     };
 
-    // Ref to store cleanup functions from async initialization
     const cleanupFns: Array<() => void | Promise<void>> = [];
     let disposed = false;
 
@@ -696,12 +649,9 @@ const DesktopShell = () => {
       void runStartupStep('Runtime activity event listener', () =>
         initializeRuntimeActivityEventListeners(),
       );
-      // Cloud sync scheduler: fires on managed-mode entry + every 30 s.
-      // Managed-only gate is enforced inside; Local and BYOK never trigger sync.
       registerCleanup(initCloudSyncScheduler());
     }
 
-    // Wire up mcpb:install_progress Tauri event into the MCPB store (Tauri-only)
     if (isTauri) {
       void (async () => {
         try {
@@ -719,11 +669,9 @@ const DesktopShell = () => {
 
     void (async () => {
       try {
-        // Wait for settings store hydration from localStorage before loading from backend
         await runStartupStep('Settings hydration', () => waitForSettingsHydration());
         if (disposed) return;
 
-        // Initialize settings (syncs with backend and configures providers)
         await runStartupStep(
           'Settings synchronization',
           () => useSettingsStore.getState().loadSettings(),
@@ -733,19 +681,16 @@ const DesktopShell = () => {
           registerCleanup(initManagedCloudSettingsSync());
         }
 
-        // Apply window preferences on startup (dock/position)
         if (isTauri) {
           await runStartupStep('Window preference restore', async () => {
             const settings = useSettingsStore.getState();
             const prefs = settings.windowPreferences;
 
-            // Dock takes precedence over centering.
             if (prefs?.dockOnStartup === 'left' || prefs?.dockOnStartup === 'right') {
               await invoke('window_dock', { position: prefs.dockOnStartup });
             } else if (prefs?.startupPosition === 'center') {
               const { getCurrentWindow } = await import('@tauri-apps/api/window');
               const win = getCurrentWindow();
-              // Small delay so any window-state restore has already run.
               const timeoutId = window.setTimeout(() => {
                 if (disposed) return;
                 void win.center().catch((error) => {
@@ -759,7 +704,6 @@ const DesktopShell = () => {
           });
         }
 
-        // Restore selected theme on startup
         await runStartupStep('Theme restore', async () => {
           const settings = useSettingsStore.getState();
           const themeId = settings.windowPreferences?.selectedTheme;
@@ -775,7 +719,6 @@ const DesktopShell = () => {
         });
         if (disposed) return;
 
-        // Initialize Ollama health service for graceful degradation of local models
         if (isTauri) {
           await runStartupStep('Ollama health monitor', async () => {
             const { initializeOllamaHealthService } =
@@ -786,30 +729,20 @@ const DesktopShell = () => {
         }
 
         if (disposed) return;
-        // Load custom instructions from backend (syncs with stored data)
         const { useCustomInstructionsStore } = await import('./stores/customInstructionsStore');
         await runStartupStep('Custom instructions sync', async () => {
           await useCustomInstructionsStore.getState().loadFromBackend();
         });
         if (disposed) return;
 
-        // Register the Managed Cloud provider if a validated session already
-        // exists. CloudAccountAuth is the sole owner of native credential/base
-        // URL persistence and completes that work before auth becomes ready;
-        // duplicating token writes here could let an older account overwrite a
-        // newer session after an account switch.
         if (isTauri) {
           await runStartupStep(
             'Managed cloud provider initialization',
             async () => {
-              // Initialize only in Managed Cloud mode. Local and BYOK chat must
-              // not wait on or hydrate managed auth.
               if (selectPrivacyMode(useAppModeStore.getState()) !== 'managed') {
                 return;
               }
 
-              // Wait for auth state to be ready before accessing session data
-              // This prevents race conditions where we read stale/empty state
               await waitForAuthReady();
               if (disposed) return;
 
@@ -820,7 +753,6 @@ const DesktopShell = () => {
 
               await invoke('llm_ensure_managed_cloud');
 
-              // Start surface heartbeat — fires immediately then every 60 s
               if (!disposed) {
                 const { startDesktopHeartbeat } = await import('./services/heartbeat');
                 const userId = cloudAccountAuth.getState().user?.id;
@@ -843,7 +775,6 @@ const DesktopShell = () => {
     return () => {
       disposed = true;
       void errorReportingService.flush();
-      // Call all cleanup functions from async initialization
       cleanupFns.forEach((cleanup) => {
         try {
           cleanup();
@@ -854,22 +785,17 @@ const DesktopShell = () => {
     };
   }, [addError]);
 
-  // Run once on mount - restore persisted session, then ensure active conversation
   useEffect(() => {
     restoreSession();
     ensureActiveConversation();
   }, [restoreSession, ensureActiveConversation]);
 
-  // Initialize providers + load mode-appropriate models into the chat package's model store.
   useLayoutEffect(() => {
     let cancelled = false;
     const initialModelStore = useChatModelStore.getState();
     const previousSelectedModelId = initialModelStore.selectedModelId;
     const clearForBoundaryChange = modelCatalogBoundaryRef.current !== modelCatalogBoundaryKey;
     modelCatalogBoundaryRef.current = modelCatalogBoundaryKey;
-    // A real Local/Cloud or cloud-owner switch clears synchronously. A refresh
-    // within the same trust boundary keeps the last verified catalog and
-    // explicit selection usable while the probes run.
     initialModelStore.beginModelCatalogLoad(clearForBoundaryChange);
     setModelCatalogError(null);
 
@@ -889,22 +815,9 @@ const DesktopShell = () => {
         }
 
         if (currentMode === 'cloud') {
-          // The native credential is projected before the account snapshot
-          // finishes. Do not briefly turn the public all-model catalog into an
-          // entitlement claim while the effective plan is still unknown — but
-          // do not leave Cloud with zero selectable models forever either.
-          // `resolveDesktopCloudPickerModels` returns [] for a null plan, so a
-          // transient /api/me failure used to make Cloud chat unusable with no
-          // recovery. Once the tier fetch has actually FAILED, fall back to the
-          // lowest tier (web's /api/me defaults to 'free' for the same reason);
-          // the degraded-account banner above explains the downgrade and its
-          // Retry restores the real tier. Entitlement is still enforced
-          // server-side on every request.
           const effectivePlan =
             currentPlan ?? (currentSubscriptionFetchStatus === 'failed' ? ('free' as const) : null);
           if (!effectivePlan) {
-            // Account entitlement is still resolving. Preserve an honest
-            // loading state rather than diagnosing an empty model catalog.
             return;
           }
 
@@ -937,10 +850,6 @@ const DesktopShell = () => {
 
         let rustModels: ReturnType<typeof parseDiscoveredChatModels>;
         if (currentMode === 'local') {
-          // `llm_get_available_models` can race provider registration. Probe
-          // every supported local runtime directly as well, but do so
-          // concurrently: absent runtimes each have a bounded native timeout
-          // and must not add up to a 15–20 second false-empty picker.
           const catalogFetches: Array<{ source: string; command: string }> = [
             { source: 'registered providers', command: 'llm_get_available_models' },
             { source: 'ollama', command: 'llm_list_ollama_models' },
@@ -1008,15 +917,6 @@ const DesktopShell = () => {
           });
         });
         if (cancelled) return;
-        // Mode-safe selection: keep the active model consistent with the mode's
-        // available set. In Local mode an auto-routing / cloud model must never
-        // stay active — the egress guard blocks cloud calls in Local mode, so a
-        // stale "Auto Economy" (managed_cloud) selection routes to a blocked
-        // cloud model and fails silently. If the current selection isn't in the
-        // set, preserve a previously explicit choice only when it remains
-        // reachable. Never turn provider discovery order into a recommendation;
-        // otherwise clear so the picker asks the user to choose. Cloud keeps its
-        // explicit auto-routing default.
         {
           const nextId =
             currentMode === 'local' &&
@@ -1027,8 +927,6 @@ const DesktopShell = () => {
         }
       } catch {
         if (cancelled) return;
-        // Reachability is unknown. Never turn static catalog membership into a
-        // fake Local/BYOK/Managed availability claim.
         const modelStore = useChatModelStore.getState();
         const message =
           currentMode === 'local'
@@ -1045,7 +943,6 @@ const DesktopShell = () => {
     };
   }, [appMode, modelCatalogBoundaryKey, modelCatalogDependencyKey, modelCatalogRetry]);
 
-  // Sync desktop auth user profile → chat package's settingsStore
   useEffect(() => {
     async function syncProfile() {
       try {
@@ -1064,14 +961,11 @@ const DesktopShell = () => {
           });
         };
 
-        // Sync immediately
         syncFromAuth();
 
-        // Re-sync when auth changes
         const unsub = useAuthStore.subscribe(syncFromAuth);
         return unsub;
       } catch {
-        // Non-fatal
         return undefined;
       }
     }
@@ -1081,7 +975,6 @@ const DesktopShell = () => {
     };
   }, []);
 
-  // Double-tap Alt to open Quick Query overlay
   const lastAltKeyupAtRef = useRef<number>(0);
   useEffect(() => {
     const DOUBLE_TAP_THRESHOLD_MS = 300;
@@ -1102,7 +995,6 @@ const DesktopShell = () => {
     };
   }, []);
 
-  // Listen for chat:action events dispatched by the shared chat package
   useEffect(() => {
     const handleChatAction = (e: Event) => {
       const detail = (e as CustomEvent).detail as { type: string; tab?: string; content?: string };
@@ -1115,9 +1007,6 @@ const DesktopShell = () => {
       } else if (detail.type === 'open-plans-modal') {
         setPlansModalOpen(true);
       } else if (detail.type === 'fix-bug' && detail.content) {
-        // From ArtifactPanel's "Fix Bug" affordance — queue the error + code
-        // as an outgoing user message via the same externalSendRequest path
-        // Quick Query uses.
         ensureActiveConversation();
         setExternalSendRequest({ id: crypto.randomUUID(), content: detail.content });
       }
@@ -1126,7 +1015,6 @@ const DesktopShell = () => {
     return () => window.removeEventListener('chat:action', handleChatAction);
   }, [openSettingsDialog, ensureActiveConversation]);
 
-  // Listen for native menu events from Tauri window menu
   useEffect(() => {
     if (!isTauri) return;
 
@@ -1177,7 +1065,6 @@ const DesktopShell = () => {
     };
   }, [openSettingsDialog]);
 
-  // Listen for timeout warning events from Tauri backend
   useEffect(() => {
     if (!isTauri) return;
 
@@ -1217,7 +1104,6 @@ const DesktopShell = () => {
     };
   }, []);
 
-  // Listen for online/offline events and update appModeStore
   useEffect(() => {
     const handleOnline = () => {
       useAppModeStore.getState().setOnline(true);
@@ -1226,7 +1112,6 @@ const DesktopShell = () => {
     const handleOffline = () => {
       useAppModeStore.getState().setOnline(false);
 
-      // Show toast warning if user is in Cloud Mode
       const isCloudMode = useAppModeStore.getState().mode === 'cloud';
       if (isCloudMode) {
         toast.error("You're offline. Switch to Local Mode or reconnect.");
@@ -1320,7 +1205,6 @@ const DesktopShell = () => {
     [routeToChatSurface],
   );
 
-  // Listen for global hotkey (Cmd+Shift+Space / Ctrl+Shift+Space) to open Quick Query overlay
   useEffect(() => {
     if (!isTauri) return;
 
@@ -1358,10 +1242,8 @@ const DesktopShell = () => {
     };
   }, []);
 
-  // Handle Quick Query submission: add user message and route to main chat
   const handleQuickQuerySubmit = useCallback(
     (query: string, model: string) => {
-      // Ensure there's an active conversation, then add the user message
       ensureActiveConversation();
 
       void (async () => {
@@ -1393,7 +1275,6 @@ const DesktopShell = () => {
     [ensureActiveConversation, addError],
   );
 
-  // Listen for global shortcut actions
   useEffect(() => {
     if (!isTauri) return;
 
@@ -1403,7 +1284,7 @@ const DesktopShell = () => {
     const setupListener = async () => {
       try {
         const unlisten = await listen<string>('shortcut_action', (event) => {
-          if (!isMounted) return; // Guard against unmounted callbacks
+          if (!isMounted) return;
           const action = event.payload;
           switch (action) {
             case 'floating_window':
@@ -1418,7 +1299,6 @@ const DesktopShell = () => {
               setCommandPaletteOpen(true);
               break;
             case 'quick_query':
-              // Handled by dedicated `global-hotkey-triggered` listener to avoid duplicate opens.
               break;
             case 'voice_input':
               void handleVoiceInputRequest();
@@ -1429,11 +1309,9 @@ const DesktopShell = () => {
           }
         });
 
-        // Only store unlisten if we're still mounted
         if (isMounted) {
           unlistenFn = unlisten;
         } else {
-          // Component unmounted while setting up - cleanup immediately
           unlisten();
         }
       } catch (error) {
@@ -1454,13 +1332,6 @@ const DesktopShell = () => {
 
   const openSettings = useCallback(() => openSettingsDialog(), [openSettingsDialog]);
 
-  // Every in-app shortcut is dispatched here. The map is keyed by
-  // RendererShortcutAction, so a row cannot be added to constants/shortcuts.ts
-  // without a handler on this side — the build fails first. Keys owned by the
-  // native window menu (New Conversation, Settings, Find, Reload, the View
-  // menu's zoom items, Fullscreen, Hide) are not routed here: the OS consumes
-  // a menu key equivalent before the webview sees the keydown, so they stay in
-  // `window_menu.rs` and reach the app through the `menu_action` listener.
   const shortcutHandlers = useMemo<Record<RendererShortcutAction, () => void>>(
     () => ({
       'app.search': () => useSearchModal.getState().toggle(),
@@ -1493,9 +1364,6 @@ const DesktopShell = () => {
     };
   }, [customKeybindings, shortcutHandlers]);
 
-  // The Rust registry rebuilds itself from `with_defaults()` on every launch,
-  // so a rebound OS-level hotkey only reaches the OS again if the shell
-  // re-applies it once settings have hydrated.
   useEffect(() => {
     if (!isTauri) return;
 
@@ -1528,10 +1396,6 @@ const DesktopShell = () => {
   }, []);
 
   const runtimeAppMode = isTauri && appMode === 'cloud' && !hasCloudSession ? 'local' : appMode;
-  // Credential refreshes keep the same runtime, but a different Cloud account
-  // must receive a fresh boundary-scoped runtime. Otherwise the long-lived
-  // CloudRuntime correctly rejects account B forever using account A's cached
-  // boundary, even though the shell has already rehydrated B's conversations.
   const runtimeAccountId = runtimeAppMode === 'cloud' ? authenticatedUserId : null;
   const runtimeResearchEnabled = useDesktopCloudResearchCapability(
     accountPlan,
@@ -1549,13 +1413,6 @@ const DesktopShell = () => {
   );
   useEffect(() => registerActiveDesktopChatRuntime(chatRuntime), [chatRuntime]);
 
-  // Keep the shared chat package's "is code execution actually available"
-  // signal in sync with this deployment's E2B cut-over flag
-  // (`/api/me` `feature_flags.code_execution`, already fetched into
-  // `useUnifiedAuthStore` by `cloudAccountAuth.refreshUserData`). The
-  // composer's "Run code" toggle (packages/ui/unified-chat) and useChat's
-  // send-time gate both read this instead of re-deriving it, so they can
-  // never disagree with what the account actually entitles.
   const codeExecutionDeploymentConfigured = useUnifiedAuthStore(
     (s) => s.featureFlags['code_execution'] ?? false,
   );
@@ -1626,10 +1483,6 @@ const DesktopShell = () => {
       setConversationModel: (id, modelId) => {
         useDesktopChatStore.getState().setConversationModel(id, modelId);
       },
-      // Upgrade CTA on an in-transcript managed quota refusal. Routes to the
-      // SAME owned Stripe checkout window the billing settings use — the shared
-      // card renders no CTA at all when this is absent, so there is never a
-      // button that leads nowhere.
       ...(canOfferStripePlanChanges
         ? {
             openUpgrade: (requiredTier: string) => {
@@ -1644,10 +1497,6 @@ const DesktopShell = () => {
             },
           }
         : {}),
-      // Managed-cloud generated files (x_generated_files): fetch bytes from
-      // the authenticated /api/files route. Bearer is ONLY attached to uris on
-      // our cloud API base (never leaked to arbitrary hosts); guardedFetch
-      // keeps the Local-mode egress chokepoint in front of the request.
       fetchCloudFile: async (uri: string) => {
         const isOurCloudUri = CLOUD_API_BASE_URL
           ? uri.startsWith(`${CLOUD_API_BASE_URL}/`)
@@ -1765,11 +1614,6 @@ const DesktopShell = () => {
     ];
   }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
-  // NOTE: a conversation-list failure is reported by the inline
-  // `data-testid="conversation-boundary-error"` banner further down, NOT by a
-  // full-screen takeover. Blanking the shell for a background list fetch took
-  // out chat, composer, sidebar and history at once; the shell now stays
-  // mounted and the failure is scoped and retryable.
   if (
     !conversationBoundaryReady ||
     conversationBoundaryRef.current !== expectedConversationBoundaryKey ||
@@ -1835,10 +1679,6 @@ const DesktopShell = () => {
           <Suspense fallback={null}>
             <OnboardingWelcome
               onComplete={() => setShowOnboarding(false)}
-              // Without this the first-run "Cloud Mode" card completed
-              // onboarding and dropped the user into Local mode, so the very
-              // first screen of a Cloud demo silently chose the wrong trust
-              // boundary. Entering Cloud makes the shell render AuthPage.
               onCloudModeSelected={() => useAppModeStore.getState().setMode('cloud')}
             />
           </Suspense>
@@ -2088,33 +1928,22 @@ const App = () => {
   const windowMode = resolveDesktopWindowMode();
   const [isAuthBootstrapReady, setIsAuthBootstrapReady] = useState(windowMode !== 'default');
 
-  // Set document direction for RTL language support (Arabic)
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
   }, [i18n.language]);
 
   useEffect(() => {
-    // Cloud account bootstrap belongs to the main Desktop shell. Auxiliary
-    // webviews have independent JS auth services and intentionally do
-    // not restore the native credential; installing an orchestrator there would
-    // immediately publish a false signed-out state into shared persistence.
     if (windowMode !== 'default') return;
 
-    // Single consolidated auth orchestrator - replaces individual store initializers
-    // This prevents race conditions from multiple auth listeners firing simultaneously
     const unsubscribeOrchestrator = initializeAuthOrchestrator();
     const unsubscribeTierRestriction = initializeTaskRoutingTierRestriction();
 
-    // After auth-store hydration, synthesize only the device-owned Local
-    // account when there is no Cloud session. The auth orchestrator already
-    // owns Cloud profile, subscription, credits, and token synchronization.
     let cancelled = false;
     void (async () => {
       try {
         if (cancelled) return;
 
-        // Wait for store hydration from localStorage before syncing
         await waitForHydration();
         if (cancelled) return;
 
@@ -2124,18 +1953,11 @@ const App = () => {
           selectPrivacyMode(useAppModeStore.getState()) === 'local' &&
           !useAuthStore.getState().accessToken
         ) {
-          // W2a-PRO-00A: local-only users have no cloud session — synthesize a
-          // stable user.id from the machine install ID so downstream chat stores
-          // can own conversations without crashing on a null user.
           const applyLocalAccount = (id: string) => {
             useAuthStore.getState().setAccount({
               id,
               email: '',
               displayName: 'Local User',
-              // The authoritative "this is not a Managed Cloud tenant" marker.
-              // selectHasCloudAccountSession reads this flag, not the plan, so
-              // the plan field can resolve asynchronously without ever making a
-              // real Cloud session look local-only (DES-C17).
               isLocalDeviceAccount: true,
               plan: 'local-only',
               planDisplayName: 'Local Mode',

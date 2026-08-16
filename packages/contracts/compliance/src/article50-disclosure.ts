@@ -45,92 +45,32 @@ import {
   type ChineseHqProviderId,
 } from './provider-jurisdiction';
 
-/** Storage key used by both mobile (MMKV) and web (localStorage / cloud DB). */
 export const DISCLOSURE_LEDGER_KEY = 'agi:article50:first-run:v1' as const;
 
-/**
- * Record persisted to the consent ledger once the user dismisses the
- * combined disclosure + 5.1.2(i) modal. The shape is consumed by:
- *   - managed-cloud `consent_ledger` table writer (web)
- *   - `apps/mobile/lib/mmkv.ts` (mobile)
- *   - Desktop SQLite store (later)
- */
 export interface DisclosureRecord {
-  /** Schema version. Bump if `composeFirstRunDisclosure()` materially changes. */
   readonly version: 1;
-  /** ISO-8601 timestamp of acceptance. */
   readonly acceptedAt: string;
-  /** Where the disclosure was accepted. */
   readonly surface: 'mobile' | 'web' | 'desktop' | 'cli';
-  /** SHA-256 of the exact copy shown — opaque correlation id. */
   readonly disclosureCopyHash: string;
-  /**
-   * Whether the user explicitly opted in to managed-cloud routing (i.e.
-   * Apple 5.1.2(i) named-provider consent). Defaults to true when the
-   * disclosure runs in BYOK-only mode (no managed routing on the surface).
-   */
   readonly managedCloudAccepted: boolean;
-  /**
-   * Subset of Chinese-HQ providers the user enabled at the disclosure step.
-   * **Default is empty** — Chinese-HQ providers are opt-in per #26 / R-023.
-   * Empty array means: all Chinese-HQ providers stay disabled.
-   */
   readonly chineseHqProvidersAccepted: readonly ChineseHqProviderId[];
 }
 
-/**
- * Inputs the disclosure composition needs from the host app, so this package
- * does not have to know about every surface's routing model.
- */
 export interface DisclosureInputs {
-  /** "mobile" | "web" | "desktop" | "cli". Drives the rendered surface label. */
   readonly surface: DisclosureRecord['surface'];
-  /**
-   * Whether the surface offers managed-cloud routing. When true, the merged
-   * copy block includes the verbatim Apple 5.1.2(i) named-provider sentence.
-   */
   readonly offersManagedCloud: boolean;
-  /**
-   * Named third-party AI providers the surface may route to (mobile = list
-   * coming from `models.json`, BYOK keys, etc.).
-   * Required by Apple 5.1.2(i) which mandates enumeration of every third
-   * party that processes the user's content.
-   */
   readonly thirdPartyAiProviders: readonly string[];
 }
 
-/**
- * Composes the merged disclosure copy for the single combined consent screen.
- *
- * Returns plain strings (no JSX, no markdown rendering) so each surface can
- * render with its own typography / accessibility scaffolding.
- */
 export interface DisclosureCopy {
-  /** Screen title — used as accessibility label + visible heading. */
   readonly title: string;
-  /** Verbatim Article 50(1) block. Display under a "Why we show this" toggle. */
   readonly article50_1: string;
-  /** Verbatim Article 50(2) block. Display under the same toggle. */
   readonly article50_2: string;
-  /** Penalty exposure copy — visible to reviewers. */
   readonly penaltyNotice: string;
-  /** Source link. */
   readonly sourceUrl: string;
-  /**
-   * Plain-language summary the user actually reads. Combines the chatbot
-   * label (50(1)), the Apple 5.1.2(i) named-provider enumeration (when
-   * applicable), and the Chinese-HQ default-off note. ONE block — not three.
-   */
   readonly summary: string;
-  /** Button label on the accept button. */
   readonly acceptLabel: string;
-  /** Button label on the decline button. */
   readonly declineLabel: string;
-  /**
-   * Per-provider opt-in rows the surface must render. Each row is one
-   * Chinese-HQ provider; row state is controlled by the user and recorded
-   * into `DisclosureRecord.chineseHqProvidersAccepted`.
-   */
   readonly chineseHqProviderRows: ReadonlyArray<{
     readonly id: ChineseHqProviderId;
     readonly displayName: string;
@@ -138,16 +78,6 @@ export interface DisclosureCopy {
   }>;
 }
 
-/**
- * Builds the single combined disclosure copy block. Pure function — no I/O.
- *
- * Why one block, not three: PRD V5 lock #26 is explicit ("covers V4's Apple
- * 5.1.2(i) consent flow") and the team-lead instructions ("combinable with
- * 5.1.2(i) modal so we don't double-prompt") are explicit. Three separate
- * consent prompts is exactly the dark pattern Article 4 (manipulation
- * prohibitions, active 2026-02-02) warns against AND increases drop-off in
- * onboarding without satisfying any additional legal requirement.
- */
 export function composeFirstRunDisclosure(inputs: DisclosureInputs): DisclosureCopy {
   const providers = inputs.thirdPartyAiProviders.join(', ');
   const managedCloudSentence = inputs.offersManagedCloud
@@ -186,27 +116,11 @@ export function composeFirstRunDisclosure(inputs: DisclosureInputs): DisclosureC
   };
 }
 
-/**
- * Minimal ledger interface — abstracts MMKV / localStorage / cloud DB / SQLite.
- * Host app provides the concrete implementation.
- */
 export interface DisclosureLedger {
   read(): DisclosureRecord | null;
   write(record: DisclosureRecord): void;
 }
 
-/**
- * The gate the LLM HTTP client checks before issuing the first request.
- *
- * Returns true iff:
- *   - the ledger has a record AND
- *   - the record schema version matches (else we re-prompt) AND
- *   - the user accepted managed-cloud routing if the surface uses it.
- *
- * The Chinese-HQ provider list is NOT part of this gate — that check lives
- * in `isProviderRoutingAllowed()` (provider-jurisdiction.ts). The summary
- * disclosure can be accepted with zero Chinese-HQ providers enabled.
- */
 export function isDisclosureSatisfied(
   ledger: DisclosureLedger,
   requireManagedCloud: boolean,
@@ -218,14 +132,6 @@ export function isDisclosureSatisfied(
   return true;
 }
 
-/**
- * Returns a SHA-256 hex digest of the disclosure copy. Used to detect when
- * the displayed copy has changed and a re-prompt is required.
- *
- * Lives in this package (not @agiworkforce/utils) because the only call
- * sites are the disclosure write path + the ledger schema-check test. We use
- * a tiny inline polyfill chain so this stays dependency-free.
- */
 export async function hashDisclosureCopy(copy: DisclosureCopy): Promise<string> {
   const canonical = JSON.stringify({
     t: copy.title,
@@ -235,8 +141,6 @@ export async function hashDisclosureCopy(copy: DisclosureCopy): Promise<string> 
     a2: copy.article50_2,
   });
 
-  // Prefer Web Crypto when available (RN 0.84 + Hermes ship globalThis.crypto.subtle
-  // via expo-crypto polyfill, and Node 20+ exposes it natively).
   const subtle = (globalThis as { crypto?: { subtle?: SubtleCrypto } }).crypto?.subtle;
   if (subtle) {
     const bytes = new TextEncoder().encode(canonical);
@@ -246,10 +150,6 @@ export async function hashDisclosureCopy(copy: DisclosureCopy): Promise<string> 
       .join('');
   }
 
-  // Fallback for environments without Web Crypto (older RN runtimes when
-  // expo-crypto's polyfill hasn't loaded yet). FNV-1a 64-bit is NOT
-  // cryptographic — it is fine here because the hash is an opaque
-  // change-detector, not a security primitive.
   let h1 = 0xcbf29ce4;
   let h2 = 0x84222325;
   for (let i = 0; i < canonical.length; i++) {
@@ -262,10 +162,6 @@ export async function hashDisclosureCopy(copy: DisclosureCopy): Promise<string> 
   return `fnv-${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`;
 }
 
-/**
- * Convenience: builds a `DisclosureRecord` from user input and the rendered
- * copy, then writes it. Host app calls this from the modal's accept handler.
- */
 export async function recordDisclosureAcceptance(args: {
   ledger: DisclosureLedger;
   copy: DisclosureCopy;

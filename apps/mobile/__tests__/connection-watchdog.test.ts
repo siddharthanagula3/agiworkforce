@@ -62,10 +62,8 @@ jest.mock('../services/companionNotifications', () => ({
 
 import { useConnectionStore } from '../stores/connectionStore';
 
-/** Longer than the store's 25s watchdog, shorter than any retry backoff. */
 const PAST_WATCHDOG_MS = 30_000;
 
-/** Drives connect() to the point where the signaling client exists. */
 async function connectAndAwaitSignaling(code = 'ABCD EFGH IJKL') {
   useConnectionStore.getState().connect(code);
   await waitFor(() => {
@@ -98,8 +96,6 @@ describe('Connection store connect watchdog', () => {
 
     jest.advanceTimersByTime(PAST_WATCHDOG_MS);
 
-    // error stays null on purpose: ErrorView renders the pairing checklist,
-    // not transport text, when the desktop simply never answered.
     expect(useConnectionStore.getState()).toMatchObject({
       status: 'error',
       error: null,

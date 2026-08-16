@@ -1,22 +1,7 @@
-/**
- * useGreeting hook tests
- *
- * Covers:
- * - All 6 time bands with correct headline format
- * - Variant selection via date-based index (date % 3)
- * - First-name extraction from full name (splits on first space)
- * - Name length cap: names > 50 chars are discarded (anonymous greeting)
- * - Non-printable character stripping from names
- * - No-user fallback (anonymous greeting without name interpolation)
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useGreeting } from './useGreeting';
-
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
 
 const greetingMocks = vi.hoisted(() => ({
   canonicalUser: null as null | {
@@ -36,20 +21,8 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 
 import { useAuthStore } from '@shared/stores/authentication-store';
 
-// React.useState is called once per render with an initializer. We need to
-// control `new Date()` inside that initializer, so we mock it before each test.
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Render the hook with a fake clock pinned to `hour` and `day` (day % 3 = variantIndex).
- * `userName` is injected into the mocked auth store.
- */
 function renderGreeting(hour: number, day: number, userName?: string) {
-  // Pin the clock
-  const fixedDate = new Date(2026, 0, day, hour, 0, 0); // Jan <day> 2026, HH:00
+  const fixedDate = new Date(2026, 0, day, hour, 0, 0);
   vi.setSystemTime(fixedDate);
 
   vi.mocked(useAuthStore).mockReturnValue({
@@ -58,10 +31,6 @@ function renderGreeting(hour: number, day: number, userName?: string) {
 
   return renderHook(() => useGreeting());
 }
-
-// ---------------------------------------------------------------------------
-// Setup / teardown
-// ---------------------------------------------------------------------------
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -72,10 +41,6 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
-
-// ---------------------------------------------------------------------------
-// Time-band mapping
-// ---------------------------------------------------------------------------
 
 describe('useGreeting · time band selection', () => {
   it('uses the canonical /api/me preferred name on the first hydrated render', () => {
@@ -94,18 +59,17 @@ describe('useGreeting · time band selection', () => {
   });
 
   it('returns earlyMorning band at hour 4', () => {
-    const { result } = renderGreeting(4, 1); // day 1 → variantIndex 1
-    // Anonymous variant: config.variants[1] = 'Early start'
+    const { result } = renderGreeting(4, 1);
     expect(result.current.headline).toBe('Early start');
   });
 
   it('returns earlyMorning band at hour 6', () => {
-    const { result } = renderGreeting(6, 3); // day 3 → variantIndex 0
+    const { result } = renderGreeting(6, 3);
     expect(result.current.headline).toBe('Good morning');
   });
 
   it('returns morning band at hour 7', () => {
-    const { result } = renderGreeting(7, 3); // variantIndex 0
+    const { result } = renderGreeting(7, 3);
     expect(result.current.headline).toBe('Good morning');
   });
 
@@ -115,7 +79,7 @@ describe('useGreeting · time band selection', () => {
   });
 
   it('returns afternoon band at hour 12', () => {
-    const { result } = renderGreeting(12, 3); // variantIndex 0
+    const { result } = renderGreeting(12, 3);
     expect(result.current.headline).toBe('Good afternoon');
   });
 
@@ -125,7 +89,7 @@ describe('useGreeting · time band selection', () => {
   });
 
   it('returns evening band at hour 17', () => {
-    const { result } = renderGreeting(17, 3); // variantIndex 0
+    const { result } = renderGreeting(17, 3);
     expect(result.current.headline).toBe('Good evening');
   });
 
@@ -135,18 +99,17 @@ describe('useGreeting · time band selection', () => {
   });
 
   it('returns night band at hour 21', () => {
-    const { result } = renderGreeting(21, 3); // variantIndex 0
+    const { result } = renderGreeting(21, 3);
     expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns night band at hour 23 (boundary)', () => {
     const { result } = renderGreeting(23, 3);
-    // variantIndex 0 for day=3 → 'Good evening'
     expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns lateNight band at hour 0 (midnight)', () => {
-    const { result } = renderGreeting(0, 3); // variantIndex 0
+    const { result } = renderGreeting(0, 3);
     expect(result.current.headline).toBe('Good evening');
   });
 
@@ -156,33 +119,28 @@ describe('useGreeting · time band selection', () => {
   });
 
   it('returns lateNight band at hour 1', () => {
-    const { result } = renderGreeting(1, 4); // day 4 → variantIndex 1
+    const { result } = renderGreeting(1, 4);
     expect(result.current.headline).toBe('Up late');
   });
 });
 
-// ---------------------------------------------------------------------------
-// Variant rotation (date % 3)
-// ---------------------------------------------------------------------------
-
 describe('useGreeting · variant rotation via date', () => {
   it('selects variant index 0 when day % 3 === 0 (day=3)', () => {
-    const { result } = renderGreeting(10, 3); // morning, index 0
+    const { result } = renderGreeting(10, 3);
     expect(result.current.headline).toBe('Good morning');
   });
 
   it('selects variant index 1 when day % 3 === 1 (day=1)', () => {
-    const { result } = renderGreeting(10, 1); // morning, index 1
+    const { result } = renderGreeting(10, 1);
     expect(result.current.headline).toBe('Morning');
   });
 
   it('selects variant index 2 when day % 3 === 2 (day=2)', () => {
-    const { result } = renderGreeting(10, 2); // morning, index 2
+    const { result } = renderGreeting(10, 2);
     expect(result.current.headline).toBe('Good to see you this morning');
   });
 
   it('wraps variant correctly for afternoon band', () => {
-    // afternoon: index 0='Good afternoon', 1='Afternoon', 2='Good to see you this afternoon'
     const { result: r0 } = renderGreeting(14, 3);
     expect(r0.current.headline).toBe('Good afternoon');
 
@@ -194,14 +152,9 @@ describe('useGreeting · variant rotation via date', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Name extraction
-// ---------------------------------------------------------------------------
-
 describe('useGreeting · name extraction', () => {
   it('uses first token from a full name', () => {
-    const { result } = renderGreeting(10, 3, 'Jane Doe'); // morning, index 0
-    // Named variant index 0: 'Good morning, {name}' → 'Good morning, Jane'
+    const { result } = renderGreeting(10, 3, 'Jane Doe');
     expect(result.current.headline).toBe('Good morning, Jane');
   });
 
@@ -212,28 +165,20 @@ describe('useGreeting · name extraction', () => {
 
   it('trims leading/trailing spaces from the extracted first name', () => {
     const { result } = renderGreeting(10, 3, '  Alice Smith');
-    // split(' ') gives ['', '', 'Alice', 'Smith'], first token is ''
-    // That token is empty so trim() gives '' which is falsy → anonymous
-    // Actually: '  Alice Smith'.split(' ')[0] = '' (two leading spaces)
-    // '' trimmed is '' which is falsy → falls through to anonymous
-    // Intentional: name with leading spaces gives anonymous greeting
     expect(result.current.headline).toBe('Good morning');
   });
 
   it('uses variant index from date for named headline', () => {
-    // index 1 for morning: 'Morning, {name}'
     const { result } = renderGreeting(10, 1, 'Bob');
     expect(result.current.headline).toBe('Morning, Bob');
   });
 
   it('uses named variant index 2 for morning', () => {
-    // index 2: 'Good to see you this morning, {name}'
     const { result } = renderGreeting(10, 2, 'Carol');
     expect(result.current.headline).toBe('Good to see you this morning, Carol');
   });
 
   it('falls back to anonymous greeting when user has no name', () => {
-    // user is present but name field is undefined
     vi.setSystemTime(new Date(2026, 0, 3, 10, 0, 0));
     vi.mocked(useAuthStore).mockReturnValue({
       user: { id: 'user-1' },
@@ -254,17 +199,8 @@ describe('useGreeting · name extraction', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Name length cap (> 50 chars → discard)
-// ---------------------------------------------------------------------------
-
 describe('useGreeting · name length cap', () => {
   it('uses name when it is exactly 50 characters', () => {
-    // Mixed case on purpose. This case is about the LENGTH cap, and an
-    // all-caps fixture also trips the casing rule (an ALL-CAPS profile name is
-    // deliberately title-cased so the hero headline does not shout) — so
-    // `'A'.repeat(50)` asserted a normalisation the product does not do, and
-    // the test failed for a reason that had nothing to do with length.
     const fiftyChars = `Aa${'b'.repeat(48)}`;
     expect(fiftyChars).toHaveLength(50);
     const { result } = renderGreeting(10, 3, fiftyChars);
@@ -274,7 +210,6 @@ describe('useGreeting · name length cap', () => {
   it('discards name and shows anonymous greeting when name is 51 characters', () => {
     const fiftyOneChars = 'A'.repeat(51);
     const { result } = renderGreeting(10, 3, fiftyOneChars);
-    // rawName.length (51) > 50 → firstName = undefined → anonymous
     expect(result.current.headline).toBe('Good morning');
   });
 
@@ -282,27 +217,19 @@ describe('useGreeting · name length cap', () => {
     const longName =
       'Wolfeschlegelsteinhausenbergerdorff the Great Senior III of the Fourth Estate';
     const { result } = renderGreeting(10, 3, longName);
-    // first token is 'Wolfeschlegelsteinhausenbergerdorff' (35 chars) → within limit
     expect(result.current.headline).toBe('Good morning, Wolfeschlegelsteinhausenbergerdorff');
   });
 
   it('discards a single first token that is > 50 chars', () => {
-    // A single word that is 51 chars long (no space → split gives same word)
     const longSingleWord = 'X'.repeat(51);
     const { result } = renderGreeting(10, 3, longSingleWord);
     expect(result.current.headline).toBe('Good morning');
   });
 });
 
-// ---------------------------------------------------------------------------
-// Non-printable character stripping
-// ---------------------------------------------------------------------------
-
 describe('useGreeting · non-printable character stripping', () => {
   it('strips control characters from the name', () => {
-    // Name with embedded null byte and bell char
     const { result } = renderGreeting(10, 3, 'Chris\x00\x07');
-    // After split on space: 'Chris\x00\x07', then replace removes control chars → 'Chris'
     expect(result.current.headline).toBe('Good morning, Chris');
   });
 

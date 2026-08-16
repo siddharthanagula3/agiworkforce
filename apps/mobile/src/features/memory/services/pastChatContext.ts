@@ -1,10 +1,3 @@
-/**
- * Mode-scoped past-chat context for Mobile.
- *
- * Local mode reads only the encrypted on-device chat store. Cloud mode searches
- * the authenticated account history and may supplement it with the physically
- * separate Cloud cache. Neither path ever crosses the Local/Cloud boundary.
- */
 import { api } from '@/services/api';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
@@ -202,8 +195,6 @@ async function searchCloudHistory(
       ];
     });
   } catch {
-    // Best effort: the Cloud cache remains available offline. Crucially, never
-    // fall back to the Local store for a Cloud prompt.
     return [];
   }
 }

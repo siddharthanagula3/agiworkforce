@@ -1,11 +1,3 @@
-/**
- * Golden tests for the system-prompt cache boundary marker.
- *
- * The marker splits a system prompt into a long-cacheable stable prefix and
- * a short-cacheable dynamic suffix; Anthropic's cache_control attaches to
- * the prefix to maximize cache hit rate. Adapter callers depend on
- * `splitSystemPromptCacheBoundary()` returning specific shapes.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -50,7 +42,6 @@ describe('splitSystemPromptCacheBoundary', () => {
     const input = `A${SYSTEM_PROMPT_CACHE_BOUNDARY}B${SYSTEM_PROMPT_CACHE_BOUNDARY}C`;
     const split = splitSystemPromptCacheBoundary(input);
     expect(split?.stablePrefix).toBe('A');
-    // The split returns suffix as the entire remainder including subsequent boundaries.
     expect(split?.dynamicSuffix).toContain('B');
     expect(split?.dynamicSuffix).toContain('C');
   });
@@ -71,7 +62,6 @@ describe('prependSystemPromptAdditionAfterCacheBoundary', () => {
       systemPrompt: prompt,
       systemPromptAddition: 'EXTRA',
     });
-    // The cacheable prefix must remain stable so the cache key doesn't churn.
     expect(out.startsWith('stable')).toBe(true);
     expect(out).toContain(SYSTEM_PROMPT_CACHE_BOUNDARY);
     expect(out).toContain('EXTRA');

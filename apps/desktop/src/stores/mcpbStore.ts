@@ -1,18 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * MCPB Bundle Store
- *
- * Manages MCP Bundle registry, installation, and updates.
- *
- * Updated to Zustand v5 best practices:
- * - Middleware composition: devtools(subscribeWithSelector(...))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Better devtools integration with store name
- * - subscribeWithSelector for granular subscriptions
- *
- * Note: This store manages ephemeral bundle state and communicates with
- * the Rust backend via Tauri commands for actual installation operations.
- */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { invoke, listen } from '../lib/tauri-mock';
@@ -23,17 +9,13 @@ import type {
   BundleInstallStatus,
 } from '../types/mcp';
 
-// ---------------------------------------------------------------------------
-// mcpb:install_progress — Rust-emitted event payload
-// ---------------------------------------------------------------------------
 interface McpbInstallProgressEvent {
   bundleId: string;
-  phase: string; // 'downloading' | 'installing' | 'configuring' | etc.
-  progress: number; // 0–100
+  phase: string;
+  progress: number;
   message: string;
 }
 
-// API layer for Tauri commands
 const mcpbApi = {
   fetchRegistry: () => invoke<McpBundle[]>('mcpb_fetch_registry'),
   searchBundles: (query: string) => invoke<McpBundle[]>('mcpb_search_bundles', { query }),
@@ -62,7 +44,6 @@ interface McpbState {
   installProgress: BundleInstallProgress | null;
   error: string | null;
 
-  // Actions
   fetchRegistry: () => Promise<void>;
   searchBundles: (query: string) => Promise<void>;
   filterByCategory: (category: McpBundleCategory | null) => void;
@@ -93,9 +74,6 @@ export const useMcpbStore = create<McpbState>()(
       fetchRegistry: async () => {
         set({ isLoading: true, error: null });
         try {
-          // Populate the native registry cache first. The remaining commands
-          // derive categories, featured entries, and installed official
-          // registry records from that same snapshot.
           const bundles = await mcpbApi.fetchRegistry();
           const [categories, featuredBundles, installedBundles] = await Promise.all([
             mcpbApi.getCategories(),
@@ -216,7 +194,6 @@ export const useMcpbStore = create<McpbState>()(
         set({ isLoading: true, error: null });
         try {
           const bundlesWithUpdates = await mcpbApi.checkUpdates();
-          // Update the installed bundles with update availability info
           const { installedBundles } = get();
           const updatedInstalledBundles = installedBundles.map((bundle) => {
             const hasUpdate = bundlesWithUpdates.some((b) => b.id === bundle.id);
@@ -298,7 +275,6 @@ export const useMcpbStore = create<McpbState>()(
   ),
 );
 
-// Selectors for optimized subscriptions
 export const selectBundles = (state: McpbState) => state.bundles;
 export const selectInstalledBundles = (state: McpbState) => state.installedBundles;
 export const selectFeaturedBundles = (state: McpbState) => state.featuredBundles;
@@ -310,7 +286,6 @@ export const selectIsInstalling = (state: McpbState) => state.isInstalling;
 export const selectInstallProgress = (state: McpbState) => state.installProgress;
 export const selectError = (state: McpbState) => state.error;
 
-// Derived selectors
 export const selectFilteredBundles = (state: McpbState) => {
   const { bundles, selectedCategory, searchQuery } = state;
   let filtered = bundles;
@@ -339,14 +314,6 @@ export const selectBundleById = (bundleId: string) => (state: McpbState) =>
 export const selectBundlesWithUpdates = (state: McpbState) =>
   state.installedBundles.filter((bundle) => bundle.updateAvailable);
 
-// ---------------------------------------------------------------------------
-// mcpb:install_progress listener
-// Initialised once at the module level (mirrors initializeAgentStatusListener).
-// Maps the Rust phase string to BundleInstallStatus and forwards the update
-// to setInstallProgress so existing UI subscribers react automatically.
-// ---------------------------------------------------------------------------
-
-/** Known phase strings emitted by the Rust mcpb backend. */
 const KNOWN_PHASES = new Set<BundleInstallStatus>([
   'pending',
   'downloading',
@@ -360,15 +327,11 @@ function toInstallStatus(phase: string): BundleInstallStatus {
   if (KNOWN_PHASES.has(phase as BundleInstallStatus)) {
     return phase as BundleInstallStatus;
   }
-  return 'installing'; // safe default for unknown phases
+  return 'installing';
 }
 
 let mcpbInstallListenerInitialized = false;
 
-/**
- * Call once during app bootstrap to wire up the `mcpb:install_progress`
- * Tauri event into the MCPB store.
- */
 export async function initializeMcpbInstallListener(): Promise<void> {
   if (mcpbInstallListenerInitialized) {
     return;

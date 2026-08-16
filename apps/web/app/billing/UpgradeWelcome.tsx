@@ -1,53 +1,13 @@
 'use client';
 
-/**
- * Post-checkout splash. Stripe's `success_url` returns here.
- *
- * The page this replaced showed "Payment successful! Your subscription has
- * been upgraded." directly above "Current Plan: FREE — No subscription". Both
- * came from the same render: Stripe redirects the browser back the instant the
- * card clears, which is typically before the `checkout.session.completed`
- * webhook has written the new tier. The old page read the tier once on mount
- * and never looked again, so it cheerfully contradicted itself and stayed that
- * way until a manual refresh.
- *
- * So this never states a plan it has not actually observed. Until the exact
- * checkout target becomes active/trialing it says the payment went through and
- * the plan is activating, which is exactly what is true. It re-checks on a
- * short interval and names the plan the moment the webhook lands.
- *
- * WHY THE HEADLINE DOES NOT NAME THE PLAN
- * ---------------------------------------
- * It used to read "Welcome to {plan}." — which renders as "Welcome to Basic."
- * for the entry tier, immediately after someone has paid. The plan name lands
- * as an adjective describing the product rather than as the thing they bought.
- * The tier is now a fact in a chip beside the price, where naming it is
- * reassuring instead of deflating, and the headline speaks to the person.
- *
- * WHAT IT SHOWS AND WHAT IT REFUSES TO
- * ------------------------------------
- * Money and dates come from the observed subscription and the canonical
- * catalog, never from the checkout intent. A renewal date renders only when
- * `current_period_end` is actually present, and a period scheduled to end says
- * "ends" rather than "renews" — a confirmation screen that invents a renewal
- * for a cancelled period is worse than one that says less.
- */
-
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BILLING_PLAN_PRICING, type SelfServePaidPlanTier } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 
-/** How long to wait for the webhook before offering a manual way forward. */
 const POLL_INTERVAL_MS = 2_000;
 const POLL_TIMEOUT_MS = 30_000;
 
-/**
- * Where a plan reaches, split by the boundary that actually matters to someone
- * who just paid: which surfaces carry the same conversations, and which are
- * scoped to a workspace instead. Collapsing the two into one "works
- * everywhere" line is the claim this deliberately does not make.
- */
 const SURFACE_GROUPS = [
   {
     label: 'Same account, same chats',
@@ -89,8 +49,6 @@ export function UpgradeWelcome({
   const plan = BILLING_PLAN_PRICING[expectedPlan];
   const planLabel = plan.label;
 
-  // `monthlyPriceUsd` is deliberately absent from contract-priced plans, so an
-  // index that yields `undefined` must render nothing rather than "$0".
   const monthlyPriceUsd =
     'monthlyPriceUsd' in plan && typeof plan.monthlyPriceUsd === 'number'
       ? plan.monthlyPriceUsd
@@ -221,16 +179,6 @@ export function UpgradeWelcome({
   );
 }
 
-/**
- * A tick once the plan is observed active, a pulsing ring while the webhook is
- * still in flight.
- *
- * Drawn as SVG rather than the `✦` text glyph it replaces: that glyph has no
- * consistent metrics across platforms, so it sat off-centre in its circle on
- * Windows and rendered as a fallback box where the font lacked it. The tick
- * also says something true — the payment cleared — where a sparkle was
- * decoration.
- */
 function StatusMark({ activated }: { activated: boolean }) {
   return (
     <div
@@ -252,8 +200,6 @@ function StatusMark({ activated }: { activated: boolean }) {
           />
         </svg>
       ) : (
-        // `motion-safe` only: a looping animation is exactly what someone with
-        // vestibular sensitivity has asked the OS to stop.
         <span className="h-7 w-7 rounded-full border-[2.5px] border-white/35 border-t-white motion-safe:animate-spin" />
       )}
     </div>

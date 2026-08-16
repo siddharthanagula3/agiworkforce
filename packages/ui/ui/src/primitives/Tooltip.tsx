@@ -4,18 +4,12 @@ import * as React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '../cn';
 
-// Identical across web/desktop (mechanical diffs only: 'use client' + import path).
-// Stacking: `--z-tooltip` (380) is the top transient layer below notifications —
-// above `--z-popover` (350) because a tooltip is routinely triggered from a
-// control inside a menu or popover, and above `--z-modal` (300) for the same
-// reason inside a dialog. The old hardcoded z-50 put it under all three.
 const TooltipProvider = TooltipPrimitive.Provider;
 
 const Tooltip = TooltipPrimitive.Root;
 
 const TooltipTrigger = TooltipPrimitive.Trigger;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface TooltipContentProps extends React.ComponentPropsWithoutRef<
   typeof TooltipPrimitive.Content
 > {

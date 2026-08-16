@@ -2,27 +2,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * One product, one accent.
- *
- * `--primary` is the token behind both `bg-primary` controls and `text-primary`
- * copy. Web previously bound it to shadcn's stock blue. Binding it directly to
- * the raw brand swatch fixed that drift but made small primary text unreadable
- * on light surfaces, because #da7756 only reaches 3.11:1 against white.
- *
- * Light mode therefore uses terra-cotta-700 from the existing brand ramp; dark
- * mode keeps the brighter raw swatch. These tests read and compute the shipped
- * token values so both text and filled-control contrast remain WCAG AA.
- */
-
 const repoRoot = resolve(import.meta.dirname, '../../../..');
 
-/** #da7756 in the HSL triple shadcn tokens use. */
 const BRAND_PRIMARY = '15 64.1% 59.6%';
-/** #743924 (`terra-cotta-700`) in the HSL triple shadcn tokens use. */
 const LIGHT_PRIMARY = '15.75 52.63% 29.8%';
 const LIGHT_PRIMARY_FOREGROUND = '0 0% 100%';
-/** Dark-on-terra-cotta: ~5.2:1. White would be 3.1:1 and fail WCAG AA. */
 const BRAND_PRIMARY_FOREGROUND = '180 3.1% 12.5%';
 const WCAG_AA_NORMAL = 4.5;
 
@@ -30,7 +14,6 @@ function read(path: string): string {
   return readFileSync(resolve(repoRoot, path), 'utf8');
 }
 
-/** Every `--primary:` value in a stylesheet, in source order. */
 function primaryValues(css: string, token = 'primary'): string[] {
   return [...css.matchAll(new RegExp(`^\\s*--${token}:\\s*([^;]+);`, 'gm'))].map((m) =>
     m[1]!.trim(),
@@ -113,8 +96,6 @@ describe('brand accent', () => {
     const web = read('apps/web/app/globals.css');
     const values = primaryValues(web);
 
-    // The third value is `.agi-dashboard-theme`, a deliberately scoped theme.
-    // The first two are :root and .dark, which are the app-wide bindings.
     expect(values.slice(0, 2)).toEqual([LIGHT_PRIMARY, BRAND_PRIMARY]);
   });
 
@@ -167,8 +148,6 @@ describe('brand accent', () => {
       'chat-input-bg',
     ];
 
-    // Existing normal/small text-primary chips use 10%, 15%, 20%, and 25%
-    // primary tints. Zero covers links and labels directly on each surface.
     for (const surfaceToken of surfaceTokens) {
       const surface = cssColorToRgb(tokenValue(light, surfaceToken));
       for (const alpha of [0, 0.1, 0.15, 0.2, 0.25]) {

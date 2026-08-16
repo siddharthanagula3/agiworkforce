@@ -1,17 +1,3 @@
-/**
- * Tests for GET /api/files/[id] — the authenticated same-origin byte-serving
- * route for generated files.
- *
- * Covers:
- *   - 401 when unauthenticated.
- *   - One 404 for unknown, foreign, inactive-workspace, and deleted assets.
- *   - 404 for non-UUID ids and missing bytes.
- *   - 200 serves the exact stored bytes (sha256 in == sha256 out) with the
- *     asset's Content-Type, an inline Content-Disposition carrying the original
- *     filename, and private cache headers — the properties the PDF/image
- *     renderer gates depend on.
- *   - 413 when the asset exceeds the serve cap.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
@@ -130,7 +116,6 @@ describe('GET /api/files/[id]', () => {
   });
 
   it('serves the exact stored bytes with content-type and inline disposition', async () => {
-    // %PDF header + trailing bytes — enough to prove byte-for-byte integrity.
     const stored = Buffer.from('%PDF-1.7\n1 0 obj\nendobj\n%%EOF', 'utf8');
     const storedHash = createHash('sha256').update(stored).digest('hex');
     mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
@@ -151,9 +136,6 @@ describe('GET /api/files/[id]', () => {
     expect(mockGetObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf');
   });
 
-  // CRIT-005 — a generated file is sandbox- or model-authored. Served `inline`
-  // under its own markup type, a top-level navigation to this route executes it
-  // as a document on the app origin with the signed-in session.
   it.each([
     ['text/html', 'dashboard.html'],
     ['image/svg+xml', 'chart.svg'],
@@ -171,7 +153,6 @@ describe('GET /api/files/[id]', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/octet-stream');
     expect(res.headers.get('content-disposition')).toBe(`attachment; filename="${filename}"`);
-    // Bytes are still served intact — `fetch().text()` renderers are unaffected.
     expect(Buffer.from(await res.arrayBuffer()).equals(stored)).toBe(true);
   });
 
@@ -234,7 +215,6 @@ describe('GET /api/files/[id]', () => {
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(200);
     const disposition = res.headers.get('content-disposition') ?? '';
-    // No header injection: single well-formed quoted filename, no CR/LF/quotes inside.
     expect(disposition).toMatch(/^inline; filename="[^"\r\n]*"$/);
     expect(res.headers.get('content-type')).toBe('text/csv');
   });

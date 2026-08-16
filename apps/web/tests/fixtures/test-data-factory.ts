@@ -1,18 +1,11 @@
-/**
- * Test Data Factory
- * Provides mock data generators for unit tests
- */
 
 import type { Task } from '@shared/stores/mission-control-store';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 const DEFAULT_TEST_MODEL = requireProviderDefaultModel('openai');
 
-// Counter for unique IDs
 let taskCounter = 0;
 let _messageCounter = 0;
-
-// ===== Mission Plan Factories =====
 
 export function createMockMissionPlan(taskCount: number = 3) {
   const tasks = [];
@@ -47,8 +40,6 @@ export function createDebugPlan() {
   };
 }
 
-// ===== Employee Factories =====
-
 export function createMockEmployee(
   overrides: { name?: string; tools?: string[]; systemPrompt?: string; description?: string } = {},
 ) {
@@ -76,8 +67,6 @@ export function createDebuggerEmployee() {
   });
 }
 
-// ===== LLM Response Factory =====
-
 export function createMockLLMResponse(content: string): {
   content: string;
   model: string;
@@ -89,8 +78,6 @@ export function createMockLLMResponse(content: string): {
     tokens: { input: 100, output: 200, total: 300 },
   };
 }
-
-// ===== Task Factories =====
 
 export function createMockTask(overrides: Partial<Task> = {}): Task {
   taskCounter++;
@@ -135,8 +122,6 @@ export function createFailedTask(description: string, error: string): Task {
     error,
   });
 }
-
-// ===== Message Factories =====
 
 export function createUserMessage(content: string) {
   _messageCounter++;

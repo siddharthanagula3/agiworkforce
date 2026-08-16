@@ -1,12 +1,3 @@
-/**
- * useTTS — Text-to-Speech hook using the browser's SpeechSynthesis API.
- *
- * Features:
- * - Strips Markdown/code blocks so the AI reads clean prose
- * - Tracks speaking state for UI feedback
- * - Cancels on unmount so no zombie utterances linger
- * - Falls back gracefully when SpeechSynthesis is unavailable (e.g., Tauri on some platforms)
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -47,12 +38,9 @@ export interface UseTTSReturn {
   isSupported: boolean;
   speak: (text: string) => void;
   speakNative: (text: string) => Promise<void>;
-  /** Speak with barge-in support (interrupts if user starts talking) */
   speakWithBargeIn: (text: string) => Promise<void>;
   stop: () => void;
-  /** Stop backend TTS playback */
   stopNative: () => Promise<void>;
-  /** Check if backend TTS is currently playing */
   isNativePlaying: () => Promise<boolean>;
 }
 
@@ -73,7 +61,6 @@ export function useTTS(): UseTTSReturn {
     (text: string) => {
       if (!isSupported) return;
 
-      // If already speaking the same content, toggle off
       if (isSpeaking) {
         stop();
         return;
@@ -82,12 +69,9 @@ export function useTTS(): UseTTSReturn {
       const clean = stripMarkdown(text);
       if (!clean) return;
 
-      // Cancel any previous utterance
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(clean);
-      // Honor the user's selected voice persona (was hardcoded, so the persona
-      // picker in Settings > Voice had no effect on real responses).
       const personaParams = getPersistedVoicePersonaParams();
       utterance.rate = personaParams.rate;
       utterance.pitch = personaParams.pitch;
@@ -117,7 +101,6 @@ export function useTTS(): UseTTSReturn {
       try {
         await voiceTtsSpeak(clean);
       } catch {
-        // Fallback to browser TTS when native is unavailable
         speak(clean);
       } finally {
         setIsSpeaking(false);
@@ -134,11 +117,9 @@ export function useTTS(): UseTTSReturn {
       try {
         await voiceTtsSpeakWithBargeIn(clean);
       } catch {
-        // Fallback to regular native TTS
         try {
           await voiceTtsSpeak(clean);
         } catch {
-          // Fallback to browser TTS
           speak(clean);
         }
       } finally {
@@ -165,13 +146,9 @@ export function useTTS(): UseTTSReturn {
     }
   }, []);
 
-  // Cancel on unmount
   useEffect(() => {
     return () => {
       if (isSupported) window.speechSynthesis.cancel();
-      // FIX-033 (Sprint 5): unmount-time TTS stop is best-effort — surface
-      // failures to the console instead of swallowing them silently so a
-      // dead TTS subsystem is at least diagnosable.
       voiceTtsStop().catch((err: unknown) => {
         console.warn('[useTTS] voiceTtsStop on unmount failed', err);
       });

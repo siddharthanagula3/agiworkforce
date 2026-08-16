@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-// PDF.js types
 interface PDFDocumentProxy {
   numPages: number;
   getPage: (pageNumber: number) => Promise<PDFPageProxy>;
@@ -36,15 +35,10 @@ interface PDFRenderTask {
 }
 
 interface PDFViewerProps {
-  /** URL or data URL of the PDF to display */
   src: string;
-  /** Optional file path for Tauri file system access */
   filePath?: string;
-  /** Additional CSS classes */
   className?: string;
-  /** Callback when PDF fails to load */
   onError?: (error: Error) => void;
-  /** Callback when PDF loads successfully */
   onLoad?: (numPages: number) => void;
 }
 
@@ -63,7 +57,6 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
   const [error, setError] = useState<string | null>(null);
   const [renderingPage, setRenderingPage] = useState(false);
 
-  // Load PDF document
   useEffect(() => {
     let cancelled = false;
     let loadingTask: PDFDocumentLoadingTask | undefined;
@@ -84,23 +77,18 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
         setIsLoading(true);
         setError(null);
 
-        // Dynamically import PDF.js to avoid SSR issues
         const [pdfjs, pdfWorker] = await Promise.all([
           import('pdfjs-dist'),
           import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
         ]);
 
-        // Bundle the matching worker so Local PDF previews do not depend on a
-        // third-party CDN or risk mixing incompatible PDF.js versions.
         pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker.default;
 
         let activeLoadingTask: PDFDocumentLoadingTask;
 
         if (filePath) {
-          // For Tauri file paths, we need to read the file first
           const { invoke } = await import('@/lib/tauri-mock');
           try {
-            // AUDIT-COMMAND-076 fix: Use file_read_binary instead of file_read_binary_base64
             const content = await invoke<string>('file_read_binary', { filePath });
             const binaryData = atob(content);
             const bytes = new Uint8Array(binaryData.length);
@@ -109,11 +97,9 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
             }
             activeLoadingTask = pdfjs.getDocument({ data: bytes });
           } catch {
-            // Fallback to URL if file read fails
             activeLoadingTask = pdfjs.getDocument({ url: src });
           }
         } else if (src.startsWith('data:')) {
-          // Data URL - extract base64 content
           const base64 = src.split(',')[1];
           if (base64) {
             const binaryData = atob(base64);
@@ -126,7 +112,6 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
             activeLoadingTask = pdfjs.getDocument({ url: src });
           }
         } else {
-          // Regular URL
           activeLoadingTask = pdfjs.getDocument({ url: src });
         }
 
@@ -164,7 +149,6 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
     };
   }, [src, filePath, onError, onLoad]);
 
-  // Render current page
   const renderPage = useCallback(async () => {
     if (!pdfDoc || !canvasRef.current) return;
 
@@ -216,7 +200,6 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
     };
   }, [renderPage]);
 
-  // Navigation handlers
   const goToPrevPage = useCallback(() => {
     setCurrentPage((prev) => (prev > 1 ? prev - 1 : prev));
   }, []);
@@ -237,7 +220,6 @@ export function PDFViewer({ src, filePath, className, onError, onLoad }: PDFView
     setRotation((prev) => (prev + 90) % 360);
   }, []);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {

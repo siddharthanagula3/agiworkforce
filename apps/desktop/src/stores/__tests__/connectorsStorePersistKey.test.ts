@@ -1,15 +1,3 @@
-/**
- * Two zustand stores that persist under one key overwrite each other's payload
- * on every rehydrate, and the lower-versioned one drags the other back through
- * migrations it already ran. `connectorsStore` and `stores/settings/connectors`
- * both claimed `connectors-store` (v7 and v4), so the v7 `version < 6` branch
- * reset `supportedConnectorIds` on every boot; `chatPreferencesStore` and
- * `stores/settings/chatPrefs` had the same pair on
- * `agiworkforce-chat-preferences`.
- *
- * Nothing about either collision was visible at the type level or at runtime,
- * so guard the invariant by reading the persist keys back out of the sources.
- */
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -30,11 +18,6 @@ function sourceFiles(directory: string): string[] {
   return files;
 }
 
-/**
- * Offsets of the top-level commas and the closing paren of the call whose `(`
- * sits at `open`. Skips comments and string bodies so their brackets and
- * apostrophes do not unbalance the depth count.
- */
 function scanCall(text: string, open: number): { end: number; commas: number[] } | null {
   let depth = 0;
   const commas: number[] = [];
@@ -66,7 +49,6 @@ function scanCall(text: string, open: number): { end: number; commas: number[] }
   return null;
 }
 
-/** Module-level `const NAME = 'literal'` bindings, for keys held in a const. */
 function stringConstants(text: string): Map<string, string> {
   const constants = new Map<string, string>();
   for (const [, identifier, , literal] of text.matchAll(
@@ -77,7 +59,6 @@ function stringConstants(text: string): Map<string, string> {
   return constants;
 }
 
-/** `persist(..., { name })` keys declared in `file`, resolved to their literals. */
 function persistKeys(file: string): string[] {
   const text = readFileSync(file, 'utf8');
   const constants = stringConstants(text);
@@ -87,11 +68,9 @@ function persistKeys(file: string): string[] {
     const open = i + 'persist('.length - 1;
     i = open + 1;
     const call = scanCall(text, open);
-    // A `persist(` inside a comment never balances into a two-argument call.
     if (!call || call.commas.length === 0) continue;
     i = call.end;
 
-    // Options are persist's second argument and always open with `name`.
     const options = text.slice(call.commas[0], call.end);
     const declared = options.match(/\bname:\s*(?:(['"])([^'"]+)\1|([A-Za-z0-9_$]+))/);
     if (!declared) continue;
@@ -117,9 +96,6 @@ describe('persisted store keys', () => {
     const collisions = [...owners].filter(([, files]) => files.length > 1);
     expect(collisions).toEqual([]);
 
-    // Sanity check on the scanner: a silent parse failure would make every
-    // collision undetectable, and the assertion above would pass on an empty
-    // map. Deliberately key-name agnostic so a rename does not touch this.
     expect([...owners.values()].flat()).toContain('connectorsStore.ts');
     expect(owners.size).toBeGreaterThan(20);
   });

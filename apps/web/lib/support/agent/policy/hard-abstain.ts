@@ -1,26 +1,3 @@
-/**
- * Hard-abstain classification — deterministic, pre-retrieval, pre-model.
- *
- * Four categories are refused regardless of retrieval confidence, per founder
- * decision: billing/charges, data deletion and retention, security, and
- * legal/policy interpretation. A hit returns an abstention BEFORE retrieval and
- * BEFORE any provider call.
- *
- * That ordering is the strongest guarantee available here: a retrieved document
- * cannot argue the agent out of abstaining on billing, because on a billing
- * question no document is ever retrieved and no model is ever run. The rules
- * live in code and are never stated in the prompt as something a model could be
- * talked out of.
- *
- * Pure — no I/O. The same classifier runs a second time over generated answer
- * text as a backstop for obliquely phrased questions.
- *
- * KNOWN LIMIT: a deterministic pattern table has imperfect recall. It is tuned
- * for PRECISION on the pre-model gate (cheap, unambiguous, unarguable), with the
- * post-generation re-classification as the second net. Neither is exhaustive;
- * real transcripts should be reviewed for missed cases once escalation captures
- * them.
- */
 
 import type { HardAbstainCategory } from '../types';
 import { normalizeText } from '../retrieval/tokenize';
@@ -30,10 +7,6 @@ interface CategoryRules {
   patterns: RegExp[];
 }
 
-/**
- * Patterns run against NFKC-lowercased text with punctuation collapsed to
- * spaces, so `\b` boundaries behave predictably.
- */
 const RULES: readonly CategoryRules[] = Object.freeze([
   {
     category: 'billing',
@@ -110,7 +83,6 @@ const RULES: readonly CategoryRules[] = Object.freeze([
   },
 ]);
 
-/** Category order is fixed so classification is deterministic on overlap. */
 export const SUPPORT_ABSTAIN_CATEGORIES: readonly HardAbstainCategory[] = Object.freeze(
   RULES.map((rule) => rule.category),
 );

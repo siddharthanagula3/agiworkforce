@@ -27,14 +27,6 @@ export function formatThinkingDuration(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
-/**
- * Derive a short live verb phrase from the leading content of a reasoning
- * block, for a status header like "Analyzing • 4s" instead of a static
- * "Thinking… 4s". Inspects the most recent non-empty line so the phrase
- * tracks what the model is currently doing as thinking tokens stream in.
- *
- * No em-dashes. Max length ~20 chars so it fits a single-line header.
- */
 export function deriveReasoningPhrase(content: string): string {
   const lines = content.split('\n');
   const activeLine =

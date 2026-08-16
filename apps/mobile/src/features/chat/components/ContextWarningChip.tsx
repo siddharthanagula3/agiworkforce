@@ -11,13 +11,6 @@ interface ContextWarningChipProps {
   onStartFreshChat?: () => void;
 }
 
-/**
- * Chip shown above the composer when the conversation is approaching the model's
- * context limit (>= 70% of contextWindow used). Disappears once the user acts or
- * when compaction reduces usage below the threshold.
- *
- * Placement: render above <Composer /> in the chat[id] screen, conditionally.
- */
 export function ContextWarningChip({
   modelId,
   messages,

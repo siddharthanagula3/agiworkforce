@@ -15,16 +15,10 @@ export const CREATE_FOLDER_TOOL = 'create_folder';
 
 const EXECUTION_TOOLS = new Set<string>([EXECUTE_CODE_TOOL, WRITE_FILE_TOOL, CREATE_FOLDER_TOOL]);
 
-/** True if `name` is one of the universal E2B execution tools. */
 export function isExecutionTool(name: string): boolean {
   return EXECUTION_TOOLS.has(name);
 }
 
-/**
- * Function-calling tool definitions offered to the model ONLY when E2B execution is
- * enabled (see ./gate.ts). When disabled, these are never offered and the existing
- * provider-native code tools remain (today's behavior) — see the design doc.
- */
 export function e2bExecutionToolDefs(): Array<{
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
@@ -35,9 +29,6 @@ export function e2bExecutionToolDefs(): Array<{
       function: {
         name: EXECUTE_CODE_TOOL,
         description:
-          // Vendor-neutral on purpose: this description is sent to the MODEL,
-          // and models quote their tool descriptions back to users. Naming the
-          // sandbox provider here put "E2B" into user-facing answers.
           'Execute code in a secure sandbox and return its stdout/stderr. Use for ' +
           'computation, data processing, and running scripts. Runs in an isolated ' +
           'environment with resource limits.',
@@ -83,36 +74,10 @@ export function e2bExecutionToolDefs(): Array<{
   ];
 }
 
-/**
- * Whether the given provider routes to E2B (platform-executed sandbox) under the §8
- * cost-optimized cut-over plan, when `e2bCutoverEnabled()` is on.
- *
- * Every provider routes through the same E2B execution and file contract. This keeps
- * tool activity, generated-file harvesting, preview, download, and conversation reload
- * behavior identical across Claude, Gemini, OpenAI, and providers without a native
- * sandbox. Provider-native execution remains available only as the flag-off fallback.
- *
- * Called only when `e2bCutoverEnabled()` is true. Has no side-effects.
- */
 export function providerRoutesToE2B(provider: string): boolean {
   return provider.trim().length > 0;
 }
 
-/**
- * Code-execution router. Returns the tools to attach when `code_execution` is
- * requested. Providers with a NATIVE (provider-executed) interpreter use it; providers
- * without one fail-closed (no tool).
- *
- * This function is the FALLBACK path used when the E2B cut-over does not apply to the
- * current request (see request-processor.ts's `code_execution` branch): free-native
- * providers (Anthropic/Google) always use it, and everyone else falls back to it when
- * `AGI_E2B_EXECUTION` is off, the request isn't streaming, or it's a free-trial request.
- * The reachable, approval-gated E2B execution loop (route.ts `hasE2BTools` → 'auto' mode
- * → `runToolLoop` → `routeExecutionTool`) is the path taken when the cut-over conditions
- * in request-processor.ts are met — see that file and the design doc for the full gating.
- *
- * Effect: when the cut-over doesn't apply, this is byte-for-byte the pre-P3 behavior.
- */
 export function resolveCodeExecutionTools(provider: string): unknown[] {
   const p = provider.toLowerCase();
   if (p === 'anthropic') {
@@ -126,7 +91,6 @@ export function resolveCodeExecutionTools(provider: string): unknown[] {
   if (p === 'openai') {
     return [{ type: 'code_interpreter' }];
   }
-  // No native interpreter and no reachable E2B execution loop → fail-closed.
   return [];
 }
 
@@ -136,19 +100,6 @@ export function resolveCodeExecutionTools(provider: string): unknown[] {
  * (e.g. a runtime error `value`), so it must be bounded too. Exported so other tool
  * result paths (generic MCP tool output in tool-loop.ts) can share the same bound —
  * see design doc §4.3 (MCP tool output is unbounded, a memory-exhaustion risk).
- */
-/**
- * Strip the sandbox vendor's identifiers out of anything heading for the
- * transcript.
- *
- * Sandbox SDK failures surface verbatim — a dropped connection or a timeout
- * arrives as a message naming the provider, its `*.e2b.dev` hosts, its
- * sandbox ids and its env var. That is an implementation detail of OUR
- * "Run code" feature, and users were seeing it in the chat whenever an
- * execution failed. Scrub the vendor, keep the diagnosis: a Python traceback
- * or "execution timed out" is still exactly as useful afterwards.
- *
- * Deliberately NOT applied to logs — operators need the raw text to debug.
  */
 export function redactSandboxVendor(text: string): string {
   return text
@@ -160,19 +111,10 @@ export function redactSandboxVendor(text: string): string {
 
 export function capOutput(output: string): string {
   if (Buffer.byteLength(output, 'utf8') <= MAX_EXECUTION_OUTPUT_BYTES) return output;
-  // Slice by bytes, not chars, to honor the byte cap with multibyte content.
   const buf = Buffer.from(output, 'utf8').subarray(0, MAX_EXECUTION_OUTPUT_BYTES);
   return `${buf.toString('utf8')}\n[output truncated at ${MAX_EXECUTION_OUTPUT_BYTES} bytes]`;
 }
 
-/**
- * Route a universal execution tool call to the E2B executor.
- *
- * FAIL-CLOSED (the load-bearing rule): if the executor is unavailable, return an
- * EXPLICIT error result to the model — never a silent no-op, and NEVER a fallback to
- * provider-native execution (that would silently re-introduce provider-hosted
- * execution, which the unified architecture bans). Output is always capped.
- */
 export async function routeExecutionTool(
   executor: E2BExecutor | null,
   name: string,
@@ -182,8 +124,6 @@ export async function routeExecutionTool(
     return {
       ok: false,
       output: '',
-      // This string reaches the transcript as tool-error text, so it names the
-      // capability, not the vendor behind it.
       error: 'Code execution is unavailable for this request.',
     };
   }

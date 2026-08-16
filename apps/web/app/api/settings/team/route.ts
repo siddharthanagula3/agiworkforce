@@ -16,15 +16,6 @@ import { withSeatAccountingErrors } from '@/lib/services/organization-seat-servi
 import { expirePendingInvitations } from '@/lib/services/organization-invitation-service';
 import { requireTeamAdminAccess } from './team-admin-access';
 
-/**
- * `owner` is deliberately absent.
- *
- * 0085_organization_seats_lifecycle.sql makes "exactly one owner" a database
- * fact (idx_org_members_single_owner). Ownership therefore moves only through
- * POST /api/settings/organization/transfer-ownership, which demotes and
- * promotes atomically. Accepting `owner` here could only ever produce a unique
- * violation, so it is rejected at the edge with an actionable message.
- */
 const AddMemberSchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
   email: z.string().email('Invalid email address'),
@@ -55,10 +46,6 @@ function formatMember(row: MemberWithProfile, currentUserId: string) {
   };
 }
 
-/**
- * GET /api/settings/team?organizationId=<uuid>
- * List members of an organization the current user belongs to.
- */
 async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-team-list');
   if (rateLimitResponse) return rateLimitResponse;
@@ -73,7 +60,6 @@ async function handleList(request: NextRequest) {
 
   const db = getNeonDb();
 
-  // Verify the requesting user is a member of that org.
   const [requesterMembership] = await db.query<OrganizationMemberRow>(
     `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
      from public.organization_members
@@ -101,13 +87,6 @@ async function handleList(request: NextRequest) {
   return NextResponse.json({ members: members.map((member) => formatMember(member, userId)) });
 }
 
-/**
- * POST /api/settings/team
- * Add an existing AGI account to the organization by email.
- *
- * There is no invitation persistence or email delivery system in this repo,
- * so unknown addresses fail with an actionable message and create no row.
- */
 async function handleAddMember(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-team-invite');
   if (rateLimitResponse) return rateLimitResponse;
@@ -129,10 +108,6 @@ async function handleAddMember(request: NextRequest) {
 
   const member = await withSeatAccountingErrors(() =>
     db.transaction(async (tx) => {
-      // Ordering nicety only. Correctness rests on the
-      // `organizations_seats_within_license` CHECK and the row lock the seat
-      // trigger takes on the organization row (0085) — this advisory lock is
-      // NOT the guarantee, because not every membership writer takes it.
       await tx.query(
         `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
         [organizationId],
@@ -153,8 +128,6 @@ async function handleAddMember(request: NextRequest) {
         throw createError.forbidden('Only owners and admins can add team members');
       }
 
-      // Release seats held by invitations that have already lapsed, so a dead
-      // invitation can never block a live seat grant.
       await expirePendingInvitations(tx, organizationId);
 
       const [targetProfile] = await tx.query<
@@ -168,10 +141,6 @@ async function handleAddMember(request: NextRequest) {
       );
 
       if (!targetProfile) {
-        // This route adds an EXISTING account directly. Onboarding someone who
-        // has no account yet is what the invitation lifecycle is for, so point
-        // there rather than dead-ending. No email is sent from either path —
-        // the invitation endpoint returns a link the inviter delivers.
         throw createError.validation(
           'No AGI account uses that email. Send an invitation instead: POST /api/settings/team/invitations returns a link you deliver yourself. No email was sent.',
         );
@@ -189,13 +158,6 @@ async function handleAddMember(request: NextRequest) {
         throw createError.conflict('This user is already a member of the organization');
       }
 
-      // NO read-then-write seat check here. `organizations.seats_consumed` is
-      // moved by an AFTER INSERT trigger and bounded by the
-      // `organizations_seats_within_license` CHECK, so the INSERT below is what
-      // enforces the ceiling. Two admins racing for the last seat serialize on
-      // the organization row lock and the loser aborts with 23514, which
-      // withSeatAccountingErrors turns into an actionable 409. A count read here
-      // would let both of them pass.
       const [created] = await tx.query<MemberWithProfile>(
         `insert into public.organization_members
          (organization_id, user_id, role, provisioning_source, provisioned_at, joined_at)
@@ -222,10 +184,6 @@ async function handleAddMember(request: NextRequest) {
 
   logger.info({ userId, organizationId, targetUserId: member.user_id }, 'Team member added');
 
-  // Audit: membership grant. Org-scoped, so it is dual-written to
-  // enterprise_audit_events for the org-admin audit export. The target's email
-  // is intentionally omitted — the stable user id is enough to trace, and an
-  // audit trail should not become a second copy of the directory.
   await recordAuditEvent({
     userId,
     eventType: 'member_invited',

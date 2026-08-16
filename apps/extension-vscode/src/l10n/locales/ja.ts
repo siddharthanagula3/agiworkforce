@@ -1,6 +1,3 @@
-/**
- * Japanese catalog. Key parity with `en` is enforced by l10n.test.ts.
- */
 const ja = {
   'applyEdit.prompt': 'AGI Workforce: {command} の結果を適用しますか？',
   'applyEdit.applyInline': 'その場に適用',

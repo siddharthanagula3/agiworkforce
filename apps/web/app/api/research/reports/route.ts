@@ -12,19 +12,6 @@ import {
   listResearchReports,
 } from '@/lib/services/research-report-service';
 
-/**
- * Durable Deep Research reports (CAP-045 slice 1/3 read path).
- *
- *   GET /api/research/reports                       - newest reports for the caller
- *   GET /api/research/reports?conversationId=<uuid> - reports for one conversation
- *   GET /api/research/reports?requestId=<key>       - the report for one run
- *
- * Read-only: reports are written by the research loop during the chat request
- * that produced them, never by a client. Every query runs through
- * `getUserScopedDb`, so migration 0094's owner-only policies enforce isolation
- * in the DATABASE, not merely in the service's WHERE clause.
- */
-
 export const runtime = 'nodejs';
 
 const QuerySchema = z.object({
@@ -54,8 +41,6 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       userId,
       requestId: parsed.data.requestId,
     });
-    // A report the caller does not own is indistinguishable from one that does
-    // not exist — the RLS read simply returns nothing.
     if (!report) throw createError.notFound('Research report not found');
     return NextResponse.json({ report });
   }

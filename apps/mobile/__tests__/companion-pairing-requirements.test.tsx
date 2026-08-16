@@ -45,9 +45,6 @@ jest.mock('@/lib/mmkv', () => ({
   rehydrateWhenMmkvReady: jest.fn(),
 }));
 
-// The real tokens rather than six hand-picked hexes: the components under test
-// read the palette through useThemeColors() now, and a partial mock omits
-// whatever they reach for next.
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
   return {

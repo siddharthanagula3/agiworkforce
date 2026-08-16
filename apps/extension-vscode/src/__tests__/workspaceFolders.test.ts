@@ -1,9 +1,3 @@
-/**
- * workspaceFolders.test.ts — Multi-root workspace helpers
- *
- * Locks in the C4 fix: callsites that previously did `workspaceFolders[0]`
- * silently scoped to the first root in a multi-root workspace.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';

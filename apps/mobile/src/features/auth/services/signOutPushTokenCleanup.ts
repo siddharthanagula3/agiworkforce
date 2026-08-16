@@ -4,16 +4,6 @@ import { secureFetch } from '@/services/secureFetch';
 
 const PUSH_TOKEN_PATH = '/api/mobile/push-token';
 
-/**
- * Revoke this device's push token during explicit sign-out.
- *
- * This is the sole intentional exception to Local mode's managed-cloud egress
- * block. The caller captures the current Clerk JWT before switching the UI and
- * persisted app mode to Local, then passes it here. The exception cannot be
- * repurposed for chat/files/telemetry because neither URL nor method is
- * caller-controlled: it always issues one DELETE to the configured API origin's
- * exact push-token path through secureFetch (the TLS-pinning chokepoint).
- */
 export async function unregisterPushTokenForSignOut(capturedClerkToken: string): Promise<void> {
   const token = capturedClerkToken.trim();
   if (!token) return;

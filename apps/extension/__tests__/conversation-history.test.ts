@@ -23,8 +23,6 @@ import {
 } from '../src/features/background/conversation-history';
 import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
 
-// ─── Chrome storage mock ─────────────────────────────────────────────────────
-
 const _store: Record<string, unknown> = {};
 const OWNER: ManagedCloudOwner = { accountId: 'account-a', authIncarnation: 'session-a' };
 const OTHER_OWNER: ManagedCloudOwner = { accountId: 'account-b', authIncarnation: 'session-b' };
@@ -77,8 +75,6 @@ const chromeMock = {
 
 (globalThis as unknown as Record<string, unknown>).chrome = chromeMock;
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function msgs(count: number): HistoryMessage[] {
   return Array.from({ length: count }, (_, i) => ({
     role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
@@ -108,8 +104,6 @@ function agentEvent(sequence = 0): AgentEventEnvelope {
     },
   };
 }
-
-// ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('conversation-history', () => {
   beforeEach(() => {
@@ -291,9 +285,7 @@ describe('conversation-history', () => {
     const list = await listConversations();
     expect(list).toHaveLength(100);
     expect(list[0].id).toBe(newId);
-    // conv-old-99 (the last element of the old array) is dropped when slicing to 100
     expect(list.find((e) => e.id === 'conv-old-99')).toBeUndefined();
-    // conv-old-0 is still present
     expect(list.find((e) => e.id === 'conv-old-0')).toBeDefined();
   });
 

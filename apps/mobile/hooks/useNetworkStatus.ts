@@ -1,21 +1,3 @@
-/**
- * useNetworkStatus — tracks device connectivity and drives the offline queue.
- *
- * On mount it fetches the current network state synchronously (via NetInfo.fetch)
- * then subscribes to change events. When the device transitions from offline to
- * online the hook triggers offlineQueue.processQueue() so any queued messages
- * are retried automatically.
- *
- * Before retrying each queued message the hook removes the queued placeholder
- * pair (empty assistant message + its user message) from the conversation so
- * the fresh sendMessage call doesn't create duplicates in the chat list.
- *
- * Returned shape:
- *   isOnline       — true when the device has an active connection
- *   isReconnecting — true during the window between going back online and the
- *                    queue finishing processing (drives the "Reconnecting…" UI)
- *   queueSize      — number of messages currently waiting to be retried
- */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import NetInfo from '@react-native-community/netinfo';
@@ -42,15 +24,12 @@ export function useNetworkStatus(): NetworkStatus {
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [queueSize, setQueueSize] = useState(0);
 
-  // Stable reference to avoid stale closure in the NetInfo listener
   const wasOnlineRef = useRef(false);
   const reconnectInFlightRef = useRef(false);
 
-  // Pull actions out of the store for queue retry
   const sendMessage = useChatStore((s) => s.sendMessage);
   const resolveOfflineMessage = useChatStore((s) => s.resolveOfflineMessage);
 
-  /** Refresh the queue-size display after each enqueue / dequeue. */
   const refreshQueueSize = useCallback(() => {
     setQueueSize(offlineQueue.getQueueSize());
   }, []);
@@ -62,11 +41,6 @@ export function useNetworkStatus(): NetworkStatus {
 
     try {
       await offlineQueue.processQueue(async (msg) => {
-        // Remove ONLY this entry's placeholder (by its queue id) before
-        // re-sending, so the fresh user + assistant pair is not a duplicate.
-        // clearQueuedPlaceholders wiped EVERY queued message in the
-        // conversation — draining the first would delete the siblings, and a
-        // failed re-send then left them queued but invisible (message lost).
         resolveOfflineMessage(msg.conversationId, msg.id);
         await sendMessage(msg.conversationId, msg.content, msg.model);
       });
@@ -78,7 +52,6 @@ export function useNetworkStatus(): NetworkStatus {
   }, [sendMessage, resolveOfflineMessage, refreshQueueSize]);
 
   useEffect(() => {
-    // Fetch initial state so the badge renders correctly on mount
     NetInfo.fetch()
       .then((state) => {
         const online = isReachableNetworkState(state);
@@ -94,7 +67,6 @@ export function useNetworkStatus(): NetworkStatus {
       setIsOnline(online);
 
       if (!wasOnlineRef.current && online) {
-        // Device just came back online — drain the offline queue
         void handleReconnect().catch((error) => {
           console.warn('[useNetworkStatus] Offline queue reconnect failed:', error);
         });
@@ -106,8 +78,6 @@ export function useNetworkStatus(): NetworkStatus {
     return unsubscribe;
   }, [handleReconnect]);
 
-  // Keep the queued-count badge live: seed on mount and update on every queue
-  // change (enqueue/drain), instead of freezing at the mount-time value.
   useEffect(() => {
     setQueueSize(offlineQueue.getQueueSize());
     return offlineQueue.subscribe(() => {

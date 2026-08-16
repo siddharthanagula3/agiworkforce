@@ -1,17 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * Opt-in gating for schedule notifications, push and email.
- *
- * Installing the app registers a device; that is not the same as agreeing to be
- * pushed, and having an account is not agreeing to be emailed. The failure
- * worth guarding is the one that cannot be taken back — notifying a user who
- * never enabled it — so the default and every degraded path must resolve to OFF.
- *
- * The channels are also INDEPENDENT: one provider failing must not suppress the
- * other, or a flaky push service would silently cost the user their email too.
- */
-
 const mocks = vi.hoisted(() => ({ query: vi.fn(), sendPush: vi.fn(), sendEmail: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
@@ -36,7 +24,6 @@ const notice = {
   status: 'success' as const,
 };
 
-/** Stored `notifications` namespace for the account. */
 function preferences(value: unknown, email: string | null = 'user@example.test') {
   mocks.query.mockResolvedValue([{ notifications: value, email }]);
 }
@@ -60,8 +47,6 @@ describe('notifyScheduleCompleted — consent', () => {
   });
 
   it('sends nothing when the preference is absent', async () => {
-    // The default must be OFF. A user who installed the app never agreed to
-    // this, and defaulting to on is the one mistake that cannot be undone.
     preferences({});
 
     await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
@@ -91,7 +76,6 @@ describe('notifyScheduleCompleted — consent', () => {
   });
 
   it('fails CLOSED when settings cannot be read', async () => {
-    // A settings outage must not start sending notifications nobody enabled.
     mocks.query.mockRejectedValue(new Error('db down'));
 
     await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
@@ -121,7 +105,6 @@ describe('notifyScheduleCompleted — content', () => {
     await notifyScheduleCompleted(notice);
 
     const message = mocks.sendPush.mock.calls[0]![1] as { data: Record<string, string> };
-    // Notifications render on a lock screen; scheduled runs can produce anything.
     expect(message.data).toEqual({ type: 'schedule_run', taskId: 'task-1' });
   });
 
@@ -144,8 +127,6 @@ describe('notifyScheduleCompleted — content', () => {
 
 describe('notifyScheduleCompleted — never throws', () => {
   it('swallows a push failure', async () => {
-    // The run is already finalized; a notification problem must not change the
-    // recorded outcome of the work.
     mocks.sendPush.mockRejectedValue(new Error('expo down'));
 
     await expect(notifyScheduleCompleted(notice)).resolves.toEqual({
@@ -162,7 +143,6 @@ describe('notifyScheduleCompleted — never throws', () => {
   });
 
   it('still emails when push fails', async () => {
-    // The channels are independent; one failing must not suppress the other.
     mocks.sendPush.mockRejectedValue(new Error('expo down'));
     preferences({
       [SCHEDULE_PUSH_PREFERENCE_KEY]: true,

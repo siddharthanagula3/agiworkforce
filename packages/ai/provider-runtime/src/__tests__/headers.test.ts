@@ -63,9 +63,7 @@ describe('LatchedHeaderStore', () => {
       store.latch(`s${i}`, 'H', String(i));
     }
     expect(store.size).toBeLessThanOrEqual(64);
-    // The first sessions should have been evicted.
     expect(store.getLatched('s0')).toEqual({});
-    // Latest sessions remain.
     expect(store.getLatched('s69')['h']).toBe('69');
   });
 });
@@ -89,7 +87,6 @@ describe('applyLatchedHeaders', () => {
     const store = new LatchedHeaderStore();
     store.latch('s1', 'X-Foo', 'latched-value');
     const out = applyLatchedHeaders('s1', { 'X-Foo': 'outbound-value' }, store);
-    // latched wins (lowercased key)
     expect(out['x-foo']).toBe('latched-value');
   });
 });

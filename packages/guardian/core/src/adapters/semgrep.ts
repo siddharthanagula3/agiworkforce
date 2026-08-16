@@ -1,6 +1,3 @@
-/**
- * Semgrep JSON output adapter (`semgrep --json`).
- */
 import { z } from 'zod';
 
 import { toEvidence, type AdapterOutcome, type RawFinding } from './types.js';

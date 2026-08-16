@@ -1,39 +1,20 @@
 'use client';
 
-/**
- * MediaDisplay - Render generated images inline within chat messages
- *
- * - Max-width 512px, rounded-xl, shadow-sm
- * - Click to open lightbox
- * - Download button overlay on hover
- * - "Generating..." skeleton loading state
- */
-
 import { useState, useCallback, memo } from 'react';
 import { Download, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ImageLightbox } from './ImageLightbox';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 type MediaStatus = 'generating' | 'ready' | 'error';
 
 interface MediaDisplayProps {
-  /** Image source URL or base64 data URI */
   src?: string;
-  /** Alt text for the image */
   alt?: string;
-  /** Current generation status */
   status?: MediaStatus;
-  /** Error message when status is 'error' */
   errorMessage?: string;
-  /** Optional prompt text shown below the image */
   prompt?: string;
-  /** Custom CSS classes */
   className?: string;
 }
-
-// ─── Skeleton / Generating State ─────────────────────────────────────────────
 
 function GeneratingSkeleton({ prompt }: { prompt?: string }) {
   return (
@@ -69,8 +50,6 @@ function GeneratingSkeleton({ prompt }: { prompt?: string }) {
   );
 }
 
-// ─── Error State ─────────────────────────────────────────────────────────────
-
 function ErrorDisplay({ message }: { message?: string }) {
   return (
     <div
@@ -87,8 +66,6 @@ function ErrorDisplay({ message }: { message?: string }) {
     </div>
   );
 }
-
-// ─── Main Component ──────────────────────────────────────────────────────────
 
 function MediaDisplayComponent({
   src,
@@ -114,19 +91,13 @@ function MediaDisplayComponent({
     [src],
   );
 
-  // ── Generating state ────────────────────────────────────────────────────
-
   if (status === 'generating') {
     return <GeneratingSkeleton prompt={prompt} />;
   }
 
-  // ── Error state ─────────────────────────────────────────────────────────
-
   if (status === 'error' || !src) {
     return <ErrorDisplay message={errorMessage} />;
   }
-
-  // ── Ready state ─────────────────────────────────────────────────────────
 
   return (
     <>

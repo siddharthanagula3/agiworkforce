@@ -1,16 +1,3 @@
-/**
- * Inline voice controls — the ONE voice presentation.
- *
- * Voice is a STATE the chat is in, not a screen you enter. The thread stays
- * visible and scrollable behind this bar, replies land as ordinary chat
- * bubbles, and the only thing that changes is the composer — an orb above it,
- * a mic, and a white X to leave.
- *
- * A full-screen overlay used to exist alongside this, reached from a different
- * entry point on the same button, so the app had two voice modes that looked
- * nothing alike. It was deleted: a spoken answer must stay re-readable,
- * scrollable and copyable without quitting voice first.
- */
 
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -28,17 +15,11 @@ export type VoiceInlinePhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 export interface VoiceInlineBarProps {
   visible: boolean;
   phase: VoiceInlinePhase;
-  /** Normalised 0..1 capture/playback level driving the orb. */
   audioLevel?: number;
-  /** Whether capture is currently suspended. Drives the privacy-legible mic state. */
   muted?: boolean;
-  /** Open the attachment menu — the composer keeps its "+" in voice mode. */
   onAttach?: () => void;
-  /** Return to typing. */
   onOpenKeyboard?: () => void;
-  /** Toggle capture (mute / unmute the mic). */
   onToggleMic: () => void;
-  /** Leave voice mode entirely. */
   onExit: () => void;
 }
 
@@ -112,8 +93,6 @@ export function VoiceInlineBar({
             {pillContent}
           </Pressable>
         ) : (
-          // Input-shaped and unhandled is worse than absent: it advertises a
-          // composer that swallows every tap. Announced as plain text instead.
           <View style={pillStyle}>{pillContent}</View>
         )}
 

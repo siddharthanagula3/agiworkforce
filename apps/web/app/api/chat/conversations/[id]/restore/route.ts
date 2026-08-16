@@ -1,19 +1,3 @@
-/**
- * Restore a soft-deleted conversation.
- *
- * POST /api/chat/conversations/[id]/restore
- *
- * `DELETE` on a conversation only sets `deleted_at`, and — unlike media, which
- * has `cron/purge-deleted-media` — nothing ever purges those rows. So a deleted
- * conversation was permanently unreachable while its messages sat in the
- * database indefinitely: the worst of both, no recovery for the user and no
- * reclaimed storage.
- *
- * This clears `deleted_at`. It deliberately does NOT touch `archived`,
- * `pinned`, or `starred`: restoring means putting the conversation back exactly
- * as it was, and an archived conversation that was then deleted should return
- * to being archived, not reappear in the main list.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -48,13 +32,6 @@ async function handleRestoreConversation(request: NextRequest, context: RouteCon
 
   let restored: ChatConversationRow | undefined;
   try {
-    // Owner-scoped and conditional on the row still being deleted. `returning`
-    // distinguishes "restored it" from "there was nothing to restore" in one
-    // statement, so a double-submit cannot report success twice.
-    //
-    // `updated_at` is deliberately NOT bumped: it drives the sidebar's ordering,
-    // and restoring an old conversation should return it to its place in the
-    // history rather than jumping it to the top as if it had new activity.
     [restored] = await db.query<ChatConversationRow>(
       `
         update web_conversations
@@ -74,8 +51,6 @@ async function handleRestoreConversation(request: NextRequest, context: RouteCon
   }
 
   if (!restored) {
-    // Covers both "not yours" and "not deleted" without disclosing which —
-    // the same shape the rest of this route family uses.
     throw createError.notFound('Conversation not found');
   }
 

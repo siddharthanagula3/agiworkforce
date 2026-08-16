@@ -1,16 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-/**
- * The schedules client used to address one resource three ways: a retyped
- * `/api/schedules` literal for the list, `managedCloudSchedulePath` for the
- * item, and `MANAGED_CLOUD_SCHEDULES_PATH` for create. Relocating the contract
- * is the only way to tell a retyped literal from a real reference — a literal
- * keeps pointing at the old route while the rest of the client moves, which is
- * exactly the half-migrated state this guard exists to prevent.
- *
- * Lives in its own file because `vi.mock` is hoisted per module, and the
- * sibling `schedule-api.test.ts` asserts the real production URLs.
- */
 const RELOCATED = '/api/relocated-schedules';
 
 vi.mock('@agiworkforce/cloud-contracts', async (importOriginal) => {

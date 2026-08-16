@@ -1,13 +1,3 @@
-/**
- * SkillMentionPicker — Phase A Slice 5 (ported from UAC)
- *
- * Dropdown picker that appears when the user types "@" in the chat input.
- * Shows a filtered list of AI skills with keyboard navigation support.
- *
- * Desktop-specific dependency removed:
- *   - loadSkills() from desktop skillLoader replaced by a prop-based skills list
- *     so the package is surface-agnostic. Hosts pass in their skill list.
- */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
@@ -19,13 +9,9 @@ export interface MentionSkill {
 }
 
 export interface SkillMentionPickerProps {
-  /** Text after the @ symbol used to filter skills */
   query: string;
-  /** Full list of skills to search over (provided by the host). */
   skills: MentionSkill[];
-  /** Called when a skill is selected */
   onSelect: (skill: MentionSkill) => void;
-  /** Called when the picker should close */
   onClose: () => void;
 }
 
@@ -53,12 +39,10 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
       .slice(0, MAX_RESULTS);
   }, [query, skills]);
 
-  // Reset selection when results change
   useEffect(() => {
     setSelectedIndex(0);
   }, [filtered.length, query]);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
@@ -84,7 +68,6 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
     return () => window.removeEventListener('keydown', handleKey, true);
   }, [filtered, selectedIndex, onSelect, onClose]);
 
-  // Scroll selected item into view
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;

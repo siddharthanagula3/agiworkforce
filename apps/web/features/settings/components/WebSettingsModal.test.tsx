@@ -2,20 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { WebSettingsModal } from './WebSettingsModal';
 
-/**
- * WebSettingsModal adapter honesty (founder spec 2026-07-10 + known-flaws
- * WEB-CONNECTORS row):
- *   - connected state comes ONLY from real sources: active user_connectors
- *     rows (GET /api/connectors) and GitHub App installations
- *     (GET /api/github/installations) — github cannot have a user_connectors
- *     row, the installation IS its real signal;
- *   - catalog Connect buttons render only for ids the server reports as
- *     available; preview-only rows stay in the Browse directory;
- *   - custom remote MCP connectors use their real persisted
- *     POST /api/connectors/custom flow;
- *   - local-only (exclusive) connectors never render on web.
- */
-
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => '/chat',
@@ -25,15 +11,9 @@ vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: vi.fn(async () => 'csrf-token'),
 }));
 
-// Section components pull in stores/Clerk/etc.; the connectors pane under
-// test is adapter-driven inside the shared shell, so stub the rest.
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
 vi.mock('../sections/AccountSection', () => ({ AccountSection: () => null }));
 vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
-// The Team section also renders the organization's SHARED ecosystem (0086).
-// Stubbed here for the same reason every other section is: this file tests the
-// modal's section routing, not the sections themselves. Its own behaviour is
-// covered by OrganizationSharingSection.test.tsx.
 vi.mock('../sections/OrganizationSharingSection', () => ({
   OrganizationSharingSection: () => <div>Organization sharing content</div>,
 }));
@@ -162,26 +142,20 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
   });
 
   it('renders no Connect buttons when the server reports nothing connectable, and hides local-only connectors', async () => {
-    stubFetch(); // available: [] — nothing connectable
+    stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
     await screen.findByText('Connect your first tool');
-    // The generic custom-MCP action is real, but no branded connector is
-    // offered unless the server advertises it as available.
     expect(screen.getByRole('button', { name: 'Connect remote MCP server' })).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.queryByPlaceholderText('Search connectors...')).toBeNull();
-    // Preview-only rows stay in Browse rather than becoming dead operational
-    // rows in the primary settings pane.
     expect(screen.queryByText('Notion')).toBeNull();
     expect(screen.queryByText('Coming soon')).toBeNull();
-    // Local-only (exclusive) connectors cannot run on the cloud web server.
     expect(screen.queryByText('Local Filesystem')).toBeNull();
     expect(screen.queryByText('Terminal / Shell')).toBeNull();
   });
 
   it('renders a Connect button for GitHub when the server reports it available', async () => {
-    // GitHub App configured → GET /api/connectors reports github connectable.
     stubFetch({ available: ['github'] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
@@ -216,7 +190,6 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
     await screen.findByText('Connect your first tool');
 
-    // Open Add > Add custom connector, fill valid values, submit.
     const { fireEvent } = await import('@testing-library/react');
     fireEvent.click(screen.getByRole('button', { name: 'Connect remote MCP server' }));
     fireEvent.change(screen.getByPlaceholderText('My connector'), {

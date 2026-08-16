@@ -44,13 +44,6 @@ function base64url(input) {
   return Buffer.from(input).toString('base64url');
 }
 
-/**
- * Mint the ES256 JWT App Store Connect expects. Written against node:crypto
- * rather than a JWT dependency so this runs with nothing installed.
- *
- * `aud` is fixed by Apple. The 20-minute expiry is Apple's documented maximum
- * for token lifetime; anything longer is rejected outright.
- */
 function mintToken({ keyId, issuerId, privateKey }) {
   const header = { alg: 'ES256', kid: keyId, typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
@@ -116,10 +109,6 @@ async function main() {
   const privateKey = readFileSync(keyPath, 'utf8');
   if (!privateKey.includes('BEGIN PRIVATE KEY')) {
     console.error(`✖ ${keyPath} is not a PKCS#8 private key.`);
-    // Deliberately spells the PEM banner out in words instead of reproducing it.
-    // This file ships in the repo, and a contiguous banner literal — in a string
-    // OR in a comment like this one — trips the pre-push secret scan on every
-    // future push. A permanent false positive in help text is worse than prose.
     console.error('  An App Store Connect API key is PKCS#8: its first line is BEGIN PRIVATE KEY,');
     console.error('  wrapped in five dashes on each side.');
     console.error('  A .certSigningRequest ("BEGIN CERTIFICATE REQUEST") is a DIFFERENT thing —');

@@ -1,20 +1,7 @@
-/**
- * Dark mode color token consistency tests.
- *
- * Verifies that:
- * 1. The target hex colors for dark mode (#0f0f13 main, #0b0c14 sidebar)
- *    are correctly defined as CSS custom properties.
- * 2. The CSS variable values in globals.css resolve to the correct hex colors.
- * 3. Border opacity values are consistent (white/7% = rgba(255,255,255,0.07)).
- */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-/**
- * Converts an HSL color string (space-separated: "h s% l%") to a hex string.
- * Matches the CSS hsl() resolution used by browsers.
- */
 function hslToHex(hslString: string): string {
   const parts = hslString.trim().split(/\s+/);
   const h = parseFloat(parts[0]!);
@@ -32,12 +19,7 @@ function hslToHex(hslString: string): string {
   return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
 }
 
-/**
- * Parses the globals.css file and extracts the value of a CSS custom property
- * within the .dark selector block.
- */
 function parseDarkModeVar(cssContent: string, varName: string): string | null {
-  // Find .dark { ... } block
   const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
   if (!darkBlockMatch) return null;
 
@@ -57,7 +39,6 @@ describe('Dark mode color tokens', () => {
     it('--background in dark mode is defined as an HSL triple', () => {
       const value = parseDarkModeVar(cssContent, '--background');
       expect(value).not.toBeNull();
-      // Should be an HSL triple: "h s% l%"
       expect(value).toMatch(/^\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%$/);
     });
 
@@ -66,8 +47,6 @@ describe('Dark mode color tokens', () => {
       expect(value).not.toBeNull();
 
       const hex = hslToHex(value as string);
-      // #0f0f13 is the exact target; #101014 is the nearest rounded value
-      // Both are visually identical (1-digit difference in each channel)
       expect(['#0f0f13', '#101014']).toContain(hex);
     });
   });
@@ -161,8 +140,6 @@ describe('Dark mode color tokens', () => {
 
 describe('Border opacity consistency', () => {
   it('white/7% opacity is rgba(255,255,255,0.07)', () => {
-    // Tailwind border-white/[0.07] resolves to rgba(255, 255, 255, 0.07)
-    // This test documents and verifies the intended border opacity value
     const opacity = 0.07;
     const rgba = `rgba(255, 255, 255, ${opacity})`;
     expect(rgba).toBe('rgba(255, 255, 255, 0.07)');

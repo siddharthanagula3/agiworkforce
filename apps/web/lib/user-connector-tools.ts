@@ -1,63 +1,3 @@
-/**
- * @file Per-user connector → chat tool-loop bridge.
- *
- * Server-only. Imported from the v1 chat-completions route to make a user's
- * CONNECTED connectors actually feed the agentic tool loop. Fixes known-flaw
- * WEB-CONNECTORS-NO-RUNTIME-EFFECT-01: before this module, `user_connectors`
- * was written by /api/connectors CRUD but never read by the tool loop, so
- * connecting a connector had zero conversational effect.
- *
- * Honest model — `user_connectors` is a per-user ENABLEMENT GATE, not a
- * credential store (it holds only connector_id + auth_type + is_active; no
- * endpoint URLs, no tokens). Credentials/endpoints therefore come from
- * server-side sources keyed by connector id, and a connector's tools are
- * offered ONLY when invoking them would actually work:
- *
- *   1. FIRST-PARTY BUILT-IN (github): backed by the existing GitHub App
- *      integration (`lib/github-app.ts` + `github_installations.access_token_enc`).
- *      Gated on the user having a usable installation — the real "invoking would
- *      work" signal — NOT on a user_connectors row (POST /api/connectors 501s
- *      github, so such a row cannot exist). The installation token is resolved
- *      per-request from the authenticated userId and is never cached across users.
- *
- *   2. REMOTE MCP CONNECTORS: an operator-provided `connectorId → MCP endpoint`
- *      map from the validated CONNECTOR_MCP_SERVERS_JSON environment value.
- *      Gated on an active `user_connectors` row for that connectorId.
- *      The endpoint + auth live in the operator config server-side; user-supplied
- *      values never flow here. Dormant until an operator configures the map.
- *
- *   2b. PER-USER OAUTH CONNECTORS (migration 0097 + `lib/connectors/**`): a
- *      provider the OPERATOR registered an OAuth application for
- *      (`CONNECTOR_OAUTH_PROVIDERS_JSON` + per-provider client credentials).
- *      The platform runs the authorization-code + PKCE dance, and each user's
- *      tokens are stored encrypted in `connector_oauth_grants`. Gated on that
- *      user holding a live grant — the real "invoking would work" signal — so
- *      no `user_connectors` row is involved. Dormant until an operator
- *      registers at least one OAuth app.
- *
- *   3. USER'S OWN CUSTOM MCP CONNECTORS: `user_custom_connectors` rows added by
- *      the user via /api/connectors/custom (Claude.ai-style "add a remote MCP
- *      server"). Unlike sources 1–2, this table IS a real per-user credential
- *      store (url + optionally an encrypted bearer token), so — unlike the
- *      operator-mapped catalog/handle caches — nothing here is ever shared
- *      across users; the provider-facing serverId is namespaced with the
- *      row's short id, while credentialed catalog/handle caches are keyed by
- *      authenticated user id + immutable row uuid. Every tool call re-scopes
- *      to the authenticated userId before that cache can be used.
- *
- * SECURITY:
- *   - Remote endpoints pass DNS-resolution SSRF validation
- *     (assertResolvedPublicHostname) — private/link-local hosts are rejected and
- *     logged, never crash the request.
- *   - Auth material is server-side only (installation token / operator headers /
- *     the user's own encrypted bearer token, decrypted only at connect time).
- *   - Per-user tool count is capped per plan (GOV-7, getPlanMaxConnectorTools,
- *     falling back to MAX_CONNECTOR_TOOLS_PER_USER when the tier declares none).
- *   - Execution errors surface as tool-result errors, never as 500s.
- *   - The execution path re-validates authorization (defense-in-depth) so a model
- *     that hallucinates a connector tool the user has not connected gets an error,
- *     not a silent operator-credentialed call.
- */
 
 import 'server-only';
 
@@ -105,70 +45,27 @@ import {
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
-/**
- * GOV-7: fallback ceiling on connector tools injected per user, across all
- * connectors, used only when the billing catalog declares no per-plan limit
- * for the caller's tier (or no tier is known). The per-plan ceiling from
- * `getPlanMaxConnectorTools` takes precedence — this flat number used to be
- * the ONLY cap, so every tier from free to enterprise silently truncated at
- * the same 32 and a paid plan bought no extra connector capacity.
- */
 export const MAX_CONNECTOR_TOOLS_PER_USER = 32;
 
-/**
- * GOV-7: one connector that lost tools to the per-plan ceiling.
- *
- * Truncation used to be log-only: tools were dropped server-side while the
- * connector still read "Connected" in the UI, so the model simply could not
- * call them and the user had no way to find out why. Returning the drop makes
- * it something a caller can actually tell the user about.
- */
 export interface DroppedConnectorTools {
-  /** MCP serverId of the connector that lost tools. */
   connectorId: string;
-  /** Human label when the serverId is an opaque `custom-<hex>` id. */
   connectorLabel: string;
-  /** How many of this connector's tools were not offered this turn. */
   droppedToolCount: number;
 }
 
-/** GOV-7: the full result of assembling a user's connector tool catalog. */
 export interface UserConnectorToolCatalog {
-  /** The tools actually offered to the model this turn. */
   tools: WebMcpToolDef[];
-  /** Non-empty only when the per-plan ceiling truncated the catalog. */
   dropped: DroppedConnectorTools[];
-  /** The ceiling that was applied, or null when the plan declares none. */
   limit: number | null;
 }
 
-/**
- * GOV-7 — resolve the connector-tool ceiling for `planTier`.
- *
- * `getPlanMaxConnectorTools` returns null for BOTH 'unlimited' and 'custom',
- * which for a recognised tier means "no product-side ceiling" — collapsing
- * that onto the flat 32 would have capped enterprise below pro. The flat
- * fallback therefore applies only when the tier is absent or unrecognised,
- * where refusing to cap at all would be the unsafe answer.
- */
 function resolveConnectorToolLimit(planTier: string | null | undefined): number | null {
   if (!getBillingPlanProductLimits(planTier)) return MAX_CONNECTOR_TOOLS_PER_USER;
   return getPlanMaxConnectorTools(planTier);
 }
 
-/** serverId reserved for the first-party GitHub built-in connector. */
 const GITHUB_SERVER_ID = 'github';
 
-/**
- * serverId prefix reserved for a user's own custom remote MCP connectors
- * (`user_custom_connectors` rows, see /api/connectors/custom). serverIds in
- * this namespace are `custom-<short_id>` — a 10-hex-char identifier (never
- * the row's full uuid `id`; see the "Why short_id" note further down) which
- * by construction never contains an underscore, so it never collides with
- * the `mcp__<serverId>__<tool>` qualified-name parser
- * (parseQualifiedToolName in lib/mcp-tool-executor.ts requires the serverId
- * segment to contain no underscore).
- */
 const CUSTOM_SERVER_PREFIX = 'custom-';
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -182,9 +79,7 @@ function isUndefinedTable(error: unknown): boolean {
   );
 }
 
-/** Result shape returned by the connector tool executor. */
 export interface ConnectorExecResult {
-  /** True when this executor owns (and has attempted) the tool. */
   handled: boolean;
   content: string;
   isError: boolean;
@@ -192,19 +87,11 @@ export interface ConnectorExecResult {
 
 const NOT_HANDLED: ConnectorExecResult = { handled: false, content: '', isError: false };
 
-// ─── GitHub built-in connector ──────────────────────────────────────────────
-
 interface GithubInstallationRow {
   installation_id: string | number;
   account_login: string;
 }
 
-/**
- * Static tool definitions for the GitHub built-in connector. These are only
- * ever OFFERED when the user has a usable installation (see
- * loadUserConnectorToolDefs), so their presence in a conversation already
- * proves a backing token exists.
- */
 const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
   {
     qualifiedName: `mcp__${GITHUB_SERVER_ID}__get_pull_request_diff`,
@@ -270,10 +157,6 @@ const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
 export async function getUserGithubInstallations(
   userId: string,
 ): Promise<{ installationId: number; login: string }[]> {
-  // Minting is lazy (getInstallationAccessToken caches into access_token_enc on
-  // first use), so a usable installation is any row PLUS mintable app creds —
-  // requiring a cached token here would deadlock fresh installs out of ever
-  // being offered.
   if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) return [];
   const db = getNeonDb();
   let rows: GithubInstallationRow[];
@@ -295,12 +178,6 @@ export async function getUserGithubInstallations(
     .filter((r) => Number.isFinite(r.installationId));
 }
 
-/**
- * Resolve the installation to use for a given repo owner. Prefers an
- * installation whose account_login matches the owner (case-insensitive); falls
- * back to the sole installation when there is exactly one; otherwise returns
- * null (ambiguous — the caller surfaces a tool-result error).
- */
 function resolveInstallationForOwner(
   installations: { installationId: number; login: string }[],
   owner: string,
@@ -328,8 +205,6 @@ async function executeGithubTool(
 ): Promise<ConnectorExecResult> {
   const installations = await getUserGithubInstallations(userId);
   if (installations.length === 0) {
-    // Re-validated at execution time (defense-in-depth): the tool was offered
-    // only when an install existed, but never trust the offer at call time.
     return {
       handled: true,
       content: 'GitHub is not connected for this account (no usable installation).',
@@ -408,8 +283,6 @@ async function executeGithubTool(
   }
 }
 
-// ─── Remote MCP connectors (operator-configured, per-user gated) ─────────────
-
 const remoteConnectorEntrySchema = z.object({
   connectorId: z.string().min(1).max(100),
   url: z
@@ -428,11 +301,6 @@ type RemoteConnectorEntry = z.infer<typeof remoteConnectorEntrySchema>;
 
 let _mapCache: Map<string, RemoteConnectorEntry> | null = null;
 
-/**
- * Load the operator connector→MCP map. Reserved built-in ids (github) are
- * ignored if an operator tries to redefine them. Cached for the process
- * lifetime; returns an empty map when the environment value is absent.
- */
 function loadConnectorMcpMap(): Map<string, RemoteConnectorEntry> {
   if (_mapCache !== null) return _mapCache;
 
@@ -445,9 +313,9 @@ function loadConnectorMcpMap(): Map<string, RemoteConnectorEntry> {
       const parsed = remoteConnectorFileSchema.parse(raw);
       for (const entry of parsed.connectors) {
         if (!entry.enabled) continue;
-        if (entry.connectorId === GITHUB_SERVER_ID) continue; // reserved built-in
-        if (entry.connectorId.startsWith(CUSTOM_SERVER_PREFIX)) continue; // reserved for per-user custom connectors
-        if (entry.connectorId.startsWith(ORG_SHARED_SERVER_PREFIX)) continue; // reserved for org-shared connectors (0086)
+        if (entry.connectorId === GITHUB_SERVER_ID) continue;
+        if (entry.connectorId.startsWith(CUSTOM_SERVER_PREFIX)) continue;
+        if (entry.connectorId.startsWith(ORG_SHARED_SERVER_PREFIX)) continue;
         map.set(entry.connectorId, entry);
       }
       logger.info({ count: map.size }, '[user-connector] loaded operator connector MCP map');
@@ -460,18 +328,10 @@ function loadConnectorMcpMap(): Map<string, RemoteConnectorEntry> {
   return map;
 }
 
-/** TEST-ONLY: reset the cached connector map so env changes take effect. */
 export function __resetConnectorMcpMapCacheForTests(): void {
   _mapCache = null;
 }
 
-/**
- * Connector ids the operator has mapped to remote MCP endpoints (enabled
- * entries only). /api/connectors uses this to decide which non-local
- * connectors can honestly be enabled: a user_connectors row only has runtime
- * effect for ids in this map (the github built-in is gated on installations
- * instead).
- */
 export function getOperatorMappedConnectorIds(): Set<string> {
   return new Set(loadConnectorMcpMap().keys());
 }
@@ -498,9 +358,6 @@ async function getUserActiveConnectorIds(userId: string): Promise<Set<string>> {
   }
 }
 
-// Per-connectorId catalog cache. The catalog is operator-credentialed and
-// therefore user-independent, so it is safe to share across users; per-user
-// gating happens at def-assembly time via getUserActiveConnectorIds.
 interface RemoteCatalogState {
   catalog: McpToolCatalog | null;
   expiresAt: number;
@@ -508,7 +365,6 @@ interface RemoteCatalogState {
 const _remoteCatalogCache = new Map<string, RemoteCatalogState>();
 const REMOTE_CATALOG_TTL_MS = 60_000;
 
-// Execution handle cache (operator-credentialed, user-independent).
 const _remoteHandles = new Map<string, McpServerHandle>();
 
 async function buildRemoteConnectorCatalog(
@@ -518,7 +374,6 @@ async function buildRemoteConnectorCatalog(
   const cached = _remoteCatalogCache.get(entry.connectorId);
   if (cached && cached.catalog && now < cached.expiresAt) return cached.catalog;
 
-  // SSRF: reject private/link-local endpoints (DNS-resolution check).
   try {
     await assertResolvedPublicHostname(entry.url);
   } catch (err) {
@@ -540,7 +395,6 @@ async function buildRemoteConnectorCatalog(
     const { catalog, handles } = await buildMcpToolCatalog({
       [entry.connectorId]: entryToMcpConfig(entry),
     });
-    // Refresh the execution handle cache with the freshly-connected handle.
     for (const h of handles) {
       const old = _remoteHandles.get(h.serverName);
       _remoteHandles.set(h.serverName, h);
@@ -564,7 +418,6 @@ async function buildRemoteConnectorCatalog(
   }
 }
 
-/** Flatten an MCP result's content blocks into the tool-loop's text payload. */
 function mcpResultToText(result: { content: McpCallToolResult['content'] }): string {
   return result.content
     .map((block) => {
@@ -588,9 +441,6 @@ function catalogToConnectorToolDefs(
     toolName: t.toolName,
     description: t.description ?? t.fallbackDescription,
     origin: 'connector',
-    // Only custom connectors have an opaque `custom-<hex>` serverId with no
-    // human name; pass the row's display name so the activity feed reads
-    // "Using <name> connector" instead of leaking the id.
     ...(serverLabel ? { serverLabel } : {}),
     inputSchema: t.inputSchema,
   }));
@@ -604,7 +454,6 @@ async function executeRemoteConnectorTool(
   try {
     let handle = _remoteHandles.get(entry.connectorId);
     if (!handle) {
-      // SSRF re-check before establishing a fresh connection.
       await assertResolvedPublicHostname(entry.url);
       handle = await connectMcpServer({
         serverName: entry.connectorId,
@@ -627,11 +476,6 @@ async function executeRemoteConnectorTool(
         isError: true,
       };
     }
-    // An authorization challenge on an OPERATOR-credentialed connector is not
-    // something the user can fix by reconnecting, so it must not produce a
-    // Connect card. Say what actually happened instead of a bare transport
-    // error, and drop the handle so a re-credentialed operator config is picked
-    // up without a process restart.
     const challenge = detectConnectorAuthChallenge(err);
     if (challenge) {
       const stale = _remoteHandles.get(entry.connectorId);
@@ -658,25 +502,6 @@ async function executeRemoteConnectorTool(
     return { handled: true, content: `Connector tool error: ${msg}`, isError: true };
   }
 }
-
-// ─── User's own custom remote MCP connectors (per-user credentialed) ───────
-//
-// Unlike the operator-mapped remote connectors above (operator-credentialed,
-// safe to share a catalog/handle across users), rows here belong to exactly
-// one user (RLS-enforced in Postgres) and carry that user's OWN, possibly
-// secret, bearer token. The catalog/handle caches below are therefore keyed
-// by authenticated `user_id` + immutable row uuid (never by the user-scoped
-// `short_id` alone), and every lookup re-scopes by `user_id` at read time so a
-// guessed identifier can never reach another user's connector.
-//
-// Why `short_id` and not the row's `id` (uuid)? The serverId namespace below
-// is embedded verbatim in the provider-facing function name
-// (`mcp__custom-<X>__<toolName>` — see catalogToConnectorToolDefs), and
-// OpenAI-family providers cap function names at 64 chars. A 36-char uuid
-// would alone burn 50 of those before the tool name even starts. `short_id`
-// is a 10-hex-char identifier allocated at insert time
-// (app/api/connectors/custom/route.ts's allocateShortId), unique per
-// (user_id, short_id) at the DB level.
 
 interface CustomConnectorRow {
   id: string;
@@ -718,17 +543,8 @@ async function getUserCustomConnectorRows(
   }
 }
 
-/** Auth-material-free view of a user's custom connectors, for API responses
- * (/api/connectors, /api/connectors/custom) — never includes auth_header_enc. */
 export interface UserCustomConnectorSummary {
-  /** Row uuid — the list/DELETE key. */
   id: string;
-  /**
-   * 10-hex chat-facing id: the tool loop's serverId is `custom-<shortId>`
-   * (see the "why short_id" note above — a uuid would overflow OpenAI's
-   * 64-char function-name cap). API responses expose this so clients can
-   * correlate a directory row with the tool calls it produces in chat.
-   */
   shortId: string;
   name: string;
   url: string;
@@ -772,11 +588,6 @@ export async function getUserCustomConnectorSummaries(
   }
 }
 
-/**
- * Raised when a stored custom-connector credential exists but cannot be
- * decrypted. Distinct from a transport failure so callers can tell the user to
- * reconnect rather than reporting a generic connector error.
- */
 export class ConnectorCredentialError extends Error {
   constructor(message: string) {
     super(message);
@@ -787,12 +598,6 @@ export class ConnectorCredentialError extends Error {
 function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
   const headers: Record<string, string> = {};
   if (row.auth_header_enc) {
-    // AUDIT-FIX CON-13: fail closed. Previously a decryption failure was logged
-    // and the connection proceeded with an empty header set — silently
-    // downgrading an authenticated connector to an anonymous one. If the remote
-    // server treats unauthenticated callers as a public or lower-privileged
-    // principal, the user gets a different (possibly another tenant's) view of
-    // the data with no indication anything changed.
     try {
       headers['Authorization'] = `Bearer ${decryptConnectorToken(row.auth_header_enc)}`;
     } catch (err) {
@@ -812,9 +617,6 @@ function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
   };
 }
 
-// Per-row catalog cache. Keyed by row id (already 1:1 with a single user's
-// credentials), TTL matches the operator remote-connector cache. The authenticated
-// user id remains part of the key as defense-in-depth against row-id/key mistakes.
 interface CustomCatalogState {
   catalog: McpToolCatalog | null;
   expiresAt: number;
@@ -822,20 +624,12 @@ interface CustomCatalogState {
 const _customCatalogCache = new Map<string, CustomCatalogState>();
 const CUSTOM_CATALOG_TTL_MS = 60_000;
 
-// Execution handle cache. Per-row — NEVER shared across users.
 const _customHandles = new Map<string, McpServerHandle>();
 
 function customConnectorCacheKey(userId: string, rowId: string): string {
   return `${encodeURIComponent(userId)}:${encodeURIComponent(rowId)}`;
 }
 
-/**
- * Evict the cached catalog and close the open MCP handle for a deleted custom
- * connector, so the connection is released immediately instead of leaking
- * until process restart. Safe no-op for unknown ids. Called by the custom
- * connectors DELETE route; the execute path re-validates ownership in the DB
- * on every call, so this is resource hygiene, not a security gate.
- */
 export async function evictCustomConnectorCaches(userId: string, rowId: string): Promise<void> {
   const cacheKey = customConnectorCacheKey(userId, rowId);
   _customCatalogCache.delete(cacheKey);
@@ -855,9 +649,6 @@ async function buildCustomConnectorCatalog(
   const cached = _customCatalogCache.get(cacheKey);
   if (cached && cached.catalog && now < cached.expiresAt) return cached.catalog;
 
-  // SSRF: reject private/link-local endpoints (DNS-resolution check). A
-  // connector saved when the endpoint was public could still be repointed
-  // via DNS since save time, so re-check on every catalog build.
   try {
     await assertResolvedPublicHostname(row.url);
   } catch (err) {
@@ -906,8 +697,6 @@ async function executeCustomConnectorTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<ConnectorExecResult> {
-  // Re-validate ownership at execution time (defense-in-depth, mirrors the
-  // remote-connector re-check): only ever act on a row owned by this user.
   const db = getNeonDb();
   let rows: CustomConnectorRow[];
   try {
@@ -959,9 +748,6 @@ async function executeCustomConnectorTool(
     if (err instanceof ConnectorCredentialError) {
       return { handled: true, content: err.message, isError: true };
     }
-    // A custom connector's credential is a bearer token the USER supplied —
-    // there is no broker that can refresh it — so an authorization challenge
-    // means "your saved token no longer works", not "click Connect".
     const challenge = detectConnectorAuthChallenge(err);
     if (challenge) {
       await evictCustomConnectorCaches(userId, row.id);
@@ -984,20 +770,6 @@ async function executeCustomConnectorTool(
   }
 }
 
-// ─── Per-user OAuth connectors (migration 0097, lib/connectors/**) ──────────
-//
-// The Anthropic-style directory connector: the OPERATOR registers one OAuth
-// application per provider, the USER clicks Connect, and the platform holds
-// that user's tokens. Unlike the operator-mapped remote connectors above, the
-// credential is per-user, so catalog and handle caches here are keyed by
-// authenticated user id + connector id and are NEVER shared across users — the
-// same rule the custom-connector path follows.
-//
-// The connector id doubles as the MCP serverId (the registry rejects ids with
-// an underscore, so `mcp__<serverId>__<tool>` still parses) and as the
-// `connector_tool_permissions.connector_id`, so the user's per-tool
-// allow/ask/deny verdicts apply to these connectors with no extra wiring.
-
 function oauthConnectorCacheKey(userId: string, connectorId: string): string {
   return `${encodeURIComponent(userId)}:${encodeURIComponent(connectorId)}`;
 }
@@ -1006,16 +778,6 @@ const _oauthCatalogCache = new Map<string, CustomCatalogState>();
 const _oauthHandles = new Map<string, McpServerHandle>();
 const OAUTH_CATALOG_TTL_MS = 60_000;
 
-/**
- * Where a connector's MCP endpoint is and what to call it.
- *
- * Deliberately narrower than `ConnectorOAuthProvider`: the execution path only
- * ever needed four fields from it, and widening the parameter to the full
- * provider meant a connector could be executed ONLY if an operator had
- * registered an OAuth app. A connector authorized through discovery
- * (`lib/connectors/mcp-discovery.ts`) has a real grant but no provider
- * descriptor, so it could hold a working token and still be unreachable here.
- */
 interface ConnectorMcpTarget {
   connectorId: string;
   mcpUrl: string;
@@ -1023,12 +785,6 @@ interface ConnectorMcpTarget {
   displayName?: string | undefined;
 }
 
-/**
- * Resolve the endpoint for a connector from whichever source knows it.
- *
- * The operator's registered provider wins, matching the precedence the connect
- * flow uses: an operator who registered an app means it to be used.
- */
 function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | null {
   const provider = getConnectorOAuthProvider(connectorId);
   if (provider) {
@@ -1058,12 +814,6 @@ function oauthConnectorMcpConfig(
   };
 }
 
-/**
- * Release the cached catalog and close the open handle for an OAuth connector.
- * Called on disconnect and whenever a token is refreshed — a live handle holds
- * the OLD Authorization header, so reusing it after a refresh would keep
- * replaying the rejected credential.
- */
 export async function evictConnectorOAuthCaches(
   userId: string,
   connectorId: string,
@@ -1096,27 +846,12 @@ function connectRequiredResult(params: {
   };
 }
 
-/**
- * Connector ids that are OAuth-configured AND not already claimed by the
- * operator MCP map. The operator's static mapping wins for a duplicated id:
- * it is already working today, and silently swapping it for a per-user OAuth
- * credential would change who a running deployment calls the provider as.
- */
 const _reportedOAuthShadowedIds = new Set<string>();
 
 function getUsableOAuthConnectorIds(): string[] {
   const operatorMapped = loadConnectorMcpMap();
   const usable: string[] = [];
 
-  // Candidates are the operator-registered providers PLUS every connector whose
-  // authorization server lets us obtain a client identity on our own (CIMD or
-  // dynamic registration). A `preregistered` endpoint is deliberately excluded:
-  // without an operator app there is no way for a user to hold a grant for it,
-  // so listing it here would only add a lookup that always misses.
-  //
-  // Membership here is not a claim that the connector is connected — the caller
-  // intersects this with the user's live grants, so a candidate with no grant
-  // still reads as Connect rather than Connected.
   const candidates = new Set(getOAuthConfiguredConnectorIds());
   for (const id of connectorIdsWithMcpEndpoint()) {
     if (isSelfServiceConnector(id)) candidates.add(id);
@@ -1124,8 +859,6 @@ function getUsableOAuthConnectorIds(): string[] {
 
   for (const id of candidates) {
     if (operatorMapped.has(id)) {
-      // A configuration mistake, not a per-turn event: warn once per process
-      // rather than on every chat turn for the life of the deployment.
       if (!_reportedOAuthShadowedIds.has(id)) {
         _reportedOAuthShadowedIds.add(id);
         logger.warn(
@@ -1151,8 +884,6 @@ async function buildOAuthConnectorCatalog(
   const cached = _oauthCatalogCache.get(cacheKey);
   if (cached && cached.catalog && now < cached.expiresAt) return cached.catalog;
 
-  // SSRF: the MCP endpoint is operator-supplied but can still be re-pointed via
-  // DNS after configuration, so it is re-checked on every build.
   try {
     await assertResolvedPublicHostname(target.mcpUrl);
   } catch (err) {
@@ -1217,19 +948,6 @@ async function callOAuthConnectorTool(
   };
 }
 
-/**
- * LAZY AUTHENTICATION — the 401 flow.
- *
- * A tool call that hits an authorization challenge does not fail the turn. It
- * becomes a structured "connect required" result the client renders as an
- * inline Connect card. Before giving up, an expired-looking 401 gets exactly
- * ONE forced refresh + retry of the same call, because the common case is a
- * token the provider invalidated ahead of its stated expiry.
- *
- * Challenge interpretation mirrors `crates/agiworkforce-mcp/src/oauth/flow.rs`
- * (see lib/connectors/oauth-challenge.ts): a 401 means reconnect, a 403 means
- * reconnect only when it carries `error="insufficient_scope"`.
- */
 async function executeOAuthConnectorTool(
   userId: string,
   connectorId: string,
@@ -1280,8 +998,6 @@ async function executeOAuthConnectorTool(
       return { handled: true, content: `Connector tool error: ${msg}`, isError: true };
     }
 
-    // The cached handle carries the rejected Authorization header; drop it so
-    // the retry below connects with the refreshed credential.
     await evictConnectorOAuthCaches(userId, connectorId);
 
     if (challenge.status === 403) {
@@ -1311,8 +1027,6 @@ async function executeOAuthConnectorTool(
       );
     } catch (retryErr) {
       if (detectConnectorAuthChallenge(retryErr)) {
-        // A freshly-minted token was rejected too. Nothing this server can do
-        // recovers that; the user has to authorize again.
         await evictConnectorOAuthCaches(userId, connectorId);
         return connectRequiredResult({
           connectorId,
@@ -1329,26 +1043,6 @@ async function executeOAuthConnectorTool(
     }
   }
 }
-
-// ─── Organization-shared custom connectors (migration 0086) ────────────────
-//
-// An org admin connects a server once and every member can USE it. Members
-// never see the credential: `auth_header_enc` is decrypted here, server-side,
-// exactly as for a personal connector, and no API surface returns it.
-//
-// Namespace. Shared connectors are emitted as `orgmcp-<org_short_id>`, NOT
-// `custom-<short_id>`. `short_id` is unique only per (user_id, short_id), so
-// reusing it would let two members' personal connectors collide with the
-// shared one inside a single conversation, and would cross-wire
-// `connector_tool_permissions` (keyed user_id + connector_id + tool_name). The
-// `orgmcp-` prefix contains no underscore, so it still parses under
-// `mcp__<serverId>__<tool>` (parseQualifiedToolName).
-//
-// Cache scope. The catalog/handle caches below are keyed by ORGANIZATION +
-// row uuid, not by member. That is correct and deliberate: unlike a personal
-// connector, one shared credential serves every member, and there is no
-// per-member header anywhere on this path. If a per-member header is ever
-// introduced, this key MUST become per-member on the same commit.
 
 const ORG_SHARED_SERVER_PREFIX = 'orgmcp-';
 const ORG_SHORT_ID_RE = /^[0-9a-f]{10}$/;
@@ -1368,13 +1062,6 @@ interface OrgSharedConnectorRow extends CustomConnectorRow {
   org_short_id: string;
 }
 
-/**
- * The organization this user belongs to, read from the membership table.
- *
- * This is the ONLY source of org scope on this path. Nothing about the chat
- * request can influence it, so a member of org A can never reach org B's shared
- * connectors even if they guess an `orgmcp-` id.
- */
 async function resolveConnectorOrganizationId(
   userId: string,
   admittedOrganizationId?: string | null,
@@ -1399,19 +1086,6 @@ async function resolveConnectorOrganizationId(
   }
 }
 
-/**
- * Shared connector rows this member may use.
- *
- * Runs on the privileged connection because it must read `auth_header_enc` to
- * connect — the same regime every other credentialed connector read uses. The
- * tenant boundary here is therefore the `s.organization_id = $1` predicate with
- * a SERVER-DERIVED id, and it is pinned by
- * `lib/services/__tests__/org-shared-connector-service.test.ts`.
- *
- * The owner's own rows are skipped: they already appear in the member's
- * personal `custom-` catalog, and offering the same server twice would double
- * its prompt weight and confuse the model.
- */
 async function getOrgSharedConnectorRows(
   userId: string,
   organizationId: string,
@@ -1444,12 +1118,6 @@ function orgSharedCacheKey(organizationId: string, rowId: string): string {
   return `${encodeURIComponent(organizationId)}:${encodeURIComponent(rowId)}`;
 }
 
-/**
- * Release the cached catalog and close the open MCP handle for a connector the
- * organization has just un-shared. Without this a member keeps invoking a
- * withdrawn connector until the process restarts — the DB row is gone but the
- * live handle is not.
- */
 export async function evictOrgSharedConnectorCaches(
   organizationId: string,
   rowId: string,
@@ -1471,8 +1139,6 @@ async function buildOrgSharedConnectorCatalog(
   const cached = _orgSharedCatalogCache.get(cacheKey);
   if (cached && cached.catalog && now < cached.expiresAt) return cached.catalog;
 
-  // SSRF: DNS can be re-pointed after the share, so re-check on every build —
-  // the same rule the personal path already applies.
   try {
     await assertResolvedPublicHostname(row.url);
   } catch (err) {
@@ -1519,9 +1185,6 @@ async function executeOrgSharedConnectorTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<ConnectorExecResult> {
-  // Re-resolve BOTH the membership and the share at execution time. A member
-  // removed from the org, or a connector un-shared, must stop working on the
-  // very next call — not when a cache expires.
   const organizationId = await resolveConnectorOrganizationId(userId, admittedOrganizationId);
   if (!organizationId) {
     return {
@@ -1591,13 +1254,6 @@ async function executeOrgSharedConnectorTool(
   }
 }
 
-// ─── Public API ─────────────────────────────────────────────────────────────
-
-/**
- * Assemble the tool defs contributed by a signed-in user's connected connectors.
- * Fully defensive: any failure degrades to an empty list (never throws), so a
- * missing table / unconfigured map / DB hiccup can never break a chat request.
- */
 export async function loadUserConnectorToolDefs(
   userId: string,
   options: LoadUserConnectorToolOptions = {},
@@ -1607,34 +1263,11 @@ export async function loadUserConnectorToolDefs(
 
 export interface LoadUserConnectorToolOptions {
   customConnectorLimit?: number;
-  /** Workspace captured at request admission; null is Personal. */
   organizationId?: string | null;
-  /**
-   * GOV-7: the caller's billing plan tier, used to resolve the per-plan
-   * connector-tool ceiling. Omitted/unknown falls back to
-   * `MAX_CONNECTOR_TOOLS_PER_USER`.
-   */
   planTier?: string | null;
-  /**
-   * AUDIT-FIX CON-2: drop tools the user has BLOCKED from the catalog
-   * entirely. Without this filter a blocked tool was still advertised to the
-   * model on every turn, so the model kept calling it and the approval card
-   * kept re-appearing — the user's "never do this" produced an endless prompt
-   * instead of silence. Filtering at the catalog is what actually makes the
-   * verdict stick; the tool loop's execution-time check (CON-1) remains as
-   * defense in depth for a model that hallucinates the name anyway.
-   *
-   * Receives the CONNECTOR id (the MCP serverId) and the BARE tool name,
-   * matching how `connector_tool_permissions` is keyed.
-   */
   isToolDenied?: (connectorId: string, toolName: string) => boolean;
 }
 
-/**
- * GOV-7 — the catalog-returning form of `loadUserConnectorToolDefs`, for
- * callers that want to tell the user when the per-plan ceiling dropped tools.
- * `loadUserConnectorToolDefs` above is the array-only wrapper.
- */
 export async function loadUserConnectorToolCatalog(
   userId: string,
   options: LoadUserConnectorToolOptions = {},
@@ -1644,13 +1277,11 @@ export async function loadUserConnectorToolCatalog(
   try {
     const defs: WebMcpToolDef[] = [];
 
-    // 1. First-party GitHub built-in (live when the user has an installation).
     const installations = await getUserGithubInstallations(userId);
     if (installations.length > 0) {
       defs.push(...GITHUB_TOOL_DEFS);
     }
 
-    // 2. Remote MCP connectors (operator-configured, gated by user_connectors).
     const map = loadConnectorMcpMap();
     if (map.size > 0) {
       const activeIds = await getUserActiveConnectorIds(userId);
@@ -1661,14 +1292,6 @@ export async function loadUserConnectorToolCatalog(
       }
     }
 
-    // 2b. Per-user OAuth connectors (0097). Offered ONLY when this user holds a
-    // live grant whose token can be resolved right now — the same "invoking
-    // would actually work" rule the other sources follow, which is why a
-    // provider with no grant keeps reading as Connect rather than Connected.
-    //
-    // The user's live grants are read ONCE and intersected with the configured
-    // providers, so a deployment with many registered OAuth apps does not issue
-    // one lookup per provider on every chat turn.
     const usableOAuthIds = getUsableOAuthConnectorIds();
     const grantedOAuthIds =
       usableOAuthIds.length > 0
@@ -1691,9 +1314,6 @@ export async function loadUserConnectorToolCatalog(
       }
     }
 
-    // 3. The user's own custom remote MCP connectors (per-user credentialed,
-    // persisted via /api/connectors/custom). Each row independently degrades
-    // to no tools on failure (buildCustomConnectorCatalog never throws).
     const customConnectorLimit =
       options.customConnectorLimit === undefined
         ? undefined
@@ -1704,10 +1324,6 @@ export async function loadUserConnectorToolCatalog(
       if (catalog) defs.push(...catalogToConnectorToolDefs(catalog, row.name));
     }
 
-    // 4. Connectors the user's ORGANIZATION shares with its members (0086).
-    // Same failure posture as 3: each row degrades to no tools independently.
-    // The route captures the active workspace at admission so a background
-    // continuation cannot drift into a newly selected workspace mid-turn.
     const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
     if (organizationId) {
       const sharedRows = await getOrgSharedConnectorRows(
@@ -1721,8 +1337,6 @@ export async function loadUserConnectorToolCatalog(
       }
     }
 
-    // AUDIT-FIX CON-2: apply the user's blocks BEFORE the per-user cap, so a
-    // blocked tool cannot crowd an allowed one out of the catalog.
     const isToolDenied = options.isToolDenied;
     const allowed = isToolDenied
       ? defs.filter((def) => !isToolDenied(def.serverId, def.toolName))
@@ -1734,10 +1348,6 @@ export async function loadUserConnectorToolCatalog(
       );
     }
 
-    // GOV-7: apply the PER-PLAN ceiling (was a flat 32 for every tier) and
-    // report what it cost. Truncating silently while the connector still reads
-    // "Connected" is the failure this replaces: the model could not call the
-    // dropped tools and nothing anywhere told the user why.
     if (limit !== null && allowed.length > limit) {
       const kept = allowed.slice(0, limit);
       const droppedByConnector = new Map<string, DroppedConnectorTools>();
@@ -1770,14 +1380,6 @@ export async function loadUserConnectorToolCatalog(
   }
 }
 
-/**
- * Build a per-user connector tool executor bound to `userId`. The tool loop
- * calls it before the operator MCP dispatch: it returns `handled: true` for
- * connector-owned tools (github built-in / operator-mapped remote connectors /
- * the user's own custom remote MCP connectors) and `handled: false` for
- * anything else so the caller falls through to the operator MCP executor.
- * Authorization is re-validated per call.
- */
 export function makeUserConnectorExecutor(
   userId: string,
   organizationId?: string | null,
@@ -1798,9 +1400,6 @@ export function makeUserConnectorExecutor(
       return executeCustomConnectorTool(userId, customShortId, toolName, args);
     }
 
-    // Organization-shared connector (0086). Membership and the share row are
-    // both re-resolved inside the executor, so a removed member or an
-    // un-shared connector stops working on the very next call.
     const orgShortId = orgShortIdFromServerId(serverId);
     if (orgShortId !== null) {
       return executeOrgSharedConnectorTool(userId, organizationId, orgShortId, toolName, args);
@@ -1809,19 +1408,12 @@ export function makeUserConnectorExecutor(
     const map = loadConnectorMcpMap();
     const entry = map.get(serverId);
     if (!entry) {
-      // Per-user OAuth connector (0097). Checked AFTER the operator map so a
-      // duplicated id keeps its existing operator-credentialed behaviour, and
-      // it re-resolves the grant on every call, so a disconnect stops working
-      // on the very next tool call rather than when a cache expires.
       if (getConnectorOAuthProvider(serverId)) {
         return executeOAuthConnectorTool(userId, serverId, toolName, args);
       }
       return NOT_HANDLED;
     }
 
-    // Re-validate the per-user gate: the user must still have this connector
-    // active. Never execute an operator-credentialed connector for a user who
-    // has not connected it.
     const activeIds = await getUserActiveConnectorIds(userId);
     if (!activeIds.has(serverId)) {
       return {

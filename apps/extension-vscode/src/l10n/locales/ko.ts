@@ -1,6 +1,3 @@
-/**
- * Korean catalog. Key parity with `en` is enforced by l10n.test.ts.
- */
 const ko = {
   'applyEdit.prompt': 'AGI Workforce: {command} 결과를 적용할까요?',
   'applyEdit.applyInline': '인라인 적용',

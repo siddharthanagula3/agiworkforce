@@ -203,8 +203,6 @@ test('pins the Runway text-to-video route and fails closed without provisioning 
   const modelKey = runwayVideoModelKey;
   const authored = runwayVideoModel;
 
-  // Keep the compatibility key and provider wire identity aligned with the
-  // canonical authored record accepted by the text-to-video endpoint.
   assert.equal(authored.id, modelKey);
   assert.equal(typeof authored.apiModelId, 'string');
   assert.ok(authored.apiModelId.length > 0);
@@ -215,17 +213,12 @@ test('pins the Runway text-to-video route and fails closed without provisioning 
   assert.deepEqual(authored.inputModalities, ['text']);
   assert.equal(authored.releasedOverride, 'December 2025');
 
-  // Runway charges 12 credits/second and sells credits for $0.01. The current
-  // canonical text-to-video route supports 720p landscape/portrait only.
   assert.equal(authored.videoPerSecondCost, 0.12);
   assert.deepEqual(authored.videoPerSecondCostByResolution, { '720p': 0.12 });
   assert.match(authored.pricingNote, /1280:720/u);
   assert.match(authored.pricingNote, /720:1280/u);
   assert.match(authored.pricingNote, /2-10 seconds/u);
 
-  // The API documents a 1,000 UTF-16-code-unit prompt maximum, not a token
-  // context. Account provisioning also has no live 200 probe, so docs alone
-  // must not make this route selectable or a provider default.
   assert.equal(authored.contextOverride, undefined);
   assert.equal(authored.availability, 'unavailable');
   assert.match(authored.unavailableReason, /live AGI-owned account probe/u);
@@ -246,20 +239,6 @@ test('pins the Runway text-to-video route and fails closed without provisioning 
   assert.equal(registry.capabilities[modelKey].videoOutput, true);
 });
 
-/**
- * The founder pin above covers the OLD discount mechanism
- * (`promo_expires_at`/`post_promo_prices`). This covers the NEW one: a
- * `pricingSchedule` window can move any rate on a date, so a discount can be
- * reintroduced through it without touching `costOverride` at all — which is
- * exactly how the 2026-08-05 intro window slipped past the pin above.
- *
- * Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed 2026-08-05):
- * The default Anthropic route bills users the founder-selected standard rates on EVERY
- * date. A provider's introductory window is a provider-cost fact recorded in
- * verificationLog, never a product price. The schedule MECHANISM stays for
- * future real product price changes, so this asserts "no sub-standard window",
- * not "no schedule".
- */
 const ANTHROPIC_STANDARD_RATES = {
   inputCost: 3,
   outputCost: 15,
@@ -276,8 +255,6 @@ test('never prices the default Anthropic route below the standard rates on any d
     "write $6.00) on EVERY date. A provider's introductory window is a provider-cost fact for " +
     'verificationLog, not a product price. Record it there and leave the billed rates alone.';
 
-  // The top-level rates ARE the standard price, so the schedule is compared
-  // against costOverride rather than against a second hardcoded copy.
   assert.deepEqual(
     model.costOverride,
     ANTHROPIC_STANDARD_RATES,
@@ -285,7 +262,7 @@ test('never prices the default Anthropic route below the standard rates on any d
   );
 
   const schedule = model.pricingSchedule;
-  if (schedule === undefined) return; // No schedule at all is the current, expected state.
+  if (schedule === undefined) return;
 
   assert.ok(
     Array.isArray(schedule),
@@ -294,7 +271,7 @@ test('never prices the default Anthropic route below the standard rates on any d
   for (const [index, window] of schedule.entries()) {
     for (const [field, standard] of Object.entries(ANTHROPIC_STANDARD_RATES)) {
       const scheduled = window[field];
-      if (scheduled === undefined) continue; // Omitted => inherits the standard rate.
+      if (scheduled === undefined) continue;
       assert.ok(
         scheduled >= standard,
         `${anthropicDefaultModelKey} pricingSchedule[${index}].${field} = ${scheduled} is BELOW the standard ` +
@@ -325,8 +302,6 @@ test('publishes the standard default Anthropic rates in the compiled registry on
     );
   }
 
-  // Same rule as the curation pin, applied to what actually ships: a compiled
-  // window may never price below the standard rate.
   for (const [index, window] of (pricing.schedule ?? []).entries()) {
     for (const [field, standard] of Object.entries(compiledStandard)) {
       const scheduled = window[field];

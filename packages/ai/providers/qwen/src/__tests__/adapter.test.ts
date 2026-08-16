@@ -1,10 +1,3 @@
-/**
- * Adapter contract test: createQwenAdapter returns a ProviderAdapter with
- * the expected shape (id, label, auth methods, catalog, stream). No network
- * calls — confirms the adapter wires up without throwing on construction
- * for every supported base-URL shape (DashScope compatible-mode default,
- * DashScope international, and a rejected/SSRF host that falls back silently).
- */
 
 import { describe, expect, it, vi } from 'vitest';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
@@ -43,9 +36,6 @@ describe('createQwenAdapter', () => {
   });
 
   it('falls back to the default base URL for a host off the allowlist', () => {
-    // MuleRouter was an allowlisted gateway until 2026-07-27. Now it is just
-    // another unlisted host, and an unlisted host must not be trusted — the
-    // adapter silently reverts to DashScope rather than dialling it.
     expect(() =>
       createQwenAdapter({ apiKey: 'test-key', baseUrl: 'https://api.mulerouter.ai' }),
     ).not.toThrow();
@@ -100,8 +90,6 @@ describe('createQwenAdapter fallbackEndpoints (pre-first-byte fail-over)', () =>
     const adapter = createQwenAdapter({
       apiKey: 'primary-key',
       fetch: hostRecordingFetch(hosts) as never,
-      // Any second allowlisted host exercises rotation; DashScope
-      // international stands in now that MuleRouter is gone.
       fallbackEndpoints: [
         { baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', apiKey: 'alt-key' },
       ],
@@ -109,10 +97,8 @@ describe('createQwenAdapter fallbackEndpoints (pre-first-byte fail-over)', () =>
 
     const chunks = await drain(adapter);
 
-    // Both the primary and the fallback endpoint were attempted.
     expect(hosts.some((h) => h === 'dashscope.aliyuncs.com')).toBe(true);
     expect(hosts.some((h) => h === 'dashscope-intl.aliyuncs.com')).toBe(true);
-    // Both exhausted → a terminal error is surfaced, never silent.
     expect(chunks.some((c) => c.type === 'error')).toBe(true);
     expect(chunks.at(-1)).toMatchObject({ type: 'stop', reason: 'error' });
   }, 20_000);
@@ -122,7 +108,6 @@ describe('createQwenAdapter fallbackEndpoints (pre-first-byte fail-over)', () =>
     const adapter = createQwenAdapter({
       apiKey: 'primary-key',
       fetch: hostRecordingFetch(hosts) as never,
-      // Same host as the DashScope compatible-mode default primary → filtered out.
       fallbackEndpoints: [{ baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' }],
     });
 

@@ -83,9 +83,6 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             paddingTop: 8,
-            // Read the real safe area rather than assuming a 34pt home
-            // indicator: that constant is wrong on every device without one
-            // (SE, iPad, Android), leaving a dead band under the sheet.
             paddingBottom: Math.max(insets.bottom, 12),
             borderTopWidth: 1,
             borderColor: themeColors.border,

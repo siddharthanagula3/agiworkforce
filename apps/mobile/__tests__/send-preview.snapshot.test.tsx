@@ -1,14 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Mobile SendPreview snapshot tests.
- *
- * Locks the RN-native SendPreview rendered tree across Local / Cloud invite /
- * Managed variants. Mirrors the unified-chat snapshot pattern so any
- * future layout drift fires a diff. Structural visual-verification —
- * not pixel parity.
- *
- * Round-10 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';

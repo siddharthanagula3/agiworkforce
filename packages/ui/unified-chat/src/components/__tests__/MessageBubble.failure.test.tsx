@@ -4,13 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../../lib/types';
 import { MessageBubble } from '../MessageBubble';
 
-/**
- * DES-C23 — a failed assistant turn used to render a completely blank bubble:
- * `message.error` was written by useChat and never read, and the list-level
- * notice only covers the LAST message.
- * DES-C22 — a managed quota refusal showed a disappearing toast over that same
- * blank bubble.
- */
 function assistantMessage(overrides: Partial<ChatMessage>): ChatMessage {
   return {
     id: 'assistant-1',

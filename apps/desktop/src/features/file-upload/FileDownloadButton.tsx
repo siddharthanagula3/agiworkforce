@@ -54,7 +54,6 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
     try {
       setIsDownloading(true);
 
-      // Web fallback: use blob download
       if (!isTauri) {
         const content = file.content ?? '';
         if (!content && !file.path) {

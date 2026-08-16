@@ -88,8 +88,6 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     debouncedSearch(searchInput);
   }, [searchInput, debouncedSearch]);
 
-  // The trailing timer outlives the component otherwise, and fires
-  // setDebouncedSearchQuery against an unmounted tree.
   useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
 
   const fetchDirectoryEntries = useCallback(async (path: string) => {
@@ -165,12 +163,6 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
     }
   };
 
-  // Read through a ref so `loadDirectory` stays referentially stable.
-  // Depending on `expandedPaths` directly re-minted the callback on every
-  // load (loadDirectory itself calls setExpandedPaths), which re-fired the
-  // root-load effect below in a loop until React threw max-update-depth —
-  // the "Code panel crashes into the error boundary" bug the WDIO sweep
-  // caught (3-of-5 native runs).
   const expandedPathsRef = useRef(expandedPaths);
   useEffect(() => {
     expandedPathsRef.current = expandedPaths;
@@ -256,7 +248,6 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         unlistenRef();
       }
       void invoke('file_watch_stop', { path: rootPath }).catch((err) => {
-        // AUDIT-P3-ERROR: Cleanup failure - watcher may already be stopped
         console.debug('[FileTree] Failed to stop file watcher on cleanup:', err);
       });
       setTree(null);
@@ -508,13 +499,6 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
             'flex min-w-0 items-center gap-2 px-2 py-1 cursor-pointer rounded-md group transition-colors select-none',
             isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-accent',
           )}
-          /*
-           * Cap the indent. The sidebar is a fixed 280px and each level added
-           * 12px unconditionally, so a node ~10 levels deep (routine in this
-           * repo: apps/web/app/api/llm/v1/chat/completions/lib/...) spent the
-           * whole width on whitespace and truncated the filename to nothing.
-           * VS Code caps indentation for the same reason.
-           */
           style={{ paddingLeft: `${Math.min(level, 8) * 12 + 8}px` }}
           onClick={() => {
             if (node.isDirectory) {

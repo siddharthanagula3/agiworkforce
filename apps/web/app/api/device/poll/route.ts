@@ -8,7 +8,6 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { decryptToken } from '@/lib/device-token-crypto';
 import { getNeonDb } from '@/lib/server/neon-db';
 
-// Row shape from device_authorization_codes (poll fields only)
 interface DeviceAuthRow {
   device_id: string;
   device_fingerprint: string | null;
@@ -18,7 +17,6 @@ interface DeviceAuthRow {
   updated_at: string;
 }
 
-// Row shape returned by the inline atomic consume query
 interface ConsumedRow {
   status: string;
   user_id: string | null;
@@ -29,7 +27,6 @@ interface ConsumedRow {
 }
 
 async function handleDevicePoll(request: NextRequest) {
-  // Parse body once and reuse - request.json() can only be called once
   let parsedBody: unknown;
   try {
     parsedBody = await request.json();
@@ -37,9 +34,6 @@ async function handleDevicePoll(request: NextRequest) {
     throw createError.validation('Invalid JSON in request body');
   }
 
-  // Rate limiting - use device_id as identifier.
-  // Validate device_id length and format BEFORE using it as a rate-limit key
-  // to prevent memory exhaustion via arbitrarily long or crafted identifiers.
   const rawDeviceId = (parsedBody as Record<string, unknown>)?.['device_id'];
   const deviceId =
     typeof rawDeviceId === 'string' && /^[a-zA-Z0-9-_]{1,128}$/.test(rawDeviceId)
@@ -64,7 +58,6 @@ async function handleDevicePoll(request: NextRequest) {
     const { device_id, device_fingerprint } = validationResult.data;
     const db = getNeonDb();
 
-    // AUDIT-008-008: Use explicit column selection instead of SELECT *
     const rows = await db.query<DeviceAuthRow>(
       `SELECT device_id, device_fingerprint, status, user_id, expires_at, updated_at
          FROM device_authorization_codes
@@ -81,10 +74,8 @@ async function handleDevicePoll(request: NextRequest) {
 
     const data = rows[0]!;
 
-    // Expiry check first (also treat already-consumed codes as expired)
     if (data.status === 'consumed' || new Date(data.expires_at) < new Date()) {
       if (data.status === 'pending') {
-        // Best-effort: mark pending codes as expired
         await db.execute(
           `UPDATE device_authorization_codes
               SET status = 'expired', updated_at = $1
@@ -98,9 +89,7 @@ async function handleDevicePoll(request: NextRequest) {
       );
     }
 
-    // Device ownership verification with backfill for legacy sessions.
     if (data.device_fingerprint) {
-      // Fingerprint was recorded on link - enforce strict match on every poll.
       if (!device_fingerprint || data.device_fingerprint !== device_fingerprint) {
         logger.warn(
           {
@@ -113,8 +102,6 @@ async function handleDevicePoll(request: NextRequest) {
         throw createError.forbidden('Device fingerprint does not match');
       }
     } else if (device_fingerprint) {
-      // Legacy session (no fingerprint stored) but client IS sending one now - backfill it.
-      // Use WHERE device_fingerprint IS NULL to prevent race conditions.
       await db.execute(
         `UPDATE device_authorization_codes
             SET device_fingerprint = $1, updated_at = $2
@@ -124,7 +111,6 @@ async function handleDevicePoll(request: NextRequest) {
       );
       logger.info({ deviceId: device_id }, 'Device fingerprint backfilled for legacy session');
     } else {
-      // SECURITY: Legacy no-fingerprint path is now deprecated
       logger.warn(
         { deviceId: device_id },
         'DEPRECATED: Device poll without fingerprint rejected - legacy path is sunset. Client must update.',
@@ -139,9 +125,6 @@ async function handleDevicePoll(request: NextRequest) {
     }
 
     if (data.status === 'approved' && data.user_id) {
-      // Atomically consume tokens (approved -> consumed) and return them exactly once.
-      // This inlines the logic of the consume_device_authorization_tokens RPC.
-      // FOR UPDATE locks the row; the UPDATE only fires if status is still 'approved'.
       const consumedRows = await db.query<ConsumedRow>(
         `WITH locked AS (
            SELECT status, expires_at, user_id, user_email, user_name,
@@ -173,7 +156,6 @@ async function handleDevicePoll(request: NextRequest) {
       );
 
       if (!consumedRows.length) {
-        // Row disappeared between poll and consume - treat as pending retry
         return NextResponse.json(
           { status: 'pending' },
           { headers: { 'Cache-Control': 'no-store' } },
@@ -211,7 +193,6 @@ async function handleDevicePoll(request: NextRequest) {
         return NextResponse.json({ status: 'pending' });
       }
 
-      // Decrypt tokens that were encrypted at rest by the approve endpoint
       let accessToken: string;
       let refreshToken: string | null = null;
       try {

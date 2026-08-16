@@ -49,11 +49,6 @@ describe('buildCloudChatSessionLabel — session-label shape', () => {
 describe('assertSessionInvariants — invariant-firing test (proves the gate is real, not a no-op)', () => {
   it('throws when a cloud_chat label is tampered into an inconsistent trust boundary', () => {
     const session = buildCloudChatSessionLabel(BASE_INPUT);
-    // `CloudChatSession.trustBoundary.providerMode` is compile-time pinned to
-    // `'ManagedGateway' | 'ManagedNative'` — the `as AppSession` cast
-    // simulates a value that arrived from outside the type system (e.g.
-    // deserialized from a stale record) so the RUNTIME gate is what's under
-    // test here, not the compiler.
     const tampered = {
       ...session,
       trustBoundary: { privacyMode: 'managed', providerMode: 'DirectByok' },

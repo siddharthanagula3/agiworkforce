@@ -108,9 +108,6 @@ function connectorAuthLabel(connector: ConnectorDef): string {
   }
 }
 
-// Custom remote MCP connectors (CustomRemoteMcpConnectorDialog.tsx) have no
-// static catalog entry — synthesize one on the fly rather than dropping them
-// (see buildCustomMcpConnectorDef's doc comment in connectorDefinitions.ts).
 function connectorById(id: string): ConnectorDef | null {
   return (
     CONNECTORS.find((connector) => connector.id === id) ??
@@ -118,30 +115,11 @@ function connectorById(id: string): ConnectorDef | null {
   );
 }
 
-// Mirrors the MCP server-name convention used when a connector is actually
-// activated (`get_connector_mcp_mapping` in
-// apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs), e.g. `github` ->
-// `connector-github`, `google_drive` -> `connector-google-drive`. Connectors
-// without a real MCP-backed server (no entry in that mapping) simply won't
-// match anything here, which correctly falls through to "no live tool
-// schema available" in ConnectorDetailView.
-//
-// Custom remote MCP connectors (`custom-<slug>`, CustomRemoteMcpConnectorDialog.tsx)
-// are the exception: the connector id IS the literal MCP server name already
-// (see slugifyServerName there) — applying the `connector-` transform to it
-// would produce a name that never matches any real server.
 function connectorMcpServerName(connectorId: string): string {
   if (isCustomMcpConnectorId(connectorId)) return connectorId;
   return `connector-${connectorId.replace(/_/g, '-')}`;
 }
 
-// Mirrors the heuristic `mcp_call_tool` uses server-side
-// (apps/desktop/src-tauri/src/sys/commands/mcp.rs) to flag destructive tools
-// when no explicit per-tool permission has been recorded yet. This only
-// affects the UI's *suggested default* in the permission dropdown — the
-// server independently recomputes the same heuristic at call time and is the
-// actual enforcement point, so a mismatch here is a UX nit, not a security
-// gap.
 function isDestructiveToolName(name: string): boolean {
   return (
     name.includes('delete') ||
@@ -482,9 +460,6 @@ export function ConnectorGallery() {
   >([]);
   const [detailConnectorId, setDetailConnectorId] = useState<string | null>(null);
   const [oauthCredsOpen, setOauthCredsOpen] = useState(false);
-  // Custom remote MCP connectors aren't managed by useConnectorsStore (they
-  // have no OAuth/API-key credential row for it to track) — their own
-  // busy/error UI state lives here instead.
   const [customConnectorBusy, setCustomConnectorBusy] = useState<Record<string, boolean>>({});
   const [customConnectorError, setCustomConnectorError] = useState<Record<string, string | null>>(
     {},
@@ -519,9 +494,6 @@ export function ConnectorGallery() {
   );
 
   const [expiresAtByProvider, setExpiresAtByProvider] = useState<Record<string, number | null>>({});
-  // Real per-connector tool schema for the detail/permissions view. `null`
-  // means "loading", `[]` means "checked, no live tools" (e.g. the
-  // connector has no MCP-backed server, or it isn't connected yet).
   const [detailTools, setDetailTools] = useState<ConnectorTool[] | null>(null);
 
   useEffect(() => {
@@ -659,14 +631,6 @@ export function ConnectorGallery() {
     };
   }, [completeOAuth]);
 
-  // Bridge for the Rust loopback OAuth listener's Tauri events. Unlike the
-  // legacy deep-link window events above (which carry {code, state} and
-  // re-run the token exchange), these fire AFTER the backend has already
-  // exchanged the code and connected the MCP server — the payload is
-  // {provider, connectorId}. Do NOT route them through handleOAuthCallback:
-  // the pending flow is consumed, so a re-exchange would fail state
-  // validation. This only reconciles frontend state (clears the pending
-  // spinner via completeOAuth, which re-connects idempotently and verifies).
   useEffect(() => {
     if (!isTauri) return;
     let disposed = false;
@@ -721,14 +685,6 @@ export function ConnectorGallery() {
     };
   }, [completeOAuth]);
 
-  // DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01: the static catalog
-  // (CONNECTOR_DIRECTORY) is necessary but not sufficient — a connector must
-  // ALSO have a real backend MCP mapping (mirrored here via
-  // `supportedConnectorIds`, fetched from `mcp_get_supported_connector_ids`)
-  // before it can ever be advertised as connectable. This is what keeps
-  // atlassian/google_sheets/context7 (real OAuth/consent flow, but no
-  // `get_connector_mcp_mapping` entry) out of this grid instead of producing
-  // a permanent fake-"Connected" badge with zero backing tools.
   const supportedConnectors = useMemo(
     () => CONNECTOR_DIRECTORY.filter((c) => supportedConnectorIds.includes(c.id)),
     [supportedConnectorIds],
@@ -859,12 +815,6 @@ export function ConnectorGallery() {
     [fetchConnected, refreshConfiguredCustomServers],
   );
 
-  // Disconnecting a custom remote MCP connector removes it from the MCP
-  // config entirely (symmetric with how CustomRemoteMcpConnectorDialog adds
-  // it) rather than calling the store's `disconnect`, which is an OAuth/
-  // API-key-token flow (`mcp_oauth_disconnect`) that has no mapping entry
-  // for a `custom-*` id and would silently no-op, leaving the server
-  // configured and the gallery still showing it connected.
   const handleDisconnectCustomConnector = useCallback(
     async (serverName: string) => {
       setCustomConnectorBusy((prev) => ({ ...prev, [serverName]: true }));

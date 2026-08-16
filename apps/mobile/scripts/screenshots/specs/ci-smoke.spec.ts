@@ -1,10 +1,3 @@
-/**
- * Blocking CI smoke for the real iOS application.
- *
- * This intentionally stops before model download so the gate remains
- * deterministic and network-independent while still exercising a cold native
- * launch, encrypted first-run state, text input, navigation, and rendered UI.
- */
 import { by, device, element, waitFor } from 'detox';
 
 describe('Mobile first-run shell', () => {
@@ -14,8 +7,6 @@ describe('Mobile first-run shell', () => {
       delete: true,
       launchArgs: { detoxEnableSynchronization: '0' },
     });
-    // Expo's foreground work keeps the main run loop continuously active;
-    // explicit waitFor assertions below are the synchronization boundary.
     await device.disableSynchronization();
   });
 

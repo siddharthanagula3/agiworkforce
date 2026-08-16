@@ -1,10 +1,3 @@
-/**
- * P1-2: Anthropic stream-translator must always emit a `stop` chunk so
- * downstream consumers terminate cleanly even when the SDK iterator is
- * truncated mid-stream (network drop, abort, server-side cutoff).
- *
- * Mirrors the OpenAI stream's `if (!stopEmitted) yield {type:'stop'}` tail.
- */
 
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -27,9 +20,6 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
 
 describe('translateAnthropicStream — truncation safety (P1-2)', () => {
   it('emits a fallback stop chunk when the SDK iterator drains without message_delta', async () => {
-    // Simulate truncation: text deltas arrive but the stream ends WITHOUT
-    // a message_delta event (which is what carries `stop_reason`). The
-    // translator should still yield a `stop` chunk so consumers terminate.
     const events: Event[] = [
       {
         type: 'message_start',
@@ -66,7 +56,6 @@ describe('translateAnthropicStream — truncation safety (P1-2)', () => {
     const stops = out.filter((c) => c.type === 'stop');
     expect(stops).toHaveLength(1);
     expect(stops[0]).toEqual({ type: 'stop', reason: 'end_turn' });
-    // The text delta still came through.
     const texts = out.filter((c) => c.type === 'text-delta');
     expect(texts).toHaveLength(1);
   });
@@ -136,8 +125,6 @@ describe('translateAnthropicStream — truncation safety (P1-2)', () => {
       caught = e;
     }
     expect(caught).toBeInstanceOf(Error);
-    // The finally block must have yielded the fallback stop chunk before
-    // re-raising the upstream error.
     const stops = collected.filter((c) => c.type === 'stop');
     expect(stops).toHaveLength(1);
     expect(stops[0]).toEqual({ type: 'stop', reason: 'end_turn' });

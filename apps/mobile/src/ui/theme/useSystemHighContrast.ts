@@ -104,11 +104,6 @@ function subscribeStore(platform: NativePlatform, listener: () => void): () => v
   };
 }
 
-/**
- * Mirrors the platform accessibility contrast preference and responds to
- * changes without requiring an app restart. All `useTheme` consumers share a
- * single native subscription through the external store.
- */
 export function useSystemHighContrast(platform: string = Platform.OS): boolean {
   const normalizedPlatform = normalizePlatform(platform);
   const subscribe = useCallback(

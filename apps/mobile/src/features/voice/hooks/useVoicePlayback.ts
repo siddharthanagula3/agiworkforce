@@ -29,7 +29,6 @@ export function useVoicePlayback() {
     async (text: string) => {
       if (!text.trim()) return;
 
-      // Stop any ongoing speech before starting a new utterance
       Speech.stop();
       isSpeaking.current = true;
 

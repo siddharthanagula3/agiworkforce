@@ -1,22 +1,3 @@
-/**
- * errorMessages.ts — friendly error message utility
- *
- * Provides a simple `getFriendlyError(err)` function that converts any
- * raw error (Error object, string, unknown) into a plain user-facing string.
- *
- * Components that only need the string (not the full FriendlyError object)
- * should import from here. Components that need the full {title, message,
- * suggestion, icon} shape should import getFriendlyError from
- * @agiworkforce/utils directly.
- *
- * Pattern mapping:
- *   "stream_watchdog_timeout" | "timed out"   → request too long, try shorter message
- *   "ECONNREFUSED" | "network" | "fetch"       → connection failed, check internet
- *   "401" | "unauthorized" | "api key"         → invalid API key, update in Settings
- *   "429" | "rate limit"                       → too many requests, wait and retry
- *   "500" | "server error"                     → server error, try again
- *   default                                    → something went wrong, please try again
- */
 
 export { getFriendlyError, formatErrorForChat, getErrorMessage } from '@agiworkforce/utils';
 export type { FriendlyError } from '@agiworkforce/utils';
@@ -36,7 +17,6 @@ export type { FriendlyError } from '@agiworkforce/utils';
  * ```
  */
 export function getSimpleErrorMessage(err: unknown): string {
-  // Normalise to a string we can pattern-match against
   let raw: string;
   if (err instanceof Error) {
     raw = err.message;

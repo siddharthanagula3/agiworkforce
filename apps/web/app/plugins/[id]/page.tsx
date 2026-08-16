@@ -13,15 +13,6 @@ import {
 } from '@agiworkforce/types';
 import { ConnectorChecklist } from './ConnectorChecklist';
 
-/**
- * One plugin, from the hosted registry (CAP-046 slice 3).
- *
- * Installation state is user-owned and authenticated, so this public detail
- * page deliberately sends Web-installable packs to the real Settings lifecycle
- * instead of pretending to install them here. Non-Web artifacts keep their
- * integrity-pinned CLI instructions below.
- */
-
 interface Props {
   params: Promise<{ id: string }>;
 }
@@ -60,8 +51,6 @@ export default async function PluginDetailPage({ params }: Props) {
     notFound();
   }
 
-  // A registry outage is not a 404: telling a visitor the plugin does not exist
-  // when the database is merely down is a false statement about the product.
   if (result.status === 'unavailable') {
     return (
       <div data-design="agi">

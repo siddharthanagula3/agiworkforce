@@ -90,8 +90,6 @@ export enum ActivityType {
   TeamCreated = 'team_created',
   TeamDeleted = 'team_deleted',
 
-  // Decode-only compatibility for activity rows written by the removed local
-  // billing ledger. No production command emits these events now.
   BillingPlanChanged = 'billing_plan_changed',
   BillingSeatsAdded = 'billing_seats_added',
   BillingSeatsRemoved = 'billing_seats_removed',

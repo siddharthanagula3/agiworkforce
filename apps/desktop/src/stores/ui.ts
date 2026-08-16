@@ -1,31 +1,9 @@
-/**
- * Unified UI Store
- *
- * Consolidated store for all ephemeral UI state including:
- * - Error notifications and toasts
- * - Form input state (drafts, attachments, recordings)
- * - Sidecar panel state
- * - Simple/Advanced mode UI state
- *
- * Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(immer(...))))
- * - Export selectors for all state slices
- * - subscribeWithSelector for granular subscriptions
- *
- * NOTE: productivityStore was NOT merged here as it's a domain/integration store,
- * not ephemeral UI state.
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../lib/tauri-mock';
 import type { EnhancedMessage } from './chat/types';
 
-// =============================================================================
-// Type Definitions
-// =============================================================================
-
-// --- Error Types ---
 export type ErrorSeverity = 'info' | 'warning' | 'error' | 'critical';
 
 export interface AppError {
@@ -48,7 +26,6 @@ export interface ErrorStatistics {
   recentErrors: AppError[];
 }
 
-// --- Input Types ---
 export interface FileAttachment {
   id: string;
   file: File;
@@ -77,7 +54,6 @@ interface DraftMessage {
   timestamp: Date;
 }
 
-// --- Sidecar Types ---
 export type SidecarSection =
   | 'operations'
   | 'reasoning'
@@ -125,21 +101,14 @@ export interface SidecarState {
   autoTrigger: boolean;
 }
 
-// --- Simple Mode Types ---
 export type UIMode = 'simple' | 'advanced';
 
-// =============================================================================
-// Store State Interface
-// =============================================================================
-
 interface UIState {
-  // --- Error State ---
   errors: AppError[];
   maxHistorySize: number;
   toasts: AppError[];
   maxToasts: number;
 
-  // --- Input State ---
   drafts: Map<number | null, DraftMessage>;
   attachments: FileAttachment[];
   isRecording: boolean;
@@ -149,27 +118,20 @@ interface UIState {
   inputHeight: number;
   showMarkdownPreview: boolean;
 
-  // --- Sidecar State (Legacy) ---
   sidecarOpen: boolean;
   sidecarSection: SidecarSection;
   sidecarWidth: number;
   sidecarUserSelected: boolean;
 
-  // --- Sidebar State ---
   sidebarWidth: number;
   sidebarCollapsed: boolean;
 
-  // --- Sidecar State (New) ---
   sidecar: SidecarState;
 
-  // --- Simple Mode State ---
   mode: UIMode;
   onboardingCompleted: boolean;
   showModeSwitcherHint: boolean;
 
-  // ==========================================================================
-  // Actions - Error Management
-  // ==========================================================================
   addError: (error: Omit<AppError, 'id' | 'timestamp' | 'dismissed' | 'count'>) => void;
   dismissError: (id: string) => void;
   dismissAll: () => void;
@@ -178,9 +140,6 @@ interface UIState {
   exportLogs: () => Promise<string>;
   reportError: (errorId: string) => Promise<void>;
 
-  // ==========================================================================
-  // Actions - Input Management
-  // ==========================================================================
   setDraft: (conversationId: number | null, content: string) => void;
   getDraft: (conversationId: number | null) => string;
   clearDraft: (conversationId: number | null) => void;
@@ -195,31 +154,19 @@ interface UIState {
   toggleMarkdownPreview: () => void;
   resetInput: () => void;
 
-  // ==========================================================================
-  // Actions - Sidecar Panel
-  // ==========================================================================
   setSidecarOpen: (open: boolean) => void;
   setSidecarSection: (section: SidecarSection) => void;
   setSidecarSectionFromEvent: (event: string) => void;
   setSidecarWidth: (width: number) => void;
 
-  // ==========================================================================
-  // Actions - Sidebar
-  // ==========================================================================
   setSidebarWidth: (width: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 
-  // ==========================================================================
-  // Actions - New Sidecar
-  // ==========================================================================
   setSidecar: (state: Partial<SidecarState>) => void;
   openSidecar: (mode: SidecarMode, contextId?: string, context?: unknown) => void;
   closeSidecar: () => void;
   getSuggestedSidecarMode: (message: EnhancedMessage) => SidecarMode | null;
 
-  // ==========================================================================
-  // Actions - Simple Mode
-  // ==========================================================================
   setMode: (mode: UIMode) => void;
   toggleMode: () => void;
   completeOnboarding: () => void;
@@ -227,21 +174,13 @@ interface UIState {
   isSimpleMode: () => boolean;
   isAdvancedMode: () => boolean;
 
-  // ==========================================================================
-  // Actions - Reset
-  // ==========================================================================
   resetOnLogout: () => void;
 }
-
-// =============================================================================
-// Constants & Helpers
-// =============================================================================
 
 const STORAGE_VERSION = 1;
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-// Storage fallback for SSR/non-browser environments
 const storageFallback: Storage = {
   get length() {
     return 0;
@@ -253,7 +192,6 @@ const storageFallback: Storage = {
   setItem: () => undefined,
 };
 
-// Module-level timer storage (not part of immer-managed state to avoid freezing)
 const dismissTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const clearDismissTimer = (id: string) => {
@@ -273,22 +211,16 @@ const setDismissTimer = (id: string, timerId: ReturnType<typeof setTimeout>) => 
   dismissTimers.set(id, timerId);
 };
 
-// =============================================================================
-// Unified UI Store
-// =============================================================================
-
 export const useUIStore = create<UIState>()(
   devtools(
     persist(
       subscribeWithSelector(
         immer((set, get) => ({
-          // --- Error State (Initial) ---
           errors: [],
           maxHistorySize: 100,
           toasts: [],
           maxToasts: 5,
 
-          // --- Input State (Initial) ---
           drafts: new Map(),
           attachments: [],
           isRecording: false,
@@ -302,7 +234,6 @@ export const useUIStore = create<UIState>()(
           inputHeight: 72,
           showMarkdownPreview: false,
 
-          // --- Sidecar State (Initial) ---
           sidecarOpen: false,
           sidecarSection: 'operations',
           sidecarWidth: 400,
@@ -316,14 +247,9 @@ export const useUIStore = create<UIState>()(
             autoTrigger: false,
           },
 
-          // --- Simple Mode State (Initial) ---
           mode: 'simple',
           onboardingCompleted: false,
           showModeSwitcherHint: true,
-
-          // =================================================================
-          // Error Actions
-          // =================================================================
 
           addError: (errorData) => {
             const { errors, toasts, maxHistorySize, maxToasts } = get();
@@ -492,10 +418,6 @@ export const useUIStore = create<UIState>()(
               console.error('Failed to report error to backend:', err);
             }
           },
-
-          // =================================================================
-          // Input Actions
-          // =================================================================
 
           setDraft: (conversationId, content) => {
             set(
@@ -674,10 +596,6 @@ export const useUIStore = create<UIState>()(
             );
           },
 
-          // =================================================================
-          // Sidecar Panel Actions
-          // =================================================================
-
           setSidecarOpen: (open) =>
             set(
               (state) => {
@@ -756,10 +674,6 @@ export const useUIStore = create<UIState>()(
               'ui/sidecar/setWidth',
             ),
 
-          // =================================================================
-          // Sidebar Actions
-          // =================================================================
-
           setSidebarWidth: (width) =>
             set(
               (state) => {
@@ -777,10 +691,6 @@ export const useUIStore = create<UIState>()(
               undefined,
               'ui/sidebar/setCollapsed',
             ),
-
-          // =================================================================
-          // New Sidecar Actions
-          // =================================================================
 
           setSidecar: (updates) =>
             set(
@@ -866,10 +776,6 @@ export const useUIStore = create<UIState>()(
             return null;
           },
 
-          // =================================================================
-          // Simple Mode Actions
-          // =================================================================
-
           setMode: (mode) => set({ mode }, undefined, 'ui/mode/set'),
 
           toggleMode: () => {
@@ -896,15 +802,9 @@ export const useUIStore = create<UIState>()(
 
           isAdvancedMode: () => get().mode === 'advanced',
 
-          // =================================================================
-          // Reset Action
-          // =================================================================
-
           resetOnLogout: () => {
-            // Clear error timers
             clearAllDismissTimers();
 
-            // Revoke attachment URLs
             const attachments = get().attachments;
             attachments.forEach((attachment) => {
               if (attachment.previewUrl) {
@@ -914,11 +814,9 @@ export const useUIStore = create<UIState>()(
 
             set(
               (state) => {
-                // Reset error state
                 state.errors = [];
                 state.toasts = [];
 
-                // Reset input state
                 state.drafts = new Map();
                 state.attachments = [];
                 state.isRecording = false;
@@ -932,7 +830,6 @@ export const useUIStore = create<UIState>()(
                 state.inputHeight = 72;
                 state.showMarkdownPreview = false;
 
-                // Reset sidecar state
                 state.sidecarOpen = false;
                 state.sidecarSection = 'operations';
                 state.sidecarUserSelected = false;
@@ -958,19 +855,11 @@ export const useUIStore = create<UIState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        // `drafts`, `inputHeight` and `showMarkdownPreview` are composer state
-        // that no composer reads back — `getDraft`, `setInputHeight` and
-        // `toggleMarkdownPreview` have no callers — and the legacy
-        // `sidecarOpen`/`sidecarSection`/`sidecarWidth` triple was superseded by
-        // the `sidecar` object below. Writing them to disk advertised restored
-        // input and a restored panel that no mount point ever restores.
         partialize: (state) => ({
-          // Sidecar state to persist
           sidebarWidth: state.sidebarWidth,
           sidebarCollapsed: state.sidebarCollapsed,
           sidecar: state.sidecar,
 
-          // Simple mode state to persist
           mode: state.mode,
           onboardingCompleted: state.onboardingCompleted,
           showModeSwitcherHint: state.showModeSwitcherHint,
@@ -987,7 +876,6 @@ export const useUIStore = create<UIState>()(
 
           return {
             ...currentState,
-            // Sidecar state
             sidebarWidth: persisted?.sidebarWidth ?? currentState.sidebarWidth,
             sidebarCollapsed: persisted?.sidebarCollapsed ?? currentState.sidebarCollapsed,
             sidecar: persisted?.sidecar
@@ -997,7 +885,6 @@ export const useUIStore = create<UIState>()(
                   autoTrigger: false,
                 }
               : currentState.sidecar,
-            // Simple mode state
             mode: persisted?.mode ?? currentState.mode,
             onboardingCompleted: persisted?.onboardingCompleted ?? currentState.onboardingCompleted,
             showModeSwitcherHint:
@@ -1010,17 +897,9 @@ export const useUIStore = create<UIState>()(
   ),
 );
 
-// =============================================================================
-// Selectors - Error
-// =============================================================================
-
 export const selectErrors = (state: UIState) => state.errors;
 export const selectToasts = (state: UIState) => state.toasts;
 export const selectUndismissedErrors = (state: UIState) => state.errors.filter((e) => !e.dismissed);
-
-// =============================================================================
-// Selectors - Input
-// =============================================================================
 
 export const selectDraft = (conversationId: number | null) => (state: UIState) =>
   state.drafts.get(conversationId)?.content ?? '';
@@ -1032,10 +911,6 @@ export const selectContextMetadata = (state: UIState) => state.contextMetadata;
 export const selectInputHeight = (state: UIState) => state.inputHeight;
 export const selectShowMarkdownPreview = (state: UIState) => state.showMarkdownPreview;
 
-// =============================================================================
-// Selectors - Sidecar
-// =============================================================================
-
 export const selectSidecarOpen = (state: UIState) => state.sidecarOpen;
 export const selectSidecarSection = (state: UIState) => state.sidecarSection;
 export const selectSidecarWidth = (state: UIState) => state.sidecarWidth;
@@ -1046,18 +921,10 @@ export const selectSidecar = (state: UIState) => state.sidecar;
 export const selectIsSidecarVisible = (state: UIState) => state.sidecarOpen || state.sidecar.isOpen;
 export const selectActiveSidecarMode = (state: UIState) => state.sidecar.activeMode;
 
-// =============================================================================
-// Selectors - Simple Mode
-// =============================================================================
-
 export const selectIsSimpleMode = (state: UIState) => state.mode === 'simple';
 export const selectUIMode = (state: UIState) => state.mode;
 export const selectOnboardingCompleted = (state: UIState) => state.onboardingCompleted;
 export const selectShowModeSwitcherHint = (state: UIState) => state.showModeSwitcherHint;
-
-// =============================================================================
-// Backwards-Compatible Aliases
-// =============================================================================
 
 /**
  * @deprecated Use useUIStore instead. This alias is for backwards compatibility.
@@ -1079,8 +946,6 @@ export const useSidecarStore = useUIStore;
  */
 export const useSimpleModeStore = useUIStore;
 
-// Export the UIState type for external use
 export type { UIState };
 
-// Default export for convenience
 export default useUIStore;

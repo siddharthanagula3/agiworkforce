@@ -1,11 +1,3 @@
-/**
- * BudgetTracker — invisible component that observes the latest chat message
- * and increments token usage in the budget store.
- *
- * Hosts mount this once inside ChatInterface (or equivalent). It reads
- * messages from `useChatStore` and budget state from `useBudgetStore`,
- * deduplicating already-counted message ids via a ref-held Set.
- */
 import { useEffect, useRef } from 'react';
 import { useBudgetStore, selectBudget } from '../stores/budgetStore';
 import { useChatStore } from '../stores/chatStore';

@@ -65,7 +65,6 @@ jest.mock('expo-haptics', () => ({
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  // Any icon name resolves to the stub — robust to new icons added to MessageBubble.
   return new Proxy({}, { get: () => Icon });
 });
 
@@ -264,9 +263,6 @@ describe('MessageBubble model label', () => {
     expect(view.queryByText('Legacy status step')).toBeNull();
     expect(view.queryByText('Legacy tool timeline')).toBeNull();
     expect(view.getByText('Verified answer.')).toBeTruthy();
-    // Reasoning is NOT one of the duplicated rows: AgentActivityState has no
-    // reasoning entry kind, so suppressing the chip alongside steps/tools hid
-    // "Thought for Ns" on every tool/research/agiwork managed-cloud turn.
     expect(view.getByText('Legacy thinking')).toBeTruthy();
   });
 

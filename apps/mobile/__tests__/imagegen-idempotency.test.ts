@@ -1,19 +1,6 @@
-/**
- * Mobile image generation sent NO `Idempotency-Key`, so every request failed
- * with "Idempotency-Key header is required for Managed Cloud chat" before the
- * route did any work — image generation was completely broken on mobile while
- * Web (`useMediaGeneration.ts`) and Desktop (`CloudRuntime.ts`) both built the
- * key with the shared helper.
- *
- * These pin the header's presence AND its shape, because the route does not
- * merely require a header: it parses the key with
- * `parseManagedMediaIdempotencyKey` and rejects anything that does not identify
- * one managed-media image operation.
- */
 
 import { isManagedMediaIdempotencyKey, parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 
-// `mock`-prefixed so Jest allows the hoisted factory below to reference it.
 const mockPost = jest.fn();
 
 jest.mock('@/services/api', () => ({
@@ -48,7 +35,6 @@ describe('generateImage — idempotency', () => {
     await generateImage({ prompt: 'an anime character' });
 
     const key = sentHeaders()['Idempotency-Key']!;
-    // The route parses this, it does not merely check for presence.
     expect(isManagedMediaIdempotencyKey(key)).toBe(true);
     expect(parseManagedMediaIdempotencyKey(key)).toEqual({
       surface: 'mobile',
@@ -58,8 +44,6 @@ describe('generateImage — idempotency', () => {
   });
 
   it('reuses a caller-supplied operation id across retries', async () => {
-    // Reusing the identity is what makes a retried request settle once instead
-    // of billing the user twice — the reason the header exists.
     await generateImage({ prompt: 'a cat' }, { operationId: 'retry-operation-1' });
     const first = sentHeaders()['Idempotency-Key'];
 
@@ -76,7 +60,6 @@ describe('generateImage — idempotency', () => {
     mockPost.mockClear();
     await generateImage({ prompt: 'a dog' }, { operationId: 'operation-bbbb' });
 
-    // Two distinct generations must not collapse into one billed operation.
     expect(sentHeaders()['Idempotency-Key']).not.toBe(first);
   });
 

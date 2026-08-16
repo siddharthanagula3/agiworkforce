@@ -1,16 +1,3 @@
-/**
- * useHelpTour Hook
- *
- * Manages the state and progression of help tours throughout the application.
- * Handles tour navigation, persistence to localStorage, and tracking of completed tours.
- *
- * Features:
- * - Multi-tour support with independent progression
- * - localStorage persistence of tour completion state
- * - Step navigation with bounds checking
- * - Tour completion tracking
- * - Reset and clear functionality
- */
 
 import { useEffect, useState, useCallback } from 'react';
 
@@ -76,16 +63,13 @@ const HELP_TOURS: Record<string, TourDefinition> = {
 };
 
 interface HelpTourState {
-  // Navigation state
   currentStep: number;
   isActive: boolean;
   currentTourId: string | null;
 
-  // Tour metadata
   totalSteps: number;
   completedTours: Record<string, boolean>;
 
-  // Actions
   startTour: (tourId: string) => void;
   nextStep: () => void;
   previousStep: () => void;
@@ -94,7 +78,6 @@ interface HelpTourState {
   resetTour: () => void;
   clearAllTours: () => void;
 
-  // Queries
   getCurrentStep: () => TourStep | null;
   hasNextStep: () => boolean;
   hasPreviousStep: () => boolean;
@@ -103,19 +86,12 @@ interface HelpTourState {
 
 const STORAGE_KEY = 'help-tour-completed';
 
-/**
- * useHelpTour - Manage help tour state and progression
- *
- * Persists tour completion state to localStorage and provides
- * navigation and query methods for managing tours throughout the app.
- */
 export function useHelpTour(): HelpTourState {
   const [currentStep, setCurrentStep] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [currentTourId, setCurrentTourId] = useState<string | null>(null);
   const [completedTours, setCompletedTours] = useState<Record<string, boolean>>({});
 
-  // Load completed tours from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
@@ -127,7 +103,6 @@ export function useHelpTour(): HelpTourState {
     }
   }, []);
 
-  // Persist completed tours to localStorage whenever they change
   useEffect(() => {
     if (Object.keys(completedTours).length > 0) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(completedTours));
@@ -226,14 +201,12 @@ export function useHelpTour(): HelpTourState {
   );
 
   return {
-    // State
     currentStep,
     isActive,
     currentTourId,
     totalSteps: getTotalSteps(),
     completedTours,
 
-    // Actions
     startTour,
     nextStep,
     previousStep,
@@ -242,7 +215,6 @@ export function useHelpTour(): HelpTourState {
     resetTour,
     clearAllTours,
 
-    // Queries
     getCurrentStep,
     hasNextStep,
     hasPreviousStep,

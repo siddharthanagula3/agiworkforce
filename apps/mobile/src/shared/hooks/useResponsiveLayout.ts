@@ -17,13 +17,6 @@ export interface ResponsiveLayout {
   gridColumns: 1 | 2 | 3;
 }
 
-/**
- * Derive navigation and grid behavior from the space the app can actually use.
- *
- * iPad Split View reports the resized application window through
- * useWindowDimensions. A permanent drawer is therefore only appropriate when
- * the remaining content pane can still hold a useful three-column surface.
- */
 export function getResponsiveLayout(viewportWidth: number): ResponsiveLayout {
   const safeViewportWidth = Math.max(0, viewportWidth);
   const usesPersistentDrawer =

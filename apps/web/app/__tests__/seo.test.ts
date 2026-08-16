@@ -12,7 +12,6 @@ import {
   webSiteSchema,
 } from '@/lib/seo/structured-data';
 
-// Narrow accessors so the tests read the shapes Next emits without `any`.
 function og(meta: ReturnType<typeof buildMetadata>) {
   return meta.openGraph as {
     title?: string;
@@ -34,8 +33,6 @@ describe('buildMetadata', () => {
   });
 
   it('emits a complete, page-specific Open Graph block (not the home card)', () => {
-    // The core bug: a page that only set title+canonical inherited the layout's
-    // home og:title. buildMetadata must carry the page's own title.
     expect(og(meta).title).toBe('BYOK: Bring Your Own Keys to Desktop & CLI');
     expect(og(meta).title).not.toBe('AGI | One AI workspace across models and tools.');
     expect(og(meta).url).toBe(`${SITE_URL}/byok`);

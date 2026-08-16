@@ -1,36 +1,13 @@
-/**
- * ConversationHeader — the bar above an active conversation.
- *
- * This was a title and nothing else (DCL-08), so Desktop's chat had no rename,
- * no share and no way to reach artifacts, while web's own 409-line ChatHeader
- * offered all three. Rather than fork a second rich header, the
- * conversation-scoped actions live here and the host supplies the handlers it
- * can honour — an action with no handler is not rendered, so no surface shows a
- * control it cannot perform.
- *
- * Page chrome that web keeps in its ChatHeader (avatar, plan badge, theme
- * toggle) is deliberately not here: that belongs to the app shell, not to a
- * conversation.
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Package, Pencil, Share2, X } from 'lucide-react';
 import { useUiTranslation } from '@agiworkforce/ui';
 import { useChatStore } from '../stores/chatStore';
 
 export interface ConversationHeaderProps {
-  /** Persist a renamed title. Omit to hide the rename affordance. */
   onRename?: (conversationId: string, title: string) => void | Promise<void>;
-  /** Publish a share link. Omit to hide the share action. */
   onShare?: (conversationId: string) => void | Promise<void>;
-  /** Toggle the artifacts panel. Omit to hide the artifacts action. */
   onToggleArtifacts?: () => void;
-  /** Whether the artifacts panel is currently open, for aria-pressed. */
   artifactsOpen?: boolean;
-  /**
-   * How many artifacts this conversation currently has. Rendered as a badge on
-   * the artifacts toggle and folded into its accessible name, so the control
-   * says what it will open instead of being an unlabelled box.
-   */
   artifactCount?: number;
 }
 
@@ -54,8 +31,6 @@ export function ConversationHeader({
     if (editing) inputRef.current?.select();
   }, [editing]);
 
-  // Abandon an in-progress rename when the conversation changes underneath it,
-  // so a draft cannot be committed onto a different conversation.
   useEffect(() => {
     setEditing(false);
   }, [currentId]);
@@ -69,8 +44,6 @@ export function ConversationHeader({
     const next = draft.trim();
     setEditing(false);
     if (!conversation || !next || next === conversation.title) return;
-    // Update locally first so the title does not flicker back while the host
-    // persists. The host owns durability.
     updateConversation(conversation.id, { title: next });
     void onRename?.(conversation.id, next);
   }, [conversation, draft, onRename, updateConversation]);
@@ -163,7 +136,6 @@ function HeaderAction({
   onClick: () => void;
   icon: typeof Pencil;
   pressed?: boolean;
-  /** Numeric count rendered beside the icon (e.g. the artifact count). */
   badge?: number;
 }) {
   return (

@@ -1,17 +1,9 @@
-// Accessibility QA (checklist row #32) — drives real keyboard navigation
-// (Tab/Shift+Tab, Enter, Escape) through the live app and inspects real
-// computed focus/ARIA state, not source-only checks.
 
 describe('AGI Desktop Accessibility (real keyboard nav + ARIA)', () => {
   it('tabs through the composer/sidebar and reaches the composer via keyboard', async function () {
     this.timeout(30000);
     await browser.pause(1000);
 
-    // Start from a REAL focused element (click the composer) rather than a
-    // blurred body, then Tab and record the real focused element at each
-    // step -- isolates whether Tab-order is broken app-wide vs. just from an
-    // unfocused-body starting point (which some WebDriver/webview stacks
-    // don't reliably support for the very first Tab press).
     const composerStart = await $('textarea[aria-label="Chat message input"]');
     await composerStart.waitForDisplayed({ timeout: 15000 });
     await composerStart.click();
@@ -38,9 +30,6 @@ describe('AGI Desktop Accessibility (real keyboard nav + ARIA)', () => {
     }
     console.log('FOCUS_TRACE', JSON.stringify(focusTrace));
 
-    // Real assertion: focus must have moved somewhere (not stuck on body /
-    // nothing focusable), and at least one focused element must expose a
-    // real accessible name (aria-label) so screen readers announce it.
     const hasAccessibleName = focusTrace.some((f) => !!f.label);
     console.log('HAS_ACCESSIBLE_NAME_IN_TRACE', hasAccessibleName);
     expect(focusTrace.length).toBeGreaterThan(0);

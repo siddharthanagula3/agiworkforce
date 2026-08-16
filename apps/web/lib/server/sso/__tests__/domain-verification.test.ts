@@ -29,7 +29,6 @@ function resolverThrowing(code: string): TxtResolver {
 describe('issueDomainVerificationToken', () => {
   it('issues a high-entropy hex token that satisfies the database constraint', () => {
     const token = issueDomainVerificationToken();
-    // sso_connections_domain_verification_token_shape (migration 0083).
     expect(token).toMatch(/^[a-f0-9]{32,64}$/);
   });
 
@@ -44,18 +43,12 @@ describe('issueDomainVerificationToken', () => {
 
     const expiresAt = domainChallengeExpiresAt(token);
     expect(expiresAt).not.toBeNull();
-    // Truncated to whole seconds by the hex encoding.
     expect(expiresAt!.getTime()).toBe(
       Math.floor((now + DOMAIN_VERIFICATION_CHALLENGE_TTL_MS) / 1000) * 1000,
     );
   });
 });
 
-/**
- * CRIT-011: the challenge lifecycle has to close. An unexpiring challenge lets
- * a tenant hold a live claim on a domain it does not own indefinitely, so any
- * future lapse in that domain's DNS control becomes an instant verification.
- */
 describe('domain challenge expiry', () => {
   const now = Date.UTC(2026, 7, 9, 12, 0, 0);
 
@@ -78,8 +71,6 @@ describe('domain challenge expiry', () => {
   });
 
   it('treats a token that carries no expiry as expired rather than as unexpiring', () => {
-    // The shape issued before this format existed. Fail closed: the way out is
-    // PUT /api/admin/sso/verify-domain, not an unbounded challenge.
     expect(isDomainChallengeExpired('a'.repeat(48), now)).toBe(true);
     expect(domainChallengeExpiresAt('a'.repeat(48))).toBeNull();
   });
@@ -98,7 +89,6 @@ describe('domain challenge expiry', () => {
       ),
     ).resolves.toEqual({ verified: false, reason: 'challenge_expired' });
 
-    // And it does not spend a DNS lookup deciding that.
     expect(resolveTxt).not.toHaveBeenCalled();
   });
 });
@@ -114,8 +104,6 @@ describe('domainVerificationInstructions', () => {
 });
 
 describe('verifyDomainOwnership', () => {
-  // A live challenge. Tokens carry their own expiry, so a hand-written literal
-  // would be read as a lapsed pre-expiry token and short-circuit every case.
   const token = issueDomainVerificationToken();
   const value = `agiworkforce-sso-verification=${token}`;
 

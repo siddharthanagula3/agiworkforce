@@ -11,8 +11,6 @@ const mockUseAuth = jest.fn(() => ({
 }));
 let mockSearchParams: { postAuthIntent?: string | string[] } = {};
 
-// Capture the props Clerk's AuthView is rendered with so we can assert the
-// app owns dismissal outside the native SwiftUI/Compose touch surface.
 let lastAuthViewProps: { mode?: string; isDismissible?: boolean; onDismiss?: () => void } = {};
 let mockIsSignedIn = false;
 let mockUserId: string | null = null;
@@ -34,8 +32,6 @@ jest.mock('@clerk/expo', () => ({
   useAuth: (options?: { treatPendingAsSignedOut?: boolean }) => mockUseAuth(options),
 }));
 
-// AuthView is a native SwiftUI/Compose component; in Jest it has no testable
-// tree, so stub it while retaining the props passed across the native boundary.
 jest.mock('@clerk/expo/native', () => {
   const { Text } = require('react-native');
   return {
@@ -46,9 +42,6 @@ jest.mock('@clerk/expo/native', () => {
   };
 });
 
-// Hand-listing four tokens meant any component on this screen that reached for
-// a fifth got `undefined` and crashed (AgiMark reads `teal` to decide whether
-// its accent spoke would be invisible). Use the real dark palette instead.
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('../src/ui/theme/tokens');
   return { useThemeColors: () => tokens.colors };
@@ -84,8 +77,6 @@ function AlreadyLoadedAuthGuardHarness() {
   const [showAuthRoute, setShowAuthRoute] = useState(true);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
 
-  // Mirrors RootLayout's passive auth guard: an already-loaded signed-in
-  // session redirects as soon as the login route commits.
   useEffect(() => {
     if (isClerkSignedIn) setShowAuthRoute(false);
   }, [isClerkSignedIn]);
@@ -114,7 +105,6 @@ describe('LoginScreen', () => {
   it('renders Clerk native AuthView in combined sign-in-or-up mode', () => {
     const { getByText } = render(<LoginScreen />);
 
-    // Cloud sign-in is the native AuthView, not a web/credential form.
     expect(getByText('AuthView:signInOrUp')).toBeTruthy();
     expect(getByText('One account. Every surface.')).toBeTruthy();
     expect(getByText('Web')).toBeTruthy();

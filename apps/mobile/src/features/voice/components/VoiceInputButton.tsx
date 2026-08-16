@@ -1,4 +1,3 @@
-// AUDIT-FIX: STT-WIRE
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, {
@@ -196,9 +195,6 @@ export function VoiceInputButton({
       setState('ptt');
       onRecordingStart?.();
       if (cancelWhenStartedRef.current) {
-        // A long press requested voice-conversation mode while this PTT
-        // start was still in flight -- discard it the moment it lands
-        // instead of leaving it running underneath the overlay.
         cancelWhenStartedRef.current = false;
         stopWhenStartedRef.current = false;
         isPTTRef.current = false;
@@ -282,18 +278,6 @@ export function VoiceInputButton({
     }
   }, [clearPTTTimer, state, stopPTTRecording, startTapRecording, stopTapRecording]);
 
-  /**
-   * A long press (>=600ms) opens voice-conversation mode, but PTT auto-starts
-   * a recording at 300ms on the SAME held touch -- so any hold past 600ms
-   * always has a recording already running underneath. Without this, that
-   * recording was orphaned: `handlePressOut` bails out immediately on
-   * `isLongPressRef.current` (never reaching the stop/cancel branches), so
-   * the native capture session kept running with no on-screen affordance to
-   * stop it, and the conversation screen's own "tap to speak" orb silently
-   * no-ops while the shared capture singleton still reports itself active.
-   * Tear down whatever's in flight (or flag it for teardown the instant an
-   * in-progress start resolves) before handing off to voice mode.
-   */
   const cancelActiveRecording = useCallback(() => {
     if (state === 'starting') {
       cancelWhenStartedRef.current = true;
@@ -308,18 +292,6 @@ export function VoiceInputButton({
     });
   }, [state, onRecordingStop]);
 
-  // Tear down an in-flight/active recording if this component unmounts
-  // entirely (e.g. the user navigates away from the chat screen mid-recording
-  // or mid-start) — ChatInput normally keeps this component mounted
-  // (display:none) *during* a recording for exactly this reason, but that
-  // only covers same-screen re-renders, not navigation away from the screen.
-  // Without this, the native capture session kept running with nothing left
-  // to stop it until the recognizer's own `continuous:false` silence timeout
-  // fired. Routed through a ref so the cleanup always calls the LATEST
-  // `cancelActiveRecording` (which closes over `state`) while still running
-  // exactly once, on true unmount — a plain `[cancelActiveRecording]` dep
-  // would re-fire this cleanup on every state transition, since that
-  // callback's identity changes with `state`.
   const cancelActiveRecordingRef = useRef(cancelActiveRecording);
   useEffect(() => {
     cancelActiveRecordingRef.current = cancelActiveRecording;

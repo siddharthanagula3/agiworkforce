@@ -1,10 +1,3 @@
-/**
- * mentionFileInChat.test.ts — C14 wiring: context-panel → @agi chat participant
- *
- * Verifies that `agi-workforce.mentionFileInChat` opens the VS Code Chat panel
- * with `@agi #file:<relpath>` pre-populated, and falls back gracefully when
- * the chat panel command is unavailable.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
@@ -105,7 +98,6 @@ describe('agi-workforce.mentionFileInChat', () => {
     const handler = handlers.get('agi-workforce.mentionFileInChat')!;
     const uri = vscode.Uri.file('/mock/workspace/src/bar.ts');
 
-    // Mock asRelativePath to return a predictable value
     vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('src/bar.ts');
 
     await handler(uri);
@@ -160,7 +152,6 @@ describe('agi-workforce.mentionFileInChat', () => {
   });
 
   it('shows warning and does not call executeCommand when no uri and no active editor', async () => {
-    // Ensure no active editor
     Object.defineProperty(vscode.window, 'activeTextEditor', {
       value: undefined,
       configurable: true,

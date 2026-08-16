@@ -1,11 +1,4 @@
-/**
- * API Module Exports
- *
- * Centralized exports for all Tauri command API wrappers.
- * Import from '@/api' for clean access to all APIs.
- */
 
-// Ollama - Local AI model management
 export {
   OllamaClient,
   ollamaCheckStatus,
@@ -18,7 +11,6 @@ export {
   type OllamaModelDetails,
 } from './ollama';
 
-// Privacy - GDPR-compliant data management
 export {
   PrivacyClient,
   updatePrivacyPreferences,
@@ -31,7 +23,6 @@ export {
   type ExportMetadata,
 } from './privacy';
 
-// MCP - Model Context Protocol
 export {
   McpClient,
   mcpInitialize,
@@ -70,7 +61,6 @@ export {
   mcpGetToolSchemas,
 } from './mcp';
 
-// Chat - Intent Detection and Stop Handling
 export {
   ChatClient,
   detectIntent,
@@ -81,7 +71,6 @@ export {
   type IntentResult,
 } from './chat';
 
-// Screen Watcher - Continuous Screen Monitoring
 export {
   ScreenWatcherClient,
   startScreenWatcher,
@@ -98,7 +87,6 @@ export {
   type WatcherStatus,
 } from './screenWatcher';
 
-// Timeout Management - Extended task execution
 export {
   getTimeoutConfig,
   setTimeoutConfig,
@@ -111,7 +99,6 @@ export {
   type TimeoutResponse,
 } from './timeout';
 
-// Background Tasks - Persistent task management
 export {
   listBackgroundTasks,
   getBackgroundTask,
@@ -133,7 +120,6 @@ export {
   type TaskProgress,
 } from './backgroundTasks';
 
-// Undo - File change undo + form submission undo + coding checkpoints
 export {
   undoGetSummary,
   undoGetChanges,
@@ -162,7 +148,6 @@ export {
   type FormUndoStats,
 } from './undo';
 
-// Terminal - Shell execution, sessions, AI commands, env vars
 export {
   executeTerminalCommand,
   terminalExecute,
@@ -188,10 +173,8 @@ export {
   type ExecuteCommandOptions,
 } from './terminal';
 
-// Memory - Persistent memory management (all 39 Rust commands)
 export * as memoryApi from './memory';
 
-// File Operations - File/directory CRUD, binary I/O, workspace files
 export {
   fileRead,
   fileReadText,
@@ -222,7 +205,6 @@ export {
   type WorkspaceFile,
 } from './fileOps';
 
-// Artifacts - CRUD, streaming, versioning, diff, import/export (24 commands)
 export {
   artifactCreate,
   artifactCreateStreaming,
@@ -258,7 +240,6 @@ export {
   type ArtifactStoreStats as ArtifactStoreStatsApiType,
 } from './artifacts';
 
-// Browser Automation - Full CDP browser control (56 commands)
 export {
   BrowserClient,
   browserInit,
@@ -328,7 +309,6 @@ export {
   type SemanticResult,
 } from './browser';
 
-// Re-export other API modules for convenience
 export * from './automation';
 export * from './automationEnhanced';
 export * from './codeEditing';
@@ -341,10 +321,8 @@ export * from './reflection';
 export * from './teamsApi';
 export * from './accountApi';
 
-// AGI Core - Goal submission, swarm execution, knowledge base
 export * from './agi';
 
-// Agent - Autonomous agent lifecycle, task management, approvals
 export {
   agentInit,
   agentSubmitTask,
@@ -365,7 +343,6 @@ export {
   type ApprovalDecision,
 } from './agent';
 
-// Git - Repository operations, branches, conflicts, PRs
 export {
   GitClient,
   gitInit,
@@ -419,7 +396,6 @@ export {
   type PrReadinessResult,
 } from './git';
 
-// Design - AI-powered CSS design assistant
 export {
   generateCss,
   applyCss,
@@ -439,7 +415,6 @@ export {
   type AccessibilityIssue,
 } from './design';
 
-// Email & Contacts - IMAP/SMTP email client + contact management
 export {
   EmailClient,
   ContactClient,
@@ -469,7 +444,6 @@ export {
   type EmailSearchResult as EmailApiSearchResult,
 } from './email';
 
-// OCR - Tesseract-based text recognition
 export {
   processImage,
   processRegion,
@@ -487,7 +461,6 @@ export {
   type MultiLanguageResult,
 } from './ocr';
 
-// Cache - LLM cache, codebase cache, analytics (22 commands)
 export {
   CacheClient,
   cacheGetStats,
@@ -533,7 +506,6 @@ export {
   type CodebaseCacheStats,
 } from './cache';
 
-// Onboarding - Onboarding progress, first-run, session, preferences (20 commands)
 export {
   OnboardingClient,
   getOnboardingStatus,
@@ -566,7 +538,6 @@ export {
   type FirstRunStatistics,
 } from './onboarding';
 
-// Tutorials - Tutorial management, progress, rewards, sample data (21 commands)
 export {
   TutorialClient,
   getTutorials,
@@ -607,7 +578,6 @@ export {
   type ValidationType,
 } from './tutorials';
 
-// API Management - HTTP client, OAuth 2.0, request templates (15 commands)
 export {
   apiRequest,
   apiGet,
@@ -636,7 +606,6 @@ export {
   type RenderedTemplate,
 } from './apiManagement';
 
-// Task Persistence - Persistent task manager and coordination (14 commands)
 export {
   taskCreate,
   taskGetStatus,
@@ -660,7 +629,6 @@ export {
   type ApprovalRequest as TaskApprovalRequest,
 } from './taskPersistence';
 
-// Analytics - Telemetry, metrics, ROI, and reports
 export {
   AnalyticsClient,
   analyticsTrackEvent,
@@ -702,7 +670,6 @@ export {
   type FeatureUsageEntry,
 } from './analytics';
 
-// Database - SQL, MongoDB, Redis with secure password storage
 export {
   dbCreatePool,
   dbExecuteQuery,
@@ -762,7 +729,6 @@ export {
   type DeleteQuery,
 } from './database';
 
-// Metrics - ROI dashboard and automation metrics
 export {
   getRealtimeStats,
   recordAutomationMetrics,
@@ -803,7 +769,6 @@ export {
   type ExportOptions,
 } from './metrics';
 
-// LSP - Language Server Protocol integration
 export {
   lspStartServer,
   lspStopServer,
@@ -835,7 +800,6 @@ export {
   type WorkspaceEdit,
 } from './lsp';
 
-// Productivity - Notion, Trello, Asana integrations
 export {
   productivityConnect,
   productivityListTasks,
@@ -859,7 +823,6 @@ export {
   type CreateTaskResponse,
 } from './productivity';
 
-// Voice - Transcription, TTS, wake word, PTT, Deepgram, barge-in, local models
 export {
   VoiceClient,
   voiceTranscribeFile,

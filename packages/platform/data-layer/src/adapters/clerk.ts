@@ -33,22 +33,9 @@ async function loadClerkBackend(): Promise<ClerkBackendModule> {
 }
 
 export interface ClerkAuthConfig {
-  /**
-   * Clerk secret key. Allows verifyToken() to fetch JWKS from Clerk when
-   * CLERK_JWT_KEY is not configured.
-   */
   secretKey?: string;
-  /**
-   * Clerk JWT verification key. Preferred for networkless token verification.
-   */
   jwtKey?: string;
-  /**
-   * Optional allowed `azp` origins for session token verification.
-   */
   authorizedParties?: string[];
-  /**
-   * Test hook so adapter tests can avoid real Clerk keys and network calls.
-   */
   verifyToken?: VerifyTokenFn;
 }
 

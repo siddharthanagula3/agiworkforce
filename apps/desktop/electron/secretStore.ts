@@ -1,12 +1,3 @@
-/**
- * OS-encrypted secret storage for the cloud shell's first-party tokens.
- *
- * Plays the role the OS keyring plays for the Tauri shell
- * (`account_store_access_token` & co in `src-tauri/src/sys/account/mod.rs`):
- * values are encrypted with Electron `safeStorage` (Keychain-backed on macOS)
- * and written to a file in `userData`. Secrets never transit the renderer
- * except as the return value of an allowlisted bridge command.
- */
 import { app, safeStorage } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -57,7 +48,6 @@ export async function getSecret(key: SecretKey): Promise<string | null> {
   try {
     return safeStorage.decryptString(Buffer.from(encrypted, 'base64'));
   } catch {
-    // Encryption key changed (OS reinstall, keychain reset) — treat as signed out.
     return null;
   }
 }

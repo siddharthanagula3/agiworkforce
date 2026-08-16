@@ -1,20 +1,3 @@
-/**
- * End-to-end proof of the generated-file byte pipeline on the adapter stream
- * path, using RECORDED/REPLAYED provider payloads through the REAL persistence
- * and serving code (only the true external boundaries — the provider HTTP API,
- * R2, and Neon — are replaced with in-memory fakes):
- *
- *   provider stream chunk carrying a file reference
- *     → collectGeneratedFileRefs (real)
- *     → persistGeneratedFiles / persistGeneratedFileBytes (real)
- *     → in-memory "R2" + "media_assets"
- *     → `x_generated_files` SSE delta with a same-origin /api/files/{id} uri
- *     → GET /api/files/[id] (the real route handler)
- *     → served bytes hash-identical to the provider payload (hash in == hash out)
- *
- * Also proves the honest failure state: when the provider fetch fails, the
- * stream carries an inline note — never silence.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash, randomUUID } from 'crypto';
@@ -46,7 +29,6 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-// ── In-memory storage + catalog fakes (the ONLY faked boundaries) ────────────
 const objectStore = new Map<string, { data: Buffer; contentType: string }>();
 interface AssetRow {
   id: string;
@@ -189,7 +171,6 @@ function parseGeneratedFilesEvent(sse: string): Array<{
   return [];
 }
 
-// Recorded provider payloads (replayed byte-for-byte via the fetch stub).
 const RECORDED_PDF = Buffer.from('%PDF-1.7\nreplayed provider pdf bytes\n%%EOF', 'utf8');
 const RECORDED_PNG = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -209,7 +190,6 @@ beforeEach(() => {
 
 describe('generated-file byte pipeline (adapter stream → persist → serve)', () => {
   it('persists an Anthropic code-execution output and serves hash-identical bytes same-origin', async () => {
-    // Replayed Anthropic wire payloads: file metadata, then file content.
     fetchSpy.mockImplementation(async (url: string) => {
       if (url === 'https://api.anthropic.com/v1/files/file_abc') {
         return {
@@ -267,12 +247,9 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
     const file = files[0]!;
     expect(file.file_name).toBe('analysis.pdf');
     expect(file.mime_type).toBe('application/pdf');
-    // Same-origin serve path — the ONLY url shape the PDF renderer gate accepts.
     expect(file.uri).toMatch(/^\/api\/files\/[0-9a-f-]{36}$/);
-    // The event must land before stream close.
     expect(sse.indexOf('x_generated_files')).toBeLessThan(sse.indexOf('data: [DONE]'));
 
-    // Now fetch the bytes back through the REAL serve route.
     const id = file.uri.slice('/api/files/'.length);
     const served = await serveFile(
       new Request(`https://example.com/api/files/${id}`) as never,
@@ -337,7 +314,6 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
     expect(files[0]!.mime_type).toBe('image/png');
     expect(files[0]!.checksum_sha256).toBe(createHash('sha256').update(RECORDED_PNG).digest('hex'));
 
-    // Foreign assets are indistinguishable from unknown ids (404).
     const { getClerkAuthUser } = await import('@/lib/api-auth');
     (getClerkAuthUser as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       userId: 'user-other',
@@ -389,5 +365,4 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
   });
 });
 
-// randomUUID import is used by the in-memory fakes at module scope.
 void randomUUID;

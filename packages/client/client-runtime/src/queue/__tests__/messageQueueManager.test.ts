@@ -1,17 +1,3 @@
-/**
- * Unit tests for `messageQueueManager`.
- *
- * Coverage targets (per Task 1.4 acceptance criteria):
- *  - 3 priority lanes (now > next > later) — total ordering across lanes
- *  - FIFO within a lane
- *  - popAllEditable reconstruction (text + cursor + PastedContent IDs)
- *  - AbortSignal cancellation removes from queue
- *  - Queue overflow rejects with QueueFullError
- *  - Per-surface state isolation (two queues are independent)
- *  - Persistence: `next` and `later` survive; `now` is volatile
- *  - Atomic compare-and-swap dequeue (dequeueIf)
- *  - Property test: 1000 random messages → FIFO-within-priority + total ordering
- */
 
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -30,10 +16,6 @@ import {
   type QueuedCommand,
 } from '../types';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function basicCommand(overrides: Partial<QueuedCommand> = {}) {
   return {
     value: overrides.value ?? 'hello',
@@ -47,10 +29,6 @@ function basicCommand(overrides: Partial<QueuedCommand> = {}) {
     preExpansionValue: overrides.preExpansionValue,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Basic FIFO + lane ordering
-// ---------------------------------------------------------------------------
 
 describe('createMessageQueue — basic correctness', () => {
   it('returns empty snapshot initially', () => {
@@ -67,7 +45,7 @@ describe('createMessageQueue — basic correctness', () => {
     const cmd = q.enqueue(basicCommand({ value: 'a' }));
     expect(cmd.id).toMatch(/.+/);
     expect(typeof cmd.enqueuedAt).toBe('number');
-    expect(cmd.priority).toBe('next'); // default
+    expect(cmd.priority).toBe('next');
   });
 
   it('respects user-provided id and enqueuedAt', () => {
@@ -101,7 +79,6 @@ describe('createMessageQueue — basic correctness', () => {
     q.enqueue(basicCommand({ value: 'next2', priority: 'next' }));
     q.enqueue(basicCommand({ value: 'now2', priority: 'now' }));
 
-    // now lane drains first (FIFO within), then next, then later.
     expect(q.dequeue()?.value).toBe('now1');
     expect(q.dequeue()?.value).toBe('now2');
     expect(q.dequeue()?.value).toBe('next1');
@@ -113,7 +90,6 @@ describe('createMessageQueue — basic correctness', () => {
     const q = createMessageQueue();
     q.enqueueNotification(basicCommand({ value: 'note', mode: 'task-notification' }));
     q.enqueue(basicCommand({ value: 'user' }));
-    // user input drains first because next < later
     expect(q.dequeue()?.value).toBe('user');
     expect(q.dequeue()?.value).toBe('note');
   });
@@ -133,8 +109,6 @@ describe('createMessageQueue — basic correctness', () => {
     q.enqueue(basicCommand({ value: 'now', priority: 'now' }));
     const all = q.dequeueAll();
     expect(all.map((c) => c.value)).toEqual(['l', 'n', 'now']);
-    // dequeueAll preserves array-iteration order (insertion order); priority
-    // ordering only applies to single dequeue.
     expect(q.size()).toBe(0);
   });
 
@@ -170,10 +144,6 @@ describe('createMessageQueue — basic correctness', () => {
     expect(q.getSnapshot().map((c) => c.value)).toEqual(['b', 'c']);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Frozen snapshot stability
-// ---------------------------------------------------------------------------
 
 describe('createMessageQueue — frozen snapshots', () => {
   it('returns the same snapshot reference between mutations', () => {
@@ -219,9 +189,9 @@ describe('createMessageQueue — frozen snapshots', () => {
     const listener = vi.fn();
     q.subscribe(listener);
 
-    q.dequeue(); // empty queue → no mutation
-    q.clear(); // empty queue → no mutation
-    q.dequeueAllMatching(() => false); // nothing matches → no mutation
+    q.dequeue();
+    q.clear();
+    q.dequeueAllMatching(() => false);
 
     expect(listener).not.toHaveBeenCalled();
   });
@@ -237,10 +207,6 @@ describe('createMessageQueue — frozen snapshots', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// popAllEditable reconstruction
-// ---------------------------------------------------------------------------
 
 describe('createMessageQueue — popAllEditable', () => {
   it('returns undefined when queue is empty', () => {
@@ -261,7 +227,6 @@ describe('createMessageQueue — popAllEditable', () => {
     q.enqueue(basicCommand({ value: 'second' }));
     const result = q.popAllEditable('typing', 7);
     expect(result?.text).toBe('first\nsecond\ntyping');
-    // Cursor offset = "first\nsecond".length + 1 + 7 = 12 + 1 + 7 = 20
     expect(result?.cursorOffset).toBe(20);
     expect(q.size()).toBe(0);
   });
@@ -333,14 +298,9 @@ describe('createMessageQueue — popAllEditable', () => {
     q.enqueue(basicCommand({ value: 'a' }));
     const result = q.popAllEditable('', 0);
     expect(result?.text).toBe('a');
-    // Cursor: "a".length + 1 + 0 = 2
     expect(result?.cursorOffset).toBe(2);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Cancellation via AbortSignal
-// ---------------------------------------------------------------------------
 
 describe('createMessageQueue — AbortSignal cancellation', () => {
   it('aborting the signal removes the command from the queue', () => {
@@ -368,15 +328,10 @@ describe('createMessageQueue — AbortSignal cancellation', () => {
     q.enqueue(basicCommand({ value: 'x' }), { signal: ac.signal });
     q.dequeue();
     expect(q.size()).toBe(0);
-    // Aborting after dequeue must not throw or affect anything.
     expect(() => ac.abort()).not.toThrow();
     expect(q.size()).toBe(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Lane overflow → QueueFullError
-// ---------------------------------------------------------------------------
 
 describe('createMessageQueue — overflow', () => {
   it('rejects with QueueFullError when a lane is at cap', () => {
@@ -436,10 +391,6 @@ describe('createMessageQueue — overflow', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Per-surface isolation
-// ---------------------------------------------------------------------------
-
 describe('createMessageQueue — per-surface isolation', () => {
   it('two queues are completely independent', () => {
     const a = createMessageQueue();
@@ -452,10 +403,6 @@ describe('createMessageQueue — per-surface isolation', () => {
     expect(b.size()).toBe(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Persistence: `next` and `later` survive; `now` is volatile
-// ---------------------------------------------------------------------------
 
 describe('createMessageQueue — persistence', () => {
   function createInMemoryStorage(): {
@@ -507,9 +454,8 @@ describe('createMessageQueue — persistence', () => {
 
     expect(data.value).toBeTruthy();
 
-    // Simulate restart — new queue instance reads from same adapter.
     const q2 = createMessageQueue({ storage: adapter });
-    expect(q2.size()).toBe(2); // now lane filtered out
+    expect(q2.size()).toBe(2);
     expect(q2.getSnapshot().map((c) => c.value)).toEqual(['survive1', 'survive2']);
   });
 
@@ -537,10 +483,6 @@ describe('createMessageQueue — persistence', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Atomic compare-and-swap dequeue (dequeueIf)
-// ---------------------------------------------------------------------------
-
 describe('createMessageQueue — dequeueIf (atomic compare-and-swap)', () => {
   it('succeeds when the expected command is at the head of its lane', () => {
     const q = createMessageQueue();
@@ -555,7 +497,6 @@ describe('createMessageQueue — dequeueIf (atomic compare-and-swap)', () => {
     const q = createMessageQueue();
     const a = q.enqueue(basicCommand({ value: 'a' }));
     q.enqueue(basicCommand({ value: 'b' }));
-    // Simulate another consumer dequeuing first.
     q.dequeue();
     expect(() => q.dequeueIf(a.id)).toThrow(QueueDequeueRaceError);
   });
@@ -564,24 +505,17 @@ describe('createMessageQueue — dequeueIf (atomic compare-and-swap)', () => {
     const q = createMessageQueue();
     const a = q.enqueue(basicCommand({ value: 'a', priority: 'next' }));
     q.enqueue(basicCommand({ value: 'urgent', priority: 'now' }));
-    // `urgent` is now the head; expecting `a.id` should fail.
     expect(() => q.dequeueIf(a.id)).toThrow(QueueDequeueRaceError);
   });
 
   it('two concurrent dequeueIf calls — only one wins, other throws', () => {
     const q = createMessageQueue();
     const cmd = q.enqueue(basicCommand({ value: 'race' }));
-    // Both consumers see the same snapshot; first wins.
     const winner = q.dequeueIf(cmd.id);
     expect(winner.value).toBe('race');
-    // Second tries the same id → race error.
     expect(() => q.dequeueIf(cmd.id)).toThrow(QueueDequeueRaceError);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Logger hook
-// ---------------------------------------------------------------------------
 
 describe('createMessageQueue — logger', () => {
   it('logs enqueue / dequeue / pop / remove / clear events', () => {
@@ -607,10 +541,6 @@ describe('createMessageQueue — logger', () => {
     expect(events).toContain('clear');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Storage adapter helpers
-// ---------------------------------------------------------------------------
 
 describe('createWebStorageAdapter', () => {
   function makeFakeStorage(): Storage {
@@ -683,13 +613,9 @@ describe('createKvStorageAdapter', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Property test: 1000 random messages → FIFO + total order
-// ---------------------------------------------------------------------------
-
 describe('createMessageQueue — property test (1000 random messages)', () => {
   it('preserves FIFO within priority + total ordering by priority class', () => {
-    const q = createMessageQueue({ laneCap: 2000 }); // wider cap for property test
+    const q = createMessageQueue({ laneCap: 2000 });
     const lanes: QueuePriority[] = ['now', 'next', 'later'];
     const inserted: { id: string; priority: QueuePriority; ordinal: number }[] = [];
 
@@ -699,7 +625,6 @@ describe('createMessageQueue — property test (1000 random messages)', () => {
       inserted.push({ id: cmd.id, priority, ordinal: i });
     }
 
-    // Drain and verify each pop respects total ordering.
     let lastPriority = -1;
     const lastOrdinalInLane: Record<QueuePriority, number> = { now: -1, next: -1, later: -1 };
 
@@ -707,10 +632,8 @@ describe('createMessageQueue — property test (1000 random messages)', () => {
       const popped = q.dequeue();
       expect(popped).toBeDefined();
       const pri = PRIORITY_ORDER[popped!.priority ?? 'next'];
-      // Total order — each pop's priority must be >= the previous (lower number = earlier).
       expect(pri).toBeGreaterThanOrEqual(lastPriority);
 
-      // FIFO within lane — find this command in the inserted log.
       const ins = inserted.find((x) => x.id === popped!.id)!;
       expect(ins.ordinal).toBeGreaterThan(lastOrdinalInLane[ins.priority]);
       lastOrdinalInLane[ins.priority] = ins.ordinal;
@@ -720,10 +643,6 @@ describe('createMessageQueue — property test (1000 random messages)', () => {
     expect(q.size()).toBe(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Edge cases that surfaced during implementation
-// ---------------------------------------------------------------------------
 
 describe('createMessageQueue — edge cases', () => {
   it('value as ContentBlock[] — text extraction joins with newline', () => {
@@ -763,7 +682,6 @@ describe('createMessageQueue — edge cases', () => {
     q.enqueue(basicCommand({ value: 'channel msg', mode: 'channel-message' }));
     expect(q.size()).toBe(1);
     expect(q.popAllEditable('', 0)).toBeUndefined();
-    // Channel messages stay queued even after popAllEditable.
     expect(q.size()).toBe(1);
   });
 });

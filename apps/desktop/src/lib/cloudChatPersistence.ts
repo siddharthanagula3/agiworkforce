@@ -26,9 +26,6 @@ import { createCloudChatPersistenceClient } from '../api/cloudApi';
 import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
 import { selectHasCloudAccountSession, useAuthStore } from '../stores/auth';
 
-/**
- * True only when the desktop is in the managed-cloud trust boundary.
- */
 export function isManagedCloudPersistenceActive(): boolean {
   try {
     return (
@@ -36,7 +33,6 @@ export function isManagedCloudPersistenceActive(): boolean {
       selectHasCloudAccountSession(useAuthStore.getState())
     );
   } catch {
-    // Fail-closed: an unreadable store is treated as a private boundary.
     return false;
   }
 }

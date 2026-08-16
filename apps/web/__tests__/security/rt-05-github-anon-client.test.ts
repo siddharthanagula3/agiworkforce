@@ -1,12 +1,3 @@
-/**
- * RT-05: GitHub webhook processReview uses Neon DB in background task
- *
- * Tests that:
- * - Background task queries Neon DB for installation record
- * - HMAC-verified webhook finds installation and posts review
- * - Missing/unverified installation -> no privileged external write
- * - Forged webhook (bad HMAC) rejected at route level
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -25,13 +16,6 @@ const { mockLogger } = vi.hoisted(() => ({
 vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@agiworkforce/types', async () => {
-  // Spread the real module rather than listing exports. A factory mock replaces
-  // the module wholesale, so every symbol the route reaches transitively has to
-  // be present or Vitest throws at first read and the suite dies at LOAD, with
-  // no assertion having run. Listing them one at a time just moves the error to
-  // the next missing name (CAPABILITY_LAYERS, then SYNCED_APP_SURFACES, ...).
-  // Only the two model resolvers below are actually being stubbed, so only they
-  // are overridden — same pattern as __tests__/api/media-image-generate.test.ts.
   const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
   return {
     ...actual,
@@ -48,7 +32,6 @@ const { mockPostComment } = vi.hoisted(() => ({
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// ─── Neon DB mock ─────────────────────────────────────────────────────────────
 const mockNeonQuery = vi.fn();
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
@@ -60,8 +43,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-// Hoist `createHmac` alongside the secret so the mock factory can verify
-// signatures without a `require()` call (banned by no-require-imports).
 const { WEBHOOK_SECRET, hoistedCreateHmac } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const cryptoMod = require('node:crypto') as typeof import('node:crypto');
@@ -73,9 +54,6 @@ vi.mock('@/lib/github-app', () => ({
     const expected = 'sha256=' + hoistedCreateHmac('sha256', secret).update(body).digest('hex');
     return sig === expected;
   },
-  // Plain functions — vitest config `mockReset: true` clears vi.fn()
-  // implementations between tests, returning undefined for everything after
-  // the first.
   getInstallationAccessToken: async () => 'ghs_token_abc',
   getPrDiff: async () => '+ added line',
   postIssueComment: (...args: unknown[]) => mockPostComment(...args),
@@ -116,12 +94,10 @@ async function waitForBackground(): Promise<void> {
 describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: installation found with pr_review_enabled
     mockNeonQuery.mockResolvedValue([
       { user_id: 'user-1', pr_review_enabled: true, review_model: null },
     ]);
 
-    // Default: LLM succeeds
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({ content: [{ text: 'LGTM - no issues' }] }),
@@ -133,7 +109,6 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     await POST(req);
     await waitForBackground();
 
-    // Neon DB query should have been called for the installation lookup
     expect(mockNeonQuery).toHaveBeenCalled();
     const [sql] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('github_installations');
@@ -151,7 +126,7 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
   });
 
   it('posts no comment when a verified installation is not found', async () => {
-    mockNeonQuery.mockResolvedValue([]); // No installation record
+    mockNeonQuery.mockResolvedValue([]);
     const req = makeWebhookRequest(VALID_PAYLOAD);
     await POST(req);
     await waitForBackground();
@@ -176,7 +151,6 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     expect(res.status).toBe(401);
 
     await waitForBackground();
-    // Background task should NOT have run (DB not queried)
     expect(mockNeonQuery).not.toHaveBeenCalled();
     expect(mockPostComment).not.toHaveBeenCalled();
   });
@@ -184,19 +158,17 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
   it('returns 200 immediately (fire-and-forget pattern)', async () => {
     const req = makeWebhookRequest(VALID_PAYLOAD);
     const res = await POST(req);
-    // Must return 200 before background task completes
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.received).toBe(true);
   });
 
   it('handles non-existent installation_id gracefully (no-op)', async () => {
-    mockNeonQuery.mockResolvedValue([]); // No installation record for this id
+    mockNeonQuery.mockResolvedValue([]);
     const req = makeWebhookRequest({ ...VALID_PAYLOAD, installation: { id: 9999 } });
     await POST(req);
     await waitForBackground();
 
-    // No linked owner means no authority to write to the repository.
     expect(mockPostComment).not.toHaveBeenCalled();
     expect(mockLogger.error).not.toHaveBeenCalled();
   });

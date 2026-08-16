@@ -1,17 +1,3 @@
-/**
- * Companion Demo Walkthrough
- *
- * Lightweight tooltip overlay that guides users through the companion feature.
- * Four steps: Pair, Monitor, Approve, Remote Control.
- *
- * Usage:
- *   <CompanionDemoWalkthrough
- *     visible={showDemo}
- *     onDone={() => setShowDemo(false)}
- *   />
- *
- * Trigger from settings or on first successful pairing.
- */
 import { useCallback, useState } from 'react';
 import { View, Pressable, Modal, Dimensions } from 'react-native';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
@@ -31,10 +17,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 
-// ---------------------------------------------------------------------------
-// Demo Step definitions
-// ---------------------------------------------------------------------------
-
 interface DemoStep {
   id: string;
   icon: typeof QrCode;
@@ -46,8 +28,6 @@ interface DemoStep {
   hint: string;
 }
 
-// A function of the palette rather than a module constant: the accent and
-// status colours differ per theme, and a constant freezes one theme's values.
 function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
   return [
     {
@@ -97,10 +77,6 @@ function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
   ];
 }
 
-// ---------------------------------------------------------------------------
-// Demo state store (tracks if user has seen the walkthrough)
-// ---------------------------------------------------------------------------
-
 interface DemoState {
   hasSeenDemo: boolean;
   markDemoSeen: () => void;
@@ -117,7 +93,6 @@ export const useDemoStore = create<DemoState>()(
     {
       name: 'companion-demo-store',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[companion-demo-store] Hydration failed:', error);
@@ -127,10 +102,6 @@ export const useDemoStore = create<DemoState>()(
 );
 
 rehydrateWhenMmkvReady(useDemoStore, 'companion-demo-store');
-
-// ---------------------------------------------------------------------------
-// Step Indicator dots
-// ---------------------------------------------------------------------------
 
 function StepDots({ total, current }: { total: number; current: number }) {
   const colors = useThemeColors();
@@ -152,10 +123,6 @@ function StepDots({ total, current }: { total: number; current: number }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Demo Walkthrough component
-// ---------------------------------------------------------------------------
-
 interface CompanionDemoWalkthroughProps {
   visible: boolean;
   onDone: () => void;
@@ -174,7 +141,6 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
     if (isLast) {
       markDemoSeen();
       onDone();
-      // Reset for next time
       setCurrentStep(0);
     } else {
       setCurrentStep((prev) => prev + 1);

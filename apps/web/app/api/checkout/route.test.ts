@@ -150,9 +150,6 @@ describe('POST /api/checkout', () => {
   ])(
     'refuses to sell over a subscription the store still bills (%s)',
     async (storeIdColumn, storeId) => {
-      // Buying an equal-or-higher tier on the web would leave the customer
-      // paying Apple/Google AND Stripe, because only the store can cancel the
-      // active store subscription.
       dbMocks.query.mockImplementation(async (sql: string) => {
         if (sql.includes('from subscriptions')) {
           return [
@@ -246,10 +243,6 @@ describe('POST /api/checkout', () => {
   });
 
   it('refuses to replace a negotiated enterprise entitlement with a self-serve plan', async () => {
-    // An Enterprise contract is provisioned by hand, so the row is paid and
-    // active with no Stripe subscription id. The webhook upsert overwrites
-    // plan_tier on user_id, so letting this checkout through would downgrade a
-    // contract customer to Pro and strip enterprise_controls.
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {
         return [
@@ -273,9 +266,6 @@ describe('POST /api/checkout', () => {
 
   describe('duplicate purchase against a delayed webhook', () => {
     function returningCustomerWithNoRecordedSubscription() {
-      // The buyer already has a Stripe customer, but the subscription their
-      // first click paid for has not been written yet because the webhook is
-      // still in flight - exactly the window a second click lands in.
       dbMocks.query.mockImplementation(async (sql: string) => {
         if (sql.includes('from subscriptions')) return [];
         if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_123' }];
@@ -420,9 +410,6 @@ describe('POST /api/checkout', () => {
     });
 
     it('keeps the seat count inside the Stripe idempotency key', async () => {
-      // Without this, a client reusing one Idempotency-Key while changing the
-      // seat count is replayed the earlier session and the org is billed for
-      // seats it did not choose.
       await POST(
         teamRequest({ plan: 'team', billingInterval: 'monthly', seats: 5 }, 'agi.team.request-1'),
       );

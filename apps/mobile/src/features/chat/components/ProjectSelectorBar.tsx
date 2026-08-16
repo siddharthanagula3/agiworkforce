@@ -1,10 +1,3 @@
-/**
- * Project Selector Bar
- *
- * Shown at the top of the chat tab. Displays the active project and lets
- * the user switch or clear it via a dropdown sheet. Also shows a context
- * indicator when a project is active.
- */
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Modal, FlatList, useWindowDimensions } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -17,19 +10,11 @@ import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
-/**
- * Minimal project shape the bar needs, normalized across the two physically
- * separate stores (local `useProjectStore` vs cloud `useCloudProjectStore`).
- */
 interface ProjectOption {
   id: string;
   name: string;
   description: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// Dropdown item
-// ---------------------------------------------------------------------------
 
 interface ProjectDropdownItemProps {
   project: ProjectOption;
@@ -89,16 +74,7 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 interface ProjectSelectorBarProps {
-  /**
-   * When provided, the inline trigger pill is hidden and the picker is opened
-   * by incrementing this signal — the entry point lives in the "+" sheet
-   * instead of a permanent row above the composer (founder 2026-07-29).
-   */
   openSignal?: number;
 }
 
@@ -107,9 +83,6 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
 
-  // Mode-aware project source. Cloud and local projects live in physically
-  // separate stores; the bar reads/writes ONLY the store for the active mode so
-  // a chat is always assigned a project from its own namespace.
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const localProjects = useProjectStore((s) => s.projects);
   const localActiveId = useProjectStore((s) => s.activeProjectId);
@@ -137,8 +110,6 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const isSheetDriven = openSignal !== undefined;
 
-  // Open on signal change only — never on mount, or the picker would appear
-  // over the composer every time the chat screen renders.
   const previousOpenSignalRef = useRef(openSignal);
   useEffect(() => {
     if (openSignal === undefined) return;
@@ -158,7 +129,6 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
 
   const handleSelect = useCallback(
     (id: string) => {
-      // Toggle: selecting the already-active project clears it
       setActiveProject(activeProjectId === id ? null : id);
       setDropdownVisible(false);
     },
@@ -169,14 +139,12 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
     setActiveProject(null);
   }, [setActiveProject]);
 
-  // No projects — render nothing
   if (projects.length === 0) return null;
 
   return (
     <>
       <View className="px-4 pb-1" style={{ display: isSheetDriven ? 'none' : 'flex' }}>
         {activeProject ? (
-          // Active project indicator pill
           <Animated.View entering={FadeIn.duration(200)}>
             <Pressable
               onPress={handleOpenDropdown}
@@ -210,7 +178,6 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
             </Pressable>
           </Animated.View>
         ) : (
-          // No active project — compact selector button
           <Pressable
             onPress={handleOpenDropdown}
             className="flex-row items-center gap-1.5 self-start rounded-full px-3 py-1.5 active:opacity-70"

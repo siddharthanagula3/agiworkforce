@@ -8,7 +8,6 @@ import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
 export async function GET(request: NextRequest) {
-  // Verify cron secret
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,7 +16,6 @@ export async function GET(request: NextRequest) {
   try {
     logger.info('Starting monthly credit reset cron job');
 
-    // Get all active subscriptions
     const db = getNeonDb();
     type SubRow = Pick<
       SubscriptionRow,
@@ -52,13 +50,6 @@ export async function GET(request: NextRequest) {
         const periodStart = new Date(subscription.current_period_start);
         const periodEnd = new Date(subscription.current_period_end);
 
-        // Idempotent allocate (getOrCreate) for the CURRENT period instead of a
-        // DESTRUCTIVE force-reset gated on a fragile 1-hour window:
-        //  - at true period rollover this creates the new period's credit account;
-        //  - within an active period it is a no-op, so it NEVER wipes in-period
-        //    usage (the old force-reset restored already-spent quota for free);
-        //  - being idempotent, the cron no longer depends on hitting a 1-hour
-        //    window it almost always missed when run once daily.
         const accountId = await SubscriptionService.allocateCreditsForPeriod(
           subscription.user_id,
           subscription.id,

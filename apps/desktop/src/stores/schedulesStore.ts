@@ -1,40 +1,21 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Schedules Store
- *
- * Thin facade over schedulerStore that exposes the Schedule interface and
- * actions required by the ScheduleEditor component.
- *
- * The canonical state lives in schedulerStore (ScheduledTask, createTask,
- * updateTask, deleteTask, toggleTask, fetchTasks). This file re-exports
- * everything with the names the task-spec asked for so consumers get a clean
- * import path while avoiding duplicated state.
- */
 
 import { inferTaskInterval as inferSchedulerTaskInterval } from './schedulerStore';
 
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'custom';
 
-/**
- * UI-friendly schedule shape used by ScheduleEditor.
- * Maps to ScheduledTask from schedulerStore with renamed / narrowed fields.
- */
 export interface Schedule {
   id: string;
   name: string;
   prompt: string;
-  /** Cron expression (for 'custom' frequency) or a simple label for builtins */
   cronExpression: string;
   frequency: Frequency;
-  nextRun: number | null; // Unix ms timestamp
-  lastRun: number | null; // Unix ms timestamp
+  nextRun: number | null;
+  lastRun: number | null;
   isActive: boolean;
-  createdAt: number; // Unix ms timestamp
-  /** Days of week when frequency === 'weekly' (0=Sun … 6=Sat) */
+  createdAt: number;
   weekDays?: number[];
-  /** Hour of day (0-23) when frequency === 'daily' */
   hour?: number;
-  /** Minute of hour (0-59) when frequency === 'daily' */
   minute?: number;
 }
 
@@ -51,11 +32,6 @@ export {
   selectSchedulerLoading,
 } from './schedulerStore';
 
-// ---------------------------------------------------------------------------
-// Conversion helpers
-// ---------------------------------------------------------------------------
-
-/** Derive a Frequency value from a TaskSchedule cron expression or interval. */
 export function inferFrequency(cronExpression: string): Frequency {
   const interval = inferSchedulerTaskInterval(cronExpression);
   return interval === 'daily' || interval === 'weekly' || interval === 'monthly'
@@ -63,10 +39,6 @@ export function inferFrequency(cronExpression: string): Frequency {
     : 'custom';
 }
 
-/**
- * Build a human-readable cron preview label from Schedule fields.
- * Used by ScheduleEditor's "Runs every …" preview.
- */
 export function buildSchedulePreview(schedule: Partial<Schedule>): string {
   const hour = schedule.hour ?? 9;
   const minute = schedule.minute ?? 0;

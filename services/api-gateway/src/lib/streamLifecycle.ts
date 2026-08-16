@@ -1,12 +1,5 @@
 import type { EventEmitter } from 'node:events';
 
-/**
- * Raised when the gateway-owned provider deadline expires.
- *
- * The provider adapter receives the same aborted signal while `next()` also
- * rejects immediately. Racing the read matters because an SDK or test double
- * can ignore AbortSignal and otherwise hold an Express request open forever.
- */
 export class StreamDeadlineError extends Error {
   constructor() {
     super('The upstream provider request exceeded the gateway deadline.');
@@ -14,7 +7,6 @@ export class StreamDeadlineError extends Error {
   }
 }
 
-/** Raised when the downstream client disconnects before the provider finishes. */
 export class StreamClientAbortError extends Error {
   constructor() {
     super('The downstream client disconnected.');
@@ -36,12 +28,6 @@ export interface StreamLifecycle {
   cleanup(): void;
 }
 
-/**
- * Own cancellation and cleanup for one provider iterator.
- *
- * Product policy remains in the route. This helper only owns the reusable
- * mechanics: deadline, abort-aware reads, and best-effort iterator release.
- */
 export function createStreamLifecycle({ deadlineMs }: { deadlineMs: number }): StreamLifecycle {
   if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) {
     throw new TypeError('deadlineMs must be a positive finite number');
@@ -131,7 +117,6 @@ export function createStreamLifecycle({ deadlineMs }: { deadlineMs: number }): S
       writable.once('error', onSocketError);
       controller.signal.addEventListener('abort', onAbort, { once: true });
 
-      // Close can race between the preflight check and listener attachment.
       if (writable.destroyed || writable.writableEnded) abortForSocket();
     });
   };

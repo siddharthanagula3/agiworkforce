@@ -1,11 +1,3 @@
-// Production-binary smoke for the CLI: builds nothing itself — run after
-// `cargo build --release --bin agi` — and exercises the real, no-API-key command surface of
-// the shipped `agi` binary end to end: --version, --help (documented commands),
-// `doctor` (local preflight diagnostics), `features` (feature flags), and the
-// `app-server` JSON-RPC initialize handshake (the IDE/desktop developer-session
-// interface). Verifies production build + startup + documented run commands.
-//
-// Run: cargo build --release --bin agi && node apps/cli/scripts/cli-smoke.mjs
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -62,10 +54,6 @@ const fail = (m) => {
   console.error('SMOKE FAIL:', m);
   failed = true;
 };
-// Core commands must respond quickly and deterministically. `doctor` shells out
-// to dependency + auth-provider checks whose runtime varies, so it (and features)
-// run with a generous timeout and never fail the smoke on timeout — only on a
-// clearly-wrong response.
 const run = (args, timeout = 20000) => execFileSync(bin, args, { env, encoding: 'utf8', timeout });
 const runSoft = (args, timeout) => {
   try {
@@ -75,16 +63,12 @@ const runSoft = (args, timeout) => {
   }
 };
 
-// --version
 const version = run(['--version']).trim();
 console.log('[--version]', version);
 const versionMatch = version.match(/\bagi\s+(\d+\.\d+\.\d+)/);
 if (!versionMatch) fail('--version did not report a semver');
 const binaryVersion = versionMatch?.[1];
 
-// Release archives also carry the legacy `agiworkforce` executable as a
-// compatibility alias. Development builds may omit it, but archive smoke can
-// require and validate the sibling explicitly.
 const aliasName = process.platform === 'win32' ? 'agiworkforce.exe' : 'agiworkforce';
 const compatibilityAlias = resolve(dirname(bin), aliasName);
 if (existsSync(compatibilityAlias)) {
@@ -101,7 +85,6 @@ if (existsSync(compatibilityAlias)) {
   fail(`release archive is missing compatibility alias ${aliasName}`);
 }
 
-// --help lists the documented command surface
 const help = run(['--help']);
 const expectedCmds = ['exec', 'app-server', 'doctor', 'models', 'features', 'login'];
 const missing = expectedCmds.filter((c) => !new RegExp(`^\\s*${c}\\b`, 'm').test(help));
@@ -111,7 +94,6 @@ console.log(
 );
 if (missing.length) fail(`--help missing documented commands: ${missing.join(', ')}`);
 
-// doctor runs real preflight diagnostics (soft — variable runtime)
 const doctor = runSoft(['doctor'], 45000);
 if (doctor === null) {
   console.log('[doctor] skipped (exceeded 45s — variable dependency/auth checks)');
@@ -121,7 +103,6 @@ if (doctor === null) {
     fail('doctor produced no diagnostic report');
 }
 
-// features lists real flags (soft)
 const features = runSoft(['features'], 20000);
 if (features === null) {
   console.log('[features] skipped (timeout)');
@@ -138,10 +119,6 @@ if (features === null) {
   if (!/Feature Flags/.test(features)) fail('features did not list feature flags');
 }
 
-// app-server initialize handshake (the developer-session IPC surface)
-// Headless developer entry points fail closed until the workspace has been
-// explicitly trusted. Exercise the supported trust action rather than giving
-// this smoke a private bypass that production users do not have.
 try {
   execFileSync(bin, ['init'], {
     cwd: smokeWorkspace,
@@ -158,7 +135,6 @@ const handshake = await new Promise((res) => {
     env,
     stdio: ['pipe', 'pipe', 'ignore'],
   });
-  // Swallow async EPIPE when the child is SIGKILL'd with data still buffered.
   child.stdin.on('error', () => {});
   let buf = '';
   const t = setTimeout(() => {

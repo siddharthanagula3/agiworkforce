@@ -1,11 +1,3 @@
-/**
- * inlineCommandFailure.test.ts — VSCX-03.
- *
- * Every inline-command failure offered one button: "Set API Key". A dropped
- * connection, a rate limit or a server error therefore told the user their
- * credentials were wrong — the action contradicted the message beside it, and
- * following it would have them change working credentials.
- */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -63,9 +55,6 @@ describe('inline command failure handling', () => {
   });
 
   it('applies the edit to the range the prompt was built from', () => {
-    // A CodeLens supplies a range without selecting anything, so collapsing an
-    // empty selection to 0,0 would have applied the result at the top of the
-    // file rather than at the declaration it describes.
     expect(inline).not.toContain(
       'selection.isEmpty ? new vscode.Selection(0, 0, 0, 0) : selection',
     );

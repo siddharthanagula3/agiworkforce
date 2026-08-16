@@ -1,17 +1,3 @@
-/**
- * End-to-end proof that a user-connected connector's tool actually executes in a
- * conversation via runToolLoop (fixes WEB-CONNECTORS-NO-RUNTIME-EFFECT-01).
- *
- * runToolLoop (auto mode) is given a connector tool def + a bound connector
- * executor. The mocked provider emits a tool_call for the connector tool; the
- * loop routes it through the connector executor (NOT the operator MCP
- * dispatcher), feeds the result back, and the model produces its final answer.
- *
- * Mirrors tool-loop.e2e.test.ts's mocking approach (buildToolLoopStream mocked
- * at its ReadableStream boundary); no real MCP server or network is touched —
- * the connector executor stands in for lib/user-connector-tools' bound closure,
- * whose own DB/HTTP wiring is covered by lib/__tests__/user-connector-tools.test.ts.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockBuildToolLoopStream = vi.fn();
@@ -26,7 +12,6 @@ vi.mock('@/lib/e2b/runtime', () => ({
   pauseE2BSession: (...args: unknown[]) => mockPauseE2BSession(...args),
 }));
 
-// The operator MCP dispatcher must NOT be reached for connector-owned tools.
 const mockExecuteWebMcpTool = vi.fn();
 vi.mock('@/lib/mcp-tool-executor', async () => {
   const actual =
@@ -103,7 +88,6 @@ describe('runToolLoop end-to-end — user connector tool execution', () => {
   });
 
   it('routes a connector tool_call through the bound connector executor and re-invokes the model', async () => {
-    // Step 1: provider emits a tool_call for the github connector's diff tool.
     const step1 = sseStreamFrom([
       chunk({
         tool_calls: [
@@ -126,7 +110,6 @@ describe('runToolLoop end-to-end — user connector tool execution', () => {
       }),
       chunk({}, 'tool_calls'),
     ]);
-    // Step 2: after the tool result is fed back, the model answers.
     const step2 = sseStreamFrom([
       chunk({ content: 'The PR renames a function.' }),
       chunk({}, 'stop'),
@@ -144,11 +127,9 @@ describe('runToolLoop end-to-end — user connector tool execution', () => {
       runToolLoop(makeProcessed(), { approvalMode: 'auto', userId: 'user-1', connectorExecutor }),
     );
 
-    // Connector executor ran; operator MCP dispatcher was never touched.
     expect(connectorExecutor).toHaveBeenCalledTimes(1);
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
 
-    // The tool result was fed back to the provider on the second invocation.
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
     const secondCallRequest = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
       messages: Array<{ role: string; content: string; tool_call_id?: string }>;
@@ -157,7 +138,6 @@ describe('runToolLoop end-to-end — user connector tool execution', () => {
     expect(toolResultMessage?.content).toContain('diff --git');
     expect(toolResultMessage?.tool_call_id).toBe('call_1');
 
-    // Client saw the tool status/result events and the final answer.
     expect(output).toContain('"name":"mcp__github__get_pull_request_diff"');
     expect(output).toContain('"status":"completed"');
     expect(output).toContain('The PR renames a function.');
@@ -244,7 +224,6 @@ describe('runToolLoop end-to-end — user connector tool execution', () => {
       runToolLoop(makeProcessed(), { approvalMode: 'auto', userId: 'user-1', connectorExecutor }),
     );
 
-    // Connector executor was consulted but declined; operator dispatcher ran.
     expect(connectorExecutor).toHaveBeenCalledTimes(1);
     expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('operator', 'do_thing', {});
   });

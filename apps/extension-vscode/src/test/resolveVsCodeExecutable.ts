@@ -3,12 +3,6 @@ import * as path from 'path';
 
 type FileExists = (candidate: string) => boolean;
 
-/**
- * VS Code 1.131 renamed the macOS app executable from `Electron` to `Code`,
- * while @vscode/test-electron 2.5.2 still resolves the legacy basename.
- * Accept the package result when it exists and otherwise try only the two
- * product-owned macOS basenames in the same verified app bundle.
- */
 export function resolveVsCodeExecutablePath(
   downloadedPath: string,
   platform: NodeJS.Platform = process.platform,

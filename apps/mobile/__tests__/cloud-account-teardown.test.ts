@@ -94,9 +94,6 @@ jest.mock('../src/features/waitlist/store', () => ({
   useWaitlistStore: { getState: jest.fn() },
 }));
 
-// These device-local stores are deliberately mocked even though the teardown
-// service must never import them. The assertions below guard the Local/Cloud
-// trust boundary during future account-cache additions.
 jest.mock('../stores/settings/localSettingsStore', () => ({
   useLocalSettingsStore: { setState: jest.fn() },
 }));
@@ -327,9 +324,6 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCloudChats).toHaveBeenCalledTimes(1);
     expect(mmkvReadyCallbacks).toHaveLength(1);
 
-    // Simulate all persisted stores rehydrating account-A data first. The
-    // teardown callback was registered after those store callbacks and must
-    // erase the restored data once encrypted MMKV becomes ready.
     mmkvReadyCallbacks[0]?.();
 
     expect(clearCloudChats).toHaveBeenCalledTimes(2);

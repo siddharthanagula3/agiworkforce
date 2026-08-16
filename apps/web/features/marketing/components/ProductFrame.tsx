@@ -9,28 +9,16 @@ import {
   type DeviceImage,
 } from './DeviceMockups';
 
-/**
- * ProductFrame · variant-keyed façade over the canonical DeviceMockups
- * system. Every variant renders at its device's one fixed geometry (see
- * DEVICE_GEOMETRY) so the same surface looks identical on every page.
- * When a real screenshot exists, pass `image` and it renders inside the
- * shared window chrome instead (the image's own proportions apply).
- */
-
 export type ProductFrameVariant = 'desktop' | 'terminal' | 'phone' | 'browser' | 'editor' | 'web';
 
 export type ProductFrameImage = DeviceImage;
 
 export interface ProductFrameProps {
   variant: ProductFrameVariant;
-  /** Title shown in the frame chrome (e.g. "AGI Desktop", "agi · zsh"). */
   title: string;
-  /** Mono status label rendered in the chrome right corner (e.g. "Local"). */
   badge?: string;
-  /** Real screenshot; replaces the scene when provided. */
   image?: ProductFrameImage;
   className?: string;
-  /** Trust route represented inside Desktop or Terminal mock content. */
   routeMode?: 'local' | 'byok' | 'managed';
 }
 

@@ -1,9 +1,3 @@
-/**
- * Simple Mode Toggle
- *
- * A friendly toggle that lets users switch between simple and advanced modes.
- * Includes a tooltip explaining the difference.
- */
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Zap, HelpCircle, X } from 'lucide-react';

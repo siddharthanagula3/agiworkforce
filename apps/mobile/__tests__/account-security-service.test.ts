@@ -125,7 +125,6 @@ describe('Mobile account security service', () => {
           isCurrent: false,
         },
       ],
-      // Absent is not "known": the UI must say it could not match this device.
       currentSessionKnown: false,
     });
   });

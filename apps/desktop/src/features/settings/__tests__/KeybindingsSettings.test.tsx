@@ -1,13 +1,3 @@
-/**
- * KeybindingsSettings — the rebinding surface must not lie.
- *
- * Two properties are load-bearing here:
- *  1. Every id this page sends to `shortcuts_update` is an id the Rust registry
- *     actually holds. It used to send the renderer ids ("new-chat", …), which
- *     `shortcuts.rs` has never heard of, so every sync failed.
- *  2. A rejected sync is reported. The rejection used to be swallowed by a
- *     `console.warn` under an unconditional "Shortcut updated" toast.
- */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -21,8 +11,6 @@ import {
   matchesBinding,
   resolveBinding,
 } from '../../../constants/shortcuts';
-
-// ── Mocks ────────────────────────────────────────────────────────────────────
 
 let mockCustomKeybindings: Record<string, string> = {};
 const mockSetCustomKeybinding = vi.fn();
@@ -59,17 +47,12 @@ const mockToast = vi.hoisted(() => ({
 }));
 vi.mock('sonner', () => ({ toast: mockToast }));
 
-// The cheatsheet overlay is a separate surface with its own stores; this file
-// is about the rebinding rows.
 vi.mock('@/features/chat/KeyboardShortcutsOverlay', () => ({
   KeyboardShortcutsOverlay: () => null,
 }));
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 const TEST_DIR = path.dirname(new URL(import.meta.url).pathname);
 
-/** Shortcut ids `ShortcutsState::with_defaults()` inserts into the registry. */
 function rustRegistryIds(): string[] {
   const source = readFileSync(
     path.resolve(TEST_DIR, '../../../../src-tauri/src/sys/commands/shortcuts.rs'),
@@ -82,7 +65,6 @@ function rustRegistryIds(): string[] {
   return [...defaults.matchAll(/id:\s*"([a-z_]+)"\.to_string\(\)/g)].map((match) => match[1]!);
 }
 
-/** Rebinds one row by pressing an unused combo into its capture field. */
 function rebindRow(description: string, key: string, modifiers: Record<string, boolean> = {}) {
   fireEvent.click(screen.getByRole('button', { name: `Edit shortcut for ${description}` }));
   fireEvent.keyDown(screen.getByLabelText('Press new key combination'), {
@@ -99,8 +81,6 @@ beforeEach(() => {
   mockReset.mockResolvedValue([{ id: 'quick_summon' }]);
 });
 
-// ── Tests ────────────────────────────────────────────────────────────────────
-
 describe('KeybindingsSettings backend sync', () => {
   it('only sends shortcut ids the Rust registry defines', async () => {
     const registryIds = rustRegistryIds();
@@ -108,8 +88,6 @@ describe('KeybindingsSettings backend sync', () => {
 
     render(<KeybindingsSettings />);
 
-    // Function keys are used by no default binding, so no edit trips the
-    // "combo already used" path instead of syncing.
     DEFAULT_SHORTCUTS.forEach((shortcut, index) => {
       rebindRow(shortcut.description, `F${index + 1}`);
     });
@@ -143,7 +121,6 @@ describe('KeybindingsSettings backend sync', () => {
       expect(mockToast.error).toHaveBeenCalledWith(expect.stringContaining('Shortcut not found'));
     });
     expect(mockToast.success).not.toHaveBeenCalled();
-    // The row must not show a binding the OS never took.
     expect(mockSetCustomKeybinding).not.toHaveBeenCalled();
   });
 
@@ -174,12 +151,6 @@ describe('KeybindingsSettings backend sync', () => {
   });
 });
 
-/**
- * The rows this page edits are dispatched by the App shell keydown router
- * (`App.tsx`), which asks `matchesBinding` which row an event belongs to. The
- * old ad-hoc handler compared only "meta or ctrl held", so Cmd+Shift+K opened
- * the search modal on its way to the command palette.
- */
 describe('renderer shortcut matching', () => {
   function bindingFor(id: string) {
     const row = RENDERER_SHORTCUTS.find((s) => s.id === id);

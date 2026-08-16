@@ -1,28 +1,4 @@
 #!/usr/bin/env node
-/**
- * Repository-owned secret scanning (ledger task CRIT-017).
- *
- * WHY REPOSITORY-OWNED rather than a third-party action. This repo pins every
- * GitHub Action by commit SHA (`actions-pinned-check.yml`), so a scanner
- * dependency is one more supply-chain edge to pin, review and rotate — for a
- * job that is a few dozen regexes. It also lets the scanner share its pattern
- * roster with the three REDACTORS already in the tree
- * (`packages/platform/utils/src/logger.ts`, `apps/cli/src/secret_redaction.rs`,
- * `apps/extension-vscode/src/core/telemetry.ts`), which is the property that
- * actually matters: a credential format that one of them can recognise but the
- * others cannot is the gap every one of these bugs has come through.
- *
- * WHAT IT IS NOT. This is not entropy analysis and deliberately so. Entropy
- * scanners fire on minified bundles, lockfile hashes, base64 fixtures and UUIDs,
- * and a scanner that cries wolf gets `--no-verify`'d within a week. Every
- * pattern below matches a credential format with a vendor-assigned prefix, so a
- * hit is a real credential shape rather than "this string looks random."
- *
- * A hit is a BLOCKING failure. If a match is a deliberate fixture, make it
- * unmistakably fake (`sk-ant-EXAMPLE...`) rather than allowlisting the file —
- * the ledger's own instruction, and it keeps the fixture honest for the next
- * reader too.
- */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,14 +6,6 @@ import process from 'node:process';
 
 const root = process.cwd();
 
-/**
- * Credential formats with a vendor-assigned prefix.
- *
- * Kept in lockstep with the redactors named in the header. When a provider is
- * added to one, add it here. This parity is maintained by hand and is NOT
- * asserted by any test — nothing fails if the rosters drift apart, so check
- * the three redactors yourself when adding a pattern.
- */
 const PATTERNS = [
   { name: 'PEM private key', re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g },
   { name: 'Anthropic API key', re: /sk-ant-(?!EXAMPLE|FAKE|TEST)[A-Za-z0-9_-]{20,}/g },
@@ -50,10 +18,6 @@ const PATTERNS = [
   { name: 'GitHub token', re: /gh[pousr]_[A-Za-z0-9]{30,}/g },
   { name: 'Google API key', re: /AIza[A-Za-z0-9_-]{35}/g },
   { name: 'AWS access key id', re: /A(?:KIA|SIA)[A-Z0-9]{16}/g },
-  // A Supabase PAT authenticates the Management API for the whole account —
-  // enumerate projects, read and rotate project API keys and DB connection
-  // strings, run SQL, delete projects. One was committed to .mcp.json and the
-  // scanner had no pattern for it, which is why it survived (SEC-01).
   { name: 'Supabase personal access token', re: /sbp_[a-f0-9]{40}/g },
   {
     name: 'Postgres/Redis URL with password',
@@ -62,14 +26,9 @@ const PATTERNS = [
   { name: 'Private key in JSON', re: /"private_key"\s*:\s*"-----BEGIN/g },
 ];
 
-/**
- * Placeholder markers that make a match unmistakably a fixture. A credential
- * carrying one of these is documentation, not a leak.
- */
 const PLACEHOLDER =
   /EXAMPLE|PLACEHOLDER|REDACTED|XXXXXX|000000|123456|your[_-]?key|dummy|sample|<[a-z-]+>/i;
 
-/** Paths that cannot contain a real credential by construction. */
 const SKIP_DIRS = new Set([
   'node_modules',
   '.git',
@@ -85,7 +44,6 @@ const SKIP_DIRS = new Set([
 const SKIP_FILE =
   /\.(png|jpe?g|gif|webp|ico|icns|woff2?|ttf|otf|mp4|mp3|wav|pdf|zip|gz|node|wasm|lock)$/i;
 
-/** This scanner necessarily contains every pattern it looks for. */
 const SELF = new Set(['scripts/check-secrets.mjs', 'scripts/__tests__/check-secrets.test.mjs']);
 
 function git(args) {
@@ -96,17 +54,6 @@ function git(args) {
   }
 }
 
-/**
- * Files that a `git add -A` would commit: everything tracked, plus everything
- * untracked that is NOT ignored.
- *
- * This used to be tracked-only, on the reasoning that an untracked local `.env`
- * is the developer's business and cannot leak through a push. That holds for
- * *ignored* files and only for those — an untracked file that .gitignore does
- * not cover is one `git add -A` away from being pushed, which is exactly how a
- * credential arrives in history. `--exclude-standard` keeps the original
- * protection for `.env` and friends while closing that gap (SEC-01).
- */
 function workingTreeFiles() {
   const tracked = git(['ls-files', '-z']).split('\0').filter(Boolean);
   const untracked = git(['ls-files', '--others', '--exclude-standard', '-z'])
@@ -115,19 +62,6 @@ function workingTreeFiles() {
   return [...new Set([...tracked, ...untracked])];
 }
 
-/**
- * Every blob ever reachable from any ref, deduped by object id.
- *
- * The working tree is the wrong place to look for a leaked credential: removing
- * the line does not remove the blob, and `git log --all -S` still yields it to
- * anyone who can clone. SEC-01 is exactly that — the Supabase PAT was replaced
- * by `${SUPABASE_ACCESS_TOKEN}` in a later commit and remained retrievable from
- * nine ancestor commits of main. Deduping by object id means a blob that
- * survives a thousand commits is read once.
- *
- * History mode is opt-in (`--history`) because it is far too slow for the
- * commit hook; CI runs it, where minutes are affordable and a leak is not.
- */
 function historyBlobs() {
   const entries = git(['rev-list', '--objects', '--all'])
     .split('\n')
@@ -144,7 +78,6 @@ function historyBlobs() {
   return byId;
 }
 
-/** Read a batch of blobs via one `git cat-file --batch` invocation. */
 function readBlobs(shas) {
   if (shas.length === 0) return new Map();
   let raw;
@@ -165,25 +98,17 @@ function readBlobs(shas) {
     const header = raw.subarray(i, nl).toString('utf8');
     const [sha, type, sizeText] = header.split(' ');
     if (type !== 'blob') {
-      // "<sha> missing" — no payload follows.
       i = nl + 1;
       continue;
     }
     const size = Number(sizeText);
     const start = nl + 1;
     if (size <= 2 * 1024 * 1024) out.set(sha, raw.subarray(start, start + size).toString('utf8'));
-    i = start + size + 1; // trailing newline
+    i = start + size + 1;
   }
   return out;
 }
 
-/**
- * Reviewed exemptions, keyed on (path, credential format).
- *
- * NOT a wildcard: a new credential FORMAT appearing in an already-listed file
- * still fails. That is the property that matters — an allowlist which exempts a
- * whole file quietly stops protecting it.
- */
 const ALLOWLIST_PATH = 'scripts/secret-scan-allowlist.json';
 let allowlist = { entries: [] };
 try {
@@ -191,16 +116,6 @@ try {
 } catch {
   // Absent allowlist means nothing is exempt, which fails loudly rather than open.
 }
-/**
- * Join a (path, format) pair into a map key.
- *
- * Both the population loop and the scan loop MUST build the key through this
- * one function. They were previously two separate template literals, and an
- * invisible control character crept into one of them — the keys printed
- * identically, compared unequal, and every exemption silently failed open while
- * the scan reported 55 findings it should have passed. One function, one
- * separator, no way for them to drift.
- */
 const allowKey = (filePath, format) => `${filePath}::${format}`;
 
 const allowed = new Map();
@@ -213,19 +128,13 @@ for (const entry of allowlist.entries ?? []) {
     );
     process.exit(1);
   }
-  allowed.set(allowKey(entry.path, entry.format), false); // false = not yet matched
+  allowed.set(allowKey(entry.path, entry.format), false);
 }
 
 const findings = [];
 let scanned = 0;
 let exempted = 0;
 
-/**
- * Match every pattern against one source. `useAllowlist` is false for history:
- * the allowlist exempts a credential format at a path in the CURRENT tree, and
- * a reviewed fixture today says nothing about a real credential that sat at the
- * same path three months ago.
- */
 function scanSource(rel, src, { useAllowlist }) {
   for (const { name, re } of PATTERNS) {
     re.lastIndex = 0;
@@ -256,8 +165,6 @@ for (const rel of workingTreeFiles()) {
   let src;
   try {
     const stat = fs.statSync(full);
-    // A credential is short. Anything multi-megabyte is a bundle or fixture,
-    // and reading them all makes this too slow to keep in the commit hook.
     if (!stat.isFile() || stat.size > 2 * 1024 * 1024) continue;
     src = fs.readFileSync(full, 'utf8');
   } catch {
@@ -298,9 +205,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-// A stale exemption is worse than none: it reads as "reviewed and accepted" for
-// code that has since moved on, and it is how an allowlist slowly becomes a list
-// of things nobody has looked at in a year.
 const stale = [...allowed.entries()].filter(([, matched]) => !matched).map(([key]) => key);
 if (stale.length > 0) {
   console.error(

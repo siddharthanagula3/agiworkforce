@@ -1,25 +1,9 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Project Memory Store
- *
- * Manages project-scoped long-term memory: project context, coding styles,
- * architectural decisions, and content search across project memories.
- * Backed by SQLite via Tauri commands (project_memory module).
- *
- * `searchProjectMemories` is a literal substring match, NOT semantic retrieval:
- * the backing command runs `content LIKE '%<query>%'` ordered by importance
- * (core/agi/project_memory.rs `search_project_memories`). There are no
- * embeddings on this path — do not surface it to users as semantic search.
- */
 import { toast } from 'sonner';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
 import { invoke } from '../lib/tauri-mock';
-
-// ---------------------------------------------------------------------------
-// Types (mirror Rust structs from project_memory.rs)
-// ---------------------------------------------------------------------------
 
 export interface ProjectContext {
   id: number;
@@ -44,7 +28,6 @@ export interface ProjectMemory {
   last_accessed: string | null;
 }
 
-/** Request payload for save_project_context */
 export interface SaveProjectContextRequest {
   projectFolder: string;
   techStack: string[];
@@ -54,22 +37,16 @@ export interface SaveProjectContextRequest {
   importance?: number;
 }
 
-/** Request payload for search_project_memories */
 export interface SearchMemoriesRequest {
   projectFolder: string;
   query: string;
   limit?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
-
 interface ProjectMemoryState {
   isLoading: boolean;
   error: string | null;
 
-  // Actions
   saveProjectContext: (request: SaveProjectContextRequest) => Promise<number>;
   getProjectMemories: (projectFolder: string) => Promise<ProjectMemory[]>;
   searchProjectMemories: (request: SearchMemoriesRequest) => Promise<ProjectMemory[]>;
@@ -85,9 +62,6 @@ export const useProjectMemoryStore = create<ProjectMemoryState>()(
       saveProjectContext: async (request: SaveProjectContextRequest) => {
         set({ isLoading: true, error: null }, undefined, 'projectMemory/saveContext/start');
         try {
-          // Tauri expects the Rust struct as a single `request` object param.
-          // The Rust side uses SaveProjectContextRequest with snake_case fields,
-          // but Tauri auto-converts camelCase -> snake_case for struct fields too.
           const id = await invoke<number>('save_project_context', {
             request: {
               projectFolder: request.projectFolder,
@@ -154,6 +128,5 @@ export const useProjectMemoryStore = create<ProjectMemoryState>()(
   ),
 );
 
-// Selectors
 export const selectProjectMemoryLoading = (state: ProjectMemoryState) => state.isLoading;
 export const selectProjectMemoryError = (state: ProjectMemoryState) => state.error;

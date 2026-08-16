@@ -1,4 +1,3 @@
-// apps/web/app/api/checkout/route.ts
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,7 +23,6 @@ import {
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
 
-// Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
   if (!stripeClient) {
@@ -35,27 +33,12 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-// Paid-plan checkout (2026-07-04): open by default, matching the
-// managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
-// The env var is retained ONLY as an incident-response kill-switch: set
-// STRIPE_CHECKOUT_ENABLED=0 (or 'false'/'off') to re-gate. Any other value
-// (including unset) keeps checkout open.
 const CHECKOUT_ENABLED_RAW = process.env['STRIPE_CHECKOUT_ENABLED']?.trim().toLowerCase();
 const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== '0' &&
   CHECKOUT_ENABLED_RAW !== 'false' &&
   CHECKOUT_ENABLED_RAW !== 'off';
 
-/**
- * Ask Stripe whether this customer is already being billed for a subscription.
- *
- * The `subscriptions` table only knows what the webhook has written, and Stripe
- * retries an undelivered event for hours. Between a completed payment and its
- * webhook the buyer reads as unsubscribed, so a second click starts a second
- * paid subscription — and because the webhook upserts on `user_id`, the older
- * subscription id is overwritten and keeps billing with nothing in the product
- * pointing at it. Stripe itself is the authoritative answer.
- */
 async function findLiveStripeSubscription(
   stripe: Stripe,
   customerId: string,
@@ -76,37 +59,22 @@ async function findLiveStripeSubscription(
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const { userId } = await getClerkAuthUser(request);
 
-  // Authenticate the bearer/cookie principal before the CSRF helper treats a
-  // Desktop bearer request as exempt from cookie-origin CSRF validation.
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) {
     return csrfError as NextResponse;
   }
 
-  // Reject checkout requests when the incident-response kill-switch
-  // (STRIPE_CHECKOUT_ENABLED=0/false/off) has been set, OR when Stripe isn't
-  // actually configured (STRIPE_SECRET_KEY unset) despite checkout being left
-  // "open" by default. Checked BEFORE any DB/Clerk work so a deployment with
-  // no Stripe env degrades to this honest message instead of requireEnv()
-  // throwing deep inside getStripe() and surfacing to the user as an opaque
-  // 500 (confirmed live on prod: STRIPE_CHECKOUT_ENABLED unset + no
-  // STRIPE_SECRET_KEY produced a 500 on "Get Pro"/"Get Max" instead of this).
   if (!CHECKOUT_ENABLED || !getOptionalEnv('STRIPE_SECRET_KEY')) {
     throw createError.validation(
       'Paid-plan checkout is not available yet. Local and BYOK are free; managed cloud is in public alpha.',
     );
   }
 
-  // Rate limiting: 10 checkouts per minute per user
   const rateLimitResponse = await withRateLimit(request, 'checkout');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
 
-  // Fetch the user's email from Clerk so Stripe customers are created with a
-  // real address. auth() only returns userId for session-cookie requests;
-  // email is only present on Bearer-token paths. clerkClient().users.getUser
-  // is the reliable cross-path source.
   let userEmail = '';
   try {
     const { clerkClient } = await import('@clerk/nextjs/server');
@@ -123,7 +91,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const db = getNeonDb();
   const user = { id: userId, email: userEmail };
 
-  // Type-safe request body parsing with Zod validation
   let rawBody: unknown;
   try {
     rawBody = await request.json();
@@ -131,7 +98,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid request body');
   }
 
-  // Validate request body against schema - provides strict type checking and sanitization
   const validationResult = CheckoutRequestSchema.safeParse(rawBody);
   if (!validationResult.success) {
     const errorMessages = validationResult.error.issues
@@ -141,9 +107,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
 
   const { plan, billingInterval } = validationResult.data;
-  // Per-seat plans (Team) bill unit price x quantity. The schema has already
-  // refused a seat count on per-account plans and required one on per-seat
-  // plans, so this is 1 for everything except a validated Team purchase.
   const quantity = resolveCheckoutQuantity(validationResult.data);
   const requestIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
   if (requestIdempotencyKey && !/^[A-Za-z0-9._:-]{8,128}$/.test(requestIdempotencyKey)) {
@@ -158,12 +121,9 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
   const { priceId, currency } = priceSelection;
 
-  // Get or create Stripe customer to prevent duplicate customers
   let stripeCustomerId: string | null = null;
   const stripe = getStripe();
 
-  // If user already has an active subscription, do NOT create a new subscription via Checkout.
-  // Route them to the Billing Portal instead to prevent duplicate subscriptions / double billing.
   type SubRow = Pick<
     SubscriptionRow,
     | 'status'
@@ -191,15 +151,10 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const existingSubscription = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(existingSubscription);
 
-  // Checkout creates a second recurring charge. Only an account with no
-  // subscription, or a terminal subscription whose owner is unambiguous, may
-  // enter it. Active Stripe plans use prorated upgrade; active store/manual
-  // plans stay with their current owner until canceled there.
   if (!ownerPolicy.canStartStripeCheckout) {
     throw createError.conflict(stripeBillingOwnershipMessage(ownerPolicy, 'checkout'));
   }
 
-  // First, check if we have a customer ID stored in profiles
   let profileRows: Array<Pick<ProfileRow, 'stripe_customer_id'>>;
   try {
     profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
@@ -214,9 +169,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
   const profile = profileRows[0] ?? null;
 
-  // A customer minted by this request cannot already own a subscription, so the
-  // provider-authoritative duplicate check below only has to run for a customer
-  // that existed before this checkout.
   let hadStoredStripeCustomer = false;
 
   if (isStripeCustomerId(profile?.stripe_customer_id)) {
@@ -234,7 +186,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       'Using existing Stripe customer from subscription',
     );
   } else {
-    // No customer ID stored - create a new Stripe customer
     try {
       const customer = await stripe.customers.create(
         {
@@ -247,16 +198,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       );
       stripeCustomerId = customer.id;
 
-      // Store the customer ID in the profile for future use
       try {
         await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
           stripeCustomerId,
           user.id,
         ]);
       } catch (error) {
-        // The current checkout still uses this exact customer and the webhook
-        // repairs the profile link. Keep the failure visible in operations;
-        // customer creation itself is idempotent for safe immediate retries.
         logger.error(
           { error, userId: user.id, stripeCustomerId },
           'Created Stripe customer but could not persist the profile link',
@@ -276,10 +223,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Duplicate-purchase guard against the payment provider, not against our own
-  // possibly-stale copy of it. The `subscriptions` read above is only as fresh
-  // as the last delivered webhook, so a second click during a delayed delivery
-  // would otherwise start a second paid subscription for the same account.
   if (hadStoredStripeCustomer && stripeCustomerId) {
     let liveSubscription: Stripe.Subscription | null = null;
     try {
@@ -315,14 +258,9 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const checkoutMetadata = {
     user_id: user.id,
     plan_tier: plan,
-    // Advisory only — the webhook reads the authoritative seat count from the
-    // Stripe subscription ITEM quantity, never from metadata. Carried so a
-    // support engineer can see what the customer asked for versus what Stripe
-    // recorded.
     requested_seats: String(quantity),
   };
 
-  // Create Stripe Checkout Session
   try {
     const checkoutSessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
@@ -339,35 +277,15 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       success_url: `${process.env['NEXT_PUBLIC_APP_URL']}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
-      // Metadata duplicates user.id for fast webhook lookups: the webhook handler
-      // resolves the Clerk user via metadata first (O(1) map read) before falling
-      // back to client_reference_id or a Stripe customer lookup. This is intentional
-      // - not redundant - because Stripe customer IDs are not always available at
-      // webhook time (e.g. first-time checkout before the customer object is linked).
       metadata: checkoutMetadata,
-      // Stripe may deliver customer.subscription.created before
-      // checkout.session.completed. Copy authenticated ownership context onto
-      // the Subscription so the earlier event can still bind it to the AGI account.
       subscription_data: {
         metadata: checkoutMetadata,
       },
       allow_promotion_codes: true,
-      // Sales tax / VAT / GST. Nothing collected tax before this, while
-      // `/terms` asserted tax obligations to the customer — so the product
-      // claimed a duty it did not discharge.
-      //
-      // The parameters, and the reason each one is required, live in ONE place:
-      // lib/billing/tax-policy.ts. In particular `customer_update.name` must be
-      // sent alongside `tax_id_collection` for an existing customer or Stripe
-      // rejects the create call outright, which is a total checkout outage
-      // rather than a missing tax line.
       ...buildCheckoutTaxParams({ hasExistingCustomer: Boolean(stripeCustomerId) }),
     };
     const checkoutSession = requestIdempotencyKey
       ? await stripe.checkout.sessions.create(checkoutSessionParams, {
-          // Plan and quantity are part of the key: a client that reuses one
-          // Idempotency-Key while changing the seat count must NOT be replayed
-          // the earlier session, or the org pays for seats it did not choose.
           idempotencyKey: `checkout:${user.id}:${plan}:${quantity}:${requestIdempotencyKey}`,
         })
       : await stripe.checkout.sessions.create(checkoutSessionParams);
@@ -376,9 +294,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       throw createError.internal('Failed to generate checkout URL');
     }
 
-    // Audit: a paid-plan purchase was initiated. The checkout URL is a
-    // single-use credential-bearing link and is never recorded; the resulting
-    // entitlement change is audited separately from the Stripe webhook.
     await recordAuditEvent({
       userId: user.id,
       eventType: 'checkout_started',
@@ -393,7 +308,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {
-    // Handle Stripe-specific errors
     if (error instanceof Stripe.errors.StripeCardError) {
       throw createError.validation(error.message);
     } else if (error instanceof Stripe.errors.StripeInvalidRequestError) {
@@ -410,7 +324,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Re-throw other errors to be handled by withErrorHandler
     throw error;
   }
 }

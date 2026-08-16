@@ -1,15 +1,8 @@
-/**
- * suite/index.ts — Mocha glob loader for integration tests.
- *
- * Loaded inside the VS Code extension host by `@vscode/test-electron`.
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import * as path from 'path';
 
 export function run(): Promise<void> {
-  // Lazy-required so unit tests don't need mocha installed.
-  // Install before running: pnpm add -D mocha @types/mocha glob @types/glob
   const Mocha = require('mocha') as new (opts: unknown) => {
     addFile: (file: string) => void;
     run: (cb: (failures: number) => void) => void;

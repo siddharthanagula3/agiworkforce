@@ -28,19 +28,6 @@ import {
 } from '@/src/features/model-picker/service';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 
-// Reasoning-effort slider stops are driven entirely by the selected model's catalog
-// metadata (models.json `reasoning.supportedEfforts`, see
-// docs/research/reasoning-effort-capability-matrix-2026-07-10.md) — never a
-// hardcoded per-provider list. The allowed set differs per model (e.g.
-// some routes omit higher efforts while others expose them), so a
-// global axis silently offered levels a model doesn't support and hid ones
-// it did.
-//
-// The shared `Effort` union (packages/contracts/types/design-system/effort.ts) is the
-// locked, 5-value request-wire vocabulary (low/medium/high/xhigh/max) used by
-// web/desktop. It deliberately stays untouched here — `PickerEffort`
-// (agentControlStore) is a mobile-local superset that also allows 'none' and
-// 'minimal', the two extra rungs several models expose.
 const EFFORT_LADDER_ORDER: readonly string[] = [
   'none',
   'minimal',
@@ -61,7 +48,6 @@ const REASONING_EFFORT_LABEL: Readonly<Record<string, string>> = {
   max: 'Max',
 };
 
-/** Sort a model's `supportedEfforts` into stable discrete slider stops. */
 function sortEffortLadder(efforts: readonly string[]): PickerEffort[] {
   return [...efforts]
     .sort((a, b) => EFFORT_LADDER_ORDER.indexOf(a) - EFFORT_LADDER_ORDER.indexOf(b))
@@ -78,8 +64,6 @@ function groupBySurface(
   if (local.length > 0)
     sections.push({ sectionId: 'local', sectionLabel: 'On device', models: local });
 
-  // Cloud models group by provider (OpenAI, Anthropic, Google, …) with
-  // available rows sorted before locked upsell rows within each provider.
   const byProvider = new Map<string, { label: string; models: ModelDef[] }>();
   for (const model of cloud) {
     const entry = byProvider.get(model.provider) ?? { label: model.providerLabel, models: [] };
@@ -161,11 +145,6 @@ interface ModelPickerSheetProps {
   onSelect?: (modelId: string) => void;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
-  /**
-   * When set, the reasoning-effort selector writes a per-conversation override
-   * via agentControlStore; otherwise it updates the '__default__' project
-   * default that chatExecutionStore resolves for conversations without one.
-   */
   conversationId?: string;
 }
 
@@ -198,9 +177,6 @@ export function ModelPickerSheet({
 
   const [search, setSearch] = useState('');
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
-  // Effort is independent of model choice: selecting it must not change the
-  // selected model or close the sheet. Resolution mirrors chatExecutionStore
-  // (conversation override > '__default__' project default > 'medium').
   const selectedEffort = useAgentControlStore((s) =>
     conversationId
       ? s.resolve(conversationId, null).effort
@@ -221,15 +197,6 @@ export function ModelPickerSheet({
     [cloudUnlocked, subscriptionTier],
   );
 
-  // Reasoning controls are catalog-driven, per selected model id — including
-  // auto-mode ids, which also carry a `reasoning` block in models.json (no
-  // special-casing needed, and none baked in here survives a model rename).
-  // Only `control:'effort_levels'` renders the discrete slider this sheet
-  // builds; 'always_on'/'thinking_toggle'/'thinking_budget' models use a
-  // different control shape (e.g. the per-model "With thinking" switch below,
-  // driven by ModelDef.supportsThinking) and are deliberately NOT shown here
-  // — see docs/research/reasoning-effort-capability-matrix-2026-07-10.md's
-  // control-type taxonomy for why each control needs a different affordance.
   const selectedReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
   const effortOptions = useMemo(
     () => sortEffortLadder(selectedReasoning.supportedEfforts ?? []),
@@ -241,19 +208,8 @@ export function ModelPickerSheet({
     effortOptions.length > 0;
   const selectedRequiresReasoning =
     selectedReasoning.capable && selectedReasoning.canDisableThinking === false;
-  // The effort row only ever renders for modelScope==='cloud' (below) — gate
-  // the clamp the same way so switching the LOCAL selected model (e.g. an
-  // on-device auto mode, which also resolves a `reasoning` block above) never
-  // silently rewrites the cloud effort default in the background while this
-  // sheet instance can't even show the control.
   const showEffortControl = modelScope === 'cloud' && selectedSupportsReasoning;
 
-  // Keep the stored effort valid for whichever model is now selected: e.g. the
-  // user picks an effort supported by one route, then switches to a route that
-  // does not support it — without this, the stale value stays
-  // selected/sent for a model that doesn't support it. Falls back to the new
-  // model's own defaultEffort, or its first (lowest) rung if that's ever
-  // missing from its own supportedEfforts.
   useEffect(() => {
     if (!showEffortControl) return;
     if (effortOptions.includes(selectedEffort)) return;
@@ -319,10 +275,6 @@ export function ModelPickerSheet({
     [onSelect, setModel, sheetRef],
   );
 
-  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default — the
-  // signed-in entitlement IS the gate, no invite/waitlist. Callers may still supply
-  // onOpenCloudAccess for screen-specific handling; otherwise route to sign-in
-  // directly, matching chat.tsx / chat/[id].tsx / models.tsx (fix 0fe0598c3).
   const openInvite = useCallback(() => {
     sheetRef.current?.close();
     requestAnimationFrame(() => {
@@ -334,10 +286,6 @@ export function ModelPickerSheet({
     });
   }, [onOpenCloudAccess, router, sheetRef]);
 
-  // A model can be locked for two different reasons: not signed in / cloud not
-  // unlocked (→ sign-in), or signed in but the subscription tier doesn't cover
-  // this model (→ upgrade). Route each to its own destination instead of always
-  // sending a Pro user who tapped a Max-only model to the sign-in screen.
   const openUpgrade = useCallback(() => {
     sheetRef.current?.close();
     requestAnimationFrame(() => {
@@ -369,9 +317,6 @@ export function ModelPickerSheet({
       }
 
       if (id === selectedModel && !isAutoMode(id)) {
-        // Re-tapping the already-selected cloud model toggles its options row
-        // (the per-model "With thinking" switch) instead of closing the sheet —
-        // this is the only way the thinking toggle is reachable.
         if (chosenModel.surface === 'cloud_managed' && chosenModel.supportsThinking) {
           setExpandedModelId((prev) => (prev === id ? null : id));
           return;
@@ -468,16 +413,10 @@ export function ModelPickerSheet({
       <BottomSheet
         ref={sheetRef as React.RefObject<BottomSheet>}
         index={-1}
-        // The library's default accessible wrapper swallows all descendant
-        // model rows on iOS. Keep the handle adjustable and expose the actual
-        // search, effort, model, and close controls individually.
         accessible={false}
         snapPoints={snapPoints}
         enablePanDownToClose
         enableDynamicSizing={false}
-        // Keyboard avoidance for the search input: extend the sheet above the
-        // keyboard while typing and restore it (blurring the input) on drag,
-        // so the effort selector and model list stay reachable.
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"

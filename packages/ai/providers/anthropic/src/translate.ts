@@ -1,16 +1,3 @@
-/**
- * Translate `ChatRequest` to Anthropic Messages API params.
- *
- * Splits the request:
- *   - `system` (string | TextBlock[]) → top-level `system`
- *   - non-system messages → `messages[]` array
- *   - `tools` → vendor `tools` array (Anthropic input_schema shape)
- *   - `thinking` → top-level `thinking` (Anthropic extended thinking)
- *
- * Cache control (ephemeral) and `service_tier` are NOT applied here — they're
- * decided by `applyAnthropicPayloadPolicyToParams` from `@agiworkforce/provider-protocol`
- * after this translation step.
- */
 
 import type {
   ChatRequest,
@@ -37,10 +24,6 @@ interface AnthropicTranslatedRequest {
     | { type: 'enabled'; budget_tokens: number }
     | { type: 'disabled' }
     | { type: 'adaptive' };
-  /**
-   * Independent of `thinking` — Anthropic accepts both on the same request.
-   * See `translateChatRequest`'s `req.effort` handling below.
-   */
   output_config?: { effort: string };
   metadata?: Record<string, unknown>;
 }
@@ -95,12 +78,6 @@ type AnthropicToolChoiceParam =
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
-/**
- * Anthropic rejects a `max_tokens` above the model's own output ceiling, so a
- * caller asking for more gets a 400 rather than a longer answer. Bound both the
- * request and the fallback by whatever `models.json` records for the model;
- * models it says nothing about keep the conservative default.
- */
 function resolveMaxOutputTokens(
   requested: number | undefined,
   registryCeiling: number | undefined,
@@ -183,8 +160,6 @@ function translateContentBlock(block: ContentBlock): AnthropicContentBlock {
 
 function translateMessage(msg: ProviderMessage): AnthropicMessageParam | null {
   if (msg.role === 'system') {
-    // System messages are passed via the top-level `system` field, not the
-    // messages array. Caller handles them separately.
     return null;
   }
   if (typeof msg.content === 'string') {
@@ -210,13 +185,10 @@ function translateSystem(
       ...(b.cacheControl ? { cache_control: b.cacheControl } : {}),
     }));
   }
-  // Otherwise, collect any system messages from the messages array.
   const systemMsgs = messages.filter((m) => m.role === 'system');
   if (systemMsgs.length === 0) {
     return undefined;
   }
-  // Collapse all system messages into a single string. Block-shaped system
-  // prompts should be passed via the explicit `system` field.
   return systemMsgs
     .map((m) => {
       if (typeof m.content === 'string') return m.content;
@@ -265,8 +237,6 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     .filter((m): m is AnthropicMessageParam => m !== null);
   const system = translateSystem(req.messages, req.system);
   const translatedTools = req.tools?.map(translateTool) ?? [];
-  // rawVendorTools are provider-native payloads (server tools like
-  // web_search_20260209) appended verbatim — the caller owns their shape.
   const tools = [...translatedTools, ...((req.rawVendorTools ?? []) as AnthropicToolParam[])];
   const toolChoice = translateToolChoice(req.toolChoice);
 
@@ -303,9 +273,6 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     ...(!rejectsSamplingParameters && req.topK !== undefined ? { top_k: req.topK } : {}),
     ...(req.stopSequences ? { stop_sequences: req.stopSequences } : {}),
     ...(thinking ? { thinking } : {}),
-    // Independent of `thinking` -- matches the old web-internal adapter
-    // (apps/web/lib/llm-providers/anthropic.ts), which sends both when
-    // `request.effort` is set. See ChatRequest.effort's JSDoc.
     ...(req.effort ? { output_config: { effort: req.effort } } : {}),
     ...(req.metadata ? { metadata: req.metadata } : {}),
   };

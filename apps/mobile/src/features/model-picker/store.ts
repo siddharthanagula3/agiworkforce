@@ -15,7 +15,6 @@ import {
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 
-/** Maximum number of entries kept in the recent-models list. */
 const MAX_RECENT = 5;
 const CLOUD_PROVIDER_ID = 'cloud_managed';
 
@@ -67,32 +66,18 @@ function modelRequiresThinking(modelId: string): boolean {
 }
 
 interface ModelState {
-  /** Currently selected model or auto-mode id. */
   selectedModel: string;
-  /** Current provider filter (used by UI for display context). */
   selectedProvider: string;
-  /** User-favorited model ids. */
   favorites: string[];
-  /** Most recently used model ids (newest first, de-duped). */
   recentModels: string[];
-  /** Whether extended thinking / reasoning mode is toggled on (legacy — kept for compat). */
   thinkingModeEnabled: boolean;
-  /** Per-model thinking toggle state. Key = model id, value = enabled. */
   thinkingEnabledPerModel: Record<string, boolean>;
 
-  // -- Actions --
-
-  /** Select a model (or auto-mode). Also pushes it into recents. */
   setModel: (modelId: string) => void;
-  /** Set the active provider filter in the picker UI. */
   setProvider: (providerId: string) => void;
-  /** Toggle a model in / out of favorites. */
   toggleFavorite: (modelId: string) => void;
-  /** Toggle thinking mode on / off (legacy). */
   setThinkingMode: (enabled: boolean) => void;
-  /** Toggle thinking for a specific model. Only works if model supports thinking. */
   toggleThinkingForModel: (modelId: string) => void;
-  /** Check if thinking is enabled for the currently selected model. */
   isThinkingEnabledForSelected: () => boolean;
 }
 
@@ -113,7 +98,6 @@ export const useModelStore = create<ModelState>()(
         const prev = get().recentModels.filter((id) => id !== resolvedModelId);
         const recentModels = [resolvedModelId, ...prev].slice(0, MAX_RECENT);
 
-        // Sync legacy thinkingModeEnabled with per-model state.
         const perModel = get().thinkingEnabledPerModel;
         const requiresThinking = modelRequiresThinking(resolvedModelId);
         const thinkingEnabledPerModel = requiresThinking
@@ -157,7 +141,6 @@ export const useModelStore = create<ModelState>()(
           }));
           return;
         }
-        // Only allow enabling if the current model supports thinking.
         if (enabled && !isAutoMode(selectedModel)) {
           const model = getModelByIdForCloudAccess(selectedModel, isCloudUnlocked());
           if (model && !model.supportsThinking) return;
@@ -169,10 +152,8 @@ export const useModelStore = create<ModelState>()(
         const resolvedModelId = normalizeSelectableModelId(modelId);
         if (!resolvedModelId) return;
 
-        // Auto modes don't have thinking state
         if (isAutoMode(resolvedModelId)) return;
 
-        // Only toggle for models that support thinking.
         const model = getModelByIdForCloudAccess(resolvedModelId, isCloudUnlocked());
         if (model && !model.supportsThinking) return;
         if (modelRequiresThinking(resolvedModelId)) {
@@ -191,7 +172,6 @@ export const useModelStore = create<ModelState>()(
         const next = { ...current, [resolvedModelId]: !current[resolvedModelId] };
         const updates: Partial<ModelState> = { thinkingEnabledPerModel: next };
 
-        // If toggling the currently selected model, sync legacy field.
         if (get().selectedModel === resolvedModelId) {
           updates.thinkingModeEnabled = next[resolvedModelId] ?? false;
         }
@@ -244,7 +224,6 @@ export const useModelStore = create<ModelState>()(
             (thinkingEnabledPerModel[selectedModel] ?? false),
         };
       },
-      // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[modelStore] Hydration failed:', error);
@@ -255,11 +234,6 @@ export const useModelStore = create<ModelState>()(
 
 rehydrateWhenMmkvReady(useModelStore, 'model-store');
 
-/**
- * A tier downgrade (e.g. Max → Pro) must not leave a now-locked flagship model
- * selected and check-marked. Re-check tier access whenever the billing tier
- * changes and fall back to the tier's registry-owned default cloud model.
- */
 function revalidateSelectedModelForTier(tier: string): void {
   const { selectedModel, thinkingEnabledPerModel } = useModelStore.getState();
   if (!isCloudManagedModelId(selectedModel)) return;

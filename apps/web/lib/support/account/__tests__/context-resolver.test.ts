@@ -1,12 +1,3 @@
-/**
- * The read-only account context.
- *
- * The properties that matter here:
- *   - it is resolved from ONE server-supplied user id, and every query binds it
- *   - it reports percentages, never private allowance operands
- *   - a slow Clerk becomes 'unknown', never 'unverified'
- *   - the citations it hands the answer layer point at pages that exist
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -84,8 +75,6 @@ describe('resolveSupportAccountContext', () => {
       if (/from user_connectors/iu.test(sql)) {
         return [
           { id: 'row-1', connector_id: 'slack', connected_at: '2026-07-01T00:00:00.000Z' },
-          // Not operator-mapped: a row with no runtime effect must not be
-          // reported as a connected connector.
           { id: 'row-2', connector_id: 'dropbox', connected_at: '2026-07-01T00:00:00.000Z' },
         ];
       }
@@ -149,9 +138,6 @@ describe('resolveSupportAccountContext', () => {
   });
 
   it('never imports the private managed-usage policy module', () => {
-    // The docblock on lib/server/managed-usage-policy.ts is explicit: its values
-    // "must never be serialized into pricing, usage, or client configuration
-    // responses". The safest enforcement is that this subtree cannot reach them.
     const dir = path.resolve(import.meta.dirname, '..');
     const files = fs
       .readdirSync(dir, { withFileTypes: true })
@@ -160,7 +146,6 @@ describe('resolveSupportAccountContext', () => {
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       const source = fs.readFileSync(file, 'utf8');
-      // Import statements only — the module is named in a comment on purpose.
       expect(source, `${path.basename(file)} imports the private usage policy`).not.toMatch(
         /(?:^|\n)\s*(?:import|export)[^;\n]*from\s+['"][^'"]*managed-usage-policy['"]/u,
       );

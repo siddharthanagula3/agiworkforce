@@ -229,7 +229,6 @@ async function generateDocx(input: Extract<ManagedOfficeFileInput, { format: 'do
           run: { font: 'Calibri', size: 22, color: '000000' },
           paragraph: { spacing: { before: 0, after: 120, line: 264 } },
         },
-        // `memo_masthead` title override for the standard business preset.
         title: {
           run: { font: 'Calibri', size: 46, bold: true, color: '000000' },
           paragraph: { spacing: { before: 0, after: 80 }, alignment: AlignmentType.CENTER },
@@ -339,9 +338,6 @@ async function generatePptx(input: Extract<ManagedOfficeFileInput, { format: 'pp
   for (const [index, source] of input.slides.entries()) {
     const slide = presentation.addSlide();
     slide.background = { color: index % 2 === 0 ? 'F7F8FC' : 'F2F5F9' };
-    // A non-text object first avoids a LibreOffice first-slide rendering bug.
-    // The semantic title remains the first text object, so importers name the
-    // slide from its heading rather than from the small AGI kicker.
     slide.addShape(presentation.ShapeType.rect, {
       x: 0,
       y: 0,

@@ -11,12 +11,6 @@ export interface AgiTaskModelEligibility {
   reason?: string;
 }
 
-/**
- * Tasks are a stronger capability boundary than ordinary function calling.
- * Runtime discovery may prove that an Ollama model accepts tool-call syntax,
- * but it cannot prove that the model can plan and execute AGI Tasks safely.
- * Only the canonical model registry may make that product capability claim.
- */
 export function getAgiTaskModelEligibility(
   model: AgiTaskModelSummary | null | undefined,
 ): AgiTaskModelEligibility {

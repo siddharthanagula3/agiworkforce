@@ -9,11 +9,6 @@ export interface Citation {
   snippet?: string;
 }
 
-/**
- * InlineSourceTags · renders citations as compact inline superscript-style tags
- * positioned immediately after the response prose, matching Claude's visual pattern
- * where source names appear as `[Source Name]` chips rather than a separate footer list.
- */
 export function InlineSourceTags({ citations }: { citations: Citation[] }) {
   if (citations.length === 0) return null;
 

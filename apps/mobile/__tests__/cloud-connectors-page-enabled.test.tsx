@@ -40,8 +40,6 @@ jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return {
     SafeAreaView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
-    // The bottom-anchored search pill (src/shared/components/BottomSearchBar)
-    // reads the safe-area inset so it clears the home indicator.
     useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
   };
 });
@@ -70,10 +68,6 @@ jest.mock('lucide-react-native', () => {
   };
 });
 
-// The connectors screen shows a "Chat is set to Local Mode" blocked banner
-// unless the app is in Cloud mode (connectors are a cloud-managed feature —
-// same trust gate as the AddToChatSheet). Put the screen in Cloud mode so the
-// interactive catalog renders and the shipped-feature assertions below apply.
 jest.mock('@/src/features/chat/store/appModeStore', () => {
   const state = { appMode: 'cloud', setAppMode: jest.fn() };
   const store = (selector: (s: typeof state) => unknown) => selector(state);
@@ -139,8 +133,6 @@ describe('Cloud Connectors screen — shipped-feature state', () => {
       ],
       available: ['github', 'slack'],
     });
-    // Real contract shape: connectConnector resolves a discriminated result,
-    // and `connected` is only returned when the server wrote the row.
     mockConnect.mockResolvedValue({ kind: 'connected' });
     mockDisconnect.mockResolvedValue(undefined);
     mockDeleteCustom.mockResolvedValue(undefined);

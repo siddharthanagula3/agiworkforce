@@ -1,16 +1,3 @@
-/**
- * Cloud waitlist capture sheet — surfaces when the user taps the locked Cloud
- * side of the ModeToggle (or any other cloud-gated entry point).
- *
- * Four internal states:
- *   1. `entry`      — email + country form
- *   2. `submitting` — loading state during onSubmit()
- *   3. `confirmed`  — success state with rank
- *   4. `error`      — submission failure with retry
- *
- * The caller wires `onSubmit({email, country})` to the Web/API persistence
- * layer. The component is unopinionated about how the row is stored.
- */
 import { useState } from 'react';
 import {
   Modal,
@@ -35,21 +22,14 @@ export interface WaitlistSubmission {
 }
 
 export interface WaitlistResult {
-  /** Queue position if the backend provides one; null when unavailable. */
   rank: number | null;
 }
 
 export interface CloudWaitlistSheetProps {
   visible: boolean;
   onClose: () => void;
-  /**
-   * Persists the waitlist row. Must throw on failure. Returns the new rank
-   * so the confirmation screen can show "#N in line".
-   */
   onSubmit: (submission: WaitlistSubmission) => Promise<WaitlistResult>;
-  /** Default country shown in the picker. Inferred from device locale upstream. */
   defaultCountry?: { code: string; name: string; flag: string };
-  /** Callback after the user closes the sheet from the confirmed state. */
   onJoined?: (result: WaitlistResult) => void;
 }
 
@@ -94,7 +74,6 @@ export function CloudWaitlistSheet({
       onJoined?.(result);
     }
     onClose();
-    // Reset *after* close so the next opening starts fresh
     setTimeout(reset, 250);
   };
 
@@ -311,10 +290,6 @@ export function CloudWaitlistSheet({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Entry state
-// ---------------------------------------------------------------------------
-
 function EntryView({
   colors,
   email,
@@ -454,10 +429,6 @@ function EntryView({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Confirmed state
-// ---------------------------------------------------------------------------
-
 function ConfirmedView({
   colors,
   email,
@@ -553,10 +524,6 @@ function ConfirmedView({
     </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Error state
-// ---------------------------------------------------------------------------
 
 function ErrorView({
   colors,

@@ -1,31 +1,8 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Shortcut Store
- *
- * Wires Rust shortcut commands (shortcuts.rs) to the frontend via invoke().
- * Manages global and local keyboard shortcuts, including the Quick Query hotkey.
- *
- * Rust commands wired:
- *   - shortcuts_register
- *   - shortcuts_unregister
- *   - shortcuts_list
- *   - shortcuts_update
- *   - shortcuts_trigger
- *   - shortcuts_reset
- *   - shortcuts_check_key
- *   - shortcuts_get_defaults
- *   - shortcuts_register_global
- *   - shortcuts_unregister_global
- *   - shortcuts_apply_quick_query_preferences
- */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
-
-// =============================================================================
-// Types (mirror Rust structs)
-// =============================================================================
 
 export interface Shortcut {
   id: string;
@@ -41,10 +18,6 @@ export interface QuickQueryHotkeyPreferences {
   combo: string;
 }
 
-// =============================================================================
-// Store State
-// =============================================================================
-
 interface ShortcutState {
   shortcuts: Shortcut[];
   defaults: Shortcut[];
@@ -52,10 +25,8 @@ interface ShortcutState {
   error: string | null;
   lastTriggeredAction: string | null;
 
-  // Event listener cleanup
   _unlisteners: UnlistenFn[];
 
-  // === Actions: CRUD ===
   register: (shortcut: Shortcut) => Promise<void>;
   unregister: (shortcutId: string) => Promise<void>;
   list: () => Promise<Shortcut[]>;
@@ -65,21 +36,14 @@ interface ShortcutState {
   checkKey: (key: string) => Promise<boolean>;
   getDefaults: () => Promise<Shortcut[]>;
 
-  // === Actions: Global Shortcuts ===
   registerGlobal: (key: string, action: string) => Promise<void>;
   unregisterGlobal: (key: string) => Promise<void>;
 
-  // === Actions: Quick Query Hotkey ===
   applyQuickQueryPreferences: (preferences: QuickQueryHotkeyPreferences) => Promise<Shortcut>;
 
-  // === Lifecycle ===
   init: () => Promise<void>;
   cleanup: () => void;
 }
-
-// =============================================================================
-// Store
-// =============================================================================
 
 export const useShortcutStore = create<ShortcutState>()(
   devtools(
@@ -91,10 +55,6 @@ export const useShortcutStore = create<ShortcutState>()(
         error: null,
         lastTriggeredAction: null,
         _unlisteners: [],
-
-        // =================================================================
-        // CRUD
-        // =================================================================
 
         register: async (shortcut) => {
           try {
@@ -214,10 +174,6 @@ export const useShortcutStore = create<ShortcutState>()(
           }
         },
 
-        // =================================================================
-        // Global Shortcuts
-        // =================================================================
-
         registerGlobal: async (key, action) => {
           try {
             await invoke('shortcuts_register_global', { key, action });
@@ -237,10 +193,6 @@ export const useShortcutStore = create<ShortcutState>()(
             throw err;
           }
         },
-
-        // =================================================================
-        // Quick Query Hotkey
-        // =================================================================
 
         applyQuickQueryPreferences: async (preferences) => {
           try {
@@ -267,20 +219,14 @@ export const useShortcutStore = create<ShortcutState>()(
           }
         },
 
-        // =================================================================
-        // Lifecycle
-        // =================================================================
-
         init: async () => {
           const unlisteners: UnlistenFn[] = [];
 
-          // Listen for shortcut action events from the Rust backend
           const actionUn = await listen<string>('shortcut_action', (event) => {
             set({ lastTriggeredAction: event.payload }, undefined, 'shortcut/event/action');
           });
           unlisteners.push(actionUn);
 
-          // Listen for shortcut registered events
           const registeredUn = await listen<Shortcut>('shortcut_registered', (event) => {
             set(
               (s) => {
@@ -298,7 +244,6 @@ export const useShortcutStore = create<ShortcutState>()(
           });
           unlisteners.push(registeredUn);
 
-          // Listen for shortcut unregistered events
           const unregisteredUn = await listen<string>('shortcut_unregistered', (event) => {
             set(
               (s) => {
@@ -310,7 +255,6 @@ export const useShortcutStore = create<ShortcutState>()(
           });
           unlisteners.push(unregisteredUn);
 
-          // Listen for shortcut updated events
           const updatedUn = await listen<Shortcut>('shortcut_updated', (event) => {
             set(
               (s) => {
@@ -326,7 +270,6 @@ export const useShortcutStore = create<ShortcutState>()(
           });
           unlisteners.push(updatedUn);
 
-          // Listen for shortcuts reset events
           const resetUn = await listen<Shortcut[]>('shortcuts_reset', (event) => {
             set({ shortcuts: event.payload }, undefined, 'shortcut/event/reset');
           });
@@ -334,7 +277,6 @@ export const useShortcutStore = create<ShortcutState>()(
 
           set({ _unlisteners: unlisteners }, undefined, 'shortcut/init');
 
-          // Fetch initial state
           await get().list();
           await get().getDefaults();
         },
@@ -351,10 +293,6 @@ export const useShortcutStore = create<ShortcutState>()(
     { name: 'ShortcutStore', enabled: import.meta.env.DEV },
   ),
 );
-
-// =============================================================================
-// Selectors
-// =============================================================================
 
 export const selectShortcuts = (s: ShortcutState) => s.shortcuts;
 export const selectShortcutDefaults = (s: ShortcutState) => s.defaults;

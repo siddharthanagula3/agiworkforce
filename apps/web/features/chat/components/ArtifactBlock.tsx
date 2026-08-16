@@ -1,21 +1,5 @@
 'use client';
 
-/**
- * ArtifactBlock – Detect and render special code-block content from assistant messages.
- *
- * Handled languages:
- *   html     → sandboxed <iframe> live preview
- *   mermaid  → code block with copy button (optional Mermaid rendering)
- *   csv      → HTML table
- *   json     → syntax-highlighted pre/code
- *   *        → standard pre/code with copy button
- *
- * Returns null when the content contains no fenced code blocks.
- *
- * Props:
- *   content  – the full assistant message text
- */
-
 import { useState, type ReactNode } from 'react';
 import { Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -24,8 +8,6 @@ import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
 import { SandboxedIframe } from './SandboxedIframe';
 import type { ArtifactRenderPayload } from '@/lib/artifact-sandbox';
 
-// Mermaid is ~250KB. Only loaded when a message actually contains a `mermaid`
-// fenced code block · saves the cost on every chat session without diagrams.
 const MermaidRenderer = dynamic(() => import('./MermaidRenderer'), {
   ssr: false,
   loading: () => (
@@ -35,28 +17,17 @@ const MermaidRenderer = dynamic(() => import('./MermaidRenderer'), {
   ),
 });
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface CodeBlock {
   lang: string;
   code: string;
 }
 
-// ─── Parse ────────────────────────────────────────────────────────────────────
-
-/** Extract all fenced code blocks from markdown text. */
 function extractCodeBlocks(content: string): CodeBlock[] {
-  // AUDIT-FIX ART-2: line-anchored fences with a permissive info string. The old
-  // `(\w*)\n` form matched no opening fence carrying attributes
-  // (```html title="x"), a hyphen/dot in the tag (```objective-c) or a CRLF line
-  // ending, so the scan resumed at that block's CLOSING fence and paired it AS AN
-  // OPENING one — every later block was then rendered from the wrong offsets.
   const regex = /^```([^\n`]*)\r?\n([\s\S]*?)^```/gm;
   const blocks: CodeBlock[] = [];
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(content)) !== null) {
-    // Info strings can carry attributes — only the leading token is the language.
     const lang = (match[1] ?? '').trim().split(/\s+/)[0]?.toLowerCase() ?? '';
     blocks.push({ lang, code: match[2] ?? '' });
   }
@@ -64,17 +35,10 @@ function extractCodeBlocks(content: string): CodeBlock[] {
   return blocks;
 }
 
-// ─── Copy button ─────────────────────────────────────────────────────────────
-
 function CopyButton({ text, className }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false);
-  // AUDIT-FIX ART-24: surfaced copy failure (see handleCopy).
   const [failed, setFailed] = useState(false);
 
-  // AUDIT-FIX ART-24: the unguarded call threw an unhandled rejection whenever
-  // the clipboard API was missing (insecure context) or the permission was
-  // denied, and the button just sat there saying "Copy" forever. Now the
-  // failure is visible.
   const handleCopy = async () => {
     try {
       if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
@@ -121,25 +85,9 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
   );
 }
 
-// ─── HTML block ──────────────────────────────────────────────────────────────
-
-/**
- * WEB-13 (audit 2026-05-19): renders LLM HTML inside the cross-origin
- * sandbox (`sandbox.agiworkforce.com`) when `NEXT_PUBLIC_SANDBOX_ORIGIN`
- * is configured. Falls back to a same-origin `srcDoc` iframe with
- * `sandbox="allow-scripts"` (no `allow-same-origin`) when the subdomain
- * isn't deployed yet · strictly safer than the previous dual-flag state.
- */
 function HtmlBlock({ code }: { code: string }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // AUDIT-FIX ART-14: this hand-rolled document was the third distinct CSP in
-  // the codebase (it named `'self'` — meaningless in a null origin — and
-  // allowed `default-src https:`) and it interpolated `code` into `<body>`
-  // with no sanitizer at all. `buildSandboxSrcDoc` is the same builder the
-  // ArtifactPreview HTML path uses: sandbox-profile DOMPurify (scripts kept,
-  // `<base>`/meta-refresh/nested `allow-same-origin` stripped) plus the single
-  // shared CSP. One posture, one implementation.
   const fallbackSrcDoc = buildSandboxSrcDoc(code);
 
   const payload: ArtifactRenderPayload = {
@@ -166,9 +114,6 @@ function HtmlBlock({ code }: { code: string }) {
             type="button"
             aria-label="Open source in new tab"
             onClick={() => {
-              // Keep the executable preview in SandboxedIframe. A new tab gets
-              // source text so untrusted artifact HTML does not execute on a
-              // Blob origin.
               const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
               const url = URL.createObjectURL(blob);
               window.open(url, '_blank', 'noopener,noreferrer');
@@ -193,8 +138,6 @@ function HtmlBlock({ code }: { code: string }) {
     </div>
   );
 }
-
-// ─── CSV block ───────────────────────────────────────────────────────────────
 
 function CsvBlock({ code }: { code: string }) {
   const lines = code.trim().split('\n').filter(Boolean);
@@ -264,10 +207,7 @@ function CsvBlock({ code }: { code: string }) {
   );
 }
 
-// ─── JSON block ──────────────────────────────────────────────────────────────
-
 function JsonBlock({ code }: { code: string }) {
-  // Pretty-print if possible
   let display = code;
   try {
     display = JSON.stringify(JSON.parse(code), null, 2);
@@ -321,8 +261,6 @@ function JsonBlock({ code }: { code: string }) {
   );
 }
 
-// ─── Mermaid block ───────────────────────────────────────────────────────────
-
 function MermaidBlock({ code }: { code: string }) {
   return (
     <div className="my-3 overflow-hidden rounded-lg border border-border">
@@ -336,8 +274,6 @@ function MermaidBlock({ code }: { code: string }) {
     </div>
   );
 }
-
-// ─── Generic code block ───────────────────────────────────────────────────────
 
 function GenericCodeBlock({ lang, code }: { lang: string; code: string }) {
   return (
@@ -353,10 +289,7 @@ function GenericCodeBlock({ lang, code }: { lang: string; code: string }) {
   );
 }
 
-// ─── ArtifactBlock ────────────────────────────────────────────────────────────
-
 interface ArtifactBlockProps {
-  /** The full assistant message content */
   content: string;
 }
 

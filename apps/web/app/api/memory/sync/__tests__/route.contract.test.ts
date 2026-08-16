@@ -1,12 +1,3 @@
-/**
- * Contract test for GET/POST /api/memory/sync (delta paths).
- *
- * Asserts the live route handlers' JSON output parses against the shared
- * `MemorySyncPullResponseSchema` / `MemorySyncPushResponseSchema` from
- * @agiworkforce/cloud-contracts — the schemas mobile's cloudSyncEngine validates
- * pulled memory pages with. The legacy status/trigger paths (no `since`, no
- * `memories`) are separate back-compat shapes and are out of contract scope.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemorySyncPullResponseSchema, MemorySyncPushResponseSchema } from '@agiworkforce/cloud-contracts';
@@ -15,8 +6,6 @@ vi.mock('server-only', () => ({}));
 
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 
-// vi.fn(impl) creation-time implementations survive the config-level
-// `mockReset: true` (which wipes .mockResolvedValue set in factories).
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
 }));

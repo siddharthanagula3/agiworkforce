@@ -1,4 +1,3 @@
-/** WebMCP tool descriptor as discovered on a web page */
 export interface WebMCPTool {
   name: string;
   description: string;
@@ -13,7 +12,6 @@ export interface WebMCPTool {
   };
 }
 
-/** Result of WebMCP tool discovery on a page */
 export interface WebMCPDiscovery {
   supported: boolean;
   tools: WebMCPTool[];
@@ -21,21 +19,18 @@ export interface WebMCPDiscovery {
   timestamp: number;
 }
 
-/** Result of calling a WebMCP tool */
 export interface WebMCPToolResult {
   success: boolean;
   result?: unknown;
   error?: string;
 }
 
-/** NLWeb endpoint information */
 export interface NLWebEndpoint {
   url: string;
   type: 'ask' | 'mcp' | 'wellknown';
   status: 'available' | 'unknown';
 }
 
-/** Page AI readiness metadata */
 export interface PageAIReadiness {
   webmcp: WebMCPDiscovery;
   nlweb: { supported: boolean; endpoints: NLWebEndpoint[] };

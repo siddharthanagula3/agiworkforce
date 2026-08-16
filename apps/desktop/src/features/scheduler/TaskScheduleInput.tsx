@@ -61,11 +61,9 @@ export function TaskScheduleInput({ value, onChange, disabled = false }: TaskSch
     onChange({ ...value, type: 'recurring', interval: 'custom', cronExpression: cron });
   };
 
-  // Format a timestamp to the value required by datetime-local input
   const formatForInput = (ts: number | undefined): string => {
     if (!ts) return '';
     const d = new Date(ts);
-    // datetime-local expects: "YYYY-MM-DDTHH:mm"
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };

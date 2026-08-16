@@ -77,27 +77,15 @@ export interface PanelState {
   size: number;
 }
 
-/**
- * Reflection state for displaying AI learning and improvement suggestions.
- */
 export interface ReflectionState {
-  /** Most recent reflection insight */
   currentInsight: ReflectionInsight | null;
-  /** Aggregated failure patterns across iterations */
   failurePatterns: FailurePattern[];
-  /** Current suggested corrections */
   corrections: Correction[];
-  /** Sub-goals derived from failed steps */
   subGoals: SubGoal[];
-  /** AI-generated recommendations */
   recommendations: string[];
-  /** Current iteration number */
   iteration: number;
-  /** Whether a reflection is currently being processed */
   isReflecting: boolean;
-  /** Whether the goal is considered achievable based on reflection */
   goalAchievable: boolean;
-  /** Confidence score from 0-1 */
   confidence: number;
 }
 
@@ -159,7 +147,6 @@ export interface ExecutionState {
   activeTab: 'thinking' | 'terminal' | 'browser' | 'files' | 'reflection';
   panelState: Record<string, PanelState>;
 
-  /** Reflection engine state */
   reflection: ReflectionState;
   iterationProgress: IterationProgressState;
 
@@ -190,7 +177,6 @@ export interface ExecutionState {
   setActiveTab: (tab: ExecutionState['activeTab']) => void;
   togglePanel: () => void;
 
-  /** Reflection actions */
   setReflectionInsight: (insight: ReflectionInsight) => void;
   addFailurePattern: (pattern: FailurePattern) => void;
   setCorrections: (corrections: Correction[]) => void;
@@ -200,7 +186,6 @@ export interface ExecutionState {
   setIteration: (iteration: number) => void;
   clearReflection: () => void;
 
-  /** Clean up execution contexts for a completed or failed goal (keeps goal state for UI display) */
   cleanupGoalContexts: () => void;
 
   reset: () => void;
@@ -254,10 +239,9 @@ const initialState = {
   iterationProgress: initialIterationProgressState,
 };
 
-// Stream timeout management
 let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 let goalCleanupTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-const STREAM_TIMEOUT_MS = 60000; // 60 seconds timeout for stuck streams
+const STREAM_TIMEOUT_MS = 60000;
 
 function startStreamTimeout() {
   clearStreamTimeout();
@@ -294,7 +278,6 @@ export const useExecutionStore = create<ExecutionState>()(
     addStep: (step) => {
       set((state) => {
         state.steps.push(step);
-        // AUDIT-006-006 fix: Cap steps at 200 entries
         if (state.steps.length > 200) {
           state.steps = state.steps.slice(-200);
         }
@@ -380,7 +363,6 @@ export const useExecutionStore = create<ExecutionState>()(
       set((state) => {
         state.fileChanges.push(change);
 
-        // AUDIT-006-005: Cap fileChanges at 500 entries, keeping newest (FIFO eviction)
         if (state.fileChanges.length > 500) {
           state.fileChanges = state.fileChanges.slice(-500);
         }
@@ -418,7 +400,6 @@ export const useExecutionStore = create<ExecutionState>()(
       set((state) => {
         state.isStreaming = streaming;
       });
-      // Manage stream timeout
       if (streaming) {
         startStreamTimeout();
       } else {
@@ -444,13 +425,11 @@ export const useExecutionStore = create<ExecutionState>()(
       });
     },
 
-    // Reflection actions
     setReflectionInsight: (insight) => {
       set((state) => {
         state.reflection.currentInsight = insight;
         state.reflection.goalAchievable = insight.assessment.goalAchievable;
         state.reflection.confidence = insight.confidence;
-        // Also update corrections, sub-goals, and recommendations from the insight
         state.reflection.corrections = insight.corrections;
         state.reflection.subGoals = insight.subGoals;
         state.reflection.recommendations = insight.recommendations;
@@ -459,12 +438,10 @@ export const useExecutionStore = create<ExecutionState>()(
 
     addFailurePattern: (pattern) => {
       set((state) => {
-        // Check if pattern already exists by category
         const existingIndex = state.reflection.failurePatterns.findIndex(
           (p) => p.category === pattern.category,
         );
         if (existingIndex >= 0) {
-          // Update frequency and merge affected steps
           const existing = state.reflection.failurePatterns[existingIndex]!;
           existing.frequency += pattern.frequency;
           pattern.affectedSteps.forEach((step) => {
@@ -515,11 +492,9 @@ export const useExecutionStore = create<ExecutionState>()(
     },
 
     cleanupGoalContexts: () => {
-      // Clear timeout to prevent memory leaks
       clearStreamTimeout();
 
       set((state) => {
-        // Clear execution data but preserve the goal state for UI display
         state.steps = [];
         state.terminalLogs = [];
         state.browserActions = [];
@@ -1025,16 +1000,11 @@ export function applyIterationGoalUnachievable(payload: GoalUnachievablePayload)
 }
 
 let listenersInitialized = false;
-// AUDIT-006-028 fix: Store unlisten functions for cleanup
 type UnlistenFn = () => void;
 const unlistenFunctions: UnlistenFn[] = [];
 let executionGoalSubscriptionInitialized = false;
 let executionGoalUnsubscribe: (() => void) | null = null;
 
-/**
- * AUDIT-006-028 fix: Cleanup function to remove all event listeners
- * Call this during logout to prevent memory leaks
- */
 export function cleanupExecutionListeners(): void {
   for (const unlisten of unlistenFunctions) {
     try {
@@ -1074,14 +1044,12 @@ export function initializeExecutionGoalSubscription(): void {
   });
 }
 
-/** Payload of `llm:stream_chunk` (core/agi/executors/llm_executor.rs). */
 interface LlmStreamChunkPayload {
   tool_id: string;
   content: string;
   chunk_index: number;
 }
 
-/** Payload of `agi:tool_stream` (ui/events/tool_stream.rs — internally tagged on `type`). */
 interface ToolStreamPayload {
   event: {
     type: 'started' | 'progress' | 'output_chunk' | 'completed' | 'error' | 'cancelled';
@@ -1089,7 +1057,6 @@ interface ToolStreamPayload {
   };
 }
 
-/** The `command` field of `agi:terminal_command` (ui/events/frontend_events.rs). */
 interface TerminalCommandPayload {
   id: string;
   command: string;
@@ -1099,8 +1066,6 @@ interface TerminalCommandPayload {
   stderr?: string | null;
 }
 
-// Which tool's LLM stream the reasoning pane is currently mirroring, so an
-// unrelated tool finishing mid-stream does not clear the streaming indicator.
 let streamingToolId: string | null = null;
 
 export async function initializeExecutionListeners() {
@@ -1109,7 +1074,6 @@ export async function initializeExecutionListeners() {
   }
   listenersInitialized = true;
 
-  // Skip listener setup in web mode
   if (!isTauri) {
     console.debug('[ExecutionStore] Skipping event listeners in web mode');
     return;
@@ -1124,9 +1088,6 @@ export async function initializeExecutionListeners() {
     });
     unlistenFunctions.push(unlisten8);
 
-    // LlmExecutor has no terminal "stream done" event of its own; the tool
-    // stream it runs inside is what reports completion, keyed by the same
-    // tool_id the chunks carry.
     const unlisten9 = await listen<ToolStreamPayload>('agi:tool_stream', ({ payload }) => {
       const { type, tool_id } = payload.event;
       if (type !== 'completed' && type !== 'error' && type !== 'cancelled') return;
@@ -1182,11 +1143,9 @@ export async function initializeExecutionListeners() {
         state.updateCurrentBrowserState(payload.url, payload.screenshot_base64 || null);
       }
 
-      // WRK-003: Sync with browserStore to keep inline panels in sync with workspace
       try {
         const browserStore = useBrowserStore.getState();
 
-        // Add action to browserStore in its expected format
         browserStore.addAction({
           id: actionId,
           type: payload.type as ActionType,
@@ -1200,7 +1159,6 @@ export async function initializeExecutionListeners() {
           },
         });
 
-        // Add screenshot if present
         if (payload.screenshot_base64 && browserStore.sessions.length > 0) {
           const activeSession = browserStore.sessions.find((s) => s.active);
           const activeTab = activeSession?.tabs.find((t) => t.active);
@@ -1214,7 +1172,6 @@ export async function initializeExecutionListeners() {
           }
         }
       } catch (syncError) {
-        // Don't block execution if browserStore sync fails
         console.debug('[ExecutionStore] browserStore sync skipped:', syncError);
       }
     });
@@ -1240,9 +1197,6 @@ export async function initializeExecutionListeners() {
     });
     unlistenFunctions.push(unlisten12);
 
-    // ===== Reflection Events =====
-
-    // Main reflection completed event with full insight
     const unlisten13 = await listen<{
       goal_id: string;
       iteration: number;
@@ -1253,14 +1207,12 @@ export async function initializeExecutionListeners() {
       state.setIteration(payload.iteration);
       state.setReflecting(false);
 
-      // Switch to reflection tab when there are issues
       if (payload.insight.assessment.successRate < 1.0) {
         state.setActiveTab('reflection');
       }
     });
     unlistenFunctions.push(unlisten13);
 
-    // Failure patterns event
     const unlisten14 = await listen<{
       goal_id: string;
       iteration: number;
@@ -1273,7 +1225,6 @@ export async function initializeExecutionListeners() {
     });
     unlistenFunctions.push(unlisten14);
 
-    // Corrections event
     const unlisten15 = await listen<{
       goal_id: string;
       iteration: number;
@@ -1285,7 +1236,6 @@ export async function initializeExecutionListeners() {
     });
     unlistenFunctions.push(unlisten15);
 
-    // Recommendations event
     const unlisten16 = await listen<{
       goal_id: string;
       iteration: number;
@@ -1295,7 +1245,6 @@ export async function initializeExecutionListeners() {
     });
     unlistenFunctions.push(unlisten16);
 
-    // Sub-goals event
     const unlisten17 = await listen<{
       goal_id: string;
       sub_goals: SubGoal[];
@@ -1306,7 +1255,6 @@ export async function initializeExecutionListeners() {
     });
     unlistenFunctions.push(unlisten17);
 
-    // Plan revised event (after corrections applied)
     const unlisten18 = await listen<PlanRevisedPayload>(
       'agi:reflection:plan_revised',
       ({ payload }) => {
@@ -1318,7 +1266,6 @@ export async function initializeExecutionListeners() {
     );
     unlistenFunctions.push(unlisten18);
 
-    // Goal iteration start - set reflecting state
     const unlisten19 = await listen<IterationStartPayload>(
       'agi:goal:iteration_start',
       ({ payload }) => {
@@ -1330,14 +1277,12 @@ export async function initializeExecutionListeners() {
     );
     unlistenFunctions.push(unlisten19);
 
-    // Goal unachievable event
     const unlisten20 = await listen<GoalUnachievablePayload>(
       'agi:goal:unachievable',
       ({ payload }) => {
         applyIterationGoalUnachievable(payload);
         const state = useExecutionStore.getState();
         state.setReflectionInsight(normalizeReflectionInsight(payload.final_insight));
-        // Switch to reflection tab to show the final analysis
         state.setActiveTab('reflection');
       },
     );
@@ -1382,7 +1327,6 @@ export const selectPendingFileChanges = (state: ExecutionState) =>
 export const selectActiveStep = (state: ExecutionState) =>
   state.steps.find((s) => s.status === 'in-progress');
 
-// Reflection selectors
 export const selectReflection = (state: ExecutionState) => state.reflection;
 export const selectReflectionInsight = (state: ExecutionState) => state.reflection.currentInsight;
 export const selectFailurePatterns = (state: ExecutionState) => state.reflection.failurePatterns;
@@ -1394,13 +1338,11 @@ export const selectReflectionIteration = (state: ExecutionState) => state.reflec
 export const selectGoalAchievable = (state: ExecutionState) => state.reflection.goalAchievable;
 export const selectConfidence = (state: ExecutionState) => state.reflection.confidence;
 
-/** Check if there are any reflection issues to display */
 export const selectHasReflectionIssues = (state: ExecutionState) =>
   state.reflection.failurePatterns.length > 0 ||
   state.reflection.corrections.length > 0 ||
   !state.reflection.goalAchievable;
 
-/** Get the total count of issues for badge display */
 export const selectReflectionIssueCount = (state: ExecutionState) =>
   state.reflection.failurePatterns.length +
   state.reflection.corrections.length +

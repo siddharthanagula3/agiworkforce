@@ -1,21 +1,6 @@
-/**
- * Tests for wired settings service methods.
- *
- * Verifies that each method:
- * 1. Calls the correct route with the correct HTTP method and headers.
- * 2. Returns the SERVER response (not a fake success).
- * 3. Surfaces an error when the server returns a non-ok response.
- *
- * No toast.success is ever called from the service layer · that is the
- * hooks layer's responsibility, so we do not test it here.
- *
- * NOTE: vitest.config.ts sets mockReset: true, which clears mock
- * implementations between tests. Each beforeEach must re-apply them.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Module-level mocks (factories run once; implementations reset by mockReset).
 vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn(),
 }));
@@ -37,7 +22,6 @@ function makeResponse(body: unknown, status = 200) {
   };
 }
 
-// Re-apply mock implementations after each mockReset.
 async function setupMocks() {
   const { getAuthToken } = await import('@shared/lib/get-auth-token');
   const { getCsrfToken } = await import('@/lib/client/csrf');
@@ -65,7 +49,6 @@ describe('settingsService · getSettings', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Server value overrides default · proves we surfaced the server result.
     expect(result.data.theme).toBe('light');
     expect(result.data.email_notifications).toBe(false);
     expect(result.error).toBeUndefined();
@@ -77,10 +60,8 @@ describe('settingsService · getSettings', () => {
     const { settingsService } = await import('./user-preferences');
     const result = await settingsService.getSettings();
 
-    // Returns safe defaults so the UI does not crash.
     expect(result.data).toBeDefined();
     expect(result.data.theme).toBe('dark');
-    // Reports the server error instead of silently returning defaults.
     expect(result.error).toBeTruthy();
   });
 });
@@ -157,7 +138,6 @@ describe('settingsService · updateProfile', () => {
   });
 
   it('stores extended fields via PUT /api/settings/preferences for bio/phone/timezone/language', async () => {
-    // Only an extended field · no PATCH /api/me should be called.
     fetchMock.mockResolvedValueOnce(makeResponse({ settings: {} }));
 
     const { settingsService } = await import('./user-preferences');
@@ -249,10 +229,8 @@ describe('settingsService · getProfile (round-trip: extended fields read from p
     const { settingsService } = await import('./user-preferences');
     const result = await settingsService.getProfile();
 
-    // /api/me succeeded so we have a profile.
     expect(result.data).not.toBeNull();
     expect(result.error).toBeUndefined();
-    // Falls back to hardcoded defaults.
     expect(result.data?.timezone).toBe('America/New_York');
     expect(result.data?.language).toBe('en');
     expect(result.data?.bio).toBeUndefined();
@@ -357,7 +335,6 @@ describe('settingsService · createAPIKey', () => {
 
     expect(result.data).toBeNull();
     expect(result.error).toContain('Key limit exceeded');
-    // Confirm the old hardcoded string is NOT returned.
     expect(result.error).not.toBe('API key management not yet available via API');
   });
 });
@@ -392,7 +369,6 @@ describe('settingsService · deleteAPIKey', () => {
     const result = await settingsService.deleteAPIKey('bad-id');
 
     expect(result.error).toBeTruthy();
-    // Confirm the old hardcoded string is NOT returned.
     expect(result.error).not.toBe('API key management not yet available via API');
   });
 });

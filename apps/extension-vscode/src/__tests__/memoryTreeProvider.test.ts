@@ -1,16 +1,8 @@
-/**
- * memoryTreeProvider.test.ts — Unit tests for MemoryFactItem and MemoryTreeProvider.
- *
- * Verifies label truncation, tooltip construction, contextValue, refresh wiring,
- * and the auto-refresh on onMemoryDidChange.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import type { MemoryFact } from '../memory/memoryStore';
 
 const MAX_LABEL = 60;
-
-// ---------- MemoryFactItem label logic (pure) ----------
 
 function buildLabel(text: string): string {
   return text.length > MAX_LABEL ? `${text.slice(0, MAX_LABEL)}…` : text;
@@ -25,7 +17,7 @@ describe('MemoryFactItem label truncation', () => {
   it('truncates to 60 chars + ellipsis when longer', () => {
     const text = 'A'.repeat(61);
     const label = buildLabel(text);
-    expect(label.length).toBe(MAX_LABEL + 1); // 60 + '…'
+    expect(label.length).toBe(MAX_LABEL + 1);
     expect(label.endsWith('…')).toBe(true);
   });
 
@@ -35,8 +27,6 @@ describe('MemoryFactItem label truncation', () => {
     expect(buildLabel(text).includes('…')).toBe(false);
   });
 });
-
-// ---------- MemoryFactItem tooltip construction (pure) ----------
 
 function buildTooltipText(fact: MemoryFact): string {
   const createdLabel = `Created: ${new Date(fact.createdAt).toLocaleString()}`;
@@ -82,8 +72,6 @@ describe('MemoryFactItem tooltip', () => {
   });
 });
 
-// ---------- MemoryTreeProvider refresh wiring (pure) ----------
-
 describe('MemoryTreeProvider refresh', () => {
   it('fires onDidChangeTreeData on explicit refresh()', () => {
     const fire = vi.fn();
@@ -101,7 +89,6 @@ describe('MemoryTreeProvider refresh', () => {
     const fire = vi.fn();
     let externalListener: (() => void) | undefined;
 
-    // Simulate onMemoryDidChange subscription
     const mockOnChange = (cb: () => void) => {
       externalListener = cb;
       return { dispose: vi.fn() };
@@ -114,7 +101,6 @@ describe('MemoryTreeProvider refresh', () => {
       }),
     };
 
-    // Simulate a store mutation triggering the event
     externalListener?.();
     expect(fire).toHaveBeenCalledTimes(1);
   });
@@ -130,12 +116,8 @@ describe('MemoryTreeProvider refresh', () => {
   });
 });
 
-// ---------- contextValue ----------
-
 describe('MemoryFactItem contextValue', () => {
   it('is "memoryFact" for inline menu binding', () => {
-    // contextValue must be 'memoryFact' to match
-    // "when": "view == agi-workforce.memory && viewItem == memoryFact"
     const contextValue = 'memoryFact';
     expect(contextValue).toBe('memoryFact');
   });

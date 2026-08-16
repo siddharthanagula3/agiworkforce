@@ -1,21 +1,9 @@
-/**
- * Authenticated real-UI e2e: signs the QA user in via a Clerk sign-in *ticket*
- * (no stored password), then exercises primary logged-in workflows that the
- * signed-out specs cannot reach.
- *
- * Auth recipe (per project-web-auth-clerk-qa-gotchas / reference-clerk-ticket-
- * playwright-evidence): mint POST api.clerk.com/v1/sign_in_tokens {user_id} with
- * CLERK_SECRET_KEY (loaded into process.env by playwright.config's .env.local
- * loader — never printed), then in-page signIn.create({strategy:'ticket'}) +
- * setActive. The dev handshake can destroy the first eval context, so Clerk-load
- * is retried.
- */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFile } from 'node:fs/promises';
 import { getModels, isExecutableImageModel } from '@agiworkforce/types';
 
-const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v'; // max-tier QA account
+const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
 const LIVE_GOOGLE_IMAGE_MODEL = getModels({
   modelTypes: ['image'],
   requireCapabilities: { imageGen: true },
@@ -84,14 +72,11 @@ async function mintSignInTicket(): Promise<string> {
 }
 
 async function signInWithTicket(page: Page, ticket: string): Promise<void> {
-  // The Clerk dev handshake redirects /sign-in and destroys the eval context, so
-  // retry the whole load-then-signin sequence and settle navigation each time.
   let signedIn = false;
   let lastError: unknown;
   for (let attempt = 0; attempt < 4 && !signedIn; attempt++) {
     try {
       await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
-      // Let the dev handshake redirect finish before touching the page.
       await page.waitForLoadState('networkidle').catch(() => undefined);
       await page.waitForFunction(
         () => Boolean((window as unknown as { Clerk?: { loaded?: boolean } }).Clerk?.loaded),
@@ -123,14 +108,9 @@ async function signInWithTicket(page: Page, ticket: string): Promise<void> {
     throw new Error(`Clerk ticket sign-in failed after retries: ${String(lastError)}`);
   }
 
-  // Give Clerk a moment to persist the session cookies before navigating.
   await page.waitForTimeout(1500);
 }
 
-// This suite exercises real logged-in flows, so it genuinely requires the Clerk
-// secret to mint a sign-in ticket. mintSignInTicket() throws a clear error if
-// CLERK_SECRET_KEY is absent (rather than silently skipping) — an authenticated
-// e2e without credentials is not meaningfully "passing".
 test.describe('authenticated primary workflows', () => {
   test('signed-in user reaches cloud projects (not the sign-in gate) and the composer', async ({
     page,
@@ -138,23 +118,17 @@ test.describe('authenticated primary workflows', () => {
     const ticket = await mintSignInTicket();
     await signInWithTicket(page, ticket);
 
-    // 1) Projects: the signed-out gate ("Sign in to view your cloud projects")
-    //    must be gone, and the projects hub chrome must render for a real user.
     await page.goto('/chat/projects');
     await page.waitForLoadState('networkidle');
     await expect(page.getByText(/sign in to view your cloud projects/i)).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
 
-    // 2) Chat: the composer (the core product surface) renders for a signed-in
-    //    user with a usable message input.
     await page.goto('/chat');
     await page.waitForLoadState('networkidle');
     const composer = page.getByRole('textbox').first();
     await expect(composer).toBeVisible({ timeout: 20000 });
     await expect(composer).toBeEditable();
 
-    // 3) Other primary signed-in surfaces render for a real user (not a gate or
-    //    an error boundary): Customize (settings) and Library.
     await page.goto('/chat/customize');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
@@ -162,54 +136,31 @@ test.describe('authenticated primary workflows', () => {
     await page.goto('/chat/library');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
-    // Recently-deleted bin (new): toggling into the bin and back must render
-    // without an app error boundary, exercising the ?deleted=true list path.
     await page.getByRole('button', { name: 'Recently deleted' }).click();
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
     await expect(page.getByRole('button', { name: 'Back to library' })).toBeVisible();
     await page.getByRole('button', { name: 'Back to library' }).click();
 
-    // 3b) AGI Work task history (new /tasks surface): the run-list consumer
-    //     renders for a real user (heading + Active/All filter, not a gate or an
-    //     app error boundary) and degrades gracefully. The underlying /runs API
-    //     depends on migrations 0061-0066 (cloud_agent_runs) being applied to the
-    //     target DB; when they are not, the page shows an honest error state —
-    //     which must never be an app error boundary. (See known-flaws
-    //     WEB-CLOUD-AGENT-RUNS-MIGRATION-UNAPPLIED-01.)
     await page.goto('/tasks');
     await page.waitForLoadState('networkidle');
     await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Active' })).toBeVisible();
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
-    // Switching the Active/All filter reloads the list without an error boundary.
     await page.getByTestId('tasks-view').getByRole('button', { name: 'All', exact: true }).click();
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
 
-    // 3c) Global search federates projects + files (env-independent:
-    //     web_conversations, user_projects, media_assets all exist): the
-    //     /api/search response carries the projects and files arrays the search
-    //     dialog now renders.
     const searchRes = await page.request.get('/api/search?q=test&limit=5');
     expect(searchRes.status()).toBe(200);
     const searchBody = (await searchRes.json()) as { projects: unknown[]; files: unknown[] };
     expect(Array.isArray(searchBody.projects)).toBe(true);
     expect(Array.isArray(searchBody.files)).toBe(true);
 
-    // 3d) The global-search dialog opens from the chat shell (real UI, not just
-    //     the API) via the ?search=true deep link and renders without error.
-    //     NB: /chat holds persistent connections, so we wait for the dialog
-    //     directly rather than networkidle (which may never settle here).
     await page.goto('/chat?search=true', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 20000 });
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
 
-    // 4) Cross-device cloud sync (WEB-CHAT-SYNC-500 regression): the pull endpoint
-    //    must return 200 for a user WITH data. node-postgres returns timestamptz as
-    //    Date, which the wire schema (z.string()) rejected on any non-empty page —
-    //    500ing sync for every real account. page.request shares the signed-in
-    //    session cookie, so this exercises the live RLS + Date-serialization path.
     const syncRes = await page.request.get('/api/chat/sync?since=0');
     expect(syncRes.status()).toBe(200);
     const syncBody = (await syncRes.json()) as {
@@ -224,15 +175,10 @@ test.describe('authenticated primary workflows', () => {
   test('opt-in: cheapest live Google image generates, downloads, reloads, and appears in Library', async ({
     page,
   }, testInfo) => {
-    // llm-guardrail-allow: this test performs an explicitly authorized billed provider request and must remain opt-in.
     test.skip(
       process.env['RUN_LIVE_MEDIA_E2E'] !== '1',
       'Set RUN_LIVE_MEDIA_E2E=1 to authorize a real billed provider request.',
     );
-    // A failed assertion after provider acceptance must never trigger another
-    // billed generation. The config disables retries for authorized live runs;
-    // these guards also fail before egress if a CLI override requests a retry
-    // or repeat.
     expect(testInfo.retry, 'Billed media tests must not retry').toBe(0);
     expect(testInfo.repeatEachIndex, 'Billed media tests must not repeat').toBe(0);
     test.setTimeout(240_000);
@@ -382,15 +328,6 @@ test.describe('authenticated primary workflows', () => {
     await expect(page.locator('[data-nextjs-dialog]')).toHaveCount(0);
   });
 
-  // DoD dimensions that only the real, signed-in UI can verify (validation,
-  // cancellation, authorization, concurrency, persistence are covered by
-  // SendButton.test.tsx, the RLS/route contract tests, and the run-concurrency
-  // guard). One sign-in, three checks, to respect Clerk dev usage limits.
-  // Failure recovery: a failing background sync must NOT take down the chat UI.
-  // Force /api/chat/sync to 500 and assert the composer still renders (graceful
-  // degradation — the exact class of WEB-CHAT-SYNC-500, now a guarded contract).
-  // The forced route is torn down with the page context (no manual unroute — the
-  // 500 triggers client retry traffic that unroute would block draining behind).
   test('chat UI degrades gracefully when background sync fails', async ({ page }) => {
     const ticket = await mintSignInTicket();
     await signInWithTicket(page, ticket);
@@ -403,8 +340,6 @@ test.describe('authenticated primary workflows', () => {
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
   });
 
-  // Responsiveness + accessibility on the two primary signed-in surfaces. Waits on
-  // concrete elements (not networkidle) so background polling never stalls the wait.
   test('signed-in surfaces are responsive and free of critical a11y violations', async ({
     page,
   }) => {
@@ -413,8 +348,6 @@ test.describe('authenticated primary workflows', () => {
     await signInWithTicket(page, ticket);
 
     async function expectNoCriticalA11y(label: string) {
-      // axe-core bundles its own playwright-core; Page is structurally identical but
-      // nominally distinct from @playwright/test's, so cast at this one boundary.
       const results = await new AxeBuilder({ page: page as never }).analyze();
       const critical = results.violations.filter((v) => v.impact === 'critical');
       expect(
@@ -423,20 +356,14 @@ test.describe('authenticated primary workflows', () => {
       ).toEqual([]);
     }
 
-    // Phone viewport: composer stays reachable, no horizontal overflow (a common
-    // broken-mobile-layout tell).
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/chat', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('textbox').first()).toBeVisible({ timeout: 20000 });
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
-    expect(overflow).toBeLessThanOrEqual(1); // sub-pixel rounding tolerance
+    expect(overflow).toBeLessThanOrEqual(1);
 
-    // Accessibility on the two primary surfaces — no CRITICAL axe violations
-    // (keyboard traps, unlabeled interactive controls, etc.). Scan /chat IN PLACE
-    // at desktop width (re-navigating to the same URL detaches the frame), then
-    // navigate once to /projects.
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.getByRole('textbox').first()).toBeVisible();
     await expectNoCriticalA11y('/chat');

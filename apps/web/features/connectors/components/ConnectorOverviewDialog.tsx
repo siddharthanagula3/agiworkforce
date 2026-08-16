@@ -1,37 +1,5 @@
 'use client';
 
-/**
- * ConnectorOverviewDialog
- *
- * Shown before the user connects a connector. Displays:
- * - Developer/publisher info
- * - The plain-language consent summary (ConnectorConsentSummary)
- * - The connector's real tools, when any are implemented
- * - Connect / Cancel buttons
- *
- * HONESTY CONSTRAINTS (do not regress these):
- *
- *  1. This dialog used to render `accessScopes()`, which built its lines from the
- *     connector's declared authType and asserted storage that does not exist —
- *     "OAuth tokens stored securely in your account", "Token stored in local
- *     secure storage", "Grants access to your local machine resources". On web
- *     there is NO OAuth flow for any branded catalog connector (POST
- *     /api/connectors 501s every id that is not operator-mapped) and
- *     `user_connectors` stores only connector_id + auth_type + is_active — no
- *     tokens, no endpoints (lib/user-connector-tools.ts header). That function
- *     is gone; ConnectorConsentSummary states what is true instead.
- *
- *  2. The "Provided tools" list came from CONNECTOR_TOOLS in
- *     config/connector-logos.ts, which advertised tool names for connectors with
- *     no runtime implementation anywhere ("Read emails", "Send email", ...).
- *     That map is deleted; the list now comes from `supportedActions` in
- *     `@/lib/connectors/catalog`, which is non-empty only for a connector with a
- *     shipped adapter (today: github, lib/user-connector-tools.ts L180-240).
- *
- *  3. `actionCount` on the connector record has no backing implementation, so it
- *     is not rendered as a capability count.
- */
-
 import { Wrench } from 'lucide-react';
 import {
   Badge,
@@ -46,8 +14,6 @@ import { getConnectorCapability } from '@/lib/connectors/catalog';
 import { RISK_CLASS_COPY } from '../data/connectors';
 import { ConnectorConsentSummary } from './ConnectorConsentSummary';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
-
-// ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface ConnectorInfo {
   id: string;
@@ -68,8 +34,6 @@ interface ConnectorOverviewDialogProps {
   onConnect: () => void;
 }
 
-// ─── Auth type helpers ─────────────────────────────────────────────────────────
-
 function authLabel(authType: ConnectorInfo['authType']): string {
   switch (authType) {
     case 'oauth':
@@ -83,8 +47,6 @@ function authLabel(authType: ConnectorInfo['authType']): string {
   }
 }
 
-// ─── ConnectorOverviewDialog ──────────────────────────────────────────────────
-
 export function ConnectorOverviewDialog({
   connector,
   open,
@@ -93,13 +55,8 @@ export function ConnectorOverviewDialog({
 }: ConnectorOverviewDialogProps) {
   if (!connector) return null;
 
-  // Only a shipped adapter has a static tool list. The registry is the single
-  // owner of that fact (audit CRIT-001) — this file used to keep its own
-  // `CONNECTORS_WITH_REAL_TOOLS` set alongside two more copies elsewhere.
   const capability = getConnectorCapability(connector.id);
   const tools = capability?.supportedActions ?? [];
-  // Risk ceiling from the canonical registry. An id the registry has never seen
-  // is treated as the highest class, not the lowest.
   const riskClass = capability?.riskClass ?? 'high-impact';
 
   const handleConnect = () => {

@@ -1,20 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Tests for AddToChatSheet component.
- *
- * Validates the local-mode "Add to Chat" bottom sheet:
- * 1. Attachment row (Camera, Photos in Local Mode; File only in Cloud)
- * 2. Session controls
- * 3. Hidden feature rows while feature flags are disabled
- * 4. Config links (Project, Choose style)
- */
 
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks — declared before imports
-// ---------------------------------------------------------------------------
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
@@ -113,9 +100,6 @@ jest.mock('../src/features/cloud-bridge', () => {
   };
 });
 
-// Mock the sub-sheet components imported by AddToChatSheet via relative paths.
-// The component uses `import { StyleSelector } from './StyleSelector'` which
-// resolves to `components/chat/StyleSelector` — we mock that path.
 jest.mock('../src/features/chat/components/StyleSelector', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -125,10 +109,6 @@ jest.mock('../src/features/chat/components/StyleSelector', () => {
     )),
   };
 });
-
-// ---------------------------------------------------------------------------
-// Imports (after mocks)
-// ---------------------------------------------------------------------------
 
 import { AddToChatSheet } from '../src/features/chat/components/AddToChatSheet';
 import { useChatStore } from '../stores/chatStore';
@@ -141,10 +121,6 @@ import { useChatViewStore } from '../stores/chat/chatViewStore';
 import { listMediaModels } from '../src/features/chat/actions/mediaMode';
 import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const SEARCH_CAPABLE_MODEL_ID = requireMobileCloudModel(
   (model) => getModelMetadataById(model.id)?.capabilities.search === true,
@@ -206,10 +182,6 @@ function renderSheet(overrides = {}) {
   return render(<AddToChatSheet {...defaultProps} {...overrides} />);
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('AddToChatSheet', () => {
   beforeEach(() => {
     resetStores();
@@ -217,8 +189,6 @@ describe('AddToChatSheet', () => {
     mockWaitlistStoreState.rank = undefined;
     jest.clearAllMocks();
   });
-
-  // ---- Section 1: Attachment Row ----
 
   describe('attachment row', () => {
     it('renders an explicit close button', () => {
@@ -325,8 +295,6 @@ describe('AddToChatSheet', () => {
     });
   });
 
-  // ---- Section 2: Removed mode selector ----
-
   describe('mode selector', () => {
     it('does not render duplicate mode controls in Add to Chat', () => {
       const { queryByLabelText, queryByText } = renderSheet();
@@ -337,10 +305,6 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Chat (default)')).toBeNull();
     });
 
-    // AGI Work moved out of this sheet to the drawer (founder 2026-08-06): it
-    // is a session-wide stance, not a per-message attachment. The sheet must no
-    // longer offer it at ANY tier — including the paid tiers that used to see a
-    // working toggle here, which is the regression this guards.
     it('no longer offers AGI Work at a paid tier — the drawer owns it now', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'max' });
@@ -363,26 +327,16 @@ describe('AddToChatSheet', () => {
     });
   });
 
-  // ---- Section 3: Feature Rows ----
-
   describe('feature toggles', () => {
     it('hides controls that live elsewhere or are disabled', () => {
       const { queryByText } = renderSheet();
 
-      // Temporary chat lives in the chat header, not this sheet.
       expect(queryByText('Temporary chat')).toBeNull();
-      // Search is ambient and capability-clamped at send time, so it is not a
-      // per-turn switch in the + sheet. Image/Video are Cloud-only modes.
       expect(queryByText('Web search')).toBeNull();
       expect(queryByText('Image')).toBeNull();
       expect(queryByText('Video')).toBeNull();
-      // AGI Work moved to the drawer (founder 2026-08-06) — it is a session
-      // stance, not a per-message attachment.
       expect(queryByText('AGI Work')).toBeNull();
-      // Code execution lives in Settings > Capabilities, matching Claude and
-      // ChatGPT. A second switch here was a duplicate control for one flag.
       expect(queryByText('Run code')).toBeNull();
-      // Still gated off in this build.
       expect(queryByText('Computer use')).toBeNull();
       expect(queryByText('Health')).toBeNull();
       expect(queryByText('Beta')).toBeNull();
@@ -390,9 +344,6 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Medium')).toBeNull();
     });
 
-    // Image is a MODE, not a toggle: picking it switches the selected model to
-    // the registry's image model (founder 2026-08-06). The row is labelled
-    // "Image" and lives in the Create section.
     it('shows the Image row in Cloud mode only', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
@@ -418,8 +369,6 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Image')).toBeNull();
     });
 
-    // Video is Max 15x / Enterprise only (`video_generation` in the billing
-    // catalog), so a Pro account must not see it.
     it('hides Video below Max 15x', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
@@ -555,8 +504,6 @@ describe('AddToChatSheet', () => {
     });
   });
 
-  // ---- Section 4: Config Links ----
-
   describe('config links', () => {
     it('renders the local-safe config links', () => {
       const { getByText, queryByText } = renderSheet();
@@ -570,9 +517,7 @@ describe('AddToChatSheet', () => {
     it('shows current values on config links', () => {
       const { getByText } = renderSheet();
 
-      // Project defaults to "Choose"
       expect(getByText('Choose')).toBeTruthy();
-      // Style defaults to "Normal"
       expect(getByText('Normal')).toBeTruthy();
     });
 

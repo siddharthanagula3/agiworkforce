@@ -53,7 +53,6 @@ export function useGlobalSearch(query: string): SearchResultGroup[] {
     const q = debouncedQuery.trim();
     const groups: SearchResultGroup[] = [];
 
-    // Chats
     const chatItems = (
       q ? fuseSearch(conversations, ['title', 'lastMessage'], q) : conversations.slice(0, 10)
     ).map((c) => ({
@@ -65,7 +64,6 @@ export function useGlobalSearch(query: string): SearchResultGroup[] {
     }));
     if (chatItems.length > 0) groups.push({ group: 'Chats', items: chatItems });
 
-    // Projects
     const activeProjects = projects.filter((p) => !p.isArchived);
     const projectItems = (
       q ? fuseSearch(activeProjects, ['name', 'description'], q) : activeProjects.slice(0, 8)
@@ -76,7 +74,6 @@ export function useGlobalSearch(query: string): SearchResultGroup[] {
     }));
     if (projectItems.length > 0) groups.push({ group: 'Projects', items: projectItems });
 
-    // Skills
     const skillItems = (
       q ? fuseSearch(skills, ['name', 'description'], q) : skills.slice(0, 8)
     ).map((s) => ({
@@ -86,7 +83,6 @@ export function useGlobalSearch(query: string): SearchResultGroup[] {
     }));
     if (skillItems.length > 0) groups.push({ group: 'Skills', items: skillItems });
 
-    // Connectors — only connected ones, or all when there's a query
     const relevantConnectors = q
       ? CONNECTORS
       : CONNECTORS.filter((c) => connectedIds.includes(c.id));
@@ -100,7 +96,6 @@ export function useGlobalSearch(query: string): SearchResultGroup[] {
     }));
     if (connectorItems.length > 0) groups.push({ group: 'Connectors', items: connectorItems });
 
-    // Settings
     const settingsItems = q
       ? fuseSearch(STATIC_SETTINGS, ['title'], q)
       : STATIC_SETTINGS.slice(0, 6);

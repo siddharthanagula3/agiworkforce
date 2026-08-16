@@ -18,42 +18,12 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
-/**
- * GET /api/user/export
- *
- * GDPR Article 20: Right to Data Portability
- *
- * This endpoint allows authenticated users to export all their personal data
- * in a structured, commonly used, and machine-readable format (JSON).
- *
- * The export includes:
- * - User profile information
- * - Subscription details
- * - User-owned billing invoices
- * - Percentage-only managed usage and reset times
- * - User-owned top-up purchase records without internal allowance units
- * - Email preferences
- * - Device authorizations
- * - Organization memberships
- * - Beta invite redemptions
- * - Cloud conversations and messages
- * - Cloud projects and knowledge-file manifests
- * - Cloud memories
- * - Cloud artifacts and version history
- *
- * Authentication: Required (Bearer token or session cookie)
- * Rate Limit: 5 requests per hour
- *
- * Response: JSON file download or JSON response based on Accept header
- */
 async function handleExportUserData(request: NextRequest) {
-  // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
     return preflightResponse;
   }
 
-  // Rate limiting (5 requests per hour)
   const rateLimitResponse = await withRateLimit(request, 'user-data-export');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -63,7 +33,6 @@ async function handleExportUserData(request: NextRequest) {
     const { userId, email } = await getClerkAuthUser(request);
     const db = getNeonDb();
 
-    // Log the export request for audit purposes
     logger.info(
       {
         userId,
@@ -72,14 +41,8 @@ async function handleExportUserData(request: NextRequest) {
       'User requested GDPR data export',
     );
 
-    // The legacy export_user_data RPC serializes entire credit ledgers and
-    // must never be used for a user-facing export. Build a reviewed DTO from
-    // explicit, tenant-scoped selects instead.
     const exportData = await collectUserData({ id: userId, email }, db);
 
-    // Audit: a full personal-data export left the system. Recorded AFTER
-    // authorization and with the section count only — never any exported
-    // content, which is the entire point of the export being sensitive.
     await recordAuditEvent({
       userId,
       eventType: 'data_exported',
@@ -361,8 +324,6 @@ async function collectUserData(
   });
   if (subscriptionRows.length > 0) exportData['subscription'] = subscriptionRows[0];
 
-  // A purchase timestamp is user-portable billing history. Its internal
-  // allowance amount, credit-account identity, and settlement metadata are not.
   const topUpPurchases = await queryExportRows({
     db,
     sql: `select id, created_at
@@ -394,7 +355,6 @@ async function collectUserData(
   });
   if (emailRows.length > 0) exportData['email_preferences'] = emailRows[0];
 
-  // Organization memberships · two queries, joined in JS (PostgREST embedding not available)
   const orgMemberRows = await queryExportRows({
     db,
     sql: `select organization_id, role, provisioning_source, provisioned_at, joined_at
@@ -427,7 +387,6 @@ async function collectUserData(
     }));
   }
 
-  // Beta redemptions · two queries, joined in JS
   const betaRows = await queryExportRows({
     db,
     sql: `select id, invite_id, redeemed_at, surface, source
@@ -507,10 +466,6 @@ async function collectUserData(
   });
   if (syncRows.length > 0) exportData['sync_data'] = syncRows;
 
-  // Export user-authored Cloud content from explicit tenant-scoped selects.
-  // Child rows are scoped through their parent instead of trusting caller-
-  // supplied IDs. Internal token/cost fields, storage URIs, and sync cursors
-  // are intentionally excluded from this user-facing portability document.
   const conversations = await queryExportRows({
     db,
     sql: `select id, title, model, project_id, pinned, created_at, updated_at, deleted_at
@@ -630,10 +585,6 @@ async function collectUserData(
   return exportData;
 }
 
-/**
- * Creates the export response with appropriate headers.
- * Supports both JSON download and API response based on Accept header.
- */
 function createExportResponse(request: NextRequest, userId: string, data: unknown): NextResponse {
   const acceptHeader = request.headers.get('accept') || '';
   const isDownload =
@@ -670,15 +621,8 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
   );
 }
 
-// Wrap outside the error handler so Desktop can read rate-limit, auth, and
-// server failure responses instead of receiving an opaque cross-origin error.
 export const GET = withCorsRoute(withErrorHandler(handleExportUserData));
 
-/**
- * OPTIONS handler for CORS preflight requests.
- * AUDIT-008-001: Fixed - OPTIONS was incorrectly assigned to handleExportUserData
- * which processes GET requests with auth. Now returns proper 204 with CORS headers.
- */
 export function OPTIONS(request: NextRequest) {
   return (
     handleCorsPreflightRequest(request) ??

@@ -1,21 +1,3 @@
-/**
- * @file Unit tests for the LLM proxy route's catalog-driven helpers.
- *
- * Coverage:
- *   - BASIC_ALLOWED_MODELS is derived from `tierAllowedModels.economy`
- *     in models.json and stays in sync with the catalog SSOT (P0-I).
- *   - resolveProvider() looks up provider via getModelMetadataById()
- *     instead of the stale `model.startsWith('claude-')` heuristic, and
- *     fails closed for catalog-unknown or non-proxied providers (P0-I).
- *
- * Why these specific assertions:
- *   The 2026-05-05 audit flagged the previous hardcoded
- *   BASIC_ALLOWED_MODELS literal-list as a drift risk — every catalog
- *   refresh would silently bypass the gate until a human noticed. The
- *   tests below pin the catalog→gateway invariant so a future model
- *   rename, provider re-attribution, or tier reshuffle either passes
- *   end-to-end or fails CI here, rather than in production.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getAllowedModelsForTier,
@@ -34,10 +16,6 @@ function requireCatalogProviderModel(provider: string): string {
   return model.id;
 }
 
-// enforcePlanTier hits `subscriptions` via getUserScopedClient — mock the
-// Neon client module so the dispatch tests below don't need a real DB.
-// Mirrors the `from(table) -> {select/eq/maybeSingle}` shape already used in
-// revocation.test.ts / deviceAuth.test.ts for the same module.
 const { tierState } = vi.hoisted(() => ({
   tierState: {
     planTier: null as string | null,
@@ -79,9 +57,6 @@ describe('llm route — catalog-driven Basic allow-list', () => {
   });
 
   it('contains the Basic workhorse + coding + reasoning slot models', () => {
-    // Canonical economy routing slots.
-    // workhorse_general, coding_fast, reasoning_economy all back
-    // models that must be reachable from a Basic request.
     const workhorse = getRoutingSlotModel('workhorse_general');
     const coding = getRoutingSlotModel('coding_fast');
     const reasoning = getRoutingSlotModel('reasoning_economy');
@@ -100,9 +75,6 @@ describe('llm route — catalog-driven Basic allow-list', () => {
   });
 
   it('every Basic-allowed model has a known provider in the catalog', () => {
-    // P0-I drift check: if any model lands in tierAllowedModels.economy
-    // but isn't registered in modelsCatalog.models, the gateway would
-    // 400 every Basic request for that ID. Fail loudly here instead.
     const missing: string[] = [];
     for (const id of BASIC_ALLOWED_MODELS) {
       const meta = modelsCatalog.models[id];
@@ -137,11 +109,6 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
   });
 
   it('resolves the Wave-2-widened cloud providers via the catalog', () => {
-    // Restructure Wave 2 step 2 wired every cloud adapter from
-    // packages/ai/providers into the gateway, so models from xAI, DeepSeek,
-    // and Perplexity now resolve instead of failing closed. Local-device
-    // providers (lmstudio, and ollama unless the server deploys one)
-    // remain outside the managed proxy; catalog-unknown models still 400.
     expect(resolveProvider(requireCatalogProviderModel('xai'))).toBe('xai');
     expect(resolveProvider(requireCatalogProviderModel('deepseek'))).toBe('deepseek');
     expect(resolveProvider(requireCatalogProviderModel('perplexity'))).toBe('perplexity');
@@ -152,12 +119,6 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
   });
 
   it('lookup is consistent with the catalog provider field for every Basic model', () => {
-    // For each model in the Basic allow-list, verify that:
-    //   - if its catalog provider is a proxied cloud provider, resolveProvider() succeeds
-    //   - otherwise resolveProvider() throws (gateway can't proxy it).
-    // This keeps the proxy honest: any new economy-tier model that
-    // joins models.json must EITHER be on a proxied provider OR be
-    // explicitly rejected — there's no silent fallthrough.
     const proxiedProviders = new Set([
       'anthropic',
       'openai',
@@ -184,11 +145,6 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
 });
 
 describe('llm route — every Basic provider has a representative model', () => {
-  // For each provider that participates in the Basic tier (i.e. has at
-  // least one model in tierAllowedModels.economy), assert that at least
-  // one of its catalog-listed models is in the Basic set. Every provider
-  // that could serve a Basic user
-  // has a documented entry-point model.
   it('at least one model per Basic-participating provider passes the allow-list', () => {
     const providersInBasic = new Set<string>();
     for (const id of BASIC_ALLOWED_MODELS) {
@@ -199,12 +155,6 @@ describe('llm route — every Basic provider has a representative model', () => 
     expect([...providersInBasic].sort()).toEqual(['google', 'openai', 'qwen']);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Edge-case / stress invariants for subscription enforcement (Phase 4)
-// These tests pin the behavior of the catalog-derived allow-list and the
-// resolveProvider lookup under adversarial inputs.
-// ---------------------------------------------------------------------------
 
 describe('llm route — edge-case stress (Phase 4 hardening)', () => {
   it('resolveProvider throws for empty string model id', () => {
@@ -232,7 +182,6 @@ describe('llm route — edge-case stress (Phase 4 hardening)', () => {
   });
 
   it('concurrent resolveProvider calls for all Basic models are consistent', async () => {
-    // Stress: 50 concurrent lookups must all return the same result as serial.
     const basicModels = [...BASIC_ALLOWED_MODELS];
     const serial = basicModels.map((id) => {
       try {
@@ -264,13 +213,6 @@ describe('llm route — edge-case stress (Phase 4 hardening)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// enforcePlanTier — tier ladder (founder directive 2026-07-16)
-//
-// Routing/access is tier-based: Free and Basic use economy models; Pro and
-// Team add pro_additions; Max, Max 15x, and Enterprise add flagships.
-// ---------------------------------------------------------------------------
-
 describe('llm route — enforcePlanTier tier ladder (founder directive 2026-07-16)', () => {
   const allowedBasicModel = [...BASIC_ALLOWED_MODELS][0]!;
   const proAdditionModel = [...PRO_ALLOWED_MODELS].find((id) => !BASIC_ALLOWED_MODELS.has(id))!;
@@ -289,7 +231,6 @@ describe('llm route — enforcePlanTier tier ladder (founder directive 2026-07-1
     expect(new Set(FLAGSHIP_ALLOWED_MODELS)).toEqual(
       new Set([...PRO_ALLOWED_MODELS, ...getAllowedModelsForTier('flagship_additions')]),
     );
-    // Every catalog flagship addition is flagship-gated.
     for (const id of modelsCatalog.tierAllowedModels.flagship_additions) {
       expect(PRO_ALLOWED_MODELS.has(id)).toBe(false);
       expect(FLAGSHIP_ALLOWED_MODELS.has(id)).toBe(true);

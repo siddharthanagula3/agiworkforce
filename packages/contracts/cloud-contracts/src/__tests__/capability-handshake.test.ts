@@ -1,18 +1,3 @@
-/**
- * Schema/type sync tests for the capability-handshake wire contract.
- *
- * `EffectiveCapabilityDocumentSchema` (this package) and
- * `EffectiveCapabilityDocument` (`@agiworkforce/types`) are two SEPARATE
- * declarations — not one `z.infer` — because `@agiworkforce/types` cannot
- * depend on `zod` (see `../capability-handshake.ts` module doc). These
- * tests are the enforcement anchor that keeps them from drifting:
- *   1. every value the strict TS contract can produce must parse against
- *      the wire schema (proves the schema is not narrower than the type);
- *   2. the wire schema is deliberately WIDER for capability-id strings
- *      (forward-compat, mirrors the existing `me.ts` `tier: z.string()`
- *      precedent) — proven by a payload carrying a capability id the
- *      current `PlatformCapability` union does not know about.
- */
 import { describe, expect, it } from 'vitest';
 import {
   buildEffectiveCapabilityDocument,
@@ -70,10 +55,6 @@ describe('EffectiveCapabilityDocument (types) -> EffectiveCapabilityDocumentSche
   });
 
   it('is structurally assignable one-way: every field of a strict TS document satisfies the wire shape (compile-time; see module doc)', () => {
-    // `readonly PlatformCapability[]` (TS contract) vs `string[]` (Zod
-    // inference) differ only in array mutability/element-widening, never in
-    // field names or nesting — normalizing that here (not casting) is what
-    // makes this assignment a real compile-time proof, not a suppressed one.
     const document = sampleDocument();
     const asWire: EffectiveCapabilityDocumentWire = {
       ...document,

@@ -78,7 +78,6 @@ describe('ComparisonResponse', () => {
 
   it('shows check icon on chosen tab button when choice=b', () => {
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="b" />);
-    // Tab defaults to the chosen option, so B is active and check is shown
     expect(screen.getByLabelText('Option B chosen')).toBeInTheDocument();
   });
 

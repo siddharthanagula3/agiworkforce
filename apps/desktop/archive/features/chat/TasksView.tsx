@@ -1,6 +1,3 @@
-// TasksView.tsx
-// Full-page tasks management view. Lists agent tasks with real-time Tauri event updates,
-// filterable by status, with expandable SubtaskTimeline per task.
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,10 +24,6 @@ import { TaskCreationDialog } from './TaskCreationDialog';
 import { SubtaskTimeline, type SubtaskStep } from './SubtaskTimeline';
 
 type FilterTab = 'active' | 'completed' | 'failed' | 'scheduled';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Status config
-// ─────────────────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<
   AgentTask['status'],
@@ -92,10 +85,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
 function formatElapsed(isoDate: string): string {
   try {
     return formatDistanceToNow(new Date(isoDate), { addSuffix: true });
@@ -123,10 +112,6 @@ function mapStatusToFilter(status: AgentTask['status']): FilterTab {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StatusBadge
-// ─────────────────────────────────────────────────────────────────────────────
-
 function StatusBadge({ status }: { status: AgentTask['status'] }) {
   const cfg = STATUS_CONFIG[status];
   return (
@@ -142,10 +127,6 @@ function StatusBadge({ status }: { status: AgentTask['status'] }) {
     </span>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ProgressBar
-// ─────────────────────────────────────────────────────────────────────────────
 
 function ProgressBar({ current, total }: { current: number; total: number }) {
   if (total <= 0) return null;
@@ -166,10 +147,6 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TaskCard
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface TaskCardProps {
   task: AgentTask;
@@ -373,10 +350,6 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Empty state
-// ─────────────────────────────────────────────────────────────────────────────
-
 interface EmptyStateProps {
   tab: FilterTab;
   onNew: () => void;
@@ -408,10 +381,6 @@ function EmptyState({ tab, onNew }: EmptyStateProps) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TasksView
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function TasksView() {
   const [activeTab, setActiveTab] = useState<FilterTab>('active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -425,12 +394,10 @@ export function TasksView() {
   const getTaskStatus = useAgentTaskStore((s) => s.getTaskStatus);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Initial load
   useEffect(() => {
     void fetchTasks();
   }, [fetchTasks]);
 
-  // Poll running tasks every 5 s
   useEffect(() => {
     const hasActive = tasks.some(
       (task) =>
@@ -465,7 +432,6 @@ export function TasksView() {
     };
   }, [tasks, getTaskStatus]);
 
-  // Tab definitions
   const tabs: ReadonlyArray<{ id: FilterTab; label: string; icon: React.ElementType }> = [
     { id: 'active', label: 'Active', icon: Zap },
     { id: 'completed', label: 'Completed', icon: CheckCircle2 },
@@ -473,7 +439,6 @@ export function TasksView() {
     { id: 'scheduled', label: 'Scheduled', icon: CalendarClock },
   ];
 
-  // Tab counts
   const counts = useMemo<Record<FilterTab, number>>(() => {
     const result: Record<FilterTab, number> = {
       active: 0,
@@ -488,7 +453,6 @@ export function TasksView() {
     return result;
   }, [tasks]);
 
-  // Filtered + sorted task list
   const filtered = useMemo(() => {
     if (activeTab === 'scheduled') return [];
 

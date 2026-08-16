@@ -1,9 +1,3 @@
-/**
- * Tier-spoofing regression for the real resolver used by both model pickers.
- *
- * Production-path selection enforcement is covered in chatStateManager.test.ts;
- * this file intentionally contains no simulated send handler.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';

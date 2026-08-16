@@ -47,7 +47,7 @@ export function parseEslintOutput(jsonText: string, repoRoot: string): AdapterOu
       ? file.filePath.slice(repoRoot.length).replace(/^\/+/, '')
       : file.filePath;
     for (const message of file.messages) {
-      if (message.severity < 2 && message.fatal !== true) continue; // warnings stay in the linter's own report
+      if (message.severity < 2 && message.fatal !== true) continue;
       findings.push({
         rule_id: `eslint/${message.ruleId ?? 'fatal'}`,
         source: 'eslint',

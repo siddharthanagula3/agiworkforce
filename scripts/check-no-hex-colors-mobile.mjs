@@ -1,14 +1,4 @@
 #!/usr/bin/env node
-/**
- * AP-02 CI gate: no hardcoded color literals in apps/mobile source.
- *
- * Violations that existed when the baseline was seeded are grandfathered.
- * New violations (not in baseline) cause exit 1.
- *
- * Usage:
- *   node scripts/check-no-hex-colors-mobile.mjs              # normal check
- *   node scripts/check-no-hex-colors-mobile.mjs --write-baseline  # seed / regenerate
- */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -31,7 +21,6 @@ const IGNORED_DIRS = new Set([
   '__tests__',
 ]);
 
-// Paths that are exempt even if they match: test fixtures, Detox screenshots, design-token source
 const EXEMPT_PREFIXES = [
   'apps/mobile/__tests__/',
   'apps/mobile/scripts/screenshots/',
@@ -41,13 +30,10 @@ const EXEMPT_PREFIXES = [
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
 
-// Patterns that constitute a hardcoded color literal.
-// Each entry: { rule, regex } where regex has one capture group for the literal found.
 const COLOR_PATTERNS = [
   { rule: 'hex', regex: /#[0-9a-fA-F]{3,8}\b/g },
   { rule: 'rgba', regex: /rgba?\s*\(/g },
   { rule: 'hsla', regex: /hsla?\s*\(/g },
-  // Named CSS colors only when used as a value, e.g. color: 'red' / backgroundColor: "white"
   {
     rule: 'named-color',
     regex:
@@ -55,19 +41,9 @@ const COLOR_PATTERNS = [
   },
 ];
 
-// Inline comment patterns — lines where the match sits entirely within a comment
 const INLINE_COMMENT_RE = /^\s*\/\//;
 const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
 
-/**
- * `rgb(...)`/`hsl(...)` written with a `${}` interpolation is a colour being
- * *computed* at runtime (a serializer, an alpha override), not a hardcoded
- * literal — the channel values come from tokens or from user input. The gate's
- * rule is "no hardcoded colour literals"; flagging these produced a false
- * positive that the only available workarounds (change the product's colour
- * serialization, or baseline it) both made worse. Genuine literals such as
- * `rgba(0, 0, 0, 0.5)` contain no interpolation and are still flagged.
- */
 function isInterpolatedFunctionalColor(codeOnly, matchIndex) {
   const close = codeOnly.indexOf(')', matchIndex);
   const call = close === -1 ? codeOnly.slice(matchIndex) : codeOnly.slice(matchIndex, close + 1);
@@ -114,7 +90,6 @@ function scanFile(relPath) {
     const line = lines[i];
     if (INLINE_COMMENT_RE.test(line)) continue;
 
-    // Strip inline trailing comment before matching
     const codeOnly = line.replace(/\/\/.*$/, '');
 
     for (const { rule, regex } of COLOR_PATTERNS) {
@@ -159,7 +134,6 @@ function baselineKey(v) {
   return `${v.file}:${v.rule}:${v.literal}`;
 }
 
-// Read raw source line for a given violation to detect scrim-shaped rgba(0,0,0,...) patterns.
 const SCRIM_LINE_RE = /rgba\s*\(\s*0\s*,\s*0\s*,\s*0\s*,/;
 
 function isScrimShaped(v) {
@@ -196,8 +170,6 @@ function writeBaseline(violations) {
   fs.writeFileSync(absolute(BASELINE_PATH), JSON.stringify(payload, null, 2) + '\n');
   console.log(`Baseline written: ${BASELINE_PATH} (${violations.length} grandfathered violations)`);
 }
-
-// --- main ---
 
 const files = walk(MOBILE_ROOT).filter((f) => !isExempt(f));
 const allViolations = files.flatMap(scanFile);

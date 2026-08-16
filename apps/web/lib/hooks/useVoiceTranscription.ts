@@ -5,11 +5,6 @@ import { getRoutingSlotModel } from '@agiworkforce/types';
 
 const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
 
-/**
- * Transcription mode
- * 'web-speech' uses the browser's Web Speech API (streaming, realtime)
- * 'whisper' uses backend Whisper transcription (more accurate, batch)
- */
 export type TranscriptionMode = 'web-speech' | 'whisper';
 
 type SpeechRecognitionLike = EventTarget & {
@@ -38,9 +33,6 @@ const getSpeechRecognitionConstructor = (): SpeechRecognitionConstructorLike | u
   return windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
 };
 
-/**
- * Voice transcription result from the backend (Whisper)
- */
 export interface VoiceTranscription {
   text: string;
   language: string | null;
@@ -48,72 +40,39 @@ export interface VoiceTranscription {
   confidence: number | null;
 }
 
-/**
- * Voice settings (web-compatible subset)
- */
 export interface VoiceSettings {
   provider: 'cloud' | 'webspeech' | 'local';
   model: string;
   language: string | null;
 }
 
-/**
- * Options for the useVoiceTranscription hook
- */
 export interface UseVoiceTranscriptionOptions {
-  /** Use Whisper Cloud (remote) when true, Web Speech API (local) when false (default) */
   preferWhisperCloud?: boolean;
-  /** Language code for transcription (e.g., 'en', 'es', 'fr') */
   language?: string;
-  /** Audio format for recording (default: 'webm') */
   audioFormat?: 'webm' | 'mp3' | 'wav' | 'ogg';
-  /** Callback when transcription result is received */
   onResult?: (transcript: string) => void;
-  /** Callback when an error occurs */
   onError?: (error: string) => void;
-  /** Callback when recording starts */
   onRecordingStart?: () => void;
-  /** Callback when recording stops */
   onRecordingStop?: () => void;
 }
 
-/**
- * State for voice transcription
- */
 export interface VoiceTranscriptionState {
-  /** Whether audio is currently being recorded */
   isRecording: boolean;
-  /** Whether audio is being transcribed by the backend */
   isTranscribing: boolean;
-  /** Final transcript from the backend */
   transcript: string;
-  /** Interim transcript (kept for API compatibility) */
   interimTranscript: string;
-  /** Error message if any */
   error: string | null;
 }
 
-/**
- * Return type for the useVoiceTranscription hook
- */
 export interface UseVoiceTranscriptionReturn extends VoiceTranscriptionState {
-  /** Start recording audio */
   startRecording: () => Promise<void>;
-  /** Stop recording and get the transcription */
   stopRecording: () => Promise<string>;
-  /** Toggle recording on/off */
   toggleRecording: () => Promise<void>;
-  /** Clear the current transcript */
   clearTranscript: () => void;
-  /** Whether the browser supports MediaRecorder */
   isSupported: boolean;
-  /** Browser builds do not expose local Whisper runtimes; keep API aligned with desktop. */
   availableLocalWhisper: string[];
 }
 
-/**
- * Get the auth token from Clerk for REST API calls
- */
 async function getAuthToken(): Promise<string> {
   const { getAuthToken: getClerkToken } = await import('@shared/lib/get-auth-token');
   const token = await getClerkToken();
@@ -123,9 +82,6 @@ async function getAuthToken(): Promise<string> {
   return token;
 }
 
-/**
- * Get the MIME type file extension
- */
 function getFormatFromMimeType(mimeType: string): string {
   if (mimeType.includes('webm')) return 'webm';
   if (mimeType.includes('mp3') || mimeType.includes('mpeg')) return 'mp3';
@@ -135,9 +91,6 @@ function getFormatFromMimeType(mimeType: string): string {
   return 'webm';
 }
 
-/**
- * Get a user-friendly error message for media errors
- */
 function getMediaErrorMessage(err: unknown): string {
   if (err instanceof DOMException) {
     switch (err.name) {
@@ -165,12 +118,6 @@ function getMediaErrorMessage(err: unknown): string {
   return 'Failed to access microphone';
 }
 
-/**
- * Hook for voice transcription using the Web Speech API or backend Whisper REST API.
- *
- * Web-only version: no Tauri IPC. Uses fetch('/api/voice/transcribe') for the
- * Whisper Cloud path and the browser's Web Speech API for the local path.
- */
 export function useVoiceTranscription(
   options: UseVoiceTranscriptionOptions = {},
 ): UseVoiceTranscriptionReturn {
@@ -219,7 +166,6 @@ export function useVoiceTranscription(
     }
   }, []);
 
-  // Check browser support on mount
   useEffect(() => {
     const supported =
       typeof navigator !== 'undefined' &&
@@ -244,7 +190,6 @@ export function useVoiceTranscription(
     };
   }, []);
 
-  // Auto-clear transient voice errors so stale banners do not block input affordances
   useEffect(() => {
     if (!state.error) return;
     const timeoutId = window.setTimeout(() => {
@@ -254,9 +199,6 @@ export function useVoiceTranscription(
     return () => window.clearTimeout(timeoutId);
   }, [state.error]);
 
-  /**
-   * Get the MIME type for the selected audio format
-   */
   const getMimeType = useCallback((): string => {
     const mimeTypes: Record<string, string> = {
       webm: 'audio/webm;codecs=opus',
@@ -282,11 +224,7 @@ export function useVoiceTranscription(
     return '';
   }, [audioFormat]);
 
-  /**
-   * Start recording audio from the microphone
-   */
   const startRecording = useCallback(async (): Promise<void> => {
-    // When not using Whisper Cloud, use Web Speech API (local, no server round-trip)
     if (!preferWhisperCloud) {
       const SpeechRecognitionCtor = getSpeechRecognitionConstructor();
 
@@ -404,7 +342,6 @@ export function useVoiceTranscription(
       return;
     }
 
-    // Whisper Cloud path: use MediaRecorder + POST /api/voice/transcribe
     if (!isSupported) {
       const error = 'MediaRecorder is not supported in this browser';
       setState((prev) => ({ ...prev, error }));
@@ -482,11 +419,7 @@ export function useVoiceTranscription(
     onResult,
   ]);
 
-  /**
-   * Stop recording and transcribe the audio
-   */
   const stopRecording = useCallback(async (): Promise<string> => {
-    // Web Speech API path
     if (!preferWhisperCloud && speechRecognitionRef.current) {
       const recognition = speechRecognitionRef.current;
       speechRecognitionRef.current = null;
@@ -624,9 +557,6 @@ export function useVoiceTranscription(
     withTimeout,
   ]);
 
-  /**
-   * Toggle recording on/off
-   */
   const toggleRecording = useCallback(async (): Promise<void> => {
     if (state.isRecording) {
       await stopRecording();
@@ -635,9 +565,6 @@ export function useVoiceTranscription(
     }
   }, [state.isRecording, startRecording, stopRecording]);
 
-  /**
-   * Clear the current transcript
-   */
   const clearTranscript = useCallback((): void => {
     setState((prev) => ({
       ...prev,

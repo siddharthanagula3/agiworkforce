@@ -1,43 +1,3 @@
-/**
- * PP-24 guard — a registered preference store may not hold a member that
- * nothing consumes.
- *
- * WHAT THIS COVERS, EXACTLY. Two stores, listed in `PREFERENCE_STORES` below:
- * `shared/stores/web-settings-store.ts` (`useSettingsStore`) and
- * `shared/stores/layout-store.ts` (`useUIStore`). It is NOT a repo-wide rule:
- * ten other zustand stores under `shared/stores/` persist state and are not
- * checked here. Adding a preference store means adding it to the registry.
- *
- * WHAT IT PROVED WORTH CATCHING:
- *   - `web-settings-store` declared `theme`, `chatFont`, `showTokenCount`,
- *     `streamingEnabled`, `responseStyle` and `notifications`. No screen read
- *     or wrote any of them; the real theme lives in `ThemeContext`, the real
- *     response style in `features/chat/stores/style-store`, and the real
- *     notification preferences are persisted server-side by
- *     `NotificationsSection`.
- *   - `layout-store` was the same defect at four times the size: ~20 members
- *     (`sidebarOpen`, `modals`, `theme`, `chatInterface`, `dashboard`,
- *     `notifications` and their setters) plus six selector hooks, with
- *     `WebChatPage` consuming only `sidebarCollapsed`/`setSidebarCollapsed`.
- *   - `CustomModelsSettings` destructured `customModels` / `addCustomModel` /
- *     `updateCustomModel` / `removeCustomModel` out of the store through a
- *     cast, with `() => {}` defaults. None of those members existed, so every
- *     "Add Model" click was silently discarded.
- *   - `CustomCommandsSettings` was the inverse: a working editor with no mount
- *     site, while `SlashCommandMenu` and `ChatComposerNew` already read the
- *     `customCommands` it writes.
- *
- * WHAT IT DOES NOT PROVE. These checks are static — they read source, so they
- * run in CI without a browser, and they cannot execute the app. The consumer
- * scan is a reference scan plus a ONE-HOP import check: a member counts as
- * consumed when some production file references it AND that file is either a
- * Next.js route module under `app/` or is imported by name somewhere. That is
- * enough to catch the `CustomCommandsSettings` shape (a component no file
- * imported), which a plain reference scan would have marked "consumed". It is
- * not a reachability proof: a consumer that is imported only by another
- * unreachable module still passes, and a component that is imported but never
- * rendered still passes.
- */
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
@@ -46,16 +6,10 @@ import { resolve, join, basename, dirname } from 'path';
 const ROOT = resolve(__dirname, '..');
 
 interface PreferenceStore {
-  /** Path relative to `apps/web`. */
   file: string;
   /** The exported zustand hook production code calls. */
   hook: string;
-  /** Interfaces whose members must each have a consumer. */
   interfaces: string[];
-  /**
-   * Members invoked through a name table rather than a call site, so no regex
-   * can see them. Each entry must be justified by `assertDynamicVerbIsReal`.
-   */
   dynamicVerbs?: string[];
 }
 
@@ -77,7 +31,6 @@ const AUTH_STORE_REL = 'shared/stores/authentication-store.ts';
 
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'build', 'coverage', '.turbo', 'e2e']);
 
-/** Next.js App Router files the framework mounts; nothing imports them. */
 const ROUTE_MODULES = new Set([
   'page',
   'layout',
@@ -104,7 +57,6 @@ function isProductionSource(path: string): boolean {
   return true;
 }
 
-/** Every production .ts/.tsx file in the web app, absolute paths. */
 function productionSources(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (entry.startsWith('.') && entry !== '.') continue;
@@ -116,7 +68,6 @@ function productionSources(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Member names declared on one of the store's interfaces. */
 function declaredMembers(source: string, interfaceName: string): string[] {
   const marker = `interface ${interfaceName} {`;
   const start = source.indexOf(marker);
@@ -127,11 +78,6 @@ function declaredMembers(source: string, interfaceName: string): string[] {
   return [...body.slice(0, end).matchAll(/^\s{2}(\w+)\??:/gm)].map((m) => m[1] as string);
 }
 
-/**
- * Store members actually touched by a file, through either shape the codebase
- * uses: a zustand selector (`useX((s) => s.field)`), a destructure
- * (`const { a, b } = useX()`), or `getState()`.
- */
 function referencedStoreMembers(source: string, hook: string): Set<string> {
   const found = new Set<string>();
 
@@ -155,14 +101,6 @@ function referencedStoreMembers(source: string, hook: string): Set<string> {
   return found;
 }
 
-/**
- * Bodies of every `const { ... } = useX(` destructure.
- *
- * Scanned by counting braces backwards rather than with a `[^{}]*` character
- * class, because the pattern this file exists to catch — `addModel = () => {}`
- * — puts a brace pair INSIDE the destructure and would slip past a naive
- * regex.
- */
 function destructureBodies(source: string, hook: string): string[] {
   const bodies: string[] = [];
   for (const match of source.matchAll(new RegExp(`\\}\\s*=\\s*${hook}\\(`, 'g'))) {
@@ -183,7 +121,6 @@ function destructureBodies(source: string, hook: string): string[] {
   return bodies;
 }
 
-/** Split a destructure body on commas that are not nested in braces/parens. */
 function splitTopLevel(body: string): string[] {
   const parts: string[] = [];
   let depth = 0;
@@ -207,32 +144,21 @@ const sourceText = new Map<string, string>(
   sources.map((file) => [file, readFileSync(file, 'utf8')]),
 );
 
-/** `features/settings/components/CustomCommandsSettings.tsx` -> repo-relative. */
 function rel(file: string): string {
   return file.slice(ROOT.length + 1);
 }
 
-/** The specifier tail another file would import this module by. */
 function importName(file: string): string {
   const base = basename(file).replace(/\.tsx?$/, '');
   return base === 'index' ? basename(dirname(file)) : base;
 }
 
-/**
- * A Next.js route module, mounted by the framework rather than by an import.
- * Anything directly under `app/` whose basename is a reserved route filename.
- */
 function isRouteModule(file: string): boolean {
   const relative = rel(file);
   if (!relative.startsWith('app/') && !/^(proxy|instrumentation)\./.test(relative)) return false;
   return ROUTE_MODULES.has(basename(relative).replace(/\.tsx?$/, ''));
 }
 
-/**
- * True when some other production file names this module in an import or a
- * dynamic `import(...)`. One hop only — see the header for what that does and
- * does not prove.
- */
 function isImportedByAnotherModule(file: string): boolean {
   const name = importName(file);
   const pattern = new RegExp(`(?:from|import\\()\\s*['"][^'"]*\\/${name}['"]`);
@@ -247,11 +173,6 @@ function isMountableConsumer(file: string): boolean {
   return isRouteModule(file) || isImportedByAnotherModule(file);
 }
 
-/**
- * A `dynamicVerbs` entry is an escape hatch, so verify the escape rather than
- * trusting it: the sign-out cleanup must really list the verb AND really list
- * the store module.
- */
 function assertDynamicVerbIsReal(store: PreferenceStore, verb: string): void {
   const auth = readFileSync(resolve(ROOT, AUTH_STORE_REL), 'utf8');
   const verbTable = /const STORE_RESET_METHODS = \[([^\]]*)\]/.exec(auth)?.[1] ?? '';
@@ -384,12 +305,7 @@ describe('PP-24 — the custom-command editor is reachable', () => {
     const declared = /const INPUT_TOKEN = '([^']+)';/.exec(editor)?.[1];
     expect(declared, 'CustomCommandsSettings must declare INPUT_TOKEN').toBeTruthy();
 
-    // The composer replaces exactly one literal; the editor must teach that
-    // literal and no other, or a template written from these instructions
-    // reaches the model with the placeholder still in it.
     expect(composer).toContain(`replaceAll('${declared}'`);
-    // No single-brace `{input}` may survive anywhere in the editor's code —
-    // that is the token the composer does NOT substitute.
     const editorCode = editor.replace(/\/\*[\s\S]*?\*\//g, '');
     expect(editorCode).not.toMatch(/(?<!\{)\{input\}(?!\})/);
   });

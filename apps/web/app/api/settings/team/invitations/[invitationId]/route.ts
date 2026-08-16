@@ -30,12 +30,6 @@ const RevokeQuerySchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
 });
 
-/**
- * The organization is taken from the CALLER'S request and the invitation is
- * then matched on (id, organization_id) together. An admin of org A passing an
- * invitation id belonging to org B therefore reads nothing and mutates
- * nothing — the id alone is never sufficient.
- */
 async function requireOrgAdmin(
   db: ReturnType<typeof getNeonDb>,
   organizationId: string,
@@ -66,13 +60,6 @@ function parseInvitationId(raw: string): string {
   return parsed.data;
 }
 
-/**
- * POST /api/settings/team/invitations/[invitationId]
- * body: { organizationId, action: 'resend' }
- *
- * Mints a NEW token and extends the expiry. The previous link stops working.
- * No email is sent — the fresh link is returned for the inviter to deliver.
- */
 async function handleResend(
   request: NextRequest,
   context: { params: Promise<{ invitationId: string }> },
@@ -113,10 +100,6 @@ async function handleResend(
   });
 }
 
-/**
- * DELETE /api/settings/team/invitations/[invitationId]?organizationId=<uuid>
- * Revoke a pending invitation and free the seat it was holding.
- */
 async function handleRevoke(
   request: NextRequest,
   context: { params: Promise<{ invitationId: string }> },

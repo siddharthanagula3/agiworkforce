@@ -65,20 +65,6 @@ function inferProviderFromModelId(modelId: string | null | undefined): string | 
   return null;
 }
 
-/**
- * Trust mode for a provider id, read from the model registry and nowhere else.
- *
- * There is deliberately no per-provider special case here: LM Studio used to be
- * pinned to `Local` by a hardcoded `PROVIDER_DISPLAY.lmstudio.isLocal` check,
- * which meant the registry's own classification for that provider was computed
- * and then never consulted — so a registry that classified LM Studio wrong
- * looked correct here and wrong everywhere else. The registry carries a
- * `trustModes: ['local']` harness for every local runtime this path can name
- * (`packages/ai/model-registry/catalog/harnesses.json`); if one is removed,
- * `getProviderSurface` returns `hidden`, this returns null, and
- * `shouldForkLocalToByok` stops firing — which is what the contract test in
- * `packages/contracts/types/src/__tests__/trust-boundary.test.ts` guards.
- */
 function providerModeFromProvider(provider: string | null): ProviderMode | null {
   if (!provider) return null;
   const normalizedProvider = normalizeProviderKey(provider);
@@ -138,27 +124,10 @@ export interface RouteLocalToByokSendParams {
   messages: readonly Message[];
   targetModelId: string;
   outgoingContent: string;
-  /**
-   * Opens the consent ceremony. Called INSTEAD of `send` whenever an on-device
-   * conversation is about to continue onto a direct BYOK provider.
-   */
   startCeremony: (request: LocalToByokCeremonyRequest) => void;
-  /** Performs the ordinary send. Never called on a Local → BYOK continuation. */
   send: () => void;
 }
 
-/**
- * The single decision point for "does this send cross the Local → BYOK trust
- * boundary?". It lives here rather than inline in WebChatPage so the branch is
- * directly testable: a test can pass spies for `startCeremony`/`send` and prove
- * that the outgoing content is NOT dispatched before consent.
- *
- * Locked critical rule (CLAUDE.md / AGENTS.md): "Local to BYOK must be an
- * explicit fork/continuation with context selection, secret scan, payload
- * preview, user consent, and visible provider label." Any early-return added
- * here that skips the ceremony while still calling `send` violates that rule —
- * refuse the send instead.
- */
 export function routeLocalToByokSend(params: RouteLocalToByokSendParams): 'ceremony' | 'send' {
   const crossesBoundary = shouldForkLocalToByok({
     conversation: params.conversation,
@@ -166,9 +135,6 @@ export function routeLocalToByokSend(params: RouteLocalToByokSendParams): 'cerem
     targetModelId: params.targetModelId,
   });
 
-  // No source conversation means there is no prior on-device transcript to
-  // carry across — `displayedMessages` is empty whenever `displayedConversationId`
-  // is null — so there is nothing for the ceremony to disclose.
   if (!crossesBoundary || !params.sourceConversationId) {
     params.send();
     return 'send';
@@ -186,20 +152,6 @@ export function routeLocalToByokSend(params: RouteLocalToByokSendParams): 'cerem
   return 'ceremony';
 }
 
-/**
- * The same trust boundary as `routeLocalToByokSend`, reached by the Regenerate
- * control, which resends an existing on-device transcript under the currently
- * selected model.
- *
- * This path REFUSES instead of opening the ceremony: the fork replays through
- * `sendContent`, which takes browser `File` attachments, whereas a regenerated
- * turn carries already-uploaded attachment records. Forking here would have to
- * drop them silently, so the honest outcome is a visible refusal that names the
- * boundary and points at the flow that does run the ceremony.
- *
- * Returns the message to show, or `null` when regenerating stays inside the
- * conversation's own trust boundary.
- */
 export function resolveRegenerateBoundaryRefusal(params: {
   conversation: Conversation | null | undefined;
   messages: readonly Message[];
@@ -215,14 +167,6 @@ export function resolveRegenerateBoundaryRefusal(params: {
   );
 }
 
-/**
- * Concrete destination the consent ceremony must name — "visible provider
- * label" in the locked Local→BYOK rule. Labels come from the model registry
- * (`PROVIDER_LABELS`, derived from models.json), never from a hand-written map,
- * so a newly catalogued provider is named correctly without an edit here.
- * Returns undefined for a target the registry cannot name; the dialog then
- * falls back to the generic BYOK label rather than inventing a provider name.
- */
 export function getByokTargetProviderLabel(modelId: string | null | undefined): string | undefined {
   const provider = inferProviderFromModelId(modelId);
   if (!provider) return undefined;

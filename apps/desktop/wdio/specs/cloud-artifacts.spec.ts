@@ -1,38 +1,3 @@
-/**
- * cloud-artifacts.spec.ts — DES-C05 / DES-C06 / DES-C15, on the real binary.
- *
- * Three findings meet here, and only the packaged app can settle the third:
- *
- *  DES-C05  Desktop Cloud could not produce an artifact at all. The only cloud
- *           artifact source read `payload.artifact` off the SSE chunk — a key the
- *           managed completions route never emits — and nothing derived artifacts
- *           from the message body the way web and mobile do. Asking the Cloud
- *           model for an HTML page showed a raw code block and nothing else.
- *
- *  DES-C06  Cloud artifacts were persisted INSIDE the 32 000-char message
- *           metadata budget shared with thinking/toolCalls/generatedFiles. One
- *           real artifact overflowed it, the save 400'd, and the ENTIRE assistant
- *           turn was lost on reopen — not just the artifact.
- *
- *  DES-C15  Artifact previews are same-document `srcdoc` iframes, which INHERIT
- *           the app CSP (`script-src 'self' 'wasm-unsafe-eval'` in
- *           `apps/desktop/src-tauri/tauri.conf.json`). Interactive HTML therefore
- *           renders inert inside the packaged binary. Vitest cannot see this:
- *           jsdom has no CSP engine and the dev server's policy is not the
- *           packaged one. This is the one assertion that requires WDIO.
- *
- * SESSION + API DOUBLES. Reuses `wdio/helpers/cloudSession.ts` (the shared Cloud
- * scaffolding: Tauri-side device authorization + a `window.fetch` stub for the
- * managed API) and layers ONE artifact-specific overlay on top of it, for the
- * two routes that helper deliberately does not model — assistant-message
- * persistence and per-turn completion content. The overlay delegates everything
- * else back to whatever `fetch` it wrapped, so it cannot silently shadow the
- * shared stub's contract-shaped responses.
- *
- * DO NOT relax any CSP, and do not add `allow-same-origin` to an artifact
- * preview, to make the DES-C15 assertion take its happy path. A preview that
- * cannot run scripts is a finding to report, not a test to bend.
- */
 
 import {
   installCloudApiStubs,
@@ -46,32 +11,13 @@ import {
 const CONVERSATION_ID = 'wdio-artifacts-conversation';
 const CONVERSATION_TITLE = 'Artifact demo';
 
-/** Mirrors MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH in @agiworkforce/cloud-contracts. */
 const MAX_METADATA_LENGTH = 32_000;
 
-/**
- * Artifact-specific overlay over the shared cloud stub.
- *
- * Handles exactly three things the shared helper does not:
- *   - POST /api/chat/conversations            → conversation creation
- *   - POST /api/chat/conversations/:id/messages → message save, enforcing the
- *     SAME 32 000-char metadata cap the server enforces, so a client that still
- *     routes artifact bytes through metadata fails here exactly as in production
- *   - GET  /api/chat/conversations(/:id)      → the saved turns, served back on
- *     reopen
- *   - POST /api/llm/v1/chat/completions       → an SSE stream of staged content
- *
- * Saved messages live in `localStorage`, not in this closure, so a
- * `browser.refresh()` models a restart against a backend that still holds the
- * turn — which is precisely what the 400 used to destroy.
- */
 function installArtifactCloudOverlay(conversationId: string, title: string): void {
   const STORE_KEY = '__wdioArtifactStoredMessages';
   const CALLS_KEY = '__wdioArtifactCalls';
   const scope = window as unknown as Record<string, unknown>;
 
-  // Wrap whatever fetch is currently installed (the shared cloud stub), never
-  // the pristine one — otherwise this overlay would silently drop /api/me.
   const delegate = window.fetch.bind(window);
   scope[CALLS_KEY] = [] as Array<{ url: string; method: string; body: string }>;
 
@@ -225,37 +171,22 @@ function installArtifactCloudOverlay(conversationId: string, title: string): voi
   } as typeof fetch;
 }
 
-/** Stages the assistant content the next mocked completion streams back. */
 async function stageCompletion(content: string): Promise<void> {
   await browser.execute((staged: string) => {
     (window as unknown as Record<string, unknown>)['__wdioStagedCompletion'] = staged;
   }, content);
 }
 
-/** Reinstalls both in-webview stubs. Required after every page load. */
 async function installWebviewStubs(): Promise<void> {
   await installCloudApiStubs({ completions: 'ok' });
   await browser.execute(installArtifactCloudOverlay, CONVERSATION_ID, CONVERSATION_TITLE);
 }
 
-/**
- * Boot into Cloud mode with a signed-in mocked session.
- *
- * Two mock layers with different lifetimes: `browser.tauri.mock` intercepts in
- * the Rust host and survives a reload, while the `window.fetch` stubs live in
- * the webview and do not. So every load reinstalls the fetch stubs and, if the
- * device sign-in card is showing, re-completes the mocked device flow.
- */
 async function enterMockedCloudMode(): Promise<void> {
   await writePersistedAppMode({ mode: 'cloud', hasSelectedMode: true, hasOnboarded: true });
   await browser.refresh();
   await installWebviewStubs();
 
-  // After the refresh the shell spends seconds in its auth-bootstrap loader
-  // before rendering EITHER the sign-in card or (with a live session) the
-  // composer. The old one-shot `deviceSignInCardVisible()` check ran during
-  // that loader, saw neither, skipped sign-in, and then waited 90s for a
-  // composer that a signed-out AuthPage can never show.
   const composerDisplayed = async () =>
     $('textarea[aria-label="Chat message input"]')
       .isDisplayed()
@@ -286,7 +217,6 @@ async function sendTurn(prompt: string): Promise<void> {
   await browser.keys(['Enter']);
 }
 
-/** Every assistant-message save the client issued, with its measured sizes. */
 async function assistantSaves(): Promise<Array<{ contentLength: number; metadataLength: number }>> {
   return browser.execute(() => {
     const calls =
@@ -311,16 +241,12 @@ describe('AGI Desktop Cloud artifacts', () => {
     this.timeout(240_000);
     await browser.pause(1_500);
     await browser.execute(() => {
-      // A previous run's persisted turns would make the first assertion pass
-      // for the wrong reason.
       localStorage.removeItem('__wdioArtifactStoredMessages');
     });
     await enterMockedCloudMode();
   });
 
   after(async () => {
-    // Specs share ONE app-data profile and only `onPrepare` wipes it, so a spec
-    // that leaves Cloud selected boots the next file into AuthPage (DES-C13).
     await browser.execute(() => {
       localStorage.removeItem('__wdioArtifactStoredMessages');
     });
@@ -338,23 +264,19 @@ describe('AGI Desktop Cloud artifacts', () => {
     );
     await sendTurn('Build me a pricing page in HTML');
 
-    // The transcript renders an artifact card, not a raw code block.
     const card = await $('[data-testid="message-artifacts"]');
     await card.waitForDisplayed({ timeout: 90_000 });
     expect(await card.getText()).toContain('Pricing');
 
-    // The fenced block is lifted out of the body so the answer is not duplicated.
     const assistantRow = await $$('[data-message-row="assistant"]');
     const transcript = await assistantRow[assistantRow.length - 1]!.getText();
     expect(transcript).toContain('Tell me what to change.');
     expect(transcript).not.toContain('<!DOCTYPE html>');
 
-    // The conversation header advertises the artifact, with a count.
     const artifactsToggle = await $('button[aria-label^="Toggle artifacts panel"]');
     await artifactsToggle.waitForDisplayed({ timeout: 30_000 });
     expect(await artifactsToggle.getAttribute('aria-label')).toContain('(1)');
 
-    // Opening the card opens the panel with a live preview.
     await card.click();
     const preview = await $('[data-testid="artifact-panel-html-preview"]');
     await preview.waitForDisplayed({ timeout: 30_000 });
@@ -364,9 +286,6 @@ describe('AGI Desktop Cloud artifacts', () => {
   it('DES-C06 · a >32KB artifact still saves the turn, and it survives a reload', async function () {
     this.timeout(240_000);
 
-    // ~48 KB of HTML: over the 32 000-char metadata cap, under the 100 000-char
-    // message-content cap. Exactly the size class that used to 400 the save and
-    // take the whole assistant turn with it.
     const bigHtml =
       '<!DOCTYPE html><html><head><title>Report</title></head><body>' +
       '<h1>Quarterly report</h1>' +
@@ -389,18 +308,13 @@ describe('AGI Desktop Cloud artifacts', () => {
     );
     expect(await $('body').getText()).not.toContain('Could not save the Cloud reply');
 
-    // The save that went out fit the server budget — proving the CLIENT-side
-    // guard ran, not that the double happened to be lenient.
     const saves = await assistantSaves();
     expect(saves.length).toBeGreaterThan(0);
     for (const save of saves) {
       expect(save.metadataLength).toBeLessThanOrEqual(MAX_METADATA_LENGTH);
     }
-    // The artifact bytes travel in the message body, which has its own 100k cap.
     expect(saves[saves.length - 1]!.contentLength).toBeGreaterThan(MAX_METADATA_LENGTH);
 
-    // Reload and reopen. The double keeps its persisted turns in localStorage,
-    // so this is a restart against a backend that still holds the message.
     await enterMockedCloudMode();
 
     const conversationEntry = await $(`=${CONVERSATION_TITLE}`);
@@ -418,8 +332,6 @@ describe('AGI Desktop Cloud artifacts', () => {
       },
     );
 
-    // And the artifact comes back with it, re-derived from the message body
-    // rather than restored from metadata that no longer carries it.
     const restoredCard = await $('[data-testid="message-artifacts"]');
     await restoredCard.waitForDisplayed({ timeout: 60_000 });
     expect(await restoredCard.getText()).toContain('Report');
@@ -446,10 +358,6 @@ describe('AGI Desktop Cloud artifacts', () => {
     const preview = await $('[data-testid="artifact-panel-html-preview"]');
     await preview.waitForDisplayed({ timeout: 60_000 });
 
-    // The capability probe (`packages/ui/unified-chat/src/lib/artifact-preview-capability.ts`)
-    // measures whether a same-document preview may run scripts under the CSP
-    // this packaged binary actually ships. Both outcomes are legitimate; a
-    // preview that silently renders nothing and explains nothing is not.
     const notice = await $('[data-testid="artifact-preview-scripts-blocked"]');
     await browser.waitUntil(
       async () =>
@@ -464,18 +372,11 @@ describe('AGI Desktop Cloud artifacts', () => {
     );
 
     if (await notice.isExisting()) {
-      // Packaged-CSP path: the inherited `script-src 'self' 'wasm-unsafe-eval'`
-      // wins over the artifact's own meta policy, so the page is inert. The user
-      // must be told why, in words. Delete this branch once the dedicated
-      // artifact URI-scheme origin lands (the remaining half of DES-C15).
       expect(await notice.getText()).toContain('security policy');
       await browser.saveScreenshot('/tmp/agi-desktop-cloud-artifact-scripts-blocked.png');
       return;
     }
 
-    // Scripts are permitted here, so the mutated DOM must actually be visible
-    // INSIDE the preview iframe. Only the native binary can settle this — jsdom
-    // has no CSP engine and no real iframe navigation.
     const iframe = await $('[data-testid="artifact-panel-html-preview"] iframe');
     await iframe.waitForExist({ timeout: 30_000 });
     await browser.switchToFrame(iframe);

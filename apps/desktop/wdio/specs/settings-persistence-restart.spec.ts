@@ -90,8 +90,6 @@ function createDistinctOllamaUrl(rawUrl: string): string {
   } else if (url.hostname === '127.0.0.1') {
     url.hostname = 'localhost';
   } else {
-    // Preserve a developer's custom host while still proving that a distinct
-    // normalized URL crosses the Settings draft -> native disk boundary.
     const marker = '/wdio-settings-restart-probe';
     const path = url.pathname.replace(/\/$/, '');
     url.pathname = path.endsWith(marker)
@@ -123,10 +121,6 @@ describe('AGI Desktop Settings — persisted native restart contract', () => {
     const changedReduceMotion = !originalReduceMotion;
     const changedApprovalPolicy: 'auto-deny' | 'pause' =
       originalApprovalPolicy === 'auto-deny' ? 'pause' : 'auto-deny';
-    // The current Developer control deliberately exposes 1-10 minutes even
-    // if an older settings file contains a wider legacy value. Drive the real
-    // 30-second keyboard steps; macOS WebKit ignores WebDriver's synthetic
-    // Home/End key codes even when the Radix thumb owns DOM focus.
     const changedApprovalTimeout = originalApprovalTimeout === 60 ? 600 : 60;
     const changedName =
       originalName === 'WDIO settings restart'
@@ -140,7 +134,6 @@ describe('AGI Desktop Settings — persisted native restart contract', () => {
       await replaceTextInput('input[aria-label="Ollama URL"]', changedUrl);
 
       await openSection('Personalization');
-      // Leaving Models & Keys commits and normalizes the URL draft.
       await replaceTextInput('#personalization-name', changedName);
       await chooseButton(
         `button[aria-label="Select ${changedTheme === 'dark' ? 'Dark' : 'Light'} theme"]`,
@@ -157,11 +150,6 @@ describe('AGI Desktop Settings — persisted native restart contract', () => {
       await approvalSlider.waitForDisplayed({ timeout: 10_000 });
       await approvalSlider.scrollIntoView({ block: 'center' });
       await approvalSlider.click();
-      // WKWebView can deliver the pointer click without moving DOM focus to
-      // Radix's thumb. Prove the actual slider owns focus before sending the
-      // user-equivalent Home/End key; otherwise browser.keys targets the page
-      // and the test reports a product persistence failure for a harness-only
-      // focus miss.
       await browser.execute((slider) => (slider as HTMLElement).focus(), approvalSlider);
       expect(
         await browser.execute((slider) => document.activeElement === slider, approvalSlider),
@@ -188,9 +176,6 @@ describe('AGI Desktop Settings — persisted native restart contract', () => {
       const policy = await $('#approvalPolicy');
       await policy.scrollIntoView({ block: 'center' });
       await policy.click();
-      // Radix Select portals do not expose their item role consistently in
-      // macOS WebKit, and WebDriver Home/End is ignored. Navigate from the
-      // current selected option with real arrow steps instead.
       const approvalPolicies = ['auto-deny', 'auto-approve', 'pause'] as const;
       const currentPolicyIndex = approvalPolicies.indexOf(originalApprovalPolicy);
       const targetPolicyIndex = approvalPolicies.indexOf(changedApprovalPolicy);
@@ -211,9 +196,6 @@ describe('AGI Desktop Settings — persisted native restart contract', () => {
         },
       );
 
-      // Revisit the first edited section before committing. This proves the
-      // controlled input reached the shared draft store and was not merely a
-      // WebDriver-side DOM mutation that disappeared when the tab unmounted.
       await openSection('Models & Keys');
       const ollamaUrlDraft = await $('input[aria-label="Ollama URL"]');
       await ollamaUrlDraft.waitForDisplayed({ timeout: 10_000 });
@@ -275,11 +257,6 @@ describe('AGI Desktop Settings — persisted native restart contract', () => {
       );
       await browser.saveScreenshot(`${SCREEN_DIR}/02-restored-after-renderer-restart.png`);
     } finally {
-      // Cleanup is deliberately native and exact: if a UI assertion fails
-      // midway through this manual journey, restore the complete snapshot
-      // rather than leaving a partially mutated developer profile. Reloading
-      // also rehydrates the renderer and live timeout/provider owners; a disk-
-      // only restore would leave later WDIO specs running with the probe draft.
       await invokeNative<void>('settings_save', { settings: original });
       await browser.refresh();
       await waitForDesktopShell();

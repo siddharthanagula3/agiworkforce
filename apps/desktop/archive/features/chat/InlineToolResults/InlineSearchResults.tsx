@@ -87,10 +87,8 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
   const provider = data?.provider || 'Web Search';
   const durationMs = data?.duration_ms;
 
-  // Memoize results to avoid dependency issues
   const results = useMemo(() => data?.results || [], [data?.results]);
 
-  // Memoize processed results with fallback favicons
   const processedResults = useMemo(() => {
     return results.map((r, idx) => ({
       ...r,
@@ -100,24 +98,13 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
     }));
   }, [results]);
 
-  // Get citation management functions from store
   const addCitation = useUnifiedChatStore((state) => state.addCitation);
   const getCitationByIndex = useUnifiedChatStore((state) => state.getCitationByIndex);
 
-  // Register search results as citations when results are available
-  // This allows the AI's response to use [1], [2], etc. references
-  //
-  // addCitation and getCitationByIndex are Zustand store actions. Zustand
-  // guarantees that action references are stable across renders (they are
-  // defined once on the store object and never replaced), so including them
-  // in the deps array would cause the effect to re-run on every store change
-  // whenever the store returns a new selector function reference. Omitting
-  // them is safe and intentional.
   useEffect(() => {
     if (status === 'completed' && processedResults.length > 0) {
       processedResults.forEach((searchResult) => {
         const index = searchResult.position;
-        // Only add if citation doesn't already exist for this index
         const existing = getCitationByIndex(index);
         if (!existing) {
           addCitation({
@@ -287,7 +274,6 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({ result, isLast }) =
   );
 };
 
-// Helper functions
 function extractDomain(url: string): string | undefined {
   try {
     return new URL(url).hostname;

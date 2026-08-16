@@ -1,8 +1,3 @@
-/**
- * AGI Components
- *
- * Components for visualizing AGI reasoning, reflection, and execution.
- */
 
 export { ProgressIndicator } from './ProgressIndicator';
 export { ReflectionInsightCard } from './ReflectionInsightCard';
@@ -11,7 +6,6 @@ export { AgentTaskPanel } from './AgentTaskPanel';
 export { AgentTaskCreator } from './AgentTaskCreator';
 export { AgentTaskMonitor } from './AgentTaskMonitor';
 
-// Re-export types
 export type {
   ReflectionInsight,
   ExecutionAssessment,

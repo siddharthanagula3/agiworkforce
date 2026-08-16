@@ -1,9 +1,3 @@
-/**
- * VoiceReview — transcription review step before sending to chat.
- *
- * Shows the transcribed text with edit capability, then Cancel or Confirm.
- * Also shows a PerformanceChip indicating the on-device STT inference details.
- */
 
 import { useState, useCallback, useEffect } from 'react';
 import { View, TextInput, Pressable, StyleSheet } from 'react-native';
@@ -16,17 +10,11 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 
 interface VoiceReviewProps {
-  /** Whether the review panel is visible */
   visible: boolean;
-  /** The transcribed text to review */
   transcript: string;
-  /** Called when user cancels — discards the transcription */
   onCancel: () => void;
-  /** Called with the (possibly edited) text to send to chat */
   onConfirm: (text: string) => void;
-  /** Re-record: discard this and go back to recording */
   onReRecord?: () => void;
-  /** STT latency for PerformanceChip, in ms */
   latencyMs?: number;
 }
 
@@ -42,7 +30,6 @@ export function VoiceReview({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [editedText, setEditedText] = useState(transcript);
 
-  // Sync when transcript changes (new recording)
   const handleTranscriptChange = useCallback((text: string) => {
     setEditedText(text);
   }, []);

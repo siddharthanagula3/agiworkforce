@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* global console */
 import { execFileSync } from 'node:child_process';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -65,9 +64,6 @@ for (const target of buildTargets) {
   const exeName = `native_messaging_host${isWindows ? '.exe' : ''}`;
   const binaryDest = path.join(outDir, `native_messaging_host-${target}${isWindows ? '.exe' : ''}`);
 
-  // Tauri validates `bundle.externalBin` during Cargo build-script execution.
-  // The helper binary is what we are building, so seed each generated sidecar
-  // path first, then overwrite it with the real compiled helper.
   if (!existsSync(binaryDest)) {
     writeFileSync(binaryDest, isWindows ? '' : '#!/usr/bin/env sh\nexit 1\n');
     if (!isWindows) chmodSync(binaryDest, 0o755);
@@ -111,10 +107,6 @@ if (requestedTarget === 'universal-apple-darwin') {
       throw new Error(`Universal native host is missing ${requiredArchitecture}`);
     }
   }
-  // Tauri's universal bundler stages external binaries from the universal
-  // Cargo output directory after it merges the application executables. The
-  // target-suffixed source file above satisfies build-script validation; this
-  // second copy satisfies the final `.app` assembly step.
   const universalBundleDir = path.join(targetDir, requestedTarget, profileDir);
   const universalBundleSource = path.join(universalBundleDir, 'native_messaging_host');
   mkdirSync(universalBundleDir, { recursive: true });

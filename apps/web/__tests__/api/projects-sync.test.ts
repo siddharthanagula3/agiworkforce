@@ -1,14 +1,3 @@
-/**
- * /api/projects/sync — delta-sync cursor + push semantics + tombstone propagation.
- *
- * Guards:
- *  - cursor advances to the highest delivered server_version (bigint, not lexicographic),
- *  - push compare-and-swaps by the server-owned revision (client clocks never win),
- *  - user_id is forced server-side (RLS WITH CHECK backstop) — never from the body,
- *  - deleted_at carries the tombstone so deletes propagate cross-device,
- *  - the pull query does NOT filter deleted_at (tombstones must be delivered),
- *  - local-only routing hints (default_privacy_mode/provider_mode) are NOT in the wire.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { queryMock, getSubscriptionMock } = vi.hoisted(() => ({
@@ -86,13 +75,10 @@ describe('POST /api/projects/sync — push', () => {
     expect(sql).toContain('existing.user_id = $1');
     expect(sql).toContain('deleted_at = case when incoming.should_delete then now() else null end');
     expect(sql).not.toContain('excluded.updated_at');
-    // user_id param is the SESSION user, never from the body.
     expect((call![1] as unknown[])[0]).toBe('u1');
   });
 
   it('strips local routing-hint fields that are not in the sync contract', async () => {
-    // default_privacy_mode is intentionally NOT a wire field; zod strips unknown keys,
-    // so the insert SQL must never reference it.
     const res = await POST(
       postReq({
         projects: [

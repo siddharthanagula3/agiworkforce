@@ -1,12 +1,3 @@
-/**
- * CodeEditor
- *
- * A lightweight code editor using a styled textarea with:
- * - Tab key inserts 2 spaces
- * - Language label shown top-right
- * - Copy code button
- * - Run button for executable languages
- */
 
 import { Check, Copy, Play } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -74,7 +65,6 @@ export function CodeEditor({
       const newValue = content.slice(0, start) + '  ' + content.slice(end);
       onChange(newValue);
 
-      // Restore cursor position after React updates the value
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         textarea.selectionStart = start + 2;

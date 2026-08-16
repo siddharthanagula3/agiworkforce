@@ -1,29 +1,11 @@
-/**
- * MaxUpgradePrompt — small inline banner shown when a user whose tier cannot
- * switch provider mid-thread attempts to do so. Click → host's onUpgrade fires
- * (typically opens billing).
- *
- * The component is presentational — it does not gate anything itself.
- * Gating is decided upstream via `selectProviderSwitchGate()` in tierStore,
- * which defers to `canSwitchProviderInThread()`. That predicate admits
- * `max`, `max_15x`, and `enterprise` only — so this banner names Max, not Pro.
- *
- * The plan name is read from `PLAN_LABEL` rather than written inline, and no
- * price is rendered here: prices live in `BILLING_PLAN_PRICING` and are shown
- * by the billing surface the host opens. A price hardcoded in a presentational
- * component silently becomes a false claim the first time pricing moves.
- */
 import { Sparkles, X } from 'lucide-react';
 import { PLAN_LABEL } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 
-/** Lowest tier that `canSwitchProviderInThread()` admits. */
 const REQUIRED_PLAN_LABEL = PLAN_LABEL.max;
 
 export interface MaxUpgradePromptProps {
-  /** Provider the user attempted to switch to (e.g. "OpenAI", "Google"). */
   attemptedProvider: string;
-  /** Provider locked to the current conversation (e.g. "Anthropic"). */
   currentProvider: string;
   onUpgrade: () => void;
   onDismiss: () => void;

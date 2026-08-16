@@ -276,8 +276,6 @@ describe('Managed gateway failover — resolver fallback plan consumption', () =
 
     expect(response.status).toBe(200);
     expect(state.buildCalls).toEqual(['anthropic', 'openai']);
-    // Attribution: every client-visible wire event names the model that
-    // actually served the stream, never the failed primary.
     expect(eventModels(events)).toEqual([FALLBACK_FLAGSHIP]);
     expect(events.filter((event) => event === '[DONE]')).toHaveLength(1);
     expect(state.billingEvents).toEqual([
@@ -342,8 +340,6 @@ describe('Managed gateway failover — resolver fallback plan consumption', () =
   });
 
   it('skips remaining routes on the provider whose credential was rejected', async () => {
-    // The second anthropic route would replay the same rejected key; only the
-    // google route can authenticate, so it is the one that serves.
     state.adapterModes.push('terminal-error', 'success');
 
     const response = await request(createApp())
@@ -459,8 +455,6 @@ describe('Managed gateway failover — resolver fallback plan consumption', () =
       });
 
     expect(response.status).toBe(200);
-    // The flagship candidate fails the per-attempt enforcePlanTier re-check,
-    // so its provider adapter is never even built.
     expect(state.buildCalls).toEqual(['anthropic', 'google']);
     expect(response.body.model).toBe(FALLBACK_PRO);
     expect(state.usageRows).toContainEqual(
@@ -482,9 +476,7 @@ describe('Managed gateway failover — resolver fallback plan consumption', () =
 
     expect(response.status).toBe(200);
     expect(response.body.model).toBe(FALLBACK_FLAGSHIP);
-    // The failed attempt's partial output never reaches the client…
     expect(response.body.choices[0].message.content).toBe('ok');
-    // …and its usage never reaches settlement.
     expect(state.billingEvents.filter((event) => event === 'finalize-completed')).toHaveLength(1);
     expect(state.billingEvents.filter((event) => event === 'finalize-failed')).toHaveLength(0);
     expect(state.finalizedUsage).toEqual(

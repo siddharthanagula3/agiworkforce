@@ -1,16 +1,3 @@
-/**
- * Tests for check-audit-progress.mjs — the BASE-009 release stop gate.
- *
- * The gate's only caller is step [9/9] of scripts/launch-readiness-check.sh, the
- * manual pre-tag command, which treats a non-zero exit as release-blocking. The
- * dangerous failure is therefore not a false alarm but a silent pass: a ledger
- * the parser cannot read correctly reports "all closed" and the tag goes out.
- * Every fixture below is a ledger shape that produced, or could produce, that.
- *
- * The gate reads ./AuditRemediationLedger.md from the process working
- * directory, so each case runs it in a throwaway directory. Nothing in the
- * repository is written or mutated.
- */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -22,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GATE = join(REPO_ROOT, 'scripts', 'check-audit-progress.mjs');
 
-/** Run the real gate against `ledger` (omit to leave the file absent). */
 function runOnLedger(ledger) {
   const dir = mkdtempSync(join(tmpdir(), 'base009-'));
   try {
@@ -71,8 +57,6 @@ test('fails closed when the ledger carries no checkboxes at all', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /no task checkboxes/);
 });
-
-// --- integrity: shapes that used to report a confident, wrong answer ---------
 
 test('fails on an unclosed code fence instead of reporting the hidden tasks closed', () => {
   const ledger = [
@@ -142,8 +126,6 @@ test('treats a heading that merely mentions an ID as a reference, not a declarat
   const result = runOnLedger(ledger);
   assert.equal(result.status, 0, `${result.stderr}${result.stdout}`);
 });
-
-// --- wiring: the gate must run where BASE-009 says, and nowhere else --------
 
 test('returns a coherent verdict when run against the real ledger', () => {
   const result = spawnSync(process.execPath, [GATE], { cwd: REPO_ROOT, encoding: 'utf8' });

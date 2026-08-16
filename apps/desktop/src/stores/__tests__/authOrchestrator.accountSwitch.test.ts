@@ -204,9 +204,6 @@ describe('Managed Cloud auth account transitions', () => {
     await loadAccountA();
     const accountAEpoch = useUnifiedAuthStore.getState().cloudSessionEpoch;
 
-    // This is the first state emitted by setSession, before /api/me returns.
-    // It used to be discarded by the orchestrator, leaving all of A visible
-    // for the entire duration of B's account refresh.
     emit(
       authState('account-b', 'token-b', {
         subscriptionFetchStatus: 'fetching',
@@ -231,8 +228,6 @@ describe('Managed Cloud auth account transitions', () => {
     expect(duringAccountRefresh.account.featureFlags).toEqual({});
     expect(duringAccountRefresh.account.credits).toBeNull();
 
-    // Even after /api/me resolves, the separate credits request must not open
-    // a window where account B can observe account A's state.
     const bCredits = deferred<{ credits: { remaining_cents: number } }>();
     mocks.fetchUserProfile.mockImplementationOnce(() => bCredits.promise);
     emit(

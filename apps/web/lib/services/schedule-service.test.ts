@@ -374,9 +374,6 @@ describe('schedule service persistence', () => {
       'user-1',
       'task-1',
       {
-        // The mounted editor uses a full PUT representation. Presence of these
-        // unchanged timing fields must not reclassify a legacy cadence as a
-        // timing edit and make a simple rename impossible.
         name: 'Renamed',
         description: null,
         prompt: 'Brief me',
@@ -784,11 +781,6 @@ describe('schedule run lifecycle', () => {
 describe('due-schedule batch isolation', () => {
   it('keeps sweeping after one claim fails to finalize', async () => {
     vi.mocked(createClaimedUserScopedDb).mockClear();
-    // processClaimedScheduleRun finalizes its own executor failures, so the only
-    // way it throws is finalization itself failing — an unparseable stored
-    // timing, or the database rejecting the write. Before the guard in
-    // processDueScheduleRuns, that single rejection propagated through
-    // Promise.all(workers) and every other due task in the batch went unrun.
     const claimRow = (runId: string) => ({
       ...taskRow,
       run_id: runId,
@@ -798,18 +790,12 @@ describe('due-schedule batch isolation', () => {
     });
 
     const query = vi.fn(async (sql: string) => {
-      // findExpiredClaims: nothing stranded from a previous invocation.
       if (sql.includes('lease_expires_at < now()')) return [];
-      // claimDueScheduleRuns: two tasks are due in this sweep.
       if (sql.includes('expired_candidates')) return [claimRow('run-1'), claimRow('run-2')];
       return [];
     });
 
     const db = database(query);
-    // processClaimedScheduleRun already retries finalization once from its own
-    // catch, so a single failure recovers. The batch only dies when the same row
-    // fails to finalize persistently — an unparseable stored timing throws on
-    // both attempts, because both compute the next occurrence.
     let finalizeCalls = 0;
     vi.spyOn(db, 'transaction').mockImplementation(async () => {
       finalizeCalls += 1;
@@ -827,8 +813,6 @@ describe('due-schedule batch isolation', () => {
       executor: executor as unknown as ScheduledTaskExecutor,
     });
 
-    // The poisoned claim is skipped, not fatal: the second claim still executed
-    // and finalized (two failed attempts on run-1, then run-1's own success).
     expect(finalizeCalls).toBe(3);
     expect(executor).toHaveBeenCalledTimes(2);
     expect(createClaimedUserScopedDb).toHaveBeenNthCalledWith(1, db, claim.scope);

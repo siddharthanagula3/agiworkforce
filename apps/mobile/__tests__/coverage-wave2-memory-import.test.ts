@@ -1,19 +1,3 @@
-/**
- * coverage-wave2-memory-import.test.ts
- *
- * Unit tests for apps/mobile/src/features/memory/services/memoryImport.ts.
- *
- * Exercises:
- *  - parseChatGPTExport: fact extraction from memory field (array + object), MAX_FACTS cap
- *  - parseClaudeExport: system_prompt + starred messages only, MAX_FACTS cap
- *  - parseGeminiExport: user-authored preference sentences, looksLikeFact heuristic
- *  - parsePlainText: paragraph-splitting, length<10 skip, MAX_FACTS cap
- *  - Malformed JSON: each parser returns empty ImportResult, never throws
- *  - MAX_FACT_CHARS truncation with ellipsis
- *  - detectSourceFromFilename: canonical filename mapping
- *
- * No mocks required — all parsers are pure string → object.
- */
 
 import {
   parseChatGPTExport,
@@ -26,17 +10,9 @@ import {
 const MAX_FACTS = 500;
 const MAX_FACT_CHARS = 2000;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function repeat(n: number, fn: (i: number) => unknown): unknown[] {
   return Array.from({ length: n }, (_, i) => fn(i));
 }
-
-// ---------------------------------------------------------------------------
-// parseChatGPTExport
-// ---------------------------------------------------------------------------
 
 describe('parseChatGPTExport', () => {
   it('extracts facts from memory array field', () => {
@@ -56,7 +32,6 @@ describe('parseChatGPTExport', () => {
   });
 
   it('caps extracted facts at MAX_FACTS (500)', () => {
-    // 501 memory entries across two conversations
     const memoryItems = repeat(501, (i) => `This is preference fact number ${i}`);
     const json = JSON.stringify([{ memory: memoryItems }]);
     const result = parseChatGPTExport(json);
@@ -70,7 +45,6 @@ describe('parseChatGPTExport', () => {
     const result = parseChatGPTExport(json);
     expect(result.facts.length).toBe(1);
     const fact = result.facts[0]!.fact;
-    // slice(0, 2000).trimEnd() + '…' => can be 2001 chars
     expect(fact.endsWith('…')).toBe(true);
     expect(fact.length).toBeLessThanOrEqual(MAX_FACT_CHARS + 1);
   });
@@ -93,16 +67,11 @@ describe('parseChatGPTExport', () => {
   it('skips memory entries with fewer than 3 non-whitespace chars', () => {
     const json = JSON.stringify([{ memory: ['ok', 'x', 'This is a real fact'] }]);
     const result = parseChatGPTExport(json);
-    // 'ok' (2 chars trimmed) and 'x' (1 char) fail isNonEmpty (trim().length > 2)
     expect(result.facts.some((f) => f.fact === 'ok')).toBe(false);
     expect(result.facts.some((f) => f.fact === 'x')).toBe(false);
     expect(result.facts.some((f) => f.fact === 'This is a real fact')).toBe(true);
   });
 });
-
-// ---------------------------------------------------------------------------
-// parseClaudeExport
-// ---------------------------------------------------------------------------
 
 describe('parseClaudeExport', () => {
   it('extracts system_prompt as a fact', () => {
@@ -175,10 +144,6 @@ describe('parseClaudeExport', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// parseGeminiExport
-// ---------------------------------------------------------------------------
-
 describe('parseGeminiExport', () => {
   it('extracts user messages that match preference patterns', () => {
     const json = JSON.stringify({
@@ -221,7 +186,6 @@ describe('parseGeminiExport', () => {
       ],
     });
     const result = parseGeminiExport(json);
-    // None of these match PREFERENCE_PATTERNS
     expect(result.facts.length).toBe(0);
   });
 
@@ -257,10 +221,6 @@ describe('parseGeminiExport', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// parsePlainText
-// ---------------------------------------------------------------------------
-
 describe('parsePlainText', () => {
   it('extracts blank-line-separated paragraphs as facts', () => {
     const text = 'I prefer TypeScript over JavaScript.\n\nI work in the morning.';
@@ -274,14 +234,12 @@ describe('parsePlainText', () => {
   it('skips lines shorter than 10 characters', () => {
     const text = 'ok\n\nThis is a long-enough fact to be included.';
     const result = parsePlainText(text);
-    // 'ok' < 10 chars → skipped
     expect(result.facts.some((f) => f.fact === 'ok')).toBe(false);
     expect(result.facts.length).toBe(1);
     expect(result.skipped).toBeGreaterThanOrEqual(1);
   });
 
   it('caps facts at MAX_FACTS (500)', () => {
-    // 501 paragraphs each at least 10 chars
     const paragraphs = repeat(501, (i) => `This is preference fact number ${i}`).join('\n\n');
     const result = parsePlainText(paragraphs as string);
     expect(result.facts.length).toBe(MAX_FACTS);
@@ -301,10 +259,6 @@ describe('parsePlainText', () => {
     expect(result.skipped).toBe(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// detectSourceFromFilename
-// ---------------------------------------------------------------------------
 
 describe('detectSourceFromFilename', () => {
   it('detects chatgpt from "chatgpt_export.json"', () => {

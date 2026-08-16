@@ -1,8 +1,3 @@
-/**
- * VoiceInputButton Component
- *
- * Simple mic button for voice recording. Single button, no mode selector dropdown.
- */
 
 import React from 'react';
 import { ChevronDown, Loader2, Mic, MicOff, Radio, Waves } from 'lucide-react';
@@ -10,27 +5,16 @@ import { cn } from '../../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 
 export interface VoiceInputButtonProps {
-  /** Whether the button is disabled */
   disabled?: boolean;
-  /** Whether voice input is supported */
   isSupported: boolean;
-  /** Whether currently recording */
   isRecording: boolean;
-  /** Whether currently transcribing */
   isTranscribing: boolean;
-  /** Whether in simple mode (no advanced selector) */
   isSimpleMode?: boolean;
-  /** Whether Whisper upload mode is selected */
   preferWhisperCloud?: boolean;
-  /** Available local Whisper runtimes */
   availableLocalWhisper?: string[];
-  /** Whether the selector popover is open */
   showModeSelector?: boolean;
-  /** Toggle the selector popover */
   onModeSelectorChange?: (open: boolean) => void;
-  /** Switch between live speech and Whisper */
   onPreferWhisperCloudChange?: (prefer: boolean) => void;
-  /** Toggle recording */
   onToggleRecording: () => void;
 }
 

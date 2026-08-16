@@ -1,17 +1,3 @@
-/**
- * @file security-monitoring-service.ts
- *
- * # Client injection contract (WEB-RLS-BYPASS mitigation)
- *
- * All methods are SERVICE-CONTEXT. `security_audit_logs` is a cross-tenant
- * admin table. Access is gated at the route level by admin authentication.
- * Service-context is correct and intentional throughout this file.
- *
- * No user-context injection is needed here because there are no user-scoped
- * operations in this service (all queries aggregate across all users for admin).
- *
- * Never add a private `getDatabase()` here. See lib/services/README.md.
- */
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -22,7 +8,6 @@ import type { SecurityEventType, SecurityEventSeverity } from '@/lib/security-au
 export interface SecurityEvent {
   id: string;
   user_id: string | null;
-  /** Historical rows may contain event names outside the current write taxonomy. */
   event_type: string;
   severity: SecurityEventSeverity;
   ip_address: string | null;
@@ -79,7 +64,6 @@ function toSecurityEvent(row: StoredSecurityAuditLogRow): SecurityEvent {
   };
 }
 
-// Default alert thresholds
 const DEFAULT_THRESHOLDS: Array<
   AlertThreshold & { name: string; alert_severity: 'warning' | 'critical' }
 > = [
@@ -128,11 +112,6 @@ const DEFAULT_THRESHOLDS: Array<
 ];
 
 export class SecurityMonitoringService {
-  /**
-   * Get recent security events.
-   * SERVICE-CONTEXT: security_audit_logs is a cross-tenant admin table.
-   * Access is gated at the route level by admin authentication.
-   */
   static async getRecentEvents(
     limit: number = 100,
     severity?: SecurityEventSeverity,
@@ -164,10 +143,6 @@ export class SecurityMonitoringService {
     }
   }
 
-  /**
-   * Get aggregated security metrics.
-   * SERVICE-CONTEXT: cross-tenant admin metrics; no user JWT involved.
-   */
   static async getMetrics(): Promise<SecurityMetrics> {
     try {
       const db = getNeonDb();
@@ -175,7 +150,6 @@ export class SecurityMonitoringService {
       const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      // Fetch events from last 7 days for all metrics
       const events = await db.query<
         Pick<
           StoredSecurityAuditLogRow,
@@ -190,13 +164,11 @@ export class SecurityMonitoringService {
 
       const allEvents = events;
 
-      // Filter for 24h and 7d
       const events24h = allEvents.filter(
         (e) => new Date(e.created_at) >= new Date(twentyFourHoursAgo),
       );
       const events7d = allEvents;
 
-      // Calculate metrics
       const bySeverity: Record<SecurityEventSeverity, number> = {
         low: 0,
         medium: 0,
@@ -221,15 +193,12 @@ export class SecurityMonitoringService {
 
       for (const event of events24h) {
         const severity = normalizeSecuritySeverity(event.severity);
-        // Count by severity
         bySeverity[severity]++;
 
-        // Count by event type
         if (event.event_type in byEventType) {
           byEventType[event.event_type as SecurityEventType]++;
         }
 
-        // Track unique IPs and users
         if (event.ip_address) {
           uniqueIps.add(event.ip_address);
         }
@@ -237,7 +206,6 @@ export class SecurityMonitoringService {
           uniqueUsers.add(event.user_id);
         }
 
-        // Count critical/error severity
         if (severity === 'critical') {
           criticalCount++;
         } else if (severity === 'high') {
@@ -261,10 +229,6 @@ export class SecurityMonitoringService {
     }
   }
 
-  /**
-   * Check alert thresholds and return triggered alerts.
-   * SERVICE-CONTEXT: cross-tenant admin operation; no user JWT involved.
-   */
   static async checkAlerts(): Promise<AlertStatus[]> {
     try {
       const db = getNeonDb();
@@ -333,10 +297,6 @@ export class SecurityMonitoringService {
     }
   }
 
-  /**
-   * Get top IP addresses by event count (for abuse detection).
-   * SERVICE-CONTEXT: cross-tenant admin operation; no user JWT involved.
-   */
   static async getTopIpAddresses(
     windowHours: number = 24,
     limit: number = 10,
@@ -351,7 +311,6 @@ export class SecurityMonitoringService {
         [windowStart],
       );
 
-      // Aggregate by IP
       const ipCounts = new Map<string, number>();
       for (const row of rows) {
         if (row.ip_address) {
@@ -359,7 +318,6 @@ export class SecurityMonitoringService {
         }
       }
 
-      // Sort and return top N
       return Array.from(ipCounts.entries())
         .map(([ip_address, event_count]) => ({ ip_address, event_count }))
         .sort((a, b) => b.event_count - a.event_count)
@@ -370,11 +328,6 @@ export class SecurityMonitoringService {
     }
   }
 
-  /**
-   * Get events by user (for investigating specific accounts).
-   * SERVICE-CONTEXT: admin investigation endpoint; no user JWT involved.
-   * Access is gated at the route level by admin authentication.
-   */
   static async getEventsByUser(userId: string, limit: number = 50): Promise<SecurityEvent[]> {
     try {
       const db = getNeonDb();
@@ -392,10 +345,6 @@ export class SecurityMonitoringService {
     }
   }
 
-  /**
-   * Get summary for dashboard display.
-   * SERVICE-CONTEXT: aggregates all the above admin-only methods.
-   */
   static async getDashboardSummary(): Promise<{
     metrics: SecurityMetrics;
     alerts: AlertStatus[];
@@ -417,10 +366,6 @@ export class SecurityMonitoringService {
     };
   }
 
-  /**
-   * Trigger cleanup of old logs (calls the database function).
-   * SERVICE-CONTEXT: maintenance operation; no user JWT involved.
-   */
   static async cleanupOldLogs(): Promise<number> {
     try {
       const db = getNeonDb();

@@ -22,18 +22,6 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
-/**
- * POST /api/code/sessions/[sessionId]/agent — run one Cloud Code agent turn.
- *
- * The difference from `../commands` is the whole point of the surface: that
- * route runs a command the USER typed; this one takes a GOAL and lets the model
- * drive the sandbox toward it under the approval boundary.
- *
- * `Idempotency-Key` is REQUIRED, exactly as on the managed chat path. An agent
- * turn makes multiple paid provider calls, so an unkeyed retry would open a
- * second billable turn against the same intent.
- */
-
 export const runtime = 'nodejs';
 
 const MAX_GOAL_LENGTH = 8000;
@@ -71,7 +59,6 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
     throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
   }
 
-  // Required before any provider work, so a retry cannot double-bill.
   let idempotencyKey: string;
   try {
     idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('idempotency-key'));
@@ -112,7 +99,6 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
       model,
       planTier,
       idempotencyKey,
-      // Client disconnect cancels the turn; the service settles usage either way.
       signal: request.signal,
     });
     return NextResponse.json(result);

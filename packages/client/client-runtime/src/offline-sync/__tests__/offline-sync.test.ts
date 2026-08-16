@@ -120,7 +120,6 @@ describe('createOfflineSyncManager', () => {
 
     manager.initialize();
 
-    // Should have fired multiple state snapshots during init (updateIsOnline, updateQueuedCount, notifyStateChange)
     expect(callback).toHaveBeenCalled();
     const lastCall = callback.mock.calls[callback.mock.calls.length - 1]?.[0];
     expect(lastCall?.state).toBe(SyncState.OFFLINE);
@@ -169,14 +168,10 @@ describe('createOfflineSyncManager', () => {
     });
     manager.initialize();
 
-    // Force the manager into SYNCING state by triggering and not advancing past debounce.
     await manager.triggerSync();
-    // Now simulate state already SYNCING.
     const internal = manager as unknown as { getState(): { state: SyncState } };
-    // We can't directly mutate state, so call triggerSync twice without advancing.
     await manager.triggerSync();
 
-    // Advance timers — sync should run once.
     await vi.advanceTimersByTimeAsync(150);
     expect(queue.syncOfflineQueue).toHaveBeenCalledTimes(1);
     expect(internal.getState().state).toBe(SyncState.ONLINE);
@@ -197,8 +192,8 @@ describe('createOfflineSyncManager', () => {
     manager.initialize();
 
     await manager.triggerSync();
-    await vi.advanceTimersByTimeAsync(60); // past debounce
-    await Promise.resolve(); // settle the rejected promise
+    await vi.advanceTimersByTimeAsync(60);
+    await Promise.resolve();
     await Promise.resolve();
 
     expect(manager.getState().state).toBe(SyncState.ERROR);

@@ -9,15 +9,12 @@ import { resolveRequestId } from './middleware/requestContext';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
-// Maximum message size in bytes (64KB default)
 const MAX_MESSAGE_SIZE = Number(process.env['WS_MAX_MESSAGE_SIZE'] ?? 65536);
 
-// Authentication timeout - close connection if not authenticated within this time
-const AUTH_TIMEOUT_MS = Number(process.env['WS_AUTH_TIMEOUT_MS'] ?? 30000); // 30 seconds default
+const AUTH_TIMEOUT_MS = Number(process.env['WS_AUTH_TIMEOUT_MS'] ?? 30000);
 
-// Rate limiting: max messages per connection within a sliding window
 const RATE_LIMIT_MAX_MESSAGES = Number(process.env['WS_RATE_LIMIT_MAX_MESSAGES'] ?? 100);
-const RATE_LIMIT_WINDOW_MS = Number(process.env['WS_RATE_LIMIT_WINDOW_MS'] ?? 60000); // 60 seconds default
+const RATE_LIMIT_WINDOW_MS = Number(process.env['WS_RATE_LIMIT_WINDOW_MS'] ?? 60000);
 
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
@@ -29,21 +26,15 @@ interface AuthenticatedWebSocket extends WebSocket {
 
 const clients = new Map<string, Set<AuthenticatedWebSocket>>();
 
-// Per-connection rate limiting tracker
 const rateLimitTracker = new Map<AuthenticatedWebSocket, { count: number; resetAt: number }>();
 
-// Pending commands queue for offline desktops (in-memory, limited to 100 per user/device)
 const pendingCommands = new Map<
   string,
   Array<{ commandId: string; type: string; payload: unknown; timestamp: number }>
 >();
 const MAX_PENDING_COMMANDS = 100;
-const PENDING_COMMAND_TTL = 5 * 60 * 1000; // 5 minutes
+const PENDING_COMMAND_TTL = 5 * 60 * 1000;
 
-/**
- * Send a command to a specific desktop device via WebSocket
- * Returns true if delivered, false if queued for later delivery
- */
 export function sendCommandToDesktop(
   userId: string,
   desktopId: string,
@@ -77,20 +68,17 @@ export function sendCommandToDesktop(
   }
 
   if (!delivered) {
-    // Queue command for later delivery
     const queueKey = `${userId}:${desktopId}`;
     if (!pendingCommands.has(queueKey)) {
       pendingCommands.set(queueKey, []);
     }
     const queue = pendingCommands.get(queueKey)!;
 
-    // Remove expired commands
     const now = Date.now();
     const validCommands = queue.filter((cmd) => now - cmd.timestamp < PENDING_COMMAND_TTL);
 
-    // Enforce max queue size
     if (validCommands.length >= MAX_PENDING_COMMANDS) {
-      validCommands.shift(); // Remove oldest
+      validCommands.shift();
     }
 
     validCommands.push({ commandId, type, payload, timestamp: now });
@@ -102,9 +90,6 @@ export function sendCommandToDesktop(
   return { delivered: true, queued: false };
 }
 
-/**
- * Flush pending commands to a newly connected desktop
- */
 function flushPendingCommands(ws: AuthenticatedWebSocket) {
   if (!ws.userId || !ws.deviceId) return;
 
@@ -145,14 +130,6 @@ const authMessageSchema = z.object({
   deviceId: z.string().optional(),
 });
 
-// SECURITY (H3, redteam-services 2026-05-04): the WS broadcast endpoints
-// previously accepted `payload: z.unknown()` which let a compromised peer
-// device send arbitrary commands to the user's other devices, bypassing
-// the desktop ownership/approval pipeline enforced over HTTPS at
-// services/api-gateway/src/routes/desktop.ts. We now require an explicit
-// allowlist of command types and a small payload schema for each. New
-// command types MUST be added here AND mirror the discriminated union in
-// the desktop's commandSchema (desktop.ts).
 const wsCommandPayloadSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('chat'),
@@ -173,9 +150,6 @@ const wsCommandPayloadSchema = z.discriminatedUnion('type', [
 
 const wsSyncPayloadSchema = z
   .object({
-    // sync events are descriptive — they carry small state deltas that the
-    // receiver applies to its local cache. We bound the size with a JSON
-    // serialization check at parse time.
     kind: z.string().min(1).max(64),
     data: z.record(z.string(), z.unknown()),
   })
@@ -204,7 +178,6 @@ type AuthMessage = z.infer<typeof authMessageSchema>;
 type NonAuthMessage = z.infer<typeof nonAuthMessageSchema>;
 
 export function setupWebSocket(wss: WebSocketServer) {
-  // Handle WebSocket server errors
   wss.on('error', (error) => {
     logger.error({ error }, 'WebSocketServer error');
   });
@@ -212,9 +185,6 @@ export function setupWebSocket(wss: WebSocketServer) {
   wss.on('connection', (ws: AuthenticatedWebSocket, request) => {
     ws.requestId = resolveRequestId(request.headers['x-request-id']);
 
-    // SECURITY: Validate Origin header to prevent cross-site WebSocket hijacking.
-    // Uses ALLOWED_ORIGINS (same env var as HTTP CORS) with sensible defaults
-    // so the check is never bypassed when the env var is unset.
     const origin = request.headers['origin'];
     const configuredOrigins = process.env['ALLOWED_ORIGINS'];
     const wsAllowedOrigins = configuredOrigins
@@ -244,10 +214,8 @@ export function setupWebSocket(wss: WebSocketServer) {
 
     ws.isAlive = true;
 
-    // Handle individual socket errors to prevent unhandled exceptions
     ws.on('error', (error) => {
       logger.error({ error: error.message, requestId: ws.requestId }, 'WebSocket client error');
-      // Clean up auth timeout if exists
       if (ws.authTimeout) {
         clearTimeout(ws.authTimeout);
         ws.authTimeout = undefined;
@@ -255,7 +223,6 @@ export function setupWebSocket(wss: WebSocketServer) {
       // The 'close' event will handle cleanup of client from the clients map
     });
 
-    // Set authentication timeout - close connection if not authenticated in time
     ws.authTimeout = setTimeout(() => {
       if (!ws.userId) {
         logger.warn(
@@ -282,16 +249,12 @@ export function setupWebSocket(wss: WebSocketServer) {
 
     ws.on('message', (message: RawData) => {
       try {
-        // Check message size before processing
-        // RawData is Buffer | ArrayBuffer | Buffer[]
         let messageSize: number;
         if (Buffer.isBuffer(message)) {
           messageSize = message.byteLength;
         } else if (Array.isArray(message)) {
-          // Buffer[] - sum up all buffer sizes
           messageSize = message.reduce((acc, buf) => acc + buf.byteLength, 0);
         } else {
-          // ArrayBuffer
           messageSize = message.byteLength;
         }
 
@@ -305,7 +268,6 @@ export function setupWebSocket(wss: WebSocketServer) {
           return;
         }
 
-        // Per-connection rate limiting (sliding window)
         const now = Date.now();
         let rateLimit = rateLimitTracker.get(ws);
         if (!rateLimit || now >= rateLimit.resetAt) {
@@ -355,12 +317,10 @@ export function setupWebSocket(wss: WebSocketServer) {
     });
 
     ws.on('close', () => {
-      // Clear auth timeout on disconnect
       if (ws.authTimeout) {
         clearTimeout(ws.authTimeout);
       }
 
-      // Clean up rate limit tracking to prevent memory leaks
       rateLimitTracker.delete(ws);
 
       if (ws.userId) {
@@ -388,7 +348,6 @@ export function setupWebSocket(wss: WebSocketServer) {
     });
   }, 30000);
 
-  // Periodic cleanup of expired pending commands to prevent memory leaks
   const pendingCleanup = setInterval(() => {
     const now = Date.now();
     for (const [key, queue] of pendingCommands) {
@@ -409,14 +368,12 @@ export function setupWebSocket(wss: WebSocketServer) {
 
 function parseMessage(message: RawData): GatewayMessage | null {
   try {
-    // RawData is Buffer | ArrayBuffer | Buffer[], convert to string
     let text: string;
     if (Buffer.isBuffer(message)) {
       text = message.toString('utf-8');
     } else if (Array.isArray(message)) {
       text = Buffer.concat(message).toString('utf-8');
     } else {
-      // ArrayBuffer
       text = Buffer.from(message).toString('utf-8');
     }
     const payload = JSON.parse(text);
@@ -456,7 +413,6 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
     const { userId } = parseResult.data;
     ws.userId = userId;
 
-    // SECURITY: Verify deviceId ownership before accepting it.
     if (typeof message.deviceId === 'string' && message.deviceId.length > 0) {
       const wsUserDb = getUserScopedClient({ userId, token: message.token });
       const { data: desktop, error: desktopError } = await wsUserDb
@@ -499,7 +455,6 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
       delete ws.deviceId;
     }
 
-    // Clear auth timeout on successful authentication
     if (ws.authTimeout) {
       clearTimeout(ws.authTimeout);
       ws.authTimeout = undefined;
@@ -520,7 +475,6 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
 
     logger.info({ userId, requestId: ws.requestId }, 'User authenticated via WebSocket');
 
-    // Flush any pending commands for this device
     flushPendingCommands(ws);
   } catch {
     ws.send(

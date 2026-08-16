@@ -1,7 +1,3 @@
-/**
- * Official connector logo sources used when a local Simple Icons glyph is unavailable.
- * These are rendered with safe image attributes and are gated by the app CSP's img-src.
- */
 
 export const CONNECTOR_LOGOS: Record<
   string,
@@ -12,7 +8,6 @@ export const CONNECTOR_LOGOS: Record<
     bgColor?: string;
   }
 > = {
-  // Productivity
   gmail: {
     url: 'https://www.gstatic.com/images/icons/material/system/1x/mail_outline_black_20dp.svg',
     bgColor: '#EA4335',
@@ -28,7 +23,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   slack: {
-    // Official Slack brand mark (SVG from Slack's CDN)
     url: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
     width: 32,
     height: 32,
@@ -43,15 +37,11 @@ export const CONNECTOR_LOGOS: Record<
     bgColor: '#0F9D58',
   },
   outlook: {
-    // Microsoft brand CDN — official Outlook icon. Special:FilePath (not the
-    // hashed /wikipedia/commons/x/xx/ path) so this keeps resolving when
-    // Commons renames/re-hashes the underlying file.
     url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Outlook%20%282018%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
   onedrive: {
-    // Microsoft brand CDN — official OneDrive icon
     url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20OneDrive%20%282019%E2%80%93present%29.svg',
     width: 32,
     height: 32,
@@ -67,9 +57,7 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Collaboration
   teams: {
-    // Microsoft brand CDN — official Teams icon
     url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Teams%20%282025%E2%80%93present%29.svg',
     width: 32,
     height: 32,
@@ -90,14 +78,12 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // CRM
   hubspot: {
     url: 'https://www.hubspot.com/hubfs/assets/hubspot.com/style-guide/brand-guidelines/logos/HubSpot-Inversed-Logo.svg',
     width: 32,
     height: 32,
   },
   salesforce: {
-    // Official Salesforce cloud mark (SVG via Wikipedia — official logo)
     url: 'https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg',
     width: 32,
     height: 32,
@@ -113,7 +99,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Marketing
   'google-analytics': {
     url: 'https://www.gstatic.com/images/branding/product/1x/googleg_120.png',
     width: 32,
@@ -125,7 +110,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Finance
   stripe: {
     url: 'https://www.stripe.com/favicon.ico',
     width: 32,
@@ -137,9 +121,7 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Social
   linkedin: {
-    // Official LinkedIn "in" mark (SVG)
     url: 'https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png',
     width: 32,
     height: 32,
@@ -155,9 +137,7 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // AI
   openai: {
-    // OpenAI official logo mark (SVG via Wikipedia)
     url: 'https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg',
     width: 32,
     height: 32,
@@ -168,14 +148,12 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Productivity (additional)
   airtable: {
     url: 'https://www.google.com/s2/favicons?domain=airtable.com&sz=64',
     width: 32,
     height: 32,
   },
   monday: {
-    // monday.com official mark (via Wikipedia SVG)
     url: 'https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg',
     width: 32,
     height: 32,
@@ -206,7 +184,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Developer (additional)
   vercel: {
     url: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64',
     width: 32,
@@ -243,7 +220,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Communication
   telegram: {
     url: 'https://www.google.com/s2/favicons?domain=telegram.org&sz=64',
     width: 32,
@@ -265,21 +241,17 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Cloud / Infra
   aws: {
-    // AWS official smile mark (SVG via Wikipedia)
     url: 'https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg',
     width: 32,
     height: 32,
   },
   gcp: {
-    // Google Cloud official mark (via Google's own CDN — covered by Simple Icons for gcp)
     url: 'https://www.gstatic.com/devrel-devsite/prod/v4a3800e32bb7ffae9f5e2f46d2ab96f0038f29dcb18e96d9ff7bb86b6b1d3c49/cloud/images/favicons/onecloud/super_cloud.png',
     width: 32,
     height: 32,
   },
   azure: {
-    // Microsoft Azure official mark (SVG via Wikipedia)
     url: 'https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg',
     width: 32,
     height: 32,
@@ -295,7 +267,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Data
   snowflake: {
     url: 'https://www.google.com/s2/favicons?domain=snowflake.com&sz=64',
     width: 32,
@@ -332,7 +303,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // CRM (additional)
   pipedrive: {
     url: 'https://www.google.com/s2/favicons?domain=pipedrive.com&sz=64',
     width: 32,
@@ -349,27 +319,22 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Design
   figma: {
     url: 'https://www.google.com/s2/favicons?domain=figma.com&sz=64',
     width: 32,
     height: 32,
   },
   canva: {
-    // No current Canva mark on Commons (file was removed); favicon service
-    // resolves Canva's own site icon instead of falling back to a bare tile.
     url: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
     width: 32,
     height: 32,
   },
   adobe: {
-    // Adobe official mark (SVG via Wikipedia)
     url: 'https://upload.wikimedia.org/wikipedia/commons/8/8d/Adobe_Corporate_Logo.png',
     width: 48,
     height: 32,
   },
 
-  // Finance (additional)
   quickbooks: {
     url: 'https://www.google.com/s2/favicons?domain=quickbooks.intuit.com&sz=64',
     width: 32,
@@ -396,7 +361,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Storage
   dropbox: {
     url: 'https://www.google.com/s2/favicons?domain=dropbox.com&sz=64',
     width: 32,
@@ -408,13 +372,11 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   sharepoint: {
-    // Microsoft SharePoint official mark (SVG via Wikipedia)
     url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20SharePoint%20%282019%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
 
-  // Social (additional)
   instagram: {
     url: 'https://www.google.com/s2/favicons?domain=instagram.com&sz=64',
     width: 32,
@@ -431,7 +393,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Marketing (additional)
   posthog: {
     url: 'https://www.google.com/s2/favicons?domain=posthog.com&sz=64',
     width: 32,
@@ -448,7 +409,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // AI / ML (additional)
   huggingface: {
     url: 'https://www.google.com/s2/favicons?domain=huggingface.co&sz=64',
     width: 32,
@@ -470,7 +430,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Healthcare
   'epic-fhir': {
     url: 'https://www.google.com/s2/favicons?domain=epic.com&sz=64',
     width: 32,
@@ -482,7 +441,6 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
-  // Exclusive
   'local-filesystem': {
     url: '/icons/filesystem.svg',
     width: 32,
@@ -510,33 +468,11 @@ export const CONNECTOR_LOGOS: Record<
   },
 };
 
-/**
- * Get logo URL for connector
- * Returns URL or fallback gradient bg color
- */
 export function getConnectorLogo(connectorId: string) {
   return CONNECTOR_LOGOS[connectorId] || null;
 }
 
-/**
- * Check if connector has official logo
- */
 export function hasOfficialLogo(connectorId: string): boolean {
   return !!CONNECTOR_LOGOS[connectorId];
 }
 
-/*
- * AUDIT-FIX CRIT-001 — `CONNECTOR_TOOLS` / `getConnectorTools()` deleted.
- *
- * That map listed five to ten friendly tool names for all 89 catalog entries
- * ("Read emails", "Send email", "Search inbox", …) while exactly one entry —
- * github — had tools that exist in a runtime path. Every consumer already had
- * to special-case github before rendering it, in three different ways, which is
- * how a fabricated list survives: nobody trusts it, everybody keeps it.
- *
- * The sanctioned static tool list is `supportedActions` in
- * `@/lib/connectors/catalog`, which is empty for every connector without a
- * shipped adapter. Tools a connected remote MCP server actually offers are
- * discovered at runtime by `catalogToConnectorToolDefs`
- * (lib/user-connector-tools.ts) and no static table can mirror them.
- */

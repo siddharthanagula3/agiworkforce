@@ -1,21 +1,3 @@
-/**
- * GOV-6 — reclaim abandoned managed sandboxes.
- *
- * Conversation-scoped sandboxes are PAUSED, not killed. The
- * `{tenantId,userId,conversationId} -> sandboxId` mapping that is the only way
- * to find one again lives in Redis under a 24h TTL, while `killE2BSession()` is
- * called solely on explicit conversation delete — and `app/api/cron/` had no
- * reclaim job (only reset-credits, purge-temporary-chats, reconcile-credits and
- * run-schedules). Once the key expired, the paused sandbox was unreachable but
- * still existed, counting against both the E2B team cap and the owner's plan
- * sandbox budget forever: a slow, permanent leak of the exact resource the
- * per-user cap exists to protect.
- *
- * This job is the reaper. A sandbox is reclaimed when it is older than the
- * retention window, or when its owning Redis mapping no longer points at it
- * (deleted conversation, expired key, replaced sandbox). Anything reclaimed
- * while still holding an open billable interval is settled first (GOV-5).
- */
 import 'server-only';
 
 import { logger } from '@/lib/logger';
@@ -28,28 +10,16 @@ import {
   type E2BSessionScope,
 } from './session-store';
 
-/**
- * Longest a sandbox may live before it is reclaimed regardless of mapping
- * state. Matches the session-store key TTL: past it, no mapping can exist, so
- * nothing can ever resume the sandbox again.
- */
 export const SANDBOX_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-/** Bound the work one cron invocation will do. */
 const MAX_RECLAIMED_PER_RUN = 200;
 
 export interface SandboxReclaimReport {
-  /** Sandboxes inspected across all pages of the list API. */
   inspected: number;
-  /** Sandboxes killed by this run. */
   reclaimed: number;
-  /** Sandboxes left alone because a live mapping still points at them. */
   retained: number;
-  /** Sandboxes that could not be killed; they are retried next run. */
   failed: number;
-  /** Cents settled for intervals that were still open at reclaim time. */
   meteredCents: number;
-  /** True when the executor is unconfigured and nothing was inspected. */
   skipped: boolean;
 }
 
@@ -81,14 +51,6 @@ function scopeFromMetadata(metadata: Record<string, string>): E2BSessionScope | 
   return null;
 }
 
-/**
- * Kill every sandbox that nothing can reach any more.
- *
- * Untagged sandboxes (no `userId`/`conversationId` metadata) are ephemeral
- * bare-API ones, which E2B kills on their own short timeout; they are only
- * reclaimed once past `maxAgeMs`, so a live one is never pulled out from under
- * a request in flight.
- */
 export async function reclaimAbandonedE2BSandboxes(
   options: { maxAgeMs?: number; now?: Date } = {},
 ): Promise<SandboxReclaimReport> {
@@ -142,13 +104,9 @@ export async function reclaimAbandonedE2BSandboxes(
 
       let orphaned = false;
       if (scope) {
-        // A mapping that no longer names THIS sandbox means nothing can resume
-        // it: the conversation was deleted, the key expired, or a later turn
-        // already replaced it.
         const session = await getE2BSession(scope);
         orphaned = session?.sandboxId !== info.sandboxId;
       } else {
-        // Untagged (ephemeral) sandboxes are only reclaimed once expired.
         orphaned = false;
       }
 
@@ -157,7 +115,6 @@ export async function reclaimAbandonedE2BSandboxes(
         continue;
       }
 
-      // GOV-5: settle any interval still open on the mapping before releasing.
       if (scope) {
         const session = await getE2BSession(scope);
         if (session?.sandboxId === info.sandboxId && typeof session.activeSinceMs === 'number') {

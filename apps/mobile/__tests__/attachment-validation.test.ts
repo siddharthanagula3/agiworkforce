@@ -1,8 +1,3 @@
-/**
- * Attach-time validation: unsupported/oversized files are rejected up front with
- * a specific reason (QA 1.3.53 / 2.3.45), images + parseable docs are accepted,
- * and pasted-text cards bypass file checks.
- */
 const mockIsParseable = jest.fn();
 jest.mock('@/services/docParser', () => ({
   isParseableDocument: (...args: unknown[]) => mockIsParseable(...args),

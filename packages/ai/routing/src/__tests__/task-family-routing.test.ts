@@ -1,15 +1,3 @@
-/**
- * Unit tests for the task-family eligibility floor and Pareto ordering stage.
- *
- * The load-bearing assertion in this file is the permutation property: the
- * stage may reorder the admitted candidate set and may do nothing else. It is
- * checked both on the live curated policy and as a randomised property over
- * synthetic inputs, because a filter that looked like a reorder is the exact
- * bug that would silently strand a request.
- *
- * All inputs are fixed literals or seeded pseudo-random values. No wall-clock
- * value is read anywhere.
- */
 import { describe, expect, it } from 'vitest';
 
 import { modelRegistry } from '@agiworkforce/model-registry';
@@ -63,7 +51,6 @@ function taskInput(
   };
 }
 
-/** Deterministic per-model cost stand-in — never reads the live price table. */
 function fakeCents(modelKey: string): number {
   let hash = 0;
   for (let index = 0; index < modelKey.length; index += 1) {
@@ -121,9 +108,6 @@ describe('curated policy', () => {
   });
 
   it('seeds no benchmark floor, because benchmark coverage is partial', () => {
-    // Fail-closed benchmark floors exclude every model with no recorded score,
-    // and most registry models have none. Authoring one today would silently
-    // empty the floor-meeting head for most families.
     for (const family of TASK_FAMILIES) {
       expect(taskFamilyPolicy(family)!.qualityFloor.minimumBenchmarkScores).toBeUndefined();
     }
@@ -165,7 +149,6 @@ describe('orderPreferredSlotsForTaskFamily · the permutation invariant', () => 
   });
 
   it('holds as a property over randomised synthetic candidate sets', () => {
-    // Seeded LCG — deterministic across runs, no wall-clock, no Math.random.
     let seed = 20260805;
     const next = () => {
       seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -187,8 +170,6 @@ describe('orderPreferredSlotsForTaskFamily · the permutation invariant', () => 
         premium: candidates.filter(() => next() < 0.5),
       };
       const ordering = orderPreferredSlotsForTaskFamily({
-        // Band-only floor, so synthetic model keys can clear it and the
-        // cost-sorted head is genuinely exercised rather than always empty.
         family: 'web_grounded_answer',
         taskType: 'general',
         preferredSlots: candidates,
@@ -198,16 +179,13 @@ describe('orderPreferredSlotsForTaskFamily · the permutation invariant', () => 
         estimateCents: () => next() * 10,
       });
       expect(ordering).not.toBeNull();
-      // Same multiset, same length: nothing added, nothing dropped, no dupes.
       expect([...ordering!.slots].sort()).toEqual([...candidates].sort());
-      // The floor-meeting head is a prefix of the result.
       expect(ordering!.slots.slice(0, ordering!.aboveFloor.length)).toEqual([
         ...ordering!.aboveFloor,
       ]);
       sawNonEmptyHead ||= ordering!.aboveFloor.length > 0;
       sawRejection ||= ordering!.rejections.length > 0;
     }
-    // Guard against a vacuous property run: both partitions must be exercised.
     expect(sawNonEmptyHead).toBe(true);
     expect(sawRejection).toBe(true);
   });
@@ -223,8 +201,6 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
   });
 
   it('breaks cost ties by the curator authored order', () => {
-    // `web_grounded_answer` floors only on the slot band, so synthetic model
-    // keys with no registry capability record still clear it.
     const ordering = orderPreferredSlotsForTaskFamily({
       family: 'web_grounded_answer',
       taskType: 'general',
@@ -238,8 +214,6 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
   });
 
   it('keeps the authored order and says so when nothing meets the floor', () => {
-    // `vision` floors at the balanced band; the multimodal economy band offers
-    // only `workhorse_general`, whose lowest band is economy.
     const ordering = orderPreferredSlotsForTaskFamily(
       taskInput('vision', 'multimodal', 'economy', fakeCents),
     )!;
@@ -263,16 +237,13 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
     const ordering = orderPreferredSlotsForTaskFamily({
       family: 'simple_chat',
       taskType: 'simple_chat',
-      // The workhorse route carries no benchmark block in the registry.
       preferredSlots: ['workhorse_general'],
       preferredSlotsByProfile: { economy: ['workhorse_general'] },
       profileOrder: PROFILE_ORDER,
       slots: policy.slots,
       estimateCents: fakeCents,
     })!;
-    // Sanity: with the seeded (benchmark-free) floor it passes …
     expect(ordering.aboveFloor).toEqual(['workhorse_general']);
-    // … and the registry genuinely has no score to check against.
     const benchmarks = (
       modelRegistry as unknown as { benchmarks: Record<string, Record<string, number>> }
     ).benchmarks;
@@ -297,11 +268,6 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
     const ordering = orderPreferredSlotsForTaskFamily(
       taskInput('code_execution', 'coding', 'premium', fakeCents),
     )!;
-    // The escalation and balanced routes share a curator band for coding, so their
-    // relative order is decided by the injected cost function — fakeCents
-    // orders sonnet first here, while the resolver integration test (real
-    // estimated cents) pins the escalation route first. Both satisfy the band-ascent invariant;
-    // the premium route must always be last.
     expect(ordering.escalationLadder).toEqual([
       CODING_BALANCED_MODEL_ID,
       CODING_ESCALATION_MODEL_ID,
@@ -321,8 +287,6 @@ describe('orderPreferredSlotsForTaskFamily · floor and cost', () => {
           const ordering = orderPreferredSlotsForTaskFamily(input);
           if (!ordering) continue;
 
-          // A model's ladder position is its LOWEST authored band among the
-          // admitted slots that resolve to it; the ladder must never step down.
           const bandIndexOf = (modelKey: string): number =>
             Math.min(
               ...input.preferredSlots
@@ -490,8 +454,6 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
       subscriptionTier: 'max',
       ...managed,
     });
-    // Authored order picks the flagship; the floor admits all three premium
-    // coding slots and cost ranking picks the cheapest of them.
     expect(off).toMatchObject({ status: 'selected', modelKey: CODING_PREMIUM_MODEL_ID });
     expect(on).toMatchObject({
       status: 'selected',
@@ -532,7 +494,6 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
       expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_PREMIUM_MODEL_ID });
       process.env[TASK_FAMILY_STAGE_ENV] = '1';
       expect(resolveAutoRoute(request)).toMatchObject({ modelKey: CODING_ESCALATION_MODEL_ID });
-      // An explicit `false` still wins over the env.
       expect(resolveAutoRoute({ ...request, enableTaskFamilyStage: false })).toMatchObject({
         modelKey: CODING_PREMIUM_MODEL_ID,
       });
@@ -554,7 +515,6 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
     expect(on.status).toBe('selected');
     const ladder =
       on.status === 'selected' ? on.taskFamilyDecision!.ordering!.escalationLadder : [];
-    // Authored best-first, so the ladder is cheapest/least-capable first.
     expect(ladder).toEqual([
       CODING_ESCALATION_MODEL_ID,
       CODING_BALANCED_MODEL_ID,

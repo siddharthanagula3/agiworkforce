@@ -1,37 +1,10 @@
-/**
- * Safe Browser API Utilities
- *
- * Provides safe wrappers for browser APIs that may not be available
- * in all environments (SSR, private browsing, older browsers).
- *
- * Created: Jan 23rd 2026
- */
 
-/**
- * Check if we're in a browser environment
- */
 export const isBrowser = typeof window !== 'undefined';
 
-/**
- * Check if we're in a Node.js environment
- */
 export const isNode =
   typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 
-// ============================================================================
-// Safe localStorage Wrapper
-// ============================================================================
-
-/**
- * Safe localStorage wrapper that handles:
- * - SSR/Node environments (no window)
- * - Private browsing mode (QuotaExceededError)
- * - localStorage disabled by browser settings
- */
 export const safeLocalStorage = {
-  /**
-   * Get an item from localStorage safely
-   */
   getItem(key: string): string | null {
     if (!isBrowser) return null;
 
@@ -43,9 +16,6 @@ export const safeLocalStorage = {
     }
   },
 
-  /**
-   * Set an item in localStorage safely
-   */
   setItem(key: string, value: string): boolean {
     if (!isBrowser) return false;
 
@@ -58,9 +28,6 @@ export const safeLocalStorage = {
     }
   },
 
-  /**
-   * Remove an item from localStorage safely
-   */
   removeItem(key: string): boolean {
     if (!isBrowser) return false;
 
@@ -73,9 +40,6 @@ export const safeLocalStorage = {
     }
   },
 
-  /**
-   * Clear all localStorage safely
-   */
   clear(): boolean {
     if (!isBrowser) return false;
 
@@ -88,9 +52,6 @@ export const safeLocalStorage = {
     }
   },
 
-  /**
-   * Check if localStorage is available and working
-   */
   isAvailable(): boolean {
     if (!isBrowser) return false;
 
@@ -104,10 +65,6 @@ export const safeLocalStorage = {
     }
   },
 };
-
-// ============================================================================
-// Safe sessionStorage Wrapper
-// ============================================================================
 
 export const safeSessionStorage = {
   getItem(key: string): string | null {
@@ -146,20 +103,12 @@ export const safeSessionStorage = {
   },
 };
 
-// ============================================================================
-// Safe Clipboard Wrapper
-// ============================================================================
-
-/**
- * Legacy clipboard fallback using execCommand
- */
 function legacyCopyToClipboard(text: string): boolean {
   if (!isBrowser) return false;
 
   const textArea = document.createElement('textarea');
   textArea.value = text;
 
-  // Avoid scrolling to bottom
   textArea.style.top = '0';
   textArea.style.left = '0';
   textArea.style.position = 'fixed';
@@ -180,9 +129,6 @@ function legacyCopyToClipboard(text: string): boolean {
   return success;
 }
 
-/**
- * Safe clipboard wrapper with fallback for older browsers
- */
 export const safeClipboard = {
   /**
    * Copy text to clipboard with fallback
@@ -191,7 +137,6 @@ export const safeClipboard = {
   async writeText(text: string): Promise<boolean> {
     if (!isBrowser) return false;
 
-    // Try modern Clipboard API first
     if (navigator?.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(text);
@@ -201,7 +146,6 @@ export const safeClipboard = {
       }
     }
 
-    // Fallback to legacy method
     return legacyCopyToClipboard(text);
   },
 
@@ -224,41 +168,22 @@ export const safeClipboard = {
     return null;
   },
 
-  /**
-   * Check if clipboard API is available
-   */
   isAvailable(): boolean {
     return isBrowser && !!navigator?.clipboard?.writeText;
   },
 };
 
-// ============================================================================
-// Safe Platform Detection
-// ============================================================================
-
-/**
- * Platform detection utilities that avoid deprecated APIs
- */
 export const safePlatform = {
-  /**
-   * Check if running on macOS
-   * Uses modern userAgentData API with fallback
-   */
   isMac(): boolean {
     if (!isBrowser) return false;
 
-    // Modern API (Chrome 90+, Edge 90+)
     if (navigator.userAgentData?.platform) {
       return navigator.userAgentData.platform === 'macOS';
     }
 
-    // Fallback to userAgent (works everywhere)
     return navigator.userAgent?.includes('Mac') ?? false;
   },
 
-  /**
-   * Check if running on Windows
-   */
   isWindows(): boolean {
     if (!isBrowser) return false;
 
@@ -269,9 +194,6 @@ export const safePlatform = {
     return navigator.userAgent?.includes('Win') ?? false;
   },
 
-  /**
-   * Check if running on Linux
-   */
   isLinux(): boolean {
     if (!isBrowser) return false;
 
@@ -282,9 +204,6 @@ export const safePlatform = {
     return navigator.userAgent?.includes('Linux') ?? false;
   },
 
-  /**
-   * Check if running on iOS
-   */
   isIOS(): boolean {
     if (!isBrowser) return false;
 
@@ -294,86 +213,51 @@ export const safePlatform = {
     );
   },
 
-  /**
-   * Check if running on Android
-   */
   isAndroid(): boolean {
     if (!isBrowser) return false;
 
     return navigator.userAgent?.includes('Android') ?? false;
   },
 
-  /**
-   * Check if device is mobile
-   */
   isMobile(): boolean {
     return this.isIOS() || this.isAndroid();
   },
 
-  /**
-   * Get the modifier key for the platform (Cmd on Mac, Ctrl elsewhere)
-   */
   getModifierKey(): 'Meta' | 'Control' {
     return this.isMac() ? 'Meta' : 'Control';
   },
 
-  /**
-   * Get the modifier key display string
-   */
   getModifierKeyDisplay(): '⌘' | 'Ctrl' {
     return this.isMac() ? '⌘' : 'Ctrl';
   },
 };
 
-// ============================================================================
-// Safe Window/Document Access
-// ============================================================================
-
-/**
- * Safely access window properties
- */
 export function safeWindow<K extends keyof Window>(key: K): Window[K] | null {
   if (!isBrowser) return null;
   return window[key] ?? null;
 }
 
-/**
- * Safely access document properties
- */
 export function safeDocument<K extends keyof Document>(key: K): Document[K] | null {
   if (!isBrowser || typeof document === 'undefined') return null;
   return document[key] ?? null;
 }
 
-/**
- * Safely reload the page
- */
 export function safeReload(): void {
   if (isBrowser) {
     window.location.reload();
   }
 }
 
-/**
- * Safely navigate to a URL
- */
 export function safeNavigate(url: string): void {
   if (isBrowser) {
     window.location.href = url;
   }
 }
 
-/**
- * Get current URL origin safely
- */
 export function safeOrigin(): string {
   if (!isBrowser) return '';
   return window.location.origin;
 }
-
-// ============================================================================
-// Type augmentation for navigator.userAgentData
-// ============================================================================
 
 declare global {
   interface Navigator {

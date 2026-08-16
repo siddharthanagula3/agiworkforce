@@ -18,14 +18,6 @@ export default async function LoginPage({
     ? `/signup?surface=desktop&redirectTo=${encodeURIComponent(redirectTo)}`
     : '/signup';
 
-  // Clerk's SignIn card creates accounts too: an OAuth first touch with an
-  // unknown identity is transferred into a sign-up without ever visiting
-  // /signup, so `signUpFallbackRedirectUrl={redirectTo}` handed those accounts
-  // to the app with the terms never on screen and nothing recorded. Sending the
-  // sign-up completion to /signup/complete puts that path through the same
-  // clickwrap and the same durable write as /signup. Force, not fallback:
-  // `signUpFallbackRedirectUrl` loses to a `?redirect_url=` that Clerk itself
-  // preserves when the user moves between its SignIn and SignUp cards.
   const signUpCompleteUrl = `/signup/complete?redirectTo=${encodeURIComponent(redirectTo)}`;
   const loginCompleteUrl = `/login/complete?redirectTo=${encodeURIComponent(redirectTo)}${
     isDesktopSurface ? '&surface=desktop' : ''

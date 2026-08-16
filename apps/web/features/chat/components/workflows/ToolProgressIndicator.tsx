@@ -1,7 +1,3 @@
-/**
- * Tool Progress Indicator
- * Shows which tools are currently executing and their progress
- */
 
 import React from 'react';
 import {

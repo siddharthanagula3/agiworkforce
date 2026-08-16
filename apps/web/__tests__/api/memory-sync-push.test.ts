@@ -1,13 +1,3 @@
-/**
- * POST /api/memory/sync — delta-push semantics + back-compat trigger.
- *
- * Guards:
- *  - push compare-and-swaps by server_version (client clocks never participate),
- *  - user_id is forced server-side (RLS WITH CHECK backstop) — never from the body,
- *  - is_deleted carries the tombstone so deletes propagate,
- *  - a no-`memories` body still returns the legacy { synced, conflicts } shape,
- *  - GET without `since` returns the legacy status shape (back-compat for mobile).
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const queryMock = vi.fn();
@@ -69,7 +59,6 @@ describe('POST /api/memory/sync — delta push', () => {
     expect(sql).toContain('existing.server_version = incoming.base_version');
     expect(sql).toContain('updated_at = now()');
     expect(sql).not.toContain('excluded.updated_at');
-    // user_id param is the SESSION user, never from the body.
     const params = call![1] as unknown[];
     expect(params[0]).toBe('u1');
   });
@@ -80,7 +69,6 @@ describe('POST /api/memory/sync — delta push', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ synced: 3, conflicts: 0 });
-    // It must NOT have run an insert.
     const insertCall = queryMock.mock.calls.find((c) =>
       String(c[0]).includes('insert into user_memories'),
     );
@@ -122,7 +110,6 @@ describe('GET /api/memory/sync — back-compat status', () => {
     expect(body.cursor).toBe('12');
     expect(body.hasMore).toBe(false);
     expect(body.memories).toHaveLength(1);
-    // The pull query must NOT filter is_deleted (tombstones must propagate).
     const call = queryMock.mock.calls.find((c) => String(c[0]).includes('from user_memories'));
     expect(String(call![0])).not.toContain('is_deleted = false');
   });

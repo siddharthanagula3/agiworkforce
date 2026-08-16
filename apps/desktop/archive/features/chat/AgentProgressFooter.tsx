@@ -1,10 +1,3 @@
-/**
- * AgentProgressFooter
- *
- * A persistent 40px bar that appears above the chat input during agent execution.
- * Displays task name, step counter, progress bar, live elapsed timer, and an
- * expand button that opens the ExecutionSidecar — similar to Manus AI's progress footer.
- */
 import { useEffect, useRef, useState } from 'react';
 import { ChevronUp, Loader2, Timer } from 'lucide-react';
 
@@ -15,10 +8,6 @@ interface AgentProgressFooterProps {
   onExpandSidecar?: () => void;
 }
 
-/**
- * Formats elapsed milliseconds into a compact human-readable string.
- * Examples: 5000 → "5s", 130000 → "2m 10s"
- */
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   if (totalSeconds < 60) {
@@ -35,8 +24,6 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
   const [elapsedMs, setElapsedMs] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Start/stop a 1-second interval whenever the active goal changes.
-  // Copy ref to local var in cleanup per CLAUDE.md timer rules.
   useEffect(() => {
     if (!activeGoal || activeGoal.status === 'completed' || activeGoal.status === 'failed') {
       const intervalId = intervalRef.current;
@@ -47,7 +34,6 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
       return;
     }
 
-    // Sync elapsed immediately on mount / goal change
     setElapsedMs(Date.now() - activeGoal.startTime);
 
     const id = setInterval(() => {
@@ -65,14 +51,12 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
     };
   }, [activeGoal]);
 
-  // Only render while a goal is actively running
   if (!activeGoal || activeGoal.status === 'completed' || activeGoal.status === 'failed') {
     return null;
   }
 
   const { description, completedSteps, totalSteps, progressPercent } = activeGoal;
 
-  // Derive progress width: prefer progressPercent, fall back to ratio from step counts
   const progressWidth =
     progressPercent > 0
       ? progressPercent

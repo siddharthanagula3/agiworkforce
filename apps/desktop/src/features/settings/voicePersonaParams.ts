@@ -1,11 +1,3 @@
-/**
- * Voice persona → Web Speech parameters.
- *
- * Single source of truth for how each voice persona sounds, shared by the
- * settings Preview button (VoicePersonaSelector) and real response TTS (useTTS)
- * so the persisted persona selection actually shapes spoken responses instead of
- * being written to localStorage and ignored.
- */
 export const VOICE_PERSONA_STORAGE_KEY = 'agiworkforce-voice-persona';
 
 export interface VoicePersonaParams {
@@ -14,7 +6,6 @@ export interface VoicePersonaParams {
   volume: number;
 }
 
-/** Rate/pitch/volume for a persona id. Unknown/absent → the 'professional' default. */
 export function getVoicePersonaParams(personaId: string | null | undefined): VoicePersonaParams {
   switch (personaId) {
     case 'friendly':
@@ -33,7 +24,6 @@ export function getVoicePersonaParams(personaId: string | null | undefined): Voi
   }
 }
 
-/** Read the persisted persona params (SSR/no-localStorage safe). */
 export function getPersistedVoicePersonaParams(): VoicePersonaParams {
   const personaId =
     typeof localStorage !== 'undefined' ? localStorage.getItem(VOICE_PERSONA_STORAGE_KEY) : null;

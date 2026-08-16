@@ -16,7 +16,6 @@
  * @packageDocumentation
  */
 
-// OpenAI Responses API payload policy
 export {
   resolveOpenAIResponsesPayloadPolicy,
   applyOpenAIResponsesPayloadPolicy,
@@ -29,7 +28,6 @@ export type {
   OpenAIResponsesEndpointClass,
 } from './openai-responses-payload-policy';
 
-// OpenAI reasoning effort resolution
 export {
   normalizeOpenAIReasoningEffort,
   resolveOpenAISupportedReasoningEfforts,
@@ -38,7 +36,6 @@ export {
 } from './openai-reasoning-effort';
 export type { OpenAIReasoningEffort, OpenAIApiReasoningEffort } from './openai-reasoning-effort';
 
-// System prompt cache boundary
 export {
   SYSTEM_PROMPT_CACHE_BOUNDARY,
   stripSystemPromptCacheBoundary,
@@ -52,7 +49,6 @@ export {
   normalizePromptCapabilityIds,
 } from './lib/prompt-cache-stability';
 
-// Provider request capability resolution (pure, no plugin manifests)
 export { resolveProviderRequestCapabilities } from './provider-attribution';
 export type {
   ProviderRequestCapabilities,
@@ -62,7 +58,6 @@ export type {
   ProviderRequestTransport,
 } from './provider-attribution';
 
-// Anthropic payload policy (cache_control + service_tier)
 export {
   resolveAnthropicPayloadPolicy,
   applyAnthropicPayloadPolicyToParams,
@@ -75,7 +70,6 @@ export type {
   AnthropicServiceTier,
 } from './anthropic-payload-policy';
 
-// OpenAI Chat Completions API compat defaults
 export {
   resolveOpenAICompletionsCompatDefaults,
   detectOpenAICompletionsCompat,
@@ -86,7 +80,6 @@ export type {
   DetectedOpenAICompletionsCompat,
 } from './openai-completions-compat';
 
-// OpenAI strict-mode tool schema normalization
 export {
   normalizeStrictOpenAIJsonSchema,
   normalizeOpenAIStrictToolParameters,
@@ -96,14 +89,11 @@ export {
 } from './openai-tool-schema';
 export type { OpenAIStrictToolSchemaDiagnostic } from './openai-tool-schema';
 
-// Generic tool parameter schema normalization (Gemini, OpenAI, Anthropic, xAI)
 export { normalizeToolParameterSchema } from './tool-parameter-schema';
 export type { ToolParameterSchemaOptions } from './tool-parameter-schema';
 
-// Gemini schema cleanup (exposed for direct use by Google adapter when added)
 export { cleanSchemaForGemini, GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS } from './lib/clean-for-gemini';
 
-// Anthropic-family tool payload compat (OpenAI-shape tools through Anthropic API)
 export {
   createAnthropicToolPayloadCompatibilityWrapper,
   createOpenAIAnthropicToolPayloadCompatibilityWrapper,
@@ -115,16 +105,12 @@ export type {
   GenericStreamFn,
 } from './anthropic-tool-payload-compat';
 
-// OpenAI Chat Completions wire compat (public /v1/chat/completions contract):
-// OpenAI-wire request -> canonical ChatRequest, canonical StreamChunks ->
-// OpenAI-wire chunks/response. Consumed by api-gateway and the web v1 route.
 export {
   openAIWireRequestToChatRequest,
   OpenAIWireAssembler,
   assembleOpenAIWireResponse,
 } from './openai-wire-compat';
 
-// Product/catalog model ID -> upstream provider wire model ID.
 export { toProviderApiModelId } from './provider-model-id';
 export type {
   OpenAIWireChatRequest,

@@ -1,11 +1,3 @@
-/**
- * Webhook payload → normalized Guardian event.
- *
- * All payload fields are attacker-influenced (branch names, titles, comment
- * bodies), so parsing is schema-first: unknown or malformed payloads normalize
- * to { kind: 'ignored' } rather than throwing, and free-text fields are
- * length-bounded before they travel further.
- */
 import { z } from 'zod';
 
 const RepoSchema = z.object({
@@ -121,10 +113,6 @@ export type NormalizedEvent =
   | { kind: 'installation'; installationId: number; action: string }
   | { kind: 'ignored'; reason: string };
 
-/**
- * Normalize a verified webhook (event name + parsed JSON body).
- * Never throws: malformed payloads become { kind: 'ignored' }.
- */
 export function normalizeWebhookEvent(eventName: string | null, payload: unknown): NormalizedEvent {
   switch (eventName) {
     case 'push': {
@@ -217,10 +205,6 @@ function ignored(reason: string): NormalizedEvent {
   return { kind: 'ignored', reason };
 }
 
-/**
- * Stale-run guard: a run for headSha may publish only while headSha is still
- * the current head of its PR/branch.
- */
 export function shouldPublish(runHeadSha: string, currentHeadSha: string): boolean {
   return runHeadSha === currentHeadSha;
 }

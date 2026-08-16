@@ -1,24 +1,8 @@
-/**
- * @file Provider Health Check Service
- *
- * Pings each LLM provider's API endpoint to determine availability.
- * Results are cached for 60 seconds to avoid excessive upstream requests.
- *
- * Exposes:
- *   - `checkAllProviders()` — returns health status for all known providers
- *   - `getProviderHealth(provider)` — returns cached status for a single provider
- *   - `getFallbackRecommendation(provider)` — suggests an alternative when a provider is down
- *   - `providerHealthRouter` — Express router mounted at /api/providers
- */
 
 import { Router, type Request, type Response } from 'express';
 import { ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
-
-// ---------------------------------------------------------------------------
-// Types (mirrors ProviderHealthStatus from @agiworkforce/types/model-catalog)
-// ---------------------------------------------------------------------------
 
 interface ProviderHealthStatus {
   provider: string;
@@ -28,16 +12,10 @@ interface ProviderHealthStatus {
   healthCheckedAt: number;
 }
 
-// ---------------------------------------------------------------------------
-// Provider registry — endpoint URLs used for lightweight HEAD/GET pings
-// ---------------------------------------------------------------------------
-
 interface ProviderEntry {
   id: string;
   label: string;
-  /** URL to ping (must return 2xx/4xx to be considered "reachable"). */
   pingUrl: string;
-  /** Model family for fallback mapping. */
   family: string;
 }
 
@@ -78,39 +56,14 @@ const DEFAULT_PROVIDERS: ProviderEntry[] = [
 
 const SUPPORTED_PROVIDER_IDS = new Set(DEFAULT_PROVIDERS.map((provider) => provider.id));
 
-/**
- * Resolve the provider list. If PROVIDER_HEALTH_URLS is set (JSON array of
- * ProviderEntry objects), it overrides the hardcoded defaults, enabling
- * operational URL changes without code deploys.
- */
-/**
- * FIX (audit 2026-05-20, §8): the PROVIDER_HEALTH_URLS env override was
- * parsed silently — ops had no signal when an operator typo'd a URL or
- * tried to ping a non-allowlisted host. Now: validate every override URL
- * against a known-good host allowlist and emit a structured warning on
- * each rejection. Operator can spot the misconfig in logs immediately.
- */
-/**
- * Canonical-list entries a health ping must never target: MuleRouter was
- * dropped as a gateway on 2026-07-27, and `localhost` / `127.0.0.1` are the
- * canonical list's local-dev carve-out for adapter base URLs — an override
- * pointed at this container's own loopback reports nothing about a provider
- * and is the shape an SSRF probe would take.
- */
 const NON_PINGABLE_HOSTS: ReadonlySet<string> = new Set([
   'api.mulerouter.ai',
   'localhost',
   '127.0.0.1',
 ]);
 
-/**
- * Derived from `ALLOWED_MANAGED_PROVIDER_HOSTS` rather than retyped, so a
- * provider added to (or retired from) the canonical list cannot leave this
- * override gate silently out of step with the rest of the platform.
- */
 const PROVIDER_HEALTH_ALLOWED_HOSTS: ReadonlySet<string> = new Set<string>([
   ...[...ALLOWED_MANAGED_PROVIDER_HOSTS].filter((host) => !NON_PINGABLE_HOSTS.has(host)),
-  // Operator-controlled internal endpoints.
   'api.agiworkforce.com',
   'staging-api.agiworkforce.com',
 ]);
@@ -148,7 +101,6 @@ function resolveProviders(): ProviderEntry[] {
   try {
     const parsed = JSON.parse(envOverride) as unknown;
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Validate each entry has the required fields + URL allowlist match.
       const valid = (parsed as ProviderEntry[]).filter(
         (p) =>
           typeof p.id === 'string' &&
@@ -175,12 +127,6 @@ function resolveProviders(): ProviderEntry[] {
 
 const PROVIDERS: ProviderEntry[] = resolveProviders();
 
-/**
- * Fallback mapping: when a provider is down, which provider can serve
- * a similar model family.
- *
- * Order matters — first available alternative wins.
- */
 const FALLBACK_MAP: Record<string, string[]> = {
   openai: ['anthropic', 'google'],
   anthropic: ['openai', 'google', 'deepseek'],
@@ -190,26 +136,13 @@ const FALLBACK_MAP: Record<string, string[]> = {
   perplexity: ['google', 'openai'],
 };
 
-// ---------------------------------------------------------------------------
-// Cache
-// ---------------------------------------------------------------------------
-
-const CACHE_TTL_MS = 60_000; // 60 seconds
+const CACHE_TTL_MS = 60_000;
 
 let cachedResults: ProviderHealthStatus[] | null = null;
 let cacheTimestamp = 0;
 
-// ---------------------------------------------------------------------------
-// Health check logic
-// ---------------------------------------------------------------------------
-
 const PING_TIMEOUT_MS = 8_000;
 
-/**
- * Ping a single provider endpoint. We consider the provider "available"
- * if we get any HTTP response (even 401/403 — that means the API is up,
- * just not authenticated). Only network errors or timeouts mean "down".
- */
 async function pingProvider(entry: ProviderEntry): Promise<ProviderHealthStatus> {
   const start = Date.now();
   try {
@@ -224,8 +157,6 @@ async function pingProvider(entry: ProviderEntry): Promise<ProviderHealthStatus>
 
     clearTimeout(timeout);
 
-    // 2xx-4xx = API is reachable (4xx just means auth required)
-    // 5xx = server-side issue
     const available = response.status < 500;
 
     return {
@@ -250,10 +181,6 @@ async function pingProvider(entry: ProviderEntry): Promise<ProviderHealthStatus>
   }
 }
 
-/**
- * Check health of all known providers.
- * Returns cached results if still fresh (< 60s).
- */
 export async function checkAllProviders(): Promise<ProviderHealthStatus[]> {
   const now = Date.now();
 
@@ -276,19 +203,11 @@ export async function checkAllProviders(): Promise<ProviderHealthStatus[]> {
   return results;
 }
 
-/**
- * Get cached health status for a single provider.
- * Returns null if no cached data exists (call `checkAllProviders()` first).
- */
 export function getProviderHealth(providerId: string): ProviderHealthStatus | null {
   if (!cachedResults) return null;
   return cachedResults.find((r) => r.provider === providerId) ?? null;
 }
 
-/**
- * When a provider is down, suggest the best available alternative.
- * Returns null if no alternative is available or the provider is healthy.
- */
 export async function getFallbackRecommendation(
   providerId: string,
 ): Promise<{ recommended: string; label: string } | null> {
@@ -296,7 +215,7 @@ export async function getFallbackRecommendation(
 
   const providerStatus = results.find((r) => r.provider === providerId);
   if (!providerStatus || providerStatus.available) {
-    return null; // Provider is up — no fallback needed
+    return null;
   }
 
   const alternatives = FALLBACK_MAP[providerId];
@@ -316,20 +235,8 @@ export async function getFallbackRecommendation(
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Express Router
-// ---------------------------------------------------------------------------
-
 const router = Router();
 
-/**
- * GET /api/providers/health
- *
- * Returns health status for all known providers.
- * Cached for 60 seconds.
- *
- * Optional query: ?provider=openai — returns single provider + fallback recommendation.
- */
 router.get('/health', createRateLimiter('health'), async (_req: Request, res: Response) => {
   const providerId =
     typeof _req.query['provider'] === 'string' ? _req.query['provider'] : undefined;
@@ -339,7 +246,6 @@ router.get('/health', createRateLimiter('health'), async (_req: Request, res: Re
   if (providerId) {
     const status = results.find((r) => r.provider === providerId);
     if (!status) {
-      // SECURITY: Do not reflect user input in error responses
       res.status(404).json({ error: 'Unknown provider' });
       return;
     }

@@ -37,10 +37,6 @@ describe('provider health policy', () => {
   });
 
   it('accepts a PROVIDER_HEALTH_URLS host the canonical provider list carries', async () => {
-    // Routing the DeepSeek ping through OpenRouter is a legitimate ops move.
-    // While this allowlist was retyped by hand it lacked OpenRouter (and
-    // DashScope, Moonshot, Zhipu, Cloudflare AI Gateway), so the override was
-    // dropped on the floor and the gateway silently kept pinging the default.
     const pingUrl = 'https://openrouter.ai/api/v1/models';
     const fetchMock = vi.fn().mockResolvedValue({ status: 401 });
     vi.stubGlobal('fetch', fetchMock);
@@ -57,9 +53,6 @@ describe('provider health policy', () => {
   });
 
   it('rejects a PROVIDER_HEALTH_URLS override aimed at loopback', async () => {
-    // `localhost` rides along on the canonical provider list as a local-dev
-    // carve-out for adapter base URLs. A health ping must leave the box, so it
-    // has to stay off this allowlist and fall back to the defaults.
     const fetchMock = vi.fn().mockResolvedValue({ status: 401 });
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv(

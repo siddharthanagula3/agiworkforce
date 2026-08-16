@@ -1,12 +1,3 @@
-/**
- * LoadingSpinner Component Tests
- *
- * Tests for the LoadingSpinner UI component including:
- * - Rendering with different sizes
- * - Accessibility (role, aria-label, sr-only text)
- * - Custom styling via className
- * - Animation classes
- */
 
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -95,13 +86,12 @@ describe('LoadingSpinner Component', () => {
       render(<LoadingSpinner className="text-blue-500" />);
       const spinner = screen.getByRole('status');
       expect(spinner).toHaveClass('text-blue-500');
-      expect(spinner).toHaveClass('animate-spin'); // Base class still present
+      expect(spinner).toHaveClass('animate-spin');
     });
 
     it('should allow overriding default styles', () => {
       render(<LoadingSpinner className="h-10 w-10" size="sm" />);
       const spinner = screen.getByRole('status');
-      // The custom class should be applied (though h-4 from size might also be present)
       expect(spinner).toHaveClass('h-10');
       expect(spinner).toHaveClass('w-10');
     });
@@ -123,10 +113,8 @@ describe('LoadingSpinner Component', () => {
       render(<LoadingSpinner />);
       const spinner = screen.getByRole('status');
 
-      // Should have role="status" which announces to screen readers
       expect(spinner).toHaveAttribute('role', 'status');
 
-      // Should have aria-label for accessible name
       expect(spinner).toHaveAttribute('aria-label', 'Loading');
     });
   });
@@ -159,7 +147,7 @@ describe('LoadingSpinner Component', () => {
       render(<LoadingSpinner className="text-primary" />);
       const spinner = screen.getByRole('status');
       expect(spinner).toHaveClass('text-primary');
-      expect(spinner).toHaveClass('border-current'); // Will inherit from text color
+      expect(spinner).toHaveClass('border-current');
     });
 
     it('should work in a card or container', () => {
@@ -179,7 +167,7 @@ describe('LoadingSpinner Component', () => {
     it('should handle undefined size gracefully (use default)', () => {
       render(<LoadingSpinner size={undefined} />);
       const spinner = screen.getByRole('status');
-      expect(spinner).toHaveClass('h-6'); // Default md size
+      expect(spinner).toHaveClass('h-6');
     });
 
     it('should handle undefined className gracefully', () => {

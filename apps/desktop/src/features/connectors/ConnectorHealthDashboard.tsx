@@ -1,9 +1,3 @@
-/**
- * ConnectorHealthDashboard Component
- *
- * Shows all currently connected MCP servers from mcpStore with live status,
- * tool counts, last ping times, and reconnect/disconnect actions.
- */
 
 import { useCallback, useEffect } from 'react';
 import {
@@ -29,10 +23,6 @@ import { Button } from '@/ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
 import { cn } from '../../lib/utils';
 import type { McpServerHealth } from '../../types/mcp';
-
-// ---------------------------------------------------------------------------
-// Status helpers
-// ---------------------------------------------------------------------------
 
 type HealthStatus = McpServerHealth['status'] | 'disconnected';
 
@@ -93,10 +83,6 @@ function formatLastPing(lastCheck: string | null | undefined): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 interface ConnectorHealthDashboardProps {
   className?: string;
 }
@@ -108,7 +94,6 @@ export function ConnectorHealthDashboard({ className }: ConnectorHealthDashboard
   const refreshServers = useMcpStore((s) => s.refreshServers);
   const refreshHealth = useMcpStore((s) => s.refreshHealth);
 
-  // Auto-refresh on mount
   useEffect(() => {
     void refreshServers();
     void refreshHealth();
@@ -146,7 +131,6 @@ export function ConnectorHealthDashboard({ className }: ConnectorHealthDashboard
     [refreshServers, refreshHealth],
   );
 
-  // Build a lookup map from server name → health entry
   const healthByName = new Map<string, McpServerHealth>();
   for (const h of health) {
     healthByName.set(h.server_name, h);
@@ -276,10 +260,6 @@ export function ConnectorHealthDashboard({ className }: ConnectorHealthDashboard
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 interface DashboardHeaderProps {
   serverCount: number;

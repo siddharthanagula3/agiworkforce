@@ -50,11 +50,6 @@ export class ScheduleConflictError extends Error {
   }
 }
 
-/**
- * GOV-7 / GOV-8: the caller already owns as many scheduled tasks as their plan
- * allows (or their plan allows none). Distinct from ScheduleValidationError so
- * the route can answer 403 with an upgrade path rather than a generic 400.
- */
 export class ScheduleLimitError extends Error {
   constructor(
     message: string,
@@ -405,9 +400,6 @@ function validateScheduleInput(
       timing = { scheduleType, cronExpression, timezone };
     }
 
-    // GOV-9: the sweep that runs due tasks fires once a day, so a finer cadence
-    // is an availability the platform does not have. Enforced here, at the only
-    // write boundary create and update share, and never on the execution path.
     if (enforceCadence) assertDeliverableCadence(timing, now);
 
     const isEnabled = input.isActive !== false;
@@ -441,13 +433,6 @@ function validateScheduleInput(
   });
 }
 
-/**
- * Number of scheduled tasks `userId` owns across every workspace.
- *
- * Callers must provide a service-context adapter: an active-workspace RLS
- * adapter would undercount Personal or other-Team rows and let workspace
- * switching multiply an account-level plan ceiling.
- */
 export async function countSchedules(db: DatabaseAdapter, userId: string): Promise<number> {
   const [row] = await db.query<{ count: string }>(
     `select count(*)::text as count from scheduled_tasks where user_id = $1`,
@@ -457,26 +442,12 @@ export async function countSchedules(db: DatabaseAdapter, userId: string): Promi
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/**
- * GOV-8: enforce the per-plan scheduled-task ceiling before another unattended
- * managed turn can be armed.
- *
- * `POST /api/schedules` previously had NO per-user count limit and no plan
- * gate; its only governor was `withRateLimit(request, 'chat-conversation')` at
- * 60/min, IP-keyed because no identifier was passed. Every firing runs through
- * `reserveManagedUsageRequest`, so an unbounded schedule list is a durable,
- * unattended path to consume provider spend.
- *
- * Fail-closed: an unknown tier resolves to 0 through
- * `getPlanMaxScheduledTasks` and is refused.
- */
 export async function assertScheduleQuota(
   db: DatabaseAdapter,
   userId: string,
   planTier: string | null | undefined,
 ): Promise<void> {
   const limit = getPlanMaxScheduledTasks(planTier);
-  // null = the tier declares itself uncapped (negotiated Enterprise contract).
   if (limit === null) return;
 
   const label = getBillingPlanPricing(planTier).label;
@@ -542,14 +513,6 @@ async function getScheduleForUpdate(
   return mapScheduleTask(row);
 }
 
-/**
- * Persist one scheduled task.
- *
- * GOV-8: the per-plan ceiling is enforced by `assertScheduleQuota`, which the
- * sole caller (`POST /api/schedules`) runs immediately before this — that route
- * is where the authenticated subscription tier is resolved. Any NEW caller must
- * run the same gate first; this function does not re-derive the plan.
- */
 export async function createSchedule(
   db: DatabaseAdapter,
   userId: string,
@@ -642,9 +605,6 @@ export async function updateSchedule(
     const definition = validateScheduleInput(
       { ...inputFromTask(current), ...patch } as ScheduleInput,
       validationNow,
-      // Compare the normalized timing below. A PUT client may send a complete
-      // representation, so key presence alone cannot distinguish an actual
-      // cadence change from an unrelated edit to a legacy row.
       { enforceCadence: false },
     );
     const timingChanged =
@@ -997,9 +957,6 @@ export async function finalizeScheduleRun(
   const durationMs = Math.max(0, outcome.completedAt.getTime() - startedAt.getTime());
 
   return db.transaction(async (tx) => {
-    // Every lifecycle mutation locks task before run. Besides avoiding a
-    // task/run deadlock with update/delete/manual-run paths, this ensures a
-    // user edit made after claim is not overwritten by the stale claim copy.
     const currentTask = await getScheduleForUpdate(tx, claim.task.userId, claim.task.id);
     const [runRow] = await tx.query<RunRow>(
       `update scheduled_task_runs
@@ -1096,17 +1053,6 @@ function errorMessage(error: unknown): string {
   return boundedError(error instanceof Error ? error.message : String(error)) ?? 'Unknown error';
 }
 
-/**
- * Push notification for a finished run.
- *
- * Called AFTER `finalizeScheduleRun` has committed, deliberately: a push issued
- * inside that transaction would hold the connection across a network call, and
- * a rollback would leave the user notified about work that was never recorded.
- *
- * Never throws — `notifyScheduleCompleted` already swallows its own failures,
- * and this guard covers an import-time or programming error too. The run
- * outcome is already durable; a notification problem must not change it.
- */
 async function announceScheduleRun(
   claim: ClaimedScheduleRun,
   status: ScheduleRunStatus,
@@ -1229,9 +1175,6 @@ export async function processDueScheduleRuns(options: {
   const limit = clampInteger(options.limit, 1, MAX_BATCH_SIZE);
   const concurrency = clampInteger(options.concurrency, 1, 10);
 
-  // A previous serverless invocation can disappear after claiming. Expired
-  // leases are terminalized before new work so the task can advance without
-  // replaying an external provider side effect whose outcome is unknown.
   const expired = await findExpiredClaims(db, limit);
   await Promise.all(
     expired.map((claim) => {
@@ -1263,12 +1206,6 @@ export async function processDueScheduleRuns(options: {
           }),
         );
       } catch (error) {
-        // processClaimedScheduleRun finalizes its own failures, so reaching here
-        // means finalization itself threw — an unparseable stored timing, or the
-        // database rejecting the write. Without this guard that single row
-        // rejects Promise.all(workers) and every other user's due task in the
-        // batch silently goes unrun. The claim keeps its lease and the next
-        // sweep terminalizes it through findExpiredClaims.
         logger.error(
           {
             error: error instanceof Error ? error.message : String(error),

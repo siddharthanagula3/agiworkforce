@@ -1,10 +1,5 @@
-/**
- * Onboarding API — typed wrappers for onboarding and first-run experience commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface OnboardingStatus {
   completed: boolean;
@@ -28,8 +23,6 @@ export interface DemoResult {
   duration: number;
   [key: string]: unknown;
 }
-
-// ---- Commands ----
 
 export async function getOnboardingStatus(): Promise<OnboardingStatus> {
   return command<OnboardingStatus>('get_onboarding_status');

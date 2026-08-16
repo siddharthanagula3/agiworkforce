@@ -1,6 +1,3 @@
-/**
- * Streaming fallback for /plugins/[id] while the registry read is in flight.
- */
 export default function PluginDetailLoading() {
   return (
     <div data-design="agi">

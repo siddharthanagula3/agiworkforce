@@ -10,21 +10,6 @@ export type BillingPlanTier =
   | 'enterprise';
 export type BillingInterval = 'monthly' | 'yearly';
 
-/**
- * Plans that can be purchased without sales-assisted provisioning.
- *
- * Team joined this set once organization ownership, licensed seats, and member
- * lifecycle became real (founder decision 2026-08-04). It is billed PER SEAT:
- * `BILLING_PLAN_PRICING.team.perSeat` is true and every checkout/upgrade call
- * for Team MUST carry an explicit seat quantity. Enterprise stays sales-assisted
- * because its price is negotiated, not published.
- *
- * This is a SET, not an ordering. Team is an organization plan bought by the
- * seat, so it has no position on the individual upgrade ladder — use
- * `SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER` for anything that means "the next plan
- * up". Ranking Team against Pro/Max here would tell an individual their next
- * step is a per-seat org plan, or tell a Team admin that Max is a downgrade.
- */
 export const SELF_SERVE_PAID_PLAN_TIERS = [
   'basic',
   'pro',
@@ -34,14 +19,6 @@ export const SELF_SERVE_PAID_PLAN_TIERS = [
 ] as const satisfies readonly BillingPlanTier[];
 export type SelfServePaidPlanTier = (typeof SELF_SERVE_PAID_PLAN_TIERS)[number];
 
-/**
- * The ordered ladder of INDIVIDUAL self-serve plans, lowest to highest.
- *
- * Deliberately excludes Team: Team is per-seat and organization-scoped, so
- * "the next plan up from Pro" is Max, not Team, and "buy more seats" is not a
- * rung on this ladder. Keep every index/rank comparison on this array and keep
- * `SELF_SERVE_PAID_PLAN_TIERS` as the purchasable SET.
- */
 export const SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER = [
   'basic',
   'pro',
@@ -58,7 +35,6 @@ export function isSelfServePaidPlanTier(
   );
 }
 
-/** Whether `value` has a rank on the individual upgrade ladder (Team does not). */
 export function isSelfServeIndividualPlanTier(
   value: string | null | undefined,
 ): value is SelfServeIndividualPlanTier {
@@ -68,24 +44,6 @@ export function isSelfServeIndividualPlanTier(
   );
 }
 
-/**
- * Whether a one-click INDIVIDUAL upgrade still exists for this tier — i.e.
- * whether a generic "Upgrade" affordance should be offered at all.
- *
- * False for `max_15x` (top of the individual ladder, nothing above it to buy),
- * for `enterprise` (negotiated, not purchasable), and for `team`. Team is now
- * self-serve, but its only "more" is MORE SEATS, which the generic upgrade
- * affordance cannot express — it opens the individual plan dialog, which has no
- * seat control and would silently re-bill an org at one seat. Seat count is
- * changed from organization billing, so answering `true` here would hand a Team
- * admin a control that does the wrong thing.
- *
- * Derived from `getNextUpgradeTier` so the affordance and the concrete target
- * can never disagree.
- *
- * Shared rather than inlined per surface so web, desktop and mobile cannot
- * drift on who is shown an upgrade prompt.
- */
 export function hasSelfServeUpgradePath(value: string | null | undefined): boolean {
   return getNextUpgradeTier(value) !== null;
 }
@@ -93,88 +51,26 @@ export function hasSelfServeUpgradePath(value: string | null | undefined): boole
 export interface BillingPlanPricing {
   id: BillingPlanTier;
   label: string;
-  /**
-   * Published USD list price, or ABSENT when the plan has no published price.
-   *
-   * Absent is not zero. Enterprise is negotiated per contract, and the `0` that
-   * used to sit here was a placeholder indistinguishable from a genuinely free
-   * plan: price formatters in this repo map 0 to "Free", and
-   * `getPlanPriceCents('enterprise')` handed callers 0 cents. Contract-priced
-   * plans now carry no amount at all and set `contractPriced`, so a price
-   * cannot be printed by accident; use `isContractPricedPlan` /
-   * `getPlanPriceUsd() === null` to render the contract state instead.
-   *
-   * NOT YET CLOSED, and deliberately recorded here rather than claimed fixed:
-   * `yearlyPriceUsd: 0` on `basic`, `max` and `max_15x` still means "this plan
-   * sells no annual subscription", which is the same overloaded-zero modeling
-   * this field's absence was introduced to end. It is currently masked at every
-   * render path by a `> 0` test — `annualAvailable` in
-   * `apps/web/features/billing/lib/plan-display.ts`, the interval each
-   * UpgradeConfirmDialog caller picks, `PLAN_INTERVALS` in
-   * `apps/web/lib/server/localized-pricing-service.ts` (yearly only for `pro`
-   * and `team`), and the hand-written `yearly: undefined` in
-   * `apps/web/lib/pricing.ts` — so no surface prints "$0/yr" today. Dropping the
-   * key cannot be done here alone: `apps/web/features/chat/components/dialogs/
-   * UpgradePlanDialog.tsx:82` drops a plan card outright when either amount is
-   * null, so making these absent would silently remove Basic/Max/Max 15x from
-   * the in-chat upgrade dialog. Fix that call site first.
-   */
   monthlyPriceUsd?: number;
   yearlyPriceUsd?: number;
-  /** India-specific monthly price in INR, when it differs from a straight USD conversion. */
   monthlyPriceInr?: number;
-  /**
-   * True when the published price is PER SEAT rather than per account. Every
-   * price-rendering surface must say "/seat" and every checkout must send a
-   * quantity; a bare `monthlyPriceUsd` on a per-seat plan would otherwise read
-   * as the whole org's bill.
-   */
   perSeat?: boolean;
-  /**
-   * True when the amount is set by a signed contract rather than published.
-   * Mutually exclusive with `monthlyPriceUsd`/`yearlyPriceUsd`, which is
-   * enforced by `packages/contracts/types/src/__tests__/billing-catalog.test.ts`.
-   */
   contractPriced?: true;
 }
 
-/** Whether `plan` is billed per seat (quantity-aware checkout is mandatory). */
 export function isPerSeatBillingPlan(plan: string | null | undefined): boolean {
   return getBillingPlanPricing(plan).perSeat === true;
 }
 
-/**
- * Seat-quantity bounds for per-seat checkout.
- *
- * The floor is 2 (founder decision, 2026-08-08): Team prices the organization
- * layer — central billing, seat management, member lifecycle — over an
- * allowance identical to Pro's, so a single-seat Team was $5/mo for company
- * scaffolding one person cannot use. One person belongs on Pro. This also
- * matches the comparables, which both require more than one seat.
- *
- * A team that shrinks to one person therefore cannot reduce to a single seat;
- * it moves to Pro instead. Team only became self-serve on 2026-08-04, so the
- * population this strands is small, but it is not nil.
- *
- * The ceiling is Stripe's documented maximum quantity for a subscription line
- * item — an API bound, NOT a product claim about team size, so an unvalidated
- * client integer cannot reach Stripe.
- */
 export const MIN_PURCHASABLE_SEATS = 2;
 export const MAX_PURCHASABLE_SEATS = 999_999;
 
-/** Clamp/validate a requested seat count; returns null when it is not a usable quantity. */
 export function normalizePurchasableSeats(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isInteger(value)) return null;
   if (value < MIN_PURCHASABLE_SEATS || value > MAX_PURCHASABLE_SEATS) return null;
   return value;
 }
 
-// `satisfies` rather than a type annotation: each entry keeps its own literal
-// shape, so `BILLING_PLAN_PRICING.pro.monthlyPriceUsd` stays a plain `number`
-// while `BILLING_PLAN_PRICING.enterprise.monthlyPriceUsd` is a compile error and
-// indexing by a runtime tier yields `number | undefined`. That is what stops a
-// contract-priced plan from silently rendering as "$0" / "Free".
 export const BILLING_PLAN_PRICING = {
   'local-only': {
     id: 'local-only',
@@ -225,24 +121,6 @@ export const BILLING_PLAN_PRICING = {
   team: {
     id: 'team',
     label: 'Team',
-    // PER SEAT. $25/seat/mo and $240/seat/yr (founder decision 2026-08-05,
-    // Decision #22, superseding the 2026-08-04 Pro-pinned $20): a Team seat
-    // carries exactly Pro's managed-usage allowance
-    // (apps/web/lib/server/managed-usage-policy.ts keeps the `team` budget
-    // byte-identical to `pro`) — the $5-over-Pro premium prices the
-    // organization layer (central billing, seat management, member lifecycle),
-    // not extra allowance. Yearly USD is now wired end-to-end; live checkout
-    // still needs the founder to create the $240/seat/yr Stripe Price behind
-    // STRIPE_PRICE_TEAM_YEARLY_USD (absent env → yearly fails closed). Team INR
-    // (monthly and yearly) is founder-undecided; ₹1,999 remains the configured
-    // monthly amount and there is no INR yearly Price.
-    //
-    // monthlyPriceUsd MUST equal the unit_amount of the Stripe Price behind
-    // STRIPE_PRICE_TEAM_MONTHLY_USD (and the INR Price behind
-    // STRIPE_PRICE_TEAM_MONTHLY_INR); yearlyPriceUsd MUST equal the
-    // STRIPE_PRICE_TEAM_YEARLY_USD Price. getPriceSelectionForCurrency compares
-    // each and refuses checkout on a mismatch, so a drift fails closed rather
-    // than charging an amount the customer did not see.
     monthlyPriceUsd: 25,
     yearlyPriceUsd: 240,
     monthlyPriceInr: 1999,
@@ -251,27 +129,12 @@ export const BILLING_PLAN_PRICING = {
   enterprise: {
     id: 'enterprise',
     label: 'Enterprise',
-    // No published amount. Enterprise is priced per signed contract, so there is
-    // deliberately no monthlyPriceUsd/yearlyPriceUsd to read.
     contractPriced: true,
   },
 } satisfies Record<BillingPlanTier, BillingPlanPricing>;
 
-/** Product surfaces that render plan-selection / upgrade / comparison lists. */
 export type BillingSurface = 'web' | 'desktop' | 'mobile';
 
-/**
- * Surfaces on which each plan tier is offered as a SELECTABLE / suggested
- * upgrade target in plan-selection, upgrade, and comparison lists.
- *
- * DISPLAY-ONLY. This does NOT affect pricing math, tier resolution, price-id
- * mapping, or an existing subscriber's ability to see their own current plan
- * in billing — it only governs whether a tier appears as a choosable option
- * on a given surface.
- *
- * Basic is selectable on every customer app surface. Managed developer
- * surfaces are gated separately by `developer_surfaces` capability.
- */
 export const PLAN_SURFACE_VISIBILITY: Record<BillingPlanTier, readonly BillingSurface[]> = {
   'local-only': ['web', 'desktop', 'mobile'],
   byok: ['web', 'desktop', 'mobile'],
@@ -284,12 +147,6 @@ export const PLAN_SURFACE_VISIBILITY: Record<BillingPlanTier, readonly BillingSu
   enterprise: ['web', 'desktop', 'mobile'],
 };
 
-/**
- * Whether `plan` may be shown as a selectable/upgrade option on `surface`.
- * Unknown values normalize to `free` (visible everywhere). Use this at every
- * plan-LIST render site; do not use it for tier resolution or current-plan
- * display (an existing subscriber must always see their own plan).
- */
 export function isPlanSelectableOnSurface(
   plan: string | null | undefined,
   surface: BillingSurface,
@@ -302,13 +159,6 @@ export function isBillingPlanTier(value: string | null | undefined): value is Bi
   return value in BILLING_PLAN_PRICING;
 }
 
-/**
- * Server-enforced product capabilities. Keep client comparison tables and API
- * gates on this contract instead of copying tier-order checks into each route.
- * Explicit sets are intentional: Team does not automatically inherit the
- * individual Max 15x media allowance, and Enterprise can receive negotiated
- * capabilities without pretending its price is a numeric tier rank.
- */
 export type BillingPlanCapability =
   | 'managed_chat'
   | 'chat_tools'
@@ -345,7 +195,6 @@ export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
   enterprise_controls: ['enterprise'],
 });
 
-/** Fail-closed capability check for privileged/server boundaries. */
 export function canUseBillingPlanCapability(
   plan: string | null | undefined,
   capability: BillingPlanCapability,
@@ -367,93 +216,19 @@ const MINUTE_MS = 60_000;
  */
 export const MAX_MANAGED_SANDBOXES_PER_USER = 5;
 
-/**
- * Scheduled runs one `/api/cron/run-schedules` invocation attempts, platform-wide.
- *
- * The sweep drains in waves of ten claims (the concurrency ceiling of
- * `processDueScheduleRuns`) until this many rows are attempted or the serverless
- * budget runs out, so this number times the deployed cron cadence is the total
- * daily throughput every tier's `maxScheduledTasks` shares. It lives here rather
- * than in the route because the quotas below are what it bounds, and separating
- * the two is what let them drift an order of magnitude apart.
- *
- * A sweep whose waves each burn their full per-task timeout stops early; the
- * unclaimed rows stay due and are picked up FIFO by the next sweep. Turning this
- * ceiling into a floor needs either more invocations per day (a paid cron
- * cadence) or invocation chaining — until then, size quotas against it, not above.
- */
 export const PLATFORM_SCHEDULE_RUNS_PER_SWEEP = 50;
 
 export interface BillingPlanProductLimits {
   projects: BillingPlanLimit;
   customMcpServers: BillingPlanLimit;
-  /**
-   * Total bytes of project knowledge files a user may hold across all
-   * projects. Enforced on upload in
-   * `apps/web/app/api/projects/[id]/knowledge-files/route.ts`, which sums
-   * `byte_count` across every project the user owns before admitting the file.
-   * (`project-context-service.ts` bounds the per-project file COUNT it reads
-   * into context — a different dimension, and not this ceiling.)
-   *
-   * Only a per-file byte cap and a 20-files-per-project count cap existed, so
-   * a user could hold unbounded total storage by spreading large files across
-   * projects — the cost dimension nobody was bounding. `local-only` / `byok`
-   * store nothing on the platform and stay uncapped.
-   */
   knowledgeStorageBytes: BillingPlanLimit;
-  /**
-   * GOV-3: maximum managed turns a single user may have in flight at once
-   * (concurrent chats / parallel streams). Enforced by the managed-turn
-   * concurrency slots in `apps/web/lib/rate-limit.ts`.
-   *
-   * `local-only` / `byok` run against the user's own runtime or key, so the
-   * platform has no compute cost to bound and they stay uncapped here; every
-   * managed tier is bounded because each in-flight turn is provider spend.
-   */
   maxConcurrentTurns: BillingPlanLimit;
-  /**
-   * GOV-4: maximum live (running OR paused) managed sandboxes a user may hold
-   * across all conversations. Enforced in `apps/web/lib/e2b/runtime.ts`.
-   * Managed compute is never available to `local-only` / `byok`, so those tiers
-   * are 0 (deny) rather than unlimited.
-   */
   maxSandboxes: BillingPlanLimit;
-  /**
-   * GOV-4: managed sandbox lifetime before the provider auto-pauses (scoped) or
-   * kills (ephemeral) it. Always a concrete duration — an "unlimited" sandbox
-   * lifetime is unbillable — and 0 means the tier gets no managed sandbox.
-   */
   sandboxTtlMs: number;
-  /**
-   * GOV-7: maximum connector (MCP) tool definitions admitted into one managed
-   * turn's tool set. Bounds both prompt size and the tool-loop fan-out.
-   */
   maxConnectorTools: BillingPlanLimit;
-  /**
-   * GOV-7 / GOV-8: maximum scheduled tasks a user may own. Every firing runs an
-   * unattended managed turn, so this is a spend ceiling, not a UI nicety.
-   *
-   * These values are ALSO bounded by what the platform can actually execute, and
-   * that is the tighter constraint. Due schedules run only when
-   * `/api/cron/run-schedules` fires (`vercel.json`), and each invocation attempts
-   * at most `PLATFORM_SCHEDULE_RUNS_PER_SWEEP` rows — a bound set by Vercel's
-   * `maxDuration`, not by choice. Total daily throughput is therefore
-   * `invocations/day * PLATFORM_SCHEDULE_RUNS_PER_SWEEP`, shared across ALL users.
-   *
-   * Sizing these above that ceiling does not fail loudly: unclaimed rows stay due
-   * and are picked up FIFO, so the symptom is a silently growing backlog and runs
-   * landing days late. That is exactly what happened — these were sized for an
-   * hourly sweep that was never deployed, against a daily cron that ran one
-   * ten-row batch. `schedule-cadence.test.ts` now derives the ceiling from
-   * `vercel.json` and fails when the sum of these quotas exceeds it, so the two
-   * cannot drift apart again. If the cadence changes, also update
-   * `SWEEP_INTERVAL_MS` in `apps/web/lib/schedules/schedule-time.ts`, which the
-   * same test pins to `vercel.json`.
-   */
   maxScheduledTasks: BillingPlanLimit;
 }
 
-/** Public, enforceable product limits; private usage budgets live separately. */
 export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
   Record<BillingPlanTier, BillingPlanProductLimits>
 > = Object.freeze({
@@ -477,10 +252,6 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConnectorTools: 'unlimited',
     maxScheduledTasks: 0,
   },
-  // Free is metered in the separate free-trial micro-USD ledger and never
-  // draws on the paid cents ledger, so the two dimensions that spend from that
-  // ledger — managed sandboxes and unattended scheduled runs — are 0 (deny)
-  // rather than a token allowance that would 402 on first use.
   free: {
     projects: 1,
     knowledgeStorageBytes: 104857600,
@@ -560,26 +331,15 @@ export function getBillingPlanProductLimits(
   return BILLING_PLAN_PRODUCT_LIMITS[plan];
 }
 
-/**
- * GOV-3 / GOV-4 / GOV-7: resolve one catalog limit to an enforceable ceiling.
- *
- *   number      -> that ceiling
- *   'unlimited' -> null (no product-side ceiling)
- *   'custom'    -> null (negotiated Enterprise contract; the private managed
- *                  usage budget, not this table, is what bounds their spend)
- *   undefined   -> 0 (unknown tier fails CLOSED)
- */
 export function toEnforceableBillingPlanLimit(limit: BillingPlanLimit | undefined): number | null {
   if (limit === 'unlimited' || limit === 'custom') return null;
   return typeof limit === 'number' ? limit : 0;
 }
 
-/** GOV-3: max in-flight managed turns for `plan`; null = uncapped. */
 export function getPlanMaxConcurrentTurns(plan: string | null | undefined): number | null {
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxConcurrentTurns);
 }
 
-/** GOV-4: max live managed sandboxes for `plan`, always capped at five per user. */
 export function getPlanMaxSandboxes(plan: string | null | undefined): number {
   const configured = toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxSandboxes);
   return configured === null
@@ -587,31 +347,18 @@ export function getPlanMaxSandboxes(plan: string | null | undefined): number {
     : Math.min(configured, MAX_MANAGED_SANDBOXES_PER_USER);
 }
 
-/** GOV-4: managed sandbox lifetime for `plan`; 0 = no managed sandbox. */
 export function getPlanSandboxTtlMs(plan: string | null | undefined): number {
   return getBillingPlanProductLimits(plan)?.sandboxTtlMs ?? 0;
 }
 
-/** GOV-7: max connector tools admitted into one managed turn; null = uncapped. */
 export function getPlanMaxConnectorTools(plan: string | null | undefined): number | null {
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxConnectorTools);
 }
 
-/** GOV-7 / GOV-8: max scheduled tasks a user may own; null = uncapped. */
 export function getPlanMaxScheduledTasks(plan: string | null | undefined): number | null {
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxScheduledTasks);
 }
 
-/**
- * GOV-20: the next INDIVIDUAL self-serve tier above `plan`, or null when there
- * is none. Lets a paywall render a concrete upgrade target instead of a generic
- * link.
- *
- * Ranks against `SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER`, not against the
- * purchasable set: Team is self-serve but per-seat and organization-scoped, so
- * it is neither a step above Pro nor a plan with an individual step above it.
- * A Team admin who wants "more" buys more seats, which is a different control.
- */
 export function getNextUpgradeTier(
   plan: string | null | undefined,
 ): SelfServeIndividualPlanTier | null {
@@ -620,9 +367,6 @@ export function getNextUpgradeTier(
     current,
   );
   if (index === -1) {
-    // Free / local / byok have no rank on the ladder: the first paid tier is the
-    // upgrade. Team is per-seat (see above) and Enterprise is negotiated — no
-    // individual self-serve step exists above either.
     return current === 'team' || current === 'enterprise'
       ? null
       : (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[0] ?? null);
@@ -630,19 +374,6 @@ export function getNextUpgradeTier(
   return SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[index + 1] ?? null;
 }
 
-/**
- * GOV-20: why a managed turn was refused, and what the user can actually do.
- *
- * The chat surface previously rendered its inline paywall card for exactly
- * three free-trial literals; every PAID limit code
- * (`rolling_five_hour_limit_reached`, `rolling_weekly_limit_reached`,
- * `flagship_weekly_limit_reached`, `insufficient_credits`,
- * `monthly_limit_exceeded`, `RATE_LIMIT_EXCEEDED`) fell through to a plain
- * banner with no upgrade link and no reset time — showing the users most
- * likely to convert the only path with no way forward.
- *
- * This is the single classifier both the free-trial and paid paths use.
- */
 export type ManagedQuotaBlockKind =
   | 'free_trial'
   | 'rolling_window'
@@ -657,35 +388,11 @@ export type ManagedQuotaBlockKind =
 
 export interface ManagedQuotaBlockPresentation {
   kind: ManagedQuotaBlockKind;
-  /** Which allowance was exhausted; maps onto the paywall card's feature slot. */
   feature: 'token_cap' | 'model_access' | 'paid_capability' | 'rolling_capacity' | 'request_rate';
-  /** Render an upgrade call to action. */
   showUpgradeCta: boolean;
-  /** Render the reset / retry-after time the response carries. */
   showResetTime: boolean;
-  /** True when switching to a standard (non-flagship) model also clears it. */
   suggestStandardModel: boolean;
-  /**
-   * True when BUYING CREDITS actually clears this block right now.
-   *
-   * This is a statement about the server, not a marketing preference, and it is
-   * why the field exists: offering "Buy credits" on a block that credits cannot
-   * lift would take a user's money and leave them exactly as blocked.
-   *
-   * Today only the billing-period ledger honours purchased balance —
-   * `add_credits` raises `token_credits.credits_allocated_cents`
-   * (db/neon/0111_credit_top_up_carry.sql), which is what
-   * `insufficient_credits` / `monthly_limit_exceeded` measure.
-   *
-   * The rolling caps became TRUE in migrations 0118/0119, which let a request
-   * refused by a rolling cap draw on remaining purchased balance instead
-   * (`p_top_up_headroom_cents`). They are gated on the account's opt-in:
-   * `resolveOverageHeadroomCents` passes 0 unless `subscriptions.overage_enabled`
-   * is set, so a user who has not turned overage on is refused exactly as
-   * before — and the paywall then offers the toggle alongside the purchase.
-   */
   clearedByCredits: boolean;
-  /** Default copy; a server-supplied message should win when present. */
   reason: string;
 }
 
@@ -718,21 +425,6 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       clearedByCredits: false,
       reason: 'That capability requires a paid plan.',
     },
-    /**
-     * Emitted by the media routes when `canUseBillingPlanCapability` refuses —
-     * image generation below Pro, video generation below Max 15x.
-     *
-     * It was absent here, so a Free or Basic user asking for an image IN CHAT
-     * fell through to a plain error banner: the exact GOV-20 failure this map
-     * was built to end, except for capability refusals rather than exhausted
-     * quotas. The media hook (`useMediaGeneration`) already recognised the code,
-     * so the same refusal produced an upgrade card on the media surface and a
-     * dead-end error in chat.
-     *
-     * `showResetTime` is false because nothing refills — waiting does not help,
-     * and offering a reset time would be a lie. The server's message names the
-     * qualifying plans, and it wins over `reason` when present.
-     */
     plan_upgrade_required: {
       kind: 'plan_capability',
       feature: 'paid_capability',
@@ -811,11 +503,6 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
   },
 );
 
-/**
- * Classify a server error code into its quota presentation, or null when the
- * code is not a quota/limit refusal. Case-insensitive: the wire carries both
- * `insufficient_credits` and `RATE_LIMIT_EXCEEDED`.
- */
 export function classifyManagedQuotaErrorCode(
   code: string | null | undefined,
 ): ManagedQuotaBlockPresentation | null {
@@ -833,19 +520,10 @@ export function getBillingPlanPricing(plan: string | null | undefined): BillingP
   return BILLING_PLAN_PRICING[normalizeBillingPlanTier(plan)];
 }
 
-/**
- * True when `plan` is priced by contract and therefore has NO published amount.
- * Price-rendering surfaces must branch on this instead of printing a number.
- */
 export function isContractPricedPlan(plan: string | null | undefined): boolean {
   return getBillingPlanPricing(plan).contractPriced === true;
 }
 
-/**
- * Published USD list price, or `null` when the plan publishes no price
- * (contract-priced Enterprise, or an interval a plan does not sell).
- * Callers must render the null case as contract/unavailable, never as `$0`.
- */
 export function getPlanPriceUsd(
   plan: string | null | undefined,
   interval: BillingInterval = 'monthly',
@@ -855,7 +533,6 @@ export function getPlanPriceUsd(
   return typeof amount === 'number' ? amount : null;
 }
 
-/** Published price in minor units, or `null` when the plan publishes no price. */
 export function getPlanPriceCents(
   plan: string | null | undefined,
   interval: BillingInterval = 'monthly',
@@ -864,19 +541,8 @@ export function getPlanPriceCents(
   return usd === null ? null : Math.round(usd * 100);
 }
 
-/**
- * Tiers that publish a list price. Enterprise is excluded because its amount
- * lives in a signed contract, not in this catalog.
- */
 export type PublishedPricePlanTier = Exclude<BillingPlanTier, 'enterprise'>;
 
-/**
- * Published USD list price for a tier that is statically known to have one.
- *
- * Use this wherever the caller's own types already exclude contract pricing —
- * it returns a plain `number`, so no call site needs a `?? 0` fallback (that
- * fallback is precisely how Enterprise came to render as "$0"/"Free").
- */
 export function getPublishedPlanPriceUsd(
   plan: PublishedPricePlanTier,
   interval: BillingInterval = 'monthly',
@@ -885,7 +551,6 @@ export function getPublishedPlanPriceUsd(
   return interval === 'yearly' ? pricing.yearlyPriceUsd : pricing.monthlyPriceUsd;
 }
 
-/** Published price in minor units for a tier statically known to publish one. */
 export function getPublishedPlanPriceCents(
   plan: PublishedPricePlanTier,
   interval: BillingInterval = 'monthly',
@@ -893,7 +558,6 @@ export function getPublishedPlanPriceCents(
   return Math.round(getPublishedPlanPriceUsd(plan, interval) * 100);
 }
 
-/** India-specific monthly price in INR for `plan`, or null if not defined (USD-only tier). */
 export function getPlanPriceInr(plan: string | null | undefined): number | null {
   const pricing = getBillingPlanPricing(plan);
   return typeof pricing.monthlyPriceInr === 'number' ? pricing.monthlyPriceInr : null;

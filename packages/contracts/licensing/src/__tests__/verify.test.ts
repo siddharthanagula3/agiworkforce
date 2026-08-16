@@ -1,15 +1,3 @@
-/**
- * License verification tests.
- *
- * The primary suite REPLAYS the committed cross-language fixture corpus: it
- * reads each `.agilicense` file and its expected verdict straight from
- * `manifest.json` and asserts `verifyLicense` agrees. The future Rust
- * `agiworkforce-licensing` crate replays this identical manifest — nothing that
- * a replay needs (root keys, `nowMs`, expected verdict) is hardcoded in this
- * file; it all lives in the manifest.
- *
- * Secondary suites cover the expiry/grace boundaries and key-rotation directly.
- */
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -44,7 +32,6 @@ function readFixture(file: string): Uint8Array {
 describe('verifyLicense — fixture corpus replay', () => {
   it('covers accept, every error variant, and grace/rotation', () => {
     const codes = new Set(manifest.cases.map((c) => ('code' in c.expect ? c.expect.code : 'ok')));
-    // Corpus must exercise the full verdict surface.
     for (const code of ['ok', 'bad_signature', 'expired', 'not_yet_valid', 'malformed']) {
       expect(codes.has(code)).toBe(true);
     }
@@ -150,7 +137,6 @@ describe('verifyLicense — key rotation', () => {
 
   it('accepts a license signed by any key in the rotatable root list', () => {
     const signedByNew = makeSignedContainer(claims, newKey.privateKey, LICENSE_CONTAINER_FORMAT);
-    // Old key first, new key second — verification must try all of them.
     const r = verifyLicense(signedByNew, [oldKey.publicKeyB64, newKey.publicKeyB64], now);
     expect(r.ok).toBe(true);
   });

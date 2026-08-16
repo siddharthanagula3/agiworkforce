@@ -1,9 +1,3 @@
-/**
- * BranchNavigator Component
- *
- * Compact navigation arrows for cycling through conversation branches at fork points.
- * Displays "< 1/3 >" style controls with branch name tooltip on hover.
- */
 
 import React, { memo, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -14,7 +8,6 @@ export interface BranchNavigatorProps {
   branches: BranchSummary[];
   activeBranchId: string;
   onSwitch: (branchId: string) => void;
-  /** The message ID at which this fork occurred (used to filter relevant branches) */
   messageId: number;
 }
 
@@ -24,10 +17,8 @@ const BranchNavigatorComponent: React.FC<BranchNavigatorProps> = ({
   onSwitch,
   messageId,
 }) => {
-  // Only show branches that fork at or near this message
   const relevantBranches = useMemo(() => {
     if (branches.length === 0) return [];
-    // Include main branch and branches that forked at this message
     return branches.filter((b) => b.id === 'main' || b.forkPointMessageId === messageId);
   }, [branches, messageId]);
 

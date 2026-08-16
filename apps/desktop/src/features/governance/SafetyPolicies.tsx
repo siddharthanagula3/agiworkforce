@@ -23,10 +23,6 @@ import { Button } from '@/ui/Button';
 import { Switch } from '@/ui/Switch';
 
 type PolicyValue = 'always_allow' | 'always_deny' | 'ask';
-// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): 'plan' was
-// missing here even though it's a real, gate-affecting mode enforced by the
-// Rust backend (`AgentMode::Plan`, tool_confirmation.rs) — this was the only
-// reachable UI control for agent mode and it silently offered 3 of 4 modes.
 type AgentMode = 'safe' | 'plan' | 'build' | 'autopilot';
 
 interface ToolPolicy {
@@ -63,9 +59,6 @@ const AGENT_MODE_CONFIG: Record<AgentMode, { label: string; description: string;
       description: 'Read-only tools only — no destructive operations',
       color: 'border-emerald-500/40 bg-emerald-500/5 text-emerald-400',
     },
-    // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01): added the missing Plan
-    // option so this is a complete, accurate mirror of the backend
-    // `AgentMode` enum (Safe / Plan / Build / Autopilot).
     plan: {
       label: 'Plan',
       description: 'Read-only analysis and planning — never writes or executes',
@@ -83,7 +76,6 @@ const AGENT_MODE_CONFIG: Record<AgentMode, { label: string; description: string;
     },
   };
 
-// Well-known tools to manage. In a full implementation this would be fetched from Rust.
 const KNOWN_TOOLS = [
   'file_read',
   'file_write',
@@ -133,7 +125,6 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
       setAutoApproveAll(autoApprove);
       setAgentMode(mode);
 
-      // Build per-tool policy state from remembered choices
       const toolPolicies = KNOWN_TOOLS.map((toolName) => {
         const remembered = rememberedChoices[toolName];
         let policy: PolicyValue = 'ask';
@@ -142,7 +133,6 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
         return { toolName, policy, isUpdating: false };
       });
 
-      // Also include any extra tools that have remembered choices but aren't in KNOWN_TOOLS
       Object.entries(rememberedChoices).forEach(([toolName, approved]) => {
         if (!KNOWN_TOOLS.includes(toolName)) {
           toolPolicies.push({
@@ -168,7 +158,6 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
   }, [loadPolicies]);
 
   const handlePolicyChange = async (toolName: string, newPolicy: PolicyValue) => {
-    // Optimistic update
     setPolicies((prev) =>
       prev.map((p) =>
         p.toolName === toolName ? { ...p, policy: newPolicy, isUpdating: true } : p,
@@ -182,7 +171,6 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
       );
       toast.success(`Policy updated for ${toolName}`);
     } catch (err) {
-      // Revert on failure
       setPolicies((prev) =>
         prev.map((p) => (p.toolName === toolName ? { ...p, isUpdating: false } : p)),
       );

@@ -1,10 +1,5 @@
 'use strict';
 
-// @react-native-community/netinfo registers a native event subscription at
-// import time; that crashes outside a real RN runtime (no native module),
-// which several test files hit transitively via lib/egressGuard.ts. Mirrors
-// the __mocks__/expo-clipboard.js / expo-sqlite.js pattern used for the same
-// reason — jest.config.js moduleNameMapper redirects the real package here.
 const state = {
   isConnected: true,
   isInternetReachable: true,

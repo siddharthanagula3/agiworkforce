@@ -1,8 +1,3 @@
-/**
- * Zhipu-specific quirks: the `max_tokens` field override and GLM's
- * thinking-mode toggle. See the module docstring in `../index.ts` for why
- * these can't be left to the shared `detectOpenAICompletionsCompat` default.
- */
 
 import { describe, expect, it } from 'vitest';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
@@ -20,10 +15,6 @@ describe('zhipu compat detection baseline (documents why the override exists)', 
       baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
       id: ZHIPU_DEFAULT_MODEL_ID,
     });
-    // If this ever flips to 'max_tokens' because the shared table learned
-    // about bigmodel.cn, the adapter's explicit override remains correct
-    // (still forces 'max_tokens') — this assertion just documents the
-    // current gap that makes the override necessary.
     expect(detected.defaults.maxTokensField).toBe('max_completion_tokens');
   });
 });

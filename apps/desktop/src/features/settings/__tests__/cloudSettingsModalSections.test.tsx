@@ -1,13 +1,3 @@
-/**
- * DES-C08: every Cloud settings section that has a bearer-reachable contract
- * must render INLINE from the account, not in a webview gated on a Clerk
- * browser cookie Desktop never holds — that window could land on `/login`
- * while the app still showed the user as signed in.
- *
- * This drives the real modal (its nav comes from SETTINGS_NAV_GROUPS_WEB) and
- * mounts the section content it produces, so a section quietly regressing back
- * to a bridged window fails here.
- */
 import { render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,11 +24,6 @@ const mocks = vi.hoisted(() => ({
   listCloudTeamMembers: vi.fn(),
 }));
 
-// Only the shell is replaced (so the section map can be captured); every other
-// export stays real. Returning a two-key module instead made every other
-// `@agiworkforce/ui` component undefined for the lazily-loaded tabs this modal
-// mounts, which surfaced as "Element type is invalid" once a lazy chunk had
-// been resolved by an earlier test in the file.
 vi.mock('@agiworkforce/ui', async () => {
   const actual = await vi.importActual<typeof import('@agiworkforce/ui')>('@agiworkforce/ui');
   return { ...actual, SettingsModal: mocks.settingsModal };
@@ -168,8 +153,6 @@ describe('DesktopCloudSettingsModal section wiring', () => {
     renderSection(key);
 
     await waitFor(() => expect(screen.getByTestId(testId)).toBeTruthy());
-    // The bridged window is the thing being removed: no section may still offer
-    // the re-auth escape hatch, because none of them opens a cookie-gated page.
     expect(screen.queryByRole('button', { name: 'Sign in again to manage this' })).toBeNull();
   });
 

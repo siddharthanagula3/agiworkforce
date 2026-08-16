@@ -341,9 +341,6 @@ function LocalMemoryTab() {
         await deleteMemory(Number(id));
       },
       clear: async () => {
-        // The native delete action refreshes the store after each deletion.
-        // Keep bulk reset sequential so those refreshes cannot race and
-        // resurrect an intermediate snapshot in the UI.
         for (const memory of memories) {
           await deleteMemory(memory.id);
         }

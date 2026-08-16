@@ -1,6 +1,3 @@
-// Expo config plugin: strips production-only iOS entitlements from local
-// development prebuilds so personal/basic development provisioning profiles can
-// install Debug builds on a physical iPhone.
 
 const { withEntitlementsPlist, createRunOncePlugin } = require('@expo/config-plugins');
 

@@ -65,9 +65,6 @@ describe('MemoryControlsCard', () => {
   });
 
   it('shows both sub-switches off and disabled while the master switch is off', () => {
-    // PAR-M41: the two sub-switches used to be the only controls, so turning
-    // them off still left manually added entries in play with no single off
-    // switch. The master must visibly own them.
     const { screen } = renderCard({
       memoryEnabled: false,
       referencePastChats: true,
@@ -75,9 +72,6 @@ describe('MemoryControlsCard', () => {
     });
 
     const switches = screen.UNSAFE_getAllByType(NativeSwitch);
-    // Stored sub-preferences are true, but the card must never show them on
-    // while the master is off — a Cloud settings pull from another device can
-    // set referencePastChats back to true underneath this screen.
     expect(switches[0].props).toMatchObject({ value: false, disabled: false });
     expect(switches[1].props).toMatchObject({
       value: false,

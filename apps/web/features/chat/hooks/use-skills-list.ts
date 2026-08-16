@@ -15,11 +15,6 @@ export interface UseSkillsListResult {
   error: string | null;
 }
 
-/**
- * Fetch path-free skill metadata for selection. Managed activation remains
- * server-owned; explicit customization previews use the authenticated body
- * endpoint directly.
- */
 export function useSkillsList(): UseSkillsListResult {
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [loading, setLoading] = useState(true);

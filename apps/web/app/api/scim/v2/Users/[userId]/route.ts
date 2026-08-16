@@ -18,7 +18,6 @@ export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: Promise<{ userId: string }> };
 
-/** GET /api/scim/v2/Users/{id} */
 export async function GET(request: NextRequest, routeContext: RouteContext): Promise<Response> {
   const { userId } = await routeContext.params;
   return withScim(request, async (context, baseUrl) => {
@@ -29,12 +28,6 @@ export async function GET(request: NextRequest, routeContext: RouteContext): Pro
   });
 }
 
-/**
- * PUT /api/scim/v2/Users/{id} — full replacement (RFC 7644 §3.5.1).
- *
- * `active: false` in the replacement body removes the organization membership,
- * exactly as a PATCH would.
- */
 export async function PUT(request: NextRequest, routeContext: RouteContext): Promise<Response> {
   const { userId } = await routeContext.params;
   return withScim(request, async (context, baseUrl) => {
@@ -46,15 +39,6 @@ export async function PUT(request: NextRequest, routeContext: RouteContext): Pro
   });
 }
 
-/**
- * PATCH /api/scim/v2/Users/{id} — RFC 7644 §3.5.2.
- *
- * This is how Okta deprovisions (`replace` on `active`) and how Entra sends
- * the same change path-lessly as `{"value": {"active": false}}`. Both shapes
- * are honoured; an unrecognised path is refused with `invalidPath` rather than
- * silently ignored, because an ignored deprovision that returns 200 is the
- * worst failure this surface can have.
- */
 export async function PATCH(request: NextRequest, routeContext: RouteContext): Promise<Response> {
   const { userId } = await routeContext.params;
   return withScim(request, async (context, baseUrl) => {
@@ -66,13 +50,6 @@ export async function PATCH(request: NextRequest, routeContext: RouteContext): P
   });
 }
 
-/**
- * DELETE /api/scim/v2/Users/{id} — hard deprovision.
- *
- * The organization membership is removed first, then the SCIM resource, so a
- * partial failure still ends in the person having lost access. 204 with no
- * body, per RFC 7644 §3.6.
- */
 export async function DELETE(request: NextRequest, routeContext: RouteContext): Promise<Response> {
   const { userId } = await routeContext.params;
   return withScim(request, async (context) => {

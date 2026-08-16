@@ -3,14 +3,6 @@ import { renderHook } from '@testing-library/react';
 import { CapabilityProvider, useCapability } from '@agiworkforce/unified-chat';
 import type { SyncedAppSurface } from '@agiworkforce/types';
 
-/**
- * Proves the shared (unified-chat) capability ADAPTER actually injects the
- * platform through context — not that the matrix has the right values (that is
- * tested in @agiworkforce/types). The critical case is `desktop`: the context
- * DEFAULT is 'web', so if the provider didn't propagate, `canTakeScreenshot`
- * would be false on desktop (a silent refactor regression that loses desktop
- * capabilities). This test fails unless the provider→context→hook glue works.
- */
 function wrapper(platform: SyncedAppSurface) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return <CapabilityProvider platform={platform}>{children}</CapabilityProvider>;

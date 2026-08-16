@@ -1,20 +1,3 @@
-/**
- * renderPersonalizationBlock — turns the user's Personalization settings into a
- * compact system-prompt instruction block.
- *
- * The settings (name, occupation, custom instructions, and four 0–100 style
- * sliders) are collected on the Personalization screen and persisted, but were
- * never injected into the model prompt. This pure function encodes them as
- * natural-language guidance so the local/cloud model actually adapts to them.
- *
- * Design:
- *   - Emit a line only when a field is meaningfully set, so a default profile
- *     produces an empty string (caller then injects nothing).
- *   - Sliders default to 50 (neutral); only the strong ends (>=75 / <=25)
- *     produce guidance, matching the screen's range labels
- *     (Cold/Warm, Neutral/Enthusiastic, Prose/Structured, None/Frequent).
- *   - No store/IO access — fully unit-testable.
- */
 import type { Personalization, PersonalizationStyle } from '@/stores/settingsStore';
 
 const HIGH = 75;

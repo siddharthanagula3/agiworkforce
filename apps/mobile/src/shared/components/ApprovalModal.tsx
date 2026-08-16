@@ -23,13 +23,9 @@ import { useThemeColors } from '@/src/ui/theme';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 interface ApprovalModalProps {
-  /** The approval request to display. Pass null to hide. */
   approval: ApprovalRequest | null;
-  /** Called when user approves the action */
   onApprove: (id: string) => void;
-  /** Called when user rejects the action */
   onReject: (id: string, reason?: string) => void;
-  /** Called when modal is dismissed (back button, tap outside) */
   onDismiss: () => void;
 }
 
@@ -50,11 +46,6 @@ const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
   other: HelpCircle,
 };
 
-/**
- * ApprovalModal -- Full-screen modal for approving/denying tool execution.
- * Designed to be triggered from push notifications or agent status updates.
- * Can be mounted at the root layout and shown from anywhere via props.
- */
 export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: ApprovalModalProps) {
   const reducedMotion = useReducedMotion();
   const colors = useThemeColors();
@@ -76,7 +67,6 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
     if (!approval) return;
 
     if (!showRejectInput) {
-      // First tap: show reason input
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
@@ -84,7 +74,6 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
       return;
     }
 
-    // Second tap: confirm rejection
     if (hapticsEnabled) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
@@ -265,14 +254,6 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
   );
 }
 
-/**
- * Hook to manage approval modal state.
- * Returns the currently shown approval and handler functions.
- *
- * Usage:
- *   const { currentApproval, showApproval, handleApprove, handleReject, handleDismiss } = useApprovalModal();
- *   <ApprovalModal approval={currentApproval} onApprove={handleApprove} onReject={handleReject} onDismiss={handleDismiss} />
- */
 export function useApprovalModal() {
   const [currentApproval, setCurrentApproval] = useState<ApprovalRequest | null>(null);
   const approveRequest = useAgentStore((s) => s.approveRequest);

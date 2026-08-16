@@ -1,20 +1,7 @@
-/**
- * Thinking Store
- *
- * Zustand store for managing extended thinking mode, including:
- * - Thinking configuration (enabled, budget, events)
- * - Toggle thinking on/off
- * - Budget management
- * - Trigger detection from user messages
- * - Model support checks
- * - Current thinking content streaming
- */
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, listen, isTauri } from '@/lib/tauri-mock';
-
-// Types matching Rust backend (thinking.rs)
 
 export interface ThinkingConfigResponse {
   enabled: boolean;
@@ -45,51 +32,39 @@ export interface ThinkingEvent {
 }
 
 interface ThinkingState {
-  // Configuration
   config: ThinkingConfigResponse | null;
   isConfigLoading: boolean;
 
-  // Current thinking content (streaming)
   currentThinking: ThinkingContent | null;
 
-  // Model support cache
   modelSupport: Record<string, boolean>;
 }
 
 interface ThinkingActions {
-  // Configuration
   loadConfig: () => Promise<ThinkingConfigResponse>;
   setConfig: (request: SetThinkingConfigRequest) => Promise<ThinkingConfigResponse>;
 
-  // Toggle
   toggle: () => Promise<boolean>;
 
-  // Budget
   setBudget: (budget: string) => Promise<ThinkingConfigResponse>;
 
-  // Detection
   detectTrigger: (message: string) => Promise<ThinkingConfigResponse>;
 
-  // Model support
   checkModelSupport: (model: string) => Promise<boolean>;
 
-  // Current thinking
   getCurrentThinking: () => Promise<ThinkingContent | null>;
 
-  // Initialization
   initialize: () => Promise<void>;
 }
 
 export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
   devtools(
     immer((set, get) => ({
-      // Initial state
       config: null,
       isConfigLoading: false,
       currentThinking: null,
       modelSupport: {},
 
-      // Configuration
       loadConfig: async () => {
         if (!isTauri) {
           set((state) => {
@@ -138,7 +113,6 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
           );
         }
         try {
-          // Rust struct SetThinkingConfigRequest uses default serde (snake_case fields)
           const config = await invoke<ThinkingConfigResponse>('thinking_set_config', {
             request: {
               enabled: request.enabled,
@@ -157,7 +131,6 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
         }
       },
 
-      // Toggle
       toggle: async () => {
         if (!isTauri) {
           const newEnabled = !(get().config?.enabled ?? false);
@@ -180,7 +153,6 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
         }
       },
 
-      // Budget
       setBudget: async (budget: string) => {
         if (!isTauri) {
           return (
@@ -205,7 +177,6 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
         }
       },
 
-      // Detection
       detectTrigger: async (message: string) => {
         if (!isTauri) {
           return (
@@ -229,10 +200,8 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
         }
       },
 
-      // Model support
       checkModelSupport: async (model: string) => {
         if (!isTauri) return false;
-        // Check cache first
         const cached = get().modelSupport[model];
         if (cached !== undefined) {
           return cached;
@@ -250,7 +219,6 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
         }
       },
 
-      // Current thinking
       getCurrentThinking: async () => {
         if (!isTauri) return get().currentThinking;
         try {
@@ -265,14 +233,11 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
         }
       },
 
-      // Initialization
       initialize: async () => {
         if (!isTauri) return;
 
-        // Load config
         await get().loadConfig();
 
-        // Listen for thinking events
         listen<ThinkingEvent>('thinking:event', (event) => {
           const payload = event.payload;
           if (payload.event_type === 'start') {
@@ -306,7 +271,6 @@ export const useThinkingStore = create<ThinkingState & ThinkingActions>()(
   ),
 );
 
-// Selectors
 export const selectThinkingConfig = (state: ThinkingState) => state.config;
 export const selectIsThinkingEnabled = (state: ThinkingState) => state.config?.enabled ?? false;
 export const selectThinkingBudget = (state: ThinkingState) => state.config?.budget ?? 'medium';

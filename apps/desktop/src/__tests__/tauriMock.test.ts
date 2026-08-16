@@ -1,33 +1,10 @@
-/**
- * tauriMock.test.ts — tauri-mock completeness tests
- *
- * Verifies that all mocked Tauri commands in src/lib/tauri-mock.ts:
- *   1. Return a value (not throw) for their happy-path invocation in test env
- *   2. Do not silently return undefined for commands that should return data
- *   3. Cover the 5 LLM provider/model commands expected by the frontend
- *
- * NOTE: In the test environment, src/lib/tauri-mock is replaced by the
- * vi.mock() in src/test/setup.ts that delegates to @tauri-apps/api/core's
- * mock invoke. To test the real tauri-mock switch statement we use
- * `vi.importActual` to bypass the module mock.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 
-// We import the real module (not the mocked one from setup.ts) to exercise
-// the switch statement in invoke().
-// NODE_ENV is already 'test', so it will follow the test-env branch.
-
 async function getRealInvoke() {
-  // Temporarily ensure neither __TAURI_INTERNALS__ nor __TAURI__ is set so
-  // isTauri evaluates to false and we hit the test-env code path.
   const mod = await vi.importActual<typeof import('../lib/tauri-mock')>('../lib/tauri-mock');
   return mod.invoke;
 }
-
-// ---------------------------------------------------------------------------
-// LLM provider/model commands (BUG-009/010)
-// ---------------------------------------------------------------------------
 
 describe('LLM provider/model commands in tauri-mock', () => {
   it('llm_check_provider_status returns an object with available and configured fields', async () => {
@@ -81,14 +58,9 @@ describe('LLM provider/model commands in tauri-mock', () => {
     });
     expect(result).toBeDefined();
     expect(typeof result.content).toBe('string');
-    // Echo behaviour: last user message content is returned
     expect(result.content).toBe('Hello from test');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Core data-returning commands
-// ---------------------------------------------------------------------------
 
 describe('Core data commands return expected shapes', () => {
   it('get_onboarding_status returns { completed: boolean }', async () => {
@@ -159,10 +131,6 @@ describe('Core data commands return expected shapes', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Scheduler fire-and-forget commands
-// ---------------------------------------------------------------------------
-
 describe('Scheduler mutation commands return undefined', () => {
   it('scheduler_update_job returns undefined', async () => {
     const invoke = await getRealInvoke();
@@ -189,10 +157,6 @@ describe('Scheduler mutation commands return undefined', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Research commands
-// ---------------------------------------------------------------------------
-
 describe('Research commands return expected shapes', () => {
   it('research_start returns a session ID string', async () => {
     const invoke = await getRealInvoke();
@@ -216,10 +180,6 @@ describe('Research commands return expected shapes', () => {
     expect(result).toBeUndefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Unregistered command guard
-// ---------------------------------------------------------------------------
 
 describe('Unregistered command guard', () => {
   it('throws for an unknown command to surface wiring issues', async () => {

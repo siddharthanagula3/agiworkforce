@@ -11,9 +11,6 @@ import { invoke } from '../lib/tauri-mock';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
-/**
- * Git repository status.
- */
 export interface GitStatus {
   branch: string;
   ahead: number;
@@ -24,9 +21,6 @@ export interface GitStatus {
   conflicts: string[];
 }
 
-/**
- * Git commit information.
- */
 export interface GitCommit {
   hash: string;
   author: string;
@@ -35,18 +29,12 @@ export interface GitCommit {
   message: string;
 }
 
-/**
- * Git branch information.
- */
 export interface GitBranch {
   name: string;
   is_current: boolean;
   last_commit: string;
 }
 
-/**
- * Git diff information for a file.
- */
 export interface GitDiff {
   file_path: string;
   additions: number;
@@ -54,70 +42,37 @@ export interface GitDiff {
   diff_content: string;
 }
 
-/**
- * Hook state and operations for Git.
- */
 export interface UseGitReturn {
-  /** Current repository status */
   status: GitStatus | null;
-  /** Whether a Git operation is in progress */
   loading: boolean;
-  /** Last error message */
   error: string | null;
-  /** Repository path being managed */
   repoPath: string | null;
 
-  /** Set the repository path */
   setRepoPath: (path: string) => void;
-  /** Refresh the repository status */
   refreshStatus: () => Promise<void>;
-  /** Stage files */
   stage: (files: string[]) => Promise<void>;
-  /** Unstage files (reset) */
   unstage: (files: string[]) => Promise<void>;
-  /** Stage all changes */
   stageAll: () => Promise<void>;
-  /** Unstage all changes */
   unstageAll: () => Promise<void>;
-  /** Discard changes in working directory */
   discardChanges: (files: string[]) => Promise<void>;
-  /** Create a commit */
   commit: (message: string) => Promise<string>;
-  /** Push to remote */
   push: (remote?: string, branch?: string, force?: boolean) => Promise<void>;
-  /** Pull from remote */
   pull: (remote?: string, branch?: string) => Promise<void>;
-  /** Get diff for a file */
   getDiff: (filePath?: string, staged?: boolean) => Promise<GitDiff[]>;
-  /** List branches */
   listBranches: () => Promise<GitBranch[]>;
-  /** Checkout a branch */
   checkout: (branchName: string) => Promise<void>;
-  /** Create and checkout a new branch */
   createBranch: (branchName: string) => Promise<void>;
-  /** Get commit log */
   getLog: (limit?: number) => Promise<GitCommit[]>;
-  /** Stash changes */
   stash: (message?: string) => Promise<void>;
-  /** Pop stash */
   stashPop: () => Promise<void>;
-  /** Initialize a new git repository */
   init: (path: string) => Promise<string>;
-  /** Clone a remote repository */
   clone: (url: string, destination: string) => Promise<string>;
-  /** Fetch from remote */
   fetch: (remote?: string) => Promise<void>;
-  /** Merge a branch into current */
   merge: (branchName: string) => Promise<void>;
-  /** Delete a branch */
   deleteBranch: (branchName: string, force?: boolean) => Promise<void>;
-  /** Get current branch name */
   currentBranch: () => Promise<string>;
-  /** Get default branch name */
   defaultBranch: () => Promise<string>;
-  /** List remote repositories */
   listRemotes: () => Promise<[string, string][]>;
-  /** Add a remote repository */
   addRemote: (name: string, url: string) => Promise<void>;
 }
 
@@ -205,7 +160,6 @@ export function useGit(initialPath?: string): UseGitReturn {
       setError(null);
 
       try {
-        // Use git reset HEAD -- <files> to unstage only the specified files
         await invoke('git_reset', {
           path: repoPath,
           commit: 'HEAD',
@@ -275,7 +229,6 @@ export function useGit(initialPath?: string): UseGitReturn {
       setError(null);
 
       try {
-        // Use git checkout -- <files> to discard only the specified files
         await invoke('git_checkout_files', {
           path: repoPath,
           files,

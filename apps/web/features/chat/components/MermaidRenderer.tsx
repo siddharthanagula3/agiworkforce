@@ -1,17 +1,5 @@
 'use client';
 
-/**
- * MermaidRenderer -- renders Mermaid diagram syntax into interactive SVG.
- *
- * Uses the mermaid library (already a project dependency) via dynamic import
- * to avoid SSR issues. Provides:
- *   - SVG output rendered from Mermaid DSL
- *   - Zoom/pan via CSS transform (scroll-wheel + drag)
- *   - Copy diagram source button
- *   - Download as SVG button
- *   - Dark/light theme support
- */
-
 import React, { memo, useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   Copy,
@@ -26,14 +14,8 @@ import {
 import DOMPurify from 'dompurify';
 import { cn } from '@shared/lib/utils';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface MermaidRendererProps {
-  /** Mermaid diagram source code */
   code: string;
-  /** Additional class names */
   className?: string;
 }
 
@@ -43,17 +25,9 @@ interface Transform {
   y: number;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
 const ZOOM_STEP = 0.15;
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export const MermaidRenderer = memo(function MermaidRenderer({
   code,
@@ -73,10 +47,8 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     y: 0,
   });
 
-  // Unique ID for mermaid render target (strip colons from useId output)
   const renderTargetId = `mermaid-${containerId.replace(/:/g, '')}`;
 
-  // ── Render mermaid diagram ──────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -84,7 +56,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
       try {
         const mermaid = (await import('mermaid')).default;
 
-        // Detect dark mode from document
         const isDark =
           typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
@@ -116,14 +87,12 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     };
   }, [code, renderTargetId]);
 
-  // ── Copy source ─────────────────────────────────────────────────────────
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for insecure contexts
       const textarea = document.createElement('textarea');
       textarea.value = code;
       textarea.style.position = 'fixed';
@@ -137,7 +106,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     }
   }, [code]);
 
-  // ── Download as SVG ─────────────────────────────────────────────────────
   const handleDownloadSvg = useCallback(() => {
     if (!svgHtml) return;
     const blob = new Blob([svgHtml], { type: 'image/svg+xml;charset=utf-8' });
@@ -151,7 +119,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [svgHtml]);
 
-  // ── Zoom controls ───────────────────────────────────────────────────────
   const zoomIn = useCallback(() => {
     setTransform((t) => ({
       ...t,
@@ -170,7 +137,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     setTransform({ scale: 1, x: 0, y: 0 });
   }, []);
 
-  // ── Mouse wheel zoom ───────────────────────────────────────────────────
   useEffect(() => {
     const container = svgContainerRef.current;
     if (!container) return;
@@ -188,7 +154,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     return () => container.removeEventListener('wheel', onWheel);
   }, []);
 
-  // ── Drag to pan ─────────────────────────────────────────────────────────
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
@@ -214,12 +179,10 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     dragRef.current.dragging = false;
   }, []);
 
-  // ── Fullscreen toggle ──────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen((f) => !f);
   }, []);
 
-  // ── Error state ─────────────────────────────────────────────────────────
   if (error) {
     return (
       <div
@@ -245,7 +208,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     );
   }
 
-  // ── Loading state ───────────────────────────────────────────────────────
   if (!svgHtml) {
     return (
       <div className={cn('my-4 overflow-hidden rounded-lg border border-border/60', className)}>
@@ -259,7 +221,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     );
   }
 
-  // ── Rendered diagram ────────────────────────────────────────────────────
   return (
     <div
       className={cn(
@@ -344,10 +305,6 @@ export const MermaidRenderer = memo(function MermaidRenderer({
     </div>
   );
 });
-
-// ---------------------------------------------------------------------------
-// ToolbarButton (internal)
-// ---------------------------------------------------------------------------
 
 interface ToolbarButtonProps {
   children: React.ReactNode;

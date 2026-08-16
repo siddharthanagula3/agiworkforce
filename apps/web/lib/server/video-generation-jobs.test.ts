@@ -41,7 +41,6 @@ function input(db: never, overrides: Partial<Parameters<typeof createVideoGenera
 
 describe('durable video job persistence boundary', () => {
   it('locks the profile and rejects generation once account erasure is fenced', async () => {
-    // The SQL predicate filters a deletion-fenced profile before the INSERT.
     const query = vi.fn().mockResolvedValue([]);
     const db = {
       transaction: (fn: (tx: unknown) => unknown) => fn({ query }),

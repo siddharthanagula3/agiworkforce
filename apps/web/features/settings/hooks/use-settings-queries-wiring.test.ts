@@ -1,17 +1,3 @@
-/**
- * Tests for wired settings React Query hooks (org, team, activity, audit-log).
- *
- * For each hook:
- * - Positive: calls the correct route, surfaces the SERVER result.
- * - Negative: server error is surfaced as an error (no fake toast.success).
- *
- * NOTE: vitest.config.ts sets mockReset: true, which clears mock
- * implementations between tests. Each beforeEach must re-apply them.
- *
- * We verify fetch calls directly (not through renderHook) because setting up
- * a full React Query provider in jsdom adds no value over testing the fetch
- * contract · the React integration is covered by the existing component tests.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -48,10 +34,6 @@ async function setupMocks() {
   vi.mocked(getAuthToken).mockResolvedValue('test-auth-token');
   vi.mocked(getCsrfToken).mockResolvedValue('test-csrf-token');
 }
-
-// ============================================================================
-// useOrganizationSettings
-// ============================================================================
 
 describe('useOrganizationSettings · queryFn (wired to GET /api/settings/organization)', () => {
   beforeEach(async () => {
@@ -121,10 +103,6 @@ describe('useOrganizationSettings · queryFn (wired to GET /api/settings/organiz
   });
 });
 
-// ============================================================================
-// useUpdateOrganizationSettings · fake success removed
-// ============================================================================
-
 describe('useUpdateOrganizationSettings · mutationFn (wired to PATCH /api/settings/organization)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
@@ -186,10 +164,6 @@ describe('useUpdateOrganizationSettings · mutationFn (wired to PATCH /api/setti
   });
 });
 
-// ============================================================================
-// useTeamMembers · was returning []
-// ============================================================================
-
 describe('useTeamMembers · queryFn (wired to GET /api/settings/team)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
@@ -244,10 +218,6 @@ describe('useTeamMembers · queryFn (wired to GET /api/settings/team)', () => {
     expect(mod.useTeamMembers.toString()).not.toContain('return []');
   });
 });
-
-// ============================================================================
-// useInviteTeamMember · was throwing "pending implementation"
-// ============================================================================
 
 describe('useInviteTeamMember · mutationFn (wired to POST /api/settings/team)', () => {
   beforeEach(async () => {
@@ -319,10 +289,6 @@ describe('useInviteTeamMember · mutationFn (wired to POST /api/settings/team)',
   });
 });
 
-// ============================================================================
-// useRemoveTeamMember · was throwing "pending implementation"
-// ============================================================================
-
 describe('useRemoveTeamMember · mutationFn (wired to DELETE /api/settings/team/[memberId])', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
@@ -374,10 +340,6 @@ describe('useRemoveTeamMember · mutationFn (wired to DELETE /api/settings/team/
     expect(mod.useRemoveTeamMember.toString()).not.toContain('pending implementation');
   });
 });
-
-// ============================================================================
-// useUpdateTeamMemberRole · was throwing "pending implementation"
-// ============================================================================
 
 describe('useUpdateTeamMemberRole · mutationFn (wired to PATCH /api/settings/team/[memberId])', () => {
   beforeEach(async () => {
@@ -438,10 +400,6 @@ describe('useUpdateTeamMemberRole · mutationFn (wired to PATCH /api/settings/te
   });
 });
 
-// ============================================================================
-// useUserActivity · was returning []
-// ============================================================================
-
 describe('useUserActivity · queryFn (wired to GET /api/settings/activity)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
@@ -492,10 +450,6 @@ describe('useUserActivity · queryFn (wired to GET /api/settings/activity)', () 
     expect(mod.useUserActivity.toString()).not.toContain('return []');
   });
 });
-
-// ============================================================================
-// useAuditLogs · was returning []
-// ============================================================================
 
 describe('useAuditLogs · queryFn (wired to GET /api/settings/audit-logs)', () => {
   beforeEach(async () => {
@@ -548,10 +502,6 @@ describe('useAuditLogs · queryFn (wired to GET /api/settings/audit-logs)', () =
     expect(mod.useAuditLogs.toString()).not.toContain('return []');
   });
 });
-
-// ============================================================================
-// useAuditLogActions · was returning []
-// ============================================================================
 
 describe('useAuditLogActions · queryFn (wired to GET /api/settings/audit-logs/actions)', () => {
   beforeEach(async () => {

@@ -1,21 +1,7 @@
-/**
- * Animation compilation and render tests.
- *
- * Verifies that:
- * 1. framer-motion mock covers all element types used in the codebase.
- * 2. Animated components render without errors in jsdom.
- * 3. AnimatePresence, motion.div, motion.button, etc. all work as expected.
- * 4. Framer-motion-specific props (initial, animate, exit, etc.) are stripped
- *    from the rendered DOM to avoid React unknown-prop warnings.
- */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-
-// -------------------------------------------------------------------------
-// Helper components that mirror real usage patterns in the codebase
-// -------------------------------------------------------------------------
 
 function AnimatedCard({ text }: { text: string }) {
   return (
@@ -101,10 +87,6 @@ function AnimatedSection({ title }: { title: string }) {
   );
 }
 
-// -------------------------------------------------------------------------
-// Tests
-// -------------------------------------------------------------------------
-
 describe('framer-motion mock coverage', () => {
   describe('motion.div', () => {
     it('renders children without error', () => {
@@ -116,7 +98,6 @@ describe('framer-motion mock coverage', () => {
     it('does not pass framer-motion props to the DOM element', () => {
       render(<AnimatedCard text="Test" />);
       const card = screen.getByTestId('animated-card');
-      // framer-motion-specific props must not appear on native DOM elements
       expect(card).not.toHaveAttribute('initial');
       expect(card).not.toHaveAttribute('animate');
       expect(card).not.toHaveAttribute('exit');
@@ -200,15 +181,12 @@ describe('framer-motion mock coverage', () => {
     it('toggles visibility of content', () => {
       render(<AnimatedPresenceDemo />);
 
-      // Initially hidden
       expect(screen.queryByTestId('presence-content')).not.toBeInTheDocument();
 
-      // Click toggle to show
       fireEvent.click(screen.getByTestId('toggle-button'));
       expect(screen.getByTestId('presence-content')).toBeInTheDocument();
       expect(screen.getByText('Visible content')).toBeInTheDocument();
 
-      // Click toggle to hide
       fireEvent.click(screen.getByTestId('toggle-button'));
       expect(screen.queryByTestId('presence-content')).not.toBeInTheDocument();
     });
@@ -235,7 +213,6 @@ describe('CSS animation classes compile correctly', () => {
   });
 
   it('stagger-item class renders with correct opacity initial state concept', () => {
-    // stagger-item sets opacity: 0 and animates to 1 via CSS keyframes
     render(
       <ul>
         <li className="stagger-item" data-testid="stagger-1">

@@ -1,35 +1,19 @@
-/**
- * BriefStatus — Phase A Slice 5 (ported from UAC)
- *
- * Minimal status indicator for AGI actions.
- * Shows brief, one-line status updates like "Opening Chrome...", "Done!".
- * Designed for non-technical users who want minimal feedback.
- */
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Check } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export interface BriefStatusState {
-  /** Current status message (e.g., "Opening Chrome...") */
   message: string | null;
-  /** Whether the action is complete */
   isComplete: boolean;
-  /** Whether an error occurred */
   isError: boolean;
 }
 
 export interface BriefStatusProps {
-  /** Current status state */
   status: BriefStatusState;
-  /** Additional CSS classes */
   className?: string;
 }
 
-/**
- * Minimal inline status indicator.
- * Shows a single line with optional spinner.
- */
 export function BriefStatus({ status, className }: BriefStatusProps) {
   if (!status.message) {
     return null;
@@ -68,9 +52,6 @@ export function BriefStatus({ status, className }: BriefStatusProps) {
   );
 }
 
-/**
- * Hook-friendly status manager.
- */
 export function useBriefStatus() {
   const createStatus = (message: string): BriefStatusState => ({
     message,
@@ -104,9 +85,6 @@ export interface FloatingBriefStatusProps {
   className?: string;
 }
 
-/**
- * Floating brief status — appears at top of chat area.
- */
 export function FloatingBriefStatus({ status, className }: FloatingBriefStatusProps) {
   if (!status.message) {
     return null;
@@ -148,12 +126,7 @@ export function FloatingBriefStatus({ status, className }: FloatingBriefStatusPr
   );
 }
 
-/**
- * Simple action status messages helper.
- * Generates user-friendly status messages for common actions.
- */
 export const actionMessages = {
-  // Browser actions
   openingBrowser: (url?: string) =>
     url ? `Opening ${new URL(url).hostname}...` : 'Opening browser...',
   navigating: (url?: string) => (url ? `Going to ${new URL(url).hostname}...` : 'Navigating...'),
@@ -161,27 +134,22 @@ export const actionMessages = {
   typing: () => 'Typing...',
   scrolling: () => 'Scrolling...',
 
-  // File actions
   openingFile: (name?: string) => (name ? `Opening ${name}...` : 'Opening file...'),
   savingFile: (name?: string) => (name ? `Saving ${name}...` : 'Saving...'),
   creatingFile: (name?: string) => (name ? `Creating ${name}...` : 'Creating file...'),
   deletingFile: (name?: string) => (name ? `Deleting ${name}...` : 'Deleting...'),
 
-  // Communication actions
   sendingEmail: (to?: string) => (to ? `Sending email to ${to}...` : 'Sending email...'),
   sendingMessage: (to?: string) => (to ? `Messaging ${to}...` : 'Sending message...'),
 
-  // System actions
   launching: (app?: string) => (app ? `Launching ${app}...` : 'Launching...'),
   running: (cmd?: string) => (cmd ? `Running ${cmd}...` : 'Running...'),
   installing: (pkg?: string) => (pkg ? `Installing ${pkg}...` : 'Installing...'),
 
-  // AI actions
   thinking: () => 'Thinking...',
   analyzing: () => 'Analyzing...',
   generating: () => 'Generating...',
 
-  // Completion
   done: () => 'Done!',
   completed: (action?: string) => (action ? `${action} complete` : 'Done!'),
   failed: (reason?: string) => (reason ? `Failed: ${reason}` : 'Failed'),

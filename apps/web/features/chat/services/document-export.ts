@@ -1,7 +1,3 @@
-/**
- * Document Export Utilities
- * Exports generated documents to PDF and DOCX formats
- */
 
 import { jsPDF } from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
@@ -14,21 +10,15 @@ export interface ExportOptions {
   metadata?: Record<string, string>;
 }
 
-/**
- * Export document to PDF
- * Uses jsPDF for client-side PDF generation
- */
 export async function exportToPDF(options: ExportOptions): Promise<Blob> {
   const { title, content, author, date = new Date() } = options;
 
-  // Create new PDF document
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
   });
 
-  // Set document properties
   doc.setProperties({
     title,
     author: author || 'AGI',
@@ -36,46 +26,38 @@ export async function exportToPDF(options: ExportOptions): Promise<Blob> {
     creator: 'AGI',
   } as Parameters<typeof doc.setProperties>[0]);
 
-  // PDF styling
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
   const maxWidth = pageWidth - 2 * margin;
   let yPosition = margin;
 
-  // Add title
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.text(title, margin, yPosition);
   yPosition += 12;
 
-  // Add date
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100, 100, 100);
   doc.text(date.toLocaleDateString(), margin, yPosition);
   yPosition += 10;
 
-  // Add separator line
   doc.setDrawColor(200, 200, 200);
   doc.line(margin, yPosition, pageWidth - margin, yPosition);
   yPosition += 10;
 
-  // Reset text color
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(11);
 
-  // Parse markdown-like content and add to PDF
   const lines = content.split('\n');
 
   for (const line of lines) {
-    // Check if we need a new page
     if (yPosition > pageHeight - margin - 10) {
       doc.addPage();
       yPosition = margin;
     }
 
-    // Handle headings
     if (line.startsWith('# ')) {
       yPosition += 5;
       doc.setFontSize(18);
@@ -107,16 +89,13 @@ export async function exportToPDF(options: ExportOptions): Promise<Blob> {
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
     } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      // Bullet point
       const text = '• ' + line.substring(2).trim();
       const splitText = doc.splitTextToSize(text, maxWidth - 5);
       doc.text(splitText, margin + 5, yPosition);
       yPosition += splitText.length * 5;
     } else if (line.trim() === '') {
-      // Empty line
       yPosition += 5;
     } else {
-      // Regular paragraph
       doc.setFont('helvetica', 'normal');
       const splitText = doc.splitTextToSize(line, maxWidth);
       doc.text(splitText, margin, yPosition);
@@ -124,7 +103,6 @@ export async function exportToPDF(options: ExportOptions): Promise<Blob> {
     }
   }
 
-  // Add page numbers
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -135,21 +113,14 @@ export async function exportToPDF(options: ExportOptions): Promise<Blob> {
     });
   }
 
-  // Return as Blob
   return doc.output('blob');
 }
 
-/**
- * Export document to DOCX
- * Uses docx library for client-side DOCX generation
- */
 export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
   const { title, content, author, date = new Date() } = options;
 
-  // Parse content into paragraphs
   const children: Paragraph[] = [];
 
-  // Add title
   children.push(
     new Paragraph({
       text: title,
@@ -161,7 +132,6 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
     }),
   );
 
-  // Add date
   children.push(
     new Paragraph({
       children: [
@@ -177,12 +147,10 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
     }),
   );
 
-  // Parse markdown-like content
   const lines = content.split('\n');
 
   for (const line of lines) {
     if (line.startsWith('# ')) {
-      // Heading 1
       children.push(
         new Paragraph({
           text: line.substring(2).trim(),
@@ -191,7 +159,6 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
         }),
       );
     } else if (line.startsWith('## ')) {
-      // Heading 2
       children.push(
         new Paragraph({
           text: line.substring(3).trim(),
@@ -200,7 +167,6 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
         }),
       );
     } else if (line.startsWith('### ')) {
-      // Heading 3
       children.push(
         new Paragraph({
           text: line.substring(4).trim(),
@@ -209,7 +175,6 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
         }),
       );
     } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      // Bullet point
       children.push(
         new Paragraph({
           text: line.substring(2).trim(),
@@ -220,7 +185,6 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
         }),
       );
     } else if (line.trim() === '') {
-      // Empty paragraph for spacing
       children.push(
         new Paragraph({
           text: '',
@@ -228,7 +192,6 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
         }),
       );
     } else {
-      // Regular paragraph
       children.push(
         new Paragraph({
           children: [
@@ -243,7 +206,6 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
     }
   }
 
-  // Create document
   const doc = new Document({
     creator: author || 'AGI',
     title,
@@ -256,14 +218,10 @@ export async function exportToDOCX(options: ExportOptions): Promise<Blob> {
     ],
   });
 
-  // Generate and return blob
   const blob = await Packer.toBlob(doc);
   return blob;
 }
 
-/**
- * Download a blob as a file
- */
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

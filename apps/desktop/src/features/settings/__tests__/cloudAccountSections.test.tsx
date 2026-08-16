@@ -210,7 +210,6 @@ describe('CloudTimeFocusSection', () => {
     render(<CloudTimeFocusSection />);
 
     const breakSelect = (await screen.findByLabelText('Break reminder')) as HTMLSelectElement;
-    // 17 is not one of BREAK_REMINDER_MINUTES, so it falls back to "Off".
     expect(breakSelect.value).toBe('');
     expect((screen.getByLabelText('Enable quiet hours') as HTMLInputElement).checked).toBe(false);
   });

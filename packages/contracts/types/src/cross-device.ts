@@ -19,10 +19,6 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Cross-Device Thread
-// ============================================================================
-
 /**
  * A persistent conversation thread that can be accessed from multiple devices.
  *
@@ -44,43 +40,20 @@
  * ```
  */
 export interface CrossDeviceThread {
-  /** Unique thread identifier. */
   id: string;
 
-  /** User who owns this thread. */
   userId: string;
 
-  /** Human-readable thread title (auto-generated or user-set). */
   title: string;
 
-  /** Identifiers of all devices that have participated in this thread. */
   deviceIds: string[];
 
-  /**
-   * Thread lifecycle status:
-   * - `active`    — thread is live and accepting new messages.
-   * - `paused`    — execution paused by user, but thread is not archived.
-   * - `completed` — all tasks within the thread have finished.
-   * - `archived`  — thread moved to archive; stored but no longer shown by default.
-   * - `deleted`   — soft-deleted; retained for audit purposes, hidden from all UIs.
-   *
-   * Note: `archived` and `deleted` are persisted in the database
-   * (`CHECK (status IN ('active', 'archived', 'deleted'))`).
-   * `paused` and `completed` are runtime-only states managed by the frontend
-   * before a thread is archived or deleted.
-   */
   status: 'active' | 'paused' | 'completed' | 'archived' | 'deleted';
 
-  /** ISO 8601 timestamp of the most recent message. */
   lastMessageAt: string;
 
-  /** ISO 8601 timestamp when the thread was created. */
   createdAt: string;
 }
-
-// ============================================================================
-// Cross-Device Message
-// ============================================================================
 
 /**
  * A single message in a `CrossDeviceThread`, tagged with its originating device.
@@ -100,73 +73,39 @@ export interface CrossDeviceThread {
  * ```
  */
 export interface CrossDeviceMessage {
-  /** Unique message identifier. */
   id: string;
 
-  /** Thread this message belongs to. */
   threadId: string;
 
-  /** Device that produced this message. */
   deviceId: string;
 
-  /** Surface category of the originating device. */
   deviceType: 'desktop' | 'mobile' | 'web';
 
-  /** Message author role. */
   role: 'user' | 'assistant' | 'system';
 
-  /** Text content of the message. */
   content: string;
 
-  /** Optional attached files, screenshots, or artifacts. */
   attachments?: CrossDeviceAttachment[];
 
-  /** ISO 8601 timestamp when the message was created. */
   timestamp: string;
 }
 
-// ============================================================================
-// Cross-Device Attachment
-// ============================================================================
-
-/**
- * A file, screenshot, or artifact attached to a `CrossDeviceMessage`.
- *
- * Small items (under ~1 MB) may be inlined as base64 in the `data` field.
- * Larger items should be uploaded to cloud storage and referenced via `url`.
- */
 export interface CrossDeviceAttachment {
-  /** Unique attachment identifier. */
   id: string;
 
-  /** Attachment category. */
   type: 'file' | 'screenshot' | 'artifact';
 
-  /** Original file name or a generated label for screenshots/artifacts. */
   name: string;
 
-  /** MIME type of the attachment (e.g., `"text/csv"`, `"image/png"`). */
   mimeType: string;
 
-  /** File size in bytes. */
   size: number;
 
-  /** URL to the uploaded attachment (for large items). */
   url?: string;
 
-  /** Base64-encoded content for small items (e.g., inline screenshots). */
   data?: string;
 }
 
-// ============================================================================
-// Desktop Dispatch
-// ============================================================================
-
-/**
- * Versioned, authenticated control contract for starting and controlling a
- * Desktop task from a paired Mobile companion. These messages travel inside
- * the signed Dispatch envelope; they never represent cloud-queued work.
- */
 export interface DispatchTaskCreateRequest {
   action: 'dispatch.task.create';
   version: 1;
@@ -209,10 +148,6 @@ export interface DispatchTaskStatusEvent {
   updatedAt: string;
 }
 
-// ============================================================================
-// Companion Approvals
-// ============================================================================
-
 export type CompanionApprovalRiskLevel = 'low' | 'medium' | 'high';
 
 export type CompanionApprovalType =
@@ -222,11 +157,6 @@ export type CompanionApprovalType =
   | 'data_modification'
   | 'other';
 
-/**
- * A bounded summary of an authoritative Desktop approval. The Mobile
- * companion may display and answer this request, but Desktop remains the
- * source of truth for its lifecycle and tool metadata.
- */
 export interface CompanionApprovalRequestEvent {
   action: 'approval_request';
   version: 1;
@@ -240,11 +170,6 @@ export interface CompanionApprovalRequestEvent {
   countdown?: number;
 }
 
-/**
- * A signed decision from Mobile. Desktop resolves the request by ID against
- * its current pending-approval store and never trusts Mobile-supplied tool
- * metadata.
- */
 export interface CompanionApprovalResponse {
   action: 'approval_response';
   version: 1;
@@ -254,7 +179,6 @@ export interface CompanionApprovalResponse {
   reason?: string;
 }
 
-/** Desktop notification that a previously relayed approval is no longer pending. */
 export interface CompanionApprovalClosedEvent {
   action: 'approval_closed';
   version: 1;
@@ -262,17 +186,12 @@ export interface CompanionApprovalClosedEvent {
   closedAt: string;
 }
 
-/** Authoritative pending IDs sent during a companion state refresh. */
 export interface CompanionApprovalSnapshotEvent {
   action: 'approval_snapshot';
   version: 1;
   pendingRequestIds: string[];
   syncedAt: string;
 }
-
-// ============================================================================
-// Device Pairing
-// ============================================================================
 
 /**
  * A pairing record linking a desktop device to a mobile device.
@@ -296,40 +215,22 @@ export interface CompanionApprovalSnapshotEvent {
  * ```
  */
 export interface DevicePairing {
-  /** Unique pairing record identifier. */
   id: string;
 
-  /** User who initiated the pairing. */
   userId: string;
 
-  /** Device ID of the desktop participant. */
   desktopDeviceId: string;
 
-  /** Device ID of the mobile participant. */
   mobileDeviceId: string;
 
-  /**
-   * Pairing lifecycle status:
-   * - `pending`  — QR code displayed; mobile has not yet confirmed.
-   * - `active`   — Pairing established; devices are communicating.
-   * - `expired`  — Pairing code timed out before the mobile confirmed.
-   * - `revoked`  — Pairing was explicitly revoked by the user or an admin.
-   */
   status: 'pending' | 'active' | 'expired' | 'revoked';
 
-  /** Short numeric or alphanumeric code shown in the QR payload. */
   pairingCode: string;
 
-  /** ISO 8601 timestamp when the pairing was initiated. */
   createdAt: string;
 
-  /** ISO 8601 timestamp when the pairing code expires (typically 5 minutes). */
   expiresAt: string;
 }
-
-// ============================================================================
-// Execution Stream Event
-// ============================================================================
 
 /**
  * A real-time execution update streamed from the desktop agent to mobile.
@@ -358,23 +259,11 @@ export interface DevicePairing {
  * ```
  */
 export interface ExecutionStreamEvent {
-  /** Event type discriminant. */
   type: 'progress' | 'tool_call' | 'tool_result' | 'screenshot' | 'completed' | 'failed';
 
-  /** Identifier of the agent task that produced this event. */
   taskId: string;
 
-  /** ISO 8601 timestamp when the event was emitted. */
   timestamp: string;
 
-  /**
-   * Event payload. Shape varies by `type`:
-   * - `progress`    — `{ message: string }`
-   * - `tool_call`   — `{ toolName: string; args: Record<string, unknown> }`
-   * - `tool_result` — `{ toolName: string; result: string; durationMs: number }`
-   * - `screenshot`  — `{ base64: string; width: number; height: number }`
-   * - `completed`   — `{ output: string }`
-   * - `failed`      — `{ error: string }`
-   */
   data: Record<string, unknown>;
 }

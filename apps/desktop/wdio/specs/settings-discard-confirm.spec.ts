@@ -1,34 +1,3 @@
-// Live-interaction verification for DESKTOP-SETTINGS-SILENT-DISCARD-01 (see
-// docs/agent-context/known-flaws.md).
-//
-// Before the fix: SettingsPanel.tsx wired every close path (X button, Escape,
-// click-outside, footer "Cancel") to unconditionally call loadSettings(),
-// which re-fetches settings from the Rust-side disk file and overwrites the
-// live Zustand store -- silently discarding any edit that wasn't explicitly
-// committed via "Save Changes", with zero warning. AgentsSettings.tsx
-// ("Timeout Warnings") and PersonalizationSettings.tsx (Name/Occupation/
-// Bio/sliders) both write directly to that same store and are not
-// self-saving, so they were both silently affected.
-//
-// A second, related bug: buildCurrentSnapshot() (backing hasUnsavedChanges /
-// the Save button's disabled state) never read state.personalization, so
-// editing Personalization never enabled "Save Changes" even though the edit
-// was real.
-//
-// This spec drives the real dialog (no mocks) and asserts:
-//  1. Toggling "Timeout Warnings" then closing via the X button now
-//     surfaces an explicit "Discard unsaved changes?" confirmation instead of
-//     silently discarding.
-//  2. Choosing "Keep editing" leaves the edit intact and the panel open.
-//  3. Editing Personalization's Name field enables "Save Changes" (previously
-//     stayed disabled forever for a personalization-only edit).
-//  4. Choosing "Discard changes" on that edit both closes the panel AND
-//     reverts the Name field to its pre-edit value the next time Settings is
-//     reopened -- i.e. discard is now honest for personalization too, not
-//     just for the other store-backed fields.
-//
-// Neither assertion path calls "Save Changes", so this test does not mutate
-// the developer machine's real persisted settings file.
 
 import { closeAnySettingsDialog, waitForSettingsReady } from '../support/close-settings';
 import { resolveScreenDir } from '../support/dom';
@@ -139,17 +108,12 @@ async function openSettings() {
   const gear = await $('button[aria-label="Settings"]');
   await gear.waitForDisplayed({ timeout: 15000 });
   await gear.click();
-  // Nav is disabled while Settings loads; wait for interactivity before any
-  // tab click (otherwise the click is a silent no-op).
   await waitForSettingsReady();
 }
 
 function clickDialogXClose() {
   return browser.execute(() => {
     const btns = Array.from(document.querySelectorAll('[role="dialog"] button'));
-    // The shared Dialog primitive's default closeLabel is "Close dialog"
-    // (packages/ui/ui/src/primitives/Dialog.tsx); match by prefix so a label
-    // tweak doesn't silently disable this close path again.
     const closeButton = btns.find((b) =>
       (b.querySelector('.sr-only')?.textContent ?? '').startsWith('Close'),
     );
@@ -177,9 +141,6 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
       'Agents',
     );
     expect(clickedAgents).toBe(true);
-    // The Agents tab content is React.lazy behind Suspense — wait for the
-    // switch itself rather than a fixed pause (measured: 1300ms can lose the
-    // race even on an idle machine).
     await browser.waitUntil(async () => (await getSwitchState('agents-timeoutWarnings')) !== null, {
       timeout: 15_000,
       interval: 250,
@@ -198,8 +159,6 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     console.log('Timeout Warnings switch state after toggle:', afterToggle);
     expect(afterToggle).not.toBe(before);
 
-    // Close via the X button (top-right of the dialog) -- one of the paths
-    // that used to silently discard with zero warning.
     const closedViaX = await clickDialogXClose();
     expect(closedViaX).toBe(true);
     await browser.pause(400);
@@ -211,16 +170,9 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     expect(alertShown).toBe(true);
     expect(alertTitle).toMatch(/discard/i);
 
-    // Settings panel must still be open behind the confirm (we haven't
-    // resolved the confirmation yet).
     const stillOpenBehind = await settingsContentRoot();
     expect(stillOpenBehind).toBe(true);
 
-    // Choose "Keep editing" -- must NOT discard the edit or close Settings.
-    // Radix's AlertDialogCancel closes on a real activation; a stray synthetic
-    // click can land while the open transition is still settling and be
-    // swallowed, leaving the dialog up. Retry the click until the alertdialog
-    // actually goes away rather than clicking once and hoping.
     let keptEditing = false;
     await browser.waitUntil(
       async () => {
@@ -246,11 +198,8 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
 
     const afterKeepEditing = await getSwitchState('agents-timeoutWarnings');
     console.log('Timeout Warnings switch state after Keep editing:', afterKeepEditing);
-    expect(afterKeepEditing).toBe(afterToggle); // edit preserved, not reverted
+    expect(afterKeepEditing).toBe(afterToggle);
 
-    // Restore original value so we don't leave the toggle mutated, then close
-    // via X again -- this time hasUnsavedChanges should be false (back at
-    // baseline) so the close should go through with NO confirmation prompt.
     await clickById('agents-timeoutWarnings');
     const restored = await getSwitchState('agents-timeoutWarnings');
     expect(restored).toBe(before);
@@ -285,7 +234,6 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
       'Personalization',
     );
     expect(clickedPersonalization).toBe(true);
-    // Same lazy-tab race as the Agents test: wait for the tab's own control.
     await browser.waitUntil(async () => (await getInputValue('personalization-name')) !== null, {
       timeout: 15_000,
       interval: 250,
@@ -302,9 +250,6 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
 
     const setOk = await setInputValueViaReactChange('personalization-name', probeName);
     expect(setOk).toBe(true);
-    // Personalization writes to the shared Settings draft synchronously. Wait
-    // for the parent snapshot effect to expose that draft through the footer
-    // rather than sleeping for the retired debounce implementation.
     await browser.waitUntil(async () => (await isSaveChangesDisabled()) === false, {
       timeout: 10_000,
       interval: 100,
@@ -319,8 +264,6 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     await browser.saveScreenshot(`${SCREEN_DIR}/03-personalization-edit-enables-save.png`);
     expect(disabledAfterEdit).toBe(false);
 
-    // Close via X -- must surface the discard confirmation (hasUnsavedChanges
-    // is now true because of the personalization edit, per the bug-2 fix).
     const closedViaX = await clickDialogXClose();
     expect(closedViaX).toBe(true);
     await browser.pause(400);
@@ -350,10 +293,6 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     );
     expect(navGone).toBe(true);
 
-    // Reopen and confirm the Name field reverted -- this is the interaction
-    // the bug-2 fix must get right: loadSettings() alone does NOT revert
-    // personalization (it isn't part of the disk-backed payload), so
-    // handleCancel must explicitly restore it from the open-time baseline.
     await openSettings();
     const clickedPersonalizationAgain = await clickButtonWithText(
       'nav[aria-label="Settings sections"]',

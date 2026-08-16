@@ -1,21 +1,5 @@
 #!/usr/bin/env tsx
 /* eslint-disable no-console -- CLI tool; stdout/log is the intended output channel */
-/**
- * Store screenshot compositor — first-pass design.
- *
- * NOT scraped or measured from a competitor's App Store screenshots (no
- * pixel-accurate reference was available). This is a defensible first pass
- * built from AGI's own established brand tokens (dark theme background,
- * `#10a37f` accent from src/ui/theme/tokens.ts) — swap in real copy/colors
- * once product/marketing signs off on final creative.
- *
- * Renders: dark gradient background -> centered device frame (raw capture)
- * -> bold headline + subhead above the frame -> thin brand-green accent rule.
- *
- * Usage:
- *   tsx compositor.ts --raw <path> --out <path> --heading <str> --subhead <str> --width <n> --height <n>
- *   tsx compositor.ts --recompose-all   (re-run over every existing raw capture using pipeline.ts's copy deck)
- */
 
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import sharp from 'sharp';
@@ -102,7 +86,6 @@ async function composite(args: Args): Promise<void> {
 
   const backgroundPng = drawBackgroundAndText(args);
 
-  // Device frame occupies ~78% of canvas height, centered, even side margins.
   const frameMaxHeight = Math.round(height * 0.78);
   const frameMaxWidth = Math.round(width * 0.86);
   const rawMeta = await sharp(raw).metadata();

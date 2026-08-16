@@ -1,8 +1,3 @@
-/**
- * Adapter contract test: createZhipuAdapter returns a ProviderAdapter with
- * the expected shape (id, label, auth methods, catalog, stream). No network
- * calls — confirms the adapter wires up without throwing on construction.
- */
 
 import { describe, expect, it } from 'vitest';
 

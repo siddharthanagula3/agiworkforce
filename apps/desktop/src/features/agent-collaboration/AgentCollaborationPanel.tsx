@@ -1,17 +1,3 @@
-/**
- * AgentCollaborationPanel
- *
- * Multi-agent workspace showing agent-to-agent communication,
- * task delegation, and swarm progress. Users can observe and
- * intervene in multi-agent workflows.
- *
- * Features:
- * - Swarm initialization with configurable max agents
- * - Goal execution with real-time progress
- * - Task delegation: assign specific tasks to specific agents
- * - Results aggregation: combined output from all agents
- * - Agent-to-agent message feed
- */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Users,
@@ -37,13 +23,7 @@ import {
 import { invoke, listen, isTauri } from '../../lib/tauri-mock';
 import { useAppModeStore, selectPrivacyMode } from '../../stores/appModeStore';
 
-// TRUST BOUNDARY (desktop-trust-boundary-01): every swarm goal submission
-// carries the workspace's execution boundary; mirrors agentTaskStore's
-// activeTrustMode mapping ('local' | 'managed'). Omitting it fails closed
-// to Local in the Rust router.
 const activeTrustMode = () => selectPrivacyMode(useAppModeStore.getState());
-
-// ─── Types ───
 
 interface SwarmAgent {
   id: string;
@@ -96,12 +76,6 @@ interface SwarmResult {
 
 type PanelTab = 'messages' | 'tasks' | 'results';
 
-// ─── Swarm event payloads ───
-//
-// Field names are snake_case because `SwarmOrchestrator::emit_event` builds
-// them with `serde_json::json!` rather than serializing a renamed struct
-// (apps/desktop/src-tauri/src/core/swarm/orchestrator.rs).
-
 interface SwarmStartedPayload {
   goal_id: string;
   description: string;
@@ -144,7 +118,6 @@ function appendMessage(previous: AgentMessage[], message: AgentMessage): AgentMe
   return [...previous, message].slice(-MAX_FEED_MESSAGES);
 }
 
-/** Adds the agent the orchestrator just dispatched to, or re-arms an existing row. */
 function upsertAgent(previous: SwarmAgent[], agentId: string, task: string): SwarmAgent[] {
   const running: Partial<SwarmAgent> = { status: 'running', currentTask: task, progress: 0 };
   if (previous.some((a) => a.id === agentId)) {
@@ -173,7 +146,6 @@ function settleAgent(
   );
 }
 
-/** Subtask output is an untyped `serde_json::Value`; render it without `[object Object]`. */
 function describeSubtaskOutput(output: unknown): string {
   if (output === null || output === undefined) return '(no output)';
   if (typeof output === 'string') return output;
@@ -183,8 +155,6 @@ function describeSubtaskOutput(output: unknown): string {
     return String(output);
   }
 }
-
-// ─── Component ───
 
 interface AgentCollaborationPanelProps {
   className?: string;
@@ -204,12 +174,10 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
   const [activeTab, setActiveTab] = useState<PanelTab>('messages');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Task delegation state
   const [delegations, setDelegations] = useState<TaskDelegation[]>([]);
   const [delegateAgentId, setDelegateAgentId] = useState('');
   const [delegateTask, setDelegateTask] = useState('');
 
-  // Results aggregation state
   const [results, setResults] = useState<SwarmResult[]>([]);
   const [resultsCopied, setResultsCopied] = useState(false);
 
@@ -222,7 +190,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     }
   }, []);
 
-  // Listen for swarm events
   useEffect(() => {
     if (!isTauri) return;
 
@@ -314,9 +281,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
           }),
         );
 
-        // The full SwarmResult arrives on the swarm_execute_goal reply; this
-        // event only closes out the live view for runs the user did not start
-        // from this panel (delegations, scheduler-triggered goals).
         track(
           await listen<SwarmCompletedPayload>('swarm:completed', () => {
             if (!mounted) return;
@@ -337,7 +301,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     };
   }, [refreshStats]);
 
-  // Initialize swarm
   const handleInit = useCallback(async () => {
     setError(null);
     try {
@@ -355,7 +318,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     }
   }, [maxAgents, refreshStats]);
 
-  // Execute goal
   const handleExecuteGoal = useCallback(async () => {
     if (!goal.trim()) return;
     setExecuting(true);
@@ -382,7 +344,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     }
   }, [goal, refreshStats]);
 
-  // Stop swarm
   const handleStop = useCallback(async () => {
     try {
       await invoke('swarm_stop');
@@ -392,7 +353,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     }
   }, []);
 
-  // Delegate a task to a specific agent
   const handleDelegateTask = useCallback(() => {
     if (!delegateTask.trim() || !delegateAgentId) return;
 
@@ -411,7 +371,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     setDelegations((prev) => [delegation, ...prev]);
     setDelegateTask('');
 
-    // Execute the delegated task as a goal scoped to the agent
     invoke('swarm_execute_goal', {
       request: {
         goal: `[Agent: ${agent.name}] ${delegateTask.trim()}`,
@@ -432,7 +391,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
       });
   }, [delegateTask, delegateAgentId, agents]);
 
-  // Copy aggregated results to clipboard
   const handleCopyResults = useCallback(async () => {
     if (results.length === 0) return;
 
@@ -452,7 +410,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     }
   }, [results]);
 
-  // Export results as markdown
   const handleExportResults = useCallback(() => {
     if (results.length === 0) return;
 
@@ -515,7 +472,6 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
     }
   };
 
-  // Scroll messages to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);

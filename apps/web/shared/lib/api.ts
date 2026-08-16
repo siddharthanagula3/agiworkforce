@@ -7,10 +7,6 @@ import { APIResponse, APIException } from '@shared/stores/query-client';
 import { securityManager } from './security';
 import { getCsrfToken } from '@/lib/client/csrf';
 
-// ========================================
-// API Configuration
-// ========================================
-
 export interface APIConfig {
   baseURL: string;
   timeout: number;
@@ -36,48 +32,29 @@ const DEFAULT_CONFIG: APIConfig = {
   },
 };
 
-// ========================================
-// API Client Class
-// ========================================
-
 export class APIClient {
   private config: APIConfig;
   private tokenKey = 'auth_token';
   private refreshTokenKey = 'refresh_token';
-  // In-memory cache of decrypted tokens for synchronous header reads.
-  // Populated on setToken/setRefreshToken and on loadTokenFromStorage().
   private cachedToken: string | null = null;
   private cachedRefreshToken: string | null = null;
   private readyPromise: Promise<void>;
 
   constructor(config: Partial<APIConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    // Load and decrypt any tokens persisted from a previous session.
     this.readyPromise = this.loadTokenFromStorage();
   }
 
-  /** Wait for initial token loading to complete. */
   async ready(): Promise<void> {
     await this.readyPromise;
   }
 
-  // Token management
-
-  /**
-   * Async initialization: decrypt stored tokens into the in-memory cache.
-   * Distinguishes between plaintext JSON (migration path) and corrupted ciphertext.
-   */
   async loadTokenFromStorage(): Promise<void> {
     if (typeof window === 'undefined') return;
     this.cachedToken = await this.decryptOrClearStored(this.tokenKey);
     this.cachedRefreshToken = await this.decryptOrClearStored(this.refreshTokenKey);
   }
 
-  /**
-   * Attempt to decrypt a stored value. If it looks like plaintext JSON
-   * (migration from pre-encryption storage), return it as-is. If decryption
-   * fails and the value is not plaintext JSON, clear the corrupted entry.
-   */
   private async decryptOrClearStored(key: string): Promise<string | null> {
     const stored = localStorage.getItem(key);
     if (!stored) return null;
@@ -85,39 +62,31 @@ export class APIClient {
     try {
       return await securityManager.decryptAsync(stored);
     } catch {
-      // Check if the stored value looks like plaintext (migration path).
-      // JWT tokens start with "ey" (base64-encoded JSON header).
-      // Neon session data starts with '{' or '"'.
       const firstChar = stored.charAt(0);
       if (firstChar === '{' || firstChar === '"' || stored.startsWith('ey')) {
         console.warn(`[APIClient] Plaintext token found in ${key}; using as-is (migration path)`);
         return stored;
       }
 
-      // Corrupted ciphertext · clear it
       console.warn(`[APIClient] Removing corrupted value from ${key}`);
       localStorage.removeItem(key);
       return null;
     }
   }
 
-  /** Synchronous read for the auth token (uses in-memory cache). */
   private getToken(): string | null {
     return this.cachedToken;
   }
 
-  /** Encrypt and persist the auth token; update in-memory cache. */
   private async setToken(token: string): Promise<void> {
     if (typeof window === 'undefined') return;
-    this.cachedToken = token; // cache plaintext for synchronous header reads
+    this.cachedToken = token;
     try {
       const encrypted = await securityManager.encryptAsync(token);
       localStorage.setItem(this.tokenKey, encrypted);
     } catch {
-      // Do NOT store plaintext · log warning and skip localStorage persistence
       console.warn('[APIClient] Encryption unavailable; token stored in memory only');
     }
-    // Also set as HttpOnly cookie for stronger security
     getCsrfToken()
       .then((csrfToken) =>
         fetch('/api/auth/set-token', {
@@ -131,12 +100,10 @@ export class APIClient {
       });
   }
 
-  /** Synchronous read for the refresh token (uses in-memory cache). */
   private getRefreshToken(): string | null {
     return this.cachedRefreshToken;
   }
 
-  /** Encrypt and persist the refresh token; update in-memory cache. */
   private async setRefreshToken(token: string): Promise<void> {
     if (typeof window === 'undefined') return;
     this.cachedRefreshToken = token;
@@ -144,10 +111,8 @@ export class APIClient {
       const encrypted = await securityManager.encryptAsync(token);
       localStorage.setItem(this.refreshTokenKey, encrypted);
     } catch {
-      // Do NOT store plaintext · log warning and skip localStorage persistence
       console.warn('[APIClient] Encryption unavailable; refresh token stored in memory only');
     }
-    // Also set as HttpOnly cookie for stronger security
     getCsrfToken()
       .then((csrfToken) =>
         fetch('/api/auth/set-token', {
@@ -179,7 +144,6 @@ export class APIClient {
       });
   }
 
-  // Build request headers
   private buildHeaders(customHeaders: Record<string, string> = {}): HeadersInit {
     const headers: Record<string, string> = {
       ...this.config.defaultHeaders,
@@ -194,7 +158,6 @@ export class APIClient {
     return headers;
   }
 
-  // Retry logic with exponential backoff
   private async retryRequest<_T>(
     requestFn: () => Promise<Response>,
     attempt = 1,
@@ -213,7 +176,6 @@ export class APIClient {
     }
   }
 
-  // Token refresh logic
   private async refreshAccessToken(): Promise<string> {
     const refreshToken = this.getRefreshToken();
 
@@ -255,7 +217,6 @@ export class APIClient {
     return newToken;
   }
 
-  // Main request method
   private async makeRequest<T = unknown>(
     endpoint: string,
     options: RequestInit = {},
@@ -267,7 +228,6 @@ export class APIClient {
       headers: this.buildHeaders(options.headers as Record<string, string>),
     };
 
-    // Add timeout using AbortController
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
     requestOptions.signal = controller.signal;
@@ -277,11 +237,9 @@ export class APIClient {
 
       clearTimeout(timeoutId);
 
-      // Handle 401 responses with token refresh
       if (response.status === 401 && this.getRefreshToken()) {
         try {
           await this.refreshAccessToken();
-          // Retry the original request with new token
           const retryOptions = {
             ...requestOptions,
             headers: this.buildHeaders(options.headers as Record<string, string>),
@@ -289,7 +247,6 @@ export class APIClient {
           const retryResponse = await fetch(url, retryOptions);
           return this.parseResponse<T>(retryResponse);
         } catch (_refreshError) {
-          // Refresh failed, clear tokens and throw original 401 error
           this.clearTokens();
           throw new APIException({
             message: 'Authentication failed',
@@ -330,11 +287,9 @@ export class APIClient {
     }
   }
 
-  // Parse API response
   private async parseResponse<T>(response: Response): Promise<APIResponse<T>> {
     const contentType = response.headers.get('content-type');
 
-    // Handle empty responses
     if (response.status === 204) {
       return {
         data: null as T,
@@ -342,7 +297,6 @@ export class APIClient {
       };
     }
 
-    // Handle non-JSON responses
     if (!contentType?.includes('application/json')) {
       if (!response.ok) {
         throw new APIException({
@@ -358,7 +312,6 @@ export class APIClient {
       };
     }
 
-    // Parse JSON response
     let data: APIResponse<T>;
     try {
       data = await response.json();
@@ -370,7 +323,6 @@ export class APIClient {
       });
     }
 
-    // Handle error responses
     if (!response.ok) {
       throw new APIException({
         message: data.message || `HTTP ${response.status}: ${response.statusText}`,
@@ -383,7 +335,6 @@ export class APIClient {
     return data;
   }
 
-  // HTTP method implementations
   async get<T = unknown>(
     endpoint: string,
     params?: Record<string, unknown>,
@@ -446,7 +397,6 @@ export class APIClient {
     return this.makeRequest<T>(endpoint, { method: 'DELETE' });
   }
 
-  // Upload file with progress tracking
   async upload<T = unknown>(
     endpoint: string,
     file: File,
@@ -470,7 +420,6 @@ export class APIClient {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
-      // Track upload progress
       if (onProgress) {
         xhr.upload.addEventListener('progress', (event) => {
           if (event.lengthComputable) {
@@ -531,7 +480,6 @@ export class APIClient {
 
       xhr.open('POST', url);
 
-      // Set auth header
       const token = this.getToken();
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -542,7 +490,6 @@ export class APIClient {
     });
   }
 
-  // Authentication methods
   async login(credentials: { email: string; password: string }): Promise<
     APIResponse<{
       user: unknown;
@@ -579,7 +526,6 @@ export class APIClient {
     };
   }
 
-  // Configuration methods
   updateConfig(newConfig: Partial<APIConfig>): void {
     this.config = { ...this.config, ...newConfig };
   }
@@ -588,29 +534,13 @@ export class APIClient {
     return { ...this.config };
   }
 
-  // Health check
   async healthCheck(): Promise<APIResponse<{ status: string; timestamp: string }>> {
     return this.get('/health');
   }
 
-  /**
-   * Create a secure EventSource connection.
-   *
-   * SECURITY: EventSource does not support custom headers, so we cannot pass
-   * auth tokens directly. Instead, we provide options for secure authentication:
-   *
-   * Option 1 (Recommended): Use cookie-based auth with HttpOnly, Secure, SameSite cookies
-   * Option 2: Exchange the JWT for a short-lived session token via POST first
-   * Option 3: Use fetch with ReadableStream for streaming (see createSecureStream)
-   *
-   * WARNING: This method does NOT pass tokens in URLs to prevent credential exposure
-   * in server logs, browser history, and Referer headers.
-   */
   createEventSource(endpoint: string, options?: { withCredentials?: boolean }): EventSource {
     const url = endpoint.startsWith('http') ? endpoint : `${this.config.baseURL}${endpoint}`;
 
-    // SECURITY: Do NOT pass tokens in URL query parameters
-    // Use withCredentials for cookie-based auth instead
     const eventSource = new EventSource(url, {
       withCredentials: options?.withCredentials ?? true,
     });
@@ -657,7 +587,6 @@ export class APIClient {
       const decoder = new TextDecoder();
       let buffer = '';
 
-      // Read the stream
       (async () => {
         try {
           while (true) {
@@ -666,7 +595,6 @@ export class APIClient {
 
             buffer += decoder.decode(value, { stream: true });
 
-            // Parse SSE format: data: ...\n\n
             const lines = buffer.split('\n\n');
             buffer = lines.pop() || '';
 
@@ -710,9 +638,7 @@ export class APIClient {
     endpoint: string,
     protocols?: string | string[],
     options?: {
-      /** Use Sec-WebSocket-Protocol for auth (requires server support) */
       useProtocolAuth?: boolean;
-      /** Send auth as first message (default behavior) */
       useMessageAuth?: boolean;
     },
   ): { ws: WebSocket; sendAuth: () => void } {
@@ -725,8 +651,6 @@ export class APIClient {
 
     let wsProtocols: string | string[] | undefined = protocols;
 
-    // Option 1: Pass auth token via Sec-WebSocket-Protocol header
-    // Server must echo this protocol back in the response
     if (useProtocolAuth && token) {
       const authProtocol = `auth-${token}`;
       if (protocols) {
@@ -738,10 +662,8 @@ export class APIClient {
       }
     }
 
-    // SECURITY: Do NOT pass token in URL query parameters
     const ws = new WebSocket(url, wsProtocols);
 
-    // Option 2: Send auth as first message after connection
     const sendAuth = () => {
       if (useMessageAuth && token && ws.readyState === WebSocket.OPEN) {
         ws.send(
@@ -758,15 +680,7 @@ export class APIClient {
   }
 }
 
-// ========================================
-// Default API Client Instance
-// ========================================
-
 export const apiClient = new APIClient();
-
-// ========================================
-// Request/Response Interceptors
-// ========================================
 
 export interface RequestInterceptor {
   (config: RequestInit): RequestInit | Promise<RequestInit>;
@@ -842,16 +756,10 @@ class InterceptorManager {
 
 export const interceptors = new InterceptorManager();
 
-// ========================================
-// Utility Functions
-// ========================================
-
-// Create API client with custom config
 export const createAPIClient = (config: Partial<APIConfig> = {}) => {
   return new APIClient(config);
 };
 
-// Build query string from object
 export const buildQueryString = (params: Record<string, unknown>): string => {
   const searchParams = new URLSearchParams();
 
@@ -868,12 +776,10 @@ export const buildQueryString = (params: Record<string, unknown>): string => {
   return searchParams.toString();
 };
 
-// Check if error is a specific type
 export const isAPIError = (error: unknown, code?: string): error is APIException => {
   return error instanceof APIException && (!code || error.code === code);
 };
 
-// Extract error message from API error
 export const getErrorMessage = (error: unknown): string => {
   if (isAPIError(error)) {
     return error.message;

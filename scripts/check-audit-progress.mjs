@@ -1,34 +1,12 @@
 #!/usr/bin/env node
-// scripts/check-audit-progress.mjs — release gate for the audit remediation ledger.
-//
-// Exits non-zero while AuditRemediationLedger.md still carries unchecked tasks,
-// so a release cannot be declared complete on top of an unfinished remediation
-// plan. It is deliberately NOT wired into lint, typecheck, test, or CI: the only
-// caller is the release-completion command scripts/launch-readiness-check.sh,
-// which is run by hand immediately before tagging. Ordinary developer flows
-// never invoke it.
-//
-// Counting checkboxes is only trustworthy if the document being counted is
-// intact, so the gate refuses to report a number it cannot stand behind. It
-// fails closed on a missing ledger, on a ledger with no checkboxes, on an
-// unclosed code fence (everything after one is invisible to the parser, which
-// is how a ledger full of open tasks can read as "all closed"), and on a task
-// ID declared more than once (the signature of a ledger that was duplicated or
-// merged badly, which doubles every count).
-//
-// Usage: node scripts/check-audit-progress.mjs   (run from the repository root)
 
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
 const LEDGER = 'AuditRemediationLedger.md';
-// Ledger task IDs look like BASE-009, CRIT-001, SEC-014.
 const TASK_ID_SOURCE = '[A-Z][A-Z0-9]{1,15}-\\d{1,4}';
 const TASK_ID = new RegExp(`\\b(${TASK_ID_SOURCE})\\b`);
-// A task is DECLARED by a heading that starts with its ID ("### CRIT-001 — …")
-// or by a bold checkbox item that starts with its ID ("- [x] **BASE-009 — …").
-// Merely mentioning an ID elsewhere is a reference, not a declaration.
 const HEADING_DECLARATION = new RegExp(`^#{1,6}\\s+(${TASK_ID_SOURCE})\\b`);
 const CHECKBOX_DECLARATION = new RegExp(`^\\s*- \\[[ xX]\\]\\s*\\*\\*(${TASK_ID_SOURCE})\\b`);
 const MAX_LISTED = 20;
@@ -65,9 +43,6 @@ for (let index = 0; index < lines.length; index += 1) {
   const line = lines[index];
   const lineNumber = index + 1;
 
-  // CommonMark: a fence is closed only by a fence of the same character that is
-  // at least as long and carries no info string. Toggling on any fence-looking
-  // line makes a ``` inside a ~~~ block silently swallow the rest of the file.
   const fenceMatch = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
   if (fenceMatch) {
     const marker = fenceMatch[1];
@@ -110,8 +85,6 @@ for (let index = 0; index < lines.length; index += 1) {
 
 const total = done + open.length;
 
-// Integrity first: a count taken from a damaged ledger is worse than no count,
-// because it looks authoritative.
 const integrity = [];
 
 if (fence !== null) {

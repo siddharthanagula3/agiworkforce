@@ -1,19 +1,4 @@
 #!/usr/bin/env node
-/**
- * AP-09: Lock-vs-build drift detection
- *
- * Reads lock files from the user's Claude memory locks directory, extracts any
- * model ID or version references, and compares them against:
- *   - packages/contracts/types/src/models.json  (canonical model catalog)
- *   - apps/desktop/src-tauri/Cargo.toml  (binary version)
- *
- * Exit 0 = aligned (or locks dir absent — skips gracefully in CI)
- * Exit 2 = drift warnings found (non-blocking; informational only)
- *
- * NOTE: Lock files live in ~/.claude/projects/.../memory/locks/ (user home,
- * outside the repo). CI runners will not have this directory; the script exits 0
- * (skip) when the directory is absent. Run locally to audit drift.
- */
 
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { resolve, join } from 'path';
@@ -25,7 +10,6 @@ const ROOT = resolve(fileURLToPath(import.meta.url), '../../');
 const MODELS_JSON = resolve(ROOT, 'packages/contracts/types/src/models.json');
 const CARGO_TOML = resolve(ROOT, 'apps/desktop/src-tauri/Cargo.toml');
 
-// Where Claude memory locks live (user home — not in repo)
 const LOCKS_DIR = join(
   homedir(),
   '.claude/projects/-Users-siddhartha-Desktop-agiworkforce/memory/locks',
@@ -47,7 +31,6 @@ function readModelsJson() {
   if (!existsSync(MODELS_JSON)) return new Set();
   const raw = JSON.parse(readFileSync(MODELS_JSON, 'utf8'));
   const ids = new Set(Object.keys(raw.models || {}));
-  // Also collect defaultModel values from providers
   for (const p of Object.values(raw.providers || {})) {
     if (p.defaultModel) ids.add(p.defaultModel);
     for (const v of Object.values(p.taskRouting || {})) ids.add(v);

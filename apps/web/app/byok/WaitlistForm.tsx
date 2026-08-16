@@ -10,7 +10,6 @@ type WaitlistSource = 'byok' | 'sync' | 'billing' | 'other';
 
 interface Props {
   source?: WaitlistSource;
-  /** Label for the submit button */
   ctaLabel?: string;
 }
 

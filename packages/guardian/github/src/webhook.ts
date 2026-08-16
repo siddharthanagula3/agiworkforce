@@ -1,21 +1,9 @@
-/**
- * GitHub webhook transport security: HMAC signature verification and
- * delivery-ID replay protection.
- *
- * Verification runs on the raw request body bytes, before any JSON parsing,
- * and uses constant-time comparison. Anything that fails here is dropped —
- * webhook payloads are attacker-reachable input.
- */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const SIGNATURE_HEADER = 'x-hub-signature-256';
 export const DELIVERY_HEADER = 'x-github-delivery';
 export const EVENT_HEADER = 'x-github-event';
 
-/**
- * Verify `X-Hub-Signature-256` over the raw body. Returns false for missing,
- * malformed, or mismatched signatures; never throws on bad input.
- */
 export function verifyWebhookSignature(
   secret: string,
   rawBody: string | Buffer,
@@ -30,12 +18,7 @@ export function verifyWebhookSignature(
   return timingSafeEqual(provided, expected);
 }
 
-/**
- * Delivery-ID replay guard. Backed by an injected store so the control plane
- * can use a database unique constraint while tests use memory.
- */
 export interface DeliveryStore {
-  /** Record the id; MUST return false when the id was already recorded. */
   recordOnce(deliveryId: string): Promise<boolean>;
 }
 
@@ -55,7 +38,6 @@ export interface WebhookHeaders {
   event: string | null;
 }
 
-/** Extract the Guardian-relevant headers from a header-getter function. */
 export function readWebhookHeaders(
   get: (name: string) => string | null | undefined,
 ): WebhookHeaders {

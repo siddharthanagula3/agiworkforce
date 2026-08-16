@@ -6,13 +6,6 @@ import { useChatStream, type UseChatStreamReturn } from '@/lib/hooks/useChatStre
 
 const ChatStreamRuntimeContext = createContext<UseChatStreamReturn | null>(null);
 
-/**
- * Owns managed chat requests above the individual `/chat/[sessionId]` page.
- *
- * The chat layout remains mounted while the user switches conversations. Keeping
- * the stream controller here therefore lets an in-flight response continue into
- * its conversation-scoped store bucket while a different chat is on screen.
- */
 export function ChatStreamRuntimeProvider({ children }: { children: ReactNode }) {
   const runtime = useChatStream();
 

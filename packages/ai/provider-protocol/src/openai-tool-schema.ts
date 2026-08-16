@@ -1,29 +1,3 @@
-/**
- * OpenAI strict-mode tool schema normalizer.
- *
- * OpenAI's strict tool mode requires:
- *   - top-level `type: "object"` schemas
- *   - `additionalProperties: false`
- *   - every property listed in `required`
- *   - no `anyOf` / `oneOf` / `allOf`
- *   - no schema-array `type` (e.g. `["string", "null"]`)
- *
- * This module:
- *   1. Normalizes the schema (flatten unions, ensure object shape, fill required)
- *   2. Detects whether a schema is strict-mode-compatible
- *   3. Returns diagnostics for violations
- *
- * Pure function. Use from `ProviderAdapter.normalizeToolSchemas` for OpenAI
- * (and OpenAI-compatible) providers when `strict` is requested.
- *
- * Ported from OpenClaw `src/agents/openai-tool-schema.ts` (MIT, Peter Steinberger).
- * See THIRD_PARTY_LICENSES.md at repo root for full attribution.
- *
- * Adaptation: replaced the OpenClaw `pi-tools-parameter-schema` dependency
- * with our own minimal `normalizeToolParameterSchema` that handles the most
- * common cases (root object shape, anyOf flattening) without needing
- * `ModelCompatConfig` or the full provider compat plumbing.
- */
 
 import { normalizeToolParameterSchema } from './tool-parameter-schema';
 

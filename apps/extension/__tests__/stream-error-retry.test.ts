@@ -62,14 +62,11 @@ describe('failed stream presentation', () => {
     expect(retry).not.toBeNull();
     retry!.click();
     expect(onRetry).toHaveBeenCalledWith('stream-1');
-    // Guard against a double-send from an impatient second click.
     expect(retry!.disabled).toBe(true);
   });
 
   it('offers retry on a failure that also produced tool activity', () => {
     const onRetry = vi.fn();
-    // The tools path builds a different DOM branch; the footer must not be
-    // reachable only on the plain-text path.
     const node = buildBubbleWithTools(
       failedMessage({ content: '[TOOL:search:success]done[/TOOL]' }),
       { onRetry },

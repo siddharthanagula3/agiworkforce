@@ -9,7 +9,6 @@ const labelVariants = cva(
   'text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
 );
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface LabelProps
   extends
     React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>,

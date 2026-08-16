@@ -1,9 +1,3 @@
-/**
- * Vitest configuration for @agiworkforce/client-runtime
- *
- * Runs pure TypeScript tests (no DOM / React needed) — the state package
- * uses only standard JS constructs compatible with Node environment.
- */
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({

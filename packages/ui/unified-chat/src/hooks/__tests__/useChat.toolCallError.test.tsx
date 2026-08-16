@@ -1,10 +1,3 @@
-/**
- * useChat — a transport-level error (StreamEvent 'error', e.g. a
- * tool-approval resume that failed outright over the "bare {type:'error'}"
- * path desktop's WebRuntime/CloudRuntime.resolveToolApproval use) must not
- * leave a tool call optimistically patched to 'running' stuck there forever
- * (streaming/approval cluster Finding 3).
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { classifyTaskLocally } from '@agiworkforce/routing';
@@ -77,19 +70,10 @@ describe('useChat — tool call left stuck at running on a transport-level error
     const { runtime, emit } = makeFakeRuntime();
     renderHook(() => useChat(runtime));
 
-    // Seed the assistant message via a 'content' event first (addMsg's
-    // "create new message" path only forwards {id,role,content,timestamp} to
-    // the store -- a separate, pre-existing gap where toolCalls/isStreaming/
-    // etc passed alongside a FIRST tool_call event would be silently
-    // dropped; using the 'else' (existing-message) branch here tests
-    // Finding 3 in isolation without tripping over that unrelated one).
     emit({ type: 'content', content: '' });
-    // A tool call starts running (e.g. just approved via resolveToolApproval).
     emit({ type: 'tool_call', toolCall: { id: 'call_1', name: 'read_file', args: {} } });
     expect(lastAssistantMessage()?.toolCalls?.[0]?.status).toBe('running');
 
-    // The resume itself fails outright (WebRuntime/CloudRuntime's bare
-    // {type:'error'} path) before any tool_result ever arrives.
     emit({ type: 'error', error: 'Network request failed' });
 
     const finalCall = lastAssistantMessage()?.toolCalls?.[0];
@@ -117,7 +101,6 @@ describe('useChat — tool call left stuck at running on a transport-level error
     const { runtime, emit } = makeFakeRuntime();
     renderHook(() => useChat(runtime));
 
-    // No tool_call event fired first -- nothing to patch, must not throw.
     expect(() => emit({ type: 'error', error: 'Network request failed' })).not.toThrow();
   });
 });
@@ -167,10 +150,6 @@ describe('useChat — addMsg forwards the real fields on message creation', () =
     const { runtime, emit } = makeFakeRuntime();
     renderHook(() => useChat(runtime));
 
-    // Previously addMsg's create-path only forwarded {id,role,content,timestamp}
-    // to the store, so a turn that starts with tool_call (no prior content
-    // event) rendered a bare empty bubble -- toolCalls was silently dropped
-    // until a SECOND event for the same message arrived.
     emit({ type: 'tool_call', toolCall: { id: 'call_1', name: 'read_file', args: {} } });
 
     const msg = lastAssistantMessage();
@@ -348,7 +327,6 @@ describe('useChat — stream events stay pinned to their origin conversation acr
       sendMessage: vi.fn((conversationId: string) => {
         capturedSendConvIds.push(conversationId);
         // Never resolves -- keeps sendMessage's .finally() safety net from
-        // firing mid-test and calling stopStreaming() out from under us.
         return new Promise<void>(() => {});
       }),
       stopGeneration: vi.fn(),
@@ -369,31 +347,24 @@ describe('useChat — stream events stay pinned to their origin conversation acr
 
     const { result } = renderHook(() => useChat(runtime));
 
-    // User sends from conv-a.
     act(() => result.current.sendMessage('hello'));
     expect(capturedSendConvIds).toEqual(['conv-a']);
 
-    // First content chunk arrives while conv-a is still active -- creates
-    // the assistant message there.
     emit({ type: 'content', content: 'Hel' });
     const convAMessages = useChatStore.getState().messagesByConversation['conv-a']!;
-    expect(convAMessages).toHaveLength(2); // user message + assistant message
+    expect(convAMessages).toHaveLength(2);
     const assistantId = convAMessages[1]!.id;
 
-    // Nothing in the sidebar gates conversation switching on isStreaming --
-    // the user navigates away WHILE conv-a's turn is still in flight.
     act(() => {
       useChatStore.getState().setActiveConversation('conv-b');
     });
 
-    // More content for conv-a's turn arrives after the switch.
     emit({ type: 'content', content: 'lo there' });
 
     const convAMsg = useChatStore
       .getState()
       .messagesByConversation['conv-a']!.find((m) => m.id === assistantId);
     expect(convAMsg?.content).toBe('Hello there');
-    // And it must not leak into the conversation the user switched to.
     expect(useChatStore.getState().messagesByConversation['conv-b']).toHaveLength(0);
   });
 

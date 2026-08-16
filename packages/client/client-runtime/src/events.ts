@@ -1,20 +1,10 @@
-/**
- * Event bus abstraction for cross-runtime event handling.
- *
- * In desktop mode: delegates to Tauri's event system.
- * In web mode: uses a simple in-memory EventTarget.
- * In test mode: uses in-memory EventTarget (same as web).
- */
 
 import { isTauri } from './detect';
 
-/** Callback type for event listeners. */
 export type EventCallback<T> = (payload: T) => void;
 
-/** Unsubscribe function returned by listen(). */
 export type UnlistenFn = () => void;
 
-/** In-memory event bus for non-Tauri runtimes. */
 const memoryBus = typeof window !== 'undefined' ? new EventTarget() : null;
 
 /**
@@ -31,7 +21,6 @@ export async function listen<T>(event: string, callback: EventCallback<T>): Prom
     return unlisten;
   }
 
-  // Web / test: in-memory event bus
   if (!memoryBus) {
     return () => {};
   }
@@ -43,9 +32,6 @@ export async function listen<T>(event: string, callback: EventCallback<T>): Prom
   return () => memoryBus.removeEventListener(event, handler);
 }
 
-/**
- * Subscribe to an event, automatically unsubscribing after the first occurrence.
- */
 export async function once<T>(event: string, callback: EventCallback<T>): Promise<UnlistenFn> {
   if (isTauri) {
     const { once: tauriOnce } = await import('@tauri-apps/api/event');
@@ -65,12 +51,6 @@ export async function once<T>(event: string, callback: EventCallback<T>): Promis
   return () => memoryBus.removeEventListener(event, handler);
 }
 
-/**
- * Emit an event with a payload.
- *
- * In desktop mode: emits via Tauri's event system.
- * In web/test mode: dispatches on the in-memory EventTarget.
- */
 export async function emit<T>(event: string, payload: T): Promise<void> {
   if (isTauri) {
     const { emit: tauriEmit } = await import('@tauri-apps/api/event');

@@ -5,7 +5,6 @@ import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
 import { Circle } from 'lucide-react';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface RadioGroupProps extends React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root> {
   ref?: React.Ref<React.ElementRef<typeof RadioGroupPrimitive.Root>>;
 }

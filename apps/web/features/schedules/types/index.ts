@@ -14,15 +14,12 @@ export type ScheduleStatus = ManagedCloudScheduleTask['status'];
 export type ScheduleRunStatus = ManagedCloudScheduleRun['status'];
 export type ScheduleTriggerSource = ManagedCloudScheduleRun['triggerSource'];
 
-/** Canonical client representation returned by /api/schedules. */
 export type ScheduleTask = ManagedCloudScheduleTask;
 
-/** Canonical client representation returned by /api/schedules/[id]/runs. */
 export type ScheduleRun = ManagedCloudScheduleRun;
 
 export type IntervalUnit = 'minutes' | 'hours' | 'days';
 
-/** UI-only editable state. It is converted to ScheduleMutation before transport. */
 export interface ScheduleDraft {
   name: string;
   description: string;
@@ -42,7 +39,6 @@ export interface ScheduleDraft {
   maxExecutions: string;
 }
 
-/** Exact body accepted by the canonical schedule create/update service. */
 export interface ScheduleMutation {
   name: string;
   description: string | null;
@@ -71,7 +67,6 @@ export const AVAILABLE_MODELS = [
   ...getCoreManualModelOptions().map((model) => ({ value: model.id, label: model.label })),
 ];
 
-/** User-facing label for a Managed Cloud schedule selection or run receipt. */
 export function scheduleModelLabel(modelId: string | null | undefined): string {
   const normalizedModelId = modelId?.trim() ?? '';
   if (!normalizedModelId) return 'Auto';
@@ -146,7 +141,6 @@ export function scheduleResultText(run: ScheduleRun): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
-/** What one scheduled run actually consumed. */
 export interface ScheduleRunUsage {
   model: string | null;
   provider: string | null;
@@ -154,21 +148,6 @@ export interface ScheduleRunUsage {
   costCents: number | null;
 }
 
-/**
- * Read the per-run usage the executor already records.
- *
- * `scheduled-agent-executor.ts` has always returned `usage.costCents` alongside
- * the token counts, and `finalizeScheduleRun` has always persisted the whole
- * result object into `scheduled_task_runs.result` — so this has been billed,
- * settled, and stored the entire time while the run history showed only a
- * duration. A schedule that runs hourly is the single easiest way to spend
- * money without noticing, which is exactly where "what did this cost" belongs.
- *
- * Every field is independently nullable: runs recorded before the executor
- * emitted usage, and failed runs that never reached the provider, have partial
- * or absent data. A missing number renders as nothing rather than as zero —
- * "$0.00" is a claim that the run was free.
- */
 export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
   const result = run.result;
   if (!result) return null;
@@ -192,12 +171,6 @@ export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
   return hasAnything ? summary : null;
 }
 
-/**
- * Cents as a currency string, keeping sub-cent costs legible.
- *
- * A single small run frequently costs a fraction of a cent, and rounding that
- * to "$0.00" would read as free. Below one cent we show more precision instead.
- */
 export function formatCostCents(costCents: number): string {
   if (costCents === 0) return '$0.00';
   const dollars = costCents / 100;
@@ -205,7 +178,6 @@ export function formatCostCents(costCents: number): string {
   return `$${dollars.toFixed(2)}`;
 }
 
-/** Compact token count: 1234 → "1.2K". */
 export function formatTokenCount(tokens: number): string {
   if (tokens < 1_000) return `${tokens}`;
   if (tokens < 1_000_000) return `${(tokens / 1_000).toFixed(1)}K`;

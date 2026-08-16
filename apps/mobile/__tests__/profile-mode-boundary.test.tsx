@@ -2,9 +2,6 @@ import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { useUser } from '@clerk/expo';
 
-// useUser requires a ClerkProvider in real usage. In tests we stub it out to
-// avoid needing the full provider tree. Return null user (not signed in) by
-// default; individual tests override via useChatCloudMessageStore / useAuthStore.
 jest.mock('@clerk/expo', () => ({
   useUser: jest.fn().mockReturnValue({ user: null, isLoaded: true }),
 }));
@@ -97,7 +94,6 @@ function resetStores() {
     isSignedIn: false,
   } as ReturnType<typeof useUser>);
   useChatAppModeStore.setState({ appMode: 'local' });
-  // ProfileScreen reads personalization from useLocalSettingsStore in local mode.
   useLocalSettingsStore.setState({
     personalization: {
       fullName: 'Siddhartha Local',
@@ -149,7 +145,6 @@ function resetStores() {
     currentConversationId: null,
     loadConversations: jest.fn(async () => undefined),
   });
-  // Cloud conversations live in the cloud store — clear it between tests.
   useChatCloudMessageStore.setState({ conversations: [], messages: {}, historyStats: null });
 }
 
@@ -171,8 +166,6 @@ describe('Profile mode boundary', () => {
 
   it('does not show local identity, settings, or counts in Cloud Mode', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    // Cloud stats come from useChatCloudMessageStore (cloud store is authoritative
-    // for cloud mode — useChatStore is local-only).
     useChatCloudMessageStore.setState({
       conversations: [
         {

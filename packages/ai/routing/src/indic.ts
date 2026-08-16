@@ -26,16 +26,6 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Script ranges (sorted ascending, end-exclusive comparison via `<=`).
-// ----------------------------------------------------------------------------
-// Tuples are `[start, end, name]`. We keep the array sorted so that — if a
-// future audit demands binary search — the call sites do not need to change.
-// At today's scale (8 ranges) a linear scan is faster than the binary-search
-// branch overhead on every codepoint, so we use a tight for-loop.
-// ============================================================================
-
-/** Human-readable identifier for each Indic script we detect. */
 export type IndicScript =
   | 'devanagari'
   | 'bengali'
@@ -46,7 +36,6 @@ export type IndicScript =
   | 'kannada'
   | 'malayalam';
 
-/** End-inclusive Unicode block ranges per Indic script. */
 const INDIC_RANGES: ReadonlyArray<readonly [number, number, IndicScript]> = [
   [0x0900, 0x097f, 'devanagari'],
   [0x0980, 0x09ff, 'bengali'],
@@ -58,47 +47,21 @@ const INDIC_RANGES: ReadonlyArray<readonly [number, number, IndicScript]> = [
   [0x0d00, 0x0d7f, 'malayalam'],
 ];
 
-/** Default ratio (per spec §4) at which Sarvam-M overrides the workhorse. */
 export const DEFAULT_INDIC_RATIO_THRESHOLD = 0.2;
 
-// ============================================================================
-// Result shape
-// ============================================================================
-
-/**
- * Result of `detectIndicScript`. Counts denominators include ALL scanned
- * codepoints (after combining-mark filtering) so the ratio is interpretable
- * across mixed-script input.
- */
 export interface IndicDetectionResult {
-  /** True iff `indicRatio >= threshold`. */
   isIndic: boolean;
 
-  /** Indic codepoints / total scanned codepoints (0..1). */
   indicRatio: number;
 
-  /** Codepoints that fell into one of the Indic ranges. */
   indicCharCount: number;
 
-  /** Total codepoints inspected (whitespace and Latin both count). */
   totalCharCount: number;
 
-  /**
-   * Dominant Indic script (highest per-script codepoint count) or `null` if
-   * the message contains no Indic characters at all.
-   */
   dominantScript: IndicScript | null;
 
-  /**
-   * Per-script codepoint counts. Always contains all 8 keys so callers can
-   * iterate without `Object.hasOwn` checks. Zero when the script is absent.
-   */
   scriptCounts: Readonly<Record<IndicScript, number>>;
 }
-
-// ============================================================================
-// Public API
-// ============================================================================
 
 /**
  * Scan `text` for Indic characters and return both the ratio and the
@@ -116,13 +79,10 @@ export function detectIndicScript(
   text: string,
   threshold: number = DEFAULT_INDIC_RATIO_THRESHOLD,
 ): IndicDetectionResult {
-  // `js-early-exit`: empty input returns the zero result immediately.
   if (text.length === 0) {
     return EMPTY_RESULT;
   }
 
-  // Per-script tally. Initialised to a fresh object so callers cannot mutate
-  // the module-level zero record (`server-no-shared-module-state`).
   const scriptCounts: Record<IndicScript, number> = {
     devanagari: 0,
     bengali: 0,
@@ -137,14 +97,11 @@ export function detectIndicScript(
   let indicCount = 0;
   let totalCount = 0;
 
-  // Iterate by codepoint (handles surrogate pairs correctly even though Indic
-  // ranges are all in the BMP — being correct here costs nothing).
   for (const ch of text) {
     const cp = ch.codePointAt(0);
     if (cp === undefined) continue;
     totalCount += 1;
 
-    // Linear scan over 8 ranges — faster than binary search at this size.
     for (let i = 0; i < INDIC_RANGES.length; i++) {
       const [start, end, name] = INDIC_RANGES[i]!;
       if (cp >= start && cp <= end) {
@@ -172,10 +129,6 @@ export function detectIndicScript(
   };
 }
 
-// ============================================================================
-// Internal helpers
-// ============================================================================
-
 const EMPTY_RESULT: IndicDetectionResult = Object.freeze({
   isIndic: false,
   indicRatio: 0,
@@ -194,7 +147,6 @@ const EMPTY_RESULT: IndicDetectionResult = Object.freeze({
   }),
 });
 
-/** Return the script with the highest count, ties resolved by INDIC_RANGES order. */
 function pickDominant(counts: Record<IndicScript, number>): IndicScript | null {
   let best: IndicScript | null = null;
   let bestCount = 0;

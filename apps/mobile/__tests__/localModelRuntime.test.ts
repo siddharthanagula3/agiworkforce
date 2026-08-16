@@ -1,6 +1,3 @@
-/**
- * Unit tests for local model runtime resolution.
- */
 
 jest.mock('../storage/installedModels', () => ({
   listInstalledModels: jest.fn().mockResolvedValue([]),

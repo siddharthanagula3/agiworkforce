@@ -20,16 +20,11 @@ describe('cloud agent runs migration', () => {
   });
 
   it('admits every origin surface the contract accepts', async () => {
-    // The API validates the surface with the Zod enum and then writes it, so a
-    // surface the contract accepts but the CHECK rejects is a paid turn that
-    // dies at the insert with a 503 the caller can do nothing about.
     const migrations = await Promise.all(
       ['0061_cloud_agent_runs.sql', '0099_origin_surface_cli.sql'].map((file) =>
         readFile(join(process.cwd(), 'db/neon', file), 'utf8'),
       ),
     );
-    // Last definition wins, exactly as the constraint does once every migration
-    // has been applied in order.
     const effective = migrations
       .flatMap((sql) => sql.split(/\bcheck\s*\(/i).slice(1))
       .filter((clause) => clause.includes('origin_surface'))

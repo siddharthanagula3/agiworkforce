@@ -1,12 +1,3 @@
-/**
- * L1 Security — Privacy Boundaries (Local / BYOK / Cloud isolation)
- *
- * Mobile is local-first v1. The trust boundary that must never be silently
- * crossed is Local -> Cloud Managed. These tests exercise the REAL gate
- * (services/remoteChatGate) and the REAL execution-mode resolver
- * (features/chat/utils/conversationMode) — not stubs — so the test fails if
- * the production guard regresses.
- */
 import {
   MOBILE_REMOTE_CHAT_DISABLED_MESSAGE,
   MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE,
@@ -28,7 +19,6 @@ describe('L1 Security - Privacy Boundaries', () => {
   });
 
   test('SECURITY: legacy direct-provider (byok) flag cannot unlock remote chat', () => {
-    // byokKeys must be inert on Mobile — it must not be a path to Cloud.
     expect(
       getRemoteChatDisabledReason({ v1LocalOnly: true, cloudChat: false, byokKeys: true }),
     ).toBe(MOBILE_REMOTE_CHAT_DISABLED_MESSAGE);
@@ -69,8 +59,6 @@ describe('L1 Security - Privacy Boundaries', () => {
   });
 
   test('SECURITY: explicit local executionMode is never overridden by model/provider', () => {
-    // Even if a cloud-managed provider leaks into the record, an explicit
-    // local executionMode must win — Local data stays Local.
     const mode = executionModeForConversation({
       executionMode: 'local',
       model: 'anything',

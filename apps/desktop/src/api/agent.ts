@@ -1,44 +1,25 @@
-/**
- * Agent API
- *
- * TypeScript wrappers for the autonomous agent Tauri commands.
- * Provides task submission, status tracking, plan management,
- * and trusted workflow configuration.
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Configuration for initializing the autonomous agent */
 export interface AgentConfig {
-  /** Maximum number of concurrent steps */
   maxConcurrentSteps?: number;
-  /** Default timeout per step in seconds */
   defaultStepTimeoutSecs?: number;
-  /** Whether to auto-approve tool executions */
   autoApprove?: boolean;
 }
 
-/** Request payload for submitting a task to the agent */
 export interface AgentSubmitTaskRequest {
   description: string;
   autoApprove?: boolean;
 }
 
-/** Response after submitting a task */
 export interface SubmitTaskResponse {
   taskId: string;
 }
 
-/** Task status response from the agent */
 export interface TaskStatusResponse {
   task: AgentTask;
 }
 
-/** Represents a task managed by the autonomous agent */
 export interface AgentTask {
   id: string;
   description: string;
@@ -50,7 +31,6 @@ export interface AgentTask {
   steps?: AgentTaskStep[];
 }
 
-/** A step within an agent task */
 export interface AgentTaskStep {
   id: string;
   action: string;
@@ -60,22 +40,12 @@ export interface AgentTaskStep {
   error?: string;
 }
 
-/** Response from listing all tasks */
 export interface ListTasksResponse {
   tasks: AgentTask[];
 }
 
-/** Map of workflow hashes to their trusted tool lists */
 export type TrustedWorkflowMap = Record<string, string[]>;
 
-// ============================================================================
-// Agent Lifecycle
-// ============================================================================
-
-/**
- * Initialize the autonomous agent with configuration.
- * Must be called before submitting tasks.
- */
 export async function agentInit(config?: AgentConfig): Promise<void> {
   if (!isTauri) {
     console.debug('[agent] agentInit (mock)', config);
@@ -87,13 +57,6 @@ export async function agentInit(config?: AgentConfig): Promise<void> {
   });
 }
 
-// ============================================================================
-// Task Management
-// ============================================================================
-
-/**
- * Submit a new task to the autonomous agent for execution.
- */
 export async function agentSubmitTask(
   description: string,
   autoApprove?: boolean,
@@ -108,9 +71,6 @@ export async function agentSubmitTask(
   });
 }
 
-/**
- * Get the current status of a task by ID.
- */
 export async function agentGetTaskStatus(taskId: string): Promise<TaskStatusResponse> {
   if (!isTauri) {
     console.debug('[agent] agentGetTaskStatus (mock)', taskId);
@@ -128,9 +88,6 @@ export async function agentGetTaskStatus(taskId: string): Promise<TaskStatusResp
   return invoke<TaskStatusResponse>('agent_get_task_status', { taskId });
 }
 
-/**
- * List all tasks managed by the agent.
- */
 export async function agentListTasks(): Promise<ListTasksResponse> {
   if (!isTauri) {
     console.debug('[agent] agentListTasks (mock)');
@@ -140,14 +97,6 @@ export async function agentListTasks(): Promise<ListTasksResponse> {
   return invoke<ListTasksResponse>('agent_list_tasks');
 }
 
-// ============================================================================
-// Trusted Workflows
-// ============================================================================
-
-/**
- * List all trusted workflows and their approved tool lists.
- * Returns a map of workflow hash -> approved tool names.
- */
 export async function agentListTrustedWorkflows(): Promise<TrustedWorkflowMap> {
   if (!isTauri) {
     console.debug('[agent] agentListTrustedWorkflows (mock)');
@@ -157,14 +106,6 @@ export async function agentListTrustedWorkflows(): Promise<TrustedWorkflowMap> {
   return invoke<TrustedWorkflowMap>('agent_list_trusted_workflows');
 }
 
-// ============================================================================
-// Agent Lifecycle
-// ============================================================================
-
-/**
- * Stop the autonomous agent.
- * Gracefully shuts down the agent loop.
- */
 export async function agentStop(): Promise<void> {
   if (!isTauri) {
     console.debug('[agent] agentStop (mock)');
@@ -174,15 +115,6 @@ export async function agentStop(): Promise<void> {
   return invoke<void>('agent_stop');
 }
 
-// ============================================================================
-// Billing-Aware Agent Task
-// ============================================================================
-
-/**
- * Start an agent task with automatic billing-aware model selection.
- * The backend selects the best model based on the user's subscription tier.
- * Returns the LLM response content.
- */
 export async function startAgentTask(
   goal: string,
   mode: string = 'default',
@@ -200,17 +132,8 @@ export async function startAgentTask(
   });
 }
 
-// ============================================================================
-// Approval Management
-// ============================================================================
-
-/** Decision for an approval request */
 export type ApprovalDecision = 'approve' | 'reject';
 
-/**
- * Resolve a pending tool execution approval.
- * Used by the approval UI to approve or reject tool calls.
- */
 export async function resolveApproval(
   approvalId: string,
   decision: ApprovalDecision,

@@ -24,21 +24,12 @@ import type {
 } from '@agiworkforce/types';
 import { defaultPermissionForTool } from '@agiworkforce/types';
 
-// ── Runtime detection (inline, no @agiworkforce/client-runtime dep needed) ──────────
-
 const isTauriEnv: boolean =
   typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
-// ── Public interface ─────────────────────────────────────────────────────────
-
 export interface ConnectorPermissionStore {
-  /** Which backend is active. */
   storage: ConnectorPermissionStorage;
 
-  /**
-   * Get the saved permission level for a tool, or `null` if not yet
-   * configured (caller should apply `defaultPermissionForTool(destructive)`).
-   */
   get(connectorId: string, toolName: string): Promise<ConnectorPermissionLevel | null>;
 
   /**
@@ -54,11 +45,8 @@ export interface ConnectorPermissionStore {
     destructive?: boolean,
   ): Promise<void>;
 
-  /** List all saved permissions for a connector. */
   list(connectorId: string): Promise<ConnectorToolPermission[]>;
 }
-
-// ── Factory ──────────────────────────────────────────────────────────────────
 
 export function getConnectorPermissionStore(): ConnectorPermissionStore {
   if (isTauriEnv) {
@@ -66,8 +54,6 @@ export function getConnectorPermissionStore(): ConnectorPermissionStore {
   }
   return new UnsupportedRuntimeStore();
 }
-
-// ── Local Vault Store (Tauri / Desktop) ──────────────────────────────────────
 
 class LocalVaultStore implements ConnectorPermissionStore {
   readonly storage: ConnectorPermissionStorage = 'local-vault';
@@ -120,24 +106,6 @@ class LocalVaultStore implements ConnectorPermissionStore {
   }
 }
 
-// ── Unsupported runtime (non-Tauri) ─────────────────────────────────────────
-//
-// CON-26: this used to return a `CloudStore` whose `getClient()` resolved
-// `globalThis['__agi_cloud_db__']` — a global set nowhere in the repo. Every
-// `set()` therefore returned a resolved promise having written nothing, and the
-// UI rendered a successful save; `get()`/`list()` returned null/[] as though the
-// user had simply never configured a permission. The queries were also
-// Supabase-shaped (`.from().select().eq().maybeSingle()`, `upsert` with
-// `onConflict`) against a stack from which Supabase has been removed, so even a
-// wired-up client would not have matched. A permission control that silently
-// discards writes is worse than no control at all.
-//
-// Connector tool permissions are enforced by the Rust side reading the
-// encrypted local vault (`connector_permission_get`/`_set`/`_list`). There is no
-// cloud-backed equivalent today, so a non-Tauri runtime must fail loudly rather
-// than pretend.
-
-/** Thrown when connector permissions are used outside the Tauri desktop runtime. */
 export class ConnectorPermissionsUnavailableError extends Error {
   readonly code = 'CONNECTOR_PERMISSIONS_UNAVAILABLE';
 
@@ -172,5 +140,4 @@ class UnsupportedRuntimeStore implements ConnectorPermissionStore {
   }
 }
 
-// Re-export the defaultPermissionForTool helper so callers can import from one place.
 export { defaultPermissionForTool };

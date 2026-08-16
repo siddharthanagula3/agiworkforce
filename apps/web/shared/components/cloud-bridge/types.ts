@@ -1,7 +1,3 @@
-/**
- * Cross-surface cloud-bridge type contract.
- * Must stay in sync with apps/desktop/src/features/cloud-bridge/types.ts.
- */
 
 export type InviteCodeSource =
   | 'connectors'

@@ -114,11 +114,6 @@ async function confirmMaxBypassCombination(): Promise<boolean> {
   return choice?.title === MAX_BYPASS_CONFIRM_ACTION;
 }
 
-/**
- * Load the durable consent markers before any agent controls are consumed.
- * Markers are cleared whenever the user leaves their elevated state, so each
- * future escalation requires a fresh confirmation.
- */
 export function initializeAgentModeConsent(context: vscode.ExtensionContext): void {
   const storedConsent =
     context.globalState.get<number>(BYPASS_CONSENT_KEY) === BYPASS_CONSENT_VERSION;
@@ -140,15 +135,10 @@ export function initializeAgentModeConsent(context: vscode.ExtensionContext): vo
   reconciliationQueue = Promise.resolve();
 }
 
-/** Fail closed when an unconfirmed raw setting claims bypass mode. */
 export function enforceAgentModeConsent(mode: ExtensionAgentMode): ExtensionAgentMode {
   return mode === 'bypass' && !bypassConsentActive ? 'auto' : mode;
 }
 
-/**
- * The only supported mutation boundary for in-product agent-mode controls.
- * Returns false when the user cancels either required escalation.
- */
 export async function setAgentModeWithConsent(
   context: vscode.ExtensionContext,
   mode: ExtensionAgentMode,
@@ -171,10 +161,6 @@ export async function setAgentModeWithConsent(
   return true;
 }
 
-/**
- * The only supported mutation boundary for in-product reasoning-effort controls.
- * Returns false when the user cancels the Max + Bypass compound-risk prompt.
- */
 export async function setAgentEffortWithConsent(
   context: vscode.ExtensionContext,
   effort: ExtensionAgentEffort,
@@ -191,11 +177,6 @@ export async function setAgentEffortWithConsent(
   return true;
 }
 
-/**
- * Reconcile edits made through VS Code's raw Settings UI or settings JSON.
- * Unconfirmed bypass is made ineffective by `enforceAgentModeConsent`, reset
- * to Auto, and only restored after the same modal confirmation used elsewhere.
- */
 export async function reconcileAgentModeConsent(context: vscode.ExtensionContext): Promise<void> {
   const configured = configuredAgentMode();
   if (configured !== 'bypass') {
@@ -212,11 +193,6 @@ export async function reconcileAgentModeConsent(context: vscode.ExtensionContext
   );
 }
 
-/**
- * Reconcile a raw effort edit that creates Max + Bypass without compound-risk
- * acknowledgement. High is the deterministic fail-closed effort while the
- * same modal used by in-product controls decides whether Max is restored.
- */
 export async function reconcileAgentEffortConsent(context: vscode.ExtensionContext): Promise<void> {
   const usesMaxBypass =
     configuredAgentEffort() === 'max' &&

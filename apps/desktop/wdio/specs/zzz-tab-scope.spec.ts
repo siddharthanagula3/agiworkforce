@@ -20,7 +20,6 @@ describe('tab trap scope check', () => {
     }));
     console.log('AFTER_TAB_FROM_GEAR', JSON.stringify(after));
 
-    // Now check Shift+Tab from composer.
     const composer = await $('textarea[aria-label="Chat message input"]');
     await composer.click();
     await browser.keys(['Shift', 'Tab']);

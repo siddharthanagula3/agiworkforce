@@ -1,10 +1,3 @@
-/**
- * /api/settings/sync — TRUST-BOUNDARY enforcement + delta semantics.
- *
- * The load-bearing tests here are the leak guards: no secret namespace and no
- * secret-looking key may ever cross the device boundary, even if a client pushes it.
- * A regression in `filterCloudSafeSettings`/`scrubSecrets` = a credential leak.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const queryMock = vi.fn();
@@ -118,15 +111,11 @@ describe('POST /api/settings/sync — push', () => {
     const sql = String(call![0]);
     expect(sql).toContain('user_settings.server_version = $3::bigint');
     expect(sql).not.toContain('excluded.updated_at >= user_settings.updated_at');
-    // A narrow Mobile/Desktop namespace must not replace sibling keys owned by
-    // another surface. The server merges each incoming namespace object.
     expect(sql).toContain('jsonb_each($2::jsonb)');
     expect(sql).toContain("coalesce(user_settings.settings, '{}'::jsonb) -> incoming.key");
-    // The stored JSONB param must NOT contain the byok secret.
     const stored = JSON.parse(String((call![1] as unknown[])[1]));
     expect(stored.byok).toBeUndefined();
     expect(stored.appearance).toEqual({ theme: 'dark' });
-    // user_id forced server-side.
     expect((call![1] as unknown[])[0]).toBe('u1');
     expect((call![1] as unknown[])[2]).toBe('2');
   });

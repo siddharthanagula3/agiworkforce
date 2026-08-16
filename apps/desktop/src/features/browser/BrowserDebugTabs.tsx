@@ -1,14 +1,3 @@
-/**
- * BrowserDebugTabs
- *
- * Extends browser debugging with four tabs:
- *  1. Replay   – existing BrowserReplayViewer
- *  2. DOM      – DOM snapshot at time of failure
- *  3. Network  – network requests captured during automation
- *  4. Console  – browser console messages
- *
- * Also adds an Error Analysis card for failed actions.
- */
 import { useState, useMemo } from 'react';
 import {
   AlertCircle,
@@ -35,11 +24,6 @@ import {
 } from '../../stores/browserStore';
 import { BrowserReplayViewer } from './BrowserReplayViewer';
 
-// =============================================================================
-// Types – these live in the store via network/console events
-// (Added as local types since they're not yet in browserStore)
-// =============================================================================
-
 export interface NetworkRequest {
   id: string;
   url: string;
@@ -63,10 +47,6 @@ export interface ConsoleMessage {
   lineNumber?: number;
   timestamp: number;
 }
-
-// =============================================================================
-// Helpers
-// =============================================================================
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -112,10 +92,6 @@ function getConsoleLevelConfig(level: ConsoleMessage['level']) {
   }
 }
 
-// =============================================================================
-// Suggested fix generator (pure heuristics – no network needed)
-// =============================================================================
-
 function suggestFix(action: BrowserAction): string {
   const { type, details } = action;
   const err = details.error ?? '';
@@ -153,10 +129,6 @@ function suggestFix(action: BrowserAction): string {
 
   return 'Review the DOM Snapshot to understand the page state at the time of failure, and check the Console tab for additional error details.';
 }
-
-// =============================================================================
-// Error Analysis Card
-// =============================================================================
 
 interface ErrorAnalysisProps {
   failedActions: BrowserAction[];
@@ -263,11 +235,6 @@ function ErrorAnalysis({ failedActions }: ErrorAnalysisProps) {
   );
 }
 
-// =============================================================================
-// DOM Snapshot tab
-// =============================================================================
-
-/** Renders HTML from DOM snapshots through DOMPurify instead of regex stripping. */
 function SanitizedDomPreview({ html }: { html: string }) {
   const sanitized = useMemo(() => sanitizeHtml(html), [html]);
   return (
@@ -303,7 +270,6 @@ function DOMSnapshotTab({ failedActions }: DOMSnapshotTabProps) {
   const snapshot = domSnapshots[selectedIdx];
   if (!snapshot) return null;
 
-  // Highlight failed selectors in the HTML
   const failedSelectors = failedActions
     .map((a) => a.details.selector)
     .filter((s): s is string => Boolean(s));
@@ -373,10 +339,6 @@ function DOMSnapshotTab({ failedActions }: DOMSnapshotTabProps) {
     </div>
   );
 }
-
-// =============================================================================
-// Network Log tab
-// =============================================================================
 
 interface NetworkLogTabProps {
   requests: NetworkRequest[];
@@ -481,10 +443,6 @@ function NetworkLogTab({ requests }: NetworkLogTabProps) {
   );
 }
 
-// =============================================================================
-// Console Log tab
-// =============================================================================
-
 interface ConsoleLogTabProps {
   messages: ConsoleMessage[];
 }
@@ -528,10 +486,6 @@ function ConsoleLogTab({ messages }: ConsoleLogTabProps) {
     </div>
   );
 }
-
-// =============================================================================
-// Tab bar
-// =============================================================================
 
 type DebugTab = 'replay' | 'errors' | 'dom' | 'network' | 'console';
 
@@ -608,15 +562,9 @@ function TabBar({
   );
 }
 
-// =============================================================================
-// Main export: BrowserDebugTabs
-// =============================================================================
-
 interface BrowserDebugTabsProps {
   className?: string;
-  /** Network requests captured externally (e.g. passed from parent) */
   networkRequests?: NetworkRequest[];
-  /** Console messages captured externally */
   consoleMessages?: ConsoleMessage[];
 }
 

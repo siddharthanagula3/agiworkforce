@@ -333,11 +333,6 @@ const DEFAULT_API_KEY_FORM: CreateApiKeyFormData = {
   scopes: ['models:read', 'inference:write'],
 };
 
-/**
- * Reachable Account-settings adapter for the API-key service. The older
- * full-page settings implementation still passes ApiKeysPanel explicit props;
- * this wrapper owns the same real query/mutation contract for WebSettingsModal.
- */
 export function ApiKeysManager() {
   const { data: apiKeys = [], isLoading, isError, error, refetch } = useAPIKeys();
   const createMutation = useCreateAPIKey();

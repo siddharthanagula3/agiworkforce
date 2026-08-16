@@ -61,11 +61,6 @@ function requireTopUpUnits(amountUsd: (typeof TOP_UP_PRESET_AMOUNTS_USD)[number]
   return units;
 }
 
-/**
- * Store-neutral business products. App Store Connect / Play Console IDs are
- * deployment configuration and are deliberately absent here: guessing an ID
- * makes a purchase surface look live before either store has registered it.
- */
 export const MOBILE_IAP_PRODUCT_DEFINITIONS = [
   {
     key: 'subscription_basic_monthly',

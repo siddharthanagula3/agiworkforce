@@ -1,9 +1,3 @@
-/**
- * CustomAgentEditor
- *
- * Form for creating or editing a custom agent configuration.
- * Writes the agent config to disk via the Rust backend.
- */
 
 import { Lock, Loader2, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -23,8 +17,6 @@ import {
   SelectValue,
 } from '@/ui/Select';
 
-// ---- Constants ---------------------------------------------------------------
-
 const INHERIT_OPTION = { value: '', label: 'Inherit from settings', provider: undefined };
 
 const TOOL_OPTIONS = [
@@ -43,15 +35,10 @@ const TOOL_OPTIONS = [
 
 type ToolOption = (typeof TOOL_OPTIONS)[number];
 
-// ---- Types -------------------------------------------------------------------
-
 interface CustomAgentEditorProps {
-  /** Existing agent to edit, or undefined to create a new one. */
   initialAgent?: CustomAgentConfig;
   onClose: () => void;
 }
-
-// ---- Helpers -----------------------------------------------------------------
 
 function createEmpty(): CustomAgentConfig {
   return {
@@ -63,8 +50,6 @@ function createEmpty(): CustomAgentConfig {
     scope: 'global',
   };
 }
-
-// ---- Component ---------------------------------------------------------------
 
 export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorProps) {
   const { saveAgent, deleteAgent, isLoading } = useCustomAgentsStore(
@@ -106,7 +91,6 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
 
   const isEditing = Boolean(initialAgent);
 
-  // Keep form in sync if the parent passes a different initialAgent (e.g. tab switch)
   useEffect(() => {
     if (initialAgent) {
       setForm({ ...initialAgent });

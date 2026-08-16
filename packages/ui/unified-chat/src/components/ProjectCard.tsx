@@ -4,37 +4,15 @@ import { cn } from '../lib/utils';
 import { useProjectStore } from '../stores/projectStore';
 import type { Project } from '../lib/types';
 
-/**
- * ProjectCard — single-card visual for the shared project gallery / sidebar.
- *
- * Round-2 audit P0 "Shared Projects component" (2026-05-21). Mirrors the
- * Claude desktop Projects gallery card pattern: name + description, star
- * toggle, conversation count, last-updated relative timestamp.
- *
- * Consumer surfaces (web, desktop, mobile-web preview, chrome-ext side-panel)
- * import this directly. Native React Native (apps/mobile) implements its own
- * `ProjectCard` because the platform's text rendering differs.
- *
- * Context menu (three-dot) actions use callback injection so this component
- * stays host-agnostic. The web host mounts ProjectSettingsDialog etc.
- */
-
 export interface ProjectCardProps {
   project: Project;
   active?: boolean;
   onSelect?: (project: Project) => void;
-  /** Called when the user chooses "Edit details" from the context menu. */
   onEdit?: (project: Project) => void;
-  /** Called when the user chooses "Archive" from the context menu. */
   onArchive?: (project: Project) => void;
-  /** Called when the user chooses "Unarchive" (shown when the project is archived). */
   onUnarchive?: (project: Project) => void;
-  /** Called when the user confirms "Delete" from the context menu. */
   onDelete?: (project: Project) => void;
-  /** Called after the star is toggled, with the new starred value, so the host
-   * can persist it (the store toggle alone is in-memory). */
   onStarChange?: (projectId: string, starred: boolean) => void;
-  /** Override the default time formatter — useful for i18n. */
   formatRelativeDate?: (iso: string) => string;
   className?: string;
 }
@@ -79,7 +57,6 @@ export function ProjectCard({
     [toggleStar, project.id, project.starred, onStarChange],
   );
 
-  // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
     function handleOutside(e: globalThis.MouseEvent) {
@@ -101,11 +78,6 @@ export function ProjectCard({
   const hasMenu = !!(onEdit || archiveAction || onDelete);
 
   return (
-    // Rendered as a role="button" div (not a native <button>) so the nested
-    // star-toggle and options <button>s below are valid HTML. A <button> may
-    // not contain another <button> — the old markup did, producing a React
-    // hydration warning on every Projects render (live audit 2026-07-10 §9).
-    // Keyboard access is preserved via tabIndex + Enter/Space handling.
     <div
       role="button"
       tabIndex={0}

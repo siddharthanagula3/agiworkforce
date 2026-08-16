@@ -54,7 +54,6 @@ export function setupChat(
     contextPanelProvider,
   );
 
-  // ── Memory tree (facts scoped to this workspace) ────────────────────────────
   const memoryTreeProvider = new MemoryTreeProvider(context.workspaceState);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('agi-workforce.memory', memoryTreeProvider),

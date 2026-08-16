@@ -1,10 +1,3 @@
-/**
- * SearchModal — Unified Spotlight Search (Cmd+K)
- *
- * Claude.ai-style unified search modal that searches across chats, projects,
- * and artifacts in one view. Shows type icons, timestamps, and project
- * attribution. Supports keyboard navigation and client-side fuzzy filtering.
- */
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Search, MessageSquare, Folder, File as FileIcon, FileCode, X, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,8 +20,6 @@ import {
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { isTauri } from '../../lib/runtimeEnvironment';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type ResultType = 'chat' | 'project' | 'library' | 'artifact';
 type FilterTab = 'all' | 'chats' | 'projects' | 'files';
 
@@ -38,7 +29,6 @@ interface SearchResult {
   title: string;
   subtitle?: string;
   updatedAt?: Date | string;
-  /** Payload for navigation on select */
   payload: ConversationSummary | Project | LibraryItem | ArtifactSummary;
 }
 
@@ -49,8 +39,6 @@ interface LibrarySearchState {
 }
 
 const EMPTY_LIBRARY_ITEMS: LibraryItem[] = [];
-
-// ─── Timestamp helper ─────────────────────────────────────────────────────────
 
 function formatTimestamp(date: Date | string | undefined): string {
   if (!date) return '';
@@ -67,8 +55,6 @@ function formatTimestamp(date: Date | string | undefined): string {
   if (diffDays < 7) return 'Past week';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
-
-// ─── Result icon ──────────────────────────────────────────────────────────────
 
 function ResultIcon({ type, selected }: { type: ResultType; selected: boolean }) {
   const className = cn(
@@ -88,8 +74,6 @@ function ResultIcon({ type, selected }: { type: ResultType; selected: boolean })
   }
 }
 
-// ─── SearchModal ──────────────────────────────────────────────────────────────
-
 export function SearchModal() {
   const isOpen = useSearchModal((s) => s.isOpen);
   const close = useSearchModal((s) => s.close);
@@ -101,12 +85,8 @@ export function SearchModal() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prefersReducedMotion = useReducedMotion();
-  // WebKit can leave a Framer Motion surface pinned to its invisible first
-  // keyframe in the bundled Tauri host. Native dialogs must be interactive on
-  // their first paint; reduced-motion users receive the same static entry.
   const disableEntryMotion = isTauri || prefersReducedMotion;
 
-  // Store data
   const conversations = useChatStore((s) => s.conversations);
   const selectConversation = useChatStore((s) => s.selectConversation);
   const projects = useProjectStore((s) => s.projects);
@@ -196,7 +176,6 @@ export function SearchModal() {
     };
   }, [libraryRequestKey, normalizedLibraryQuery]);
 
-  // Reset state when modal opens/closes
   useEffect(() => {
     if (!isOpen) return;
 
@@ -205,16 +184,12 @@ export function SearchModal() {
     setQuery('');
     setFilter('all');
     setSelectedIndex(0);
-    // The bundled native WebView can defer its first animation frame long
-    // enough to leave a visible modal without keyboard focus. The element is
-    // committed when this effect runs, so focus it immediately in Tauri.
     if (isTauri) {
       inputRef.current?.focus();
       return () => {
         if (previouslyFocused?.isConnected) previouslyFocused.focus();
       };
     }
-    // Autofocus input after animation frame
     const frameId = requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
@@ -224,12 +199,10 @@ export function SearchModal() {
     };
   }, [isOpen]);
 
-  // Reset selection when query or filter changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [query, filter]);
 
-  // Build search results from store data
   const results = useMemo((): SearchResult[] => {
     const q = query.trim().toLowerCase();
 
@@ -303,7 +276,6 @@ export function SearchModal() {
           }))
         : [];
 
-    // When there's no query, sort all by recency
     if (!q) {
       const allResults = [...chatResults, ...projectResults, ...libraryResults, ...artifactResults];
       return allResults.sort((a, b) => {
@@ -325,10 +297,8 @@ export function SearchModal() {
     libraryItems,
   ]);
 
-  // Group results by type for display
   const groupedResults = useMemo(() => {
     if (query.trim()) {
-      // In search mode, group by type
       const chats = results.filter((r) => r.type === 'chat');
       const projectItems = results.filter((r) => r.type === 'project');
       const files = results.filter((r) => r.type === 'library');
@@ -382,7 +352,6 @@ export function SearchModal() {
     ],
   );
 
-  // Keyboard navigation — only register the listener while the modal is open
   useEffect(() => {
     if (!isOpen) return;
 
@@ -493,7 +462,6 @@ export function SearchModal() {
 
   const renderGrouped = () => {
     if (!groupedResults) {
-      // Flat chronological list (no search query)
       if (results.length === 0) {
         return (
           <div className="px-4 py-10 text-center" role="status">
@@ -519,7 +487,6 @@ export function SearchModal() {
       );
     }
 
-    // Build a flat ordered index for keyboard nav: chats → projects → files → artifacts
     const orderedResults = [...chats, ...projectItems, ...files, ...artifacts];
 
     return (

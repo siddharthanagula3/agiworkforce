@@ -1,16 +1,3 @@
-/**
- * Voice Companion Mode — full-screen screen.
- *
- * Flow: idle → Listen (STT via on-device capture) → Think (selected local model)
- *       → Speak (on-device TTS) → loop back to Listen.
- *
- * Supports hands-free turn-taking (auto-relisten, recognizer finalizes on
- * silence) and push-to-talk (hold the orb to talk, release to send) via the
- * shared useVoiceConversation hook. The preference persists in settings.
- *
- * Design: the shared VoiceOrb (identical to voice in chat), dark gradient
- * background. All processing is on-device. No audio leaves the device.
- */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Alert, View, Pressable, StatusBar, useWindowDimensions, StyleSheet } from 'react-native';
@@ -40,10 +27,6 @@ import {
   type VoiceConversationPhase as Phase,
 } from '@/src/features/voice/hooks/useVoiceConversation';
 
-// ---------------------------------------------------------------------------
-// Phase state
-// ---------------------------------------------------------------------------
-
 const PHASE_LABEL: Record<Phase, string> = {
   idle: 'Tap to speak',
   listening: 'Listening...',
@@ -68,13 +51,7 @@ function phaseSublabel(phase: Phase, pttMode: boolean): string {
   return PHASE_SUBLABEL[phase];
 }
 
-// Brand colour for the companion's own chrome. The orb itself is the shared
-// VoiceOrb and carries the same palette as voice in chat — one presentation.
 const PHASE_LABEL_COLOR = colors.terraCotta;
-
-// ---------------------------------------------------------------------------
-// Background
-// ---------------------------------------------------------------------------
 
 function DarkGradientBg() {
   const { width, height } = useWindowDimensions();
@@ -96,10 +73,6 @@ function DarkGradientBg() {
     </Svg>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Orb — the shared VoiceOrb under the companion's press handling
-// ---------------------------------------------------------------------------
 
 function CompanionOrb({
   phase,
@@ -135,10 +108,6 @@ function CompanionOrb({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
-
 export default function VoiceScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string }>();
@@ -156,7 +125,6 @@ export default function VoiceScreen() {
 
   const convIdRef = useRef<string | null>(null);
 
-  // Ensure a conversation is ready for the session
   useEffect(() => {
     createConversation('Voice session')
       .then((id) => {
@@ -171,17 +139,12 @@ export default function VoiceScreen() {
     async (text: string) => {
       let convId = convIdRef.current;
       if (!convId) {
-        // The eager creation in the mount effect failed or hasn't resolved —
-        // retry on demand instead of failing the whole voice turn.
         convId = await createConversation('Voice session');
         convIdRef.current = convId;
       }
       const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[convId] ?? []);
       const accepted = await sendMessage(convId, text, selectedModel);
       if (!accepted) {
-        // A pre-flight gate blocked the send (sign-in, model/mode mismatch,
-        // queue full, …). The store's error is the real reason — throw it so
-        // the voice UI shows it instead of a misleading "Sent to chat."
         throw new Error(useChatStore.getState().error ?? 'Message was not sent. Please try again.');
       }
       return findNewAssistantResponse(

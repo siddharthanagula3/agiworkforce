@@ -131,8 +131,6 @@ export async function createIOSReminder({ title, due }: CreateIOSReminderInput):
     );
   }
 
-  // Expo Calendar's runtime explicitly accepts null to select the OS default
-  // reminders calendar; its SDK 57 declaration still narrows this to string.
   return Calendar.createReminderAsync(null as unknown as string, {
     title: normalizedTitle,
     ...(due

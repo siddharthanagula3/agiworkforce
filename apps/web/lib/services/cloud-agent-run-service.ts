@@ -41,11 +41,6 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   completed_at: string | Date | null;
   created_at: string | Date;
   updated_at: string | Date;
-  /**
-   * Populated only by the queries that join the pending-approval lateral. A run
-   * read through a query that does not join it is indistinguishable from a run
-   * with nothing pending, which is why both are mapped to `undefined`.
-   */
   pending_approval_requested_at?: string | Date | null;
   pending_approval_tool_calls?: unknown;
 }
@@ -164,11 +159,6 @@ export class CloudAgentApprovalCheckpointNotFoundError extends Error {
   }
 }
 
-/**
- * AUDIT-FIX AGT-3: an approval that aged out is materially different from one
- * that never existed — the caller must be able to tell the user the request
- * expired instead of reporting it as missing.
- */
 export class CloudAgentApprovalCheckpointExpiredError extends Error {
   constructor(message = 'Cloud agent approval checkpoint has expired') {
     super(message);
@@ -190,22 +180,8 @@ export class CloudAgentApprovalCheckpointConflictError extends Error {
   }
 }
 
-/**
- * AUDIT-FIX AGT-3: checkpoints carry no expiry column, so a pending approval
- * created months ago used to stay claimable and would execute its tools
- * against a world that has since changed. Bound the claim by checkpoint age.
- */
 export const APPROVAL_CHECKPOINT_TTL_HOURS = 24;
 
-/**
- * SQL that attaches the newest still-claimable approval checkpoint to a run
- * row. Kept as one fragment so the list (Tasks inbox) and the single-run read
- * (desktop reattach) can never disagree about which approval is outstanding.
- *
- * The TTL predicate mirrors `claimCloudAgentApprovalCheckpoint` deliberately:
- * an approval that can no longer be claimed must not be advertised with live
- * Approve/Deny affordances that would only ever answer 410.
- */
 const PENDING_APPROVAL_LATERAL = `
   left join lateral (
     select checkpoint.created_at, checkpoint.pending_tool_calls
@@ -222,13 +198,6 @@ const PENDING_APPROVAL_COLUMNS = `
   pending.created_at as pending_approval_requested_at,
   pending.pending_tool_calls as pending_approval_tool_calls`;
 
-/**
- * Project a checkpoint's validated tool calls into the inbox summary. Arguments
- * are truncated HERE, on the server, because the whole point of the summary is
- * that a client can render an approval it never streamed — shipping unbounded
- * tool arguments to every list response would make the Tasks page pay for
- * payloads it only ever shows the first line of.
- */
 function mapPendingApproval(row: CloudAgentRunRow): CloudAgentRun['pendingApproval'] {
   const requestedAt = toIsoTimestamp(row.pending_approval_requested_at ?? null);
   if (!requestedAt) return undefined;
@@ -348,18 +317,6 @@ export async function createCloudAgentRun(
   return requireRun(rows);
 }
 
-/**
- * Returns the run currently guarding a conversation, if one exists, so a new
- * turn cannot silently spawn a second parallel paid run for the same
- * conversation (the concurrency half of the follow-up/interrupt contract).
- *
- * "Active" means still doing billable work: state in ('running', 'queued') with
- * no cancellation requested yet. A cooperatively-cancelling run (its
- * `cancellation_requested_at` is set but the loop has not yet reached a terminal
- * boundary) is treated as vacating, so an immediate stop-then-send follow-up is
- * never rejected. The caller's own idempotent retry is excluded by
- * `excludeRequestId`, so replays of the same turn still resolve to their run.
- */
 export async function findActiveCloudAgentRunForConversation(
   db: DatabaseAdapter,
   input: { userId: string; conversationId: string; excludeRequestId?: string },
@@ -578,25 +535,11 @@ export async function listCloudAgentRuns(
 }
 
 export interface CloudAgentRunAssistantText {
-  /** Visible answer prose, concatenated in journal order. */
   text: string;
-  /** Highest journal sequence covered by `text`; -1 when the run has no events. */
   lastSequence: number;
-  /** Validated cards recovered from durable completed tool-operation receipts. */
   interactiveCards: InteractiveCard[];
 }
 
-/**
- * Rebuild the assistant's visible answer from the run journal.
- *
- * The durable workflow has no in-process text accumulator to hand to
- * `persistAssistantTurn` — the browser that started the turn may be gone, and a
- * Workflow step can be retried in a fresh process. The journal is the only
- * writer-independent record of what was said, and it is duplicate-free by
- * construction: `cloud_agent_events` is keyed on `(run_id, sequence)`, so a
- * replayed step re-appending the same envelope is a no-op rather than a second
- * copy of the sentence.
- */
 export async function readCloudAgentRunAssistantText(
   db: DatabaseAdapter,
   input: { userId: string; runId: string },
@@ -643,11 +586,6 @@ export async function readCloudAgentRunAssistantText(
   };
 }
 
-/**
- * Persist the exact validated execution state before an approval request is
- * visible to a client. A later request identifies only the run; it never
- * supplies the model transcript or tool arguments that will execute.
- */
 export async function saveCloudAgentApprovalCheckpoint(
   db: DatabaseAdapter,
   input: {
@@ -716,9 +654,6 @@ export async function saveCloudAgentApprovalCheckpoint(
     );
     if (!ownedRun[0]) throw new CloudAgentRunNotFoundError();
 
-    // Reaching another approval boundary proves the previously claimed
-    // checkpoint advanced successfully. Resolve that precise predecessor
-    // before inserting the next version.
     await tx.query(
       `update public.cloud_agent_approval_checkpoints
           set state = 'resolved',
@@ -757,11 +692,6 @@ export async function saveCloudAgentApprovalCheckpoint(
       ],
     );
 
-    // These envelopes were buffered by the tool loop and have not been shown
-    // to the client yet. Commit them in this same transaction so the persisted
-    // continuation cursor can never jump over an approval event after a
-    // disconnect or process crash. Live streaming re-appends them safely via
-    // the run journal's (run_id, sequence) idempotency key.
     for (const event of events) {
       await appendCloudAgentEventWithinTransaction(tx, {
         userId: input.userId,
@@ -781,10 +711,6 @@ export async function saveCloudAgentApprovalCheckpoint(
   });
 }
 
-/**
- * Atomically bind a complete decision set to the latest pending checkpoint.
- * Exact set equality prevents forged ids, omitted calls, and double resumes.
- */
 export async function claimCloudAgentApprovalCheckpoint(
   db: DatabaseAdapter,
   input: {
@@ -817,9 +743,6 @@ export async function claimCloudAgentApprovalCheckpoint(
       [input.runId, input.userId, APPROVAL_CHECKPOINT_TTL_HOURS],
     );
     if (!rows[0]) {
-      // AUDIT-FIX AGT-3: the age predicate above hides an expired checkpoint
-      // from the claim, so look again without it to report expiry distinctly
-      // rather than telling the user the approval simply vanished.
       const expiredRows = await tx.query<{ id: string }>(
         `select id from public.cloud_agent_approval_checkpoints
           where run_id = $1 and user_id = $2 and state = 'pending'
@@ -852,10 +775,6 @@ export async function claimCloudAgentApprovalCheckpoint(
       claimedRows,
       new CloudAgentApprovalCheckpointConflictError(),
     );
-    // AUDIT-FIX AGT-5: an unconstrained update revived terminal runs — a run
-    // that failed while its checkpoint stayed pending could be flipped back to
-    // 'running' by a client POST and execute side-effecting tools inside an
-    // execution context that was already torn down and billed out.
     const resumedRuns = await tx.query<CloudAgentRunRow>(
       `update public.cloud_agent_runs
           set state = 'running', completed_at = null, updated_at = now()
@@ -872,7 +791,6 @@ export async function claimCloudAgentApprovalCheckpoint(
   });
 }
 
-/** Mark only the lease that actually drove the continuation as terminal. */
 export async function completeCloudAgentApprovalCheckpoint(
   db: DatabaseAdapter,
   input: {
@@ -900,10 +818,6 @@ export async function completeCloudAgentApprovalCheckpoint(
   );
 }
 
-/**
- * Return a claimed checkpoint to pending only before execution begins. The
- * exact lease token prevents one continuation from releasing another.
- */
 export async function releaseCloudAgentApprovalCheckpoint(
   db: DatabaseAdapter,
   input: {

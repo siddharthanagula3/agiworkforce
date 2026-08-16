@@ -4,34 +4,7 @@ import { ContinuityOnboardingGate } from '@/src/features/continuity';
 import { useThemeColors } from '@/src/ui/theme';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 
-// Expo Router only wires up a route's error boundary when the route file
-// itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
-// otherwise just an ordinary, unreachable screen. ./error.tsx already has
-// the full retry / go-back UI matching this group's design system;
-// re-export it here under the name Expo Router looks for so it actually
-// fires for errors thrown anywhere inside the (app) drawer.
 export { default as ErrorBoundary } from './error';
-
-/**
- * App layout -- Drawer navigator wrapping the entire authenticated section.
- *
- * Navigation structure:
- *   Drawer (slide-out on iPhone, permanent sidebar on iPad)
- *     (tabs)/       -- Chat, Projects, Settings screens (retained for route compat)
- *     chats/        -- full chat history, filters, and global search
- *     artifacts/    -- mobile artifact gallery
- *     library/      -- aggregated generated images + artifacts view
- *     skills/       -- read-only Managed Cloud Skills catalog
- *     connectors/   -- Service integrations
- *     chat/[id]     -- Full chat conversation (pushes on top)
- *     agents/[id]   -- Agent detail view
- *     companion/    -- QR pairing + desktop companion
- *     profile/      -- User profile
- *     schedules/    -- Schedule management
- *     settings/*    -- Settings sub-pages
- * The drawer replaces the previous bottom tab bar, giving more room
- * for the 6 nav items + recents list + user profile card.
- */
 
 const HIDDEN = { drawerItemStyle: { display: 'none' as const } };
 

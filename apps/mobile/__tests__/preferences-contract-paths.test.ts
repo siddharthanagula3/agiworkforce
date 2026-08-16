@@ -1,13 +1,3 @@
-/**
- * MATCH-005 — the account settings route is owned by the cloud contract.
- *
- * Mobile retyped `/api/settings/preferences` at four call sites in
- * `services/preferences.ts`, while its sibling `/api/settings/sync` already went
- * through `MANAGED_CLOUD_SETTINGS_SYNC_PATH` in `services/cloudSyncEngine.ts`.
- * Relocating the contract is the only way to tell a real reference from a
- * value-equal literal: a literal keeps the old URL and silently splits Mobile
- * from Web and Desktop on a route move.
- */
 const RELOCATED = '/api/relocated-preferences';
 
 jest.mock('@agiworkforce/cloud-contracts', () => {

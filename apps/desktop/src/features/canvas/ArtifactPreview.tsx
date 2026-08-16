@@ -1,13 +1,3 @@
-/**
- * ArtifactPreview
- *
- * Renders the preview pane for a canvas artifact:
- * - html   → sandboxed iframe with srcDoc
- * - markdown → rendered HTML (simple regex-based)
- * - code (after execution) → terminal-style output box
- * - document → formatted text preview
- * - error state → red border + error message + "Fix Bug" button
- */
 
 import { AlertTriangle, Terminal, WrenchIcon } from 'lucide-react';
 import { useMemo } from 'react';
@@ -15,9 +5,6 @@ import { cn } from '../../lib/utils';
 import type { CanvasArtifact } from '../../stores/editingStore';
 import { sanitizeMarkdownHtml } from '../../utils/security';
 
-// ---------------------------------------------------------------------------
-// Simple markdown → HTML renderer (no external deps)
-// ---------------------------------------------------------------------------
 function renderMarkdown(md: string): string {
   const html = md
     // Escape HTML entities first
@@ -46,9 +33,7 @@ function renderMarkdown(md: string): string {
     .map((block) => {
       const trimmed = block.trim();
       if (!trimmed) return '';
-      // Don't wrap headings, hr, blockquote in <p>
       if (/^<(h[1-6]|hr|blockquote|li)/.test(trimmed)) return trimmed;
-      // Wrap list items in <ul>
       if (trimmed.includes('<li>')) return `<ul>${trimmed}</ul>`;
       return `<p>${trimmed.replace(/\n/g, '<br/>')}</p>`;
     })
@@ -57,16 +42,7 @@ function renderMarkdown(md: string): string {
   return html;
 }
 
-// ---------------------------------------------------------------------------
-// Sandboxed iframe sandbox attribute (no allow-same-origin per security rules).
-// No allow-popups: a popup can navigate to an external URL and exfiltrate data,
-// defeating the CSP connect-src 'none' egress control.
-// ---------------------------------------------------------------------------
 const IFRAME_SANDBOX = 'allow-scripts';
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
 
 interface ArtifactPreviewProps {
   artifact: CanvasArtifact;
@@ -80,7 +56,6 @@ export function ArtifactPreview({ artifact, onFixBug, className }: ArtifactPrevi
   const hasError = executionState === 'error' && errorMessage;
   const hasOutput = (executionState === 'success' || executionState === 'error') && executionOutput;
 
-  // Build HTML srcDoc with basic reset styles
   const htmlSrcDoc = useMemo(() => {
     if (type !== 'html') return '';
     return `<!DOCTYPE html>
@@ -145,7 +120,6 @@ ${content}
           <div className="h-full overflow-y-auto p-6 bg-gray-950">
             <div
               className="prose prose-sm prose-invert max-w-none"
-              // CRIT-009: sanitizeMarkdownHtml strips any unsafe tags/attributes via DOMPurify
               dangerouslySetInnerHTML={{ __html: sanitizeMarkdownHtml(markdownHtml) }}
             />
           </div>
@@ -164,7 +138,6 @@ ${content}
         {type === 'code' && (
           <div className="flex flex-col h-full">
             {hasOutput ? (
-              // Execution output panel
               <div className="flex flex-col h-full bg-gray-950">
                 <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-gray-900">
                   <Terminal className="h-3.5 w-3.5 text-gray-400" />

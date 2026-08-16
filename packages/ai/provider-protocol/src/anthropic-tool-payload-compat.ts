@@ -1,26 +1,3 @@
-/**
- * Anthropic-family tool payload compatibility wrapper.
- *
- * Some Anthropic-shaped endpoints (Vertex Anthropic, OpenRouter pass-through,
- * various proxies) accept OpenAI-style tool payloads — `{ function: { name,
- * description, parameters }, type: "function" }` and string `tool_choice`
- * modes — instead of Anthropic's native `{ name, description, input_schema }`
- * + object `tool_choice`. Triggering this compat is opt-in (some endpoints
- * reject the OpenAI shape outright).
- *
- * This module exports a generic stream-wrapper factory that mutates the
- * outgoing payload right before it leaves the agent. The wrapper signature is
- * generic over an opaque `StreamFn` so callers don't have to depend on
- * `@mariozechner/pi-agent-core`.
- *
- * Ported and adapted from OpenClaw
- * `src/agents/pi-embedded-runner/anthropic-family-tool-payload-compat.ts`
- * (MIT, Peter Steinberger). See THIRD_PARTY_LICENSES.md at repo root.
- *
- * Adaptation: we generalized the StreamFn type so the wrapper has no
- * dependency on pi-agent-core. Callers cast to whatever stream signature
- * their adapter uses.
- */
 
 export type AnthropicToolSchemaMode = 'openai-functions';
 export type AnthropicToolChoiceMode = 'openai-string-modes';
@@ -155,14 +132,6 @@ function normalizeOpenAiStringModeAnthropicToolChoice(toolChoice: unknown): unkn
   return toolChoice;
 }
 
-/**
- * Wrap a StreamFn so it mutates outgoing payloads to match the OpenAI-style
- * tool shape when the model's `api === "anthropic-messages"` AND either:
- *   - the caller passed `toolSchemaMode` / `toolChoiceMode` options, OR
- *   - the model's `compat.requiresOpenAiAnthropicToolPayload === true`
- *
- * Pass-through otherwise.
- */
 export function createAnthropicToolPayloadCompatibilityWrapper<
   TPayload = unknown,
   TModel extends ModelLike = ModelLike,
@@ -202,11 +171,6 @@ export function createAnthropicToolPayloadCompatibilityWrapper<
   };
 }
 
-/**
- * Convenience factory: pre-sets both `toolSchemaMode` AND `toolChoiceMode`
- * to OpenAI-style. This is the common "OpenRouter / Vertex-Anthropic /
- * generic OpenAI-shape proxy targeting Anthropic" combination.
- */
 export function createOpenAIAnthropicToolPayloadCompatibilityWrapper<
   TPayload = unknown,
   TModel extends ModelLike = ModelLike,

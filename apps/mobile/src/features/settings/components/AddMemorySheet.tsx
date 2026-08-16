@@ -12,7 +12,6 @@ interface AddMemorySheetProps {
   onSave: (content: string, category?: string) => void;
   onUpdate: (id: string, content: string) => void;
   open: boolean;
-  /** Cloud memories sync across devices — "removed from this device" is misleading there. */
   isCloud?: boolean;
 }
 

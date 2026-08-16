@@ -29,20 +29,6 @@
  * our servers never see them.
  */
 
-/**
- * Hostname suffixes that belong to OUR managed cloud infrastructure. Matched by
- * boundary-safe suffix (exact host OR `*.<suffix>`), so `notagiworkforce.com`
- * does NOT match `agiworkforce.com`.
- *
- * Reconciled UNION of desktop + mobile (do not invent — every entry is confirmed
- * from repo config/usage on one or both surfaces):
- *  - `agiworkforce.com` — public web app + `www.`/`api.`/`gateway.`/`signaling.`
- *    subdomains (the API gateway, managed gateway, and signaling relay).
- *  - `vercel.app` — Vercel preview/prod deploys of our web + LLM endpoints.
- *  - `neon.tech` — our managed Postgres (any project/branch subdomain).
- *  - `clerk.com` / `clerk.accounts.dev` / `clerk.dev` / `clerk.services` — our
- *    managed auth provider (Clerk) across its FAPI + accounts domains.
- */
 export const OUR_CLOUD_HOSTS: readonly string[] = [
   'agiworkforce.com', // web app + www/api/gateway/signaling subdomains
   'vercel.app', // Vercel-hosted web + LLM endpoints
@@ -53,25 +39,11 @@ export const OUR_CLOUD_HOSTS: readonly string[] = [
   'clerk.services', // managed auth (Clerk) — service domain
 ];
 
-/**
- * Normalize a host for comparison: lowercase and strip a single trailing FQDN
- * dot (`agiworkforce.com.` → `agiworkforce.com`). Returns '' for nullish/empty.
- */
 function normalizeHost(host: string | null | undefined): string {
   if (!host) return '';
   return host.toLowerCase().replace(/\.$/, '');
 }
 
-/**
- * Boundary-safe suffix match: `host` matches an entry `d` only when it equals
- * `d` exactly or ends with `.<d>`. This is the exact algorithm both surfaces
- * used, hoisted here verbatim. It rejects substring/prefix bypasses
- * (`notagiworkforce.com`, `agiworkforce.com.evil.example`, `evilvercel.app`).
- *
- * Exposed so a surface can reuse the SAME matcher for its own config-derived
- * hosts (mobile derives extra hosts from API_URL/WS_URL) on top of the shared
- * floor — see mobile's egressGuard.
- */
 export function matchesCloudHost(
   host: string | null | undefined,
   hosts: readonly string[],

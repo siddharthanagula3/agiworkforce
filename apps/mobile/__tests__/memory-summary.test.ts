@@ -1,9 +1,3 @@
-/**
- * PAR-M41 — the memory summary must be a projection of stored entries, never a
- * generated claim. These tests pin the two properties that make the screen
- * auditable: every rendered line comes from a stored fact, and the provenance
- * counts/dates come from the entries themselves.
- */
 import {
   describeMemoryFreshness,
   summarizeMemoryFacts,
@@ -51,7 +45,6 @@ describe('summarizeMemoryFacts', () => {
   });
 
   it('dedupes restatements of the same fact within a section', () => {
-    // Same normalized key as the write path uses (case + whitespace folded).
     const summary = summarizeMemoryFacts([
       fact({ id: '1', fact: 'Prefers  Rust' }),
       fact({ id: '2', fact: 'prefers rust' }),
@@ -60,7 +53,6 @@ describe('summarizeMemoryFacts', () => {
 
     expect(summary.sections).toHaveLength(1);
     expect(summary.sections[0].facts).toEqual(['Prefers  Rust', 'ships on Fridays']);
-    // Provenance still reports what it was generated FROM, not what survived.
     expect(summary.sourceCount).toBe(3);
     expect(summary.includedCount).toBe(2);
   });

@@ -1,18 +1,3 @@
-/**
- * SIX-22 — the chat document pickers must never advertise a file type the
- * parser and the attach-time validator always reject.
- *
- * Both chat screens used to hardcode their own MIME arrays that included
- * `application/msword` and the OOXML wordprocessingml type. `detectDocType`
- * has never recognised either, so `isParseableDocument` returned false and
- * `isAcceptableAttachment` answered "isn't a supported file type" for every
- * Word document the picker had just offered — a guaranteed dead end presented
- * as a supported option.
- *
- * These tests lock the invariant on the real (unmocked) parser: every MIME
- * type the pickers advertise is accepted by the validator, and neither screen
- * re-introduces a private list.
- */
 jest.mock('expo-file-system/legacy', () => ({
   readAsStringAsync: jest.fn(),
   getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 0 }),
@@ -42,8 +27,6 @@ describe('document picker MIME allowlist', () => {
   it.each([...PICKABLE_DOCUMENT_MIME_TYPES])(
     'the parser can extract text from every advertised type: %s',
     (mimeType) => {
-      // Extensionless uri: the MIME type alone has to be enough, because
-      // DocumentPicker hands back whatever name the provider supplied.
       expect(isParseableDocument('file:///picked', mimeType)).toBe(true);
     },
   );

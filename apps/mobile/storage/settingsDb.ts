@@ -1,9 +1,3 @@
-/**
- * Settings key-value store backed by SQLite.
- * For performance-sensitive preferences use the MMKV layer (lib/mmkv.ts).
- * This module handles settings that must co-locate with conversation data
- * (e.g., per-conversation overrides, per-model preferences).
- */
 
 import { getDb } from './db';
 

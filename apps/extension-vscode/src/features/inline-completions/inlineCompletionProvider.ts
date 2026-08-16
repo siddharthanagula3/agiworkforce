@@ -1,4 +1,3 @@
-// AUDIT-FIX: vscode-reorg
 import * as vscode from 'vscode';
 import {
   AgiWorkforceApiError,
@@ -10,9 +9,6 @@ import { Config } from '../../platform/config';
 import { isSensitiveFile } from '../../utils/pathSafety';
 import { showCloudUtilityErrorActions } from '../../core/cloudUtilityErrorActions';
 
-// PR-2D (F-09): in addition to the canonical sensitive-file denylist,
-// refuse inline completion in any file whose name suggests it holds
-// secrets/credentials — even if not matched by the exact regex set.
 const SECRETY_NAME_PATTERN =
   /(secret|credential|password|passwd|apikey|api[_-]key|token|private[_-]key)/i;
 
@@ -28,11 +24,6 @@ interface CachedCompletion {
   createdAt: number;
 }
 
-/**
- * Bounded LRU keyed by `${docUri}::line:col::context`. Replaces the previous
- * single-slot cache so typo-correction loops (move cursor 1 char, type, undo)
- * don't fire a fresh network request every keystroke.
- */
 class CompletionLruCache {
   private readonly map = new Map<string, CachedCompletion>();
 
@@ -43,7 +34,6 @@ class CompletionLruCache {
       this.map.delete(key);
       return undefined;
     }
-    // Touch (move to most-recent end of insertion order).
     this.map.delete(key);
     this.map.set(key, entry);
     return entry;
@@ -63,7 +53,6 @@ class CompletionLruCache {
     this.map.clear();
   }
 
-  /** Test-only inspector. */
   size(): number {
     return this.map.size;
   }
@@ -81,7 +70,6 @@ function extractCompletionText(raw: string, maxLength: number): string {
     return fromFence.slice(0, maxLength);
   }
 
-  // If the model returns explanatory prose, keep only the first meaningful line.
   const firstLine = trimmed.split('\n').find((line) => line.trim() !== '');
   const result = firstLine?.trim() ?? '';
   return result.slice(0, maxLength);
@@ -91,11 +79,6 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
   private readonly cache = new CompletionLruCache();
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingResolve: (() => void) | undefined;
-  /**
-   * When true, inline completions are silently suppressed for the remainder of
-   * the VS Code session.  Set on the first paywall hit so we don't spam the
-   * user with a toast on every keystroke.
-   */
   private paywallSuppressed = false;
 
   constructor(private readonly secrets: vscode.SecretStorage) {}
@@ -110,10 +93,6 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       return [];
     }
 
-    // PR-2D (F-09): refuse inline completions in sensitive files so that
-    // .env, .pem, .ssh/, credentials, etc. never flow to the LLM API
-    // on each keystroke. Also catches name-based hints
-    // (`my-secret.ts`, `apikey.config`) via the substring pattern.
     const fsPath = document.uri.fsPath;
     if (isSensitiveFile(fsPath) || SECRETY_NAME_PATTERN.test(fsPath)) {
       return [];
@@ -127,7 +106,6 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       return [];
     }
 
-    // Avoid trying to autocomplete into the middle of non-whitespace text.
     if (lineSuffix.trim() !== '') {
       return [];
     }
@@ -136,7 +114,6 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     const contextRange = new vscode.Range(startLine, 0, position.line, position.character);
     const contextBeforeCursor = document.getText(contextRange);
 
-    // Gather suffix context for better completions
     const endLine = Math.min(document.lineCount - 1, position.line + MAX_SUFFIX_LINES);
     const suffixRange = new vscode.Range(
       position.line,
@@ -158,7 +135,6 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     const debounceMs = Config.inlineCompletionsDebounceMs();
     const maxLength = Config.inlineCompletionsMaxLength();
 
-    // Debounce: cancel any pending request and wait for the user to stop typing
     if (this.debounceTimer !== undefined) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = undefined;
@@ -168,9 +144,6 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       this.pendingResolve = undefined;
     }
 
-    // Wait for debounce period before sending the request.
-    // The cancellation listener must be disposed to prevent accumulation
-    // across rapid keystrokes (each call registers a new listener).
     let cancelListener: vscode.Disposable | undefined;
     const shouldProceed = await new Promise<boolean>((resolve) => {
       this.pendingResolve = () => resolve(false);
@@ -232,14 +205,10 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       this.cache.set(cacheKey, completion);
       return [new vscode.InlineCompletionItem(completion, new vscode.Range(position, position))];
     } catch (error: unknown) {
-      // Keep inline completions silent; chat/commands surface explicit errors.
       if (error instanceof AgiWorkforcePaywallError) {
         const paywallError: AgiWorkforcePaywallError = error;
-        // Suppress all future inline completion requests for this session to
-        // avoid a toast+request loop on every keystroke.
         if (!this.paywallSuppressed) {
           this.paywallSuppressed = true;
-          // Show one shared, actionable paywall notification — never repeated.
           void showCloudUtilityErrorActions(paywallError, {
             title: 'AGI Workforce: Inline completions paused',
           });

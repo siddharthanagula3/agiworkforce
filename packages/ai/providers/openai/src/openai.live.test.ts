@@ -1,14 +1,3 @@
-/**
- * OpenAI adapter live smoke test.
- *
- * Hits api.openai.com with a tiny prompt and asserts the stream produces
- * the canonical chunks (text-delta, usage, stop). Skipped unless both
- * `AGIWORKFORCE_LIVE_TEST=1` and `OPENAI_API_KEY` are set.
- *
- * Run: `pnpm --filter @agiworkforce/providers-openai test:live`
- *
- * Cost: ~5-50 tokens per invocation (tiny prompt + 32 token cap).
- */
 
 import { describe, expect, it } from 'vitest';
 import { getTaskModelForProvider, type StreamChunk } from '@agiworkforce/types';
@@ -24,7 +13,6 @@ if (!LIVE_MODEL_ID) {
   throw new Error('The canonical OpenAI fast-completion route must exist');
 }
 
-// llm-guardrail-allow: env-gated live-provider test; makes real paid API calls, deliberately skipped without keys
 describe.skipIf(skip)('OpenAI adapter live', () => {
   it('streams a tiny completion end-to-end', async () => {
     const adapter = createOpenAIAdapter({ apiKey, skipDiscovery: true });
@@ -69,7 +57,6 @@ describe.skipIf(skip)('OpenAI adapter live', () => {
   });
 });
 
-// llm-guardrail-allow: visible placeholder row so skipped live suites stay discoverable in test output
 describe.skipIf(!skip)('OpenAI adapter live (skipped)', () => {
   it.skip('set AGIWORKFORCE_LIVE_TEST=1 + OPENAI_API_KEY to run', () => {});
 });

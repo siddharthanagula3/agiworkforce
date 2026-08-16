@@ -4,7 +4,6 @@ import { createMapSearchToolDefinition, executeMapSearchTool } from './map-searc
 
 const NOW = () => new Date('2026-08-11T12:00:00.000Z');
 
-/** Stand-in for the Nominatim call; production resolves through the real one. */
 const resolveView = vi.fn(async () => ({
   view: {
     latitude: 30.2672,
@@ -37,10 +36,8 @@ describe('map search tool service', () => {
     expect(outcome.card.body.actions.every((action) => action.url.startsWith('https://'))).toBe(
       true,
     );
-    // The viewport exists and carries attribution, so the card can paint tiles.
     expect(outcome.card.body.view?.zoom).toBe(11);
     expect(outcome.card.body.view?.attribution).toContain('OpenStreetMap');
-    // Identity comes from the GEOCODER, never from the model's phrasing.
     expect(outcome.card.body.places?.[0]?.label).toContain('Travis County');
   });
 
@@ -52,7 +49,6 @@ describe('map search tool service', () => {
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok || !outcome.card.recognized || outcome.card.kind !== 'map-search.v1') return;
-    // No fabricated centre: absent view is how the renderer knows to degrade.
     expect(outcome.card.body.view).toBeUndefined();
     expect(outcome.card.body.places).toBeUndefined();
     expect(outcome.card.body.actions).toHaveLength(2);

@@ -2,9 +2,7 @@ export interface VoicePreset {
   id: string;
   name: string;
   description: string;
-  /** Keywords to match against system voice names */
   voiceKeywords: string[];
-  /** Fallback speech rate if no matching voice found */
   rate: number;
   pitch: number;
 }
@@ -52,15 +50,10 @@ export const VOICE_PRESETS: VoicePreset[] = [
   },
 ];
 
-/**
- * Find the best system voice match for a preset.
- * Searches available voices for keyword matches in voice name.
- */
 export function findVoiceForPreset(
   preset: VoicePreset,
   availableVoices: Array<{ identifier: string; name: string; language: string }>,
 ): string | null {
-  // Only consider English voices
   const englishVoices = availableVoices.filter((v) => v.language.startsWith('en'));
 
   for (const keyword of preset.voiceKeywords) {
@@ -68,6 +61,5 @@ export function findVoiceForPreset(
     if (match) return match.identifier;
   }
 
-  // Fallback to first English voice
   return englishVoices[0]?.identifier ?? null;
 }

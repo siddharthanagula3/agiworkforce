@@ -1,35 +1,3 @@
-/**
- * Mobile cloud sync engine (P2 Phase 1).
- *
- * Delta-syncs the CLOUD chat store (`chatCloudMessageStore`) with the managed-cloud
- * `/api/chat/sync` endpoint: push locally-changed rows, then pull everything with a
- * `server_version` greater than our cursor, advancing the cursor as we go.
- *
- * Also delta-syncs the CLOUD memory store (`cloudMemoryStore`) with the managed-cloud
- * `/api/memory/sync` endpoint using a SEPARATE memory cursor (independent from the
- * chat cursor). Memory sync runs inside the same `syncNow()` call, gated by the same
- * `isManagedSyncEnabled()` check.
- *
- * Also delta-syncs managed-cloud user settings with `/api/settings/sync` using a
- * SEPARATE settings cursor (independent from chat/memory/project cursors). Settings
- * sync runs last inside `syncNow()`. Only cloud-safe namespaces are ever pushed or
- * applied (see services/cloudSettingsMapping.ts).
- *
- * MANAGED-ONLY: every entry point is gated on `isManagedSyncEnabled()` and the `api`
- * client routes through `guardedFetch`, which independently refuses any network I/O
- * in Local mode. Local-mode conversations live in a separate store and are never
- * touched here. IDs are UUIDv7 (client-generated, collision-free, time-ordered).
- *
- * Wave 4: the PURE apply/cursor logic below (conversation/message delta apply,
- * memory delta apply, push-item mapping, cursor arithmetic, settings push/pull
- * gating) delegates to @agiworkforce/sync — the same
- * rules desktop's Rust cloud_sync.rs implements natively and keeps in sync
- * with via golden-fixture replay (packages/client/sync/src/__fixtures__).
- * What stays here is mobile-only glue: Zustand store access (the "port"
- * adapters below), scheduling, egress-guarded transport, and Zod validation.
- * Project apply and memory/project push mapping were intentionally NOT
- * extracted — see the inline scope notes at each call site.
- */
 import { api } from './api';
 import { managedCloudProjects } from './managedCloudProjects';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
@@ -54,12 +22,6 @@ import {
   isStaleCloudAccountOperation,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
-// Wire shapes + pure apply/cursor logic come from the shared cloud contracts
-// and sync-apply modules (@agiworkforce/sync) — the same schemas the web
-// routes' contract tests enforce server-side, and the same apply rules
-// desktop's Rust engine replays via golden fixtures. Every pull/push response
-// is still validated here, so a server-shape drift throws into syncNow()'s
-// catch (status 'error') instead of silently mis-applying deltas.
 import {
   ChatSyncPullResponseSchema,
   ChatSyncPushResponseSchema,
@@ -107,11 +69,6 @@ const MEMORY_SYNC_PATH = '/api/memory/sync';
 /** Safety bound on the pull pagination loop (each page is up to 500 rows). */
 const PULL_PAGE_GUARD = 50;
 
-/**
- * Managed-only gate: the cloud-chat feature is on AND the app is in cloud mode.
- * The `api` client's guardedFetch is an independent fail-closed backstop that
- * refuses egress in Local mode regardless of this check.
- */
 export function isManagedSyncEnabled(): boolean {
   try {
     return (
@@ -123,15 +80,6 @@ export function isManagedSyncEnabled(): boolean {
     return false;
   }
 }
-
-// ── Port adapters over the Zustand cloud stores ─────────────────────────────
-//
-// The pure apply rules live in @agiworkforce/sync;
-// these adapters are the mobile-specific glue that satisfies its port
-// interfaces against chatCloudMessageStore. Each method does a live
-// `.getState()` read/write (never a cached snapshot), so a mutation from an
-// earlier delta in the same apply call is visible to a later one — matching
-// the original single-pass implementation's behavior.
 
 const conversationPort: ConversationStorePort = {
   get: (id) => {
@@ -170,23 +118,10 @@ const conversationPort: ConversationStorePort = {
   },
 };
 
-/**
- * Normalize a possibly-non-string ChatMessage content field to the wire's
- * `content: string` requirement. Used ONLY at the push (wire) boundary,
- * matching the original push()'s guard exactly — NOT in the port's
- * getMessages below, where `content` must pass through byte-for-byte
- * unchanged for any message not targeted by the current delta batch (see
- * that comment for why).
- */
 function messageContentToString(content: unknown): string {
   return typeof content === 'string' ? content : JSON.stringify(content);
 }
 
-/**
- * Project pending approval cards into sync metadata. This is display state
- * only; the approval endpoint ignores it and loads executable arguments from
- * the tenant-owned server checkpoint.
- */
 function messageMetadataForSync(message: ChatMessage): Record<string, unknown> | null {
   const base = message.metadata ? { ...message.metadata } : {};
   const candidateImageUrl =
@@ -202,9 +137,6 @@ function messageMetadataForSync(message: ChatMessage): Record<string, unknown> |
           candidateImageUrl === undefined ? undefined : { url: candidateImageUrl },
         );
 
-  // Image metadata crosses the device boundary only as a validated,
-  // owner-scoped `/api/files/<uuid>` identity. Remove any legacy provider URL
-  // or inline payload before rebuilding the bounded projection below.
   delete base['imageUrl'];
   delete base['imageGenPrompt'];
   delete base['imageGenModel'];
@@ -259,8 +191,6 @@ function messageMetadataForSync(message: ChatMessage): Record<string, unknown> |
       calls,
     });
   } else if (runReference.success || 'cloudApproval' in base) {
-    // An explicit null clears approval cards on other devices after the run
-    // resumes or terminates. Omitting the key would leave stale cards behind.
     base.cloudApproval = null;
   }
 
@@ -378,15 +308,6 @@ function patchMessageServerVersion(
 const messagePort: MessageStorePort = {
   getMessages: (conversationId) => {
     const msgs = useChatCloudMessageStore.getState().messages[conversationId] ?? [];
-    // NOTE: `content` is passed through AS-IS (never stringified here), even
-    // though ChatMessage.content is typed as string. applyMessageDeltas only
-    // overwrites `content` for ids present in the delta batch (from the
-    // wire, always a real string); every OTHER message in this list is a
-    // pure pass-through — getMessages → (unmodified) → setMessages's
-    // `{...existing}` overlay writes the exact original value back. The
-    // original single-pass applyMessageDeltas never touched a non-delta'd
-    // message's content at all, so this round-trip must be lossless,
-    // regardless of what content actually holds at runtime.
     return msgs.map((m) => ({
       id: m.id,
       role: m.role,
@@ -399,11 +320,6 @@ const messagePort: MessageStorePort = {
     }));
   },
   setMessages: (conversationId, records) => {
-    // Re-attach each record onto its EXISTING full ChatMessage (if any) so
-    // rich, sync-irrelevant fields (attachments, artifacts, toolCalls, steps,
-    // image-gen state, ...) survive an apply — the shared apply function only
-    // ever sees the minimal SyncMessageRecord projection above, never the
-    // full local message shape.
     const existingById = new Map(
       (useChatCloudMessageStore.getState().messages[conversationId] ?? []).map((m) => [m.id, m]),
     );
@@ -459,8 +375,6 @@ const messagePort: MessageStorePort = {
   },
 };
 
-// ── Apply pulled deltas into the cloud store ────────────────────────────────────
-
 /**
  * Applies pulled conversation deltas via the shared sync-apply rule (see
  * @agiworkforce/sync conversations.ts: tombstone-remove, server-revision
@@ -478,8 +392,6 @@ function applyMessageDeltas(deltas: MessageWireDelta[]): void {
   applyMessageDeltasCore(messagePort, deltas);
 }
 
-// ── Pull ────────────────────────────────────────────────────────────────────────
-
 async function pull(account: CloudAccountEpoch): Promise<void> {
   let cursor = useCloudSyncStateStore.getState().cursor;
   for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
@@ -488,27 +400,17 @@ async function pull(account: CloudAccountEpoch): Promise<void> {
     const res = ChatSyncPullResponseSchema.parse(raw);
     applyConversationDeltas(res.conversations);
     applyMessageDeltas(res.messages);
-    // Artifacts (0039): mobile is a PULLER — apply pulled cloud artifacts via the shared
-    // state-sync logic. Kept in a separate store slice; the gallery merges on render.
     useArtifactStore.getState().applyCloudArtifactDeltas(res.artifacts, account.ownerId);
-    // Trust the server's SAFE cursor. The two tables paginate independently and
-    // share one version sequence, so taking the max of per-row server_versions
-    // overshoots the lagging table's frontier and skips rows that fall in the gap
-    // (the server now bounds the cursor to that frontier). Only ever move forward.
     cursor = selectNextCursor(cursor, res.cursor);
     useCloudSyncStateStore.getState().setCursor(cursor);
     if (!res.hasMore) break;
   }
 }
 
-// ── Push ────────────────────────────────────────────────────────────────────────
-
 async function push(account: CloudAccountEpoch): Promise<void> {
   const { dirtyConversationIds, dirtyMessages } = useCloudSyncStateStore.getState();
   if (dirtyConversationIds.length === 0 && dirtyMessages.length === 0) return;
 
-  // Conversations are sent first (the server upserts them before messages, so a
-  // new conversation's messages pass the ownership EXISTS check in one round-trip).
   const conversationSnapshots = dirtyConversationIds
     .map((id) => conversationPort.get(id))
     .filter((c): c is SyncConversationRecord => Boolean(c));
@@ -517,9 +419,6 @@ async function push(account: CloudAccountEpoch): Promise<void> {
 
   const cloud = useChatCloudMessageStore.getState();
 
-  // Split message refs into buildable (a syncable local row exists) and dead (the
-  // row vanished locally, or is a non-syncable 'tool' record). Dead refs are dropped
-  // unconditionally; buildable refs are only cleared once the server ACKS them.
   const buildableRefs: DirtyMessageRef[] = [];
   const deadRefs: DirtyMessageRef[] = [];
   const messages: MessagePushItem[] = [];
@@ -609,18 +508,12 @@ async function push(account: CloudAccountEpoch): Promise<void> {
     }
   }
 
-  // Clear a conversation only after an exact-snapshot ACK or deterministic server
-  // winner. Edits made while either conversation or message requests are in
-  // flight keep their dirty refs and are rebased onto the returned revision.
-  // An unacked orphan stays dirty until its parent reaches the server.
   const clearedMessageRefs = [
     ...deadRefs,
     ...buildableRefs.filter((ref) => resolvedMessageIds.has(ref.messageId)),
   ];
   useCloudSyncStateStore.getState().clearDirty([...resolvedConversationIds], clearedMessageRefs);
 }
-
-// ── Memory pull ────────────────────────────────────────────────────────────────
 
 async function pullMemory(account: CloudAccountEpoch): Promise<void> {
   let cursor = useMemorySyncStateStore.getState().memoryCursor;
@@ -630,9 +523,6 @@ async function pullMemory(account: CloudAccountEpoch): Promise<void> {
     const res = MemorySyncPullResponseSchema.parse(raw);
     const memories = res.memories;
     if (memories.length > 0) {
-      // Map wire snake_case → client camelCase, then upsert/tombstone by id —
-      // both steps are the shared sync-apply rule (memory.ts); the engine's
-      // only job is to read the current entries and write the merged result.
       const current: CloudMemoryEntry[] = useCloudMemoryStore.getState().entries;
       const dirtyIds = useMemorySyncStateStore.getState().dirtyMemoryIds;
       const merged = applyMemoryDeltas(current, memories.map(mapMemoryWireDelta), dirtyIds);
@@ -644,8 +534,6 @@ async function pullMemory(account: CloudAccountEpoch): Promise<void> {
   }
 }
 
-// ── Memory push ────────────────────────────────────────────────────────────────
-
 async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const { dirtyMemoryIds } = useMemorySyncStateStore.getState();
   if (dirtyMemoryIds.length === 0) return;
@@ -653,7 +541,6 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const allEntries = useCloudMemoryStore.getState().entries;
   const entryById = new Map(allEntries.map((e) => [e.id, e]));
 
-  // Separate live entries from dead refs (entry vanished from store — skip, clear).
   const liveIds: string[] = [];
   const deadIds: string[] = [];
   const payload = [] as ReturnType<typeof toMemoryPushItem>[];
@@ -665,11 +552,9 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
       continue;
     }
     liveIds.push(id);
-    // Deleted entries are sent as tombstones; the server applies the soft-delete.
     payload.push(toMemoryPushItem(entry));
   }
 
-  // Dead refs: clear immediately (nothing to push).
   const ackedIds = new Set<string>();
   const resolvedIds = new Set<string>();
   if (payload.length > 0) {
@@ -717,7 +602,6 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
     }
   }
 
-  // Hard-delete tombstones that the server acked.
   for (const id of liveIds) {
     const entry = entryById.get(id);
     if (entry?.isDeleted && ackedIds.has(id) && resolvedIds.has(id)) {
@@ -725,12 +609,9 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
     }
   }
 
-  // Clear dirty queue for: dead refs + server-acked live refs.
   const toClear = [...deadIds, ...resolvedIds];
   useMemorySyncStateStore.getState().clearMemoryDirty(toClear);
 }
-
-// ── Project pull ───────────────────────────────────────────────────────────────
 
 async function pullProjects(account: CloudAccountEpoch): Promise<void> {
   let cursor = useProjectSyncStateStore.getState().projectCursor;
@@ -739,9 +620,6 @@ async function pullProjects(account: CloudAccountEpoch): Promise<void> {
     assertCloudAccountEpochCurrent(account);
     const items = res.projects;
     if (items.length > 0) {
-      // Map wire snake_case → client camelCase via the shared mapping (projects.ts).
-      // The upsert/tombstone REDUCER stays store-owned (cloudProjectStore also
-      // clears activeProjectId on a tombstone — see projects.ts's scope note).
       const deltas: CloudProject[] = items.map(mapProjectWireDelta);
       const dirtyIds = new Set(useProjectSyncStateStore.getState().dirtyProjectIds);
       const preserved: CloudProject[] = [];
@@ -749,8 +627,6 @@ async function pullProjects(account: CloudAccountEpoch): Promise<void> {
       for (const delta of deltas) {
         const local = useCloudProjectStore.getState().projects.find((p) => p.id === delta.id);
         if (dirtyIds.has(delta.id) && local && delta.deletedAt === null) {
-          // A local edit happened after the snapshot sent by this sync. Preserve
-          // that edit, but advance its CAS base to the latest server revision.
           preserved.push({ ...local, serverVersion: delta.serverVersion });
         } else {
           authoritative.push(delta);
@@ -769,8 +645,6 @@ async function pullProjects(account: CloudAccountEpoch): Promise<void> {
   }
 }
 
-// ── Project push ───────────────────────────────────────────────────────────────
-
 async function pushProjects(account: CloudAccountEpoch): Promise<void> {
   const { dirtyProjectIds } = useProjectSyncStateStore.getState();
   if (dirtyProjectIds.length === 0) return;
@@ -778,7 +652,6 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
   const allProjects = useCloudProjectStore.getState().projects;
   const projectById = new Map(allProjects.map((p) => [p.id, p]));
 
-  // Separate live projects from dead refs (project vanished from store — skip, clear).
   const liveIds: string[] = [];
   const deadIds: string[] = [];
   const payload: ProjectSyncPushItem[] = [];
@@ -790,7 +663,6 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
       continue;
     }
     liveIds.push(id);
-    // Tombstone projects are sent with deletedAt; the server applies the soft-delete.
     payload.push({
       id: project.id,
       name: project.name,
@@ -804,7 +676,6 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
     });
   }
 
-  // Dead refs: clear immediately (nothing to push).
   const ackedIds = new Set<string>();
   const resolvedConflictIds = new Set<string>();
   if (payload.length > 0) {
@@ -833,8 +704,6 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
       }
       const serverWinner = mapProjectWireDelta(conflict.current);
       if (serverWinner.deletedAt !== null) {
-        // Deletion is authoritative across every Managed Cloud surface. Never
-        // resurrect a project merely because a local edit raced the tombstone.
         useCloudProjectStore.getState().applyCloudProjectDeltas([serverWinner]);
         resolvedConflictIds.add(conflict.id);
         continue;
@@ -851,7 +720,6 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
     }
   }
 
-  // Hard-delete tombstones that the server acked.
   for (const id of liveIds) {
     const project = projectById.get(id);
     if (project?.deletedAt !== null && ackedIds.has(id) && resolvedConflictIds.has(id)) {
@@ -859,12 +727,10 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
     }
   }
 
-  // Clear dirty queue for: dead refs + server-acked live refs.
   const toClear = [...deadIds, ...resolvedConflictIds];
   useProjectSyncStateStore.getState().clearProjectDirty(toClear);
 }
 
-/** Compare only fields carried by the project sync mutation, not local clocks/revisions. */
 function projectSyncContentMatches(left: CloudProject, right: CloudProject): boolean {
   return (
     left.id === right.id &&
@@ -878,25 +744,6 @@ function projectSyncContentMatches(left: CloudProject, right: CloudProject): boo
   );
 }
 
-// ── Settings push ───────────────────────────────────────────────────────────────
-
-/**
- * Push the cloud-safe settings projection if a real local edit has been made since
- * the last push. Gated by the shared `shouldPushSettings` rule (settings.ts):
- *
- * 1. `settingsUpdatedAt !== null` — null means this device has never changed any
- *    cloud-safe setting (factory defaults). A fresh device must NOT push defaults
- *    before pulling, because it has not observed a server revision. Only real
- *    edits (stamped by cloud-safe setters) are pushed.
- *
- * 2. Snapshot-diff: the current cloud projection serializes differently from
- *    `lastPushedSnapshot`. Skips the POST when nothing changed since last push
- *    (prevents redundant network I/O on background sync cycles).
- *
- * `settingsUpdatedAt` remains a local-only dirty marker. It never crosses the wire
- * and never participates in conflict resolution. The push uses the last observed
- * server revision as `baseVersion`.
- */
 function parseSettingsSnapshot(serialized: string): CloudSafeSettings {
   if (!serialized) return {};
   try {
@@ -920,8 +767,6 @@ async function pushSettings(account: CloudAccountEpoch): Promise<CloudSettings> 
 
   if (!shouldPushSettings(settingsUpdatedAt, currentJson, lastPushedSnapshot)) return current;
 
-  // Mobile owns only a subset of each namespace. Carry forward the complete
-  // server document so a theme edit cannot erase Desktop/Web-only keys.
   const outgoing = mergeCloudSafeSettings(
     parseSettingsSnapshot(serverSnapshot),
     current as CloudSafeSettings,
@@ -934,8 +779,6 @@ async function pushSettings(account: CloudAccountEpoch): Promise<CloudSettings> 
   assertCloudAccountEpochCurrent(account);
   const res = SettingsSyncPushResponseSchema.parse(raw);
 
-  // Only an accepted compare-and-swap owns the returned revision. On conflict,
-  // retain the old cursor so the following pull can retrieve the server winner.
   if (res.applied) {
     useSettingsSyncStateStore
       .getState()
@@ -944,22 +787,10 @@ async function pushSettings(account: CloudAccountEpoch): Promise<CloudSettings> 
       );
     useSettingsSyncStateStore.getState().setServerSnapshot(JSON.stringify(outgoing));
   }
-  // The attempted local projection is the three-way-merge base. On a conflict,
-  // that attempt loses to the server winner; only edits made after it are replayed.
   useSettingsSyncStateStore.getState().setLastPushedSnapshot(currentJson);
   return current;
 }
 
-// ── Settings pull ───────────────────────────────────────────────────────────────
-
-/**
- * Pull cloud settings. Settings is a single document (not a collection), so
- * there is no pagination loop — the server always returns hasMore:false.
- *
- * After applying the pulled namespaces into the live store, update the baseline
- * snapshot so the next pushSettings() call does not re-push what was just pulled
- * (which would create an infinite churn loop).
- */
 async function pullSettings(
   localRequestBase: CloudSettings,
   account: CloudAccountEpoch,
@@ -974,7 +805,6 @@ async function pullSettings(
   const pulledSettings = res.settings;
   const advancedCursor = selectNextCursor(cursor, res.cursor);
 
-  // Only apply if the server returned a new cursor (something changed).
   if (shouldApplyPulledSettings(advancedCursor, cursor, Object.keys(pulledSettings).length)) {
     const dirtyMarkerBeforeApply = useCloudSettingsStore.getState().settingsUpdatedAt;
     const localCurrent = toCloudSettings(useCloudSettingsStore.getState());
@@ -984,8 +814,6 @@ async function pullSettings(
       localCurrent as CloudSafeSettings,
     );
 
-    // Apply the server winner first so we can record a local-surface baseline,
-    // then replay only edits made while the request was in flight.
     applyCloudSettings(pulledSettings as CloudSettings);
     const serverLocalProjection = toCloudSettings(useCloudSettingsStore.getState());
     applyCloudSettings(rebased.localChanges as CloudSettings);
@@ -1003,20 +831,9 @@ async function pullSettings(
   useSettingsSyncStateStore.getState().setSettingsCursor(advancedCursor);
 }
 
-// ── Public API ──────────────────────────────────────────────────────────────────
-
 let syncingAccountKey: string | null = null;
 
-/**
- * Push local changes, then pull deltas. No-op (and zero network I/O) unless managed
- * mode is active. Single-flight: a concurrent call is dropped while one is in flight.
- */
 export async function syncNow(): Promise<void> {
-  // ── GATING ENFORCEMENT POINT ────────────────────────────────────────────
-  // Both chat AND memory sync are gated here. isManagedSyncEnabled() requires
-  // FEATURES.cloudChat === true AND appMode === 'cloud'. A Local-mode call exits
-  // before any network I/O. The api client's guardedFetch is an independent
-  // fail-closed backstop that refuses egress in Local mode regardless.
   if (!isManagedSyncEnabled()) return;
   const account = captureCloudAccountEpoch();
   if (!account) return;
@@ -1025,24 +842,12 @@ export async function syncNow(): Promise<void> {
   syncingAccountKey = accountKey;
   useCloudSyncStateStore.getState().setStatus('syncing');
   try {
-    // Chat sync: push dirty conversations/messages, then pull deltas.
     await push(account);
     await pull(account);
-    // Memory sync: push dirty cloud memories, then pull deltas.
-    // Runs after chat so the gating check above covers both. Uses its own
-    // cursor (memorySyncStateStore) — independent from the chat cursor.
     await pushMemory(account);
     await pullMemory(account);
-    // Project sync: push dirty cloud projects, then pull deltas.
-    // Runs after memory so the single isManagedSyncEnabled() gate covers all
-    // three. Uses its own cursor (projectSyncStateStore) — independent from
-    // both the chat cursor and the memory cursor.
     await pushProjects(account);
     await pullProjects(account);
-    // Settings sync: push cloud-safe preferences if changed, then pull.
-    // Runs LAST (most sensitive — allowlist-gated). Uses its own cursor
-    // (settingsSyncStateStore) — independent from all other cursors.
-    // Push uses snapshot-diff dirty detection (no per-setter hooks needed).
     const settingsRequestBase = await pushSettings(account);
     await pullSettings(settingsRequestBase, account);
     assertCloudAccountEpochCurrent(account);
@@ -1060,7 +865,6 @@ export async function syncNow(): Promise<void> {
 
 let loopHandle: ReturnType<typeof setInterval> | null = null;
 
-/** Start periodic background sync. Idempotent; runs one sync immediately. */
 export function startCloudSyncLoop(intervalMs = 30_000): void {
   if (loopHandle) return;
   loopHandle = setInterval(() => {
@@ -1076,34 +880,18 @@ export function stopCloudSyncLoop(): void {
   }
 }
 
-/** Mark a locally-created/edited cloud conversation for the next push. */
 export function markConversationForSync(id: string): void {
   useCloudSyncStateStore.getState().markConversationDirty(id);
 }
 
-/** Mark a locally-created/edited cloud message for the next push. */
 export function markMessageForSync(conversationId: string, messageId: string): void {
   useCloudSyncStateStore.getState().markMessageDirty(conversationId, messageId);
 }
 
-/**
- * Mark a locally-created/edited/deleted cloud memory for the next push.
- * Only call this when appMode === 'cloud' (enforced by the memory store write
- * paths in src/features/memory/store.ts). An isManagedSyncEnabled() check at
- * the syncNow() entry point is the network-level gate; this function is the
- * write-side marker.
- */
 export function markMemoryForSync(id: string): void {
   useMemorySyncStateStore.getState().markMemoryDirty(id);
 }
 
-/**
- * Mark a locally-created/edited/archived/deleted cloud project for the next push.
- * Only call this when appMode === 'cloud' (enforced by the project store write
- * paths in src/features/projects/store.ts). An isManagedSyncEnabled() check at
- * the syncNow() entry point is the network-level gate; this function is the
- * write-side marker.
- */
 export function markProjectForSync(id: string): void {
   useProjectSyncStateStore.getState().markProjectDirty(id);
 }

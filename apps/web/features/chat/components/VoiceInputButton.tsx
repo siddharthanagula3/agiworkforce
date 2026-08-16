@@ -1,19 +1,8 @@
 'use client';
 
-/**
- * VoiceInputButton – Speech-to-text using the Web Speech API
- *
- * States: idle | listening | processing
- * - Pulsing red mic icon while listening
- * - Graceful degradation when SpeechRecognition is unavailable
- * - On transcript: calls onTranscript(text)
- */
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-
-// ─── Browser SpeechRecognition type shim ─────────────────────────────────────
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
@@ -33,7 +22,6 @@ interface SpeechRecognitionInstance extends EventTarget {
   onstart: (() => void) | null;
 }
 
-// Safely detect SpeechRecognition in browser environments
 function getSpeechRecognitionConstructor(): (new () => SpeechRecognitionInstance) | null {
   if (typeof window === 'undefined') return null;
 
@@ -41,20 +29,13 @@ function getSpeechRecognitionConstructor(): (new () => SpeechRecognitionInstance
   return w['SpeechRecognition'] ?? w['webkitSpeechRecognition'] ?? null;
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type VoiceState = 'idle' | 'listening' | 'processing';
 
 interface VoiceInputButtonProps {
-  /** Called with the final transcript text when speech is recognised */
   onTranscript: (text: string) => void;
-  /** Disable the button (e.g. while the chat is loading) */
   disabled?: boolean;
-  /** Extra classes on the outer button element */
   className?: string;
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInputButtonProps) {
   const [state, setState] = useState<VoiceState>('idle');
@@ -62,27 +43,11 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   const [showTooltip, setShowTooltip] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
-  /**
-   * AUDIT-FIX BUG-30: browser-capability detection MUST NOT happen in the
-   * render path.
-   *
-   * This was `typeof window !== 'undefined' && getSpeechRecognitionConstructor()
-   * !== null`, evaluated during render. On the server the guard is always false,
-   * so the server HTML shipped a disabled mic with the "not supported in this
-   * browser" label — and because React keeps the server's DOM for the first
-   * paint and this value never changed afterwards, the mic stayed PERMANENTLY
-   * disabled in Chrome and Edge, which do support it.
-   *
-   * Optimistic default + post-mount correction: the first client render matches
-   * the server (no hydration mismatch), and the effect immediately downgrades
-   * to the honest unsupported state on browsers that really lack the API.
-   */
   const [isSupported, setIsSupported] = useState(true);
   useEffect(() => {
     setIsSupported(getSpeechRecognitionConstructor() !== null);
   }, []);
 
-  // Clean up on unmount
   useEffect(() => {
     return () => {
       recognitionRef.current?.abort();
@@ -158,8 +123,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
     }
   };
 
-  // ── Derived render values ────────────────────────────────────────────────
-
   const isListening = state === 'listening';
   const isProcessing = state === 'processing';
   const isActive = isListening || isProcessing;
@@ -183,7 +146,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         aria-label={label}
         aria-pressed={isListening}
         className={cn(
-          // AUDIT-FIX GOV-38: 44px touch target on phones, compact on pointer viewports.
           'relative h-11 w-11 touch-manipulation sm:h-8 sm:w-8 rounded-full flex items-center justify-center transition-all duration-150',
           'text-muted-foreground hover:text-foreground hover:bg-muted/60',
           isListening && [

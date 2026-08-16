@@ -1,26 +1,11 @@
 import { ProviderLogo, hasProviderLogo } from './ProviderLogo';
 
-/**
- * RouteFlow · animated flow diagram of AGI's routing model.
- *
- * Providers on the left stream through the AGI router to the six surfaces
- * on the right. Pulses travel the paths via SMIL <animateMotion> (no JS);
- * a prefers-reduced-motion rule in globals.css hides the pulses and keeps
- * the static diagram. Provider marks are official (simple-icons) or text
- * wordmarks · never invented logos.
- */
-
 const PROVIDERS: { name: string; slug?: string }[] = [
   { name: 'OpenAI', slug: 'openai' },
   { name: 'Anthropic', slug: 'anthropic' },
   { name: 'Gemini', slug: 'gemini' },
   { name: 'Grok', slug: 'xai' },
   { name: 'DeepSeek', slug: 'deepseek' },
-  // A retired provider lane was removed with its catalog entries; its old IDs
-  // now canonicalize to a current catalog route,
-  // so the home page was drawing a lane to a provider the router cannot reach.
-  // Perplexity is in the catalog, has an adapter in packages/ai/providers, and
-  // is listed on /providers and /byok.
   { name: 'Perplexity', slug: 'perplexity' },
   { name: 'Qwen', slug: 'qwen' },
   { name: 'Ollama', slug: 'ollama' },

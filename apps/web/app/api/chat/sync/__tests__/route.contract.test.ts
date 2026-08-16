@@ -1,12 +1,3 @@
-/**
- * Contract test for GET/POST /api/chat/sync.
- *
- * Asserts the live route handlers' JSON output parses against the shared
- * `ChatSyncPullResponseSchema` / `ChatSyncPushResponseSchema` from
- * @agiworkforce/cloud-contracts — the schemas mobile's cloudSyncEngine validates
- * every pulled page with. If the route's response shape drifts, this fails
- * first, before any client breaks in production.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
@@ -18,8 +9,6 @@ vi.mock('server-only', () => ({}));
 
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 
-// vi.fn(impl) creation-time implementations survive the config-level
-// `mockReset: true` (which wipes .mockResolvedValue set in factories).
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
 }));
@@ -113,9 +102,9 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
 
   it('pull page with rows parses against ChatSyncPullResponseSchema', async () => {
     mockQuery
-      .mockResolvedValueOnce([conversationRow]) // conversations
-      .mockResolvedValueOnce([messageRow]) // messages
-      .mockResolvedValueOnce([artifactRow]); // artifacts
+      .mockResolvedValueOnce([conversationRow])
+      .mockResolvedValueOnce([messageRow])
+      .mockResolvedValueOnce([artifactRow]);
 
     const res = await GET(makeGet());
     expect(res.status).toBe(200);
@@ -132,9 +121,6 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
   });
 
   it('parses a page whose timestamps arrive as Date objects (real node-postgres rows)', async () => {
-    // The live Pool returns `timestamptz` as JS Date, not the ISO strings the
-    // other cases mock. Before the withIsoTimestamps fix this threw
-    // "expected string, received date" and the route 500'd (WEB-CHAT-SYNC-500).
     mockQuery
       .mockResolvedValueOnce([
         {
@@ -167,7 +153,6 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
     const body = await res.json();
     const parsed = ChatSyncPullResponseSchema.safeParse(body);
     expect(parsed.success).toBe(true);
-    // Dates were serialized to ISO strings, including the nullable tombstone.
     expect(body.conversations[0].created_at).toBe('2026-07-01T00:00:00.000Z');
     expect(body.messages[0].deleted_at).toBe('2026-07-03T00:00:00.000Z');
     expect(body.artifacts[0].updated_at).toBe('2026-07-02T00:00:02.000Z');

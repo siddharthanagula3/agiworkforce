@@ -31,7 +31,7 @@ export interface CreditBalance {
   daily_limit_cents?: number;
   daily_used_cents?: number;
   daily_remaining_cents?: number;
-  daily_reset_at?: string; // ISO timestamp
+  daily_reset_at?: string;
 }
 
 export interface UserProfile {
@@ -46,6 +46,3 @@ export type SubscriptionInfo = ManagedUsageSubscription;
 export type CreditsInfo = ManagedUsageBalance;
 export type CreditBalanceResponse = ManagedUsageBalanceResponse;
 
-// STB-6: `DeductCreditsResponse` was removed with its obsolete Tauri command.
-// That command targeted a route that never existed, and client-driven usage
-// deduction is retired platform-wide; managed operations deduct server-side.

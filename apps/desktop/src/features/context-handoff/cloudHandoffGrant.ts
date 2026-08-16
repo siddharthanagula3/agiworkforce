@@ -1,11 +1,3 @@
-/**
- * Renderer facade for native-owned, ephemeral folder capabilities.
- *
- * No function in this module accepts a filesystem root. The only way to obtain
- * a grant is the native OS picker; subsequent operations carry an opaque id and
- * a root-relative path. Native responses are validated before they can reach
- * the consent UI.
- */
 import type { GlobMatch } from '../../api/codeSearch';
 import { invoke } from '../../lib/tauri-mock';
 
@@ -14,7 +6,6 @@ const MAX_LISTING_RESULTS = 1_000;
 
 export interface CloudHandoffFolderGrant {
   grantId: string;
-  /** Display-only absolute path selected by the user; never sent back as authority. */
   path: string;
 }
 

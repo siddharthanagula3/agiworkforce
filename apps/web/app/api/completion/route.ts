@@ -7,11 +7,6 @@ const RETIRED_BODY = {
   },
 } as const;
 
-/**
- * Per-keystroke managed prompt completion was a second, unreserved provider
- * spend path. Keep a stable retirement response so old clients fail closed;
- * normal chat and AGI Work continue through the canonical completion route.
- */
 export function POST(_request: NextRequest): NextResponse {
   return NextResponse.json(RETIRED_BODY, { status: 410 });
 }

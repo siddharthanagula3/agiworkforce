@@ -1,37 +1,9 @@
-// Multimodal (vision) support for tier-3 llama.rn GGUF models.
-//
-// A vision GGUF model ships as TWO artifacts: the base weights (`downloadUrl`)
-// and a separate mmproj vision projector (`mmprojUrl`). llama.rn loads the base
-// model via `initLlama` (with `ctx_shift:false`) and then attaches the projector
-// via `context.initMultimodal({ path })`. Image input is only effective once the
-// projector is installed AND `initMultimodal` returns true.
-//
-// This module holds the PURE logic (no native/expo dependency) so it is fully
-// unit-testable: artifact resolution, effective-capability gating, download +
-// checksum-verify orchestration (native FS primitives injected), and the
-// llama.rn multimodal message assembly. The mobile app provides the real
-// expo-file-system / expo-crypto primitives; tier-3 provides the native context.
 
 import type { OnDeviceModel } from '@agiworkforce/types';
 import type { DeviceCapabilities } from './types';
 
-/**
- * Minimum device RAM for the tier-3 llama.rn multimodal path (base GGUF +
- * mmproj vision projector loaded together with `ctx_shift:false` and GPU
- * layers). Restructure §8 device QA checklist. Deliberately a separate named
- * constant from tier-2's generic `TIER2_MIN_RAM_MB` in `capabilities.ts` even
- * though both are 3500 today — the two gates protect different runtimes and
- * may diverge independently as either path's memory footprint changes.
- */
 export const MULTIMODAL_MIN_RAM_MB = 3500;
 
-/**
- * RAM eligibility gate for tier-3 multimodal (vision) inference. Pure
- * function over the already-detected `totalRAMMB` so callers can use it at
- * model-install/selection time, before any model is loaded — fail-closed:
- * an unknown/zero RAM reading (native capability probe unavailable) is NOT
- * eligible, matching every other on-device gate's default-deny posture.
- */
 export function hasSufficientRAMForMultimodal(
   totalRAMMB: DeviceCapabilities['totalRAMMB'],
 ): boolean {
@@ -40,7 +12,6 @@ export function hasSufficientRAMForMultimodal(
 
 export interface MultimodalArtifact {
   url: string;
-  /** SHA-256 hex digest (lowercase, 64 chars). */
   checksum: string;
   sizeBytes: number;
 }
@@ -50,11 +21,6 @@ export interface MultimodalArtifacts {
   mmproj: MultimodalArtifact;
 }
 
-/**
- * Resolve the base-GGUF + mmproj artifact pair for a multimodal llama.rn model.
- * Returns null when the model is not an mmproj-backed vision model (missing any
- * of the six required fields), so callers can never half-download a vision pack.
- */
 export function resolveMultimodalArtifacts(model: OnDeviceModel): MultimodalArtifacts | null {
   if (!model.capabilities.visionIn) return null;
   if (!model.supportedRuntimes.includes('llama-rn')) return null;
@@ -70,18 +36,10 @@ export function resolveMultimodalArtifacts(model: OnDeviceModel): MultimodalArti
   };
 }
 
-/** True when the model is an mmproj-backed llama.rn vision model. */
 export function isMultimodalModel(model: OnDeviceModel): boolean {
   return resolveMultimodalArtifacts(model) !== null;
 }
 
-/**
- * True when a catalog model can be downloaded and run through the tier-3
- * llama.rn GGUF path with VERIFIED artifacts: base url + sha256 + size, and —
- * for vision models — the full mmproj triple as well. This is the installability
- * predicate the mobile picker/installer uses for llama-rn-only rows (mirror of
- * the `executorchPreset` requirement on the tier-2 path).
- */
 export function hasRunnableGgufArtifacts(model: OnDeviceModel): boolean {
   if (model.format !== 'gguf') return false;
   if (!model.supportedRuntimes.includes('llama-rn')) return false;
@@ -90,12 +48,6 @@ export function hasRunnableGgufArtifacts(model: OnDeviceModel): boolean {
   return true;
 }
 
-/**
- * Effective vision capability. Per restructure §8: `visionIn` is true only when
- * the mmproj projector artifact is actually installed. The catalog `visionIn`
- * flag is the NOMINAL capability; this is the honest, installed-state capability
- * used to decide routing and to avoid false "vision available" badges.
- */
 export function effectiveVisionIn(
   model: OnDeviceModel,
   state: { mmprojInstalled: boolean },
@@ -103,14 +55,6 @@ export function effectiveVisionIn(
   return Boolean(model.capabilities.visionIn) && state.mmprojInstalled;
 }
 
-/**
- * Effective vision capability for a TIER-2 (ExecuTorch) VLM. The tier-2 .pte
- * is a single artifact with the vision projector embedded — there is no
- * mmproj pair — so the honest install-state evidence is the model itself
- * being installed with a vision-capable preset. Same capability-honesty rule
- * as `effectiveVisionIn`: the catalog `visionIn` flag alone never lights up
- * vision UI or routing.
- */
 export function effectiveTier2VisionIn(
   model: OnDeviceModel,
   state: { modelInstalled: boolean },
@@ -147,14 +91,8 @@ export class ChecksumMismatchError extends Error {
   }
 }
 
-/**
- * Native filesystem primitives, injected by the mobile app (expo-file-system +
- * expo-crypto). Keeping them injected makes the orchestration below testable in
- * Node with mocks — real hardware only supplies the implementations.
- */
 export interface FileSystemDeps {
   fileExists: (path: string) => Promise<boolean>;
-  /** Lowercase 64-char SHA-256 hex of the file at `path`. */
   sha256OfFile: (path: string) => Promise<string>;
   downloadToFile: (
     url: string,
@@ -164,13 +102,6 @@ export interface FileSystemDeps {
   deleteFile: (path: string) => Promise<void>;
 }
 
-/**
- * Ensure a single artifact exists at `destPath` with a verified checksum.
- * - If present with a matching digest, does nothing (idempotent).
- * - If present but the digest differs (partial/corrupt), deletes and re-downloads.
- * - After download, re-verifies; on mismatch deletes the file and throws so a
- *   corrupt artifact is never left on disk or handed to the runtime.
- */
 export async function ensureVerifiedArtifact(params: {
   artifact: MultimodalArtifact;
   destPath: string;
@@ -202,12 +133,6 @@ export interface MultimodalInstallResult {
   mmprojPath: string;
 }
 
-/**
- * Download + verify BOTH artifacts (base GGUF, then mmproj) to the given paths,
- * reporting size-weighted aggregate progress across the two files. Returns the
- * on-disk paths, ready to hand to `tier3LoadMultimodalModel`. Throws (and leaves
- * nothing corrupt) if either checksum fails.
- */
 export async function ensureMultimodalArtifacts(params: {
   artifacts: MultimodalArtifacts;
   modelPath: string;
@@ -240,8 +165,6 @@ export async function ensureMultimodalArtifacts(params: {
   return { modelPath, mmprojPath };
 }
 
-// --- llama.rn multimodal message assembly -----------------------------------
-
 export type LlamaContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } };
@@ -251,13 +174,6 @@ export interface LlamaMessage {
   content: string | LlamaContentPart[];
 }
 
-/**
- * Build llama.rn completion messages. When the current turn carries images, the
- * user message content becomes the `[{type:'text'}, {type:'image_url'}, ...]`
- * array llama.rn's multimodal path expects; otherwise it stays a plain string
- * (identical shape to the text-only path). Image URIs may be `file://` paths or
- * `data:` base64 URLs — both are accepted by llama.rn.
- */
 export function buildMultimodalMessages(opts: {
   systemPrompt?: string;
   messages?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;

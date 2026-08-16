@@ -18,8 +18,8 @@ function assistantMessage(overrides: Record<string, unknown> = {}) {
 
 describe('isContinuableFinishReason', () => {
   it('accepts token-cap truncation reasons from both wire shapes', () => {
-    expect(isContinuableFinishReason('length')).toBe(true); // OpenAI wire
-    expect(isContinuableFinishReason('max_tokens')).toBe(true); // legacy Anthropic web wire
+    expect(isContinuableFinishReason('length')).toBe(true);
+    expect(isContinuableFinishReason('max_tokens')).toBe(true);
   });
 
   it('accepts the client-only user-stopped marker', () => {
@@ -57,8 +57,6 @@ describe('isMessageContinuable', () => {
     expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
       false,
     );
-    // No recorded finish reason at all (e.g. local runtimes that omit it, or
-    // legacy persisted messages) — no fake availability.
     expect(isMessageContinuable(assistantMessage({ metadata: {} }))).toBe(false);
     expect(isMessageContinuable(assistantMessage({ metadata: undefined }))).toBe(false);
   });
@@ -123,9 +121,6 @@ describe('hasStreamError', () => {
   });
 
   it("is true retroactively when metadata.finishReason==='error', even with no marker at all", () => {
-    // Historical messages persisted before the x_stream_error marker existed:
-    // legacy-web has passed the literal 'error' finish_reason through for a
-    // while, so these have finishReason:'error' in metadata and nothing else.
     expect(hasStreamError({ metadata: { finishReason: 'error' } })).toBe(true);
   });
 
@@ -136,10 +131,6 @@ describe('hasStreamError', () => {
   });
 
   it('does not require an assistant role or non-streaming state on its own (callers gate that)', () => {
-    // hasStreamError is a narrow "was the marker present" check -- callers
-    // (ChatMessageList's showStreamErrorNotice) are responsible for also
-    // checking role/isStreaming/isLoading, mirroring isMessageContinuable's
-    // division of labor (the predicate here stays a pure metadata read).
     const userMessage: Record<string, unknown> = assistantMessage({
       role: 'user',
       metadata: { streamError: { message: 'boom' } },

@@ -1,13 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Connector detail — reauthorizing an OAuth grant.
- *
- * A grant whose access token expired with no refresh token (`needsReauthorization`
- * from GET /api/connectors) is still a row, but its tools cannot run. The detail
- * screen must say so and give the user a way back through the hosted
- * authorization flow — without ever reporting a success the server has not
- * confirmed.
- */
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';

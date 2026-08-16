@@ -1,9 +1,3 @@
-/**
- * runInlineCommand.ts — Shared handler for the inline command commands
- * (`@agi /explain`, `/fix`, `/refactor`, `/tests`, `/docs`).
- *
- * Extracted from `extension.ts` (110 LOC) per A1 decomposition.
- */
 
 import * as vscode from 'vscode';
 import { Config } from '../platform/config';
@@ -28,15 +22,6 @@ export function commandLabel(command: string): string {
 export async function runInlineCommand(
   context: vscode.ExtensionContext,
   command: InlineCommand,
-  /**
-   * Explicit target range, supplied by callers that already know what the user
-   * pointed at — a CodeLens above a function, for example.
-   *
-   * Without it this fell back to `editor.selection`, and an empty selection
-   * makes `getText(undefined)` return the *entire document*. So the
-   * "Select some code first" guard below never fired for a lens click, and
-   * asking about one function silently sent the whole file to the model.
-   */
   targetRange?: vscode.Range,
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
@@ -62,13 +47,6 @@ export async function runInlineCommand(
 
   const lang = editor.document.languageId;
   const planModeEnabled = Config.agentPlanMode();
-  // EXTV-1 (audit 2026-05-03): autoApplyFixes is a workspace-level
-  // setting. An untrusted workspace (cloned repo) could enable it via
-  // .vscode/settings.json and have LLM-generated code auto-applied
-  // with no diff preview. Force `false` whenever the workspace is not
-  // explicitly trusted by the user — preserves the diff-preview path.
-  // NOTE: read raw via getConfiguration directly so the trust gate stays at
-  // this site (not abstracted into Config); makes the trust check obvious.
   const rawAutoApplyFixes =
     vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('autoApplyFixes') ?? false;
   const autoApplyFixes = vscode.workspace.isTrusted ? rawAutoApplyFixes : false;
@@ -128,11 +106,6 @@ export async function runInlineCommand(
 
         progress.report({ increment: 100 });
 
-        // Apply against the range the prompt was built from. This previously
-        // collapsed to Selection(0,0,0,0) whenever the selection was empty,
-        // which now matters: a CodeLens supplies a range without selecting
-        // anything, so the result would have been applied at the top of the
-        // file instead of at the declaration it describes.
         await applyLlmEdit(
           editor,
           new vscode.Selection(explicitRange.start, explicitRange.end),

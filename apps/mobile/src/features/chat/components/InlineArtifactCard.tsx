@@ -84,15 +84,11 @@ function artifactSurface(color: ArtifactTypeConfig['badgeColor'], colors: ColorS
   }
 }
 
-/**
- * Generates a preview string for the artifact content.
- */
 function getPreview(artifact: Artifact): string {
   const { type, content, metadata } = artifact;
 
   switch (type) {
     case 'code': {
-      // Show first 2 non-empty lines
       const lines = content
         .split('\n')
         .filter((l) => l.trim())
@@ -122,10 +118,6 @@ function getPreview(artifact: Artifact): string {
   }
 }
 
-/**
- * Inline rich card for artifacts.
- * Tappable to expand to full screen view.
- */
 export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardProps) {
   const colors = useThemeColors();
   const config = TYPE_CONFIG[artifact.type] ?? FALLBACK_CONFIG;

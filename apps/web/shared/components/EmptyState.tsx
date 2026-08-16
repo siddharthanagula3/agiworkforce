@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * EmptyState · consistent empty state for list and grid views on the web app.
- *
- * Matches the glassmorphism surface style used across the web dashboard.
- *
- * Usage:
- *   <EmptyState
- *     icon={MessageSquare}
- *     title="No conversations yet"
- *     description="Start a new chat to get going."
- *     action={{ label: 'Start Chat', onClick: () => router.push('/chat') }}
- *   />
- */
-
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
 

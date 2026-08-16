@@ -1,10 +1,5 @@
-/**
- * Messaging API — typed wrappers for messaging platform commands (Slack, WhatsApp, Teams, Discord, Telegram, Signal).
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface ConnectSlackRequest {
   user_id: string;
@@ -55,8 +50,6 @@ export interface PlatformStatus {
   connected: boolean;
   error?: string;
 }
-
-// ---- Commands ----
 
 export async function connectSlack(request: ConnectSlackRequest): Promise<MessagingConnection> {
   return command<MessagingConnection>('connect_slack', { request });

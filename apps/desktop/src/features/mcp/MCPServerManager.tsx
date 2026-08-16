@@ -28,7 +28,6 @@ import { Switch } from '@/ui/Switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { MCPLogsViewer } from './MCPLogsViewer';
 
-/** Editable configuration options for an MCP server */
 type EditableMcpServerConfig = Partial<McpServerConfig> & {
   endpoint?: string;
   [key: string]: unknown;

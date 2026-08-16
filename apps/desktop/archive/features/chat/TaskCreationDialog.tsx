@@ -1,5 +1,3 @@
-// TaskCreationDialog.tsx
-// Dialog for creating a new autonomous agent task.
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Zap } from 'lucide-react';
@@ -14,26 +12,15 @@ import {
 import { useAgentTaskStore } from '../../stores/agentTaskStore';
 import { cn } from '../../lib/utils';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-
 interface TaskCreationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogProps) {
-  // Form state
   const [goal, setGoal] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const submitGoalAuto = useAgentTaskStore((state) => state.submitGoalAuto);
-
-  // ── Submit ──────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async () => {
     const trimmedGoal = goal.trim();
@@ -69,8 +56,6 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
     },
     [submitting, onOpenChange],
   );
-
-  // ── Render ──────────────────────────────────────────────────────────────────
 
   const isValid = goal.trim().length > 0;
 

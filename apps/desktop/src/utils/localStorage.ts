@@ -1,9 +1,3 @@
-/**
- * In-memory storage implementation that fully implements the Storage interface.
- * Used as a fallback when localStorage is unavailable (SSR, private browsing, etc).
- *
- * AUDIT-P3-TYPE: Implements Storage interface properly to avoid unsafe casts.
- */
 class MemoryStorage implements Storage {
   private storage = new Map<string, string>();
 
@@ -32,7 +26,6 @@ class MemoryStorage implements Storage {
     return keys[index] ?? null;
   }
 
-  // Storage interface requires index signature for bracket access
   [name: string]: unknown;
 }
 
@@ -49,7 +42,6 @@ function isLocalStorageAvailable(): boolean {
 
 function getStorage(): Storage {
   if (typeof window === 'undefined') {
-    // AUDIT-P3-TYPE: MemoryStorage now properly implements Storage interface
     return new MemoryStorage();
   }
 
@@ -58,7 +50,6 @@ function getStorage(): Storage {
   }
 
   console.warn('[localStorage] localStorage is unavailable, using in-memory fallback');
-  // AUDIT-P3-TYPE: MemoryStorage now properly implements Storage interface
   return new MemoryStorage();
 }
 
@@ -309,7 +300,6 @@ export function hasStorageQuota(dataSize: number, safetyMargin = 0.1): boolean {
     }
     return true;
   } catch {
-    // If we can't check, assume we have space and let the actual write fail
     return true;
   }
 }
@@ -334,7 +324,7 @@ export function safeSetJSONWithQuotaCheck<T>(
 ): { success: boolean; error?: 'quota_exceeded' | 'serialization_error' | 'write_error' } {
   try {
     const serialized = JSON.stringify(value);
-    const dataSize = serialized.length * 2; // UTF-16 encoding
+    const dataSize = serialized.length * 2;
 
     if (!hasStorageQuota(dataSize)) {
       console.warn(`[localStorage] STR-008: Quota would be exceeded for key "${key}"`);
@@ -364,7 +354,7 @@ export function getKeySize(key: string): number {
     const storage = getStorageInstance();
     const value = storage.getItem(key);
     if (value === null) return 0;
-    return (key.length + value.length) * 2; // UTF-16 encoding
+    return (key.length + value.length) * 2;
   } catch {
     return 0;
   }
@@ -399,12 +389,6 @@ export function cleanupStorage(keysToClean: string[], targetFreeBytes: number): 
   return freedBytes;
 }
 
-/**
- * No-op Storage implementation used as a Zustand persist fallback in SSR and
- * non-browser environments (Tauri IPC tests, Vitest JSDOM without localStorage).
- *
- * Shared here so chatStore and toolStore don't each define an identical copy.
- */
 export const storageFallback: Storage = {
   get length() {
     return 0;

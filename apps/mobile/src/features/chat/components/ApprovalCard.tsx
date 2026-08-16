@@ -97,7 +97,6 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   const riskSurface = colors[riskConfig.surfaceToken];
   const borderColor = riskColor;
 
-  // Countdown timer for smart auto-approve
   useEffect(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -119,7 +118,6 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
             clearInterval(intervalRef.current);
             intervalRef.current = null;
           }
-          // Auto-approve on timeout
           onApproveRef.current(approval.id);
           return 0;
         }
@@ -148,7 +146,6 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
 
   const handleRejectPress = useCallback(() => {
     if (showRejectInput) {
-      // Second tap: confirm rejection — stop countdown to prevent auto-approve after reject
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -160,7 +157,6 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
       setShowRejectInput(false);
       setRejectReason('');
     } else {
-      // First tap: show reason input
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }

@@ -1,48 +1,15 @@
-/**
- * Common Shared Types
- * Consolidated type definitions used across the codebase
- *
- * This file provides canonical definitions to eliminate duplicate types.
- * Import from @shared/types for all common types.
- */
 
-// ============================================================================
-// COMMON ENUMS AND PRIMITIVES
-// ============================================================================
 
-/**
- * Standard loading/async operation status
- */
 export type Status = 'idle' | 'loading' | 'success' | 'error';
 
-/**
- * Message role in conversations
- */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
-/**
- * Message delivery/send status
- */
 export type MessageDeliveryStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
-/**
- * Tool call execution status
- */
 export type ToolCallStatus = 'pending' | 'running' | 'completed' | 'failed';
 
-/**
- * Participant type in conversations
- */
 export type ParticipantType = 'user' | 'agent' | 'system';
 
-// ============================================================================
-// API RESPONSE TYPES
-// ============================================================================
-
-/**
- * Standard API response wrapper
- * Use this for all API responses across the application
- */
 export interface ApiResponse<T> {
   data: T | null;
   error: string | null;
@@ -52,9 +19,6 @@ export interface ApiResponse<T> {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Paginated response structure
- */
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -66,9 +30,6 @@ export interface PaginatedResponse<T> {
   hasNext?: boolean;
 }
 
-/**
- * Standard API error structure
- */
 export interface ApiError {
   message: string;
   code?: string;
@@ -76,13 +37,6 @@ export interface ApiError {
   details?: Record<string, unknown>;
 }
 
-// ============================================================================
-// CHAT MESSAGE TYPES
-// ============================================================================
-
-/**
- * Chat message metadata - model and token usage info
- */
 export interface MessageMetadata {
   model?: string;
   provider?: string;
@@ -99,7 +53,6 @@ export interface MessageMetadata {
   thinkingProcess?: ThinkingStep[];
   reasoning?: string;
   status?: 'thinking' | 'working' | 'completed' | 'error';
-  // Extended fields used by chat features
   mode?: string;
   isThinking?: boolean;
   isSearching?: boolean;
@@ -121,21 +74,9 @@ export interface MessageMetadata {
   documentTitle?: string;
   documentData?: unknown;
   downloadData?: { filename: string; content: string; contentType: string };
-  /** Allow additional metadata fields */
   [key: string]: unknown;
 }
 
-/**
- * Base chat message interface · web surface variant.
- *
- * Field mapping to canonical `ChatMessage` from `@agiworkforce/types`:
- *   - `id`        → canonical `id`
- *   - `role`      → canonical `role`
- *   - `content`   → canonical `content`
- *   - `createdAt` → canonical `createdAt` (canonical is always ISO string;
- *                   this surface accepts both Date and string for local state)
- *   - `metadata`  → canonical `metadata` (web extends with richer typing)
- */
 export interface BaseChatMessage {
   id: string;
   role: MessageRole;
@@ -144,10 +85,6 @@ export interface BaseChatMessage {
   metadata?: MessageMetadata;
 }
 
-/**
- * Simple chat message for basic use cases (hooks, local state)
- * Use this for simple chat implementations without multi-agent features
- */
 export interface SimpleChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -162,17 +99,6 @@ export interface SimpleChatMessage {
   }>;
 }
 
-/**
- * Web-surface chat message with session/conversation context.
- *
- * This is the web app's full-featured extension of the canonical
- * `ChatMessage` from `@agiworkforce/types`. It extends `BaseChatMessage`
- * (the web-local base) with multi-agent participant, delivery-status,
- * streaming, and editing fields that are specific to the web surface.
- *
- * When the canonical package covers all these fields the surface-specific
- * extension should be removed in favour of a direct import.
- */
 export interface ChatMessage extends BaseChatMessage {
   sessionId?: string;
   conversationId?: string;
@@ -191,9 +117,6 @@ export interface ChatMessage extends BaseChatMessage {
   updatedAt?: Date | string;
 }
 
-/**
- * Mission Control chat message with extended display options
- */
 export interface MissionChatMessage {
   id: string;
   type: 'user' | 'assistant' | 'system';
@@ -204,9 +127,6 @@ export interface MissionChatMessage {
   status?: 'thinking' | 'working' | 'completed' | 'error';
 }
 
-/**
- * MCP Tool call information for display
- */
 export interface MCPToolCallInfo {
   tool: string;
   arguments: Record<string, unknown>;
@@ -215,9 +135,6 @@ export interface MCPToolCallInfo {
   status: 'pending' | 'executing' | 'completed' | 'failed';
 }
 
-/**
- * Chat message record for database persistence
- */
 export interface ChatMessageRecord {
   id: string;
   session_id?: string;
@@ -228,9 +145,6 @@ export interface ChatMessageRecord {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Tool call information within a message
- */
 export interface ToolCall {
   id: string;
   name: string;
@@ -246,9 +160,6 @@ export interface ToolCall {
   executionTime?: number;
 }
 
-/**
- * Message attachment (files, images, etc.)
- */
 export interface Attachment {
   id: string;
   name: string;
@@ -260,9 +171,6 @@ export interface Attachment {
   uploadedAt?: Date | string;
 }
 
-/**
- * Message reaction (likes, helpful, etc.)
- */
 export interface MessageReaction {
   type:
     | 'up'
@@ -279,9 +187,6 @@ export interface MessageReaction {
   timestamp: Date | string;
 }
 
-/**
- * Thinking/reasoning step for AI responses
- */
 export interface ThinkingStep {
   id: string;
   step: number;
@@ -291,9 +196,6 @@ export interface ThinkingStep {
   duration?: number;
 }
 
-/**
- * Citation/source reference
- */
 export interface Citation {
   id: string;
   title: string;
@@ -304,13 +206,6 @@ export interface Citation {
   timestamp?: Date | string;
 }
 
-// ============================================================================
-// CHAT SESSION/CONVERSATION TYPES
-// ============================================================================
-
-/**
- * Chat session representing a conversation
- */
 export interface ChatSession {
   id: string;
   title: string;
@@ -331,9 +226,6 @@ export interface ChatSession {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Chat/conversation settings
- */
 export interface ChatSettings {
   model: string;
   temperature: number;
@@ -344,9 +236,6 @@ export interface ChatSettings {
   systemPrompt?: string;
 }
 
-/**
- * Typing indicator for real-time chat
- */
 export interface TypingIndicator {
   participantId: string;
   participantName: string;
@@ -355,13 +244,6 @@ export interface TypingIndicator {
   startedAt: Date | string;
 }
 
-// ============================================================================
-// AI EMPLOYEE TYPES (MARKETPLACE & CHAT)
-// ============================================================================
-
-/**
- * AI provider types
- */
 export type AIProvider =
   | 'openai'
   | 'anthropic'
@@ -375,9 +257,6 @@ export type AIProvider =
   | 'gemini'
   | 'custom';
 
-/**
- * Employee status in the system
- */
 export type AIEmployeeStatus =
   | 'available'
   | 'busy'
@@ -387,9 +266,6 @@ export type AIEmployeeStatus =
   | 'idle'
   | 'maintenance';
 
-/**
- * Simplified AI employee for chat/selector use
- */
 export interface AIEmployeeBasic {
   id: string;
   name: string;
@@ -402,10 +278,6 @@ export interface AIEmployeeBasic {
   tools?: string[];
 }
 
-/**
- * AI agent for marketplace display
- * All agents are freely available · no ownership or pricing model
- */
 export interface MarketplaceEmployee extends AIEmployeeBasic {
   category: string;
   provider: AIProvider;
@@ -434,9 +306,6 @@ export interface MarketplaceEmployee extends AIEmployeeBasic {
   defaultTools?: string[];
 }
 
-/**
- * Performance metrics for AI employee
- */
 export interface AIEmployeePerformance {
   tasksCompleted: number;
   successRate: number;
@@ -448,13 +317,6 @@ export interface AIEmployeePerformance {
   quality?: number;
 }
 
-// ============================================================================
-// TOOL TYPES
-// ============================================================================
-
-/**
- * Tool definition for AI capabilities
- */
 export interface Tool {
   id: string;
   name: string;
@@ -465,9 +327,6 @@ export interface Tool {
   status?: 'available' | 'limited' | 'unavailable';
 }
 
-/**
- * Tool execution result
- */
 export interface ToolResult {
   success: boolean;
   data?: unknown;
@@ -477,13 +336,6 @@ export interface ToolResult {
   metadata?: Record<string, unknown>;
 }
 
-// ============================================================================
-// STREAMING TYPES
-// ============================================================================
-
-/**
- * Streaming update for real-time message generation
- */
 export interface StreamingUpdate {
   type: 'content' | 'tool_call' | 'error' | 'done';
   content?: string;
@@ -499,27 +351,12 @@ export interface StreamingUpdate {
   };
 }
 
-// ============================================================================
-// BASE ENTITY TYPES
-// ============================================================================
-
-/**
- * Base entity with common fields
- */
 export interface BaseEntity {
   id: string;
   createdAt: Date | string;
   updatedAt: Date | string;
 }
 
-// ============================================================================
-// ORCHESTRATION TYPES
-// ============================================================================
-
-/**
- * Agent capability for collaboration manager
- * Used in multi-agent orchestration for team collaboration
- */
 export interface CollaborationAgentCapability {
   employeeId: string;
   employeeName: string;
@@ -529,14 +366,9 @@ export interface CollaborationAgentCapability {
   tools: string[];
   specialization: string[];
   canDelegate: boolean;
-  priority: number; // 1-10, higher means better for leadership
+  priority: number;
 }
 
-/**
- * Real-time status of an agent during multi-agent orchestration.
- * Preserved from the deleted agent-collaboration-manager runtime; still
- * consumed by agent-metrics-store and company-hub-store.
- */
 export interface AgentStatus {
   agentName: string;
   status:
@@ -549,17 +381,12 @@ export interface AgentStatus {
     | 'blocked'
     | 'error';
   currentTask?: string;
-  progress: number; // 0-100
+  progress: number;
   toolsUsing?: string[];
   blockedBy?: string;
   output?: unknown;
 }
 
-/**
- * A single communication event between agents during orchestration.
- * Preserved from the deleted agent-collaboration-manager runtime; still
- * consumed by agent-metrics-store.
- */
 export interface AgentCommunication {
   id: string;
   from: string;
@@ -570,10 +397,6 @@ export interface AgentCommunication {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Agent capability for employee selection/reasoning
- * Used for intelligent agent selection based on task requirements
- */
 export interface SelectionAgentCapability {
   agentType: string;
   name: string;
@@ -591,9 +414,4 @@ export interface SelectionAgentCapability {
   model: string;
 }
 
-// ============================================================================
-// RE-EXPORTS FOR CONVENIENCE
-// ============================================================================
-
-// Export type aliases for backward compatibility
 export type { ApiResponse as APIResponse };

@@ -23,13 +23,6 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useThemeColors } from '@/src/ui/theme';
 
-// ---------------------------------------------------------------------------
-// Siri App Shortcuts (iOS) — must stay in sync with the intents that actually
-// ship in native/ios/AGIAppIntents/. Do not list an action here unless its
-// AppIntent exists there; this screen previously advertised Quick Actions,
-// Control Center tiles, and home-screen widgets that had no native target.
-// ---------------------------------------------------------------------------
-
 const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; description: string }> = [
   {
     icon: MessageSquare,
@@ -73,17 +66,12 @@ const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; descripti
   },
 ];
 
-// Phrases mirror native/ios/AGIAppIntents/AppShortcuts.swift.
 const SIRI_EXAMPLES: string[] = [
   '"Hey Siri, start chat with AGI Workforce"',
   '"Hey Siri, summarize this with AGI Workforce"',
   '"Hey Siri, translate with AGI Workforce"',
   '"Hey Siri, set reminder via AGI Workforce"',
 ];
-
-// ---------------------------------------------------------------------------
-// Section header
-// ---------------------------------------------------------------------------
 
 function SectionHeader({
   icon: Icon,
@@ -111,10 +99,6 @@ function SectionHeader({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Action row
-// ---------------------------------------------------------------------------
-
 function ActionRow({
   icon: Icon,
   label,
@@ -140,17 +124,6 @@ function ActionRow({
     </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Quick Access Screen
-//
-// Describes ONLY integrations that actually ship:
-//   iOS      — Siri App Shortcuts, a native text/link Share Extension, and
-//              universal links.
-//   Android  — share-sheet target (ACTION_SEND) and text-selection action
-//              (ACTION_PROCESS_TEXT), both rewritten by MainActivity.kt onto
-//              the agiworkforce://intent/share deep link; verified App Links.
-// ---------------------------------------------------------------------------
 
 export default function WidgetSetupScreen() {
   const colors = useThemeColors();

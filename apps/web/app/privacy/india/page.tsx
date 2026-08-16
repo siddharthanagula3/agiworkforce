@@ -22,57 +22,6 @@ export const metadata = buildMetadata({
   path: '/privacy/india',
 });
 
-/*
- * INDIA — DPDP ACT, 2023 NOTICE
- *
- * ═══════════════════════════════════════════════════════════════════════
- * LEGAL REVIEW REQUIRED BEFORE THIS PAGE IS RELIED ON.
- *
- * This page was drafted from the repository, not from counsel. Every factual
- * claim below is traceable to code (the same discipline /privacy follows — see
- * its header), but the LEGAL characterisations are not, and an engineer must
- * not be the last reader of them. The specific clauses that need an Indian
- * data-protection practitioner, itemised with the reason, are in
- * DPDP_PROGRESS.md under "Needs lawyer review". The short list:
- *
- *   1. Whether AGI Automation LLC is a Data Fiduciary for Indian data
- *      principals at all, and on what basis it is subject to the Act
- *      extraterritorially (s.3(b) — offering goods or services to data
- *      principals in India).
- *   2. Whether any processing here qualifies as a "legitimate use" under s.7
- *      rather than requiring consent. This page claims none of them, which is
- *      the conservative reading; counsel may narrow the consent surface.
- *   3. Significant Data Fiduciary status (s.10) is a Central Government
- *      notification, not a self-assessment. If AGI is ever notified as one, a
- *      named DPO based in India, a DPIA and an independent audit become
- *      mandatory. Nothing in this repository can determine that.
- *   4. Section 9 — a child is anyone under 18 under this Act, verifiable
- *      parental consent is mandatory, and tracking or behavioural advertising
- *      directed at children is prohibited outright. The product's stated
- *      position (18+, with 13–17 under a supervising adult's account) does NOT
- *      implement verifiable parental consent. The gap is stated on this page
- *      rather than papered over, and it is an open item, not a solved one.
- *   5. Cross-border transfer under s.16. Transfers are permitted except to
- *      territories the Central Government restricts by notification. Whether
- *      any such notification affects US hosting is a question of the live
- *      notification list on the date of reading, which this page cannot assert.
- *   6. s.6(4) requires the notice to be available in English and every language
- *      in the Eighth Schedule to the Constitution. Only English exists. That is
- *      a translation commissioning decision, not an engineering task.
- *
- * WHAT THIS PAGE MAY NOT DO — the same rule the rest of the policy set follows:
- * every claim must be checkable in this repository. If you cannot point at the
- * code, cut the sentence. Specifically do not add:
- *   - A named Grievance Officer or DPO. No name exists in this repository, and
- *     inventing one publishes a false statement about a real company.
- *     GRIEVANCE_OFFICER_NAME is a role for exactly that reason.
- *   - A response deadline described as statutory. The number published here is
- *     a product commitment (GRIEVANCE_RESPONSE_TARGET_DAYS).
- *   - Registration with a Consent Manager. None is registered.
- *   - Any claim that data is stored in India. It is not.
- * ═══════════════════════════════════════════════════════════════════════
- */
-
 export default function IndiaDpdpNoticePage() {
   return (
     <div data-design="agi" data-legal-review="pending-counsel">

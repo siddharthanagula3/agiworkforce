@@ -1,19 +1,3 @@
-/**
- * Contract tests for GET /api/library — the Library listing route.
- *
- * The database adapter is mocked at the `getNeonDb` seam so the REAL
- * `listLibraryAssets` SQL-building runs; the tests assert the properties the
- * contract promises:
- *   - 401 when unauthenticated (no query is issued).
- *   - Owner scoping: the authed user id is the $1 binding of the query.
- *   - Filters: kind/surface/origin/q reach the SQL; the surface clause uses
- *     the documented legacy coalesce fallback; ILIKE wildcards are escaped.
- *   - Legacy rows (empty metadata) map to surface 'file', mime-derived
- *     previewable, origin 'generated', and a non-empty fallback file_name.
- *   - Pagination: limit+1 probe drives has_more/next_offset.
- *   - 400 for out-of-contract query params.
- *   - Every response parses against LibraryListResponseSchema.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -132,7 +116,6 @@ describe('GET /api/library', () => {
     expect(res.status).toBe(200);
     const [sql] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("deleted_at is not null and deleted_at > now() - interval '30 days'");
-    // The bin must NOT also carry the live-only "deleted_at is null" clause.
     expect(sql).not.toContain('deleted_at is null');
     expect(sql).toContain('order by deleted_at desc');
   });
@@ -194,7 +177,7 @@ describe('GET /api/library', () => {
     const res = await GET(makeRequest('?limit=2&offset=4'));
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('limit $3 offset $4');
-    expect(params).toEqual(['user-owner', null, 3, 4]); // probe = limit + 1
+    expect(params).toEqual(['user-owner', null, 3, 4]);
     const body = await parsedBody(res);
     expect(body.items).toHaveLength(2);
     expect(body.has_more).toBe(true);

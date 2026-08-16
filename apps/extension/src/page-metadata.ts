@@ -24,8 +24,6 @@ function extractJsonLd(): unknown[] {
   for (const script of scripts) {
     const text = script.textContent;
     if (!text) continue;
-    // M-03 audit 2026-05-19: cap per-script-block size so a hostile page
-    // with multi-MB JSON-LD cannot stall the parser.
     const parsed = safeJsonParse<unknown>(text, MAX_JSON_LD_BYTES);
     if (parsed === undefined) {
       logger.warn('Skipped JSON-LD block (oversize or unparseable)');
@@ -45,7 +43,6 @@ function extractOpenGraph(): Record<string, string> {
     const property = meta.getAttribute('property');
     const content = meta.getAttribute('content');
     if (property && content) {
-      // Strip the "og:" prefix for cleaner keys
       og[property.slice(3)] = content;
     }
   }
@@ -61,7 +58,6 @@ function extractTwitterCard(): Record<string, string> {
     const name = meta.getAttribute('name');
     const content = meta.getAttribute('content');
     if (name && content) {
-      // Strip the "twitter:" prefix for cleaner keys
       twitter[name.slice(8)] = content;
     }
   }
@@ -70,7 +66,6 @@ function extractTwitterCard(): Record<string, string> {
 }
 
 function getMetaContent(name: string): string | null {
-  // Try name attribute first, then property attribute
   const meta =
     document.querySelector(`meta[name="${CSS.escape(name)}"]`) ??
     document.querySelector(`meta[property="${CSS.escape(name)}"]`);
@@ -88,7 +83,6 @@ function getLanguage(): string {
 }
 
 function getFavicon(): string | null {
-  // Check for explicit favicon link tags (most specific first)
   const selectors = [
     'link[rel="icon"]',
     'link[rel="shortcut icon"]',
@@ -99,7 +93,6 @@ function getFavicon(): string | null {
     const link = document.querySelector(selector);
     const href = link?.getAttribute('href');
     if (href) {
-      // Resolve relative URLs to absolute
       try {
         return new URL(href, document.baseURI).href;
       } catch {
@@ -108,7 +101,6 @@ function getFavicon(): string | null {
     }
   }
 
-  // Fallback: /favicon.ico at the origin
   try {
     return new URL('/favicon.ico', window.location.origin).href;
   } catch {
@@ -124,14 +116,11 @@ function getMainHeading(): string | null {
 function extractSchemaTypes(): string[] {
   const types = new Set<string>();
 
-  // Microdata: elements with itemscope + itemtype
   const itemScoped = document.querySelectorAll('[itemscope][itemtype]');
   for (const el of itemScoped) {
     const itemType = el.getAttribute('itemtype');
     if (!itemType) continue;
 
-    // itemtype is a URL like "https://schema.org/Article"
-    // Extract the type name from the end
     const typeName = itemType.split('/').pop();
     if (typeName) {
       types.add(typeName);
@@ -139,8 +128,6 @@ function extractSchemaTypes(): string[] {
   }
 
   // Also extract @type from JSON-LD (already parsed above, but we
-  // call this separately so callers can get types without full JSON-LD).
-  // M-03 audit 2026-05-19: same size cap as extractJsonLd.
   const scripts = document.querySelectorAll('script[type="application/ld+json"]');
   for (const script of scripts) {
     const text = script.textContent;
@@ -154,9 +141,6 @@ function extractSchemaTypes(): string[] {
   return Array.from(types);
 }
 
-// SECURITY (audit batch-221 [MEDIUM] resource exhaustion, 2026-06-13): cap
-// recursion depth to match collectSchemaTypes in nlweb.ts and bound work on
-// hostile/deeply nested JSON-LD.
 const MAX_JSONLD_RECURSION_DEPTH = 10;
 
 function collectJsonLdTypes(data: unknown, types: Set<string>, depth = 0): void {
@@ -183,7 +167,6 @@ function collectJsonLdTypes(data: unknown, types: Set<string>, depth = 0): void 
       }
     }
 
-    // Recurse into nested objects
     for (const value of Object.values(record)) {
       if (typeof value === 'object' && value !== null) {
         collectJsonLdTypes(value, types, depth + 1);
@@ -221,7 +204,6 @@ export function extractPageMetadata(): PageMetadata {
   } catch (e) {
     logger.error('Failed to extract page metadata', e);
 
-    // Return a safe fallback so callers always get a valid object
     return {
       url: window.location.href,
       title: document.title,

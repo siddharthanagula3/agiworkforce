@@ -22,21 +22,15 @@ import { Button } from './Button';
  */
 export interface SectionErrorBoundaryProps {
   children: ReactNode;
-  /** Name of the section for error reporting */
   sectionName?: string;
-  /** Custom fallback UI - if provided, replaces the default error UI */
   fallback?: ReactNode;
-  /** Custom fallback render function - receives error info */
   fallbackRender?: (props: {
     error: Error;
     errorInfo: ErrorInfo | null;
     resetError: () => void;
   }) => ReactNode;
-  /** Callback when an error is caught */
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
-  /** Whether to show a compact error UI */
   compact?: boolean;
-  /** Custom class name for the error container */
   className?: string;
 }
 
@@ -46,17 +40,6 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-/**
- * A reusable error boundary component for wrapping UI sections.
- * Provides user-friendly error messages and recovery options.
- *
- * Usage:
- * ```tsx
- * <SectionErrorBoundary sectionName="Chat Interface">
- *   <ChatComponent />
- * </SectionErrorBoundary>
- * ```
- */
 export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, State> {
   constructor(props: SectionErrorBoundaryProps) {
     super(props);
@@ -80,14 +63,12 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
       errorInfo,
     });
 
-    // Log the error for debugging
     console.error(
       `[SectionErrorBoundary${this.props.sectionName ? `: ${this.props.sectionName}` : ''}] Error caught:`,
       error,
       errorInfo,
     );
 
-    // Call the optional onError callback
     this.props.onError?.(error, errorInfo);
   }
 
@@ -104,12 +85,10 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
     const { children, sectionName, fallback, fallbackRender, compact, className } = this.props;
 
     if (hasError && error) {
-      // Use custom fallback if provided
       if (fallback) {
         return fallback;
       }
 
-      // Use custom fallback render function if provided
       if (fallbackRender) {
         return fallbackRender({
           error,
@@ -118,7 +97,6 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
         });
       }
 
-      // Compact error UI
       if (compact) {
         return (
           <div
@@ -147,7 +125,6 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
         );
       }
 
-      // Default error UI
       return (
         <div
           className={cn(

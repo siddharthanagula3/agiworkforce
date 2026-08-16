@@ -25,7 +25,6 @@ const { chromium } = require('playwright');
       throw new Error('TEST_EMAIL and TEST_PASSWORD environment variables are required');
     }
 
-    // Capture console logs
     const consoleLogs = [];
     page.on('console', (msg) => {
       const text = msg.text();
@@ -40,7 +39,6 @@ const { chromium } = require('playwright');
       }
     });
 
-    // Set viewport
     await page.setViewportSize({ width: 1280, height: 720 });
 
     console.log('TEST 1: Load Application');
@@ -52,7 +50,6 @@ const { chromium } = require('playwright');
 
     await page.waitForTimeout(2000);
 
-    // Check if already logged in
     const bodyText = await page.textContent('body');
     let isLoggedIn = bodyText.includes('New Chat') || bodyText.includes('Ask me');
 
@@ -78,7 +75,6 @@ const { chromium } = require('playwright');
         console.log('    ✓ Sign in button clicked');
       }
 
-      // Wait for app to load
       console.log('\n1.3 Waiting for app to load (up to 35 seconds)...');
       try {
         await page.waitForSelector('text=/New Chat|Ask me|Send/', { timeout: 35000 });
@@ -96,7 +92,6 @@ const { chromium } = require('playwright');
     console.log('==========================');
     const currentText = await page.textContent('body');
 
-    // Check for HOBBY plan indicators
     let hobbyFound = false;
     if (currentText.toUpperCase().includes('HOBBY')) {
       console.log('2.1 ✓ HOBBY plan detected in page content');
@@ -110,7 +105,6 @@ const { chromium } = require('playwright');
       console.log('2.1 ? HOBBY plan not found in visible content');
     }
 
-    // Check console logs for plan tier
     const planLogs = consoleLogs.filter(
       (log) => log.includes('hobby') || log.includes('HOBBY') || log.includes('plan tier'),
     );
@@ -123,7 +117,6 @@ const { chromium } = require('playwright');
     console.log('\nTEST 3: Verify Credits');
     console.log('==========================');
 
-    // Check for credits in page content
     if (currentText.includes('350')) {
       console.log('3.1 ✓ Credit amount "350" found in page');
       testResults.creditsAllocated = true;
@@ -134,7 +127,6 @@ const { chromium } = require('playwright');
       console.log('3.1 ? Credits not found in visible content (may load dynamically)');
     }
 
-    // Look for credit-related console logs
     const creditLogs = consoleLogs.filter(
       (log) => log.includes('credit') || log.includes('Credit') || log.includes('350'),
     );
@@ -147,7 +139,6 @@ const { chromium } = require('playwright');
     console.log('\nTEST 4: Test Message Sending');
     console.log('==========================');
 
-    // Find and fill chat input
     let chatInput =
       (await page.$('input[placeholder*="Ask"]')) ||
       (await page.$('textarea[placeholder*="Ask"]')) ||
@@ -163,13 +154,11 @@ const { chromium } = require('playwright');
       await chatInput.type(testMessage);
       console.log('4.2 ✓ Test message typed: "' + testMessage + '"');
 
-      // Find and click send button
       let sendBtn = await page.$('button[aria-label*="Send"]');
       if (!sendBtn) {
         sendBtn = await page.$('button:has-text("Send")');
       }
       if (!sendBtn) {
-        // Try to find any button with send icon
         const allButtons = await page.$$('button');
         for (let btn of allButtons) {
           const ariaLabel = await btn.getAttribute('aria-label');
@@ -185,10 +174,8 @@ const { chromium } = require('playwright');
         await sendBtn.click();
         console.log('4.4 ✓ Send button clicked');
 
-        // Wait for response
         await page.waitForTimeout(3000);
 
-        // Check for errors
         const pageAfterSend = await page.textContent('body');
         if (pageAfterSend.includes('Insufficient')) {
           console.log('4.5 ✗ ERROR: "Insufficient credits" message found');
@@ -203,7 +190,6 @@ const { chromium } = require('playwright');
           testResults.messageSent = true;
         }
 
-        // Check if message appears in chat
         if (pageAfterSend.includes(testMessage.substring(0, 20))) {
           console.log('4.6 ✓ Message appears in chat history');
           testResults.messageSent = true;
@@ -234,7 +220,6 @@ const { chromium } = require('playwright');
       errorLogs.slice(0, 5).forEach((log) => console.log('    ' + log));
     }
 
-    // Check for timeout errors specifically
     const timeoutLogs = consoleLogs.filter((log) => log.includes('TIMED OUT'));
     if (timeoutLogs.length > 0) {
       console.log('5.2 ? Timeout messages found (should be 20s, not 10s):');
@@ -265,12 +250,10 @@ const { chromium } = require('playwright');
       console.log('⚠️  Some features need verification. Check console logs above.');
     }
 
-    // Take final screenshot
     console.log('\nTaking final screenshot...');
     await page.screenshot({ path: '/tmp/final-test-result.png' });
     console.log('✓ Screenshot saved to /tmp/final-test-result.png\n');
 
-    // Wait to see results
     await page.waitForTimeout(5000);
     await browser.close();
   } catch (err) {

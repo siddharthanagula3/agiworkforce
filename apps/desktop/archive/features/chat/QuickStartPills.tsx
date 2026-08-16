@@ -1,11 +1,3 @@
-/**
- * QuickStartPills Component
- *
- * Quick action pills shown in the empty chat state.
- * Each pill populates the composer or opens the matching surface.
- *
- * Product source of truth target: Research, Browser, Code, Write, Skills.
- */
 
 import React from 'react';
 import { Code, Pen, Search, Globe, Sparkles } from 'lucide-react';
@@ -15,9 +7,7 @@ import { cn } from '../../lib/utils';
 interface PillDefinition {
   label: string;
   icon: LucideIcon;
-  /** The action key passed to onPillClick. */
   action: string;
-  /** Starter text injected into the chat input when the pill is clicked. */
   prompt: string;
 }
 

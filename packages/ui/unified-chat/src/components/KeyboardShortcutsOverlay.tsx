@@ -1,24 +1,9 @@
-/**
- * KeyboardShortcutsOverlay — Phase A Slice 5 (ported from UAC)
- *
- * Full-screen cheatsheet accessible via Cmd+/ or Ctrl+/.
- * Shows all keyboard shortcuts grouped by category.
- *
- * Desktop-specific extension: the UAC version reads from DEFAULT_SHORTCUTS +
- * settingsStore.customKeybindings. This version accepts shortcut definitions as
- * props so it works on any surface. Desktop's Slice 6 flip can pass the
- * desktop constants as props.
- */
 
 import React, { useEffect, useCallback } from 'react';
 import { Keyboard, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { Button } from '@agiworkforce/ui';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface ShortcutItem {
   description: string;
@@ -30,10 +15,6 @@ export interface ShortcutSection {
   label: string;
   shortcuts: ShortcutItem[];
 }
-
-// ---------------------------------------------------------------------------
-// Default built-in sections (surface-agnostic)
-// ---------------------------------------------------------------------------
 
 const DEFAULT_SECTIONS: ShortcutSection[] = [
   {
@@ -70,10 +51,6 @@ const DEFAULT_SECTIONS: ShortcutSection[] = [
     ],
   },
 ];
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 function KeyBadge({ label }: { label: string }) {
   return (
@@ -114,27 +91,12 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 export interface KeyboardShortcutsOverlayProps {
-  /** Whether the overlay is currently visible. */
   open: boolean;
-  /** Called when the user dismisses the overlay. */
   onClose: () => void;
-  /** Optional handler that navigates to the Keybindings settings tab. */
   onOpenSettings?: () => void;
-  /**
-   * Extra shortcut sections injected by the host (e.g., desktop-specific
-   * global hotkeys). These are appended after the built-in sections.
-   */
   extraSections?: ShortcutSection[];
 }
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 export function KeyboardShortcutsOverlay({
   open,

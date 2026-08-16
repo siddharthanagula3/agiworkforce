@@ -1,12 +1,3 @@
-/**
- * Sign-out must leave nothing behind: neither the Clerk session that would
- * silently sign the user back in, nor the token material the legacy
- * `APIClient` persisted to localStorage.
- *
- * Kept out of authentication-store.test.ts because that file replaces
- * `window.localStorage` with a bare vi.fn() double that has no `length`/`key`,
- * which is exactly the surface the storage sweep walks.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -14,8 +5,6 @@ vi.mock('@shared/lib/logger', () => ({
   logger: { auth: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-// The cleanup registry deliberately imports every user-scoped store; none of
-// them are collaborators of this test.
 vi.mock('./mission-control-store', () => ({}));
 vi.mock('./notification-store', () => ({}));
 vi.mock('./artifact-store', () => ({}));

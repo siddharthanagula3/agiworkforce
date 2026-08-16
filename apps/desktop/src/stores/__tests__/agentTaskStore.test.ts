@@ -8,7 +8,6 @@ vi.mock('../../api/agi', () => ({
   ensureAgiInitialized,
 }));
 
-// Mock sonner toast before importing the store
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
@@ -41,9 +40,6 @@ describe('agentTaskStore', () => {
       tasks: [],
       loading: false,
     });
-    // TRUST BOUNDARY (desktop-trust-boundary-01): pin the workspace mode so
-    // the trustMode each submission sends is deterministic, not an accident
-    // of the non-Tauri test environment's default.
     useAppModeStore.setState({ mode: 'local' });
     useChatModelStore.getState().setModels([
       {
@@ -485,13 +481,11 @@ describe('agentTaskStore', () => {
       const { cancelTask } = useAgentTaskStore.getState();
       await cancelTask('test-task-2');
 
-      // Task status should remain 'running' since cancel failed
       const { tasks } = useAgentTaskStore.getState();
       const task = tasks.find((t) => t.id === 'test-task-2');
       expect(task).toBeDefined();
       expect(task!.status).toBe('running');
 
-      // toast.error should have been called
       expect(toast.error).toHaveBeenCalledWith('Failed to cancel task');
     });
   });

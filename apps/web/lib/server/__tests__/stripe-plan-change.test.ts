@@ -47,8 +47,6 @@ describe('classifyPlanChange', () => {
   });
 
   it('allows more seats on the same per-seat tier', () => {
-    // A plain tier comparison calls this "team -> team" and refuses it, which
-    // would make adding seats impossible through the product.
     expect(
       classifyPlanChange({
         currentTier: 'team',
@@ -100,7 +98,6 @@ describe('classifyPlanChange', () => {
         currentSeats: 1,
       }).allowed,
     ).toBe(false);
-    // Team ranks between Pro and Max, so Team -> Pro is also a downgrade.
     expect(
       classifyPlanChange({
         currentTier: 'team',
@@ -120,12 +117,8 @@ describe('classifyPlanChange', () => {
 });
 
 describe('per-seat organization plans are fenced off the individual upgrade path', () => {
-  // TIER_ORDER ranks team at 1.5, so a plain rank comparison says team -> max is
-  // an upgrade and pro -> team is an upgrade. Both are wrong: they are seat and
-  // organization lifecycle changes, and allowing them on the individual path
-  // strands org members or mints a seatless Team subscription.
   it('refuses leaving a Team org for a personal plan, even though max ranks higher', () => {
-    expect(isUpgrade('team', 'max')).toBe(true); // the rank really does say "upgrade"
+    expect(isUpgrade('team', 'max')).toBe(true);
 
     const decision = classifyPlanChange({
       currentTier: 'team',
@@ -194,8 +187,6 @@ describe('currentSeatsFromStripeItem', () => {
   });
 
   it('falls back to 1 for missing or nonsensical quantities', () => {
-    // Falling back UP would let a stale/absent value inflate what we treat as
-    // already-purchased, silently blocking legitimate seat increases.
     expect(currentSeatsFromStripeItem(null)).toBe(1);
     expect(currentSeatsFromStripeItem(undefined)).toBe(1);
     expect(currentSeatsFromStripeItem(0)).toBe(1);

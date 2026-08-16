@@ -7,11 +7,6 @@ import {
   isDomainChallengeExpired,
 } from './domain-verification';
 
-/**
- * The columns every SSO read selects. Deliberately excludes `metadata_xml`
- * (up to 500KB of IdP document that no client needs) and never exposes the
- * verification token itself except through the explicit instructions block.
- */
 export const SSO_CONNECTION_SELECT_COLUMNS = [
   'id',
   'organization_id',
@@ -55,23 +50,16 @@ export interface SSOConnectionView {
   isActive: boolean;
   status: SSOConnectionStatus;
   domainVerifiedAt: string | null;
-  /** Service Provider values the admin pastes into their IdP. Null until provisioned. */
   serviceProvider: {
     acsUrl: string | null;
     entityId: string | null;
     metadataUrl: string | null;
   };
-  /** Present only while an unexpired challenge is outstanding. */
   domainVerification: {
     recordType: 'TXT';
     recordName: string;
     recordValue: string;
   } | null;
-  /**
-   * When the outstanding challenge stops being accepted. Null whenever
-   * `domainVerification` is null, so a client can tell "no live challenge"
-   * from "challenge with a deadline" without inspecting the token.
-   */
   domainChallengeExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -84,19 +72,9 @@ export function connectionStatus(row: SSOConnectionRow): SSOConnectionStatus {
   return 'ready_to_activate';
 }
 
-/**
- * Project a stored row into the client shape.
- *
- * The Clerk connection id is never returned: it is an internal provider
- * reference, and exposing it invites a client to address Clerk directly.
- */
 export function toConnectionView(row: SSOConnectionRow): SSOConnectionView {
   const verified = row.domain_verified_at !== null;
 
-  // An expired challenge is not published as instructions. Handing an admin a
-  // TXT record that verification will refuse sends them to their DNS provider
-  // to fix a problem that is not there; the honest answer is that the challenge
-  // lapsed and has to be reissued.
   const token = row.domain_verification_token;
   const liveToken = !verified && token !== null && !isDomainChallengeExpired(token) ? token : null;
 

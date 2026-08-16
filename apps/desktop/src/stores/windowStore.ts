@@ -1,35 +1,7 @@
-/**
- * Window Store
- *
- * Wires Rust window commands (window.rs) to the frontend via invoke().
- * Manages window state: maximize, fullscreen, pinned, always-on-top,
- * docking, floating window, and visibility.
- *
- * Rust commands wired:
- *   - window_get_state
- *   - window_set_pinned
- *   - window_set_always_on_top
- *   - window_set_visibility
- *   - window_dock
- *   - window_is_maximized
- *   - window_maximize
- *   - window_unmaximize
- *   - window_toggle_maximize
- *   - window_set_fullscreen
- *   - window_is_fullscreen
- *   - window_toggle_floating
- *   - window_open_floating
- *   - window_close_floating
- *   - window_is_floating_visible
- */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
-
-// =============================================================================
-// Types (mirror Rust structs)
-// =============================================================================
 
 export type DockPosition = 'left' | 'right' | 'top' | 'bottom';
 
@@ -41,10 +13,6 @@ export interface WindowStatePayload {
   fullscreen: boolean;
 }
 
-// =============================================================================
-// Store State
-// =============================================================================
-
 interface WindowState {
   pinned: boolean;
   alwaysOnTop: boolean;
@@ -55,13 +23,11 @@ interface WindowState {
   loading: boolean;
   error: string | null;
 
-  // === Actions: State Query ===
   getState: () => Promise<WindowStatePayload>;
   isMaximized: () => Promise<boolean>;
   isFullscreen: () => Promise<boolean>;
   isFloatingVisible: () => Promise<boolean>;
 
-  // === Actions: Window Control ===
   setPinned: (pinned: boolean) => Promise<void>;
   setAlwaysOnTop: (value: boolean) => Promise<void>;
   setVisibility: (visible: boolean) => Promise<void>;
@@ -72,18 +38,12 @@ interface WindowState {
   setFullscreen: (fullscreen: boolean) => Promise<void>;
   toggleFullscreen: () => Promise<void>;
 
-  // === Actions: Floating Window ===
   toggleFloating: () => Promise<boolean>;
   openFloating: () => Promise<void>;
   closeFloating: () => Promise<void>;
 
-  // === Lifecycle ===
   init: () => Promise<void>;
 }
-
-// =============================================================================
-// Store
-// =============================================================================
 
 export const useWindowStore = create<WindowState>()(
   devtools(
@@ -97,10 +57,6 @@ export const useWindowStore = create<WindowState>()(
         floatingVisible: false,
         loading: false,
         error: null,
-
-        // =================================================================
-        // State Query
-        // =================================================================
 
         getState: async () => {
           try {
@@ -156,10 +112,6 @@ export const useWindowStore = create<WindowState>()(
             return false;
           }
         },
-
-        // =================================================================
-        // Window Control
-        // =================================================================
 
         setPinned: async (pinned) => {
           try {
@@ -258,10 +210,6 @@ export const useWindowStore = create<WindowState>()(
           await get().setFullscreen(!current);
         },
 
-        // =================================================================
-        // Floating Window
-        // =================================================================
-
         toggleFloating: async () => {
           try {
             const isVisible = await invoke<boolean>('window_toggle_floating');
@@ -294,10 +242,6 @@ export const useWindowStore = create<WindowState>()(
           }
         },
 
-        // =================================================================
-        // Lifecycle
-        // =================================================================
-
         init: async () => {
           try {
             await get().getState();
@@ -312,10 +256,6 @@ export const useWindowStore = create<WindowState>()(
   ),
 );
 
-// =============================================================================
-// Selectors
-// =============================================================================
-
 export const selectPinned = (s: WindowState) => s.pinned;
 export const selectAlwaysOnTop = (s: WindowState) => s.alwaysOnTop;
 export const selectDock = (s: WindowState) => s.dock;
@@ -324,10 +264,6 @@ export const selectFullscreen = (s: WindowState) => s.fullscreen;
 export const selectFloatingVisible = (s: WindowState) => s.floatingVisible;
 export const selectWindowLoading = (s: WindowState) => s.loading;
 export const selectWindowError = (s: WindowState) => s.error;
-
-// ============================================================================
-// Shortcut Store (absorbed from shortcutStore.ts — task-w58)
-// ============================================================================
 
 import { subscribeWithSelector as shortcutSWS } from 'zustand/middleware';
 import { immer as shortcutImmer } from 'zustand/middleware/immer';
@@ -604,10 +540,6 @@ export const selectShortcutLoading = (s: ShortcutState) => s.loading;
 export const selectShortcutError = (s: ShortcutState) => s.error;
 export const selectLastTriggeredAction = (s: ShortcutState) => s.lastTriggeredAction;
 
-// ============================================================================
-// Updater Store (absorbed from updaterStore.ts — task-w58)
-// ============================================================================
-
 import {
   persist as updPersist,
   subscribeWithSelector as updSWS,
@@ -761,10 +693,6 @@ export const selectUpdateInfo = (state: UpdaterState) => state.updateInfo;
 export const selectDownloadProgress = (state: UpdaterState) => state.downloadProgress;
 export const selectUpdError = (state: UpdaterState) => state.updError;
 export const selectAutoCheckEnabled = (state: UpdaterState) => state.autoCheckEnabled;
-
-// =============================================================================
-// Notification Store (absorbed from notificationStore.ts — task-w58)
-// =============================================================================
 
 export interface NotificationAction {
   id: string;

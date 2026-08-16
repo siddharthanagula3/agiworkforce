@@ -3,35 +3,23 @@ import type { Artifact } from '../lib/types';
 
 export type ArtifactViewMode = 'preview' | 'code';
 
-// ---------------------------------------------------------------------------
-// Per-conversation artifact map (Phase A Slice 4)
-// ---------------------------------------------------------------------------
-
 interface ArtifactStoreState {
-  // Active artifact in the right-sidebar viewer
   activeArtifact: Artifact | null;
   viewMode: ArtifactViewMode;
 
-  // Conversation-keyed artifact lists (collected from message streams)
   artifactsByConversation: Record<string, Artifact[]>;
 
-  // Actions
   openArtifact: (artifact: Artifact, preferredViewMode?: ArtifactViewMode) => void;
   closeArtifact: () => void;
   setViewMode: (mode: ArtifactViewMode) => void;
   reset: () => void;
 
-  // Conversation-scoped CRUD
   setArtifacts: (conversationId: string, artifacts: Artifact[]) => void;
   addArtifact: (conversationId: string, artifact: Artifact) => void;
   updateArtifact: (conversationId: string, artifactId: string, patch: Partial<Artifact>) => void;
   removeArtifact: (conversationId: string, artifactId: string) => void;
   clearConversation: (conversationId: string) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Selectors
-// ---------------------------------------------------------------------------
 
 export function selectArtifacts(state: ArtifactStoreState, conversationId: string): Artifact[] {
   return state.artifactsByConversation[conversationId] ?? [];
@@ -48,10 +36,6 @@ export function selectArtifactById(
 ): Artifact | undefined {
   return (state.artifactsByConversation[conversationId] ?? []).find((a) => a.id === artifactId);
 }
-
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
 
 export const useArtifactStore = create<ArtifactStoreState>((set) => ({
   activeArtifact: null,
@@ -90,7 +74,6 @@ export const useArtifactStore = create<ArtifactStoreState>((set) => ({
   addArtifact: (conversationId, artifact) =>
     set((state) => {
       const existing = state.artifactsByConversation[conversationId] ?? [];
-      // Replace if id already present, otherwise append
       const idx = existing.findIndex((a) => a.id === artifact.id);
       const next =
         idx >= 0

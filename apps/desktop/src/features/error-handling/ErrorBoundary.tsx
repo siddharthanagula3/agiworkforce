@@ -5,11 +5,8 @@ import { errorReportingService } from '../../services/errorReporting';
 
 interface Props {
   children: ReactNode;
-  /** Custom fallback UI to show when an error occurs */
   fallback?: ReactNode | ((error: Error | null, errorInfo: ErrorInfo | null) => ReactNode);
-  /** Callback when an error is caught */
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
-  /** Name to identify which boundary caught the error */
   boundaryName?: string;
 }
 
@@ -68,7 +65,6 @@ class ErrorBoundary extends Component<Props, State> {
       errorInfo,
     });
 
-    // Call optional onError callback
     this.props.onError?.(error, errorInfo);
 
     const errorStore = useErrorStore.getState();
@@ -277,7 +273,6 @@ class ErrorBoundary extends Component<Props, State> {
 
 export default ErrorBoundary;
 
-/** Specialized boundary for the chat interface — shows a "Restart Chat" recovery UI. */
 export class ChatErrorBoundary extends ErrorBoundary {
   override render(): ReactNode {
     if (this.state.hasError) {

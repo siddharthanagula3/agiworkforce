@@ -1,50 +1,3 @@
-/**
- * agentLoop.ts — Orchestrator for the computer-use agent.
- *
- * Given a user goal and an active tab ID, runs an agentic loop:
- *   1. Capture a screenshot + DOM summary ("eyes")
- *   2. Call the AGI Cloud gateway with the full history + tools
- *   3. For each tool_call, execute via cdpDriver
- *   4. Append tool results to history
- *   5. Repeat until the model returns a final text message or MAX_STEPS is reached
- *
- * SECURITY:
- *   - Tab must be on an allowlisted origin before the loop starts. Privileged
- *     callers MUST also provide assertOwnership so account/session, active-tab,
- *     exact URL intent, and allowlist membership are revalidated around every
- *     cloud and CDP cycle. Navigation additionally validates its destination in
- *     cdpDriver before moving the tab.
- *   - All CDP calls are isolated in cdpDriver.ts which attaches/detaches the
- *     debugger per action.
- *   - All network egress goes to api.agiworkforce.com only (validated in
- *     cloudAgentClient.callCloud).
- *   - Text egress (DOM summaries, field readbacks) is redacted by cdpDriver
- *     (sanitizePageText / getFieldValue) before it reaches this file — see
- *     cdpDriver.ts SECURITY notes.
- *   - Screenshots are NOT and cannot be redacted — you can't regex-scrub
- *     secrets out of a PNG. This is a residual, accepted risk, bounded by:
- *     (a) the tab must already be on the user's site allowlist, (b) starting
- *     a computer-use session at all is an explicit user action (typed goal +
- *     click), which covers the one screenshot taken to orient the agent
- *     before the loop's first turn (below), and (c) every screenshot taken
- *     mid-loop is a tool call and therefore passes through the
- *     onBeforeAction ask-gate by default (background.ts defaults
- *     agi_cu_ask_before_acting to true — autopilot is an explicit opt-out).
- *     If a page has secrets visibly rendered (e.g. a plaintext API key on a
- *     dashboard), a screenshot of it still reaches the cloud gateway. Do not
- *     claim screenshots are redacted anywhere in this codebase — they are not.
- *
- * ASK-BEFORE-ACTING:
- *   Pass an `onBeforeAction` callback to gate each tool call. The default
- *   (undefined) is allow-all — suitable for isolated automated scenarios. The
- *   production background supplies the side-panel confirmation gate by default.
- *   Return false from the callback to skip an action (the tool result will
- *   report "Action skipped by user").
- *
- * MAX_STEPS:
- *   Hard cap at 20 steps to prevent runaway loops during the demo. Adjust
- *   with the `maxSteps` option.
- */
 
 import * as cdp from './cdpDriver';
 import {
@@ -63,63 +16,25 @@ import {
   type ToolCall,
 } from './cloudAgentClient';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 export interface AgentLoopOptions {
-  /** Maximum tool-call steps before the loop is forcibly stopped. Default: 20. */
   maxSteps?: number;
-  /**
-   * Called before each tool action. Return false to skip the action (it will be
-   * reported to the model as "Action skipped by user").
-   *
-   * DEFAULT: undefined = allow all actions without asking. The production
-   * background omits this callback only after an explicit user opt-out.
-   *
-   * P2-5: On timeout (30s) the gate now resolves DENY (fail-CLOSED), not ALLOW.
-   * The approval is bound to the specific pending action so it cannot be spammed.
-   *
-   */
   onBeforeAction?: (
     toolName: string,
     args: Record<string, unknown>,
     signal?: AbortSignal,
   ) => Promise<boolean> | boolean;
-  /**
-   * Called after each step with a progress update. Use for streaming status to
-   * the popup or side panel.
-   */
   onProgress?: (step: AgentLoopStep) => void;
-  /**
-   * P2-7: Usage tracking callback. Called after each cloud call with the
-   * cumulative token count from SSE usage fields (when the gateway emits them).
-   * The computerUsePanel uses this to update the usage meter.
-   */
   onUsageUpdate?: (usage: AgentLoopUsage) => void;
-  /** Cancels in-flight cloud reads and prevents any subsequent CDP cycle. */
   signal?: AbortSignal;
-  /**
-   * Resolve a bearer that still belongs to the owner captured by the caller.
-   * The background supplies this per cloud cycle so token refresh is allowed
-   * but an account/session switch fails closed before egress.
-   */
   resolveOwnedCredential?: () => Promise<string>;
-  /** Reassert account, run, active-tab, and tab-intent ownership. */
   assertOwnership?: () => Promise<void> | void;
-  /** Lets the background distinguish agent-owned navigation from user intent changes. */
   onActionStateChange?: (active: boolean) => Promise<void> | void;
-  /**
-   * Catalog model id for this run, resolved from the account's tier by the
-   * background via resolveComputerUseModel(). Omitted (or unresolvable) falls
-   * back to the tier-agnostic COMPUTER_USE_MODEL slot inside callCloud.
-   */
   model?: string;
 }
 
-/** P2-7: Cumulative usage for the run so far. */
 export interface AgentLoopUsage {
   stepsUsed: number;
   maxSteps: number;
-  /** Total prompt + completion tokens this run (0 when gateway does not emit usage). */
   totalTokens: number;
 }
 
@@ -129,7 +44,7 @@ export type AgentLoopStepKind =
   | 'tool_result'
   | 'final'
   | 'error'
-  | 'injection_blocked'; // P2-6: forced stop from injection detection
+  | 'injection_blocked';
 
 export interface AgentLoopStep {
   kind: AgentLoopStepKind;
@@ -142,26 +57,13 @@ export interface AgentLoopStep {
 }
 
 export interface AgentLoopResult {
-  /** The final natural-language response from the model. */
   finalMessage: string;
-  /** Total number of tool-call steps executed. */
   stepsUsed: number;
-  /** True if the loop hit the step cap before the model finished. */
   cappedAtMaxSteps: boolean;
-  /** Full message history (for debugging or resuming). */
   history: AgentMessage[];
-  /** P2-7: Total tokens consumed this run (0 when gateway does not emit usage). */
   totalTokens: number;
 }
 
-// ─── Security helpers ─────────────────────────────────────────────────────────
-
-/**
- * Thrown when a navigate tool call results in the tab landing on an
- * off-allowlist origin (direct or via redirect). The agent loop catches
- * this specifically to abort immediately rather than continuing to issue
- * CDP actions on a host the user did not approve.
- */
 export class NavigationOffAllowlistError extends Error {
   constructor(message: string) {
     super(message);
@@ -169,10 +71,6 @@ export class NavigationOffAllowlistError extends Error {
   }
 }
 
-/**
- * Read the current URL of a tab via the chrome.tabs API.
- * Returns null if the tab is not found or the URL is unavailable.
- */
 async function getTabUrl(tabId: number): Promise<string | null> {
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -219,17 +117,6 @@ async function resolveCredential(options: AgentLoopOptions): Promise<string> {
   return token;
 }
 
-// ─── Tool dispatch ────────────────────────────────────────────────────────────
-
-/**
- * Execute a single tool call against the cdpDriver and return the result as a
- * plain string (which is what we send back to the model in the tool role).
- */
-// ─── P2-6: Injection sentinel ─────────────────────────────────────────────────
-/**
- * Thrown when an injection pattern is found in page content and the loop must
- * hard-stop without letting the model continue. Distinct from NavigationOffAllowlistError.
- */
 export class InjectionDetectedError extends Error {
   constructor(message: string) {
     super(message);
@@ -245,13 +132,10 @@ async function executeTool(
 ): Promise<string> {
   switch (toolName) {
     case 'screenshot': {
-      // P1-1: Wait for DOM stable before capturing
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 2_000, signal: options.signal }),
       );
       const base64 = await runOwnedOperation(options, () => cdp.screenshot(tabId, options.signal));
-      // Return a compact acknowledgement; the image is injected into the
-      // next user turn as an image_url content block (see loop below).
       return JSON.stringify({ type: 'screenshot', base64, note: 'See image in next turn.' });
     }
 
@@ -263,7 +147,6 @@ async function executeTool(
 
       let clickResult: string;
       if (typeof index === 'number') {
-        // P1-2: index-based targeting
         await runOwnedOperation(options, () => cdp.click(tabId, { index }, options.signal));
         clickResult = `Clicked element [${index}]`;
       } else if (typeof selector === 'string') {
@@ -276,7 +159,6 @@ async function executeTool(
         throw new Error('click requires either index, selector, or {x, y}');
       }
 
-      // P1-3: Post-action verification — re-read URL to detect navigation
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 1_500, signal: options.signal }),
       );
@@ -314,8 +196,6 @@ async function executeTool(
 
       await runOwnedOperation(options, () => cdp.type(tabId, text, targetIndex, options.signal));
 
-      // P1-3: Post-action verification — re-read the field value
-      // We can only verify when an index was provided (we know the selector).
       let verifyMsg = `Typed: ${JSON.stringify(text)}`;
       if (targetIndex !== undefined) {
         const selector = cdp.getElementIndexMap(tabId).get(targetIndex);
@@ -332,7 +212,6 @@ async function executeTool(
               }
             }
           } catch {
-            // Verification is best-effort; don't crash on error
             verifyMsg += '\nverification: could not read field value (non-fatal)';
           }
         }
@@ -341,7 +220,6 @@ async function executeTool(
     }
 
     case 'read_dom': {
-      // P1-1: Wait for DOM stable before reading
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 2_000, signal: options.signal }),
       );
@@ -349,8 +227,6 @@ async function executeTool(
         cdp.getPageContent(tabId, options.signal),
       );
 
-      // P2-6: Hard-stop on injection detection when ask-toggle is irrelevant
-      // (injection in DOM is a security event, not a user decision).
       const injectionHit = scanForInjection(content);
       if (injectionHit && content.startsWith('SECURITY WARNING')) {
         throw new InjectionDetectedError(
@@ -364,11 +240,7 @@ async function executeTool(
     case 'navigate': {
       const url = args['url'];
       if (typeof url !== 'string') throw new Error('navigate requires url:string');
-      // cdpDriver.navigate enforces the allowlist BEFORE the CDP call (P0 fix).
-      // After navigation, we also re-verify the ACTUAL tab URL so a redirect
-      // cannot move the tab off-allowlist without us catching it.
       await runOwnedOperation(options, () => cdp.navigate(tabId, url, options.signal));
-      // P1-1: Replace the fixed 800ms wait with waitForStable.
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 3_000, signal: options.signal }),
       );
@@ -377,8 +249,6 @@ async function executeTool(
         try {
           await assertDestinationAllowlisted(actualUrl);
         } catch {
-          // Tab landed off-allowlist (redirect). Signal abort via a special
-          // thrown error so the caller can terminate the loop cleanly.
           throw new NavigationOffAllowlistError(
             `Post-navigate check: tab landed on "${actualUrl}" which is not on the site allowlist. ` +
               `The agent loop has been aborted to prevent data exfiltration.`,
@@ -389,9 +259,6 @@ async function executeTool(
     }
 
     case 'find': {
-      // find() is a convenience wrapper: we run getPageContent and instruct the
-      // model to locate the element itself. A more sophisticated implementation
-      // could use the accessibility tree or a vision query.
       const description = args['description'];
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 1_500, signal: options.signal }),
@@ -410,8 +277,6 @@ async function executeTool(
   }
 }
 
-// ─── Main loop ────────────────────────────────────────────────────────────────
-
 /**
  * Run the computer-use agent loop for a given goal on a given tab.
  *
@@ -426,8 +291,6 @@ export async function runAgentLoop(
 ): Promise<AgentLoopResult> {
   const maxSteps = options.maxSteps ?? 20;
 
-  // P1-4: Install the onDetach listener and register this tab so transparent
-  // re-attach fires if the service worker is evicted mid-loop.
   ensureOnDetachListener();
   registerActiveTab(tabId);
 
@@ -438,13 +301,8 @@ export async function runAgentLoop(
   let finalMessage = '';
 
   try {
-    // Resolve gateway before starting. Credentials are resolved per cloud
-    // cycle so refresh is supported without ever accepting a new owner.
     const gatewayBase = await runOwnedOperation(options, resolveGatewayBase);
 
-    // ── Initial context snapshot ───────────────────────────────────────────
-    // Take one screenshot on the first turn. Every boundary is reasserted so
-    // cancellation during DOM stabilization cannot proceed to capture/egress.
     await runOwnedOperation(options, () => waitForStable(tabId, { signal: options.signal }));
     const [initialScreenshot, initialDom] = await Promise.all([
       runOwnedOperation(options, () => cdp.screenshot(tabId, options.signal)),
@@ -491,14 +349,10 @@ export async function runAgentLoop(
     };
     history.push(systemMessage, initialUserMessage);
 
-    // ── Agentic loop ─────────────────────────────────────────────────────────
     while (stepNumber < maxSteps) {
       await assertRunOwnership(options);
       stepNumber++;
 
-      // Resolve and verify the current token immediately before each egress.
-      // callCloud receives the same AbortSignal so an ownership change stops an
-      // in-flight SSE read rather than merely suppressing its eventual result.
       const token = await resolveCredential(options);
       const { message, isDone, tokensUsed } = await callCloud(
         history,
@@ -511,10 +365,8 @@ export async function runAgentLoop(
       totalTokens += tokensUsed;
       history.push(message);
 
-      // P2-7: emit usage update after each call
       options.onUsageUpdate?.({ stepsUsed: stepNumber, maxSteps, totalTokens });
 
-      // No tool calls → model is done
       if (!message.tool_calls || message.tool_calls.length === 0) {
         finalMessage = typeof message.content === 'string' ? message.content : '';
         throwIfCancelled(options.signal);
@@ -526,7 +378,6 @@ export async function runAgentLoop(
         break;
       }
 
-      // Execute each tool call
       const toolResults: AgentMessage[] = [];
 
       for (const toolCall of message.tool_calls) {
@@ -534,8 +385,6 @@ export async function runAgentLoop(
         await assertRunOwnership(options);
         toolResults.push(result);
 
-        // If the tool was a screenshot, inject the new image into the next user turn
-        // so the model can see the updated page state after the action.
         if (toolCall.function.name === 'screenshot') {
           let resultContent: { base64?: string } = {};
           if (typeof result.content === 'string') {
@@ -566,16 +415,10 @@ export async function runAgentLoop(
         }
       }
 
-      // Append all tool results to history
       for (const r of toolResults) {
         history.push(r);
       }
 
-      // When the model returned tool_calls we always continue the loop so it can
-      // call the gateway again with the tool results. `isDone` here means the SSE
-      // stream closed — that is always true after a complete response, not a signal
-      // that the task itself is finished. The loop exits when the model returns a
-      // turn with no tool_calls (text-only final answer) or hits maxSteps.
       void isDone;
     }
 
@@ -585,7 +428,6 @@ export async function runAgentLoop(
       finalMessage = `Agent reached the maximum step limit (${maxSteps}). Partial progress may have been made.`;
     }
   } finally {
-    // P1-4: Always clean up the tab registration even if the loop threw.
     unregisterActiveTab(tabId);
   }
 
@@ -597,8 +439,6 @@ export async function runAgentLoop(
     totalTokens,
   };
 }
-
-// ─── Tool call dispatcher ─────────────────────────────────────────────────────
 
 /**
  * How long the ask-before-acting gate waits for a decision before failing CLOSED
@@ -631,9 +471,6 @@ async function dispatchToolCall(
     toolArgs: args,
   });
 
-  // Ask-before-acting gate
-  // P2-5: Fail-CLOSED — a 30s timeout resolves DENY (not ALLOW).
-  // The approval is bound to this specific pending action to prevent spamming.
   if (options.onBeforeAction) {
     let allowed: boolean;
     try {
@@ -675,7 +512,7 @@ async function dispatchToolCall(
     } catch (error) {
       throwIfCancelled(options.signal);
       void error;
-      allowed = false; // fail-CLOSED on callback error
+      allowed = false;
     }
     if (!allowed) {
       const skippedResult = 'Action skipped — no approval received (timeout or user denied).';
@@ -702,13 +539,9 @@ async function dispatchToolCall(
     resultContent = await executeTool(tabId, toolName, args, options);
   } catch (err) {
     throwIfCancelled(options.signal);
-    // P0 SECURITY: NavigationOffAllowlistError is a hard abort — re-throw so
-    // the loop terminates immediately rather than feeding the error to the model
-    // and allowing it to try other actions on the now-off-allowlist tab.
     if (err instanceof NavigationOffAllowlistError) {
       throw err;
     }
-    // P2-6: InjectionDetectedError is a hard abort — re-throw to stop the loop.
     if (err instanceof InjectionDetectedError) {
       options.onProgress?.({
         kind: 'injection_blocked',
@@ -725,7 +558,6 @@ async function dispatchToolCall(
       toolName,
       errorMessage: resultContent,
     });
-    // Return the error to the model so it can adapt rather than crashing the loop
     return {
       role: 'tool',
       content: resultContent,

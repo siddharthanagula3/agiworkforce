@@ -135,14 +135,12 @@ describe('Models screen', () => {
 
   it('renders favorite/recent models as tappable rows (regression: MOBILE-MODELS-FAVORITES-INERT)', () => {
     const fav = LOCAL_MODEL_LIST[0];
-    // Previously these were plain non-interactive Views that read as tappable.
     useModelStore.setState({ favorites: [fav.id], recentModels: [fav.id] });
 
     const { getAllByLabelText } = render(<ModelsScreen />);
     const rows = getAllByLabelText(`Select ${fav.name}`);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0].props.accessibilityRole).toBe('button');
-    // Routes through the gated picker (openPicker); must not throw.
     fireEvent.press(rows[0]);
   });
 });

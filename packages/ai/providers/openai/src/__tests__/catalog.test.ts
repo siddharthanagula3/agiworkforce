@@ -1,9 +1,3 @@
-/**
- * Catalog SSOT regression: OPENAI_MODEL_CATALOG must derive from
- * `models.json` and surface every OpenAI-provider entry, including the
- * current default. Earlier versions were hardcoded at one model generation
- * while models.json declared a newer defaultModel.
- */
 
 import { describe, expect, it } from 'vitest';
 

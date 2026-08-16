@@ -41,9 +41,6 @@ describe('MapSearchCard', () => {
     const tiles = frame.querySelectorAll('img');
     expect(tiles.length).toBeGreaterThan(0);
     for (const tile of tiles) {
-      // Tiles must never be fetched from the upstream host directly: the proxy
-      // is what carries the required User-Agent and keeps the tile server out
-      // of the page's request graph.
       expect(tile.getAttribute('src')).toMatch(/^\/api\/maps\/tile\/5\/\d+\/\d+$/);
     }
     expect(screen.getByTitle('Dallas, Texas')).toBeTruthy();
@@ -60,7 +57,6 @@ describe('MapSearchCard', () => {
     );
 
     expect(screen.queryByTestId('map-search-tiles')).toBeNull();
-    // The answer still carries its provider affordance rather than going blank.
     expect(screen.getByRole('button', { name: /Open in Google Maps/ })).toBeTruthy();
   });
 });
@@ -89,8 +85,6 @@ describe('MapSearchCard · interaction', () => {
   it('zooms the tile grid and offers a reset once the view has moved', () => {
     render(<MapSearchCard ctx={ctx} body={body} />);
     expect(tileZooms()).toEqual([11]);
-    // Reset is the only control that appears conditionally — absent until the
-    // user has actually left the server's viewport.
     expect(screen.queryByRole('button', { name: 'Reset map view' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
@@ -106,8 +100,6 @@ describe('MapSearchCard · interaction', () => {
     const zoomIn = screen.getByRole('button', { name: 'Zoom in' });
     for (let i = 0; i < 10; i++) fireEvent.click(zoomIn);
 
-    // 17 is MAP_SEARCH_MAX_ZOOM; past it the proxy answers 400, so the control
-    // must stop rather than paint a grid of broken images.
     expect(tileZooms()).toEqual([17]);
     expect(zoomIn).toBeDisabled();
   });

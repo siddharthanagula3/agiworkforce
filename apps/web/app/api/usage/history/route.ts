@@ -10,10 +10,6 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 
-/**
- * Legacy alias retained for old clients. Managed subscription ledger rows are
- * private; exact Stripe invoice and top-up history use their billing routes.
- */
 async function handleGetHistory(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'usage-history');
   if (rateLimitResponse) return rateLimitResponse;

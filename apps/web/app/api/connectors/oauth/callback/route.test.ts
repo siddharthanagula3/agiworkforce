@@ -1,9 +1,3 @@
-/**
- * The callback is where an attacker would try to bind their own provider
- * account to somebody else's AGI user, replay a code, or read a token out of a
- * response. These tests pin each of those closed, plus the happy path that
- * turns an authorization code into an encrypted per-user grant.
- */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -178,7 +172,6 @@ describe('GET /api/connectors/oauth/callback', () => {
     for (const secret of ['access-token-value', 'refresh-token-value', 'auth-code', STATE]) {
       expect(serialized).not.toContain(secret);
     }
-    // Nor into a log line.
     const logged = JSON.stringify(mocks.warn.mock.calls);
     for (const secret of ['access-token-value', 'refresh-token-value', 'auth-code', STATE]) {
       expect(logged).not.toContain(secret);

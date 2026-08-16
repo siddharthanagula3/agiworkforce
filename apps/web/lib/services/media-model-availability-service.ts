@@ -39,7 +39,6 @@ const IMAGE_API_PROVIDER: Readonly<Record<string, string>> = {
 const VIDEO_ADAPTER_PROVIDERS = new Set(['google', 'runway', 'open_router']);
 
 export interface MediaModelAvailabilityEvidence {
-  /** Injectable for deterministic tests; production reads server env only. */
   getEnv?: (name: string) => string | undefined;
   imageStorageConfigured?: boolean;
   videoStorageConfigured?: boolean;
@@ -101,20 +100,12 @@ function admissionState(input: {
   return 'enabled';
 }
 
-/**
- * Resolve the deploy-specific picker contract without exposing any key value.
- * Routes still repeat authorization, entitlement, tuple, and provider checks;
- * this is presentation admission, never a replacement for server enforcement.
- */
 export function resolveMediaModelAvailability(
   evidence: MediaModelAvailabilityEvidence = {},
 ): ManagedMediaModelAvailabilityResponse {
   const getEnv = evidence.getEnv ?? defaultGetEnv;
   const imageStorageConfigured = evidence.imageStorageConfigured ?? isImageStorageConfigured();
   const videoStorageConfigured = evidence.videoStorageConfigured ?? isVideoStorageConfigured();
-  // Direct callers must prove the required schema. The production route uses
-  // resolveDeploymentMediaModelAvailability below; defaulting true here would
-  // let a future caller advertise a path whose first DB operation must fail.
   const imageSchemaConfigured = evidence.imageSchemaConfigured ?? false;
   const videoSchemaConfigured = evidence.videoSchemaConfigured ?? false;
   const models: ManagedMediaModelAdmission[] = [];
@@ -150,11 +141,6 @@ export function resolveMediaModelAvailability(
   };
 }
 
-/**
- * Resolve image schema here and delegate the complete durable-video proof to
- * the same readiness owner enforced by generation. This prevents picker drift
- * whenever 0105 gains another admission, billing, or lifecycle prerequisite.
- */
 export async function resolveDeploymentMediaModelAvailability(
   db: DatabaseAdapter = getNeonDb(),
   evidence: Omit<

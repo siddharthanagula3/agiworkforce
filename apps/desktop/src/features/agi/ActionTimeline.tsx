@@ -1,15 +1,3 @@
-/**
- * ActionTimeline
- *
- * Shows a chronological audit trail for a single agent task run:
- *  - Tool calls with timestamp, status (approved/denied/timed-out), and duration
- *  - Canonical task state alongside the tool audit trail
- *  - Structured so an operator can trace what happened in a failed run
- *
- * Reads from toolStore.actionLog (approval audit entries) and filters by the
- * provided task's timeline.  Falls back to showing ALL log entries when no
- * taskId is supplied (used for general monitoring).
- */
 import { useMemo } from 'react';
 import {
   AlertCircle,
@@ -32,8 +20,6 @@ import {
 } from '../../stores/chat/toolStore';
 import type { AgentTask, AgentTaskStatus } from '../../stores/agentTaskStore';
 
-// ── Status icon map ───────────────────────────────────────────────────────────
-
 const STATUS_ICONS: Record<
   ActionLogStatus,
   { icon: React.ElementType; color: string; bgColor: string; label: string }
@@ -55,8 +41,6 @@ const STATUS_ICONS: Record<
   },
 };
 
-// ── Entry type icons ──────────────────────────────────────────────────────────
-
 const TYPE_ICONS: Record<ActionLogEntryType, React.ElementType> = {
   plan: RefreshCw,
   terminal: Terminal,
@@ -67,8 +51,6 @@ const TYPE_ICONS: Record<ActionLogEntryType, React.ElementType> = {
   approval: AlertTriangle,
   metrics: CheckCircle2,
 };
-
-// ── Task-state helpers ────────────────────────────────────────────────────────
 
 function getTaskStateIcon(task: AgentTask): React.ElementType | null {
   switch (task.status) {
@@ -83,8 +65,6 @@ function getTaskStateIcon(task: AgentTask): React.ElementType | null {
   }
 }
 
-// ── Time formatting ───────────────────────────────────────────────────────────
-
 function formatTime(date: Date | string): string {
   const d = date instanceof Date ? date : new Date(date);
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -95,25 +75,16 @@ function formatDurationMs(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
-
 interface ActionTimelineProps {
-  /** When provided, only shows entries that relate to this task (by messageId or workflowHash) */
   task?: AgentTask;
-  /** Maximum entries to show, newest first */
   maxEntries?: number;
   className?: string;
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export function ActionTimeline({ task, maxEntries = 100, className }: ActionTimelineProps) {
   const actionLog = useToolStore(selectActionLog);
 
   const entries = useMemo(() => {
-    // Show all entries when no task is scoped, otherwise the full log is still shown
-    // (task metadata would need message IDs embedded in the log to cross-reference).
-    // For now we show the full log limited to maxEntries newest-first.
     return actionLog.slice(0, maxEntries);
   }, [actionLog, maxEntries]);
 
@@ -151,8 +122,6 @@ export function ActionTimeline({ task, maxEntries = 100, className }: ActionTime
     </div>
   );
 }
-
-// ── Task-state banner ─────────────────────────────────────────────────────────
 
 function renderTaskStateBanner(task: AgentTask) {
   const TaskStateIcon = getTaskStateIcon(task);
@@ -203,8 +172,6 @@ function renderTaskStateBanner(task: AgentTask) {
   );
 }
 
-// ── Timeline row ──────────────────────────────────────────────────────────────
-
 interface TimelineRowProps {
   entry: ActionLogEntry;
 }
@@ -214,7 +181,6 @@ function TimelineRow({ entry }: TimelineRowProps) {
   const StatusIcon = statusConf.icon;
   const TypeIcon = TYPE_ICONS[entry.type] ?? Terminal;
 
-  // Approval-specific metadata
   const riskLevel = entry.metadata?.['riskLevel'] as string | undefined;
   const approvalType = entry.metadata?.['approvalType'] as string | undefined;
   const durationMs = entry.metadata?.['duration_ms'] as number | undefined;
@@ -278,8 +244,6 @@ function TimelineRow({ entry }: TimelineRowProps) {
     </div>
   );
 }
-
-// ── Risk badge ────────────────────────────────────────────────────────────────
 
 function RiskBadge({ level }: { level: string }) {
   const cfg: Record<string, string> = {

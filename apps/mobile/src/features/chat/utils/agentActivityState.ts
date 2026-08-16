@@ -150,7 +150,6 @@ function isEntry(value: unknown): boolean {
   }
 }
 
-/** Validate synced metadata before it reaches the native renderer or reducer. */
 export function readAgentActivityState(value: unknown): AgentActivityState | undefined {
   if (
     !isRecord(value) ||

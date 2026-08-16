@@ -3,50 +3,26 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/',
     'scripts/screenshots/specs/',
-    // Excluded suites are tracked in tasks/quality-sweep-2026-05-19/squad-mobile.md
-    // and cover feature-gated Auth/Billing paths that are outside this pass.
     '__tests__/auth-401\\.test\\.ts$',
   ],
-  // Runs BEFORE jest-expo's setup to fix missing UIManager mock
   setupFiles: ['./jest.setup.js'],
-  // Expo 57 installs its native `expo/fetch` lazy getter during preset setup.
-  // Unit tests must never reach that native module or the network; install a
-  // writable post-preset mock that individual suites can safely spy on.
   setupFilesAfterEnv: ['./jest.after-setup.js'],
-  // @testing-library/react-native v13+ auto-extends jest matchers — no explicit setup needed
-  // The extend-expect subpath was removed; matchers register automatically on import
-  // The pnpm package store resolves to paths like:
-  //   node_modules/.pnpm/@react-native+js-polyfills@X.Y.Z/node_modules/@react-native/...
-  // The optional (?:.pnpm/[^/]+/node_modules/)? prefix handles both npm and pnpm layouts
-  // so React Native packages that use Flow types still get transformed by Babel.
   transformIgnorePatterns: [
-    // uuid and shared ESM workspaces are included in the Babel transform.
     'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|standard-navigation|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens|@agiworkforce/artifacts|@agiworkforce/cloud-contracts|@agiworkforce/sync|@agiworkforce/trust-boundaries|uuid))',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
-    // Override jest-expo preset which incorrectly resolves react to @types/react in pnpm
     '^react$': '<rootDir>/node_modules/react',
-    // Workspace packages can resolve a second pnpm peer-context copy of React
-    // Native. Keep every tested workspace module on jest-expo's configured
-    // instance so its NativeModules/Platform test bridge remains available.
     '^react-native$': '<rootDir>/node_modules/react-native',
-    // Workspace packages that may not be pnpm-linked in CI: resolve src directly.
     '^@agiworkforce/local-llm$': '<rootDir>/../../packages/platform/local-llm/src/index',
     '^@agiworkforce/artifacts$': '<rootDir>/../../packages/platform/artifacts/src/index',
     '^@agiworkforce/cloud-contracts$':
       '<rootDir>/../../packages/contracts/cloud-contracts/src/index',
     '^@agiworkforce/sync$': '<rootDir>/../../packages/client/sync/src/index',
-    // Platform-neutral trust policy is ESM; resolve source for Jest/Babel.
     '^@agiworkforce/trust-boundaries$':
       '<rootDir>/../../packages/contracts/trust-boundaries/src/index',
-    // expo-clipboard is a native Expo module; keep Jest from loading native glue.
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
-    // expo-sqlite stub for storage tests until the native module is linked.
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
-    // @react-native-community/netinfo registers a native event subscription at
-    // import time that crashes outside a real RN runtime — stub it globally
-    // rather than per-test-file, since lib/egressGuard.ts now imports it.
     '^@react-native-community/netinfo$': '<rootDir>/__mocks__/netinfo.js',
   },
 };

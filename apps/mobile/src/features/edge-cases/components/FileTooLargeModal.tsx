@@ -1,8 +1,3 @@
-/**
- * FileTooLargeModal — shown when the document file picker returns a file >50MB.
- *
- * Informs the user of the limit. Single dismiss CTA.
- */
 import { Modal, View, Pressable } from 'react-native';
 import { FileX } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';

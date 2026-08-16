@@ -1,14 +1,3 @@
-/**
- * Browser profile management — isolated, agent-only Chromium profiles.
- *
- * Each profile lives at `~/.agiworkforce/browser/profiles/<name>` and is
- * launched as a persistent context (so cookies + local storage survive
- * across sessions, exactly like a regular browser profile).
- *
- * The `agiworkforce` profile (default) is **never** the user's daily
- * Chrome — that's the whole point. Mirrors OpenClaw's
- * `extensions/browser/src/browser/profiles.ts` design.
- */
 
 import { homedir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
@@ -20,18 +9,8 @@ import type { BrowserProfileInfo } from './types';
 
 const DEFAULT_PROFILE_NAME = 'agiworkforce';
 
-/**
- * Profile names must match this regex: 1-48 chars, alphanumerics plus
- * `_`, `.`, `-`. No path separators, no `..`, no whitespace, no shell
- * metacharacters. Names that fail validation are rejected with a
- * `BrowserProfileNameError` (code: `'invalid_profile_name'`).
- */
 const PROFILE_NAME_RE = /^[a-zA-Z0-9_.-]{1,48}$/;
 
-/**
- * Error thrown when a profile name fails validation in `resolveProfileDir`.
- * Code: `'invalid_profile_name'`.
- */
 export class BrowserProfileNameError extends Error {
   override readonly name = 'BrowserProfileNameError';
   readonly code = 'invalid_profile_name' as const;
@@ -52,30 +31,14 @@ interface OpenProfile {
 
 const open = new Map<string, OpenProfile>();
 
-/**
- * Pattern that AGIWORKFORCE_BROWSER_PROFILE_ROOT must match.
- *
- * FIX (audit 2026-05-20, §8): the env-var override was previously read
- * with zero validation — an attacker who could write to the user's shell
- * profile could set this to `/etc` or `~/Library/Mail` and have the
- * profile machinery write into a directory the agent shouldn't own. The
- * audit also flagged the silent default ("no docs, no validation").
- *
- * Allowed values are *absolute* paths whose every component is safe
- * (alphanumerics + `_`, `-`, `.`, `/`) and that contain no parent
- * traversal segments. Relative paths and `..` are rejected with a
- * clear error so the operator can fix their shell config.
- */
 const PROFILE_ROOT_ENV_VAR = 'AGIWORKFORCE_BROWSER_PROFILE_ROOT';
 
 function isAcceptableProfileRoot(p: string): boolean {
   if (!p || typeof p !== 'string') return false;
-  if (!p.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(p)) return false; // absolute on POSIX or Windows
+  if (!p.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(p)) return false;
   if (p.includes('\0')) return false;
-  // Reject any `..` segment.
   const parts = p.split(/[\\/]/);
   if (parts.some((seg) => seg === '..')) return false;
-  // Conservative charset: everything we expect from a config knob.
   return /^[A-Za-z0-9_.:\\/ -]+$/.test(p);
 }
 
@@ -103,8 +66,6 @@ export function resolveProfileDir(name?: string): string {
   }
   const root = resolve(profileRoot());
   const resolved = resolve(join(root, profileName));
-  // Defense-in-depth: even though the regex blocks `..` and path
-  // separators, double-check the resolved path stays strictly under root.
   const rel = relative(root, resolved);
   if (rel === '' || rel.startsWith('..')) {
     throw new BrowserProfileNameError(
@@ -116,7 +77,6 @@ export function resolveProfileDir(name?: string): string {
 }
 
 export async function listProfiles(): Promise<BrowserProfileInfo[]> {
-  // Walk on-disk profile dirs without launching anything.
   const { readdir, stat } = await import('node:fs/promises');
   const root = profileRoot();
   let entries: string[] = [];
@@ -145,16 +105,10 @@ export async function listProfiles(): Promise<BrowserProfileInfo[]> {
 }
 
 export interface OpenProfileOptions {
-  /** Override the bundled Chromium executable (e.g. system Chrome). */
   executablePath?: string;
-  /** Headed by default for debugging — set true for CI. */
   headless?: boolean;
 }
 
-/**
- * Open or reuse a profile. Returns the active page (creating one if needed).
- * The profile name defaults to `agiworkforce` if omitted.
- */
 export async function openProfile(name?: string, options: OpenProfileOptions = {}): Promise<Page> {
   const profileName = name ?? DEFAULT_PROFILE_NAME;
   const existing = open.get(profileName);
@@ -170,8 +124,6 @@ export async function openProfile(name?: string, options: OpenProfileOptions = {
     args: ['--no-default-browser-check', '--no-first-run', '--disable-features=TranslateUI'],
   };
 
-  // launchPersistentContext is the Playwright equivalent of "Chrome with a
-  // persistent profile dir" — cookies, storage, etc. survive across runs.
   const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
   const pages = context.pages();
   const page = pages[0] ?? (await context.newPage());

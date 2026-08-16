@@ -1,6 +1,3 @@
-/**
- * Deterministic finding fixtures for guardian-github tests.
- */
 import {
   FindingSchema,
   SCHEMA_VERSION,

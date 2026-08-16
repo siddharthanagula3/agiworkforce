@@ -1,11 +1,3 @@
-/**
- * CommandPaletteProvider ⌘K gating.
- *
- * Regression: ⌘K is advertised in the chat sidebar as "Search" and is handled
- * there by WebShellV3's conversation-search dialog. This global provider also
- * binding ⌘K stacked TWO modals on a single keypress on /chat. The provider must
- * yield ⌘K on /chat routes and keep owning it everywhere else.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { CommandPaletteProvider } from './CommandPaletteProvider';
@@ -13,7 +5,6 @@ import { CommandPaletteProvider } from './CommandPaletteProvider';
 const nav = vi.hoisted(() => ({ pathname: '/' }));
 vi.mock('next/navigation', () => ({ usePathname: () => nav.pathname }));
 
-// Stub the heavy palette; surface the controlled `open` prop for assertions.
 vi.mock('./CommandPalette', () => ({
   CommandPalette: ({ open }: { open: boolean }) => (
     <div data-testid="palette" data-open={open ? 'true' : 'false'} />
@@ -51,8 +42,6 @@ describe('CommandPaletteProvider ⌘K gating', () => {
   });
 
   it('DOES open on a /chat-prefixed route that is not the chat surface (gate is exact, not loose)', () => {
-    // e.g. a hypothetical /chat-settings — no WebShellV3 search handler there,
-    // so the palette must still own ⌘K rather than leaving it dead.
     nav.pathname = '/chat-settings';
     const { getByTestId } = render(<CommandPaletteProvider />);
     pressCmdK();

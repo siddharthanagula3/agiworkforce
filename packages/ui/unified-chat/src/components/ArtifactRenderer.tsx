@@ -1,23 +1,3 @@
-/**
- * ArtifactRenderer — surface-agnostic artifact content renderer.
- *
- * Ported from apps/desktop/src/components/UnifiedAgenticChat/ArtifactRenderer.tsx.
- *
- * Changes from source:
- * - Removed all @tauri-apps/* imports and isTauri guards
- * - Removed useCodeStore dependency; replaced with optional `onSaveArtifact` prop
- * - Removed @/lib/tauri-mock dependency
- * - Removed useThemeContext dep; accepts optional `isDark` prop (defaults to false)
- * - Removed PromptDialog / usePrompt (would need desktop UI); "Apply to file"
- *   action delegates to the optional `onApplyCode` prop
- * - Removed SectionErrorBoundary wrapper (host app provides error boundaries)
- * - Kept sanitizeHtml inline using DOMPurify-compatible allow-list logic via
- *   a local plaintext fallback (no heavy dependency on the desktop sanitize util).
- *   SVG/Mermaid rendering calls the local safe-sanitize helper.
- * - ReactPreview and sub-artifact components imported from this package.
- * - Charts / Tables remain inline (recharts is a peer dep in consumer apps; here
- *   we render them as plain text tables if recharts is not available).
- */
 
 import {
   AlertTriangle,
@@ -47,24 +27,11 @@ import { PresentationArtifact } from './artifact-components/PresentationArtifact
 import { ReactPreview } from './artifact-components/ReactPreview';
 import { SpreadsheetArtifact } from './artifact-components/SpreadsheetArtifact';
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 export interface ArtifactRendererProps {
   artifact: Artifact;
   className?: string;
-  /** Whether the host app is in dark mode. Affects code/mermaid themes. */
   isDark?: boolean;
-  /**
-   * Optional callback invoked when the user clicks "Apply to file" for code
-   * artifacts. The host app (e.g. desktop with Tauri) implements the file-write.
-   */
   onApplyCode?: (artifactId: string, content: string) => Promise<void>;
-  /**
-   * Optional callback invoked when the user requests a native PDF/Word/Excel
-   * export. Desktop implements via Tauri invoke; web/mobile may no-op or redirect.
-   */
   onExportNative?: (
     format: 'pdf' | 'word' | 'excel',
     artifactId: string,
@@ -72,10 +39,6 @@ export interface ArtifactRendererProps {
     title: string,
   ) => Promise<void>;
 }
-
-// ---------------------------------------------------------------------------
-// Minimal SVG sanitizer (allow-list — no external dependency)
-// ---------------------------------------------------------------------------
 
 const SVG_ALLOWED_TAGS = new Set([
   'svg',
@@ -90,7 +53,6 @@ const SVG_ALLOWED_TAGS = new Set([
   'text',
   'tspan',
   'defs',
-  // tagName comparisons are lowercased; 'clipPath' would never match.
   'clippath',
   'use',
   'image',
@@ -172,18 +134,12 @@ const SVG_ALLOWED_ATTRS = new Set([
  * different answers to "is this SVG safe?".
  */
 export function sanitizeSvg(raw: string): string {
-  // Parse using browser DOM parser, then walk and strip
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(raw, 'image/svg+xml');
     const errorNode = doc.querySelector('parsererror');
     if (errorNode) return '';
 
-    // AUDIT-FIX (CRITICAL #15): a non-<svg> root (e.g. an XHTML document)
-    // used to fall into sanitizeNode's removeChild branch, which detaches
-    // the root but leaves the held reference — and its attributes and
-    // children — completely unsanitized for XMLSerializer below. Reject
-    // any document whose root is not <svg> outright.
     if (doc.documentElement.tagName.toLowerCase() !== 'svg') return '';
 
     function sanitizeNode(node: Element) {
@@ -192,20 +148,14 @@ export function sanitizeSvg(raw: string): string {
         node.parentNode?.removeChild(node);
         return;
       }
-      // Strip disallowed attributes
       const attrs = Array.from(node.attributes);
       for (const attr of attrs) {
         const name = attr.name.toLowerCase();
         if (!SVG_ALLOWED_ATTRS.has(name)) {
           node.removeAttribute(attr.name);
         }
-        // Block dangerous URI schemes (javascript:, data:, vbscript:, etc.)
-        // AUDIT-FIX: alert-450 — parse URL scheme instead of `startsWith` substring
-        // check, which is bypassable via case (`JavaScript:`) or whitespace prefix.
         if (name === 'href' || name === 'xlink:href') {
           const raw = attr.value.trim();
-          // Allow safe schemes + relative refs; reject everything else.
-          // `new URL` throws on relative URLs without a base — treat as safe.
           let scheme: string | null = null;
           try {
             scheme = new URL(raw, 'https://placeholder.invalid/').protocol
@@ -220,7 +170,6 @@ export function sanitizeSvg(raw: string): string {
           }
         }
       }
-      // Recurse children (snapshot to avoid mutation during iteration)
       Array.from(node.children).forEach(sanitizeNode);
     }
 
@@ -231,10 +180,6 @@ export function sanitizeSvg(raw: string): string {
     return '';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getFileExtension(artifact: Artifact): string {
   if (artifact.type === 'code' && artifact.language) return artifact.language;
@@ -282,10 +227,6 @@ function getArtifactIcon(type: string): React.ReactNode {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Sub-renderers
-// ---------------------------------------------------------------------------
-
 function CodeArtifact({ artifact }: { artifact: Artifact }) {
   const lines = artifact.content.split('\n');
   return (
@@ -328,7 +269,7 @@ function SvgArtifact({ artifact }: { artifact: Artifact }) {
         className="w-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         dangerouslySetInnerHTML={{
           __html:
-            sanitized /* llm-guardrail-allow: sanitizeSvg() output — audited SVG tag/attr allowlist, non-svg roots rejected */,
+            sanitized,
         }}
       />
     </div>
@@ -401,7 +342,7 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
           ref={containerRef}
           dangerouslySetInnerHTML={{
             __html:
-              sanitized /* llm-guardrail-allow: sanitizeSvg() output — audited SVG tag/attr allowlist, non-svg roots rejected */,
+              sanitized,
           }}
           className="w-full h-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         />
@@ -416,14 +357,6 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isRunning, setIsRunning] = useState(true);
 
-  // Shared CSP envelope lives in `lib/artifact-sandbox` so this surface and
-  // `ArtifactPanel` cannot drift on the iframe's security attributes.
-  //
-  // AUDIT-FIX ART-16: `buildSandboxedHtml` throwing used to be swallowed into
-  // `srcDoc = ''`, and the render was `{isRunning && srcDoc && <iframe/>}` +
-  // `{!isRunning && <Run again/>}` — so a build failure matched NEITHER branch
-  // and the component rendered a toolbar above dead empty space with no error,
-  // no retry and no explanation. The failure is now a first-class state.
   const build = useMemo<{ srcDoc: string; error: string | null }>(() => {
     if (!isRunning) return { srcDoc: '', error: null };
     try {
@@ -489,16 +422,11 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   );
 }
 
-/** Types whose content is tabular (CSV/TSV or JSON array-of-objects). */
 const TABULAR_TYPES = ['spreadsheet', 'table', 'csv'] as const;
 
 export function isTabularType(type: string): boolean {
   return (TABULAR_TYPES as readonly string[]).includes(type);
 }
-
-// ---------------------------------------------------------------------------
-// Main ArtifactRenderer
-// ---------------------------------------------------------------------------
 
 export function ArtifactRenderer({
   artifact,
@@ -540,9 +468,6 @@ export function ArtifactRenderer({
 
   const handleDownload = () => {
     if (!hasContent) return;
-    // Tabular artifacts download as real CSV even when the stored content is
-    // the legacy JSON array-of-objects shape; unparseable content falls back
-    // to the raw text so nothing is silently lost.
     let body = artifact.content;
     let mime = 'text/plain';
     if (isTabularType(artifact.type)) {

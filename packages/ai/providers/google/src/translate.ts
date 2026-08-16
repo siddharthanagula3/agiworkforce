@@ -1,16 +1,3 @@
-/**
- * Translate `ChatRequest` → Gemini `:streamGenerateContent` request body.
- *
- * Gemini-specific shape rules:
- *   - **No "system" role**: system messages go on top-level `systemInstruction`
- *   - **Roles are `user` / `model`**: assistant ≡ model
- *   - **Each message holds a `parts: GeminiPart[]`** array; text / inlineData (image) /
- *     functionCall / functionResponse / thought all live as parts
- *   - **Tool schemas pass through `cleanSchemaForGemini`** from provider-protocol
- *     to scrub disallowed JSON Schema keywords before submission
- *   - **Thinking** maps to `generationConfig.thinkingConfig` (`includeThoughts: true` +
- *     optional `thinkingBudget`)
- */
 
 import type {
   ChatRequest,
@@ -35,16 +22,6 @@ function isTextBlock(b: ContentBlock): b is TextBlock {
   return b.type === 'text';
 }
 
-/**
- * Build a map of `toolUseId → functionName` from prior assistant
- * `tool_use` blocks so that subsequent `tool_result` blocks can carry the
- * original function name when translated to Gemini's `functionResponse`.
- *
- * Gemini requires `functionResponse.name` to match a
- * `tools.functionDeclarations[].name`. Passing the opaque toolUseId
- * (e.g. `toolu_01ABC...`) breaks the multi-turn round-trip — Gemini
- * either errors or treats the response as an unrecognized function output.
- */
 function buildToolUseNameMap(messages: ProviderMessage[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const msg of messages) {
@@ -64,9 +41,6 @@ function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): 
     case 'text':
       return { text: block.text };
     case 'image':
-      // Gemini accepts inline base64. URL parts use fileData with a fileUri
-      // that must be a Files-API uri (gs:// or generated upload uri); we
-      // can't pass a generic public URL, so URL images are skipped here.
       if (block.source.type === 'base64') {
         return { inlineData: { mimeType: block.source.mediaType, data: block.source.data } };
       }
@@ -76,18 +50,6 @@ function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): 
         inlineData: { mimeType: block.source.mediaType, data: block.source.data },
       };
     case 'tool_use':
-      // Current provider models strictly validate thought signatures on replayed functionCall
-      // parts: omitting one 400s with INVALID_ARGUMENT ("Function call is
-      // missing a thought_signature in functionCall parts", live repro
-      // 2026-07-10 on a current Gemini tool-capable model with the tool loop's replayed assistant
-      // turn). Our tool loops replay assistant tool calls over the
-      // OpenAI-compatible wire, which cannot carry Gemini's signature — from
-      // Gemini's perspective these are INJECTED function calls, and the docs
-      // (ai.google.dev/gemini-api/docs/generate-content/thought-signatures)
-      // document exactly this dummy value to skip validation for injected
-      // calls. Real-signature continuity needs the signature to survive the
-      // shared wire (same class as the Anthropic thinking-continuity fix) —
-      // tracked in known-flaws as GEMINI-FUNCTIONCALL-THOUGHT-SIGNATURE-01.
       return {
         functionCall: { name: block.name, args: block.input },
         thoughtSignature: 'skip_thought_signature_validator',
@@ -97,9 +59,6 @@ function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): 
         typeof block.content === 'string'
           ? block.content
           : block.content.map((b) => b.text).join('\n');
-      // Look up the original function name from the prior assistant
-      // tool_use block. Fall back to the toolUseId only if we can't find
-      // it (defensive — a well-formed transcript will always have a match).
       const name = toolUseNames.get(block.toolUseId) ?? block.toolUseId;
       return { functionResponse: { name, response: { output: text } } };
     }
@@ -182,8 +141,6 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
     req.tools && req.tools.length > 0
       ? req.tools.flatMap(translateTool).filter((d): d is NonNullable<typeof d> => d !== undefined)
       : undefined;
-  // rawVendorTools are provider-native tool entries (e.g. { google_search: {} })
-  // appended verbatim as additional GeminiTool objects — caller owns the shape.
   const vendorTools = (req.rawVendorTools ?? []) as GeminiTool[];
   const combinedTools: GeminiTool[] = [
     ...(declarations ? [{ functionDeclarations: declarations }] : []),
@@ -192,15 +149,6 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
   const tools: GeminiTool[] | undefined = combinedTools.length > 0 ? combinedTools : undefined;
   const choiceConfig = translateToolChoice(req.toolChoice);
 
-  // Gemini requires `toolConfig.includeServerSideToolInvocations: true` when a
-  // request carries BOTH built-in tools (rawVendorTools, e.g. google_search
-  // grounding) AND functionDeclarations — without it the API rejects the
-  // request with 400 INVALID_ARGUMENT ("Please enable
-  // tool_config.include_server_side_tool_invocations to use Built-in tools
-  // with Function calling."). Scoped narrowly to the combined case: requests
-  // with only one kind of tool keep their existing byte-identical body (the
-  // key is never emitted), and all catalog Gemini models are 3.x, which
-  // support the flag.
   const combinesBuiltInAndFunctions =
     declarations !== undefined && declarations.length > 0 && vendorTools.length > 0;
   const toolConfig: GeminiToolConfig | undefined = combinesBuiltInAndFunctions
@@ -215,21 +163,7 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
   if (req.stopSequences) generationConfig.stopSequences = req.stopSequences;
 
   if (req.thinking?.type === 'enabled') {
-    // includeThoughts defaults to true (Gemini streams a reasoning summary
-    // back) so every caller that predates this field -- e.g. services/api-
-    // gateway's /api/v1/providers/:providerId/stream, which takes a caller-
-    // supplied ChatRequest.thinking directly -- keeps today's behavior with
-    // zero change. A caller can opt OUT (apps/web's web v1 route does, to
-    // hold its byte-stability contract with the pre-adapter Google provider,
-    // which only ever sent thinkingBudget -- see canonical-request.ts's
-    // toCanonicalGoogleThinking) by setting includeThoughts:false, which
-    // omits the key entirely rather than sending it as a literal `false`
-    // (Gemini's own default), matching the pre-adapter wire byte-for-byte.
     const includeThoughts = req.thinking.includeThoughts ?? true;
-    // Prefer the discrete `thinkingLevel` control when the catalog exposes it. Fall back
-    // to the legacy `thinkingBudget` integer when no
-    // level is set — preserving byte-stability for legacy callers that only ever
-    // sent a budget. See reasoning-effort-capability-matrix-2026-07-10 flag 4.
     generationConfig.thinkingConfig = {
       ...(includeThoughts ? { includeThoughts: true } : {}),
       ...(req.thinking.thinkingLevel !== undefined

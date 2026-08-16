@@ -4,15 +4,6 @@ import type { AgentEvent } from '@agiworkforce/types/protocol';
 
 import { agentEventToStreamChunk, streamChunkToAgentEvent } from '../agent-event-envelope';
 
-/**
- * The lossless-mapping proof for the one versioned agent event envelope
- * (execution program §W5 item 4). REUSES the exact `StreamChunk[]` sequence
- * from `openai-wire-compat.test.ts`'s `'emits text deltas, tool-call
- * frames, and the finish chunk'` test (`OpenAIWireAssembler streaming`
- * describe block) — that sequence already exercises this package's real
- * production wire-assembly path, so it is real recorded dialect data, not
- * a fixture invented for this test.
- */
 const REAL_WEB_SSE_CHUNK_SEQUENCE: StreamChunk[] = [
   { type: 'text-delta', delta: 'Hel' },
   { type: 'tool-use-start', toolUseId: 'tu_1', name: 'search' },
@@ -26,9 +17,6 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
   it('maps the real recorded web SSE chunk sequence to AgentEvent and back losslessly', () => {
     const events = REAL_WEB_SSE_CHUNK_SEQUENCE.map(streamChunkToAgentEvent);
 
-    // None of the six real chunks in this sequence is one of the three
-    // deliberately-unmodeled StreamChunk variants (citation-delta,
-    // vendor-raw, response-meta) — every mapping must succeed.
     for (const event of events) {
       expect(event).not.toBeNull();
     }
@@ -187,8 +175,6 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
       expect(streamChunk).toEqual({ type: 'stop', reason: 'refusal' });
       expect(streamChunk).not.toEqual({ type: 'stop', reason: 'error' });
 
-      // And back up: the round trip recovers 'refusal' exactly. A refusal is
-      // never re-generalized into 'error' at this edge.
       const roundTripped = streamChunkToAgentEvent(streamChunk!);
       expect(roundTripped).toEqual({ type: 'stop', reason: 'refusal' });
     });

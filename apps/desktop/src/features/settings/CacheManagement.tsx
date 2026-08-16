@@ -1,9 +1,3 @@
-/**
- * Cache Management Component
- *
- * UI component for managing cache in the Settings panel.
- * Displays cache statistics and provides controls for clearing cache.
- */
 
 import React, { useEffect, useState } from 'react';
 import { CacheService } from '../../services/cacheService';
@@ -29,7 +23,6 @@ export const CacheManagement: React.FC = () => {
   const [clearLLMDialogOpen, setClearLLMDialogOpen] = useState(false);
   const [clearProviderDialog, setClearProviderDialog] = useState<string | null>(null);
 
-  // Load cache statistics on component mount
   useEffect(() => {
     void loadStats();
   }, []);
@@ -143,7 +136,6 @@ export const CacheManagement: React.FC = () => {
       setLoading(true);
       const exportData = await CacheService.export();
 
-      // Download as JSON file
       const blob = new Blob([exportData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

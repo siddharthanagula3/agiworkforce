@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Scans .ts/.tsx source files for icon-only buttons and TreeItems that lack
-// an aria-label or accessible label nearby. Emits a Markdown report.
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { join, relative } from 'path';
@@ -11,11 +9,9 @@ const SRC_DIR = join(ROOT, 'src');
 const REPORT_DIR = join(ROOT, 'docs');
 const REPORT_PATH = join(REPORT_DIR, 'a11y-audit-2026-05-15.md');
 
-// Patterns that suggest an icon-only interactive element
 const ICON_BUTTON_RE = /vscode\.\w*[Ii]con\w*Button|createButton\s*\(|IconButton/g;
 const TREE_ITEM_ICON_RE = /new\s+vscode\.TreeItem\s*\(|iconPath\s*=/g;
 
-// Patterns that indicate an accessible label is present nearby (within ±5 lines)
 const ARIA_LABEL_RE = /aria[_-]?label|accessibilityInformation|label\s*:/i;
 
 function walk(dir, files = []) {
@@ -101,7 +97,6 @@ function run() {
     md += `- Re-run this script after fixes; target: 0 findings.\n`;
   }
 
-  // Ensure docs/ exists
   try {
     statSync(REPORT_DIR);
   } catch {

@@ -1,18 +1,3 @@
-/**
- * FileMentionPicker Component
- *
- * Dropdown picker that appears when the user types `@file:query` or `@path.ext`
- * in the chat input. Shows a filtered list of files with keyboard navigation.
- *
- * Search strategy:
- * - If query is empty or no project folder set: lists the project root directory.
- * - If query contains a `/` or `\`: drills into that directory path.
- * - Otherwise: uses `glob_search` to find files matching `**‌/<query>*` across
- *   the whole project.
- *
- * Selected files are injected into the chat as `@path/to/file.ts` tokens, which
- * the context builder reads and includes as file content in the system prompt.
- */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { File, FileText, Folder, Loader2, Search } from 'lucide-react';
@@ -28,11 +13,8 @@ export interface MentionFile {
 }
 
 interface FileMentionPickerProps {
-  /** Text typed after the @ prefix, used to filter files */
   query: string;
-  /** Called when a file is selected */
   onSelect: (file: MentionFile) => void;
-  /** Called when the picker should close */
   onClose: () => void;
 }
 
@@ -115,7 +97,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const isMountedRef = useRef(true);
   const currentFolder = useProjectStore(selectCurrentFolder);
 
-  // Refs for keyboard handler (avoids stale closures)
   const filteredRef = useRef<MentionFile[]>([]);
   const selectedIndexRef = useRef(0);
 
@@ -128,12 +109,10 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
 
   const rootPath = browsePath ?? currentFolder ?? null;
 
-  // ── Glob-based search for non-empty queries ────────────────────────────────
   const searchByGlob = useCallback(
     async (searchQuery: string, root: string) => {
       setIsLoading(true);
       try {
-        // Build a glob pattern that matches the query anywhere in the path.
         const cleanQuery = searchQuery.replace(/^[@/\\]+/, '');
         const globPattern = cleanQuery.includes('/') ? `**/${cleanQuery}*` : `**/*${cleanQuery}*`;
 
@@ -155,7 +134,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         setEntries(mapped);
       } catch {
         if (isMountedRef.current) {
-          // Fallback to directory listing if glob_search isn't available yet.
           await loadDirEntries(root);
         }
       } finally {
@@ -166,7 +144,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     [],
   );
 
-  // ── Directory listing for empty query or explicit directory browse ─────────
   const loadDirEntries = useCallback(async (path: string) => {
     setIsLoading(true);
     try {
@@ -192,31 +169,24 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     }
   }, []);
 
-  // ── Effect: load entries when query or browsePath changes ──────────────────
   useEffect(() => {
     if (!rootPath) {
       setEntries([]);
       return;
     }
-    // Strip the "file:" prefix if present (legacy @file: trigger).
     const cleanQuery = query.startsWith('file:') ? query.slice(5) : query;
 
     if (browsePath) {
-      // Explicit directory browse — always do a directory listing.
       void loadDirEntries(browsePath);
     } else if (cleanQuery.trim().length > 0) {
-      // Query present — use glob search.
       void searchByGlob(cleanQuery, rootPath);
     } else {
-      // No query — list project root.
       void loadDirEntries(rootPath);
     }
   }, [rootPath, query, browsePath, loadDirEntries, searchByGlob]);
 
-  // Client-side filter on top of server results (for instant response on dir listing).
   const displayEntries = entries.slice(0, MAX_RESULTS);
 
-  // Keep refs in sync for keyboard handler.
   filteredRef.current = displayEntries;
   selectedIndexRef.current = selectedIndex;
 
@@ -235,7 +205,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     [onSelect],
   );
 
-  // Keyboard navigation.
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const currentFiltered = filteredRef.current;
@@ -262,10 +231,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     return () => window.removeEventListener('keydown', handleKey, true);
   }, [onClose, handleEntryActivate]);
 
-  // Scroll selected item into view.
-  // BUG-FMP-04: list.children[selectedIndex] was off-by-header because the
-  // first child is the header <div>, not a file item. Use a targeted selector
-  // on the data-mention-item attribute instead.
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;

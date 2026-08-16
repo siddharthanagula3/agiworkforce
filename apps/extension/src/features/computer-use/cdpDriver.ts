@@ -1,82 +1,26 @@
-/**
- * cdpDriver.ts — Chrome DevTools Protocol action layer for the computer-use agent.
- *
- * WHY CDP INSTEAD OF CONTENT SCRIPTS:
- *   The existing content-script executor (content.ts:executePlannedAction) has
- *   no working case for screenshot/right_click/double_click/mouse_move/wait/
- *   execute_script — they all fall through to the `default` branch which returns
- *   'Unsupported page action'. CDP is authoritative, reliable for a live demo,
- *   and avoids untangling the dual src/ vs src/features/ executor trees.
- *
- * SECURITY:
- *   - attach() is called per-action and detach() is called after every operation
- *     (success or error) — the debugger is never left attached.
- *   - callers MUST pass a tabId that has already cleared the site-allowlist gate;
- *     the driver does NOT re-check — that is enforced by the agentLoop orchestrator.
- *   - DOM_SUMMARY_MAX_CHARS caps the text returned by getPageContent() to prevent
- *     runaway context windows.
- *   - getPageContent() and getFieldValue() route text through `sanitizePageText`
- *     (the same redactSecrets-backed helper content.ts/side_panel.ts use) before
- *     it is handed back to agentLoop for the cloud call — see the HIGH finding
- *     this closed: computer-use previously shipped raw page/field text to the
- *     cloud gateway unredacted (audit 2026-07-19).
- *
- * SUPPORTED ACTIONS:
- *   screenshot()      → Page.captureScreenshot → base64 PNG
- *   click()           → resolve element via Runtime.evaluate + Input.dispatchMouseEvent
- *   scroll()          → Input.dispatchMouseEvent (wheel) or Runtime scrollIntoView
- *   type()            → Input.insertText (after focusing the active element)
- *   getPageContent()  → Runtime.evaluate compact interactable-element summary with indices
- *   navigate()        → Page.navigate
- *   waitForStable()   → polls DOM hash + readyState until quiet, capped by timeout
- */
 
 import { SITE_ALLOWLIST_STORAGE_KEY, sanitizePageText } from '../../background/policy';
 
-/**
- * Placeholder returned for password/hidden field values — both in-page (the
- * Runtime.evaluate expression in getFieldValue) and here, so the raw value
- * never crosses the CDP boundary into the extension process, let alone the
- * cloud gateway. Kept as a named export so tests can assert on it.
- */
 export const REDACTED_FIELD_PLACEHOLDER = '[redacted password]';
 
-/** How many characters of DOM summary text to return to the model (token budget). */
 const DOM_SUMMARY_MAX_CHARS = 8_000;
-
-// ─── Index→selector map ───────────────────────────────────────────────────────
-//
-// P1-2: Index-based targeting. After each getPageContent() call we store a
-// per-tab map from integer index → CSS selector (or backendNodeId as fallback).
-// The model is instructed to reference elements by index. click() and type()
-// resolve an {index} argument via this map.
-//
-// The map is keyed by tabId and replaced on every snapshot because SPA re-renders
-// invalidate old indices.
 
 const elementIndexMaps = new Map<number, Map<number, string>>();
 
-/** Return the current index→selector map for a tab (empty Map if none yet). */
 export function getElementIndexMap(tabId: number): ReadonlyMap<number, string> {
   return elementIndexMaps.get(tabId) ?? new Map();
 }
 
-/** Replace the index→selector map for a tab (called by getPageContent). */
 function setElementIndexMap(tabId: number, map: Map<number, string>): void {
   elementIndexMaps.set(tabId, map);
 }
 
-/** Resolve an element index to its selector. Returns null when the index is stale. */
 export function resolveIndexedSelector(tabId: number, index: number): string | null {
   return elementIndexMaps.get(tabId)?.get(index) ?? null;
 }
 
-// ─── CDP type shims ──────────────────────────────────────────────────────────
-// @types/chrome ships chrome.debugger but not the CDP protocol message shapes.
-// We only need the few we send, so thin inline types are cleaner than a dep.
-
 interface CdpScreenshotResult {
-  data: string; // base64 PNG
+  data: string;
 }
 
 interface CdpBoxModel {
@@ -87,17 +31,6 @@ interface CdpObjectResult {
   result: { type: string; value?: unknown; objectId?: string };
   exceptionDetails?: { text: string };
 }
-
-// ─── P1-4: Debugger reattach registry ────────────────────────────────────────
-//
-// When the MV3 service worker is evicted and revived, chrome.debugger fires
-// onDetach. We track which tab IDs the agent loop considers active so that
-// onDetach can transparently re-attach, preventing "Receiving end does not
-// exist" mid-loop failures.
-//
-// The registry is a Map<tabId, boolean> — value is always true while the loop
-// is running. The background service worker (agentLoop caller) calls
-// registerActiveTab / unregisterActiveTab around runAgentLoop.
 
 const activeDebuggerTabs = new Map<number, boolean>();
 
@@ -110,12 +43,6 @@ export function unregisterActiveTab(tabId: number): void {
   elementIndexMaps.delete(tabId);
 }
 
-/**
- * Install the chrome.debugger.onDetach listener ONCE at module load.
- * When a registered tab detaches (service-worker eviction), re-attach so the
- * loop can continue. This is a no-op in test environments where chrome.debugger
- * is absent or the listener is already installed.
- */
 let _onDetachInstalled = false;
 
 export function ensureOnDetachListener(): void {
@@ -127,23 +54,18 @@ export function ensureOnDetachListener(): void {
       const tabId = source.tabId;
       if (tabId === undefined) return;
       if (!activeDebuggerTabs.has(tabId)) return;
-      // Service-worker eviction — re-attach silently.
       if (reason === 'canceled_by_user') {
-        // User manually detached via Chrome UI — do NOT re-attach.
         unregisterActiveTab(tabId);
         return;
       }
-      // Transparent re-attach (best-effort; the next action will pick it up).
       chrome.debugger.attach({ tabId }, '1.3', () => {
-        void chrome.runtime.lastError; // suppress "already attached" errors
+        void chrome.runtime.lastError;
       });
     });
   } catch {
     // In test / non-extension environments chrome.debugger may be absent.
   }
 }
-
-// ─── Debuggee helpers ────────────────────────────────────────────────────────
 
 function debuggee(tabId: number): chrome.debugger.Debuggee {
   return { tabId };
@@ -160,7 +82,6 @@ async function attach(tabId: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     chrome.debugger.attach(debuggee(tabId), '1.3', () => {
       if (chrome.runtime.lastError) {
-        // Already attached is not fatal — we own the attach lifecycle
         const msg = chrome.runtime.lastError.message ?? '';
         if (msg.includes('Another debugger is already attached')) {
           resolve();
@@ -177,7 +98,6 @@ async function attach(tabId: number, signal?: AbortSignal): Promise<void> {
 async function detach(tabId: number): Promise<void> {
   return new Promise((resolve) => {
     chrome.debugger.detach(debuggee(tabId), () => {
-      // Ignore errors on detach (already detached is fine)
       void chrome.runtime.lastError;
       resolve();
     });
@@ -208,10 +128,6 @@ async function sendCommand<T = unknown>(
   });
 }
 
-/**
- * Wrap an action with attach/detach lifecycle. The debugger is always detached
- * after the action completes, whether success or error.
- */
 async function withDebugger<T>(
   tabId: number,
   fn: () => Promise<T>,
@@ -228,16 +144,10 @@ async function withDebugger<T>(
   }
 }
 
-// ─── P1-1: waitForStable ─────────────────────────────────────────────────────
-
 export interface WaitForStableOptions {
-  /** Total timeout in ms before giving up and returning anyway. Default 3000. */
   timeoutMs?: number;
-  /** Interval between polls in ms. Default 250. */
   pollIntervalMs?: number;
-  /** Number of consecutive identical snapshots before declaring stable. Default 2. */
   stableCount?: number;
-  /** Stop polling immediately when the owning computer-use run is cancelled. */
   signal?: AbortSignal;
 }
 
@@ -261,21 +171,6 @@ async function waitForPollInterval(delayMs: number, signal?: AbortSignal): Promi
   });
 }
 
-/**
- * Wait until the page DOM is "quiet":
- *   1. document.readyState === 'complete'
- *   2. A lightweight hash of the interactable-element snapshot is unchanged
- *      across `stableCount` consecutive polls spaced `pollIntervalMs` apart.
- *
- * Replaces the lone setTimeout(800) used after navigate. Caps at `timeoutMs`
- * and resolves (never rejects) so a timeout never crashes the caller.
- *
- * P1-1: this is the #1 live-flake source fix.
- */
-/**
- * Poll the DOM stability hash once, using an ephemeral attach/detach.
- * Returns empty string on any error (including CDP not available).
- */
 async function pollDomHash(tabId: number, signal?: AbortSignal): Promise<string> {
   try {
     return await withDebugger(
@@ -328,7 +223,7 @@ export async function waitForStable(
     throwIfCdpCancelled(signal);
     if (hash !== '' && hash === lastHash && hash.startsWith('complete|')) {
       consecutiveStable++;
-      if (consecutiveStable >= stableCount) return; // DOM is quiet
+      if (consecutiveStable >= stableCount) return;
     } else {
       consecutiveStable = 0;
       lastHash = hash;
@@ -338,15 +233,11 @@ export async function waitForStable(
   // Timeout reached — return anyway; caller continues best-effort
 }
 
-// ─── Coordinate resolution ───────────────────────────────────────────────────
-
-/** CSS selector → center {x, y} coordinates via CDP DOM.getBoxModel */
 async function selectorToCoords(
   tabId: number,
   selector: string,
   signal?: AbortSignal,
 ): Promise<{ x: number; y: number }> {
-  // Resolve the node ID via Runtime.evaluate → DOM.getBoxModel
   const evalResult = await sendCommand<CdpObjectResult>(
     tabId,
     'Runtime.evaluate',
@@ -390,8 +281,6 @@ async function dispatchMouseClick(
   y: number,
   signal?: AbortSignal,
 ): Promise<void> {
-  // Once mousePressed is accepted, mouseReleased is cleanup for that same
-  // atomic click and must still run to avoid leaving Chrome in a stuck state.
   throwIfCdpCancelled(signal);
   await sendCommand(tabId, 'Input.dispatchMouseEvent', {
     type: 'mousePressed',
@@ -409,12 +298,6 @@ async function dispatchMouseClick(
   });
 }
 
-// ─── Public action surface ───────────────────────────────────────────────────
-
-/**
- * Capture a screenshot of the tab.
- * Returns a base64-encoded PNG string (no data: URI prefix).
- */
 export async function screenshot(tabId: number, signal?: AbortSignal): Promise<string> {
   return withDebugger(
     tabId,
@@ -434,12 +317,6 @@ export async function screenshot(tabId: number, signal?: AbortSignal): Promise<s
   );
 }
 
-/**
- * Click a DOM element by CSS selector, screen coordinates, or indexed element.
- *
- * P1-2: Accepts `{ index: number }` — resolves via the per-tab index→selector
- * map built by the most recent getPageContent() call.
- */
 export async function click(
   tabId: number,
   target: string | { x: number; y: number } | { index: number },
@@ -455,7 +332,6 @@ export async function click(
         x = coords.x;
         y = coords.y;
       } else if ('index' in target) {
-        // P1-2: index-based targeting
         const selector = resolveIndexedSelector(tabId, target.index);
         if (!selector) {
           throw new Error(
@@ -476,9 +352,6 @@ export async function click(
   );
 }
 
-/**
- * Scroll the page by dy pixels (positive = down) or scroll a selector into view.
- */
 export async function scroll(
   tabId: number,
   target: { dy: number } | { toSelector: string },
@@ -498,7 +371,6 @@ export async function scroll(
           signal,
         );
       } else {
-        // Wheel event at viewport center
         await sendCommand(
           tabId,
           'Input.dispatchMouseEvent',
@@ -517,10 +389,6 @@ export async function scroll(
   );
 }
 
-/**
- * Type text into an element. Accepts an optional `targetIndex` to click-focus
- * the indexed element before typing (P1-2).
- */
 export async function type(
   tabId: number,
   text: string,
@@ -531,7 +399,6 @@ export async function type(
     tabId,
     async () => {
       if (targetIndex !== undefined) {
-        // Focus the indexed element first via a click
         const selector = resolveIndexedSelector(tabId, targetIndex);
         if (!selector) {
           throw new Error(
@@ -548,22 +415,6 @@ export async function type(
   );
 }
 
-/**
- * Build a compact, token-bounded summary of interactable elements + visible text.
- *
- * P1-2: Elements are assigned sequential integer indices starting at 1.
- *   Format: "[3] button "Submit"  [4] input name=email"
- *   A per-tab index→selector map is built and stored in elementIndexMaps[tabId].
- *   The model can then act by index: click({index:3}) or type(text, 3).
- *   The map is replaced on every call since SPA re-renders invalidate old indices.
- *
- * P2-6: Content fencing — visible body text is wrapped in an UNTRUSTED DATA
- *   block so the model does not follow instructions embedded in page content.
- *   An injection heuristic scans the text and returns a WARNING prefix when
- *   common prompt-injection patterns are detected (see scanForInjection).
- *
- * Returns a plain-text string bounded to DOM_SUMMARY_MAX_CHARS.
- */
 export async function getPageContent(tabId: number, signal?: AbortSignal): Promise<string> {
   return withDebugger(
     tabId,
@@ -648,7 +499,6 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
       const val = evalResult.result.value;
       if (typeof val !== 'string') return '[getPageContent: unexpected result type]';
 
-      // Parse the combined result and update the index map
       try {
         const parsed = JSON.parse(val) as { summary: string; indexMap: Record<string, string> };
         const newMap = new Map<number, string>();
@@ -657,39 +507,21 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
         }
         setElementIndexMap(tabId, newMap);
 
-        // SECURITY (HIGH finding, audit 2026-07-19): this summary — element
-        // labels/names/hrefs plus the visible body text — is what agentLoop
-        // sends verbatim to the cloud gateway. Route it through the same
-        // sanitizePageText() every other content-egress path uses (content.ts,
-        // side_panel.ts, context-handoff) BEFORE the injection scan and BEFORE
-        // return, so on-page secrets (session tokens in the DOM, API keys on a
-        // dashboard) never leave the extension.
         const sanitizedSummary = sanitizePageText(parsed.summary);
 
-        // P2-6: Injection heuristic scan on the (now-redacted) summary before returning
         const injectionWarning = scanForInjection(sanitizedSummary);
         if (injectionWarning) {
           return `SECURITY WARNING: Possible prompt injection detected in page content.\n${injectionWarning}\n\n${sanitizedSummary}`;
         }
         return sanitizedSummary;
       } catch {
-        return val; // fallback: return raw string
+        return val;
       }
     },
     signal,
   );
 }
 
-// ─── P2-6: Injection heuristic ───────────────────────────────────────────────
-
-/**
- * Patterns that commonly appear in prompt-injection payloads embedded in web
- * page content. When matched, the agent loop forces a human-confirm regardless
- * of the ask-toggle (handled in agentLoop.ts dispatchToolCall).
- *
- * This list is conservative (low false-negative budget): if any pattern
- * fires, the safest action is to stop and confirm.
- */
 export const INJECTION_PATTERNS: RegExp[] = [
   /ignore\s+(all\s+)?(previous|above|prior)\s+instructions?/i,
   /disregard\s+(all\s+)?(previous|above|prior)\s+instructions?/i,
@@ -704,10 +536,6 @@ export const INJECTION_PATTERNS: RegExp[] = [
   /\bsystem\s+prompt\b/i,
 ];
 
-/**
- * Scan page-content text for injection patterns.
- * Returns a short description of the first match, or null when clean.
- */
 export function scanForInjection(text: string): string | null {
   for (const re of INJECTION_PATTERNS) {
     const m = text.match(re);
@@ -718,13 +546,6 @@ export function scanForInjection(text: string): string | null {
   return null;
 }
 
-// ─── Site allowlist helpers (P0 security fix) ────────────────────────────────
-
-/**
- * Read the site allowlist from chrome.storage.local.
- * Returns an empty Set when storage is unavailable (fail-closed: no CDP
- * navigation will be allowed if we cannot read the allowlist).
- */
 async function readSiteAllowlist(): Promise<ReadonlySet<string>> {
   try {
     const result = await chrome.storage.local.get([SITE_ALLOWLIST_STORAGE_KEY]);
@@ -738,10 +559,6 @@ async function readSiteAllowlist(): Promise<ReadonlySet<string>> {
   return new Set<string>();
 }
 
-/**
- * Returns the origin of a URL string (e.g. "https://example.com").
- * Throws on unparseable input.
- */
 export function getOrigin(url: string): string {
   return new URL(url).origin;
 }
@@ -763,7 +580,7 @@ export function getOrigin(url: string): string {
  *   as a tool error so it can adapt (not crash the loop).
  */
 export async function assertDestinationAllowlisted(url: string): Promise<void> {
-  const parsed = new URL(url); // throws on invalid URL
+  const parsed = new URL(url);
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`navigate: only http/https URLs allowed, got ${parsed.protocol}`);
   }
@@ -777,18 +594,7 @@ export async function assertDestinationAllowlisted(url: string): Promise<void> {
   }
 }
 
-/**
- * Navigate the tab to a URL.
- *
- * P0 SECURITY (Day-2): validates that:
- *   1. The URL scheme is http or https.
- *   2. The destination ORIGIN is on the user-managed site allowlist.
- *
- * Both checks happen BEFORE the CDP call so the tab never moves to an
- * off-allowlist host. Rejects model-hallucinated or prompt-injected URLs.
- */
 export async function navigate(tabId: number, url: string, signal?: AbortSignal): Promise<void> {
-  // Will throw if scheme is invalid or origin is off-allowlist
   throwIfCdpCancelled(signal);
   await assertDestinationAllowlisted(url);
   throwIfCdpCancelled(signal);
@@ -801,21 +607,6 @@ export async function navigate(tabId: number, url: string, signal?: AbortSignal)
   );
 }
 
-/**
- * P1-3: Read back the current value of a form field by CSS selector.
- * Used by the type action to verify input was committed (React swallowed event?).
- * Returns null when the element is not found or is not a form field.
- *
- * SECURITY (MEDIUM finding, audit 2026-07-19): the result flows into the tool
- * result the model sees and ships to the cloud gateway. Two layers guard it:
- *   1. In-page: `type="password"` and `type="hidden"` inputs never surface
- *      their real `.value` — the injected expression itself substitutes
- *      REDACTED_FIELD_PLACEHOLDER, so the raw value never crosses the CDP
- *      boundary.
- *   2. In-extension: any other value (ordinary text/textarea/select fields)
- *      is still run through sanitizePageText() so a token or API key typed
- *      into a normal text box gets scrubbed before it reaches the model.
- */
 export async function getFieldValue(
   tabId: number,
   selector: string,
@@ -847,8 +638,6 @@ export async function getFieldValue(
       if (evalResult.exceptionDetails) return null;
       const val = evalResult.result.value;
       if (typeof val !== 'string') return null;
-      // Already redacted in-page (password/hidden) — don't double-process, and
-      // don't let redactSecrets' own patterns mangle the placeholder text.
       if (val === REDACTED_FIELD_PLACEHOLDER) return val;
       return sanitizePageText(val);
     },
@@ -856,5 +645,4 @@ export async function getFieldValue(
   );
 }
 
-/** Alias: readDom is an alias for getPageContent (matches the spec wording). */
 export const readDom = getPageContent;

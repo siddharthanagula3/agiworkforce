@@ -1,22 +1,5 @@
-/**
- * Onboarding API — Tauri command wrappers for onboarding.rs
- *
- * Covers all 20 commands:
- *   get_onboarding_status, complete_onboarding_step, skip_onboarding_step,
- *   reset_onboarding, export_user_data, check_connectivity,
- *   get_session_info, update_session_activity,
- *   get_user_preference, set_user_preference,
- *   start_first_run_experience, has_completed_first_run, run_instant_demo,
- *   update_first_run_step, select_demo, record_demo_results,
- *   complete_first_run, get_first_run_session,
- *   get_first_run_statistics, skip_first_run
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// =============================================================================
-// Types (mirrors Rust structs in sys/commands/onboarding.rs + ui/onboarding/)
-// =============================================================================
 
 export interface OnboardingStep {
   id: number;
@@ -92,11 +75,6 @@ export interface FirstRunStatistics {
   average_time_to_value_seconds: number;
 }
 
-// =============================================================================
-// Onboarding Progress Commands
-// =============================================================================
-
-/** Get onboarding status with all steps and progress. */
 export async function getOnboardingStatus(): Promise<OnboardingStatus> {
   try {
     return await invoke<OnboardingStatus>('get_onboarding_status');
@@ -105,7 +83,6 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus> {
   }
 }
 
-/** Mark a specific onboarding step as completed. */
 export async function completeOnboardingStep(stepId: string, data?: string): Promise<void> {
   try {
     await invoke('complete_onboarding_step', { stepId, data: data ?? null });
@@ -114,7 +91,6 @@ export async function completeOnboardingStep(stepId: string, data?: string): Pro
   }
 }
 
-/** Skip a specific onboarding step. */
 export async function skipOnboardingStep(stepId: string): Promise<void> {
   try {
     await invoke('skip_onboarding_step', { stepId });
@@ -123,7 +99,6 @@ export async function skipOnboardingStep(stepId: string): Promise<void> {
   }
 }
 
-/** Reset all onboarding progress. */
 export async function resetOnboarding(): Promise<void> {
   try {
     await invoke('reset_onboarding');
@@ -132,11 +107,6 @@ export async function resetOnboarding(): Promise<void> {
   }
 }
 
-// =============================================================================
-// Data Export
-// =============================================================================
-
-/** Export all user data (conversations, messages, settings) as JSON string. */
 export async function exportUserData(): Promise<string> {
   try {
     return await invoke<string>('export_user_data');
@@ -145,11 +115,6 @@ export async function exportUserData(): Promise<string> {
   }
 }
 
-// =============================================================================
-// Connectivity
-// =============================================================================
-
-/** Check internet connectivity by resolving a known host. */
 export async function checkConnectivity(): Promise<boolean> {
   try {
     return await invoke<boolean>('check_connectivity');
@@ -158,11 +123,6 @@ export async function checkConnectivity(): Promise<boolean> {
   }
 }
 
-// =============================================================================
-// Session Management
-// =============================================================================
-
-/** Get or create the current user session. */
 export async function getSessionInfo(): Promise<SessionInfo> {
   try {
     return await invoke<SessionInfo>('get_session_info');
@@ -171,7 +131,6 @@ export async function getSessionInfo(): Promise<SessionInfo> {
   }
 }
 
-/** Touch session last_activity timestamp. */
 export async function updateSessionActivity(sessionId: string): Promise<void> {
   try {
     await invoke('update_session_activity', { sessionId });
@@ -180,11 +139,6 @@ export async function updateSessionActivity(sessionId: string): Promise<void> {
   }
 }
 
-// =============================================================================
-// User Preferences
-// =============================================================================
-
-/** Read a single user preference by key. Returns null if not found. */
 export async function getUserPreference(key: string): Promise<UserPreference | null> {
   try {
     return await invoke<UserPreference | null>('get_user_preference', { key });
@@ -193,7 +147,6 @@ export async function getUserPreference(key: string): Promise<UserPreference | n
   }
 }
 
-/** Upsert a user preference. */
 export async function setUserPreference(
   key: string,
   value: string,
@@ -214,11 +167,6 @@ export async function setUserPreference(
   }
 }
 
-// =============================================================================
-// First-Run Experience
-// =============================================================================
-
-/** Start the first-run onboarding flow for a user. */
 export async function startFirstRunExperience(
   userId: string,
   userRole?: string,
@@ -233,7 +181,6 @@ export async function startFirstRunExperience(
   }
 }
 
-/** Check if a user has completed the first-run flow. */
 export async function hasCompletedFirstRun(userId: string): Promise<boolean> {
   try {
     return await invoke<boolean>('has_completed_first_run', { userId });
@@ -242,7 +189,6 @@ export async function hasCompletedFirstRun(userId: string): Promise<boolean> {
   }
 }
 
-/** Run a selected first-run demo. */
 export async function runInstantDemo(demoId: string, userId?: string): Promise<DemoResult> {
   try {
     return await invoke<DemoResult>('run_instant_demo', {
@@ -254,7 +200,6 @@ export async function runInstantDemo(demoId: string, userId?: string): Promise<D
   }
 }
 
-/** Advance the first-run step to a new stage. */
 export async function updateFirstRunStep(sessionId: string, step: FirstRunStep): Promise<void> {
   try {
     await invoke('update_first_run_step', { sessionId, step });
@@ -263,7 +208,6 @@ export async function updateFirstRunStep(sessionId: string, step: FirstRunStep):
   }
 }
 
-/** Select a demo in the first-run flow. */
 export async function selectDemo(sessionId: string, demoId: string): Promise<void> {
   try {
     await invoke('select_demo', { sessionId, demoId });
@@ -272,7 +216,6 @@ export async function selectDemo(sessionId: string, demoId: string): Promise<voi
   }
 }
 
-/** Persist demo results for a first-run session. */
 export async function recordDemoResults(sessionId: string, results: DemoResult): Promise<void> {
   try {
     await invoke('record_demo_results', { sessionId, results });
@@ -281,7 +224,6 @@ export async function recordDemoResults(sessionId: string, results: DemoResult):
   }
 }
 
-/** Complete the entire first-run flow. */
 export async function completeFirstRun(sessionId: string): Promise<void> {
   try {
     await invoke('complete_first_run', { sessionId });
@@ -290,7 +232,6 @@ export async function completeFirstRun(sessionId: string): Promise<void> {
   }
 }
 
-/** Get a first-run session by ID. */
 export async function getFirstRunSession(sessionId: string): Promise<FirstRunSession> {
   try {
     return await invoke<FirstRunSession>('get_first_run_session', { sessionId });
@@ -299,7 +240,6 @@ export async function getFirstRunSession(sessionId: string): Promise<FirstRunSes
   }
 }
 
-/** Get aggregate first-run statistics. */
 export async function getFirstRunStatistics(): Promise<FirstRunStatistics> {
   try {
     return await invoke<FirstRunStatistics>('get_first_run_statistics');
@@ -308,7 +248,6 @@ export async function getFirstRunStatistics(): Promise<FirstRunStatistics> {
   }
 }
 
-/** Skip the first-run flow entirely. */
 export async function skipFirstRun(sessionId: string): Promise<void> {
   try {
     await invoke('skip_first_run', { sessionId });
@@ -317,32 +256,22 @@ export async function skipFirstRun(sessionId: string): Promise<void> {
   }
 }
 
-// =============================================================================
-// Client object for structured access
-// =============================================================================
-
 export const OnboardingClient = {
-  // Progress
   getStatus: getOnboardingStatus,
   completeStep: completeOnboardingStep,
   skipStep: skipOnboardingStep,
   reset: resetOnboarding,
 
-  // Data
   exportData: exportUserData,
 
-  // Connectivity
   checkConnectivity,
 
-  // Session
   getSession: getSessionInfo,
   updateActivity: updateSessionActivity,
 
-  // Preferences
   getPreference: getUserPreference,
   setPreference: setUserPreference,
 
-  // First-Run
   firstRun: {
     start: startFirstRunExperience,
     hasCompleted: hasCompletedFirstRun,

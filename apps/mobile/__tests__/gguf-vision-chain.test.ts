@@ -1,16 +1,3 @@
-/**
- * Full-chain integration test for the on-device vision pipeline with mocked
- * native layers (in-memory filesystem + fake llama.rn):
- *
- *   downloadModel (base GGUF + side-by-side mmproj, real chunked SHA-256
- *   verification over the fake bytes) → installed_models record with a real
- *   local_path → vision routing resolves the vl-pack → tier-3 llama.rn loads
- *   with ctx_shift:false, attaches the mmproj via initMultimodal, and receives
- *   the image as a text+image_url content array.
- *
- * Only the physical device behavior (real llama.rn inference, output quality,
- * RAM/thermals) remains outside this test.
- */
 
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 
@@ -55,9 +42,6 @@ jest.mock('expo-file-system/legacy', () => ({
   })),
 }));
 
-// Device capability probe touches React Native NativeModules (no native bridge
-// in Jest) — pin a text-only tier-3 device profile; the real selector logic
-// still chooses the tier from this snapshot.
 jest.mock('../../../packages/platform/local-llm/src/capabilities', () => ({
   detectCapabilities: jest.fn(async () => ({
     totalRAMMB: 6_000,
@@ -96,7 +80,6 @@ function hex(bytes: Uint8Array): string {
   return out;
 }
 
-// Fake artifact bytes large enough to exercise the chunked hasher's loop.
 const baseBytes = new Uint8Array(1024).map((_, i) => (i * 7) % 256);
 const mmprojBytes = new Uint8Array(512).map((_, i) => (i * 13) % 256);
 const BASE_URL = 'https://models.example/fixture-vision-base.gguf';
@@ -121,11 +104,8 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
   });
 
   it('runs the entire pipeline against mocked native layers', async () => {
-    // --- 1. Install: download + verify BOTH artifacts (real sha256 over fake bytes).
     const progress: number[] = [];
     const record = await downloadModel({
-      // Use the catalog row so vision routing and tier-3 context sizing exercise
-      // production metadata; artifact bytes and checksums remain test-local.
       modelId: VISION_CATALOG_MODEL.id,
       displayName: VISION_CATALOG_MODEL.displayName,
       downloadUrl: BASE_URL,
@@ -149,7 +129,6 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
     const stored = mockRecords.get(VISION_CATALOG_MODEL.id) as InstalledModel;
     expect(stored.local_path).toBe(expectedModelPath);
 
-    // --- 2. Select: the vision router resolves the installed vl-pack.
     const route = await resolveVisionRoute();
     expect(route).toEqual({
       kind: 'vl-pack',
@@ -157,8 +136,6 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
       displayName: VISION_CATALOG_MODEL.displayName,
     });
 
-    // --- 3. Generate: tier-3 loads with ctx_shift:false + attaches the mmproj,
-    // and the image reaches the model as a content array.
     const completion = jest.fn(async () => ({ text: 'a tabby cat on a windowsill' }));
     const initMultimodal = jest.fn(async () => true);
     const initLlama = jest.fn(async () => ({
@@ -198,7 +175,6 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
   it('rejects a corrupted mmproj artifact and leaves no corrupt file behind', async () => {
     mockFiles.clear();
     mockRecords.clear();
-    // Serve wrong bytes for the mmproj so its checksum fails.
     mockRemote.set(MMPROJ_URL, new Uint8Array(16));
 
     await expect(
@@ -219,7 +195,6 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
 
     const mmprojPath = `file:///doc/models/${VISION_CATALOG_MODEL.id}/model.gguf.mmproj.gguf`;
     expect(mockFiles.has(mmprojPath)).toBe(false);
-    // No install record was written for the failed install.
     expect(mockRecords.has(VISION_CATALOG_MODEL.id)).toBe(false);
   });
 });

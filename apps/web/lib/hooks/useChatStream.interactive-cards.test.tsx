@@ -1,13 +1,3 @@
-/**
- * Slice 1 end to end: an `x_interactive_card` SSE delta reaches the assistant
- * message's metadata as a PARSED card, alongside the prose of the same turn.
- *
- * This is the wire half of the slice. The renderer half lives in
- * `features/chat/components/messages/InteractiveCardBlock.test.tsx`; together
- * they cover byte-in to pixel-out with no producer in between, which is exactly
- * what slice 1 is for — the degradation path exists and works before anything
- * depends on it.
- */
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE } from '@agiworkforce/types';
@@ -139,7 +129,6 @@ describe('useChatStream — interactive cards', () => {
   });
 
   it('keeps the prose of the same turn intact', async () => {
-    // A card must never replace the answer it sits inside.
     mockSseStream([textEvent('Happy to help. '), cardEvent(CARD), textEvent('Tap through these:')]);
     await send();
 
@@ -161,8 +150,6 @@ describe('useChatStream — interactive cards', () => {
   });
 
   it('replaces a re-emitted card rather than duplicating it', async () => {
-    // The server re-sends a card when its state changes (pending -> answered),
-    // and cardId is stable because it IS the tool call id.
     const answered = clone(CARD) as Record<string, unknown>;
     (answered['body'] as Record<string, unknown>)['state'] = {
       status: 'answered',

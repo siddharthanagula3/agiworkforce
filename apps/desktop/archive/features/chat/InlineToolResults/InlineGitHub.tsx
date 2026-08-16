@@ -2,7 +2,6 @@ import { GitPullRequest, AlertCircle, GitCommit, MessageSquare, Loader2 } from '
 import type { ToolResultProps } from './index';
 import { cn } from '@/lib/utils';
 
-/** Validate that a URL uses https or http protocol before rendering as href */
 function isSafeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -85,7 +84,6 @@ const getLabelTextColor = (hexColor: string): string => {
 export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as GitHubPR | undefined;
 
-  // Show running state
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -95,7 +93,6 @@ export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result, status }) =>
     );
   }
 
-  // Show error state if status indicates failure, even if data is null
   if (status === 'failed' || status === 'error') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -159,7 +156,6 @@ export const InlineGitHubPR: React.FC<ToolResultProps> = ({ result, status }) =>
 export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as GitHubIssue | undefined;
 
-  // Show running state
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -169,7 +165,6 @@ export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result, status })
     );
   }
 
-  // Show error state if status indicates failure, even if data is null
   if (status === 'failed' || status === 'error') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -248,7 +243,6 @@ export const InlineGitHubIssue: React.FC<ToolResultProps> = ({ result, status })
 export const InlineGitHubCommit: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as GitHubCommit | undefined;
 
-  // Show running state
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -258,7 +252,6 @@ export const InlineGitHubCommit: React.FC<ToolResultProps> = ({ result, status }
     );
   }
 
-  // Show error state if status indicates failure, even if data is null
   if (status === 'failed' || status === 'error') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">

@@ -1,8 +1,3 @@
-/**
- * sharedClient.ts integration test — verifies the api-gateway's
- * shared MCP client module loads, exports the expected surface, and
- * gracefully handles the empty-config case.
- */
 
 import { describe, expect, it, vi } from 'vitest';
 

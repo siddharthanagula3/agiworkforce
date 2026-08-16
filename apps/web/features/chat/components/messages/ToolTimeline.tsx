@@ -38,37 +38,20 @@ import {
 } from '../../lib/connector-connect-required';
 import { ConnectorConnectCard } from '../ConnectorConnectCard';
 
-// ─── File reference helper ──────────────────────────────────────────────────
-
-/**
- * Extract the first file-name-like segment (name.ext) from a tool's args string.
- * Used to render a FileTypeIcon + filename pill on file-operation steps. Returns
- * null when the args contain no recognizable filename (e.g. a bare shell command).
- */
 function getFileName(args?: string): string | null {
   if (!args) return null;
   const match = args.match(/([^\s/\\]+\.[a-z0-9]+)(?:\s|$)/i);
   return match?.[1] ?? null;
 }
 
-/**
- * Return the icon component for a tool step based on its name.
- * Matches the Claude reference: file-type-specific icon for file ops,
- * semantic lucide glyphs for other tool types.
- */
 type IconComponent = React.FC<{ className?: string }>;
 
 function getToolIcon(toolName: string, filename?: string | null): IconComponent {
-  // Connector/MCP tool call (mcp__<serverId>__<toolName>) — a consistent
-  // "connector" glyph beats guessing from substrings in the tool name, which
-  // can misfire (e.g. a GitHub "search_issues" tool matching the generic
-  // 'search' bucket below and losing its connector identity).
   if (parseQualifiedMcpToolName(toolName)) return Plug;
 
   const n = toolName.toLowerCase();
 
-  // File-type icon is handled separately in the step row when filename is present
-  if (filename) return FileText; // placeholder; step renders FileTypeIcon directly
+  if (filename) return FileText;
 
   if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep')) {
     return Search;
@@ -96,16 +79,11 @@ function getToolIcon(toolName: string, filename?: string | null): IconComponent 
     return FolderOpen;
   }
   if (n.includes('skill') || n.includes('learn')) {
-    // Claude reference (image 400 "Read design skill") uses an open-book glyph for skills.
     return BookOpen;
   }
-  // Default: file-read / view
   return FileText;
 }
 
-// ─── Web-search tool detection + humanization ─────────────────────────────────
-
-/** Known tool IDs that represent a web/perplexity search */
 const WEB_SEARCH_TOOL_IDS = new Set([
   'web_search',
   'WebSearch',
@@ -117,10 +95,6 @@ const WEB_SEARCH_TOOL_IDS = new Set([
   'fetch_url',
 ]);
 
-/**
- * Returns true when this tool entry represents a web search call.
- * Used to decide whether to render inline source cards beneath the step.
- */
 export function isWebSearchTool(name: string): boolean {
   if (WEB_SEARCH_TOOL_IDS.has(name)) return true;
   const n = name.toLowerCase();
@@ -130,24 +104,11 @@ export function isWebSearchTool(name: string): boolean {
   );
 }
 
-/**
- * Map a raw tool id to a human-readable label.
- *
- * Rules (in priority order):
- *  1. If the tool is a web-search variant and `args` contains a recognizable
- *     query string (parameters.query or the raw args string), show that query.
- *  2. If the tool is a connector/MCP call (mcp__<serverId>__<toolName>), show
- *     "<Connector> · <tool>" so it carries its identity instead of the raw
- *     qualified wire name.
- *  3. Otherwise map known raw IDs to short English labels.
- *  4. Fall back to the original name (for human-named tools like "Read"/"Bash").
- */
 export function humanizeToolName(
   name: string,
   args?: string,
   parameters?: Record<string, unknown>,
 ): string {
-  // 1. Web-search: prefer showing the actual query
   if (isWebSearchTool(name)) {
     const query =
       (parameters?.['query'] as string | undefined) ||
@@ -157,11 +118,9 @@ export function humanizeToolName(
     return 'Web search';
   }
 
-  // 2. Connector/MCP tool call: render its connector identity
   const mcpTool = describeMcpTool(name);
   if (mcpTool) return mcpTool.label;
 
-  // 3. Known raw snake_case → friendly label map
   const map: Record<string, string> = {
     web_search: 'Web search',
     search_web: 'Web search',
@@ -191,11 +150,8 @@ export function humanizeToolName(
   };
   if (map[name]) return map[name]!;
 
-  // 4. Return as-is (human-named tools: "Read", "Bash", "Write", etc.)
   return name;
 }
-
-// ─── Inline source cards (rendered inside the web-search step) ────────────────
 
 interface InlineSourceCardsProps {
   sources: ResearchSource[];
@@ -222,7 +178,6 @@ function InlineSourceCards({ sources, query: _query }: InlineSourceCardsProps) {
 function InlineSourceRow({ source, index }: { source: ResearchSource; index: number }) {
   const [imgError, setImgError] = useState(false);
 
-  // Derive a clean display hostname, handling Vertex AI redirect URIs gracefully
   let displayHost = source.url;
   try {
     const parsed = new URL(source.url);
@@ -231,7 +186,6 @@ function InlineSourceRow({ source, index }: { source: ResearchSource; index: num
     // keep raw
   }
 
-  // Favicon: provided by source, else fall back to Google's favicon service
   const faviconSrc =
     source.favicon && !imgError
       ? source.favicon
@@ -275,81 +229,34 @@ function InlineSourceRow({ source, index }: { source: ResearchSource; index: num
   );
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 export interface ToolEntry {
-  /** Unique identifier for this tool execution */
   id?: string;
-  /** Display name of the tool (e.g. "Read", "Bash", "WebSearch") */
   name: string;
   status: 'running' | 'completed' | 'failed' | 'pending' | 'awaiting_approval';
   durationMs?: number;
-  /** Set for a manual-approval card — the exact tool_call_id the resume must decide. */
   toolCallId?: string;
-  /** When true, render approve/reject affordances (manual-approval gate). */
   requiresApproval?: boolean;
-  /** Short arg preview shown in the card (e.g. file path or command) */
   args?: string;
-  /** Optional parameters map forwarded to ToolCallCard */
   parameters?: Record<string, unknown>;
-  /** When set, consecutive entries sharing the same key render as a parallel group */
   parallelGroup?: string;
-  /** Optional error message when status === 'failed' */
   error?: string;
-  /** Tool execution result content (stdout / response body), populated via x_tool_result SSE events */
   result?: string;
-  /** Playful action phrase shown in the running-state header (e.g. "Running code"). */
   statusPhrase?: string;
 }
 
 interface ToolTimelineProps {
   tools: ToolEntry[];
   className?: string;
-  /**
-   * When true (default: auto when steps > 3) the timeline renders a single
-   * collapsed summary line. Click expands to the full per-step view.
-   * Pass `compact={false}` to always show the full timeline.
-   */
   compact?: boolean;
-  /**
-   * Web search source cards to render INSIDE the web-search step (Claude reference).
-   * Collected from message.metadata.searchResults / citations by MessageBubble.
-   */
   searchSources?: ResearchSource[];
-  /** The search query string corresponding to searchSources. */
   searchQuery?: string;
-  /**
-   * Manual-approval callbacks. When provided, awaiting_approval cards render
-   * approve/reject buttons; the argument is the tool_call_id being decided.
-   */
   onApprove?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
-  /**
-   * True when this message's suspended turn is no longer in the live
-   * approval registry and cannot be rebuilt from its persisted run reference.
-   * Awaiting-approval cards render an expired notice instead of live buttons,
-   * which would otherwise silently no-op. See MessageBubble's
-   * `isApprovalTurnLive` check.
-   */
   expired?: boolean;
-  /** Resend affordance shown on an expired approval card. */
   onResend?: (toolCallId: string) => void;
-  /**
-   * Re-runs the whole exchange from the user's last message. Wired to the
-   * inline Connect card's Retry button (lazy authentication): nothing resumes a
-   * turn after the OAuth callback returns, so re-running it is the only real
-   * way to make the connector tool call happen again.
-   */
   onRetryTurn?: () => void;
 }
 
-/**
- * Lazy authentication: a connector tool call the server answered with a
- * verified "connect required" envelope, or null for every other tool result.
- * Verification (structure, tool binding, destination) lives in
- * `readConnectorConnectRequest` — see that module for why a tool result cannot
- * forge one of these.
- */
 function findConnectRequest(tool: ToolEntry): ConnectorConnectRequest | null {
   return readConnectorConnectRequest({
     qualifiedToolName: tool.name,
@@ -362,8 +269,6 @@ interface EntryGroup {
   parallelGroup?: string;
   entries: ToolEntry[];
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function stableId(tool: ToolEntry, index: number): string {
   if (tool.id) return tool.id;
@@ -385,7 +290,6 @@ function toToolCallStatus(status: ToolEntry['status']): ToolCallStatus {
   }
 }
 
-/** Build a minimal parameters record from args string, if present. */
 function buildParameters(
   args?: string,
   parameters?: Record<string, unknown>,
@@ -411,11 +315,6 @@ function groupTools(tools: ToolEntry[]): EntryGroup[] {
   return groups;
 }
 
-/**
- * Build a compact action-phrased summary from a list of tool entries.
- * Uses Claude-style counted verb phrases: "Ran 5 commands, created a file, read a file".
- * Never emits a mechanical "N tools" count.
- */
 function buildCompactSummary(tools: ToolEntry[]): string {
   type Bucket =
     | 'connector'
@@ -428,9 +327,6 @@ function buildCompactSummary(tools: ToolEntry[]): string {
     | 'codebase-search'
     | 'list';
 
-  // Connector identity for the compact phrase (claude.ai parity: "Used GitHub
-  // integration", not "ran a command"). Collected up front because the
-  // per-bucket phrase builder only sees counts.
   const connectorNames = new Set<string>();
   for (const tool of tools) {
     const described = describeMcpTool(tool.name);
@@ -438,9 +334,6 @@ function buildCompactSummary(tools: ToolEntry[]): string {
   }
 
   function categorize(name: string): Bucket {
-    // Qualified connector calls first — their tool names (post_issue_comment,
-    // get_pull_request_diff, ...) would false-positive into the substring
-    // heuristics below.
     if (parseQualifiedMcpToolName(name)) return 'connector';
     const n = name.toLowerCase();
     if (
@@ -475,7 +368,6 @@ function buildCompactSummary(tools: ToolEntry[]): string {
     return 'shell';
   }
 
-  // Count occurrences per bucket in order of first appearance
   const counts = new Map<Bucket, number>();
   const order: Bucket[] = [];
 
@@ -488,7 +380,6 @@ function buildCompactSummary(tools: ToolEntry[]): string {
     counts.set(b, counts.get(b)! + 1);
   }
 
-  // Phrase builder: count-aware singular/plural
   function phrase(bucket: Bucket, count: number): string {
     const n = count;
     switch (bucket) {
@@ -524,7 +415,6 @@ function buildCompactSummary(tools: ToolEntry[]): string {
 
   const phrases = order.map((b) => phrase(b, counts.get(b)!));
 
-  // Capitalize only the first phrase
   const [first, ...rest] = phrases;
   const capitalized = (first ?? '').charAt(0).toUpperCase() + (first ?? '').slice(1);
 
@@ -534,25 +424,8 @@ function buildCompactSummary(tools: ToolEntry[]): string {
   return `${capitalized}, ${rest.join(', ')}, ${last}`;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-// Threshold: auto-compact when more than this many steps
 const COMPACT_THRESHOLD = 3;
 
-/**
- * A single timeline step row: tool icon + label + optional filename chip below.
- * Matches the Claude reference layout in image 385.
- *
- * When `searchSources` is provided and this step is a web-search tool, the
- * source cards render INSIDE this row (directly below the label), matching
- * the Claude reference (image 381).
- */
-/**
- * Strip the raw tool output from a card that is being replaced by a richer
- * renderer. The "connect required" envelope is machine JSON written for the
- * model; dumping it into the card's Result/Error box under the Connect card
- * would show the user the same thing twice, once unreadably.
- */
 function withoutRawOutput(toolCall: ToolCall): ToolCall {
   const next: ToolCall = { ...toolCall };
   delete next.result;
@@ -583,10 +456,6 @@ function TimelineStepRow({
   onResend?: (toolCallId: string) => void;
   onRetryTurn?: () => void;
 }) {
-  // A connector/MCP call's args (owner/repo/issue_number, etc.) can
-  // incidentally look like a filename to getFileName — check this first so a
-  // connector step always gets its Plug icon + connector label, never a
-  // misfired FileTypeIcon.
   const mcpTool = parseQualifiedMcpToolName(tool.name);
   const filename = mcpTool ? null : getFileName(tool.args);
   const hasFile = filename != null;
@@ -594,17 +463,12 @@ function TimelineStepRow({
   const isWebSearch = isWebSearchTool(tool.name);
   const hasSources = isWebSearch && searchSources && searchSources.length > 0;
 
-  // Lazy authentication: a verified "connect required" result renders an inline
-  // Connect card instead of the envelope's raw JSON.
   const connectRequest = useMemo(() => findConnectRequest(tool), [tool]);
 
-  // Build the humanized label for this tool call
   const humanLabel = humanizeToolName(tool.name, tool.args, tool.parameters);
   const displayToolCall: ToolCall = connectRequest
     ? { ...withoutRawOutput(toolCall), name: humanLabel }
     : { ...toolCall, name: humanLabel };
-  // A quick-pick preference for a dead turn would silently no-op exactly
-  // like live Approve/Reject buttons would -- hide it too when expired.
   const showPermissionPicker = mcpTool != null && tool.status === 'awaiting_approval' && !expired;
 
   return (
@@ -679,16 +543,6 @@ function TimelineStepRow({
   );
 }
 
-// ─── Tool permission quick-picker ──────────────────────────────────────────────
-
-/**
- * Compact allow/ask/block picker rendered under a connector tool call that is
- * awaiting approval. Persists the decision to the same per-(connectorId,
- * toolName) store useChatStream consults to auto-resolve future calls
- * (see tool-permissions-store.ts); picking Always allow / Block also resolves
- * THIS pending call immediately via the same onApprove/onReject callbacks the
- * card's own buttons use, so the user isn't left clicking twice.
- */
 const PERMISSION_QUICK_PICKS: { level: PermissionLevel; label: string; icon: IconComponent }[] = [
   { level: 'allow', label: 'Always allow', icon: Check },
   { level: 'ask', label: 'Ask', icon: HelpCircle },
@@ -747,16 +601,6 @@ function ToolPermissionQuickPicker({
   );
 }
 
-/**
- * AUDIT-FIX GOV-29: what the timeline's live region says.
- *
- * ToolTimeline had ZERO live-region markup, so a run that is entirely tool
- * calls — the AGI Work case — was completely silent to assistive tech: no
- * start, no per-step progress, no approval prompt, no completion. This mirrors
- * `buildAgentActivityAnnouncement` in
- * packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx: one short
- * discrete phrase per state, never a re-read of the step list.
- */
 function buildToolAnnouncement(tools: ToolEntry[]): string {
   if (tools.length === 0) return '';
 
@@ -765,9 +609,6 @@ function buildToolAnnouncement(tools: ToolEntry[]): string {
     return `Approval needed: ${humanizeToolName(awaiting.name, awaiting.args, awaiting.parameters)}`;
   }
 
-  // Lazy authentication is a blocking prompt exactly like an approval, so it
-  // gets the same one-phrase announcement rather than being folded into the
-  // generic "N tool calls failed" line below.
   const connectTool = tools.map(findConnectRequest).find((r) => r !== null);
   if (connectTool) return `Connection required: ${connectTool.connectorName}`;
 
@@ -797,30 +638,21 @@ function ToolTimeline({
 }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
-  // Compact expanded state · separate from the regular isExpanded
   const [compactExpanded, setCompactExpanded] = useState(false);
 
   const hasRunning = useMemo(() => tools.some((t) => t.status === 'running'), [tools]);
-  // A tool awaiting approval must keep the timeline OPEN so the approve/reject
-  // buttons are visible (they live inside the expandable list).
   const hasAwaiting = useMemo(() => tools.some((t) => t.status === 'awaiting_approval'), [tools]);
   const errorCount = useMemo(() => tools.filter((t) => t.status === 'failed').length, [tools]);
-  // A pending connector authorization is a blocking prompt: collapsing it
-  // behind a "1 failed" summary would hide the only control that unblocks the
-  // conversation, so it keeps the timeline open exactly like an approval does.
   const hasConnectRequest = useMemo(
     () => tools.some((t) => findConnectRequest(t) !== null),
     [tools],
   );
 
-  // Compact mode: explicit prop OR auto when step count > threshold (and neither
-  // running, awaiting approval, nor awaiting a connector authorization).
   const isCompact =
     compactProp !== undefined
       ? compactProp
       : !hasRunning && !hasAwaiting && !hasConnectRequest && tools.length > COMPACT_THRESHOLD;
 
-  // Reset userForcedClosed when all running tools finish so next batch auto-expands
   const prevHasRunning = useRef(hasRunning);
   useEffect(() => {
     if (prevHasRunning.current && !hasRunning) {
@@ -829,8 +661,6 @@ function ToolTimeline({
     prevHasRunning.current = hasRunning;
   }, [hasRunning]);
 
-  // Auto-expand while tools are running or awaiting approval, but respect the
-  // user's manual close.
   const isOpen = userForcedClosed
     ? false
     : hasRunning || hasAwaiting || hasConnectRequest || isExpanded;
@@ -838,8 +668,6 @@ function ToolTimeline({
   const groups = useMemo(() => groupTools(tools), [tools]);
   const summary = useMemo(() => buildCompactSummary(tools), [tools]);
 
-  // Pick the status phrase from the most recently started running tool, if set.
-  // Falls back to "Working..." so the header is always informative.
   const runningPhrase = useMemo(() => {
     const running = [...tools].reverse().find((t) => t.status === 'running');
     return running?.statusPhrase ?? 'Working...';
@@ -847,31 +675,20 @@ function ToolTimeline({
 
   const handleToggle = useCallback(() => {
     if (isOpen) {
-      // User is collapsing · if tools are running, force closed
       setUserForcedClosed(true);
       setIsExpanded(false);
     } else {
-      // User is expanding · clear forced close
       setUserForcedClosed(false);
       setIsExpanded(true);
     }
   }, [isOpen]);
 
-  /** AUDIT-FIX GOV-29: one short phrase per run state, announced politely. */
   const announcement = useMemo(() => buildToolAnnouncement(tools), [tools]);
 
-  /**
-   * AUDIT-FIX GOV-33: the tool-list height/opacity animation and the chevron
-   * rotation are framer-motion INLINE styles, out of reach of the global
-   * prefers-reduced-motion reset in globals.css.
-   */
   const prefersReducedMotion = useReducedMotion();
 
   if (tools.length === 0) return null;
 
-  // ── Compact render ────────────────────────────────────────────────────────
-  // Compact = collapsed single-line summary with right-pointing chevron.
-  // No Wrench icon, no "N tools" count, no duration.
   if (isCompact && !compactExpanded) {
     return (
       <div className={cn('flex items-center', className)}>
@@ -892,9 +709,6 @@ function ToolTimeline({
     );
   }
 
-  // ── Full / expanded render ────────────────────────────────────────────────
-  // Header: action-phrased summary + right-aligned chevron.
-  // No Wrench icon. Chevron is right-pointing when closed, down when open.
   return (
     <div className={cn('', className)} aria-busy={hasRunning || hasAwaiting}>
       {/* AUDIT-FIX GOV-29: the timeline's only live region — off-screen,
@@ -966,8 +780,6 @@ function ToolTimeline({
               />
               <div className="space-y-3">
                 {(() => {
-                  // Track whether we've attached the search sources to a step yet.
-                  // Sources render only on the FIRST web-search step to avoid duplication.
                   let sourcesAttached = false;
 
                   return groups.map((group, gi) => {
@@ -1023,8 +835,6 @@ function ToolTimeline({
                     return group.entries.map((tool, ti) => {
                       const id = stableId(tool, gi * 100 + ti);
                       const toolCall: ToolCall = {
-                        // Approval cards carry the tool_call_id as the card id so
-                        // onApprove/onReject can address the exact pending call.
                         id: tool.toolCallId ?? id,
                         name: tool.name,
                         status: toToolCallStatus(tool.status),
@@ -1078,14 +888,11 @@ function ToolTimeline({
   );
 }
 
-// Memoize with custom comparison to prevent unnecessary re-renders
 const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   if (prev.className !== next.className) return false;
   if (prev.compact !== next.compact) return false;
   if (prev.searchQuery !== next.searchQuery) return false;
   if ((prev.searchSources?.length ?? 0) !== (next.searchSources?.length ?? 0)) return false;
-  // Approval callbacks are stable useCallback refs; a change means a different
-  // wiring and must re-render so the buttons dispatch to the new handler.
   if (prev.onApprove !== next.onApprove || prev.onReject !== next.onReject) return false;
   if (prev.expired !== next.expired || prev.onResend !== next.onResend) return false;
   if (prev.onRetryTurn !== next.onRetryTurn) return false;

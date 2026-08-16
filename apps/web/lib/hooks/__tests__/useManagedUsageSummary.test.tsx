@@ -1,13 +1,3 @@
-/**
- * BIZ-026 — the managed-usage snapshot must not freeze at its mount value.
- *
- * `WebChatPage` feeds this hook's result straight into `selectUsageWarning`,
- * which is the only pre-emptive "you're running low" signal on the chat
- * surface. When the snapshot was fetched once per mount, a user who opened
- * chat below the warning threshold and worked past it kept the mount-time
- * numbers for the whole session: the banner never fired, and any "Resets in
- * …" label it had already rendered stayed frozen at its first value.
- */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useManagedUsageSummary } from '../useManagedUsageSummary';
@@ -53,7 +43,6 @@ describe('useManagedUsageSummary', () => {
     const { result } = renderHook(() => useManagedUsageSummary());
     await waitFor(() => expect(result.current.usage?.session_usage_percentage).toBe(20));
 
-    // The user keeps chatting; the server-side window fills up.
     percentage = 95;
 
     await act(async () => {
@@ -101,8 +90,6 @@ describe('useManagedUsageSummary', () => {
     });
 
     await waitFor(() => expect(result.current.stale).toBe(true));
-    // The last good snapshot is still on screen, and the background failure did
-    // not raise the foreground error alert.
     expect(result.current.usage?.session_usage_percentage).toBe(20);
     expect(result.current.error).toBeNull();
   });

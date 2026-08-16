@@ -22,13 +22,6 @@ function cloudDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDel
   };
 }
 
-// AUDIT-FIX ART-21: the two `extractArtifactsFromContent` cases that used to
-// live here were deleted with the API they covered. That action wrapped a
-// forked `parseCodeBlocks` inside this store, which the module's own header
-// forbids ("do NOT reimplement derivation here"); it had no non-test callers,
-// so these tests were the only thing keeping the fork alive. Artifact
-// derivation is covered where it actually happens, in
-// packages/platform/artifacts/src/__tests__/artifact-derivation.test.ts.
 describe('chat artifacts sidecar store', () => {
   beforeEach(() => {
     useArtifactsStore.getState().clearArtifacts();
@@ -81,9 +74,6 @@ describe('chat artifacts sidecar store', () => {
     ]);
   });
 
-  // Regression: version browsing shipped read-only on web — a user could page
-  // back to an earlier revision and had no way to act on it, while desktop
-  // already had rollback.
   describe('restoreArtifactVersion', () => {
     const base = {
       id: 'artifact-restore',
@@ -108,8 +98,6 @@ describe('chat artifacts sidecar store', () => {
 
       const state = useArtifactsStore.getState();
       expect(state.artifacts.find((a) => a.id === base.id)?.content).toBe('<main>one</main>');
-      // History is preserved, not rewound: the intervening versions survive and
-      // the restore is recorded as a new one.
       expect(state.getArtifactVersions(base.id).map((v) => v.content)).toEqual([
         '<main>one</main>',
         '<main>two</main>',
@@ -123,7 +111,6 @@ describe('chat artifacts sidecar store', () => {
       const before = useArtifactsStore.getState().getArtifactVersions(base.id).length;
 
       expect(useArtifactsStore.getState().restoreArtifactVersion(base.id, 99)).toBe(false);
-      // Index 2 is the current content.
       expect(useArtifactsStore.getState().restoreArtifactVersion(base.id, 2)).toBe(false);
       expect(useArtifactsStore.getState().restoreArtifactVersion('missing-id', 0)).toBe(false);
 
@@ -164,13 +151,11 @@ describe('chat artifacts sidecar store', () => {
     expect(state.getConversationArtifacts('conv-a')[0]?.id).toBe('art-conv-a');
     expect(state.getConversationArtifacts('conv-b')).toHaveLength(1);
     expect(state.getConversationArtifacts('conv-b')[0]?.id).toBe('art-conv-b');
-    // A new/empty chat with no matching id sees nothing.
     expect(state.getConversationArtifacts('conv-c')).toHaveLength(0);
   });
 
   it('getConversationArtifacts excludes orphaned artifacts without a conversationId', () => {
     const store = useArtifactsStore.getState();
-    // Add an artifact without conversationId (legacy / orphaned).
     store.upsertArtifact({
       id: 'orphan-1',
       type: 'code',
@@ -183,15 +168,9 @@ describe('chat artifacts sidecar store', () => {
 
     const state = useArtifactsStore.getState();
     expect(state.artifacts).toHaveLength(1);
-    // No conversationId -> hidden from all conversation-scoped views.
     expect(state.getConversationArtifacts('any-conv')).toHaveLength(0);
   });
 
-  // Regression: an artifact first stored before the active conversation loaded
-  // (conversationId=undefined) must adopt the conversationId on a later upsert
-  // with identical content. artifactsEqual ignores conversationId, so without
-  // an explicit backfill the orphaned artifact stayed hidden from its own
-  // chat's Artifacts panel ("No artifacts yet" despite an inline card).
   it('backfills a missing conversationId on a later content-equal upsert', () => {
     const store = useArtifactsStore.getState();
     const base = {
@@ -203,11 +182,9 @@ describe('chat artifacts sidecar store', () => {
       messageId: 'msg-bf',
     };
 
-    // First upsert: active conversation not yet loaded -> no conversationId.
     store.upsertArtifact({ ...base });
     expect(useArtifactsStore.getState().getConversationArtifacts('conv-loaded')).toHaveLength(0);
 
-    // Re-stamp once the conversation id is known (same content).
     store.upsertArtifact({ ...base, conversationId: 'conv-loaded' });
 
     const state = useArtifactsStore.getState();
@@ -228,7 +205,6 @@ describe('chat artifacts sidecar store', () => {
     };
 
     store.upsertArtifact({ ...base, conversationId: 'conv-keep' });
-    // A later render fires before load completes -> conversationId undefined.
     store.upsertArtifact({ ...base });
 
     const state = useArtifactsStore.getState();

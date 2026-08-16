@@ -1,73 +1,24 @@
-/**
- * Route parameter types for Expo Router typed routes.
- *
- * The app uses file-based routing (Expo Router) with the following structure:
- *
- * (auth)/
- *   login          -- Sign in / sign up
- *
- * (app)/
- *   (tabs)/
- *     index        -- Home dashboard (agents, conversations, quick actions)
- *     chat         -- Chat list + new chat input
- *     agents       -- Agent grid with live status
- *     settings     -- Full settings screen
- *   chat/[id]      -- Individual chat conversation
- *   agents/[id]    -- Agent detail view
- *   companion/     -- QR pairing + desktop companion
- *   profile/       -- User profile + subscription + stats
- *   schedules/     -- Schedule list + create
- *   settings/memory -- Memory management
- *   messaging/     -- External messaging integrations
- *
- * onboarding       -- First-launch onboarding slides
- */
 
-// ---------------------------------------------------------------------------
-// Route params
-// ---------------------------------------------------------------------------
 
-/** Params for chat conversation screen: /(app)/chat/[id] */
 export interface ChatRouteParams {
   id: string;
 }
 
-/** Params for agent detail screen: /(app)/agents/[id] */
 export interface AgentDetailRouteParams {
-  /**
-   * Expo Router supplies this from the `[id]` segment. The field name must
-   * match the segment key (`id`), not the domain term `agentId`, or any code
-   * typed against this interface reading `params.agentId` would get `undefined`.
-   */
   id: string;
 }
 
-/** Params for companion screen when opened via deep link */
 export interface CompanionRouteParams {
   pairingCode?: string;
 }
 
-/** Params for the schedule create/edit screen. */
 export interface ScheduleCreateRouteParams {
   id?: string;
   template?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Tab navigation
-// ---------------------------------------------------------------------------
-
-/** Tab route names within (tabs) layout */
 export type TabRouteName = 'index' | 'chat' | 'agents' | 'settings';
 
-// ---------------------------------------------------------------------------
-// Type map for typed navigation
-// ---------------------------------------------------------------------------
-
-/**
- * Complete route param map. Used for type-safe navigation with
- * Expo Router's typed routes feature (`experiments.typedRoutes` in app.config.js).
- */
 export interface AppRouteParams {
   '/(auth)/login': undefined;
   '/(app)': undefined;

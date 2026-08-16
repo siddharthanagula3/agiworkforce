@@ -83,9 +83,6 @@ export default function BusinessPage() {
           rows={[
             {
               k: 'Model choice',
-              // The count is derived from models.json and dated by its own
-              // lastUpdated stamp. A number a buyer can open and count beats a
-              // padded floor they have to trust.
               v: `One product routes across a dated, inspectable catalog — ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. Frontier cloud APIs through BYOK on Desktop, CLI, and VS Code, plus local models through Ollama, LM Studio, llama.cpp, and vLLM. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
             },
             {
@@ -102,9 +99,6 @@ export default function BusinessPage() {
             },
             {
               k: 'Admin',
-              // Mirrors the corrected /enterprise wording. These are contract
-              // commitments in progress, not switches available today, and the
-              // implementations are owned by a separate workstream.
               v: 'Workspace accounts today. Identity, audit, and retention controls are contract-scoped commitments rather than self-serve settings — the enterprise page states which are built and which are not.',
             },
           ]}
@@ -117,11 +111,6 @@ export default function BusinessPage() {
             {
               meta: 'Teams',
               title: 'Team workspaces',
-              // Previously "usage visibility". Usage is reported per user
-              // (apps/web/app/api/usage/route.ts is user-scoped and has no
-              // organization dimension); there is no org/project budget,
-              // showback, or admin usage roll-up anywhere in the product, so a
-              // team-control list must not imply one.
               body: 'Shared projects, connector policy, and separated Local, BYOK, and Cloud spend.',
               href: '/teams',
             },

@@ -1,19 +1,7 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Prompt Stash Store
- *
- * Persists a list of user-saved prompts (max 50) to localStorage so they
- * survive restarts. Provides save, load, remove, updateLabel, and clear.
- *
- * Middleware: persist (localStorage via storageFallback)
- */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface PromptStashEntry {
   id: string;
@@ -31,16 +19,8 @@ interface PromptStashState {
   clear: () => void;
 }
 
-// ============================================================================
-// Constants
-// ============================================================================
-
 const MAX_ENTRIES = 50;
 const STORE_NAME = 'agiworkforce-prompt-stash';
-
-// ============================================================================
-// Store
-// ============================================================================
 
 export const usePromptStashStore = create<PromptStashState>()(
   persist(

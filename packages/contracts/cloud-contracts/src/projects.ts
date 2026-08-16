@@ -10,7 +10,6 @@ const PrivacyModeSchema = z.literal('managed');
 const ProviderModeSchema = z.enum(['ManagedGateway', 'ManagedNative']);
 const SourceSurfaceSchema = z.enum(SYNCED_APP_SURFACES);
 
-/** Runtime form of the existing Web CRUD `ProjectRecord` response. */
 export const ManagedCloudProjectSchema = z.object({
   id: z.string().min(1),
   ownerUserId: z.string().min(1),
@@ -72,8 +71,6 @@ export type ManagedCloudProjectCreateRequest = z.infer<
 export const ManagedCloudProjectUpdateRequestSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   isArchived: z.boolean().optional(),
-  // Starred/pinned. Persisted in the existing user_projects.metadata jsonb so no
-  // schema migration is required; the server merges it under metadata.starred.
   starred: z.boolean().optional(),
   ...ManagedCloudProjectWriteFields,
 });

@@ -8,18 +8,6 @@ vi.mock('@/lib/services/waitlistServiceClient', () => ({
   joinPublicWaitlist: (...args: unknown[]) => mockJoinPublicWaitlist(...args),
 }));
 
-/**
- * Tick the consent box that makes storing the address lawful (DPDP s.6).
- *
- * The modal will not submit without it, by design: `/api/waitlist/public`
- * refuses to store an address with no consent row, so a form that could submit
- * without this would just produce a 400. Tests that expect a successful submit
- * therefore have to tick it, exactly as a person does.
- *
- * Queried by role rather than by label text: the consent label contains the
- * words "email address", which is what made `getByLabelText(/email address/i)`
- * ambiguous the moment these checkboxes shipped.
- */
 function grantRequiredConsent() {
   fireEvent.click(screen.getByRole('checkbox', { name: /store my email address/i }));
 }
@@ -67,7 +55,6 @@ describe('WaitlistModal', () => {
       </WaitlistModalProvider>,
     );
 
-    // Modal closed initially
     expect(screen.queryByText(/discuss enterprise access/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /join cloud waitlist/i }));
@@ -84,8 +71,6 @@ describe('WaitlistModal', () => {
         email: 'visitor@example.com',
         referralSource: 'website',
         consentSurface: 'web-waitlist-modal',
-        // Both purposes travel, ticked and unticked. An unticked box is a
-        // recorded decision, not an omission.
         consent: [
           { purpose: 'enterprise_waitlist', granted: true },
           { purpose: 'product_updates', granted: false },
@@ -148,15 +133,9 @@ describe('WaitlistModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/failed to join/i);
-    // Modal still open with the form visible for retry
     expect(screen.getByText(/discuss enterprise access/i)).toBeInTheDocument();
   });
 
-  /**
-   * The consent gate itself (DPDP s.6). Submitting without the required purpose
-   * must not reach the service at all — the server would refuse it anyway, so a
-   * form that posts regardless is just a wasted 400 and a worse error message.
-   */
   it('refuses to submit until the required consent is ticked', async () => {
     mockJoinPublicWaitlist.mockResolvedValue({ success: true });
 
@@ -170,7 +149,6 @@ describe('WaitlistModal', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /email address/i }), {
       target: { value: 'visitor@example.com' },
     });
-    // Deliberately no consent.
     fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/tick the box/i);
@@ -187,8 +165,6 @@ describe('WaitlistModal', () => {
 
     const boxes = screen.getAllByRole('checkbox');
     expect(boxes).toHaveLength(2);
-    // Unticked on first paint is the whole point — consent needs a clear
-    // affirmative action, so a pre-ticked box would not be consent at all.
     for (const box of boxes) expect(box).not.toBeChecked();
   });
 

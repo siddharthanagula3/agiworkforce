@@ -24,7 +24,6 @@ describe('free trial config', () => {
         (modelId) => getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free',
       ),
     );
-    // the default selection must live inside the selectable Hobby set
     expect(FREE_TRIAL_MODELS).toContain(FREE_TRIAL_MODEL);
   });
 

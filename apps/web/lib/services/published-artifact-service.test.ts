@@ -1,11 +1,3 @@
-/**
- * published-artifact-service — the storage half of the first real
- * `CloudPublisher` (CAP-015 slice 1).
- *
- * The behaviours pinned here are the ones a wrong implementation would make
- * user-visible: an unguessable token, republish keeping one URL, unpublishable
- * kinds never reaching the database, and the list never shipping bodies.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -56,8 +48,6 @@ describe('token minting', () => {
   });
 
   it('never derives the token from anything an artifact reader can see', () => {
-    // A derived token would be guessable by anyone who saw the artifact id in a
-    // shared conversation, silently turning "unlisted" into "public".
     const tokens = new Set(Array.from({ length: 200 }, () => mintPublishToken()));
     expect(tokens.size).toBe(200);
   });
@@ -74,8 +64,6 @@ describe('kind policy', () => {
   });
 
   it('marks every script-executing kind as sandbox-only', () => {
-    // mermaid runs the mermaid parser over published source; it must not run on
-    // the app origin any more than html/react may.
     expect(requiresSandboxedRender('html')).toBe(true);
     expect(requiresSandboxedRender('react')).toBe(true);
     expect(requiresSandboxedRender('mermaid')).toBe(true);
@@ -118,8 +106,6 @@ describe('publishArtifactRecord', () => {
     });
     const [sql] = db.query.mock.calls[0]!;
     expect(sql).toContain('on conflict (user_id, artifact_id) do update set');
-    // The token column is NOT in the update list: a republish must not rotate a
-    // URL the user already handed out.
     expect(sql).not.toMatch(/do update set[\s\S]*token = excluded\.token/);
   });
 

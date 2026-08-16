@@ -1,70 +1,9 @@
 'use client';
 
-/**
- * WHY THE DIRECTIVE. `react-i18next` calls `createContext` at module scope, and
- * `createContext` does not exist in React's `react-server` condition. This
- * module is reachable from a SERVER component: `@agiworkforce/ui` resolves to
- * the barrel `src/index.ts`, the barrel re-exports `useUiTranslation` from
- * here, and `apps/web/features/marketing/components/MarketingFooter.tsx` — a
- * server component — imports `AgiMark` through that same barrel. Importing one
- * pure SVG therefore evaluated react-i18next in the server graph:
- *
- *     Failed to collect configuration for /about
- *       [cause]: TypeError: (0 , o.createContext) is not a function
- *
- * That failed EVERY marketing page — each one renders MarketingFooter — and the
- * build only ever named whichever it reached first, which is why the reported
- * route moved between /about, /acceptable-use, /accessibility and
- * /agent-permissions across runs while the cause stayed the same.
- *
- * A module whose entire public surface is a React hook over context is
- * client-side by nature, so the boundary belongs here rather than on every
- * consumer. The barrel's sidebar components already carry it; this one was
- * missed when `c5d67f7be` added `useUiTranslation` to the barrel. The directive
- * is inert in the non-Next hosts (desktop, mobile) that also import this file.
- */
-
-/**
- * i18n.ts — how shared components read translated copy.
- *
- * `@agiworkforce/ui` and `@agiworkforce/unified-chat` render inside three
- * hosts that each construct their own i18next instance (web adds a browser
- * language detector, desktop persists to its own store, mobile uses
- * expo-localization). A shared component cannot assume it can see any of
- * them, so the English text is not optional here — it is a required argument
- * that travels to i18next as `defaultValue`, and is returned verbatim
- * whenever the key resolves to nothing.
- *
- * WHERE THIS ACTUALLY TRANSLATES, TODAY:
- *
- * - Desktop, Web, and Mobile: yes. Every host initializes the same workspace
- *   `i18next` singleton. This hook passes that singleton explicitly to
- *   react-i18next instead of relying on `I18nContext`: pnpm may legitimately
- *   install separate react-i18next peer variants for React Native and DOM,
- *   whose module-scoped contexts cannot see one another.
- *
- * The other half of the gap is the corpus: most keys passed below do not yet
- * exist in `packages/ui/i18n/locales`, so even on desktop they resolve to the
- * English `defaultValue`. Only keys that already ship in the corpus (e.g.
- * `chat:newChat`, `chat:retry`, `common:search`, `common:loading`) translate
- * into all 12 locales right now. Adding the rest means writing under
- * `packages/ui/i18n/locales/**`, which is the i18n key-parity item's ground.
- *
- * What this file does guarantee in every host is the floor: never a raw key
- * (`chat.newChat`) and never a raw placeholder (`Archived ({{count}})`) in
- * rendered output — the regression desktop's `wdio/specs/i18n-raw-keys.spec.ts`
- * exists to catch.
- */
-
 import { useCallback, useMemo } from 'react';
 import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 
-/**
- * The namespaces `@agiworkforce/i18n` ships. Kept as a literal union rather
- * than imported so this module stays free of a runtime dependency on the
- * corpus — hosts already own loading it.
- */
 export type UiNamespace =
   | 'common'
   | 'chat'
@@ -89,16 +28,6 @@ export interface UiTranslation {
   t: UiTranslate;
 }
 
-/**
- * Fill `{{placeholders}}` the way i18next would.
- *
- * Reached whenever no i18next instance is visible to this module's copy of
- * react-i18next — which is every render in `apps/web` (see above), plus any
- * host or test that renders a shared component without a provider. Without
- * this, react-i18next's not-ready `t` hands back `defaultValue` untouched and
- * the archive toggle reads "Archived ({{count}})" — a raw placeholder is the
- * same class of defect as a raw key.
- */
 function interpolate(template: string, values: Record<string, unknown> | undefined): string {
   if (!values) return template;
   return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, name: string) =>
@@ -106,24 +35,13 @@ function interpolate(template: string, values: Record<string, unknown> | undefin
   );
 }
 
-/**
- * Translate copy in `namespace`, falling back to the supplied English.
- */
 export function useUiTranslation(namespace: UiNamespace): UiTranslation {
-  // Bind to the host-initialized singleton explicitly. Relying on the nearest
-  // I18nextProvider is unsafe in this monorepo because React Native and DOM can
-  // resolve distinct react-i18next peer variants with distinct contexts.
-  // Shared chat must remain renderable while a host is still loading a locale
-  // namespace. Every call below carries complete English source copy, so
-  // suspending the whole composer here is both unnecessary and harmful.
   const { t } = useTranslation(namespace, { i18n: i18next, useSuspense: false });
   const hasInstance = i18next.isInitialized;
 
   const translate = useCallback<UiTranslate>(
     (key, english, values) => {
       if (!hasInstance) return interpolate(english, values);
-      // `defaultValue` last: a caller's interpolation values must never be
-      // able to displace the English fallback and reintroduce raw keys.
       return t(key, { ...values, defaultValue: english }) as string;
     },
     [t, hasInstance],

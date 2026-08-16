@@ -24,11 +24,6 @@ async function getHudPosition(): Promise<{ x?: number; y?: number }> {
   };
 }
 
-/**
- * Opens the recorder-only always-on-top window and reserves its stop shortcut.
- * A failed HUD/shortcut setup aborts capture so recording never continues
- * without visible controls.
- */
 export async function openRecorderHudWindow(): Promise<void> {
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
   const existing = await WebviewWindow.getByLabel(RECORDER_HUD_WINDOW_LABEL);
@@ -77,7 +72,6 @@ export async function closeRecorderHudWindow(): Promise<void> {
   if (hudWindow) await hudWindow.close().catch(() => undefined);
 }
 
-/** Called inside the HUD webview after Done/Discard succeeds. */
 export async function closeCurrentRecorderHud(): Promise<void> {
   await shortcuts.shortcutsUnregisterGlobal(RECORDER_STOP_SHORTCUT).catch(() => undefined);
   const { getCurrentWindow } = await import('@tauri-apps/api/window');

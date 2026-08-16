@@ -1,16 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-/**
- * Tests for ThinkingChip — the reasoning status line and its detail sheet.
- *
- * History: this was a status-only chip, then an inline accordion that
- * auto-expanded while streaming. On a phone that unfolded a wall of
- * chain-of-thought above the answer and reflowed the list on every token, so
- * the transcript now carries ONE muted status line and the reasoning text
- * lives in a bottom sheet opened by tapping it. These tests pin that: the
- * text is never inline, tapping opens it, and closing puts it away.
- */
-
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
@@ -50,7 +39,6 @@ describe('ThinkingChip', () => {
       <ThinkingChip thinkingText="Considering the options." isStreaming />,
     );
 
-    // The status line is there; the chain-of-thought is not inline.
     expect(getByLabelText('Show reasoning')).toBeTruthy();
     expect(queryByText('Considering the options.')).toBeNull();
   });

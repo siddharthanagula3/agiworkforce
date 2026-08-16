@@ -9,7 +9,6 @@ export type FreeTrialErrorCode =
   | 'free_trial_feature_unavailable';
 
 interface FreeTrialState {
-  /** Server-reported exhaustion only. Exact usage and limits remain private. */
   limitReached: boolean;
   markLimitReached: () => void;
   clearLimitReached: () => void;

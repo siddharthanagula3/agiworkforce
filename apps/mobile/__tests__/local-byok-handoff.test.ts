@@ -175,9 +175,6 @@ describe('mobile local conversation forks', () => {
     useProjectStore.getState().setActiveProject('local-project');
     useChatAppModeStore.setState({ appMode: 'cloud' });
 
-    // Cloud chat is enabled now, so Cloud mode attempts a real cloud conversation;
-    // with no reachable cloud in the test env it fails — but it must NOT silently
-    // fall back to a local conversation (the strict Local/Cloud separation invariant).
     await expect(useChatStore.getState().createConversation('Cloud attempt')).rejects.toThrow(
       'AGI Cloud conversation could not be created.',
     );

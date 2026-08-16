@@ -11,8 +11,6 @@ const compat = detectOpenAICompletionsCompat({
 
 describe('rawVendorTools passthrough (openai)', () => {
   it('appends a provider-native tool payload verbatim after translated tools', () => {
-    // Not one of the Responses-API-only types below -- this is the "ordinary" vendor
-    // tool passthrough path, still verbatim.
     const vendorTool = { type: 'some_future_native_tool' };
     const req: ChatRequest = {
       model: 'gpt-test',
@@ -25,11 +23,6 @@ describe('rawVendorTools passthrough (openai)', () => {
     expect(out.tools?.[1]).toEqual(vendorTool);
   });
 
-  // web_search_preview / code_interpreter exist only on OpenAI's Responses API --
-  // /chat/completions (what translateChatRequest targets) rejects them with HTTP 400.
-  // apps/web/lib/llm-providers/openai.ts strips them for exactly this reason (see its
-  // OPENAI_RESPONSES_ONLY_TOOL_TYPES); translateChatRequest must reproduce that or a
-  // request with web search enabled goes from a legacy no-op to a hard failure.
   it('strips web_search_preview and code_interpreter for provider "openai"', () => {
     const req: ChatRequest = {
       model: 'gpt-test',
@@ -52,10 +45,6 @@ describe('rawVendorTools passthrough (openai)', () => {
   });
 
   it('does NOT strip web_search_preview for a compat provider (e.g. groq)', () => {
-    // None of the 9 openai-compat providers' legacy files strip these types --
-    // request-processor.ts only ever injects web_search_preview for provider ===
-    // 'openai', so stripping it for other providers here would be an unverified
-    // behavior change for consumers this migration hasn't audited.
     const req: ChatRequest = {
       model: 'some-groq-model',
       messages: [{ role: 'user', content: 'hi' }],

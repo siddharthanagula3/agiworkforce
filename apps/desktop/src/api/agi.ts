@@ -1,29 +1,8 @@
-/**
- * AGI Core API
- *
- * TypeScript wrappers for AGI core, swarm, and knowledge base Tauri commands.
- *
- * Covered commands (sys/commands/agi.rs):
- *   agi_init                      — initialize the AGI core engine
- *   agi_stop                      — stop the AGI core engine
- *   agi_submit_goal_swarm         — execute goal via swarm (parallel multi-agent)
- *   agi_submit_goal_auto          — auto-select best execution strategy
- *   agi_should_use_swarm          — check if swarm execution is beneficial
- *   query_knowledge               — query the knowledge base
- *   get_recent_knowledge          — get recent knowledge entries
- *   get_knowledge_by_category     — get knowledge entries by category
- *   get_system_resources          — get system resource usage
- */
 
 import { toast } from 'sonner';
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Configuration for the AGI core engine. */
 export interface AGIResourceLimits {
   cpuPercent?: number;
   memoryMb?: number;
@@ -41,12 +20,10 @@ export interface AGICoreConfig {
   enableMultimodal?: boolean;
 }
 
-/** Response from submitting a goal. */
 export interface SubmitGoalResponse {
   goalId: string;
 }
 
-/** Response from swarm goal execution. */
 export interface SwarmGoalResponse {
   success: boolean;
   goalId: string;
@@ -59,7 +36,6 @@ export interface SwarmGoalResponse {
   summary: string;
 }
 
-/** Request payload for submitting a goal. */
 export interface SubmitGoalRequest {
   description: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
@@ -69,7 +45,6 @@ export interface SubmitGoalRequest {
   provider?: string;
 }
 
-/** Knowledge base entry. */
 export interface KnowledgeEntry {
   id: string;
   category: string;
@@ -79,7 +54,6 @@ export interface KnowledgeEntry {
   importance: number;
 }
 
-/** System resource usage information. */
 export interface SystemResources {
   cpuUsagePercent: number;
   memoryUsageMb: number;
@@ -90,14 +64,6 @@ export interface SystemResources {
   availableTools: string[];
 }
 
-// ============================================================================
-// AGI Core Lifecycle
-// ============================================================================
-
-/**
- * Initialize the AGI core engine.
- * Must be called before submitting goals or using AGI features.
- */
 export async function agiInit(config?: AGICoreConfig): Promise<void> {
   if (!isTauri) {
     console.debug('[agi] agiInit (mock)', config);
@@ -109,19 +75,8 @@ export async function agiInit(config?: AGICoreConfig): Promise<void> {
   });
 }
 
-// Module-level flag so ensureAgiInitialized is idempotent across calls.
 let _agiInitialized = false;
 
-/**
- * Idempotent AGI init guard.
- *
- * Calls agi_init once per renderer lifetime.  Safe to call before every goal
- * submission — subsequent calls are no-ops (module flag + early return).
- * In non-Tauri environments (web/test) it returns immediately without error.
- *
- * The honest 'grant accessibility permissions' toast on Tauri failure is
- * acceptable — it tells the user what to do.
- */
 export async function ensureAgiInitialized(config?: AGICoreConfig): Promise<void> {
   if (_agiInitialized) return;
   if (!isTauri) {
@@ -132,16 +87,11 @@ export async function ensureAgiInitialized(config?: AGICoreConfig): Promise<void
     await invoke<void>('agi_init', { config: config ?? {} });
     _agiInitialized = true;
   } catch (err) {
-    // Do NOT set _agiInitialized — allow retry on next goal submission.
     console.warn('[agi] ensureAgiInitialized failed:', err);
     throw err;
   }
 }
 
-/**
- * Stop the AGI core engine.
- * Gracefully shuts down the AGI loop and all managed agents.
- */
 export async function agiStop(): Promise<void> {
   if (!isTauri) {
     console.debug('[agi] agiStop (mock)');
@@ -151,15 +101,6 @@ export async function agiStop(): Promise<void> {
   return invoke<void>('agi_stop');
 }
 
-// ============================================================================
-// Goal Submission (Swarm + Auto)
-// ============================================================================
-
-/**
- * Submit a goal for swarm execution.
- * The swarm decomposes the goal into parallelizable subtasks and
- * spawns multiple agents for concurrent execution.
- */
 export async function submitGoalSwarm(
   request: SubmitGoalRequest,
 ): Promise<SwarmGoalResponse | null> {
@@ -191,11 +132,6 @@ export async function submitGoalSwarm(
   }
 }
 
-/**
- * Submit a goal with automatic execution strategy selection.
- * The AGI determines whether to use sequential, parallel, or swarm execution.
- * This is the recommended entry point for goal submission.
- */
 export async function submitGoalAuto(
   request: SubmitGoalRequest,
 ): Promise<SubmitGoalResponse | null> {
@@ -227,11 +163,6 @@ export async function submitGoalAuto(
   }
 }
 
-/**
- * Check if a goal would benefit from swarm execution.
- * Returns true if the goal description indicates parallelizable work.
- * Useful for UI hints before submission.
- */
 export async function shouldUseSwarm(description: string): Promise<boolean> {
   if (!isTauri) {
     console.debug('[agi] shouldUseSwarm (mock)', description);
@@ -241,14 +172,6 @@ export async function shouldUseSwarm(description: string): Promise<boolean> {
   return invoke<boolean>('agi_should_use_swarm', { description });
 }
 
-// ============================================================================
-// Knowledge Base
-// ============================================================================
-
-/**
- * Query the AGI knowledge base.
- * Returns matching entries sorted by relevance.
- */
 export async function queryKnowledge(query: string, limit: number = 10): Promise<KnowledgeEntry[]> {
   if (!isTauri) {
     console.debug('[agi] queryKnowledge (mock)', { query, limit });
@@ -258,9 +181,6 @@ export async function queryKnowledge(query: string, limit: number = 10): Promise
   return invoke<KnowledgeEntry[]>('query_knowledge', { query, limit });
 }
 
-/**
- * Get the most recent knowledge entries.
- */
 export async function getRecentKnowledge(limit: number = 10): Promise<KnowledgeEntry[]> {
   if (!isTauri) {
     console.debug('[agi] getRecentKnowledge (mock)', limit);
@@ -270,9 +190,6 @@ export async function getRecentKnowledge(limit: number = 10): Promise<KnowledgeE
   return invoke<KnowledgeEntry[]>('get_recent_knowledge', { limit });
 }
 
-/**
- * Get knowledge entries filtered by category.
- */
 export async function getKnowledgeByCategory(
   category: string,
   limit: number = 10,
@@ -285,14 +202,6 @@ export async function getKnowledgeByCategory(
   return invoke<KnowledgeEntry[]>('get_knowledge_by_category', { category, limit });
 }
 
-// ============================================================================
-// System Resources
-// ============================================================================
-
-/**
- * Get current system resource usage including CPU, memory, network, storage,
- * and available tools. Combines system metrics with AGI resource state when available.
- */
 export async function getSystemResources(): Promise<SystemResources> {
   if (!isTauri) {
     console.debug('[agi] getSystemResources (mock)');

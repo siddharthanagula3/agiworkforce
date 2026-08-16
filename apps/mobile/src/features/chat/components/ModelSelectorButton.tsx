@@ -43,10 +43,6 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   const thinkingEnabled = useModelStore((s) => s.thinkingEnabledPerModel[s.selectedModel] ?? false);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const subscriptionTier = useTierStore((s) => s.tier);
-  // Effort resolution mirrors ModelPickerSheet/chatExecutionStore: the open
-  // conversation's override first, else the '__default__' project default.
-  // `currentConversationId` is null on the new-chat tab, which is exactly the
-  // conversation-less case the picker resolves the same way.
   const conversationId = useChatStore((s) => s.currentConversationId);
   const selectedEffort = useAgentControlStore((s) => s.resolve(conversationId ?? '', null).effort);
 

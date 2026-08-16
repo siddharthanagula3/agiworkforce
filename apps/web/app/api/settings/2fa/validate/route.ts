@@ -1,19 +1,3 @@
-/**
- * POST /api/settings/2fa/validate
- *
- * Validates a TOTP code (or backup code) for an already-authenticated user.
- * This is used for sensitive-operation step-up verification (not for login),
- * since Clerk handles primary authentication separately.
- *
- * Design note: This route requires a valid Clerk session.  It intentionally
- * does NOT serve as a Clerk login second-factor endpoint · Clerk's own session
- * model manages that flow.  This endpoint is for in-app step-up auth (e.g.,
- * confirming a destructive action, re-authenticating before viewing secrets).
- *
- * Body: { code: string }
- * Returns: { valid: boolean, used_backup_code?: boolean }
- * Errors: 400 if 2FA is not enabled; 401 if code is invalid; 429 if rate limited
- */
 
 import 'server-only';
 
@@ -42,15 +26,6 @@ async function handleValidateTOTP(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Strict rate limiting: prevents brute force on 6-digit codes
-  // AUDIT-FIX GOV-16: key the TOTP attempt limit on the authenticated user, not
-  // the source IP. rateLimitConfigs['2fa-verify'] documents itself as "5 attempts
-  // per 15 minutes per user", but withRateLimit falls back to an IP bucket when
-  // no identifier is passed — so the control failed in both directions: an
-  // attacker rotating source IPs got unlimited 6-digit guesses, while colleagues
-  // behind one corporate NAT locked each other out. The limit now runs after
-  // authentication; there is no pre-auth brute-force surface here because
-  // getClerkAuthUser rejects unauthenticated callers before any code is checked.
   const { userId } = await getClerkAuthUser(request);
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
@@ -83,10 +58,8 @@ async function handleValidateTOTP(request: NextRequest) {
     return NextResponse.json({ valid: true, used_backup_code: false });
   }
 
-  // Try backup codes
   const backupIndex = await verifyBackupCode(code, row.backup_codes_hashed ?? []);
   if (backupIndex !== -1) {
-    // Consume the backup code by removing it from the stored array
     const updatedCodes = (row.backup_codes_hashed ?? []).filter((_, i) => i !== backupIndex);
     await db.query(
       `update user_two_factor

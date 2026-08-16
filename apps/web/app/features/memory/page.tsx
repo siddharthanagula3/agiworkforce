@@ -19,12 +19,6 @@ const CONTROLS = [
     body: 'Memory is stored as short, readable facts rather than an opaque profile.',
     points: [
       'Open the full list any time in Settings → Memory',
-      // Scoped to Mobile deliberately. Only the Mobile store writes
-      // `source_conversation_id` (features/memory/services/consolidation.ts) and
-      // only the Mobile summary screen groups facts by it. Web and Desktop
-      // memories record a coarse origin ('auto' vs manual) and no conversation
-      // at all, so the unqualified sentence promised provenance that neither
-      // surface can show.
       'On Mobile, a fact records the conversation it was learned from',
       'Facts stay short and readable by design',
     ],

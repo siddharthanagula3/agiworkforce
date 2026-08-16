@@ -1,20 +1,5 @@
 'use client';
 
-/**
- * Recently deleted chats.
- *
- * `DELETE /api/chat/conversations/[id]` only sets `deleted_at`, and — unlike
- * media, which has `cron/purge-deleted-media` — nothing ever purges those rows.
- * So a deleted conversation was the worst of both: permanently unreachable for
- * the user, and still occupying storage indefinitely. Every read filtered
- * `deleted_at is null`, so a mis-click was unrecoverable.
- *
- * This lists those rows and restores them. The copy deliberately does NOT
- * promise a retention window, because there is no purge job to enforce one —
- * saying "deleted after 30 days" would be the same unenforced claim as the
- * retention control that was removed from Settings → System.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -107,11 +92,6 @@ export function DeletedChatsSection() {
     setError(null);
     setNotice(null);
     try {
-      // Unlike an archived chat — which is already in the sidebar store and
-      // only needs a flag flipped — a deleted one was filtered out of every
-      // read, so it must be ADDED back. The server returns the restored row so
-      // its real archived/pinned state and original `updated_at` are used
-      // rather than reconstructed from this summary.
       const restored = await restoreDeletedConversation(conversation.id);
       setConversations((current) => current.filter(({ id }) => id !== conversation.id));
       addConversationToStore(toWebConversation(restored));

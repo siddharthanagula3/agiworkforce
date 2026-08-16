@@ -164,7 +164,6 @@ export default function VoiceLanguageScreen() {
   const [loading, setLoading] = useState(true);
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
-  // Device-global voice hardware settings (same across modes)
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const setSelectedVoiceId = useSettingsStore((s) => s.setSelectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
@@ -174,7 +173,6 @@ export default function VoiceLanguageScreen() {
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
 
-  // Mode-specific: speech language is a cloud-synced preference
   const localSpeechLanguage = useLocalSettingsStore((s) => s.speechLanguage);
   const cloudSpeechLanguage = useCloudSettingsStore((s) => s.speechLanguage);
   const speechLanguage = isCloud ? cloudSpeechLanguage : localSpeechLanguage;

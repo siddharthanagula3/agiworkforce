@@ -1,17 +1,5 @@
 'use client';
 
-/**
- * Drift resolution: SelectTrigger's background was `bg-background` on web vs
- * `bg-popover` on desktop. Resolved toward web's `bg-background` — it matches the
- * `bg-background` convention that both apps' Input.tsx and Textarea.tsx use
- * identically, so desktop's `bg-popover` was the outlier even within its own
- * design system, not just relative to web.
- *
- * Stacking: the portalled content sits on the `--z-popover` layer (350), above
- * `--z-modal` (300), because a Select opened from inside a Dialog would otherwise
- * render behind the dialog it belongs to. The inline fallback keeps that ordering
- * in apps that have not defined the variable — see Popover.tsx for the scale.
- */
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
@@ -23,7 +11,6 @@ const SelectGroup = SelectPrimitive.Group;
 
 const SelectValue = SelectPrimitive.Value;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface SelectTriggerProps extends React.ComponentPropsWithoutRef<
   typeof SelectPrimitive.Trigger
 > {

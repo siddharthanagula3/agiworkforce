@@ -1,51 +1,24 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Workflow Orchestration Store
- *
- * Wires all 15 orchestration Tauri commands from `sys/commands/orchestration.rs`:
- * CRUD for workflow definitions, execution lifecycle (execute, pause, resume, cancel),
- * status/logs, scheduling, event triggers, and next-execution-time queries.
- *
- * All invoke() params use camelCase per Tauri IPC rules.
- */
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
-
-// ── Shared execution log type ────────────────────────────────────────────────
-//
-// Used by BOTH browser sessions and workflow runs so operator tooling can
-// consume a single consistent format regardless of which surface produced the
-// run.  Keep fields optional to allow partial emission at any lifecycle stage.
 
 export type ExecutionLogSource = 'workflow' | 'browser' | 'agent' | 'tool';
 
 export type ExecutionLogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface ExecutionLog {
-  /** Unique log line ID */
   id: string;
-  /** Which surface produced this entry */
   source: ExecutionLogSource;
-  /** Identifies the run (workflow execution ID, browser session ID, agent task ID, etc.) */
   runId: string;
-  /** Optional node / step within the run */
   nodeId?: string;
-  /** Severity level */
   level: ExecutionLogLevel;
-  /** Human-readable message */
   message: string;
-  /** Arbitrary structured metadata (tool output, error details, etc.) */
   data?: Record<string, unknown>;
-  /** Unix ms timestamp */
   timestamp: number;
-  /** Wall-clock duration of this event in ms (if applicable) */
   durationMs?: number;
-  /** Whether the event completed successfully */
   success?: boolean;
 }
-
-// ── Types (mirror Rust serde output — camelCase via Tauri) ──────────────────
 
 export interface WorkflowNode {
   type: string;
@@ -110,8 +83,6 @@ export interface WorkflowExecutionLog {
   timestamp: number;
 }
 
-// ── Store ───────────────────────────────────────────────────────────────────
-
 interface WorkflowState {
   workflows: WorkflowDefinition[];
   activeExecution: WorkflowExecution | null;
@@ -119,24 +90,20 @@ interface WorkflowState {
   isLoading: boolean;
   error: string | null;
 
-  // ── CRUD ──────────────────────────────────────────────────────────────
   createWorkflow: (definition: WorkflowDefinition) => Promise<string>;
   updateWorkflow: (id: string, definition: WorkflowDefinition) => Promise<void>;
   deleteWorkflow: (id: string) => Promise<void>;
   getWorkflow: (id: string) => Promise<WorkflowDefinition>;
   fetchUserWorkflows: (userId: string) => Promise<void>;
 
-  // ── Execution lifecycle ───────────────────────────────────────────────
   executeWorkflow: (workflowId: string, inputs: Record<string, unknown>) => Promise<string>;
   pauseWorkflow: (executionId: string) => Promise<void>;
   resumeWorkflow: (executionId: string) => Promise<void>;
   cancelWorkflow: (executionId: string) => Promise<void>;
 
-  // ── Status / logs ─────────────────────────────────────────────────────
   getWorkflowStatus: (executionId: string) => Promise<WorkflowExecution>;
   fetchExecutionLogs: (executionId: string) => Promise<void>;
 
-  // ── Scheduling ────────────────────────────────────────────────────────
   scheduleWorkflow: (workflowId: string, cronExpr: string, timezone?: string) => Promise<void>;
   triggerWorkflowOnEvent: (
     workflowId: string,
@@ -155,15 +122,12 @@ export const useWorkflowStore = create<WorkflowState>()(
       isLoading: false,
       error: null,
 
-      // ── CRUD ────────────────────────────────────────────────────────────
-
       createWorkflow: async (definition) => {
         return invoke<string>('create_workflow', { definition });
       },
 
       updateWorkflow: async (id, definition) => {
         await invoke('update_workflow', { id, definition });
-        // Update local state
         set((state) => ({
           workflows: state.workflows.map((w) => (w.id === id ? definition : w)),
         }));
@@ -193,8 +157,6 @@ export const useWorkflowStore = create<WorkflowState>()(
         }
       },
 
-      // ── Execution lifecycle ─────────────────────────────────────────────
-
       executeWorkflow: async (workflowId, inputs) => {
         const executionId = await invoke<string>('execute_workflow', { workflowId, inputs });
         return executionId;
@@ -212,8 +174,6 @@ export const useWorkflowStore = create<WorkflowState>()(
         await invoke('cancel_workflow', { executionId });
       },
 
-      // ── Status / logs ───────────────────────────────────────────────────
-
       getWorkflowStatus: async (executionId) => {
         const execution = await invoke<WorkflowExecution>('get_workflow_status', { executionId });
         set({ activeExecution: execution });
@@ -230,8 +190,6 @@ export const useWorkflowStore = create<WorkflowState>()(
           // non-fatal
         }
       },
-
-      // ── Scheduling ──────────────────────────────────────────────────────
 
       scheduleWorkflow: async (workflowId, cronExpr, timezone) => {
         await invoke('schedule_workflow', {

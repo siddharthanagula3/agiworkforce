@@ -5,32 +5,12 @@ import { ProductFrame, type ProductFrameImage, type ProductFrameVariant } from '
 import { Reveal } from './Reveal';
 import { WaitlistTrigger } from './WaitlistModal';
 
-/**
- * Flagship marketing sections · landing-page system, 2026-06.
- *
- * Server components styled by the `agi-fl*` classes in app/globals.css.
- * Every factual claim in default copy is verified against docs/current/*,
- * the parity matrix, or surface source (see docs-facts workflow report);
- * pages may override copy but must keep claims grounded.
- */
-
 export interface FlagshipCta {
   href?: string;
   label: string;
   waitlist?: boolean;
 }
 
-/**
- * A trust-mode pill in the hero ribbon.
- *
- * A bare string renders the label alone (the original behaviour, kept so every
- * existing caller is unchanged). The object form adds one line saying what
- * actually CHANGES in that mode — which is the point of the ribbon. Three
- * unexplained pills reading "Local · on-device / BYOK · your keys / Cloud ·
- * public alpha" decorate; they do not tell a first-time reader that the choice
- * of where inference happens is theirs, and the section that explains it sits
- * several screens down.
- */
 export type ModeRibbonItem = string | { label: string; note: string };
 
 function CtaButton({ cta, kind }: { cta: FlagshipCta; kind: 'primary' | 'secondary' | 'ghost' }) {
@@ -45,8 +25,6 @@ function CtaButton({ cta, kind }: { cta: FlagshipCta; kind: 'primary' | 'seconda
   );
 }
 
-/* ────────────────────────────── Hero ────────────────────────────── */
-
 export function FlagshipHero({
   eyebrow,
   brand,
@@ -60,18 +38,14 @@ export function FlagshipHero({
   visual,
 }: {
   eyebrow: string;
-  /** Optional large brand mark rendered above the eyebrow (e.g. "AGI"). */
   brand?: string;
-  /** Headline lines; omit to render no h1. */
   titleLines?: string[];
   em?: string;
   lede?: string;
   ctas: FlagshipCta[];
-  /** Optional second row of ghost-style platform links. */
   ctas2?: FlagshipCta[];
   modeRibbon: ModeRibbonItem[];
   frame?: ProductFrameImage;
-  /** Custom hero visual (e.g. HeroAppWindow). Takes precedence over frame. */
   visual?: ReactNode;
 }) {
   const hasVisual = !!(visual || frame);
@@ -178,15 +152,7 @@ export function FlagshipHero({
   );
 }
 
-/* ─────────────────────────── Surface ticker ─────────────────────── */
-
-/**
- * Continuous scrolling strip of mono words · the "WEB · DESKTOP · …"
- * treatment. Pauses on hover; respects prefers-reduced-motion via the
- * marquee keyframe's global reduced-motion override.
- */
 export function SurfaceTicker({ words }: { words: string[] }) {
-  // Repeat words enough times so one row is always wider than any viewport.
   const repeated = [...Array(6)].flatMap(() => words);
 
   const row = (key: string) => (
@@ -214,8 +180,6 @@ export function SurfaceTicker({ words }: { words: string[] }) {
   );
 }
 
-/* ──────────────────────────── Stat band ─────────────────────────── */
-
 export interface StatBandItem {
   value: string;
   label: string;
@@ -234,25 +198,13 @@ export function StatBand({ items }: { items: StatBandItem[] }) {
   );
 }
 
-/* ────────────────────────── Availability strip ──────────────────── */
-
 export interface AvailabilityItem {
   name: string;
   status: string;
-  /** True only when the surface has a published release the reader can get. */
   available: boolean;
   href: string;
 }
 
-/**
- * Six surfaces, each with its real release status.
- *
- * This answers the one question the site could not previously answer — "what
- * can I actually install today?" — and it answers it in the same place for
- * every surface, so an unreleased surface cannot be quietly presented like a
- * shipped one. Status strings must come from `SURFACE_STATUS`, which is
- * sourced from release tags.
- */
 export function AvailabilityStrip({
   eyebrow,
   title,
@@ -299,8 +251,6 @@ export function AvailabilityStrip({
   );
 }
 
-/* ─────────────────────────── Surface index ──────────────────────── */
-
 export interface SurfaceIndexItem {
   index: string;
   name: string;
@@ -310,18 +260,12 @@ export interface SurfaceIndexItem {
   platforms: string;
   status: string;
   href: string;
-  /**
-   * Optional product visual. Only supply when there is REAL content to
-   * show (an actual screenshot via `image`, or the text-based terminal
-   * variant) · rows without one render as full-width text, no mock frames.
-   */
   frame?: {
     variant: ProductFrameVariant;
     title: string;
     badge?: string;
     image?: ProductFrameImage;
   };
-  /** Custom visual node (e.g. HeroAppWindow). Takes precedence over frame. */
   visual?: ReactNode;
 }
 
@@ -395,8 +339,6 @@ export function SurfaceIndex({
   );
 }
 
-/* ─────────────────────────── Trust triptych ─────────────────────── */
-
 export interface TrustModeCard {
   mode: string;
   glyph: string;
@@ -445,8 +387,6 @@ export function TrustTriptych({
   );
 }
 
-/* ─────────────────────────── Capability grid ────────────────────── */
-
 export interface CapabilityItem {
   meta: string;
   title: string;
@@ -487,8 +427,6 @@ export function CapabilityGrid({
   );
 }
 
-/* ───────────────────────────── Dev band ─────────────────────────── */
-
 export function DevBand({
   eyebrow,
   title,
@@ -500,14 +438,8 @@ export function DevBand({
   title: string;
   body: string;
   ctas: FlagshipCta[];
-  /** Custom visual column (e.g. a showcase-scene collage). */
   visual?: ReactNode;
 }) {
-  // Server Component (no useId) -- this component renders more than once per
-  // page (see app/page.tsx), so the heading id must be derived per-instance
-  // from the (unique) eyebrow text rather than hardcoded, or every instance
-  // after the first gets aria-labelledby pointing at the FIRST instance's
-  // heading via getElementById's first-match behavior.
   const titleId = `agi-fl-dev-title-${eyebrow
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -532,8 +464,6 @@ export function DevBand({
     </section>
   );
 }
-
-/* ───────────────────────────── Final CTA ────────────────────────── */
 
 export function FinalCta({
   eyebrow,

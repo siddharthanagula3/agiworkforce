@@ -31,11 +31,6 @@ const stripe = stripeSecretKey
   ? new Stripe(stripeSecretKey, { apiVersion: STRIPE_API_VERSION })
   : null;
 
-/**
- * List portable billing records for one authenticated account. Ownership is
- * resolved server-side from the tenant-scoped subscription row; callers never
- * supply a Stripe customer identifier.
- */
 export async function listUserBillingInvoices(userId: string): Promise<BillingInvoiceRecord[]> {
   if (!stripe) return [];
 

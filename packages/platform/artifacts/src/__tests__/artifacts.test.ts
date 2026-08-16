@@ -1,21 +1,7 @@
-/**
- * Unit tests for the artifact-publish service.
- *
- * Covers:
- *   1. Local publish returns file:// URL and a LocalPublishResult.
- *   2. Cloud (byok/managed) reports unavailable unless the host supplies a publisher.
- *   3. Trust-boundary throws when generated-file URI is not file://.
- *   4. Sync-rule throws on developer-session surfaces (cli, vscode, chrome).
- *   5. Missing localFileWriter throws on local path.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { publishArtifact } from '../artifacts';
 import type { PublishableArtifact, LocalFileWriter } from '../artifacts';
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 const baseArtifact: PublishableArtifact = {
   id: 'art-001',
@@ -25,17 +11,11 @@ const baseArtifact: PublishableArtifact = {
   language: 'javascript',
 };
 
-/** A fake localFileWriter that returns a deterministic file:// URL. */
 const fakeLocalWriter: LocalFileWriter = async (artifact) =>
   `file:///Users/test/AGI/artifacts/${artifact.id}.txt`;
 
-/** A fake writer that returns a non-file:// URL to trigger trust-boundary. */
 const nonFileWriter: LocalFileWriter = async (artifact) =>
   `https://cloud.example.com/artifacts/${artifact.id}`;
-
-// ---------------------------------------------------------------------------
-// 1. Local publish returns file:// URL
-// ---------------------------------------------------------------------------
 
 describe('publishArtifact — local path', () => {
   it('returns a LocalPublishResult with a file:// shareUrl', async () => {
@@ -47,12 +27,12 @@ describe('publishArtifact — local path', () => {
     });
 
     expect(result.kind).toBe('local');
-    if (result.kind !== 'local') return; // narrow type
+    if (result.kind !== 'local') return;
 
     expect(result.shareUrl).toMatch(/^file:\/\//);
     expect(result.shareToken).toBeTruthy();
     expect(typeof result.publishedAt).toBe('string');
-    expect(result.publishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/); // ISO 8601
+    expect(result.publishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it('calls the localFileWriter with the artifact', async () => {
@@ -73,16 +53,10 @@ describe('publishArtifact — local path', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. Cloud paths use an injected publisher or report unavailability
-// ---------------------------------------------------------------------------
-
 describe('publishArtifact — cloud path (no waitlist gate)', () => {
   it.each(['byok', 'managed'] as const)(
     'returns an honest unavailable result for privacyMode=%s when no cloudPublisher is injected',
     async (privacyMode) => {
-      // Still asserts the no-network invariant: this module performs no I/O of
-      // its own, it only calls adapters the host supplies.
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('no network'));
 
       const result = await publishArtifact({
@@ -95,7 +69,6 @@ describe('publishArtifact — cloud path (no waitlist gate)', () => {
       expect(result.kind).toBe('unavailable');
       expect(result.shareUrl).toBeNull();
       if (result.kind === 'unavailable') {
-        // No waitlist language, and no invented endpoint.
         expect(result.reason).not.toMatch(/waitlist/i);
         expect(result.reason.length).toBeGreaterThan(0);
       }
@@ -138,10 +111,6 @@ describe('publishArtifact — cloud path (no waitlist gate)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. Trust-boundary throws on non-file:// URI
-// ---------------------------------------------------------------------------
-
 describe('publishArtifact — trust-boundary enforcement', () => {
   it('throws when the localFileWriter returns a non-file:// URL', async () => {
     await expect(
@@ -154,10 +123,6 @@ describe('publishArtifact — trust-boundary enforcement', () => {
     ).rejects.toThrow(/trust-boundary violation/i);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 4. Sync-rule throws on developer-session surfaces
-// ---------------------------------------------------------------------------
 
 describe('publishArtifact — surface sync-rule enforcement', () => {
   it.each(['cli', 'vscode', 'chrome'] as const)(

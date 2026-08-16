@@ -1,26 +1,8 @@
-/**
- * useSessionPersistence Hook
- *
- * React hook for managing session persistence in chat store.
- * Handles loading, saving, and syncing session data with localStorage.
- *
- * Usage:
- * ```tsx
- * const { restoreSession, saveSession, isLoading } = useSessionPersistence();
- *
- * useEffect(() => {
- *   restoreSession();
- * }, []);
- * ```
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import * as sessionStorage from '@/lib/session/sessionStorage';
 import type { EnhancedMessage } from '@shared/stores/unified-chat-types';
 
-/**
- * Persisted session data structure
- */
 export interface PersistedSession {
   id: string;
   title: string;
@@ -33,48 +15,21 @@ export interface PersistedSession {
   updatedAt: Date;
 }
 
-/**
- * useSessionPersistence hook configuration
- */
 export interface UseSessionPersistenceOptions {
-  /**
-   * Auto-save interval in milliseconds (0 to disable)
-   */
   autoSaveInterval?: number;
 
-  /**
-   * Enable debug logging
-   */
   debug?: boolean;
 }
 
-/**
- * Return type for useSessionPersistence hook
- */
 export interface UseSessionPersistenceReturn {
-  /**
-   * Restore the last active session from localStorage
-   */
   restoreSession: () => PersistedSession | null;
 
-  /**
-   * Save a session to localStorage
-   */
   saveSession: (session: PersistedSession) => void;
 
-  /**
-   * Delete a session from localStorage
-   */
   deleteSession: (sessionId: string) => void;
 
-  /**
-   * Load a specific session by ID
-   */
   loadSession: (sessionId: string) => PersistedSession | null;
 
-  /**
-   * Get all saved sessions (summary only)
-   */
   getAllSessions: () => Array<{
     id: string;
     title: string;
@@ -82,40 +37,19 @@ export interface UseSessionPersistenceReturn {
     updatedAt: Date;
   }>;
 
-  /**
-   * Clear all session data
-   */
   clearAll: () => void;
 
-  /**
-   * Export all sessions as JSON string
-   */
   exportSessions: () => string;
 
-  /**
-   * Import sessions from JSON string
-   */
   importSessions: (jsonString: string) => boolean;
 
-  /**
-   * Check if data is being loaded
-   */
   isLoading: boolean;
 
-  /**
-   * Any error that occurred during operations
-   */
   error: Error | null;
 
-  /**
-   * Get storage size in bytes
-   */
   getStorageSize: () => number;
 }
 
-/**
- * Hook for managing session persistence
- */
 export function useSessionPersistence(
   options: UseSessionPersistenceOptions = {},
 ): UseSessionPersistenceReturn {
@@ -124,7 +58,6 @@ export function useSessionPersistence(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Helper to log if debug enabled
   const log = useCallback(
     (message: string, data?: unknown) => {
       if (debug) {
@@ -134,27 +67,23 @@ export function useSessionPersistence(
     [debug],
   );
 
-  // Restore the last active session
   const restoreSession = useCallback((): PersistedSession | null => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Get current session ID
       const currentId = sessionStorage.loadCurrentSessionId();
       if (!currentId) {
         log('No current session ID saved');
         return null;
       }
 
-      // Load session
       const stored = sessionStorage.loadSession(currentId);
       if (!stored) {
         log('Current session not found in storage', currentId);
         return null;
       }
 
-      // Convert to PersistedSession
       const persisted: PersistedSession = {
         id: stored.id,
         title: stored.title,
@@ -185,7 +114,6 @@ export function useSessionPersistence(
     }
   }, [log]);
 
-  // Save a session
   const saveSessionFn = useCallback(
     (session: PersistedSession) => {
       try {
@@ -222,7 +150,6 @@ export function useSessionPersistence(
     [log],
   );
 
-  // Delete a session
   const deleteSessionFn = useCallback(
     (sessionId: string) => {
       try {
@@ -238,7 +165,6 @@ export function useSessionPersistence(
     [log],
   );
 
-  // Load specific session
   const loadSessionFn = useCallback(
     (sessionId: string): PersistedSession | null => {
       try {
@@ -279,7 +205,6 @@ export function useSessionPersistence(
     [log],
   );
 
-  // Get all sessions summary
   const getAllSessionsFn = useCallback(() => {
     try {
       setError(null);
@@ -299,7 +224,6 @@ export function useSessionPersistence(
     }
   }, [log]);
 
-  // Clear all
   const clearAllFn = useCallback(() => {
     try {
       setError(null);
@@ -312,7 +236,6 @@ export function useSessionPersistence(
     }
   }, [log]);
 
-  // Export
   const exportSessionsFn = useCallback(() => {
     try {
       setError(null);
@@ -327,7 +250,6 @@ export function useSessionPersistence(
     }
   }, [log]);
 
-  // Import
   const importSessionsFn = useCallback(
     (jsonString: string) => {
       try {
@@ -345,7 +267,6 @@ export function useSessionPersistence(
     [log],
   );
 
-  // Get storage size
   const getStorageSizeFn = useCallback(() => {
     try {
       return sessionStorage.getSessionStorageSize();
@@ -355,7 +276,6 @@ export function useSessionPersistence(
     }
   }, []);
 
-  // Auto-save effect
   useEffect(() => {
     if (!autoSaveInterval || autoSaveInterval <= 0) {
       return;

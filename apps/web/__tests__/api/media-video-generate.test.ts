@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// ---------------------------------------------------------------------------
-// Mock: server-only
-// ---------------------------------------------------------------------------
 vi.mock('server-only', () => ({}));
 
 const modelCatalogMocks = vi.hoisted(() => ({
@@ -34,16 +31,10 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Mock: rate-limit — allow by default
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: logger
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -53,18 +44,12 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: CORS helpers
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: errors — use real implementations so createError.* works correctly
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/errors', async () => {
   const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
   return {
@@ -74,34 +59,21 @@ vi.mock('@/lib/errors', async () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Mock: error-handler — real withErrorHandler so thrown AppErrors produce
-//        proper JSON responses (matching the live route behaviour)
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/error-handler', async () => {
   const actual = await vi.importActual<typeof import('@/lib/error-handler')>('@/lib/error-handler');
   return { withErrorHandler: actual.withErrorHandler, handleError: actual.handleError };
 });
 
-// ---------------------------------------------------------------------------
-// Mock: Clerk auth
-// ---------------------------------------------------------------------------
 const mockGetClerkAuthUser = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: cloud database service client (used by CreditService/SubscriptionService)
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/neon-db', () => ({
   getServiceClient: vi.fn(() => ({})),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: SubscriptionService
-// ---------------------------------------------------------------------------
 const mockGetSubscription = vi.fn();
 
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -110,10 +82,6 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: CreditService — allow by default (sufficient credits)
-// Module-level mock fns so they survive mockReset between tests
-// ---------------------------------------------------------------------------
 const mockCheckAvailable = vi.fn();
 const mockCreditGetBalance = vi.fn();
 const mockDeductCredits = vi.fn();
@@ -228,22 +196,13 @@ vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
   }),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: video-task-store
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/video-task-store', () => ({
   storeVideoTask: vi.fn(),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: global fetch (used for provider API calls)
-// ---------------------------------------------------------------------------
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-// ---------------------------------------------------------------------------
-// Import route after all mocks are in place
-// ---------------------------------------------------------------------------
 import { POST, OPTIONS } from '@/app/api/media/video/generate/route';
 import {
   getModelMetadataById,
@@ -256,9 +215,6 @@ import {
 } from '@agiworkforce/types';
 import { MANAGED_COMPUTE_PRIVATE_BETA_ENV } from '@/lib/managed-compute-gate';
 
-// ---------------------------------------------------------------------------
-// Shared test helpers
-// ---------------------------------------------------------------------------
 const BASE_URL = 'http://localhost/api/media/video/generate';
 
 function requireCatalogVideoModel(
@@ -334,9 +290,6 @@ function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> =
   });
 }
 
-// ---------------------------------------------------------------------------
-// Default subscription fixture (Max 15x tier, active)
-// ---------------------------------------------------------------------------
 const VIDEO_SUBSCRIPTION = {
   id: 'sub_test_123',
   user_id: 'user-test-id',
@@ -349,18 +302,13 @@ const VIDEO_SUBSCRIPTION = {
 
 const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 describe('POST /api/media/video/generate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Happy-path defaults — Clerk auth
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(VIDEO_SUBSCRIPTION);
 
-    // Re-establish CreditService mock defaults after clearAllMocks
     mockCheckAvailable.mockResolvedValue(true);
     mockCreditGetBalance.mockResolvedValue({ credits_remaining_cents: 10000 });
     mockDeductCredits.mockResolvedValue({ success: true });
@@ -385,8 +333,6 @@ describe('POST /api/media/video/generate', () => {
     }));
     modelCatalogMocks.runwayApiModelId = undefined;
     modelCatalogMocks.runwayAvailability = 'live';
-    // Most tests below exercise the already-built Runway mechanics behind the
-    // release gate. A dedicated regression asserts the production fail-close.
     videoReleasePolicyMocks.runwayEnabled = true;
     durableJobMocks.create.mockImplementation(async (input) => {
       const now = new Date().toISOString();
@@ -462,7 +408,6 @@ describe('POST /api/media/video/generate', () => {
     durableJobMocks.failClaimed.mockResolvedValue({ status: 'failed' });
     durableJobMocks.markUnknown.mockResolvedValue({ status: 'outcome_unknown' });
 
-    // Set env vars
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '1';
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     process.env['GOOGLE_API_KEY'] = 'test-google-key';
@@ -575,9 +520,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // OPTIONS / CORS preflight
-  // =========================================================================
   describe('OPTIONS', () => {
     it('should return 204 for preflight when no CORS handler intercepts', async () => {
       const { handleCorsPreflightRequest } = await import('@/lib/cors');
@@ -590,9 +532,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // Authentication
-  // =========================================================================
   describe('Authentication', () => {
     it('should return 401 when authorization header is missing', async () => {
       const { createError } = await import('@/lib/errors');
@@ -700,9 +639,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // Rate limiting
-  // =========================================================================
   describe('Rate limiting', () => {
     it('should return 429 when rate limited', async () => {
       const { withRateLimit } = await import('@/lib/rate-limit');
@@ -735,9 +671,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // Subscription / plan checks
-  // =========================================================================
   describe('Subscription checks', () => {
     it('should return 403 when user has no subscription', async () => {
       mockGetSubscription.mockResolvedValue(null);
@@ -836,9 +769,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // Request validation
-  // =========================================================================
   describe('Request validation', () => {
     it('should return 400 for invalid JSON body', async () => {
       const request = new NextRequest(BASE_URL, {
@@ -915,9 +845,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // Provider selection — no provider configured
-  // =========================================================================
   describe('Provider configuration', () => {
     it('should return 503 when neither RUNWAY_API_KEY nor GOOGLE_API_KEY is set', async () => {
       delete process.env['RUNWAY_API_KEY'];
@@ -1380,9 +1307,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // Happy path — Runway provider
-  // =========================================================================
   describe('Success — Runway provider', () => {
     it('fails closed in the release policy before reservation or provider egress', async () => {
       videoReleasePolicyMocks.runwayEnabled = false;
@@ -1449,7 +1373,6 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      // estimated = 60 + 8 * 10 = 140 seconds
       expect(data.estimated_duration_secs).toBe(140);
     });
 
@@ -1468,9 +1391,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // Happy path — Google Veo provider
-  // =========================================================================
   describe('Success — Google Veo provider', () => {
     beforeEach(() => {
       delete process.env['RUNWAY_API_KEY'];
@@ -1634,9 +1554,6 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  // =========================================================================
-  // Provider error handling
-  // =========================================================================
   describe('Provider errors', () => {
     it('should return 401/503 when Runway returns 401', async () => {
       mockFetch.mockResolvedValueOnce({
@@ -1655,7 +1572,6 @@ describe('POST /api/media/video/generate', () => {
       );
       const data = await response.json();
 
-      // createError.serviceUnavailable => 503
       expect(response.status).toBe(503);
       expect(data.error.message).toContain('Service temporarily unavailable');
     });

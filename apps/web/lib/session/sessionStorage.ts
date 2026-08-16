@@ -24,10 +24,6 @@
  *     corrupt store is visible in diagnostics rather than invisible.
  */
 
-/**
- * Thrown when session data could not be persisted. The most common cause is
- * `QuotaExceededError`: localStorage is full and the session was NOT saved.
- */
 export class SessionStorageWriteError extends Error {
   readonly code = 'SESSION_STORAGE_WRITE_FAILED';
 
@@ -57,7 +53,6 @@ function persist<T>(key: string, value: T): void {
   if (!ok) throw new SessionStorageWriteError(key);
 }
 
-/** Log a read-path failure instead of discarding it. */
 function warnReadFailure(operation: string, error: unknown): void {
   console.warn(`[sessionStorage] ${operation} failed; falling back to default.`, error);
 }
@@ -66,23 +61,17 @@ import { safeGetJSON, safeSetJSON } from '@shared/utils/localStorage';
 import type { EnhancedMessage } from '@shared/stores/unified-chat-types';
 import type { StoredChatSession, StoredMessage, SessionStorageMetadata } from '@agiworkforce/types';
 
-// Session storage schema version for migrations
 const SESSION_STORAGE_VERSION = 1;
 
-// Re-export for backward compatibility
 export type { StoredChatSession, StoredMessage, SessionStorageMetadata };
 
-// Storage keys
 const SESSION_STORAGE_KEY = 'agi_chat_sessions';
 const SESSION_METADATA_KEY = 'agi_chat_sessions_metadata';
 const CURRENT_SESSION_KEY = 'agi_current_session_id';
 const MODEL_SELECTION_KEY = 'agi_selected_model';
 const SIDEBAR_STATE_KEY = 'agi_sidebar_collapsed';
-const THEME_PREFERENCE_KEY = 'agi_theme_preference'; // May already exist
+const THEME_PREFERENCE_KEY = 'agi_theme_preference';
 
-/**
- * Convert an EnhancedMessage to StoredMessage for serialization
- */
 function messageToStored(msg: EnhancedMessage): StoredMessage {
   return {
     id: msg.id,
@@ -110,10 +99,8 @@ export function saveSession(session: {
   selectedProvider?: string;
 }): void {
   try {
-    // Load existing sessions
     const sessions = loadAllSessions();
 
-    // Find or create entry
     const existingIndex = sessions.findIndex((s) => s.id === session.id);
     const stored: StoredChatSession = {
       id: session.id,
@@ -135,12 +122,10 @@ export function saveSession(session: {
       sessions.push(stored);
     }
 
-    // Cap session history to prevent unbounded growth (keep last 50)
     const trimmedSessions = sessions.slice(Math.max(0, sessions.length - 50));
 
     persist(SESSION_STORAGE_KEY, trimmedSessions);
 
-    // Update metadata
     updateSessionMetadata();
   } catch (error) {
     if (error instanceof SessionStorageWriteError) throw error;
@@ -148,9 +133,6 @@ export function saveSession(session: {
   }
 }
 
-/**
- * Load a single session by ID with all messages
- */
 export function loadSession(sessionId: string): StoredChatSession | null {
   try {
     const sessions = loadAllSessions();
@@ -161,9 +143,6 @@ export function loadSession(sessionId: string): StoredChatSession | null {
   }
 }
 
-/**
- * Load all sessions from localStorage
- */
 export function loadAllSessions(): StoredChatSession[] {
   try {
     const data = safeGetJSON<StoredChatSession[]>(SESSION_STORAGE_KEY, []);
@@ -174,16 +153,12 @@ export function loadAllSessions(): StoredChatSession[] {
   }
 }
 
-/**
- * Delete a session by ID
- */
 export function deleteSession(sessionId: string): void {
   try {
     let sessions = loadAllSessions();
     sessions = sessions.filter((s) => s.id !== sessionId);
     persist(SESSION_STORAGE_KEY, sessions);
 
-    // Clear current session if it was deleted
     const currentId = loadCurrentSessionId();
     if (currentId === sessionId) {
       clearCurrentSessionId();
@@ -196,9 +171,6 @@ export function deleteSession(sessionId: string): void {
   }
 }
 
-/**
- * Clear all session history
- */
 export function clearAllSessions(): void {
   try {
     localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -206,14 +178,10 @@ export function clearAllSessions(): void {
     localStorage.removeItem(CURRENT_SESSION_KEY);
     // Don't call updateSessionMetadata() as we want to clear metadata too
   } catch (error) {
-    // "Cleared" must not be reported when the rows are still there.
     throw new SessionStorageWriteError(SESSION_STORAGE_KEY, { cause: error });
   }
 }
 
-/**
- * Save the ID of the current active session
- */
 export function saveCurrentSessionId(sessionId: string): void {
   try {
     persist(CURRENT_SESSION_KEY, sessionId);
@@ -223,9 +191,6 @@ export function saveCurrentSessionId(sessionId: string): void {
   }
 }
 
-/**
- * Load the ID of the current active session
- */
 export function loadCurrentSessionId(): string | null {
   try {
     const id = safeGetJSON<string>(CURRENT_SESSION_KEY, '');
@@ -236,9 +201,6 @@ export function loadCurrentSessionId(): string | null {
   }
 }
 
-/**
- * Clear the current session ID
- */
 export function clearCurrentSessionId(): void {
   try {
     localStorage.removeItem(CURRENT_SESSION_KEY);
@@ -247,9 +209,6 @@ export function clearCurrentSessionId(): void {
   }
 }
 
-/**
- * Save model selection (provider + model ID)
- */
 export function saveModelSelection(model: { modelId: string; provider: string }): void {
   try {
     persist(MODEL_SELECTION_KEY, model);
@@ -259,9 +218,6 @@ export function saveModelSelection(model: { modelId: string; provider: string })
   }
 }
 
-/**
- * Load model selection
- */
 export function loadModelSelection(): { modelId: string; provider: string } | null {
   try {
     const data = safeGetJSON<{ modelId: string; provider: string }>(MODEL_SELECTION_KEY, {
@@ -275,9 +231,6 @@ export function loadModelSelection(): { modelId: string; provider: string } | nu
   }
 }
 
-/**
- * Save sidebar collapsed state
- */
 export function saveSidebarState(collapsed: boolean): void {
   try {
     persist(SIDEBAR_STATE_KEY, collapsed);
@@ -287,9 +240,6 @@ export function saveSidebarState(collapsed: boolean): void {
   }
 }
 
-/**
- * Load sidebar collapsed state
- */
 export function loadSidebarState(): boolean | null {
   try {
     const data = safeGetJSON<boolean>(SIDEBAR_STATE_KEY, false);
@@ -300,9 +250,6 @@ export function loadSidebarState(): boolean | null {
   }
 }
 
-/**
- * Save theme preference (light, dark, system)
- */
 export function saveThemePreference(theme: 'light' | 'dark' | 'system'): void {
   try {
     persist(THEME_PREFERENCE_KEY, theme);
@@ -312,9 +259,6 @@ export function saveThemePreference(theme: 'light' | 'dark' | 'system'): void {
   }
 }
 
-/**
- * Load theme preference
- */
 export function loadThemePreference(): 'light' | 'dark' | 'system' | null {
   try {
     const data = safeGetJSON<string>(THEME_PREFERENCE_KEY, '');
@@ -328,9 +272,6 @@ export function loadThemePreference(): 'light' | 'dark' | 'system' | null {
   }
 }
 
-/**
- * Update session storage metadata (version, last sync time)
- */
 function updateSessionMetadata(): void {
   try {
     const metadata: SessionStorageMetadata = {
@@ -344,9 +285,6 @@ function updateSessionMetadata(): void {
   }
 }
 
-/**
- * Get session storage metadata
- */
 export function getSessionMetadata(): SessionStorageMetadata | null {
   try {
     const data = safeGetJSON<SessionStorageMetadata>(SESSION_METADATA_KEY, {
@@ -360,9 +298,6 @@ export function getSessionMetadata(): SessionStorageMetadata | null {
   }
 }
 
-/**
- * Calculate total size of session data (for debugging/monitoring)
- */
 export function getSessionStorageSize(): number {
   try {
     const sessions = loadAllSessions();
@@ -386,9 +321,6 @@ export function getSessionStorageSize(): number {
   }
 }
 
-/**
- * Export sessions as JSON (for backup)
- */
 export function exportSessions(): string {
   try {
     const sessions = loadAllSessions();
@@ -411,14 +343,10 @@ export function exportSessions(): string {
 
     return JSON.stringify(backup, null, 2);
   } catch (error) {
-    // An export that returns '' looks like "you have no sessions" — never that.
     throw new SessionStorageWriteError('export', { cause: error });
   }
 }
 
-/**
- * Import sessions from backup JSON
- */
 export function importSessions(jsonString: string): boolean {
   try {
     const data = JSON.parse(jsonString);
@@ -453,10 +381,7 @@ export function importSessions(jsonString: string): boolean {
 
     return true;
   } catch (error) {
-    // A storage failure mid-import leaves a partial restore — that must reach
-    // the user, not collapse into the same `false` as a malformed backup file.
     if (error instanceof SessionStorageWriteError) throw error;
-    // Malformed JSON / wrong shape: a legitimate `false`.
     warnReadFailure('importSessions', error);
     return false;
   }

@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-/**
- * check:capability-boundaries
- *
- * Enforces the platform-capability single-source-of-truth on the live entry
- * points. The recurring failure mode (architecture review, 2026-06) is a chat
- * composer / slash menu defining its OWN hardcoded command or capability
- * allowlist instead of consuming the canonical registry + capability matrix —
- * which silently drifts and re-introduces desktop-on-web leaks.
- *
- * This guard fails any chat/composer/slash SURFACE file that hardcodes a
- * slash-command list (>= 4 distinct `/command` literals) without importing the
- * canonical @agiworkforce/unified-chat registry (BUILT_IN_SLASH_COMMANDS /
- * filterSlashCommandsByCapability). Known not-yet-migrated surfaces are
- * allowlisted as tracked debt so the guard passes today AND blocks NEW
- * divergence. Scope is path-limited to composer/menu/slash surfaces to avoid
- * false positives on routers (which also contain `/path` literals).
- */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -44,18 +27,13 @@ const ignoredParts = new Set([
 ]);
 const sourceExt = new Set(['.ts', '.tsx']);
 
-// Only audit chat composer / slash-command / menu surfaces.
 const SURFACE_RE =
   /(SlashCommand|slash-command|useSlashCommand|Composer|PlusMenu|AttachmentMenu|AddToChatSheet|ChatInput)/;
-// Importing the canonical registry / capability filter = compliant.
 const REGISTRY_RE =
   /(BUILT_IN_SLASH_COMMANDS|filterSlashCommandsByCapability|slash-command-registry)/;
-// A slash-command id literal: '/search' (lowercase command, single segment).
 const CMD_LITERAL_RE = /['"`]\/[a-z][a-z0-9-]+['"`]/g;
 const MIN_DISTINCT = 4;
 
-// Tracked debt — surfaces that still maintain a private list, pending adoption.
-// Each MUST have a tracking note. The guard blocks any NEW unlisted surface.
 const ALLOWLIST = new Map([
   [
     'apps/mobile/src/features/chat/components/ChatInput.tsx',
@@ -88,9 +66,9 @@ for (const file of walk(root)) {
   const src = fs.readFileSync(file, 'utf8');
   const distinct = new Set((src.match(CMD_LITERAL_RE) || []).map((s) => s.replace(/['"`]/g, '')));
   if (distinct.size < MIN_DISTINCT) continue;
-  if (REGISTRY_RE.test(src)) continue; // consumes the registry → compliant
+  if (REGISTRY_RE.test(src)) continue;
 
-  if (ALLOWLIST.has(rel)) continue; // tracked debt
+  if (ALLOWLIST.has(rel)) continue;
   errors.push(
     `${rel}: hardcodes ${distinct.size} slash-command literals without importing the canonical ` +
       `@agiworkforce/unified-chat registry (BUILT_IN_SLASH_COMMANDS + filterSlashCommandsByCapability). ` +

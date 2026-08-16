@@ -51,11 +51,9 @@ function normalizeSettingsProvider(input: string): Provider | null {
 }
 
 async function handleTestProvider(request: NextRequest) {
-  // CSRF protection
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Rate limiting - use the default bucket to avoid hammering providers
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -93,7 +91,6 @@ async function handleTestProvider(request: NextRequest) {
   });
   if (managedGateResponse) return managedGateResponse;
 
-  // Send a minimal test completion to verify the provider is reachable
   try {
     const adapter = buildServerProviderAdapter(provider);
     const chatRequest = openAIWireRequestToChatRequest({
@@ -117,23 +114,9 @@ async function handleTestProvider(request: NextRequest) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // SECURITY (web subtle-issue #6, audit 2026-05-04): the previous
-    // implementation echoed the full provider-SDK error message back to the
-    // client. Provider errors frequently embed the raw HTTP response body,
-    // which may contain internal endpoint URLs, model-specific quota text,
-    // partial header values, or other operational detail that has no business
-    // landing in a UI surface. We keep the full message in the server log
-    // (useful for ops triage) but return only a coarse-grained classification
-    // and a numeric status to the caller.
     const lowered = message.toLowerCase();
     let clientError: string;
     if (lowered.includes('is not configured')) {
-      // buildServerProviderAdapter throws this synchronously (before any
-      // network call) when the provider's *_API_KEY env var is unset --
-      // check it first since it's an explicit signal from our own code, not
-      // a heuristic guess about upstream error text. Matches the message
-      // the pre-migration `LLMProviderFactory.createProvider` null-return
-      // branch used to return directly.
       clientError = `Provider "${providerKey}" is not configured - missing API key on server`;
     } else if (
       lowered.includes('401') ||

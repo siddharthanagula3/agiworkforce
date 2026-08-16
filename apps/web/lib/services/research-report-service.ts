@@ -10,25 +10,6 @@ import {
   type ResearchStep,
 } from '@agiworkforce/types';
 
-/**
- * Durable Deep Research report persistence (CAP-045 slice 1).
- *
- * The research loop used to be entirely in-stream: a closed tab or a failed
- * synthesis turn destroyed everything the run gathered. This service is the
- * durable sink behind `public.research_reports`
- * (db/neon/0094_research_reports.sql), shaped by the `ResearchReport` contract.
- *
- * Every write goes through an RLS-scoped adapter (`getUserScopedDb`) and also
- * binds `user_id` explicitly, so the row is owner-scoped in the database AND in
- * the statement. `(user_id, request_id)` is the idempotency key: the loop
- * persists an `interrupted`/`failed` row on a failure path and overwrites it
- * with the completed report when synthesis lands, so a retry always has
- * something to resume from and a same-request replay never duplicates a row.
- */
-
-// ─── Bounds ───────────────────────────────────────────────────────────────────
-
-/** Report bodies are model output; cap them so one run cannot bloat a row. */
 const MAX_CONTENT_CHARS = 400_000;
 const MAX_TITLE_CHARS = 500;
 const MAX_SUMMARY_CHARS = 8_000;
@@ -38,8 +19,6 @@ const MAX_CITATIONS = 500;
 const MAX_STEPS = 200;
 const MAX_KEY_FINDINGS = 50;
 const MAX_KEY_FINDING_CHARS = 1_000;
-
-// ─── Row shape ────────────────────────────────────────────────────────────────
 
 interface ResearchReportRow {
   id: string;
@@ -64,12 +43,10 @@ interface ResearchReportRow {
   completed_at: string | Date | null;
 }
 
-/** What the research loop hands over when it finishes (or gives up). */
 export interface SaveResearchReportInput {
   userId: string;
   requestId: string;
   conversationId?: string | null;
-  /** The research question the run was started from. */
   query: string;
   title: string;
   summary: string;
@@ -85,7 +62,6 @@ export interface SaveResearchReportInput {
   provider?: string | null;
 }
 
-/** A persisted report plus its run linkage. */
 export type PersistedResearchReport = ResearchReport & {
   userId: string;
   requestId: string;
@@ -102,8 +78,6 @@ export class ResearchReportValidationError extends Error {
     this.name = 'ResearchReportValidationError';
   }
 }
-
-// ─── Normalization ────────────────────────────────────────────────────────────
 
 function clampText(value: unknown, max: number): string {
   if (typeof value !== 'string') return '';
@@ -122,11 +96,6 @@ function toCount(value: number | string | null): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-/**
- * Keep only citations that carry the two fields the contract requires
- * (`title`/`url`) — a malformed entry is dropped, never stored as a stub, and
- * never allowed to fail the whole persist.
- */
 function normalizeCitations(citations: unknown): Citation[] {
   if (!Array.isArray(citations)) return [];
   const out: Citation[] = [];
@@ -170,8 +139,6 @@ function normalizeKeyFindings(findings: unknown): string[] {
 }
 
 function rowToReport(row: ResearchReportRow): PersistedResearchReport {
-  // A row whose status somehow fell outside the contract is reported as
-  // 'failed' rather than being cast blindly into the union.
   const status: ResearchReportStatus = isResearchReportStatus(row.status) ? row.status : 'failed';
   const report: PersistedResearchReport = {
     id: row.id,
@@ -202,14 +169,6 @@ function rowToReport(row: ResearchReportRow): PersistedResearchReport {
   return report;
 }
 
-// ─── Writes ───────────────────────────────────────────────────────────────────
-
-/**
- * Insert or update the report for one research run.
- *
- * Idempotent on `(user_id, request_id)`. `completed_at` is set only when the
- * run actually completed, so an interrupted row never claims a completion time.
- */
 export async function saveResearchReport(
   db: DatabaseAdapter,
   input: SaveResearchReportInput,
@@ -288,10 +247,6 @@ export async function saveResearchReport(
 
   const row = rows[0];
   if (!row) {
-    // A SELECT/UPDATE filtered by RLS USING clauses comes back as zero rows
-    // (an INSERT WITH CHECK violation raises instead and propagates from the
-    // query call above). Either way, surface the miss honestly instead of
-    // reporting a successful save that never happened.
     throw new ResearchReportValidationError(
       'Research report was not persisted (row-level security denied the write)',
     );
@@ -299,9 +254,6 @@ export async function saveResearchReport(
   return rowToReport(row);
 }
 
-// ─── Reads ────────────────────────────────────────────────────────────────────
-
-/** The report for one run, or null when the caller does not own one. */
 export async function getResearchReportByRequestId(
   db: DatabaseAdapter,
   input: { userId: string; requestId: string },
@@ -317,7 +269,6 @@ export async function getResearchReportByRequestId(
   return row ? rowToReport(row) : null;
 }
 
-/** Newest reports for a user, optionally narrowed to one conversation. */
 export async function listResearchReports(
   db: DatabaseAdapter,
   input: { userId: string; conversationId?: string | null; limit?: number },

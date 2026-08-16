@@ -1,32 +1,15 @@
 'use client';
 
-/**
- * EditableMessage - Inline edit mode for user messages.
- *
- * Ported from desktop EditableMessage with web-appropriate styling.
- * Features:
- * - Auto-resizing textarea pre-filled with message content
- * - Auto-focus with cursor at end
- * - Cmd/Ctrl+Enter to save, Escape to cancel
- * - Save and Cancel buttons
- * - Character count near limit
- */
-
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 export interface EditableMessageProps {
-  /** The message object with at least content */
   message: { id: string; content: string };
-  /** Called with the new content when the user saves */
   onSave: (newContent: string) => void;
-  /** Called when the user cancels editing */
   onCancel: () => void;
-  /** Maximum character limit (default 20000) */
   maxLength?: number;
-  /** Additional class names */
   className?: string;
 }
 
@@ -41,7 +24,6 @@ export function EditableMessage({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Auto-resize textarea to fit content
   const adjustHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -50,12 +32,10 @@ export function EditableMessage({
     textarea.style.height = `${newHeight}px`;
   }, []);
 
-  // Resize on content change
   useEffect(() => {
     adjustHeight();
   }, [content, adjustHeight]);
 
-  // Auto-focus and place cursor at end on mount
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {

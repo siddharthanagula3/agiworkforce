@@ -5,12 +5,6 @@ import { useProjectStore } from '../stores/projectStore';
 import { ProjectCard } from './ProjectCard';
 import type { Project } from '../lib/types';
 
-/**
- * Project create presets — quick-start options that pre-fill name + emoji
- * + accent color. Mirrors the ChatGPT create-project modal pattern
- * (Investing / Homework / Writing) without copying their labels. Tuned for
- * AGI's developer + research audience.
- */
 interface ProjectPreset {
   emoji: string;
   label: string;
@@ -24,7 +18,6 @@ const PROJECT_PRESETS: readonly ProjectPreset[] = [
   { emoji: '📚', label: 'Learning', accentColor: 'violet' },
 ];
 
-/** Quick-pick emoji palette shown inline when the user opens the picker. */
 const EMOJI_OPTIONS: readonly string[] = [
   '📁',
   '💻',
@@ -40,62 +33,17 @@ const EMOJI_OPTIONS: readonly string[] = [
   '🌱',
 ];
 
-/**
- * ProjectGallery — shared list/grid surface for project navigation.
- *
- * Round-2 audit P0 "Shared Projects component" (2026-05-21). Consumed by web
- * (`/projects`), desktop (Projects view), chrome ext side panel, and any
- * future light surface that needs a project picker.
- *
- * Behavior parity with Claude desktop's Projects gallery:
- *   - Starred projects pin to the top
- *   - Quick-filter search (case-insensitive, name + description)
- *   - Inline "+ New project" affordance with a one-line name input
- *   - Empty state with a hint and the same "+ New project" CTA
- *
- * Hosts that need server-backed projects (Cloud Managed) pass `onCreate`,
- * `onSelect`, and `onArchive` callbacks so the API round-trip stays in the
- * consumer; the gallery itself only manipulates `useProjectStore`.
- */
-
 export interface ProjectGalleryProps {
-  /**
-   * Called when a project is selected. If omitted, the gallery falls back to
-   * `useProjectStore.setActiveProject(project.id)`.
-   */
   onSelect?: (project: Project) => void;
-  /**
-   * Optional async create hook. If provided, the gallery awaits this then
-   * adds the returned project to the store. If omitted, the gallery creates
-   * a device-local project directly via `useProjectStore.addProject`.
-   */
   onCreate?: (input: ProjectGalleryCreateInput) => Promise<Project> | Project;
-  /**
-   * Called when the user chooses "Edit details" from a card context menu.
-   * The host is responsible for opening the settings dialog.
-   */
   onEditProject?: (project: Project) => void;
-  /**
-   * Called after archive is applied. The gallery marks `isArchived: true` in
-   * the store; the host can sync to a backend here.
-   */
   onArchiveProject?: (project: Project) => void;
-  /**
-   * Called after the project is removed from the store. The host can sync to
-   * a backend here.
-   */
   onDeleteProject?: (project: Project) => void;
-  /** Persist a star toggle (the card flips the store optimistically first). */
   onStarProject?: (projectId: string, starred: boolean) => void;
-  /** Optional title — defaults to "Projects". Pass null to hide. */
   title?: string | null;
-  /** Optional description copy under the title. */
   description?: string;
-  /** Limit visible projects to this count (sorted starred-first then by updatedAt). */
   limit?: number;
-  /** Render mode: 'grid' (default — 2 columns >= 768px) or 'list' (single column). */
   layout?: 'grid' | 'list';
-  /** Optional className for the outer container. */
   className?: string;
 }
 
@@ -149,7 +97,6 @@ export function ProjectGallery({
 
   const visibleProjects = useMemo(() => {
     const q = query.trim().toLowerCase();
-    // Never show archived projects in the main gallery view
     const active = projects.filter((p) => !p.isArchived);
     const filtered = q
       ? active.filter(
@@ -206,9 +153,6 @@ export function ProjectGallery({
             iconEmoji: newEmoji,
             accentColor: newAccent,
           });
-          // Best-effort merge of emoji + accent — when the host's onCreate
-          // doesn't echo them back, layer them on top of the returned
-          // project so the auto-select handoff still carries them.
           project = {
             ...project,
             iconEmoji: project.iconEmoji ?? newEmoji,
@@ -225,16 +169,12 @@ export function ProjectGallery({
             updatedAt: now,
           };
         }
-        // Hosts return the canonical server row but do not mutate this shared
-        // view model themselves. Local and managed creates therefore converge
-        // through the same single insertion point.
         addProject(project);
         setNewName('');
         setNewEmoji('📁');
         setNewAccent('zinc');
         setEmojiPickerOpen(false);
         setCreating(false);
-        // Auto-select the just-created project so the host can route into it.
         handleSelect(project);
       } catch (error) {
         setCreateError(error instanceof Error ? error.message : 'Failed to create project');

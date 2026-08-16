@@ -3,21 +3,10 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from './logger';
 
-/**
- * CORS configuration for API routes
- *
- * Allowed origins are configured via environment variable ALLOWED_ORIGINS
- * Format: comma-separated list of origins (e.g., "https://example.com,https://app.example.com")
- *
- * In development, localhost origins are automatically allowed.
- */
-
-// Parse allowed origins from environment variable
 function getAllowedOrigins(): string[] {
   const envOrigins = process.env['ALLOWED_ORIGINS'];
   const origins: string[] = [];
 
-  // Always allow localhost in development
   if (process.env.NODE_ENV === 'development') {
     origins.push(
       'http://localhost:3000',
@@ -33,7 +22,6 @@ function getAllowedOrigins(): string[] {
     );
   }
 
-  // Add production origins from environment variable
   if (envOrigins) {
     const customOrigins = envOrigins
       .split(',')
@@ -42,7 +30,6 @@ function getAllowedOrigins(): string[] {
     origins.push(...customOrigins);
   }
 
-  // Add default production origin if NEXT_PUBLIC_APP_URL is set
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
   if (appUrl && !origins.includes(appUrl)) {
     origins.push(appUrl);
@@ -59,48 +46,27 @@ function getAllowedOrigins(): string[] {
  */
 export function isOriginAllowed(origin: string | null, requireOrigin = false): boolean {
   if (!origin) {
-    // AUDIT-008-012: For sensitive endpoints, require Origin header
     if (requireOrigin) {
       return false;
     }
-    // Allow requests without origin (same-origin requests, server-to-server)
     return true;
   }
 
   const allowedOrigins = getAllowedOrigins();
 
-  // Check for exact match
   if (allowedOrigins.includes(origin)) {
     return true;
   }
 
-  // Check for Tauri desktop app.
-  //
-  // FIX (audit 2026-05-20, §13): the legacy `tauri://[a-zA-Z0-9_-]+$` pattern
-  // was over-permissive (any host-id charset, including underscores).
-  //
-  // FIX (Codex P1, 2026-05-20): Tauri v2 on Windows/Linux still uses the
-  // `tauri://localhost` origin scheme for desktop window requests, and the
-  // desktop codebase asserts that origin in production. Accept BOTH the
-  // pinned `https://tauri.localhost` (macOS / Tauri v2 https mode) and the
-  // pinned `tauri://localhost` (Tauri v2 legacy scheme on other platforms).
-  // The host-id is now hard-pinned to the literal `localhost` · no charset
-  // wildcard, no length surface.
   const tauriOriginPattern = /^(?:https:\/\/tauri\.localhost|tauri:\/\/localhost)(?::\d+)?$/;
   if (tauriOriginPattern.test(origin)) {
     return true;
   }
 
-  // Electron desktop cloud shell. Its renderer is served from the privileged
-  // `agi:` scheme (registered standard+secure in apps/desktop/electron/main.ts),
-  // so every fetch carries this exact origin. Pinned literal — no wildcard, no
-  // charset surface, same style as the Tauri origins above. `null` (file://,
-  // sandboxed iframes) is intentionally NOT accepted anywhere in this function.
   if (origin === 'agi://cloud') {
     return true;
   }
 
-  // In development, allow any localhost origin
   if (process.env.NODE_ENV === 'development') {
     const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
     if (localhostPattern.test(origin)) {
@@ -111,9 +77,6 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
   return false;
 }
 
-/**
- * Get CORS headers for a response
- */
 export function getCorsHeaders(request: NextRequest): Record<string, string> {
   const origin = request.headers.get('origin');
   const headers: Record<string, string> = {
@@ -126,7 +89,6 @@ export function getCorsHeaders(request: NextRequest): Record<string, string> {
   };
 
   if (isOriginAllowed(origin)) {
-    // Set the specific origin - never use wildcard for authenticated endpoints
     if (origin) {
       headers['Access-Control-Allow-Origin'] = origin;
       headers['Access-Control-Allow-Credentials'] = 'true';
@@ -140,9 +102,6 @@ export function getCorsHeaders(request: NextRequest): Record<string, string> {
   return headers;
 }
 
-/**
- * Security headers to add to all API responses
- */
 export function getSecurityHeaders(): Record<string, string> {
   return {
     'X-Content-Type-Options': 'nosniff',
@@ -185,9 +144,6 @@ export function handleCorsPreflightRequest(
   });
 }
 
-/**
- * Add CORS and security headers to a response
- */
 export function withCorsAndSecurityHeaders<TResponse extends Response>(
   response: TResponse,
   request: NextRequest,
@@ -198,9 +154,6 @@ export function withCorsAndSecurityHeaders<TResponse extends Response>(
   for (const [key, value] of Object.entries(corsHeaders)) {
     response.headers.set(key, value);
   }
-  // Route-specific security policies may be stricter or intentionally more
-  // precise than the API defaults (for example, authenticated same-origin PDF
-  // previews use SAMEORIGIN while every other API response remains DENY).
   for (const [key, value] of Object.entries(securityHeaders)) {
     if (!response.headers.has(key)) {
       response.headers.set(key, value);
@@ -210,13 +163,6 @@ export function withCorsAndSecurityHeaders<TResponse extends Response>(
   return response;
 }
 
-/**
- * Wrap a route handler so every outcome — success, rate-limit response, CSRF
- * rejection, and `withErrorHandler` failure response — carries the same CORS
- * and security headers. Cross-surface API routes should compose this OUTSIDE
- * `withErrorHandler`; adding headers only to happy-path `NextResponse.json`
- * calls leaves Desktop/Mobile unable to read actionable error responses.
- */
 export function withCorsRoute<TArgs extends unknown[]>(
   handler: (request: NextRequest, ...args: TArgs) => Promise<Response>,
 ): (request: NextRequest, ...args: TArgs) => Promise<Response> {
@@ -224,9 +170,6 @@ export function withCorsRoute<TArgs extends unknown[]>(
     withCorsAndSecurityHeaders(await handler(request, ...args), request);
 }
 
-/**
- * Create a JSON response with CORS and security headers
- */
 export function jsonResponseWithCors(
   request: NextRequest,
   data: unknown,

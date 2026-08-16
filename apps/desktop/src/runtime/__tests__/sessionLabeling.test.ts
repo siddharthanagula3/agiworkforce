@@ -1,14 +1,3 @@
-/**
- * Tests for ./sessionLabeling.ts — the W5 stage-2 desktop consumer of
- * @agiworkforce/types's session-taxonomy and ExecutionProfile contracts.
- *
- * Covers: per-mode AppSession/ExecutionProfile label correctness, invariant
- * assertions firing on a deliberately inconsistent fixture, the
- * composition-root agreement check (both that it stays silent for the real
- * wiring and that it genuinely catches a wrong-class wiring bug — not a
- * trivial no-op), and that `createDesktopChatRuntimeWithLabeling` selects
- * identically to the unwrapped `createDesktopChatRuntime`.
- */
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatRuntime } from '@agiworkforce/unified-chat';
 import { getSessionKindDefaults, type ChatExecutionMode } from '@agiworkforce/types';
@@ -93,14 +82,6 @@ describe('labelDesktopSession', () => {
 });
 
 describe('labelDesktopSession tracks getSessionKindDefaults (no hand-inlined drift)', () => {
-  // labelDesktopSession hand-writes each session's structural fields rather
-  // than spreading getSessionKindDefaults(kind) — deliberately, because the
-  // defaults return the general SessionKindDefaults shape while the per-kind
-  // session interfaces narrow storageScope/trustBoundary/syncPolicy in ways
-  // that don't spread cleanly. That means nothing at the type level stops
-  // the two from drifting apart if someone edits the SSOT in taxonomy.ts.
-  // These checks close that gap by asserting equality against the real
-  // getSessionKindDefaults output for every kind this module emits.
   const cases: Array<{
     mode: ChatExecutionMode;
     kind: Parameters<typeof getSessionKindDefaults>[0];
@@ -233,10 +214,6 @@ describe('createDesktopChatRuntimeWithLabeling — selection stays identical to 
 });
 
 describe('createDesktopChatRuntimeWithLabeling — the agreement check has real teeth, not a rubber stamp', () => {
-  // Adversarial factories: `managed` is wired to the WRONG class (TauriRuntime
-  // instead of CloudRuntime) — a realistic wiring bug. The plain-object stub
-  // factories used by desktopChatRuntime.test.ts would sidestep `instanceof`
-  // entirely, so this test deliberately uses real runtime classes.
   it('throws when the cloud factory is wired to a non-cloud runtime class', () => {
     const badFactories = {
       local: () => new TauriRuntime(),

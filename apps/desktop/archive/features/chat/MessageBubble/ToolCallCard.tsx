@@ -1,17 +1,3 @@
-/**
- * ToolCallCard Component
- *
- * Desktop adapter over the canonical @agiworkforce/unified-chat ToolCallCard.
- * Preserves this file's existing flat prop API (messageId, toolName,
- * toolStatus, ...) and its Tauri-IPC approve/deny/cancel transport — those
- * stay desktop-specific and are injected into the shared component as
- * callbacks. Rendering (bar, approval prompt, request/response sections,
- * icon-kind inference) is now owned by the package.
- *
- * Canonical ToolCallCard for desktop chat surface; consolidated from 3
- * implementations in R25 V7, then reconciled onto the shared package
- * component in the unified-chat/web/desktop renderer consolidation.
- */
 
 import React, { memo, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
@@ -31,11 +17,9 @@ export interface ToolCallCardProps {
   toolCommand?: string;
   requiresApproval: boolean;
   actionId?: string;
-  confirmationRequestId?: string; // AUDIT-UI-052: ID for tool confirmation requests
+  confirmationRequestId?: string;
   onToggleSidecar?: (tab: SidecarMode) => void;
 }
-
-// ─── Status mapping ───────────────────────────────────────────────────────────
 
 function toPackageStatus(toolStatus: string | undefined): ToolCallStatus {
   switch (toolStatus) {
@@ -56,13 +40,6 @@ function toPackageStatus(toolStatus: string | undefined): ToolCallStatus {
   }
 }
 
-// ─── Kind mapping ─────────────────────────────────────────────────────────────
-// Left to the package's own name-based auto-inference (kind='auto' default) —
-// this desktop wrapper always passes the raw tool name as the label, so a
-// separate local classifier would just duplicate that inference.
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
 const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   messageId,
   toolName,
@@ -79,7 +56,6 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   );
   const [actionError, setActionError] = React.useState<string | null>(null);
 
-  // Determine target sidecar tab based on tool name
   const targetTab = useMemo(() => {
     const lowerTool = (toolName || '').toString().toLowerCase();
     return lowerTool.includes('browser')
@@ -93,7 +69,6 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
             : 'terminal';
   }, [toolName]);
 
-  // AUDIT-UI-052 fix: Use proper tool confirmation response command
   const handleApprove = useCallback(async () => {
     if (!confirmationRequestId) {
       const message = 'Approval request is no longer available.';
@@ -183,9 +158,6 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
     pendingAction || actionError || (requiresApproval && !confirmationRequestId),
   );
 
-  // Extra status feedback (pending-action / error / expired-approval text) that
-  // doesn't fit the package's generic approval-prompt + request/response body —
-  // rendered as a footer below the bar, alongside the sidecar toggle link.
   const footer =
     hasStatusFeedback || onToggleSidecar ? (
       <div className="px-1">

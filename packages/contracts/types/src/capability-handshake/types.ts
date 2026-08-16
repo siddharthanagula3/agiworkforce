@@ -64,15 +64,6 @@ import type { PlatformCapability } from '../capabilities';
 
 export type { PlatformCapability };
 
-// ============================================================================
-// Policy Layers
-// ============================================================================
-
-/**
- * The four independent policy layers whose INTERSECTION gates a capability
- * for a session (six-app finding A: "model capabilities ∩ tier policy ∩
- * surface support ∩ user settings").
- */
 export type CapabilityLayer = 'model' | 'tier' | 'surface' | 'settings';
 
 export const CAPABILITY_LAYERS = [
@@ -86,60 +77,20 @@ export function isCapabilityLayer(value: string): value is CapabilityLayer {
   return (CAPABILITY_LAYERS as readonly string[]).includes(value);
 }
 
-/**
- * One layer's grant set for a session, already normalized onto
- * `PlatformCapability` by the caller (see module doc "single-vocabulary
- * decision"). `sourceId` is carried into rejections/audits so a denial is
- * always traceable to a concrete model key, tier id, surface id, or
- * settings-document hash — never a bare boolean.
- */
 export interface CapabilityLayerGrant {
   layer: CapabilityLayer;
   sourceId: string;
   granted: ReadonlySet<PlatformCapability>;
 }
 
-// ============================================================================
-// The Document
-// ============================================================================
-
-/**
- * Identity of a computed `EffectiveCapabilityDocument`. Split out from the
- * full document so OTHER contracts (e.g. a session's policy snapshot in
- * `../sessions`) can cite a handshake result by reference without importing
- * the full grant/denial payload — see `../sessions` `SessionPolicySnapshot`.
- */
 export interface CapabilityDocumentRef {
   sessionId: string;
-  /** Monotonic per-session version/hash. Bump on any input-layer change (model switch, tier change, settings edit) so stale snapshots are detectable, never silently reused. */
   version: string;
   computedAt: string;
 }
 
-/**
- * Server-authoritative, session-scoped capability truth: the layer
- * intersection. Wire-visible schema lives in
- * `@agiworkforce/cloud-contracts` (`capability-handshake.ts`) — this is the
- * TS contract type; the two are kept in sync by test, not by hand (see that
- * package's `__tests__/capability-handshake.test.ts`).
- *
- * Never trust a client-declared capability set — a client MAY cache and
- * display `granted`, but every admission decision must be re-evaluated
- * server-side against freshly computed layer grants.
- */
 export interface EffectiveCapabilityDocument extends CapabilityDocumentRef {
-  /** Per-layer provenance — what produced each layer's grant set. */
   sources: Readonly<Record<CapabilityLayer, string>>;
-  /** Capabilities granted by ALL FOUR layers — the only ones actually usable this session. */
   granted: readonly PlatformCapability[];
-  /**
-   * Capabilities granted by AT LEAST ONE layer but not all four, mapped to
-   * the layers that denied them. Only ids that appear in at least one
-   * layer's grant set are tracked here (a capability no layer ever
-   * mentioned is simply absent from both `granted` and `deniedBy` — there is
-   * nothing to audit). Exists for UI surfacing ("your plan doesn't include
-   * this" vs "this model can't do that") and for the evaluator's rejection
-   * detail.
-   */
   deniedBy: Readonly<Partial<Record<PlatformCapability, readonly CapabilityLayer[]>>>;
 }

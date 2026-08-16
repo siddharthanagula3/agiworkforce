@@ -1,17 +1,3 @@
-/**
- * 0088_support_action_proposals.sql — SQL shape.
- *
- * SCOPE AND HONEST LIMITS: this is a static assertion over the migration text.
- * Every DB test in apps/web mocks the adapter, so nothing here proves runtime
- * role or RLS behaviour. Whether `app_rls` is really confined to its own rows
- * MUST be rehearsed manually on a throwaway Neon branch using the checklist at
- * the bottom of the migration. A green run of this file is not that proof, and
- * the application code does not rely on RLS as its primary gate — every
- * statement carries an explicit `user_id = $n` predicate.
- *
- * What it does prove is that the migration keeps the properties the
- * confirmation protocol depends on, so a future edit cannot quietly drop one.
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,8 +6,6 @@ import { describe, expect, it } from 'vitest';
 const MIGRATION_PATH = path.resolve(import.meta.dirname, '0088_support_action_proposals.sql');
 const migration = fs.readFileSync(MIGRATION_PATH, 'utf8');
 
-// Strip `--` comments so assertions about executable SQL cannot be satisfied by
-// prose or by the commented-out rehearsal checklist.
 const executable = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/u, ''))
@@ -58,7 +42,6 @@ describe('0088 support action proposals — token integrity', () => {
 
 describe('0088 support action proposals — no content, no credentials', () => {
   it('has no column for message, prompt, model output or key material', () => {
-    // The table records that an action was proposed, never what was said.
     for (const forbidden of [
       'message',
       'transcript',

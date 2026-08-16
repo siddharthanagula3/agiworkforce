@@ -1,30 +1,8 @@
-/**
- * Stripe Subscription Downgrade Webhook Tests
- *
- * Tests for tier downgrade handling mid-cycle:
- * - customer.subscription.updated event with plan change
- * - Plan tier resolution from price IDs
- * - Reset (new period) vs allocate (same period) credit branching
- * - Edge cases and error handling
- *
- * NOT covered here, because the webhook does not do it: a mid-cycle DOWNGRADE
- * does not shrink the billing-period allowance. `updateSubscriptionInDb`
- * (app/api/stripe-webhook/lib/db.ts) only distinguishes `isPaidPlanUpgrade`
- * (carry usage) from `isNewPeriod` (reset) and otherwise calls
- * `allocateCreditsForPeriod`, whose SQL `get_or_create_credit_account`
- * (db/neon/0020_functions.sql) returns the existing row untouched when the
- * period is unchanged. Enforcement reads `credits_allocated_cents` off that
- * row, so a portal downgrade lowers `plan_tier` (and its capability gates)
- * while leaving the higher plan's spend allowance in place until the period
- * ends. Ledger BIZ-010 owns defining and implementing that policy; do not add
- * an assertion here that presents the current behaviour as intended.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-// Mock environment variables before imports
 const mockEnv = {
   STRIPE_SECRET_KEY: 'sk_test_mock_key',
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
@@ -33,7 +11,6 @@ const mockEnv = {
 vi.stubEnv('STRIPE_SECRET_KEY', mockEnv.STRIPE_SECRET_KEY);
 vi.stubEnv('STRIPE_WEBHOOK_SECRET', mockEnv.STRIPE_WEBHOOK_SECRET);
 
-// Mock logger
 const mockLoggerInfo = vi.fn();
 const mockLoggerError = vi.fn();
 const mockLoggerWarn = vi.fn();
@@ -48,12 +25,10 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock security audit
 vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Neon DB mock
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockDb = {
@@ -70,7 +45,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => mockDb),
 }));
 
-// Mock subscription service
 const mockAllocateCredits = vi.fn().mockResolvedValue(undefined);
 const mockResetCredits = vi.fn().mockResolvedValue(undefined);
 
@@ -81,7 +55,6 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-// Mock credit service
 const mockGetBalance = vi.fn();
 const mockDeductCredits = vi.fn();
 
@@ -92,7 +65,6 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-// Mock price tier mapping with configurable behavior
 const mockResolvePlanTier = vi.fn();
 
 vi.mock('@/lib/price-tier-mapping', () => ({
@@ -106,7 +78,6 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   isPriceIdRegistered: vi.fn(() => true),
 }));
 
-// Utility to generate Stripe signature
 function generateStripeSignature(
   payload: string,
   secret: string,
@@ -121,7 +92,6 @@ function generateStripeSignature(
   };
 }
 
-// Mock Stripe with proper signature verification
 const mockStripeWebhooks = {
   constructEvent: vi.fn((body: string, signature: string, secret: string) => {
     const parts = signature.split(',');
@@ -186,25 +156,20 @@ vi.mock('stripe', () => ({
 }));
 
 describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.updated)', () => {
-  const periodStart = Math.floor(Date.now() / 1000) - 15 * 24 * 60 * 60; // 15 days ago
-  const periodEnd = Math.floor(Date.now() / 1000) + 15 * 24 * 60 * 60; // 15 days from now
+  const periodStart = Math.floor(Date.now() / 1000) - 15 * 24 * 60 * 60;
+  const periodEnd = Math.floor(Date.now() / 1000) + 15 * 24 * 60 * 60;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Re-establish getNeonDb mock after resetModules
     const neonModule = await import('@/lib/server/neon-db');
     (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
-    // Default idempotency: should process (true)
-    // Default subscription lookup: returns existing Pro subscription with matching period start
-    // so that isNewPeriod = false (same period) for most tests.
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes('process_stripe_event_idempotent')) {
         return Promise.resolve([{ process_stripe_event_idempotent: true }]);
       }
-      // Subscription upsert/select returning sub with user_id and matching period start
       if (sql.includes('subscriptions')) {
         return Promise.resolve([
           {
@@ -215,7 +180,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
           },
         ]);
       }
-      // Profile lookup
       if (sql.includes('profiles')) {
         return Promise.resolve([{ id: 'user_123' }]);
       }
@@ -224,7 +188,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
     mockExecute.mockResolvedValue(1);
 
-    // Default plan tier resolution
     mockResolvePlanTier.mockImplementation((_metadata: unknown, priceId: string) => {
       if (priceId?.includes('hobby')) return 'hobby';
       if (priceId?.includes('pro')) return 'pro';
@@ -232,7 +195,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       return 'hobby';
     });
 
-    // Default Stripe subscription retrieve
     mockStripeSubscriptionsRetrieve.mockResolvedValue({
       id: 'sub_test_123',
       status: 'active',
@@ -244,25 +206,21 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       metadata: {},
     });
 
-    // Default Stripe customer retrieve
     mockStripeCustomersRetrieve.mockResolvedValue({
       id: 'cus_test_123',
       email: 'test@example.com',
       deleted: false,
     });
 
-    // Restore subscription service mocks after clearAllMocks
     mockAllocateCredits.mockResolvedValue(undefined);
     mockResetCredits.mockResolvedValue(undefined);
 
-    // Default credit balance
     mockGetBalance.mockResolvedValue({
       credits_remaining_cents: 800,
       credits_allocated_cents: 1200,
       account_id: 'acc_123',
     });
 
-    // Default successful deduction
     mockDeductCredits.mockResolvedValue({
       success: true,
       remaining_cents: 350,
@@ -308,7 +266,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       await POST(request);
 
-      // Verify resolvePlanTier was called with correct price ID
       expect(mockResolvePlanTier).toHaveBeenCalledWith(expect.any(Object), 'price_hobby');
     });
 
@@ -348,7 +305,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       await POST(request);
 
-      // Verify metadata was passed to resolvePlanTier
       expect(mockResolvePlanTier).toHaveBeenCalledWith(
         expect.objectContaining({ plan_tier: 'hobby' }),
         expect.any(String),
@@ -394,7 +350,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // Should query subscriptions table
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('subscriptions'),
         expect.anything(),
@@ -528,7 +483,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // Credits should be allocated for upgraded plan
       expect(mockAllocateCredits).toHaveBeenCalled();
     });
   });
@@ -540,7 +494,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       mockResolvePlanTier.mockReturnValue('hobby');
 
-      // DB returns subscription with the OLD period start
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: true }]);
@@ -592,7 +545,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // For new period, should reset credits
       expect(mockResetCredits).toHaveBeenCalled();
     });
 
@@ -633,19 +585,16 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // Within same period, should allocate (not reset)
       expect(mockAllocateCredits).toHaveBeenCalled();
     });
   });
 
   describe('Edge Cases', () => {
     it('should handle subscription update for non-existent local subscription', async () => {
-      // No local subscription found — upsert creates one
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: true }]);
         }
-        // Upsert returning new row
         if (sql.includes('subscriptions') && sql.includes('insert into')) {
           return Promise.resolve([{ id: 'sub_new_db', user_id: 'user_123' }]);
         }
@@ -697,7 +646,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
     });
 
     it('should handle unknown/invalid plan tier from price ID', async () => {
-      // Return null for unknown price ID
       mockResolvePlanTier.mockReturnValue(null);
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
@@ -733,8 +681,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       const response = await POST(request);
 
-      // Fail closed so Stripe retries after the missing Price mapping is fixed;
-      // acknowledging 200 would silently preserve stale entitlements forever.
       expect(response.status).toBe(500);
       expect(mockLoggerError).toHaveBeenCalled();
     });
@@ -821,7 +767,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
   describe('Error Handling', () => {
     it('should handle database error during subscription update', async () => {
-      // DB throws on the upsert
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: true }]);
@@ -867,7 +812,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       const response = await POST(request);
 
-      // Should return 500 for unhandled database errors (allows Stripe retry)
       expect(response.status).toBe(500);
       expect(mockLoggerError).toHaveBeenCalled();
     });
@@ -909,8 +853,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       const response = await POST(request);
 
-      // Allocation and entitlement changes are one financial operation; retry
-      // the webhook instead of acknowledging a partially provisioned plan.
       expect(response.status).toBe(500);
       expect(mockLoggerError).toHaveBeenCalled();
     });
@@ -1004,7 +946,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       await POST(request);
 
-      // Verify logging includes subscription ID
       expect(mockLoggerInfo).toHaveBeenCalledWith(
         expect.objectContaining({ subscriptionId: 'sub_logging' }),
         'Processing subscription update',

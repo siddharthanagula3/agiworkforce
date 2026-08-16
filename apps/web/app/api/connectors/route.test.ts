@@ -135,11 +135,6 @@ describe('/api/connectors managed-cloud capability boundary', () => {
   });
 
   it('accepts dropbox as a known connector id (honest 501, not the allowlist rejection)', async () => {
-    // dropbox is in VALID_CONNECTOR_IDS but (like most providers here) isn't
-    // operator-mapped in this test's mock, so it must fail with the "not
-    // implemented for this provider" 501 — NOT the "Invalid connector ID" 400
-    // an unlisted id would get. This is the regression check for dropbox
-    // joining the allowlist alongside onedrive.
     const response = await POST(postRequest('dropbox'));
 
     expect(response.status).toBe(501);
@@ -178,8 +173,6 @@ describe('/api/connectors managed-cloud capability boundary', () => {
   });
 
   it('advertises a provider as soon as an operator registers its OAuth app', async () => {
-    // This is the "Coming soon" fix: availability is computed from real
-    // capability, and an OAuth-configured provider is real capability.
     mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
 
     const response = await GET(getRequest());
@@ -197,20 +190,12 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     await expect(response.json()).resolves.toMatchObject({
       connectorId: 'linear',
       oauthStartPath: '/api/connectors/oauth/start?connectorId=linear',
-      // Alias the existing web directory hook already follows on a 409, so a
-      // configured OAuth connector opens consent instead of toasting an error.
       installStartPath: '/api/connectors/oauth/start?connectorId=linear',
     });
     expect(mocks.query).not.toHaveBeenCalled();
   });
 
   it('starts the OAuth flow for a configured provider outside VALID_CONNECTOR_IDS', async () => {
-    // `airtable` is in the web catalog (features/connectors/data/connectors.ts)
-    // but NOT in this route's 34-id VALID_CONNECTOR_IDS allowlist, and the OAuth
-    // registry accepts any well-formed connectorId. Before the POST gate learned
-    // about OAuth-configured ids, GET advertised airtable as available — so the
-    // directory rendered a live Connect button — and this POST answered 400
-    // "Invalid connector ID". Availability and connectability must agree.
     mocks.oauthConfiguredIds.mockReturnValue(new Set(['airtable']));
 
     const getBody = (await (await GET(getRequest())).json()) as { available: string[] };
@@ -223,19 +208,12 @@ describe('/api/connectors managed-cloud capability boundary', () => {
       connectorId: 'airtable',
       oauthStartPath: '/api/connectors/oauth/start?connectorId=airtable',
     });
-    // The 409 is a redirect to consent, not a connection: nothing is persisted.
     expect(
       mocks.query.mock.calls.some(([sql]) => String(sql).includes('insert into user_connectors')),
     ).toBe(false);
   });
 
   it('never rejects a connector the directory itself lists (audit CRIT-001)', async () => {
-    // The route used to carry its own `VALID_CONNECTOR_IDS` set of 34 ids while
-    // the directory rendered 89. Every id in the gap answered 400 "Invalid
-    // connector ID" — a message about a connector the product had just shown
-    // the user — instead of the honest "not implemented for this provider".
-    // Both lists are now the canonical registry, so this asserts the gap is
-    // closed for every catalog entry rather than for one sampled id.
     const rejected: string[] = [];
     for (const connector of CONNECTORS) {
       const response = await POST(postRequest(connector.id));
@@ -245,10 +223,6 @@ describe('/api/connectors managed-cloud capability boundary', () => {
   });
 
   it('answers an unbuilt connector honestly instead of pretending it saved', async () => {
-    // trello: no remote MCP endpoint, not operator-mapped, no OAuth app. This
-    // used to be airtable, but 2f4cebaf4 gave airtable a self-service MCP
-    // endpoint, so it now takes the authorization branch below rather than
-    // this one — see the next test.
     const response = await POST(postRequest('trello'));
 
     expect(response.status).toBe(501);
@@ -259,10 +233,6 @@ describe('/api/connectors managed-cloud capability boundary', () => {
   });
 
   it('sends a self-service MCP connector to authorization rather than saving a row', async () => {
-    // airtable has a remote MCP endpoint with `clientRegistration: 'cimd'`, so
-    // it connects by running the authorization flow, not by flipping a row.
-    // The honest answer is 409 + where to send the user — and, exactly as for
-    // the unbuilt case above, still no insert.
     const response = await POST(postRequest('airtable'));
 
     expect(response.status).toBe(409);
@@ -359,8 +329,6 @@ describe('/api/connectors managed-cloud capability boundary', () => {
       expect.stringContaining('delete from public.connector_tool_permissions'),
       ['user-1', 'linear'],
     );
-    // No user_connectors row exists for an OAuth connector, so nothing should
-    // be soft-deleted there.
     expect(
       mocks.execute.mock.calls.some(([sql]) => String(sql).includes('update user_connectors')),
     ).toBe(false);

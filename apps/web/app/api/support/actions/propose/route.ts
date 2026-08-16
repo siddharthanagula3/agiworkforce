@@ -1,13 +1,3 @@
-/**
- * POST /api/support/actions/propose
- *
- * Mint a single-use, caller-bound, action-bound, short-lived confirmation for
- * ONE safe action. Proposing performs no effect whatsoever.
- *
- * The body may name an `actionId` and its parameters. It may NOT name a user:
- * the caller is resolved from the session and the proposal row is written
- * against that id. A model that hallucinates a target user has nowhere to put it.
- */
 
 import 'server-only';
 

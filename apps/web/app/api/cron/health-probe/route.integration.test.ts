@@ -1,12 +1,3 @@
-/**
- * The unit test above mocks the health checks and the mail transport, which
- * proves the decision logic and nothing about the wiring. This one replaces
- * only the two things that leave the machine — the Neon client and `fetch` —
- * and drives the REAL health checks, the REAL support config and the REAL
- * Resend transport. It is the local stand-in for the preview drill in
- * docs/runbooks/incident-response.md, and the thing that would catch a probe
- * that only ever alerts because a mock said so.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,8 +25,6 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // The drill's step 2: a deployment with no database URL. Both `environment`
-  // and `database` then fail, which is the real `unhealthy` shape.
   delete process.env['DATABASE_URL'];
   delete process.env['AGI_DATABASE_URL'];
   delete process.env['STRIPE_SECRET_KEY'];

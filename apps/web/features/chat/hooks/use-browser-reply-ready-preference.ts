@@ -16,13 +16,6 @@ function readBrowserReplyReady(value: unknown): boolean | undefined {
   return typeof candidate === 'boolean' ? candidate : undefined;
 }
 
-/**
- * The live preference used by the background-reply notifier.
- *
- * Settings are account-backed, but the chat page stays mounted behind the
- * Settings modal. Listening for successful namespace saves makes a change
- * effective in that same tab without requiring a reload.
- */
 export function useBrowserReplyReadyPreference(): boolean {
   const [enabled, setEnabled] = useState(DEFAULT_BROWSER_REPLY_READY);
 

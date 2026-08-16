@@ -1,15 +1,3 @@
-/**
- * Model Store
- *
- * Manages model selection, favorites, recent models, and provider status.
- *
- * Updated to Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Persist middleware: Using createJSONStorage, partialize, version, migrate
- * - Better devtools integration with store name
- * - subscribeWithSelector for granular subscriptions
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { toast } from 'sonner';
@@ -48,10 +36,6 @@ import {
   ollamaPullModel,
 } from '../api/ollama';
 
-// ---------------------------------------------------------------------------
-// Managed cloud rows are projected from the shared tier + runtime contract.
-// ---------------------------------------------------------------------------
-
 export interface ManagedCloudModel {
   id: string;
   displayName: string;
@@ -88,11 +72,6 @@ function buildManagedCloudModel(model: ChatPickerModel): ManagedCloudModel {
   };
 }
 
-/**
- * Returns the managed cloud models admitted by both the subscription tier and
- * the Desktop Cloud runtime profile. Until that profile is honestly marked
- * implemented after live verification, this returns an empty list.
- */
 export function getManagedCloudModelsForTier(tier: PlanTier | string): ManagedCloudModel[] {
   return getModelsForTierAndSurface(tier, 'desktop/cloud-chat', {
     modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
@@ -111,7 +90,6 @@ export interface ProviderStatus {
   ollamaRunning?: boolean;
 }
 
-/** Router suggestion from the Rust LLM router */
 export interface RouterSuggestion {
   provider: string;
   model: string;
@@ -147,7 +125,6 @@ export interface ModelInfo {
   available: boolean;
 }
 
-/** Ollama model details from the Rust backend */
 export interface OllamaModelDetails {
   parameter_size: string;
   quantization_level: string;
@@ -157,7 +134,6 @@ export interface OllamaModelDetails {
   format: string;
 }
 
-/** Ollama model representation from the Rust backend */
 export interface OllamaModel {
   name: string;
   size: number;
@@ -166,7 +142,6 @@ export interface OllamaModel {
   details: OllamaModelDetails;
 }
 
-/** Speed/quality tradeoff mode for each request. */
 export type SpeedQualityMode = 'fast' | 'balanced' | 'quality';
 
 interface ModelState {
@@ -185,35 +160,22 @@ interface ModelState {
 
   thinkingModeEnabled: boolean;
   thinkingBudget: number;
-  /** Per-turn adaptive thinking: enabled for the next send only, then resets to false. */
   perTurnAdaptiveThinking: boolean;
 
-  /** Controls the speed/quality tradeoff for all requests. */
   speedQualityMode: SpeedQualityMode;
 
-  // Ollama-specific state
   ollamaModels: OllamaModel[];
   ollamaAvailable: boolean;
   ollamaLoading: boolean;
   ollamaError: string | null;
 
-  // Router suggestion state
   routerSuggestion: RouterSuggestion | null;
 
   loading: boolean;
   error: string | null;
 
-  /**
-   * Managed cloud models available for the current plan tier.
-   * Populated when app is in cloud mode; empty in local mode.
-   */
   cloudModels: ManagedCloudModel[];
 
-  /**
-   * Reload the model list when the app mode or plan tier changes.
-   * In cloud mode: loads MANAGED_CLOUD_MODELS filtered by tier.
-   * In local mode: clears cloudModels (BYOK models come from getAllModels()).
-   */
   loadModelsForMode: (mode: AppMode, planTier: PlanTier) => void;
 
   selectModel: (modelId: string, provider: Provider) => Promise<void>;
@@ -229,33 +191,21 @@ interface ModelState {
   refreshUsageStats: () => Promise<void>;
   getAvailableModels: () => Promise<ModelInfo[]>;
 
-  // Router suggestions from the Rust LLM router
   getRouterSuggestion: (context?: {
     taskType?: string;
     complexity?: string;
     requiresVision?: boolean;
   }) => Promise<RouterSuggestion>;
 
-  // Reset the session cost accumulator in the LLM router
   resetSessionCost: () => Promise<void>;
 
-  // Ollama-specific actions
   checkOllamaStatus: () => Promise<boolean>;
   fetchOllamaModels: () => Promise<OllamaModel[]>;
   pullOllamaModel: (modelName: string) => Promise<void>;
   deleteOllamaModel: (modelName: string) => Promise<void>;
 
-  /**
-   * Cycle the currently selected model to its catalog-declared
-   * thinking/reasoning counterpart, or back.
-   * Shows a toast with the result.
-   */
   cycleModelVariant: () => void;
 
-  /**
-   * Set the speed/quality mode that controls how requests are routed and how
-   * much extended thinking budget is applied.
-   */
   setSpeedQualityMode: (mode: SpeedQualityMode) => void;
 
   reset: () => void;
@@ -297,9 +247,6 @@ const defaultUsageStats: UsageStats = {
   byModel: {},
 };
 
-// storageFallback is imported from '../lib/storageFallback'
-
-// Version for storage migration
 const MODEL_STORE_VERSION = 3;
 
 function normalizePersistedCatalogModel(modelId: string | null | undefined): string | null {
@@ -353,13 +300,11 @@ export const useModelStore = create<ModelState>()(
         perTurnAdaptiveThinking: false,
         speedQualityMode: 'balanced' as SpeedQualityMode,
 
-        // Ollama-specific initial state
         ollamaModels: [],
         ollamaAvailable: false,
         ollamaLoading: false,
         ollamaError: null,
 
-        // Router suggestion initial state
         routerSuggestion: null,
 
         loading: false,
@@ -607,7 +552,6 @@ export const useModelStore = create<ModelState>()(
           }
         },
 
-        // Ollama-specific actions
         checkOllamaStatus: async () => {
           try {
             const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
@@ -636,7 +580,6 @@ export const useModelStore = create<ModelState>()(
             'model/fetchOllamaModels/start',
           );
           try {
-            // First check if Ollama is available
             const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
             const available = await ollamaCheckStatus(baseUrl);
             if (!available) {
@@ -686,7 +629,6 @@ export const useModelStore = create<ModelState>()(
           try {
             const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
             await ollamaPullModel(modelName, baseUrl);
-            // Refresh the model list after pulling
             await get().fetchOllamaModels();
           } catch (error) {
             console.error('Failed to pull Ollama model:', error);
@@ -708,7 +650,6 @@ export const useModelStore = create<ModelState>()(
           try {
             const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
             await ollamaDeleteModel(modelName, baseUrl);
-            // Refresh the model list after deletion
             await get().fetchOllamaModels();
           } catch (error) {
             console.error('Failed to delete Ollama model:', error);
@@ -721,7 +662,6 @@ export const useModelStore = create<ModelState>()(
           }
         },
 
-        // Router suggestion from the Rust LLM router
         getRouterSuggestion: async (context?: {
           taskType?: string;
           complexity?: string;
@@ -745,7 +685,6 @@ export const useModelStore = create<ModelState>()(
           }
         },
 
-        // Reset session cost accumulator
         resetSessionCost: async (): Promise<void> => {
           try {
             await invoke('reset_session_cost');
@@ -767,7 +706,6 @@ export const useModelStore = create<ModelState>()(
             toast.info('No thinking/reasoning variant available for this model');
             return;
           }
-          // Determine provider from the variant model metadata; fall back to current provider
           const variantMeta = getModelMetadata(variantId);
           const provider = variantMeta?.provider ?? get().selectedProvider ?? 'anthropic';
           void get().selectModel(variantId, provider);
@@ -816,12 +754,10 @@ export const useModelStore = create<ModelState>()(
               },
               availableModels: [],
               usageStats: null,
-              // Reset Ollama state
               ollamaModels: [],
               ollamaAvailable: false,
               ollamaLoading: false,
               ollamaError: null,
-              // Reset router suggestion
               routerSuggestion: null,
               speedQualityMode: 'balanced' as SpeedQualityMode,
               loading: false,
@@ -839,14 +775,6 @@ export const useModelStore = create<ModelState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        // The selection and `favorites` survive a restart; the composer
-        // settings below do not. The composer's thinking switch
-        // is owned by the shared unified-chat model store (`thinkingEnabled`,
-        // read by ThinkingControl and forwarded as `thinkingMode` in
-        // TauriRuntime); this store's `thinkingModeEnabled`/`thinkingBudget`
-        // pair and its `speedQualityMode` have no control and no reader, and
-        // `recentModels` has no picker to appear in. Persisting them promised
-        // remembered composer settings that nothing restores.
         partialize: (state) => ({
           selectedModel: state.selectedModel,
           selectedProvider: state.selectedProvider,
@@ -880,17 +808,6 @@ export const useModelStore = create<ModelState>()(
   ),
 );
 
-/**
- * Selectors for optimized subscriptions via subscribeWithSelector middleware.
- *
- * These selectors enable granular state subscriptions, preventing unnecessary re-renders
- * when only specific parts of the state change. While currently primarily used in tests,
- * they provide a foundation for performance optimization in complex components.
- *
- * Usage example:
- *   useModelStore.subscribe(selectSelectedModel, (model) => console.log('Model changed:', model));
- *   const model = useModelStore(selectSelectedModel);
- */
 export const selectSelectedModel = (state: ModelState) => state.selectedModel;
 export const selectSelectedProvider = (state: ModelState) => state.selectedProvider;
 export const selectFavorites = (state: ModelState) => state.favorites;
@@ -922,7 +839,6 @@ export const selectIsModelFavorite = (modelId: string) => (state: ModelState) =>
 export const selectProviderStatus = (provider: Provider) => (state: ModelState) =>
   state.providerStatuses[provider];
 
-// Ollama selectors
 export const selectOllamaModels = (state: ModelState) => state.ollamaModels;
 export const selectOllamaAvailable = (state: ModelState) => state.ollamaAvailable;
 export const selectOllamaLoading = (state: ModelState) => state.ollamaLoading;
@@ -931,12 +847,8 @@ export const selectOllamaError = (state: ModelState) => state.ollamaError;
 export const selectSpeedQualityMode = (state: ModelState) => state.speedQualityMode;
 export const selectIsAutoMode = (state: ModelState) => state.selectedModel === 'auto';
 
-// Router suggestion selectors
 export const selectRouterSuggestion = (state: ModelState) => state.routerSuggestion;
 
-/**
- * Helper function to format Ollama model size for display
- */
 export const formatOllamaModelSize = (sizeInBytes: number): string => {
   const gb = sizeInBytes / (1024 * 1024 * 1024);
   if (gb >= 1) {
@@ -946,9 +858,6 @@ export const formatOllamaModelSize = (sizeInBytes: number): string => {
   return `${mb.toFixed(0)} MB`;
 };
 
-/**
- * Helper function to get display name for Ollama model
- */
 export const getOllamaModelDisplayName = (model: OllamaModel): string => {
   const paramSize = model.details?.parameter_size;
   if (paramSize) {
@@ -957,11 +866,6 @@ export const getOllamaModelDisplayName = (model: OllamaModel): string => {
   return model.name;
 };
 
-/**
- * STR-009 fix: Wait for settings hydration before reading from settings store.
- * This prevents race conditions where modelStore might initialize with stale
- * defaults before settings have been loaded from localStorage.
- */
 export const initializeModelStoreFromSettings = async () => {
   const modelStore = useModelStore.getState();
 
@@ -970,7 +874,6 @@ export const initializeModelStoreFromSettings = async () => {
   }
 
   try {
-    // STR-009 fix: Wait for settings to hydrate before reading from store
     await waitForSettingsHydration();
 
     const settingsStore = useSettingsStore.getState();
@@ -983,14 +886,10 @@ export const initializeModelStoreFromSettings = async () => {
     })();
 
     const defaultProvider = settingsStore.llmConfig.defaultProvider;
-    // For subscription-only model, only managed_cloud and ollama are in defaultModels
-    // Fall back to 'auto' for any other provider (should not happen in practice)
     const defaultModels = settingsStore.llmConfig.defaultModels as Record<string, string>;
     const defaultModel = defaultModels[defaultProvider] ?? 'auto';
 
     if (defaultProvider && defaultModel) {
-      // If default is auto/managed_cloud, ensure we set the provider correctly in the store
-      // Auto is one self-routing selection; the server clamps each task to the plan's slots.
       if (defaultProvider === 'managed_cloud' || defaultModel === 'auto') {
         await modelStore.selectModel('auto', 'managed_cloud');
       } else if (
@@ -1008,31 +907,13 @@ export const initializeModelStoreFromSettings = async () => {
   }
 };
 
-/**
- * Return the single selectable Auto id.
- * The server chooses and tier-clamps its routing profile per task.
- */
 export const getBestAutoModeForTier = (tier: string): string => {
   return getBestAutoModeForSubscriptionTier(tier);
 };
 
-/**
- * Enforce tier-appropriate model selection when the user's plan changes.
- *
- * Behavior:
- * - Simple Mode always selects canonical Auto.
- * - Advanced Mode preserves an allowed manual selection.
- * - Persisted non-selectable Auto aliases and out-of-tier manual models fall
- *   back to canonical Auto.
- *
- * Every tier exposes the same Auto control; the managed resolver applies the
- * tier's reachable slots at request time.
- */
-// [C1 fix] Re-entrancy guard: prevents concurrent plan-change events from corrupting tier state
 let _isEnforcingTier = false;
 
 export const enforceModelTierRestriction = (planTier: string | null): void => {
-  // [C1 fix] Skip if already enforcing to prevent race conditions on rapid plan changes
   if (_isEnforcingTier) return;
   _isEnforcingTier = true;
 
@@ -1042,7 +923,6 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
   const normalizedTier = normalizeSubscriptionTier(planTier) as SubscriptionTier;
   const allowed = getAllowedAutoModesForTier(normalizedTier);
 
-  // Check if user is in Simple Mode before enforcing tier restrictions.
   Promise.resolve()
     .then(async () => {
       const isSimpleMode = useUIStore.getState().mode === 'simple';
@@ -1052,14 +932,11 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
         selectedProvider === 'ollama' || selectedMetadata?.provider === 'ollama';
 
       if (isSimpleMode) {
-        // Simple Mode always uses the one self-routing Auto selection.
         const bestAutoMode = getBestAutoModeForTier(normalizedTier);
         if (selectedModel !== bestAutoMode) {
-          // Await selectModel so the reentrancy guard holds until selection completes
           await selectModel(bestAutoMode, 'managed_cloud');
         }
       } else {
-        // Replace any non-selectable legacy Auto alias that survived in memory.
         if (isAutoSelection && selectedModel && !allowed.includes(selectedModel)) {
           await selectModel('auto', 'managed_cloud');
         } else if (
@@ -1074,20 +951,15 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
     })
     .catch(async (err) => {
       console.error('[ModelStore] enforceModelTierRestriction failed:', err);
-      // [C1 fix] Fail-safe: on error, fall back to the lowest tier model
       await selectModel('auto', 'managed_cloud');
     })
     .finally(() => {
-      // [C1 fix] Always release the lock so future plan changes are processed
       _isEnforcingTier = false;
     });
 };
 
-// [C3 fix] Module-level unsubscribe reference prevents listener accumulation on HMR reload
 let _unsubscribePlanChanges: () => void = () => {};
 
-// Subscribe to auth store plan changes to enforce tier restrictions
-// This runs when the user's plan tier is loaded/changed
 if (typeof window !== 'undefined') {
   _unsubscribePlanChanges?.();
   _unsubscribePlanChanges = useAccountStore.subscribe(
@@ -1102,19 +974,10 @@ if (typeof window !== 'undefined') {
   enforceModelTierRestriction(initialPlan);
 }
 
-// ---------------------------------------------------------------------------
-// Subscribe to app-mode changes to reload the model list. Account entitlement
-// is owned by the unified auth store above, never duplicated in appModeStore.
-// When switching to cloud mode: populate cloudModels with managed models.
-// When switching to local mode: clear cloudModels (BYOK list used instead).
-// Module-level ref prevents subscription accumulation on HMR reload.
-// ---------------------------------------------------------------------------
-
 let _unsubscribeAppMode: () => void = () => {};
 
 if (typeof window !== 'undefined') {
   _unsubscribeAppMode?.();
-  // Initial load
   const { mode } = useAppModeStore.getState();
   useModelStore.getState().loadModelsForMode(mode, useAccountStore.getState().plan ?? 'free');
 

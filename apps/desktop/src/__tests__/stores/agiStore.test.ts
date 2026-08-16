@@ -8,16 +8,8 @@ import type {
   FileChange,
 } from '../../stores/executionStore';
 
-/**
- * Tests for the real ExecutionStore (Zustand + immer).
- *
- * This store manages all AGI execution state: goals, steps, terminal logs,
- * browser actions, file changes, LLM streaming, and panel UI state.
- */
-
 describe('ExecutionStore (real Zustand store)', () => {
   beforeEach(() => {
-    // Reset the store to initial state before each test
     useExecutionStore.getState().reset();
   });
 
@@ -147,7 +139,6 @@ describe('ExecutionStore (real Zustand store)', () => {
 
       const state = useExecutionStore.getState();
       expect(state.steps).toHaveLength(200);
-      // Should keep the most recent entries
       expect(state.steps[199]!.id).toBe('step-209');
     });
   });
@@ -184,7 +175,7 @@ describe('ExecutionStore (real Zustand store)', () => {
     });
 
     it('should set terminal scroll lock', () => {
-      expect(useExecutionStore.getState().terminalScrollLock).toBe(true); // default
+      expect(useExecutionStore.getState().terminalScrollLock).toBe(true);
       useExecutionStore.getState().setTerminalScrollLock(false);
       expect(useExecutionStore.getState().terminalScrollLock).toBe(false);
     });
@@ -435,10 +426,8 @@ describe('ExecutionStore (real Zustand store)', () => {
       useExecutionStore.getState().cleanupGoalContexts();
 
       const state = useExecutionStore.getState();
-      // Goal should still be there
       expect(state.activeGoal).toBeDefined();
       expect(state.activeGoal!.id).toBe('goal-1');
-      // But execution data should be cleared
       expect(state.steps).toHaveLength(0);
       expect(state.terminalLogs).toHaveLength(0);
       expect(state.browserActions).toHaveLength(0);

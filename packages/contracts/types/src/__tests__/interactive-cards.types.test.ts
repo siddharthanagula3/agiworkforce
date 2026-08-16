@@ -37,8 +37,6 @@ describe('unrecognized cards cannot be read as if validated', () => {
     } satisfies InteractiveCard;
 
     // @ts-expect-error `body` is ABSENT from the unrecognized branch — not
-    // optional, not unknown, absent. A renderer that reaches for it does not
-    // compile, so an unvalidated payload can never reach a component.
     const leaked = card.body;
 
     expect(leaked).toBeUndefined();
@@ -55,8 +53,6 @@ describe('unresolved places carry no identity', () => {
 
   it('has no coordinates', () => {
     // @ts-expect-error An optional `lat?` would have been silently skipped by
-    // exactly the code that built a directions URL from display names. There is
-    // no field to skip.
     const lat = unresolved.lat;
 
     // @ts-expect-error Same for longitude.
@@ -68,7 +64,6 @@ describe('unresolved places carry no identity', () => {
 
   it('has no provider place id and no address', () => {
     // @ts-expect-error The opaque provider id only exists once a resolver
-    // returned one.
     const id = unresolved.providerPlaceId;
 
     // @ts-expect-error A resolver-authored address likewise.
@@ -105,7 +100,6 @@ describe('an unavailable route has nothing to open', () => {
 
   it('has no legs and no url', () => {
     // @ts-expect-error "Open route" is not disabled by a runtime `if` that
-    // someone can delete later — on this branch there is nothing to render.
     const legs = route.legs;
 
     // @ts-expect-error And no travel mode to label it with.
@@ -119,10 +113,6 @@ describe('an unavailable route has nothing to open', () => {
 
 describe('the model cannot author place identity', () => {
   it('compiles the identity guard', () => {
-    // If anyone adds placeId / lat / address / url / name back to the
-    // model-facing input, this constant stops compiling and CI fails. The
-    // regression becomes a build error rather than a wrong-city deep link found
-    // in a screenshot.
     expect(INTERACTIVE_CARD_IDENTITY_GUARD).toBe(true);
   });
 
@@ -141,11 +131,9 @@ describe('the model cannot author place identity', () => {
     stop.lat = 32.8;
 
     // @ts-expect-error No URL — the documented anti-pattern is letting the model
-    // return links in JSON content.
     stop.url = 'https://maps.example/anything';
 
     // @ts-expect-error No display name either: a model-authored name beside a
-    // resolver-authored address is two names with no rule for which wins.
     stop.displayName = 'South Park';
 
     expect(stop.placeQuery).toBe('South Park');

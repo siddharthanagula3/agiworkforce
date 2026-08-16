@@ -1,11 +1,3 @@
-/**
- * Autotag Batch API
- *
- * POST /api/autotag/batch - Get tags for multiple conversations
- *
- * Looks up existing tags from conversation_tags table.
- * Returns 'general' for any conversation without a stored tag.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -18,7 +10,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 async function handleBatchGetTags(request: NextRequest) {
-  // AUDIT-008-006: Enforce CSRF protection for cookie-auth POST endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -41,17 +32,14 @@ async function handleBatchGetTags(request: NextRequest) {
     throw createError.validation('conversationIds must be a non-empty array');
   }
 
-  // Cap at 100 to prevent abuse
   if (conversationIds.length > 100) {
     throw createError.validation('Maximum 100 conversation IDs per request');
   }
 
-  // Validate all IDs are strings
   if (!conversationIds.every((id) => typeof id === 'string' && id.length > 0)) {
     throw createError.validation('All conversationIds must be non-empty strings');
   }
 
-  // Fetch existing tags for this user's conversations
   let rows: { conversation_id: string; tag: string }[];
   try {
     rows = await db.query<{ conversation_id: string; tag: string }>(
@@ -71,7 +59,6 @@ async function handleBatchGetTags(request: NextRequest) {
     throw createError.internal('Failed to fetch tags');
   }
 
-  // Build result map, defaulting to 'general' for untagged conversations
   const tags: Record<string, string> = {};
   for (const id of conversationIds) {
     tags[id] = 'general';

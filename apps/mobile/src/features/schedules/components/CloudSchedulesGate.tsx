@@ -11,10 +11,6 @@ interface CloudSchedulesGateProps {
   onContinue: () => void;
 }
 
-/**
- * Honest trust-boundary screen for schedule deep links opened from Local Mode.
- * No schedule API request is made until the user explicitly activates Cloud.
- */
 export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedulesGateProps) {
   const colors = useThemeColors();
 

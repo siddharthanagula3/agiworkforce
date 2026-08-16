@@ -1,16 +1,3 @@
-/**
- * Settings Store
- *
- * Manages application settings including LLM configuration, window preferences,
- * chat preferences, and allowed directories.
- *
- * Updated to Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Persist middleware: Using createJSONStorage, partialize, version, migrate
- * - Better devtools integration with store name
- * - subscribeWithSelector for granular subscriptions
- */
 import { invoke, isTauriContext } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
 import { getTimeoutConfig, setTimeoutConfig, minutesToSeconds } from '../api/timeout';
@@ -37,7 +24,6 @@ import type { AgentMode, ChatPreferences } from './settings/chatPrefs';
 export type { AgentMode, ChatPreferences };
 // Absorbed sub-stores are re-exported from ./settings/ sub-directory.
 
-/** Base theme modes. Any other string value is treated as a named theme ID from the theme registry. */
 export type Theme = 'light' | 'dark' | 'system' | string;
 export type ChatFont = 'default' | 'sans' | 'mono' | 'dyslexic';
 export type Language =
@@ -59,19 +45,12 @@ export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'ima
 export type EmojiUsage = 'never' | 'sometimes' | 'often';
 
 export interface PersonalizationPreferences {
-  /** User's display name shown to the AI */
   name: string;
-  /** User's occupation or role */
   occupation: string;
-  /** Background info about the user */
   bio: string;
-  /** Response formality: 1 = very casual, 5 = very formal */
   formality: number;
-  /** Response warmth: 1 = very direct, 5 = very warm */
   warmth: number;
-  /** Response detail level: 1 = very concise, 5 = very detailed */
   detail: number;
-  /** How often the AI should use emoji */
   emojiUsage: EmojiUsage;
 }
 
@@ -97,11 +76,8 @@ interface LLMConfig {
   favoriteModels: string[];
   providerMode: 'auto' | 'local' | 'cloud';
   ollamaUrl: string;
-  /** Base URL for the local LM Studio server (OpenAI-compatible). Default: http://localhost:1234/v1 */
   lmstudioUrl: string;
-  /** Base URL for the local llama.cpp `llama-server` (OpenAI-compatible). Default: http://localhost:8080/v1 */
   llamacppUrl: string;
-  /** Base URL for the local vLLM server (OpenAI-compatible). Default: http://localhost:8000/v1 */
   vllmUrl: string;
 }
 
@@ -110,15 +86,10 @@ interface WindowPreferences {
   language: Language;
   startupPosition: 'center' | 'remember';
   dockOnStartup: 'left' | 'right' | null;
-  /** Named theme ID from the theme registry. When set, overrides `theme` for color values. */
   selectedTheme?: string;
-  /** When true, applies the OpenDyslexic font for improved readability. */
   dyslexicFont?: boolean;
-  /** Selected chat font family: default | sans | mono | dyslexic */
   chatFont?: ChatFont;
-  /** Persisted application scale, expressed as a root-font percentage. */
   uiScale?: 90 | 100 | 110;
-  /** User override for reduced motion, independent of the OS preference. */
   reduceMotion?: boolean;
 }
 
@@ -142,55 +113,33 @@ type NativeSettingsPayload = {
 
 // ChatPreferences and AgentMode are defined in ./settings/chatPrefs and re-exported above.
 
-/**
- * Policy applied when an approval request times out.
- * - 'auto-deny'    — automatically reject the tool call (safest, default)
- * - 'auto-approve' — automatically approve (use with caution)
- * - 'pause'        — pause the agent and wait for the user to return
- */
 export type ApprovalTimeoutPolicy = 'auto-deny' | 'auto-approve' | 'pause';
 
 export type TerminalSandboxPolicy = 'danger-full-access' | 'read-only' | 'workspace-write';
 export type TerminalSandboxBackend = 'none' | 'srt';
 
 export interface TerminalSandboxPreferences {
-  /** Whether terminal commands should be wrapped in an OS-level sandbox runtime */
   enabled: boolean;
-  /** Backend used to enforce sandboxing */
   backend: TerminalSandboxBackend;
-  /** Filesystem access preset */
   policy: TerminalSandboxPolicy;
-  /** Executable name or absolute path for the sandbox runtime */
   executable: string;
-  /** Domain allowlist passed to the sandbox runtime; empty blocks all network access */
   allowedDomains: string[];
 }
 
 export interface ExecutionPreferences {
-  /** Maximum task timeout in minutes (1-4320, default 1440=24hrs) */
   maxTimeoutMinutes: number;
-  /** Enable automatic checkpointing of task progress */
   enableCheckpointing: boolean;
-  /** Interval between checkpoints in steps (default 5) */
   checkpointInterval: number;
-  /** Enable task resumption after app restart */
   autoResumeOnRestart: boolean;
-  /** Show timeout warnings at 1hr, 30min, 5min remaining */
   enableTimeoutWarnings: boolean;
-  /** Seconds before a pending approval times out (default 300 = 5 minutes) */
   approvalTimeoutSeconds: number;
-  /** What to do when an approval request times out */
   approvalTimeoutPolicy: ApprovalTimeoutPolicy;
-  /** Duration (seconds) of inactivity on an active stream before triggering timeout recovery */
   streamInactivityTimeoutSeconds: number;
-  /** OS-level sandbox wrapper for terminal command execution */
   terminalSandbox: TerminalSandboxPreferences;
 }
 
 export interface GlobalHotkeyPreferences {
-  /** Whether the global hotkey is enabled */
   enabled: boolean;
-  /** The key combo string, e.g. "CommandOrControl+Shift+Space" */
   combo: string;
 }
 
@@ -223,11 +172,6 @@ interface SettingsState {
   personalization: PersonalizationPreferences;
   allowedDirectories: string[];
   customModels: CustomModelConfig[];
-  /**
-   * User-customized keybindings.
-   * Key = shortcut ID (from DEFAULT_SHORTCUTS), value = serialized combo ("meta+shift+m").
-   * Only overrides are stored — missing IDs fall back to DEFAULT_SHORTCUTS.
-   */
   customKeybindings: Record<string, string>;
   loading: boolean;
   error: string | null;
@@ -303,11 +247,9 @@ interface SettingsState {
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
 
-  // Feature capability toggles (key=capability name, value=enabled)
   features: Record<string, boolean>;
   setFeature: (key: string, enabled: boolean) => void;
 
-  // Hydration tracking for persist middleware
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
 }
@@ -507,8 +449,6 @@ async function applyLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Promis
     snapshot.chatPreferences.allowToolAssistedMemoryGeneration === true,
   );
   await invoke('update_allowed_directories', { paths: snapshot.allowedDirectories });
-  // The filesystem MCP command intentionally rejects an empty root list. The
-  // native ToolGuard still enforces an empty allowed-directory list as deny-all.
   if (snapshot.allowedDirectories.length > 0) {
     await McpClient.updateFilesystemDirectories(snapshot.allowedDirectories);
   }
@@ -554,35 +494,6 @@ async function restoreLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Prom
   return failures;
 }
 
-// storageFallback is imported from '../lib/storageFallback'
-
-// Version for storage migration
-// v2: Simplified for subscription-only model - removed hardcoded providers, only managed_cloud + ollama
-// v3: Added alwaysUseAgentMode setting
-// v4: Added executionPreferences for extended timeout support
-// v5: Added compactMode for simple status messages (like ChatGPT/Claude/Gemini)
-// v6: Added language preference
-// v7: Added language preference to windowPreferences
-// v8: Added autoApproveTools to chatPreferences
-// v9: Added globalHotkeyPreferences for system-wide Quick Query hotkey
-// v10: Added customModels for user-defined OpenAI-compatible endpoints
-// v11: Added features for capability toggles
-// v12: Added autoInjectSkills to chatPreferences
-// v13: Added agentMode to chatPreferences
-// v14: Added providerMode and ollamaUrl to llmConfig
-// v15: Added chatStorageMode to chatPreferences (local | cloud)
-// v16: Added customKeybindings for user-defined keyboard shortcuts
-// v17: Added selectedTheme to windowPreferences (named theme registry ID)
-// v18: Coding tools parity (no schema changes, version bump to invalidate stale caches)
-// v19: Added dyslexicFont accessibility toggle to windowPreferences
-// v20: Added approvalTimeoutSeconds, approvalTimeoutPolicy, streamInactivityTimeoutSeconds
-// v21: Added chatFont to windowPreferences for chat font selector tiles
-// v22: Added personalization preferences (name, occupation, bio, formality, warmth, detail, emojiUsage)
-// v23: Added terminalSandbox execution preferences
-// v24: Added lmstudioUrl/llamacppUrl to llmConfig (LM Studio/llama.cpp local runtimes)
-// v25: Added vllmUrl to llmConfig (vLLM local runtime)
-// v26: Normalized persisted model aliases to canonical catalog IDs
-// v27: Added the authoritative memory master and tool-assisted generation scope
 const SETTINGS_STORE_VERSION = 28;
 
 function normalizeKnownCatalogModelId(modelId: string | undefined): string | null {
@@ -618,16 +529,6 @@ export function isTaskRoutingModelAllowedForTier(
   return isModelAllowedForTier(modelId, normalizedTier);
 }
 
-/**
- * Bridge the persisted "Max Task Timeout" + "Timeout Warnings" execution
- * preferences into the LIVE global TimeoutConfig the task executor actually reads.
- * `settings_save` only stores ExecutionPreferences to disk (unread by the
- * executor); `timeout_set_config` updates the global TIMEOUT_CONFIG that governs
- * task timeouts (per-task overrides aside). Runs on both save (change-time) and
- * load (startup — the global config resets to its 72h default on each launch).
- * Checkpointing/auto-resume need the separate per-task TaskConfig path (tracked as
- * DESKTOP-SETTINGS-PERSISTED-BUT-UNREAD) and are deliberately left untouched here.
- */
 async function syncExecutionTimeoutToBackend(prefs: ExecutionPreferences): Promise<void> {
   const current = await getTimeoutConfig();
   await setTimeoutConfig({
@@ -685,7 +586,7 @@ export const useSettingsStore = create<SettingsState>()(
         },
 
         setMaxTimeoutMinutes: (minutes: number) => {
-          const clamped = Math.max(1, Math.min(4320, minutes)); // 1 min to 72 hours
+          const clamped = Math.max(1, Math.min(4320, minutes));
           set(
             (state) => ({
               executionPreferences: { ...state.executionPreferences, maxTimeoutMinutes: clamped },
@@ -740,7 +641,7 @@ export const useSettingsStore = create<SettingsState>()(
         },
 
         setApprovalTimeoutSeconds: (seconds: number) => {
-          const clamped = Math.max(30, Math.min(3600, seconds)); // 30s to 1 hour
+          const clamped = Math.max(30, Math.min(3600, seconds));
           set(
             (state) => ({
               executionPreferences: {
@@ -767,7 +668,7 @@ export const useSettingsStore = create<SettingsState>()(
         },
 
         setStreamInactivityTimeoutSeconds: (seconds: number) => {
-          const clamped = Math.max(10, Math.min(300, seconds)); // 10s to 5 minutes
+          const clamped = Math.max(10, Math.min(300, seconds));
           set(
             (state) => ({
               executionPreferences: {
@@ -1106,7 +1007,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setSelectedTheme',
           );
-          // Apply theme immediately so the entire app updates
           if (themeId) {
             const theme = getThemeById(themeId);
             if (theme) applyTheme(theme);
@@ -1123,7 +1023,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setDyslexicFont',
           );
-          // Apply/remove dyslexic font class immediately
           if (typeof document !== 'undefined') {
             if (enabled) {
               document.documentElement.classList.add('dyslexic-font');
@@ -1141,7 +1040,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setChatFont',
           );
-          // Apply chat font CSS variable immediately
           if (typeof document !== 'undefined') {
             const fontMap: Record<ChatFont, string> = {
               default: 'ui-sans-serif, system-ui, sans-serif',
@@ -1275,8 +1173,6 @@ export const useSettingsStore = create<SettingsState>()(
               chatPreferences: {
                 ...state.chatPreferences,
                 memoryEnabled: enabled,
-                // The former auto-save toggle had no mounted control. Keep it
-                // as a wire-compatible mirror of the new master policy.
                 autoSaveMemories: enabled,
               },
             }),
@@ -1304,9 +1200,6 @@ export const useSettingsStore = create<SettingsState>()(
 
         setAutoApproveTools: async (enabled: boolean) => {
           // Safety toggle: if the backend sync fails we must NOT leave the UI
-          // showing a value the backend never applied (auto-approving dangerous
-          // tools the user thinks are gated, or vice versa). Roll back on failure,
-          // mirroring setAgentMode.
           const previousAutoApprove = get().chatPreferences.autoApproveTools;
           set(
             (state) => ({
@@ -1343,9 +1236,7 @@ export const useSettingsStore = create<SettingsState>()(
               chatPreferences: {
                 ...state.chatPreferences,
                 agentMode: mode,
-                // autopilot skips all confirmations; plan mode forces read-only
                 autoApproveTools: mode === 'autopilot',
-                // plan mode implies "always use agent mode" so the LLM can explore
                 alwaysUseAgentMode:
                   mode === 'plan' ? true : state.chatPreferences.alwaysUseAgentMode,
               },
@@ -1358,7 +1249,6 @@ export const useSettingsStore = create<SettingsState>()(
             await invoke('set_auto_approve_all', { enabled: mode === 'autopilot' });
           } catch (error) {
             console.error('Failed to sync agent mode to backend:', error);
-            // Rollback frontend state to match backend
             set(
               (state) => ({
                 chatPreferences: {
@@ -1415,17 +1305,12 @@ export const useSettingsStore = create<SettingsState>()(
           set({ loading: true, error: null }, undefined, 'settings/loadSettings/start');
 
           try {
-            // Web development mode: Tauri commands are unavailable.
-            // Use persisted localStorage state + in-memory defaults and skip disk/native calls.
             if (!isTauriContext()) {
               set({ loading: false, error: null }, undefined, 'settings/loadSettings/webMode');
               get().setTheme(get().windowPreferences.theme);
               return;
             }
 
-            // Preserve the renderer-hydrated values for fields introduced into
-            // the native schema after launch. An older settings.json omits
-            // those fields; migration must not overwrite them with defaults.
             const hydratedCurrent = get();
             let settings: NativeSettingsPayload;
 
@@ -1448,7 +1333,6 @@ export const useSettingsStore = create<SettingsState>()(
               ...(settings.llmConfig ?? defaultSettings.llmConfig),
               defaultModels: {
                 ...defaultSettings.llmConfig.defaultModels,
-                // Only merge managed_cloud and ollama from persisted settings
                 managed_cloud:
                   settings.llmConfig?.defaultModels?.managed_cloud ??
                   defaultSettings.llmConfig.defaultModels.managed_cloud,
@@ -1460,7 +1344,6 @@ export const useSettingsStore = create<SettingsState>()(
                 ...defaultSettings.llmConfig.taskRouting,
                 ...(settings.llmConfig?.taskRouting ?? defaultSettings.llmConfig.taskRouting),
               },
-              // SET-005 fix: Preserve persisted favoriteModels instead of resetting to []
               favoriteModels: Array.isArray(settings.llmConfig?.favoriteModels)
                 ? settings.llmConfig.favoriteModels
                 : [],
@@ -1600,10 +1483,6 @@ export const useSettingsStore = create<SettingsState>()(
               ),
             };
 
-            // Restore every persisted local runtime independently. The helper
-            // attempts all four before reporting a failure, so an unavailable
-            // optional runtime cannot prevent another configured runtime from
-            // being restored.
             try {
               await configureLocalRuntimeProviders(mergedLLMConfig);
             } catch (error) {
@@ -1648,22 +1527,8 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to restore default provider:', error);
             }
 
-            // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03):
-            // `ToolConfirmationState` on the Rust side now persists
-            // agent_mode / auto_approve_all itself (settings_v2) and restores
-            // them on every launch, failing closed to Safe/false when
-            // nothing is persisted yet. The old code here unconditionally
-            // PUSHED this frontend store's own (often-default, or stale —
             // e.g. never updated by SafetyPolicies.tsx, which calls
-            // `set_agent_mode` directly and bypasses this store) value down
-            // to the backend on every load, silently clobbering whatever
-            // the backend had just correctly restored — reproducing the
             // exact "safety setting reverts on restart" regression even
-            // after the backend fix. The backend is now the source of
-            // truth on load: read it and hydrate this store instead of
-            // overwriting it. Only fall back to pushing the frontend value
-            // if the read itself fails, so the two layers don't disagree
-            // indefinitely.
             let resolvedAgentMode: AgentMode = mergedChatPreferences.agentMode ?? 'build';
             try {
               resolvedAgentMode = await invoke<AgentMode>('get_agent_mode');
@@ -1711,10 +1576,6 @@ export const useSettingsStore = create<SettingsState>()(
               );
             }
 
-            // Re-apply the persisted memory master switch to the process-local
-            // native injection policy after every launch. Missing legacy values
-            // are treated as disabled; chat_send_message independently checks
-            // the same persisted flag before both retrieval and generation.
             try {
               await configureMemoryInjection(
                 mergedChatPreferences.memoryEnabled === true,
@@ -1726,10 +1587,6 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to restore native memory policy:', error);
             }
 
-            // Keep backend capability enforcement in sync with loaded settings.
-            // Without this the backend falls back to its defaults, which means a
-            // capability the user turned off on disk runs enabled for the whole
-            // session — surface that rather than logging it and moving on.
             try {
               await invoke('sync_capabilities', {
                 capabilities:
@@ -1749,14 +1606,10 @@ export const useSettingsStore = create<SettingsState>()(
               );
             }
 
-            // FIX-003: Sync allowed directories to the backend security guard
-            // This ensures file operations respect user-configured allowed directories
             try {
               const dirs = settings.allowedDirectories ?? [];
               await invoke('update_allowed_directories', { paths: dirs });
 
-              // Also update MCP filesystem server to use the allowed directories.
-              // Empty directory lists are represented by ToolGuard only.
               if (dirs.length > 0) {
                 await McpClient.updateFilesystemDirectories(dirs);
               }
@@ -1764,8 +1617,6 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to sync allowed directories to backend:', error);
             }
 
-            // Push the loaded max-timeout / timeout-warning prefs into the live
-            // TimeoutConfig (resets to default on each launch, so sync on startup).
             try {
               await syncExecutionTimeoutToBackend(get().executionPreferences);
             } catch (error) {
@@ -1815,10 +1666,6 @@ export const useSettingsStore = create<SettingsState>()(
               customKeybindings,
             } = get();
 
-            // `settings_load` is a non-mutating read of the last native commit.
-            // Keep it as the rollback snapshot while all live policy owners are
-            // staged. Native settings_save is deliberately last: once it
-            // succeeds there are no remaining fallible stages.
             previousLiveSettings = resolveNativeLiveSettings(
               await invoke<NativeSettingsPayload>('settings_load'),
             );
@@ -1845,26 +1692,9 @@ export const useSettingsStore = create<SettingsState>()(
               },
             });
 
-            // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03):
-            // deliberately do NOT push `chatPreferences.agentMode` /
-            // `autoApproveTools` to the backend here. `ToolConfirmationState`
             // is the source of truth for these two safety-gating fields and
-            // is updated immediately by both write paths that can change
-            // them (`setAgentMode`/`setAutoApproveTools` in this store, and
             // SafetyPolicies.tsx's direct `set_agent_mode`/
-            // `set_auto_approve_all` invokes, which do NOT go through this
-            // store). Re-pushing `chatPreferences.agentMode` here re-opens
-            // the exact restart-clobber bug this fix closes: if this store's
-            // copy is stale (e.g. still 'build' because the user changed
             // mode via SafetyPolicies.tsx, which never touches this store),
-            // any call to `saveSettings()` elsewhere in the app would
-            // silently downgrade the user's explicit Safe/Plan choice back
-            // to 'build' and — now that the backend persists it — make that
-            // downgrade survive restarts too. `loadSettings()` reads the
-            // backend's persisted value as authoritative, so this store's
-            // `chatPreferences.agentMode`/`autoApproveTools` fields are a
-            // best-effort mirror for UI/export purposes only, not a write
-            // path for backend gating state.
 
             set({ loading: false }, undefined, 'settings/saveSettings/success');
           } catch (error) {
@@ -1895,7 +1725,6 @@ export const useSettingsStore = create<SettingsState>()(
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => {
-          // Fields that apply in both Tauri (desktop) and web environments.
           const base = {
             llmConfig: state.llmConfig,
             windowPreferences: {
@@ -1915,7 +1744,6 @@ export const useSettingsStore = create<SettingsState>()(
             customKeybindings: state.customKeybindings,
           };
 
-          // Fields that are only meaningful in the native desktop (Tauri) environment.
           if (isTauriContext()) {
             return {
               ...base,
@@ -1952,7 +1780,6 @@ export const useSettingsStore = create<SettingsState>()(
               ...currentState.llmConfig.taskRouting,
               ...(persisted?.llmConfig?.taskRouting ?? {}),
             },
-            // SET-005 fix: Preserve user's favoriteModels instead of resetting
             favoriteModels: Array.isArray(persisted?.llmConfig?.favoriteModels)
               ? persisted.llmConfig.favoriteModels
               : currentState.llmConfig.favoriteModels,
@@ -2031,9 +1858,7 @@ export const useSettingsStore = create<SettingsState>()(
             executionPreferences?: Partial<ExecutionPreferences>;
           };
 
-          // Migration from v1 to v2: Simplified subscription-only model
           if (version < 2) {
-            // Reset to subscription defaults
             if (state?.llmConfig) {
               state.llmConfig.defaultProvider = 'managed_cloud';
               state.llmConfig.defaultModels = {
@@ -2041,7 +1866,6 @@ export const useSettingsStore = create<SettingsState>()(
                 managed_cloud: state.llmConfig?.defaultModels?.managed_cloud ?? 'auto',
               };
               state.llmConfig.favoriteModels = [];
-              // Update taskRouting to use managed_cloud with 'auto'
               if (state.llmConfig.taskRouting) {
                 for (const key of Object.keys(state.llmConfig.taskRouting)) {
                   state.llmConfig.taskRouting[key] = { provider: 'managed_cloud', model: 'auto' };
@@ -2050,7 +1874,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v2 to v3: Add alwaysUseAgentMode setting
           if (version < 3) {
             if (!state.chatPreferences) {
               state.chatPreferences = {
@@ -2066,7 +1889,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v3 to v4: Add executionPreferences for extended timeout support
           if (version < 4) {
             if (!state.executionPreferences) {
               state.executionPreferences = {
@@ -2083,14 +1905,12 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v4 to v5: Add compactMode to chatPreferences
           if (version < 5) {
             if (state.chatPreferences && state.chatPreferences.compactMode === undefined) {
-              state.chatPreferences.compactMode = true; // Enable compact mode by default
+              state.chatPreferences.compactMode = true;
             }
           }
 
-          // Migration from v5 to v6: Cleanup - remove unused provider fields
           if (version < 6) {
             if (state?.llmConfig?.defaultModels) {
               state.llmConfig.defaultModels = {
@@ -2100,7 +1920,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v6 to v7: Add language preference
           if (version < 7) {
             if (!state.windowPreferences) {
               state.windowPreferences = {} as WindowPreferences;
@@ -2110,14 +1929,12 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v7 to v8: Add autoApproveTools setting
           if (version < 8) {
             if (state.chatPreferences && state.chatPreferences.autoApproveTools === undefined) {
               state.chatPreferences.autoApproveTools = false;
             }
           }
 
-          // Migration from v8 to v9: Add globalHotkeyPreferences
           if (version < 9) {
             const stateWithHotkey = state as Partial<SettingsState> & {
               globalHotkeyPreferences?: Partial<GlobalHotkeyPreferences>;
@@ -2130,7 +1947,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v9 to v10: Add customModels array
           if (version < 10) {
             const stateWithCustomModels = state as Partial<SettingsState>;
             if (!Array.isArray(stateWithCustomModels.customModels)) {
@@ -2138,21 +1954,18 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v10 to v11: Add features capability toggles
           if (version < 11) {
             if (!state.features || typeof state.features !== 'object') {
               (state as Partial<SettingsState>).features = {};
             }
           }
 
-          // Migration from v11 to v12: Add autoInjectSkills to chatPreferences
           if (version < 12) {
             if (state.chatPreferences && state.chatPreferences.autoInjectSkills === undefined) {
               state.chatPreferences.autoInjectSkills = true;
             }
           }
 
-          // Migration from v12 to v13: Add agentMode derived from autoApproveTools
           if (version < 13) {
             if (state.chatPreferences && state.chatPreferences.agentMode === undefined) {
               state.chatPreferences.agentMode = state.chatPreferences.autoApproveTools
@@ -2161,7 +1974,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v13 to v14: Add providerMode and ollamaUrl to llmConfig
           if (version < 14) {
             if (state.llmConfig) {
               const llmConfig = state.llmConfig as Partial<LLMConfig>;
@@ -2174,7 +1986,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v14 to v15: Add chatStorageMode to chatPreferences
           if (version < 15) {
             if (state.chatPreferences) {
               const cp = state.chatPreferences as Partial<ChatPreferences>;
@@ -2184,7 +1995,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v15 to v16: Add customKeybindings map
           if (version < 16) {
             const stateWithKeys = state as Partial<SettingsState>;
             if (
@@ -2195,11 +2005,9 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v16 to v17: Add selectedTheme to windowPreferences
           if (version < 17) {
             const stateWithTheme = state as Partial<SettingsState>;
             if (stateWithTheme.windowPreferences) {
-              // selectedTheme is undefined by default (no named theme selected)
               if (stateWithTheme.windowPreferences.selectedTheme === undefined) {
                 stateWithTheme.windowPreferences = {
                   ...stateWithTheme.windowPreferences,
@@ -2209,12 +2017,10 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v17 to v18: Coding tools parity — no schema changes needed
           if (version < 18) {
             // No-op: version bump only to signal coding tools parity release
           }
 
-          // Migration from v18 to v19: Add dyslexicFont to windowPreferences
           if (version < 19) {
             if (state.windowPreferences && state.windowPreferences.dyslexicFont === undefined) {
               state.windowPreferences = {
@@ -2224,7 +2030,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v19 to v20: Add approval timeout + stream inactivity settings
           if (version < 20) {
             if (state.executionPreferences) {
               const ep = state.executionPreferences as Partial<ExecutionPreferences>;
@@ -2240,7 +2045,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v20 to v21: Add chatFont to windowPreferences
           if (version < 21) {
             if (state.windowPreferences && state.windowPreferences.chatFont === undefined) {
               state.windowPreferences = {
@@ -2250,7 +2054,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v21 to v22: Add personalization preferences
           if (version < 22) {
             const stateWithPersonalization = state as Partial<SettingsState>;
             if (!stateWithPersonalization.personalization) {
@@ -2258,7 +2061,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v22 to v23: Add terminal sandbox preferences
           if (version < 23 && state.executionPreferences) {
             const ep = state.executionPreferences as Partial<ExecutionPreferences>;
             ep.terminalSandbox = {
@@ -2270,7 +2072,6 @@ export const useSettingsStore = create<SettingsState>()(
             };
           }
 
-          // Migration from v23 to v24: Add lmstudioUrl/llamacppUrl to llmConfig
           if (version < 24 && state.llmConfig) {
             const llmConfig = state.llmConfig as Partial<LLMConfig>;
             if (llmConfig.lmstudioUrl === undefined) {
@@ -2281,7 +2082,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v24 to v25: Add vllmUrl to llmConfig
           if (version < 25 && state.llmConfig) {
             const llmConfig = state.llmConfig as Partial<LLMConfig>;
             if (llmConfig.vllmUrl === undefined) {
@@ -2289,8 +2089,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v25 to v26: purge selections that refer to models
-          // removed by latest-family-only catalog updates.
           if (version < 26 && state.llmConfig) {
             const llmConfig = state.llmConfig as Partial<LLMConfig>;
             if (llmConfig.defaultModels) {
@@ -2313,9 +2111,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
           }
 
-          // Migration from v26 to v27: replace the unmounted auto-save toggle
-          // with one explicit master policy. Preserve the old opt-in when it
-          // exists; otherwise fail closed instead of silently enabling memory.
           if (version < 27 && state.chatPreferences) {
             const cp = state.chatPreferences as Partial<ChatPreferences>;
             cp.memoryEnabled = cp.autoSaveMemories === true;
@@ -2339,11 +2134,9 @@ export const useSettingsStore = create<SettingsState>()(
 
           return state as SettingsState;
         },
-        // Called when rehydration finishes (with or without errors)
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
-            // Sync capability toggles to backend on startup
             if (isTauriContext() && state.features && Object.keys(state.features).length > 0) {
               invoke('sync_capabilities', { capabilities: state.features }).catch(
                 (err: unknown) => {
@@ -2374,12 +2167,6 @@ export const enforceTaskRoutingTierRestriction = (planTier: string | null): void
   });
 };
 
-/**
- * Keep persisted task routing within the authenticated account's effective
- * tier. This must be installed by the main Desktop window only: auxiliary
- * webviews have independent auth memory and would otherwise rewrite shared
- * settings as Free as soon as they import this module.
- */
 export function initializeTaskRoutingTierRestriction(): () => void {
   const applyValidatedPlan = (plan: string | null) => {
     if (plan) {
@@ -2394,10 +2181,6 @@ export function initializeTaskRoutingTierRestriction(): () => void {
   return useUnifiedAuthStore.subscribe(selectValidatedPlan, applyValidatedPlan);
 }
 
-/**
- * Wait for settings store to finish hydrating from localStorage.
- * Use this before accessing settings that depend on persisted values.
- */
 export function waitForSettingsHydration(): Promise<void> {
   return new Promise((resolve) => {
     const state = useSettingsStore.getState();
@@ -2414,7 +2197,6 @@ export function waitForSettingsHydration(): Promise<void> {
   });
 }
 
-// Selectors
 export const selectLlmConfig = (state: SettingsState) => state.llmConfig;
 export const selectDefaultProvider = (state: SettingsState) => state.llmConfig.defaultProvider;
 export const selectTemperature = (state: SettingsState) => state.llmConfig.temperature;
@@ -2473,11 +2255,6 @@ export const selectSettingsHasHydrated = (state: SettingsState) => state._hasHyd
 
 export const selectPersonalization = (state: SettingsState) =>
   state.personalization ?? defaultPersonalization;
-
-// ============================================================================
-// Absorbed stores — now in settings/ sub-directory (Phase B split)
-// All original export names preserved for backwards compat.
-// ============================================================================
 
 export type { SettingsTab } from './settings/dialog';
 export { LEGACY_TAB_MAP, useSettingsDialogStore } from './settings/dialog';

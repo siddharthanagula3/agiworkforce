@@ -39,26 +39,9 @@ export interface AgentActivityTimelineProps {
   onCancel?: (toolCallId: string) => void;
   onResend?: (toolCallId: string) => void;
   isApprovalExpired?: (toolCallId: string) => boolean;
-  /**
-   * Re-runs the whole exchange from the user's last message. Wired to the
-   * inline Connect card's Retry button (lazy authentication): nothing resumes a
-   * turn after the connector OAuth callback returns, so re-running it is the
-   * only real way to make the connector tool call happen again. Omit it and no
-   * Retry button is rendered — never a dead one.
-   */
   onRetryTurn?: () => void;
 }
 
-/**
- * Whether the canonical activity projection already owns tool-call rendering.
- *
- * A durable run can legitimately carry a terminal activity envelope with no
- * tool entries while the portable/legacy projection still contains real tool
- * activity (for example, provider-native web grounding). Treating the mere
- * presence of the envelope as authoritative hides that work completely. Both
- * the shared bubble and the Web bubble use this predicate so the fallback is
- * suppressed only when the canonical spine can actually render a tool.
- */
 export function hasCanonicalToolActivity(
   activity: Pick<AgentActivityState, 'entries'> | undefined,
 ): boolean {
@@ -79,8 +62,6 @@ function latestActiveSummary(activity: AgentActivityState): string | undefined {
   return undefined;
 }
 
-/** The most recent entry's semantic phrase — the closest match to Claude's collapsed
- * "what the agent did" header from per-step data. */
 function finalSummary(activity: AgentActivityState): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
@@ -89,12 +70,6 @@ function finalSummary(activity: AgentActivityState): string | undefined {
   return undefined;
 }
 
-/**
- * Collapsed-header text. Claude-style: a natural-language phrase describing the work —
- * NEVER an elapsed-time or tool-count pill (the founder directive explicitly rejects the
- * ChatGPT "Worked for Xm" pattern). Built entirely from the per-step semantic summaries
- * we already carry, so no elapsed clock or model-emitted title is needed.
- */
 export function buildAgentActivitySummary(activity: AgentActivityState): string {
   const active = latestActiveSummary(activity);
   if (activity.status === 'awaiting-approval') {
@@ -136,18 +111,6 @@ function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
   }
 }
 
-/**
- * The connector's own initial for the badge (Claude parity — "F" for Filesystem,
- * "G" for GitHub) instead of the generic "M". Derived from the serverId in an
- * MCP tool name (`mcp__<serverId>__<tool>`); undefined for non-connector tools.
- *
- * A user's custom remote connector uses an opaque `custom-<hex>` serverId that
- * carries no human name, so its leading letter would mislabel every custom
- * connector as "C". Those fall back to the generic connector badge; only named
- * servers (github, filesystem, notion, …) yield a truthful initial. Showing the
- * real custom-connector initial needs the display name emitted on the event —
- * tracked in known-flaws.md as CONNECTOR-BADGE-CUSTOM-NAME.
- */
 function connectorInitial(name: string): string | undefined {
   if (!/^mcp__/i.test(name)) return undefined;
   const serverId = name.slice('mcp__'.length).split('__')[0];
@@ -199,16 +162,6 @@ function asResult(value: unknown): string | undefined {
   }
 }
 
-/**
- * Lazy authentication: a connector tool call the server answered with a
- * verified "connect required" envelope, or null for every other tool entry.
- *
- * `entry.name` is the qualified tool name and `entry.output` is the tool result
- * verbatim (`tool-execution-end` carries `name: tc.qualifiedName` and
- * `output: toAgentEventJson(content)` — a string stays a string). Those are the
- * two inputs the trusted-path check needs; see `readConnectorConnectRequest`
- * for why an arbitrary tool result cannot forge one of these.
- */
 function connectRequestFor(entry: AgentActivityToolEntry): ConnectorConnectRequest | null {
   return readConnectorConnectRequest({
     qualifiedToolName: entry.name,
@@ -235,7 +188,6 @@ function sourceDomain(url: string): string {
   }
 }
 
-/** Favicon for a source row: real favicon (Google service) with a Globe2 fallback. */
 function SourceFavicon({ url }: { url: string }) {
   const [errored, setErrored] = useState(false);
   let domain = '';
@@ -262,7 +214,6 @@ function SourceFavicon({ url }: { url: string }) {
   );
 }
 
-/** How many source rows to show before collapsing the rest behind "+N more". */
 const MAX_VISIBLE_SOURCES = 5;
 
 function SourceLinks({
@@ -470,10 +421,6 @@ export function AgentActivityTimeline({
   onRetryTurn,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  // While the run is active (running / awaiting approval) the timeline auto-opens
-  // so the user watches the steps stream live (Claude/ChatGPT behaviour), then
-  // collapses to the summary pill when the run finishes. `userForcedClosed` lets
-  // the user override the auto-open during a run; it resets when the run ends.
   const [userForcedClosed, setUserForcedClosed] = useState(false);
   const [entryVisibility, setEntryVisibility] = useState(() => ({
     turnId: activity.turnId,
@@ -486,13 +433,6 @@ export function AgentActivityTimeline({
     activity.entries.length === 1 &&
     activity.entries[0]?.kind === 'progress' &&
     activity.entries[0].progressId === 'local-starting';
-  // Effective open state: auto-open while active (unless the user closed it),
-  // else follow the manual `expanded` toggle. The local pre-provider status
-  // stays compact because its only detail row repeats the same summary; real
-  // provider/tool events replace it and regain live auto-expansion.
-  // A pending connector authorization is a blocking prompt: the run itself has
-  // finished, so the collapse-on-finish behaviour below would hide the only
-  // control that unblocks the conversation behind the summary pill.
   const hasConnectRequest = useMemo(
     () => activity.entries.some((e) => e.kind === 'tool' && connectRequestFor(e) !== null),
     [activity.entries],
@@ -501,8 +441,6 @@ export function AgentActivityTimeline({
     ? false
     : (isActive && !isLocalStartingActivity) || hasConnectRequest || expanded;
 
-  // When a run finishes, clear the manual-close and collapse to the summary so
-  // the next run auto-opens and the completed trace reads as a single pill.
   const prevActive = useRef(isActive);
   useEffect(() => {
     if (prevActive.current && !isActive) {
@@ -514,7 +452,6 @@ export function AgentActivityTimeline({
 
   const handleToggle = () => {
     if (isOpen) {
-      // Closing: during an active run, remember the manual close.
       if (isActive) setUserForcedClosed(true);
       else setExpanded(false);
     } else {
@@ -574,11 +511,6 @@ export function AgentActivityTimeline({
           {visibleEntries.map((entry) => {
             if (entry.kind === 'progress') return <ProgressRow key={entry.id} entry={entry} />;
             if (entry.kind === 'tool') {
-              // Lazy authentication: the "connect required" envelope is machine
-              // JSON written for the model. When it verifies, the inline Connect
-              // card replaces it — showing the raw payload in the card's
-              // Result/Error box as well would show the user the same thing
-              // twice, once unreadably.
               const connectRequest = connectRequestFor(entry);
               return (
                 <div key={entry.id} className="relative py-1 pl-7">

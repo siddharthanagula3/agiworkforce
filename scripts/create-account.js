@@ -21,7 +21,6 @@ const { chromium } = require('playwright');
 
     await page.waitForTimeout(2000);
 
-    // Click "Create account" link
     console.log('\n2. Looking for signup option...');
     const createAccountLink = await page.$('text=/Create account|Sign up/i');
     if (createAccountLink) {
@@ -32,7 +31,6 @@ const { chromium } = require('playwright');
       console.log('   ? Create account link not found, looking for signup form');
     }
 
-    // Fill in signup form
     console.log('\n3. Filling signup form...');
     const emailInput = await page.$('input[type="email"]');
     if (emailInput) {
@@ -46,7 +44,6 @@ const { chromium } = require('playwright');
       console.log('   ✓ Password set (16 characters)');
     }
 
-    // Look for signup button
     console.log('\n4. Submitting signup form...');
     const signUpBtn =
       (await page.$('button:has-text("Sign up")')) ||
@@ -57,7 +54,6 @@ const { chromium } = require('playwright');
       await signUpBtn.click();
       console.log('   ✓ Signup button clicked');
 
-      // Wait for account creation
       await page.waitForTimeout(5000);
 
       console.log('\n5. Checking signup result...');

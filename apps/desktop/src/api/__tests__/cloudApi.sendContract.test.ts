@@ -2,18 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { CloudApiError, sendCloudMessage } from '../cloudApi';
 
-/**
- * Desktop Cloud send-body contract.
- *
- * The accepted field names are pinned against
- * `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`:
- *   - `assistant_message_id: z.string().uuid().optional()` (DES-C24) — without
- *     it the route takes the `assistant_turn_not_server_persisted` skip branch
- *     and a crash after generation loses the already-billed turn.
- *   - `client_timezone` (DES-C25) — absent, `buildCapabilityPreamble` drops the
- *     local-calendar-date clause and the model answers date questions in the
- *     server's day.
- */
 const IDEMPOTENCY_KEY = 'agi.chat.desktop.send.0190a000-0000-7000-8000-0000000000aa';
 const ASSISTANT_MESSAGE_ID = '0199c1f2-0000-7000-8000-0000000000ab';
 const FIXTURE_MODEL_ID = 'fixture-cloud-contract-model';
@@ -73,7 +61,6 @@ describe('sendCloudMessage — outbound body contract', () => {
     expect(body['assistant_message_id']).toBe(ASSISTANT_MESSAGE_ID);
     const zone = body['client_timezone'];
     expect(typeof zone).toBe('string');
-    // The route validates with `isValidIanaTimeZone` and caps at 64 chars.
     expect(String(zone).length).toBeLessThanOrEqual(64);
     expect(() => new Intl.DateTimeFormat(undefined, { timeZone: String(zone) })).not.toThrow();
   });

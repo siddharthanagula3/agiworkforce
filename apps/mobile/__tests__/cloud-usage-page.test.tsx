@@ -1,12 +1,3 @@
-/**
- * Cloud Usage settings screen — PERCENTAGE-ONLY contract.
- *
- * The screen consumes the canonical `/api/usage` percentage summary
- * (ManagedUsageSummaryResponse via services/usage.ts). It must never render an
- * exact dollar figure or a private cents allowance, and it must never divide by
- * an absent cap into `$NaN`. Rolling session/weekly bars are driven directly by
- * server percentages and hidden when their window is inactive (null reset).
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
@@ -102,7 +93,6 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
-/** A valid percentage-only snapshot (camelCase projection of /api/usage). */
 function snap(overrides: Record<string, unknown> = {}) {
   return {
     planTier: 'pro',
@@ -152,7 +142,6 @@ describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint'
       expect(getByText('25% used')).toBeTruthy();
     });
     expect(getByText('Pro plan')).toBeTruthy();
-    // No exact dollar/cents allowance may appear anywhere on the screen.
     expect(queryByText(/\$\d/)).toBeNull();
   });
 

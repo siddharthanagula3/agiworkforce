@@ -60,18 +60,15 @@ export class RateLimiter {
 
     const rateState = this.state.get(key)!;
 
-    // Reset counter if minute has passed
     if (now > rateState.resetTime) {
       rateState.count = 0;
       rateState.resetTime = now + 60000;
     }
 
-    // Check if over limit
     if (rateState.count >= this.maxRequestsPerMinute) {
       return true;
     }
 
-    // Check screenshot cooldown
     if (messageType === 'CAPTURE_SCREENSHOT') {
       if (now - rateState.lastScreenshot < this.screenshotCooldownMs) {
         return true;
@@ -152,7 +149,6 @@ export const domUtils = {
 
       element.dispatchEvent(mouseEvent);
 
-      // Also call click() for fallback
       if ('click' in element && typeof element.click === 'function') {
         (element as HTMLElement).click();
       }
@@ -221,7 +217,6 @@ export const formUtils = {
       if (field instanceof HTMLInputElement) {
         field.value = value;
 
-        // Trigger change event
         field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
         field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
 
@@ -246,16 +241,11 @@ export const formUtils = {
 
   submitForm(form: HTMLFormElement | null = null): boolean {
     try {
-      // L-02 audit 2026-05-19: use requestSubmit() so framework-level
-      // onSubmit handlers (CSRF-token injection, validation hooks) fire.
-      // Bare `form.submit()` bypasses them entirely.
       const target = form ?? this.getForms()[0] ?? null;
       if (target) {
         if (typeof target.requestSubmit === 'function') {
           target.requestSubmit();
         } else {
-          // Very old browsers — fall back to submit(). MV3 min Chrome 132
-          // supports requestSubmit, so this should never trigger in prod.
           target.submit();
         }
       }
@@ -326,24 +316,10 @@ export const validators = {
   },
 
   isValidSelector(selector: string): boolean {
-    // SECURITY (M-11 audit 2026-05-19): validate selector SYNTAX only, never
-    // execute it. The previous implementation called `document.querySelector`
-    // just to check parseability — but querySelector runs the selector
-    // against the entire DOM, which a malicious page or LLM-supplied selector
-    // can use as a DoS vector (e.g. `* * * * * * * *` on a deep tree).
-    //
-    // We do a conservative character-class check and a length cap. The cost
-    // is a few legitimate edge-case selectors (e.g. exotic attribute
-    // selectors with rare characters), traded for bounded validation cost.
     if (typeof selector !== 'string' || selector.length === 0 || selector.length > 2048) {
       return false;
     }
-    // Disallow expression-injection metacharacters that should never appear
-    // in a CSS selector but show up in eval-shaped strings.
     if (/[;{}`]/.test(selector)) return false;
-    // Accept characters that legitimately appear in CSS selectors. This is
-    // intentionally narrower than the full CSS grammar — false-rejects are
-    // preferable to false-accepts here.
     return /^[\w\-#.[\]"'=:()*\s>+~\\,^$|@]+$/.test(selector);
   },
 
@@ -354,15 +330,6 @@ export const validators = {
   },
 };
 
-/**
- * Label for the composer's page-context chip.
- *
- * Only http(s) pages have a hostname worth showing. `new URL()` on a
- * browser-internal URL still yields a `hostname`, but it is the raw
- * chrome-extension id (a 32-character string) or an internal page name, and
- * that was rendering verbatim in the chip. Those are also precisely the URLs
- * `isRestrictedUrl()` blocks, so there is no page context to attach either way.
- */
 export function pageChipLabel(url: string): string {
   if (!url) return '';
   try {

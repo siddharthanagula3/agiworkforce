@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-// AUDIT-FIX: vscode-reorg
 import { SidebarProvider } from '../features/sidebar-webview/sidebarProvider';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
@@ -134,26 +133,12 @@ function buildSidebarReferenceDraft(target: vscode.Uri): {
   };
 }
 
-/**
- * Explain a diff shortcut that resolved nothing.
- *
- * `agi-workforce.hasDiff` only proves a diff exists *somewhere*, so the chord
- * can fire while the focused editor has none. Saying so beats the previous
- * behaviour, where the keypress did nothing and reported nothing.
- */
 function warnNoDiffUnderCursor(verb: 'accept' | 'dismiss'): void {
   vscode.window.showWarningMessage(
     `AGI Workforce: no suggestion to ${verb} in the active editor. Open the file that has the pending change, or use Accept/Reject All.`,
   );
 }
 
-/**
- * Output channel for git/test commands invoked via execFile.
- * PR-3B (F-12, F-19): replaces `terminal.sendText` for hardcoded commands
- * so shell metacharacters in dynamic args (e.g. commit messages) cannot
- * cross into the shell. Output lands in a dedicated channel rather than
- * the integrated terminal.
- */
 let _agiGitOutputChannel: vscode.OutputChannel | undefined;
 function getAgiGitOutputChannel(): vscode.OutputChannel {
   if (_agiGitOutputChannel === undefined) {
@@ -213,14 +198,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     nativeChatAvailable,
   } = deps;
 
-  // Per-command registration guard. All commands below are elements of big
-  // array literals pushed to `context.subscriptions` — array literals evaluate
-  // left-to-right, so ONE synchronous `registerCommand` throw (e.g. a duplicate
-  // command id) would silently abort every later registration in the same
-  // literal. Registering through this helper isolates each failure: the error
-  // is recorded in subsystem health (status-bar warning + detail quick-pick),
-  // logged, and surfaced once via an error toast after setup — never swallowed
-  // silently, and never able to take down the remaining commands.
   type CommandHandler = Parameters<typeof vscode.commands.registerCommand>[1];
   const failedCommandIds: string[] = [];
   const register = (id: string, handler: CommandHandler): vscode.Disposable => {
@@ -287,7 +264,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    // ── context panel commands ──────────────────────────────────────────────────
     register('agi-workforce.addToContext', async (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (target === undefined) {
@@ -341,14 +317,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    // ── diff commands ───────────────────────────────────────────────────────────
-    //
-    // `acceptDiff`/`rejectDiff` are reachable two ways: the CodeLens passes the
-    // session id it rendered, and `contributes.keybindings` binds them with no
-    // arguments at all. The argument-free path used to look up `undefined` in
-    // the session map — Ctrl/Cmd+Shift+Enter and Escape over a diff were silent
-    // no-ops with no toast and no log. Resolve the diff under the cursor
-    // instead, exactly as the CodeLens-free shortcuts do.
     register('agi-workforce.acceptDiff', async (sessionId?: string) => {
       if (typeof sessionId === 'string' && sessionId !== '') {
         await diffDecorationProvider.acceptDiff(sessionId);
@@ -363,8 +331,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         diffDecorationProvider.rejectDiff(sessionId);
         return;
       }
-      // Escape is bound to this command. It is a global dismissal key, so a
-      // press with no diff under the cursor must stay silent rather than nag.
       diffDecorationProvider.rejectCurrentDiff();
     }),
     register('agi-workforce.acceptAllDiffs', async (uri: vscode.Uri) => {
@@ -408,7 +374,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       getPatchOutputChannel().show(true);
     }),
 
-    // ── inline command shortcuts ────────────────────────────────────────────────
     register('agi-workforce.chat', async () => {
       if (!nativeChatAvailable) {
         await revealFirstPartyChat();
@@ -506,16 +471,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    // ── API key / auth commands ─────────────────────────────────────────────────
     register('agi-workforce.signIn', async () => {
-      // Secretless device sign-in. Opens the browser connect page, then polls
-      // for the approved token through the shared device-auth service used by
-      // the CLI. Sign-in unlocks Managed Cloud developer sessions and
-      // cloud-backed extras such as inline completions and Account & Usage.
-      // Local models and provider BYOK keep running through the AGI CLI
-      // without it; provider keys remain owned by that same `agi` app-server
-      // (`agi login <provider>`). This surface is not cloud-only — see
-      // utils/api.ts getCloudCredential.
       const ok = await signInToAgiCloud(context.secrets);
       if (ok) {
         await refreshAccountTierCache(context);
@@ -573,13 +529,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    // ── model selection ─────────────────────────────────────────────────────────
     register('agi-workforce.selectModel', async () => {
       const currentModel = normalizeConfiguredModelId(Config.model());
 
-      // VSCODE-PICKER-TIER-01: gate the roster on the resolved tier so a
-      // signed-out / Local-mode user does not see managed-cloud models
-      // presented as selectable.
       const pickerTier = await resolveTier(context);
       const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems(pickerTier).map(
         (item: GroupedQuickPickItem) => ({
@@ -630,7 +582,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       vscode.window.showInformationMessage(`AGI Workforce model set to: ${picked.modelId}`);
     }),
 
-    // ── conversation commands ───────────────────────────────────────────────────
     register('agi-workforce.openConversation', async (idOrItem: string | ConversationTreeItem) => {
       const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.thread.id;
       await revealFirstPartyChat();
@@ -693,7 +644,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    // ── feedback ────────────────────────────────────────────────────────────────
     register('agi-workforce.sendFeedback', async () => {
       const FEEDBACK_TYPES: vscode.QuickPickItem[] = [
         {
@@ -743,16 +693,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    // ── git commands ────────────────────────────────────────────────────────────
-    // PR-3B (F-12, F-19): replace `terminal.sendText` with `execFile('git', [...])`
-    // so the user's shell config (aliases, profile, RC-file sourcing) cannot
-    // affect the literal command we intend to run, and so shell metacharacters
-    // in dynamic args (commit messages) are passed as a single argv entry —
-    // never interpreted by a shell.
     register('agi.git.status', async () => {
-      // EXTV-GIT-READ: `git status`/`git diff` execute repo-controlled code in
-      // an untrusted workspace (`core.fsmonitor`, `.gitattributes` textconv /
-      // `diff.external`). Gate them exactly like commit/test.run.
       if (!vscode.workspace.isTrusted) {
         vscode.window.showWarningMessage(
           'AGI Workforce: git is disabled in untrusted workspaces. Trust the workspace to run git.',
@@ -817,23 +758,18 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         console.warn('[AGI Workforce] git ext commit failed, falling back to execFile:', err);
       }
 
-      // EXTV-GIT-COMMIT: refuse in untrusted workspaces
       if (!vscode.workspace.isTrusted) {
         vscode.window.showWarningMessage(
           'AGI: git commit fallback is disabled in untrusted workspaces.',
         );
         return;
       }
-      // PR-3B (F-12): execFile passes commit message as a single argv entry.
-      // No shell interpretation. shellQuoteForCurrentPlatform is no longer
-      // load-bearing here — kept only as backup utility in workspaceFolders.
       await runGitToOutputChannel(['add', '-u'], folder.uri.fsPath, 'git add');
       await runGitToOutputChannel(['commit', '-m', msg], folder.uri.fsPath, 'git commit');
       vscode.window.showInformationMessage(`AGI Workforce: committed "${msg.slice(0, 60)}"`);
     }),
 
     register('agi.test.run', async () => {
-      // EXTV-3: refuse in untrusted workspaces
       if (!vscode.workspace.isTrusted) {
         vscode.window.showWarningMessage(
           'AGI Workforce: test execution is disabled in untrusted workspaces. Trust the workspace to run tests.',
@@ -848,10 +784,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const workspaceRoot = folder.uri.fsPath;
 
       let testCmd = 'npm test';
-      // Default `npm test`, refined to the detected package manager by lockfile.
-      // (audit 216 L855: the previous `if (pkg.scripts?.['test']) testCmd =
-      // 'npm test'` was a no-op — it re-assigned the value already held — and the
-      // package.json parse existed only to feed it, so both are removed.)
       if (fs.existsSync(path.join(workspaceRoot, 'package.json'))) {
         if (fs.existsSync(path.join(workspaceRoot, 'pnpm-lock.yaml'))) testCmd = 'pnpm test';
         if (fs.existsSync(path.join(workspaceRoot, 'yarn.lock'))) testCmd = 'yarn test';
@@ -868,7 +800,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       terminal.sendText(testCmd);
     }),
 
-    // ── misc commands ───────────────────────────────────────────────────────────
     register('agi-workforce.newConversation', () => {
       sidebarProvider.resetConversation();
       sidebarProvider.reveal();
@@ -1070,10 +1001,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.showTierStatus', async () => {
-      // Compatibility alias for older keybindings and Marketplace installs.
-      // Account identity, subscription owner/cancellation, quota, billing
-      // recovery, privacy, and runtime-boundary copy are owned by one panel so
-      // the two commands can never disagree about current entitlement state.
       await vscode.commands.executeCommand('agi-workforce.showAccountUsage');
     }),
 
@@ -1170,10 +1097,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    // User-curated memory facts for the current workspace. VS Code is a
-    // workspace/task-scoped surface, so these facts never cross repositories
-    // and are never synced into consumer chat history.
-    // The companion sidebar tree (agi-workforce.memory view) provides list/edit/delete.
     register('agi-workforce.memory', async () => {
       if (!requireWorkspaceMemoryScope()) return;
       const action = await vscode.window.showQuickPick(
@@ -1231,8 +1154,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         }
       }
     }),
-
-    // ── memory tree commands ────────────────────────────────────────────────────
 
     register('agi-workforce.memory.refresh', () => {
       memoryTreeProvider.refresh();
@@ -1303,20 +1224,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   );
 
   context.subscriptions.push(
-    // AGI Cloud is public alpha and open by default (founder decision,
-    // 2026-06-27) — there is no invite/waitlist gate to unlock anymore. This
-    // command is kept only so older call sites/keybindings referencing it
-    // still do something useful: it routes straight to the real device-auth
-    // sign-in flow instead of the retired invite-code/waitlist modal, which
-    // always failed with "account_auth_not_wired" regardless of what the
-    // user entered.
     register('agi-workforce.openInviteCodeModal', async () => {
       await vscode.commands.executeCommand('agi-workforce.signIn');
     }),
   );
 
-  // Mode cycling remains command-palette accessible. It deliberately has no
-  // Shift+Tab binding: reverse focus traversal must never mutate permissions.
   context.subscriptions.push(
     register('agi-workforce.cycleAgentMode', async () => {
       const modes: ReadonlyArray<'ask' | 'auto' | 'plan' | 'bypass'> = [
@@ -1337,7 +1249,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
   );
 
-  // ── W6-02: Account & usage panel ─────────────────────────────────────────────
   context.subscriptions.push(
     register('agi-workforce.showAccountUsage', async () => {
       const { getTokenCounter } = await import('../data/tokenCounter');
@@ -1348,18 +1259,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         fetchTierInfo(context.secrets),
         fetchAccountIdentity(context.secrets),
       ]);
-      // Identity/tier requests may invalidate an expired token while this
-      // Promise.all is in flight. Re-read SecretStorage before constructing
-      // any connected/account-plan rows so the QuickPick cannot show Sign out
-      // and a cached paid tier after /api/me has already signed the editor out.
       const accountToken = await getAccountToken(context.secrets);
       const authInvalidated = capturedAccountToken !== undefined && accountToken === undefined;
       if (authInvalidated || accountToken === undefined) {
         await clearAccountTierCache(context);
       } else {
-        // This user-invoked refresh is also authoritative for model admission.
-        // Displaying a fresh plan while leaving the picker on a stale cached
-        // entitlement made upgrades and billing recovery appear ineffective.
         await refreshAccountTierCache(context, async () => capturedTierInfo);
       }
       const tierInfo = authInvalidated ? null : capturedTierInfo;
@@ -1548,7 +1452,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
   );
 
-  // ── W6 P2: Mention file from project ─────────────────────────────────────────
   context.subscriptions.push(
     register('agi-workforce.mentionFileFromProject', async () => {
       const uris = await vscode.window.showOpenDialog({
@@ -1581,8 +1484,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
   );
 
-  // Surface registration failures loudly — a command that silently loses its
-  // handler shows up to the user as a dead menu entry / dead keybinding.
   if (failedCommandIds.length > 0) {
     console.error(
       `[AGI Workforce] ${failedCommandIds.length} command registration(s) failed: ${failedCommandIds.join(', ')}`,

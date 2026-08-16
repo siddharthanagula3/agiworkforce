@@ -26,11 +26,6 @@ export const API_KEY_SCOPE_OPTIONS: ReadonlyArray<{
 
 const API_KEY_SCOPE_SET = new Set<string>(API_KEY_SCOPE_VALUES);
 
-/**
- * Rows created before scoped issuance shipped contain an empty array. They are
- * treated as having every currently supported public-API scope, but the auth
- * boundary still rejects them on every non-public endpoint.
- */
 export function resolveApiKeyScopes(scopes: readonly string[]): ApiKeyScope[] {
   if (scopes.length === 0) {
     return [...API_KEY_SCOPE_VALUES];

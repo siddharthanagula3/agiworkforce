@@ -1,17 +1,3 @@
-/**
- * OpenAI Chat Completions stream → StreamChunk translation.
- *
- * SSE delta accumulation rules:
- *   - `delta.content` → `text-delta` (content can also be `null` on tool-only chunks)
- *   - `delta.reasoning_content` → `thinking-delta` (o-series reasoning models)
- *   - `delta.tool_calls[].function.name` (first time per index) → `tool-use-start`
- *   - `delta.tool_calls[].function.arguments` (string deltas) → `tool-use-delta`
- *   - `finish_reason` → `tool-use-end` (for any open tool_call) + `stop`
- *   - terminal `usage` (with `stream_options.include_usage`) → `usage`
- *
- * OpenAI emits tool_calls by **index**, not by id (the id only arrives on the
- * first chunk for that index). We track an indexId map to rebuild our shape.
- */
 
 import type { StreamChunk } from '@agiworkforce/types';
 
@@ -36,9 +22,6 @@ function mapFinishReason(
       return 'tool_use';
     case 'content_filter':
       // OpenAI's safety layer stopped the response — the same honest concept
-      // as Anthropic's `stop_reason: 'refusal'`, mapped to the same
-      // first-class StreamChunkStop member (not 'error': that means
-      // transport/provider failure).
       return 'refusal';
     default:
       return 'end_turn';
@@ -54,14 +37,6 @@ export async function* translateOpenAIStream(
   let metaEmitted = false;
 
   for await (const chunk of chunks) {
-    // id/created/system_fingerprint/service_tier are stable across a whole
-    // OpenAI stream (every real chunk repeats the same values) -- emit once,
-    // from the first chunk seen, as a StreamChunkResponseMeta. Task #34's
-    // OpenAI slice: OpenAIWireAssembler's wireMode:'openai-passthrough' uses
-    // these instead of synthesizing its own id/created, closing the gap
-    // between the StreamChunk round-trip and legacy's near-verbatim raw
-    // passthrough. A consumer that doesn't recognize this chunk type simply
-    // ignores it (see StreamChunkResponseMeta's docstring).
     if (!metaEmitted) {
       metaEmitted = true;
       yield {
@@ -82,14 +57,6 @@ export async function* translateOpenAIStream(
     if (!choice) continue;
     const delta = choice.delta;
 
-    // Per-chunk logprobs (task #34's OpenAI slice, team-lead's full-passthrough
-    // upgrade): unlike id/created/system_fingerprint/service_tier above,
-    // logprobs is NOT stream-stable -- OpenAI reports different per-token
-    // data on every chunk, so it rides along on the content/tool-call
-    // StreamChunk itself rather than the once-per-stream response-meta
-    // chunk. Only OpenAIWireAssembler's wireMode:'openai-passthrough' reads
-    // it; every other consumer (including this package's own wireMode:
-    // 'default' callers) ignores the field.
     const logprobs = choice.logprobs !== undefined ? { logprobs: choice.logprobs } : {};
 
     if (delta.content) {
@@ -102,8 +69,6 @@ export async function* translateOpenAIStream(
       for (const tc of delta.tool_calls) {
         let state = toolCalls.get(tc.index);
         if (!state) {
-          // Need both id AND name to emit tool-use-start; OpenAI sends them together
-          // on the first chunk for that index.
           if (tc.id && tc.function?.name) {
             state = { id: tc.id, name: tc.function.name, emittedStart: false };
             toolCalls.set(tc.index, state);
@@ -125,7 +90,6 @@ export async function* translateOpenAIStream(
     }
 
     if (choice.finish_reason) {
-      // Close any open tool calls.
       for (const state of toolCalls.values()) {
         if (state.emittedStart) {
           yield { type: 'tool-use-end', toolUseId: state.id };
@@ -133,7 +97,6 @@ export async function* translateOpenAIStream(
       }
       toolCalls.clear();
 
-      // Emit usage if collected (some streams emit usage on a separate trailing chunk).
       if (lastUsage) {
         const usageChunk: StreamChunk = {
           type: 'usage',
@@ -159,7 +122,6 @@ export async function* translateOpenAIStream(
     }
   }
 
-  // Trailing usage chunk after finish_reason — drain it.
   if (lastUsage) {
     const usageChunk: StreamChunk = {
       type: 'usage',

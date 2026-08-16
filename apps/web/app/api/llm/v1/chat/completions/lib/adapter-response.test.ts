@@ -1,19 +1,3 @@
-/**
- * drainToLlmResponse (adapter-response.ts) -- the non-streaming half of the
- * adapter-path wiring. Until this file, it had zero direct behavioral
- * coverage: `__tests__/api/llm-v1-chat-completions-routing.test.ts` only
- * smoke-tests status 200 + routing metadata (a fake single-text-chunk
- * stream), and `web-wire-parity.test.ts`'s non-streaming tests exercise
- * `OpenAIWireAssembler.response()` directly, not this bridge function.
- *
- * This suite feeds realistic `StreamChunk` sequences (mirroring the
- * streaming "rich" fixture used elsewhere in this migration -- text,
- * server-managed web_search, tool_use) through `drainToLlmResponse` and
- * asserts the resulting `AdapterLlmResponse` shape matches what
- * `buildNonStreamResponse` (response-builder.ts, untouched by this
- * migration) expects, reproducing `apps/web/lib/llm-providers/anthropic.ts`'s
- * non-streaming `sendRequest` semantics.
- */
 
 import { describe, it, expect } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
@@ -57,12 +41,6 @@ describe('drainToLlmResponse · content and finish reason', () => {
   });
 
   it('coalesces empty content to "" (not null) for a tool-only response', async () => {
-    // apps/web/lib/llm-providers/anthropic.ts's `textContent = textBlocks
-    // .map(b => b.text || '').join('')` is `''` when there are no text
-    // blocks at all -- NEVER `null`. OpenAIWireAssembler.response()'s
-    // `message.content` is `null` for an empty turn (modern OpenAI
-    // convention); drainToLlmResponse must coalesce back to match the
-    // legacy non-streaming contract exactly.
     const result = await drainToLlmResponse(
       chunksOf([
         { type: 'tool-use-start', toolUseId: 'call_1', name: 'get_weather' },
@@ -96,13 +74,6 @@ describe('drainToLlmResponse · content and finish reason', () => {
 
 describe('drainToLlmResponse · tool_calls index scheme', () => {
   it('uses sequential order-of-appearance index, NOT the raw vendor content-block index', async () => {
-    // Mirrors apps/web/lib/llm-providers/anthropic.ts's non-streaming
-    // `toolUseBlocks.map((block, index) => ({..., index}))` -- a DIFFERENT
-    // indexing scheme from the streaming wire's vendorIndex (see
-    // packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts,
-    // where the same tool_use block gets index 4, its raw content-block
-    // position). Text before the tool_use block proves this isn't
-    // accidentally correct only when the tool call is the first block.
     const result = await drainToLlmResponse(
       chunksOf([
         { type: 'text-delta', delta: 'Let me check. ' },

@@ -11,11 +11,6 @@ const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariant
   variant: 'default',
 });
 
-// React 19 ref-as-prop pattern - no forwardRef needed.
-// Root's real props are a discriminated union (single vs. multiple selection
-// mode: ToggleGroupSingleProps | ToggleGroupMultipleProps), so this must be a
-// `type` intersection rather than `interface extends` — interfaces cannot
-// extend a union type.
 type ToggleGroupProps = React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
   VariantProps<typeof toggleVariants> & {
     ref?: React.Ref<React.ElementRef<typeof ToggleGroupPrimitive.Root>>;

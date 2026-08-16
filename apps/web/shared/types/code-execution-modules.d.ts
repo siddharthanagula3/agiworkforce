@@ -1,10 +1,3 @@
-/**
- * Type declarations for optional code execution dependencies.
- * These packages are dynamically imported at runtime and may not be installed.
- *
- * - @webcontainer/api: Browser-based Node.js runtime (requires cross-origin isolation)
- * - pyodide: Browser-based Python runtime via WebAssembly (loaded from CDN)
- */
 
 declare module '@webcontainer/api' {
   export interface WebContainerProcess {

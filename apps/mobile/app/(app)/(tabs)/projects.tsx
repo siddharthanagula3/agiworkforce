@@ -12,10 +12,6 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
-// navigation package, so the raw hook can land on a different context
-// instance than the one expo-router's navigator provides.
 import { useNavigation } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { Filter, FolderOpen, Plus, X } from 'lucide-react-native';
@@ -41,11 +37,6 @@ import {
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
 
-/**
- * Projects tab -- manage project contexts that apply instructions to chat.
- * Tap a project to open it; long-press for Set active / Rename / Delete.
- */
-/** Project shape shared across local and cloud for display purposes. */
 type DisplayProject = {
   id: string;
   name: string;
@@ -64,17 +55,6 @@ function toDisplayProject(p: Project | CloudProject): DisplayProject {
   };
 }
 
-/**
- * List order. Both references pair the bottom search pill with a funnel chip
- * offering exactly these orders; the list used to render raw store order, which
- * made the relative timestamp on every card meaningless.
- *
- * NOT offered: "Created by you" / "Shared with you" ownership filters. Neither
- * project record carries an owner — `CloudProject`
- * (stores/projects/cloudProjectStore.ts:26-51) has no owner, creator or shared
- * field, and its `source` is the originating *device*, not a person. Shipping
- * ownership chips today would mean inventing the field they filter on.
- */
 type ProjectSort = 'recent' | 'name' | 'active';
 
 const SORT_LABELS: Record<ProjectSort, string> = {
@@ -97,8 +77,6 @@ function sortDisplayProjects(
   }
   sorted.sort(byRecent);
   if (sort === 'active') {
-    // Stable on top of the recency order, so the remaining rows keep the
-    // default ordering rather than an arbitrary one.
     sorted.sort((a, b) => Number(b.id === activeProjectId) - Number(a.id === activeProjectId));
   }
   return sorted;
@@ -112,10 +90,8 @@ export default function ProjectsTabScreen() {
   const isCloud = appMode === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
-  // Read from the appropriate store depending on mode.
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjectsRaw = useCloudProjectStore((s) => s.projects);
-  // Only show non-tombstoned, non-archived cloud projects.
   const cloudProjects = useMemo(
     () => cloudProjectsRaw.filter((p) => p.deletedAt === null && !p.isArchived),
     [cloudProjectsRaw],
@@ -153,10 +129,6 @@ export default function ProjectsTabScreen() {
     setFormInstructions('');
   }, []);
 
-  // The screen instance survives direct account switches. Bind its editor to
-  // the scope that opened it and clear Cloud-owned fields before paint when
-  // that epoch changes. A Local editor remains device-owned across Clerk
-  // account changes because its scope key remains `local`.
   useLayoutEffect(() => {
     const nextScope = captureAccountScopedUiState(isCloud ? 'cloud' : 'local');
     const nextKey = accountScopedUiStateKey(nextScope);
@@ -225,12 +197,6 @@ export default function ProjectsTabScreen() {
     updateProject,
   ]);
 
-  // A project row is a navigation affordance in both references: tapping it
-  // opens the project's own screen with its chats and sources. This used to
-  // toggle the active-context flag and nothing else, so a tap looked like a
-  // dead control while `/(app)/projects/[id]` — implemented and registered —
-  // was reachable only from the drawer, the chats list and the in-conversation
-  // project chip. "Set as active context" now lives on the long-press sheet.
   const handleProjectPress = useCallback(
     (id: string) => {
       if (!isScopeCurrent(activeScopeRef.current)) return;
@@ -303,8 +269,6 @@ export default function ProjectsTabScreen() {
     setActiveProject(null);
   }, [isScopeCurrent, setActiveProject]);
 
-  // Search + sort are applied together: the funnel chip orders whatever the
-  // search left, so a filtered list is never in raw store order either.
   const visibleProjects = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     const matches = normalized
@@ -423,7 +387,6 @@ export default function ProjectsTabScreen() {
           <Pressable
             onPress={openCreateModal}
             className="px-5 rounded-xl items-center justify-center active:opacity-80"
-            // 44pt minimum touch target; `py-2.5` alone left it at ~38pt.
             style={{ backgroundColor: colors.textPrimary, minHeight: 44 }}
             accessibilityRole="button"
             accessibilityLabel="Create project"
@@ -439,7 +402,6 @@ export default function ProjectsTabScreen() {
           data={visibleProjects}
           contentContainerStyle={{
             padding: 12,
-            // Clears the floating create pill and the search field it stacks on.
             paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
           }}
           ItemSeparatorComponent={() => <View className="h-3" />}

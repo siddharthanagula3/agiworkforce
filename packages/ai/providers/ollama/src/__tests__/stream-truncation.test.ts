@@ -1,8 +1,3 @@
-/**
- * P1-3: Ollama stream-translator must always emit a `stop` chunk so
- * downstream consumers terminate cleanly even when the underlying NDJSON
- * stream is truncated before the trailing `done: true` record arrives.
- */
 
 import { describe, expect, it } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';

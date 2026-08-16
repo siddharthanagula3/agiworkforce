@@ -1,11 +1,3 @@
-// Live QA pass on the v3 Sidebar (apps/desktop/src/features/v3/Sidebar.tsx) and
-// everything it exposes: collapse/expand, New Chat, Search, conversation list,
-// Projects section, Local/Cloud toggle, account/profile footer, keyboard nav,
-// and visual polish. Real Tauri IPC, real SQLite, no mocks.
-//
-// Same perf note as conversation-actions.spec.ts: the embedded driver pays a
-// fixed ~5-6s tax on nearly every discrete WebdriverIO command, so most steps
-// are collapsed into single `browser.execute()` in-page DOM operations.
 
 import * as fs from 'node:fs';
 
@@ -76,7 +68,7 @@ describe('AGI Desktop v3 Sidebar', () => {
     console.log('COLLAPSE: initial state', JSON.stringify(before));
 
     await clickSelector('aside[data-v3-sidebar] button[title="Collapse sidebar"]');
-    await browser.pause(400); // let the 180ms width transition settle
+    await browser.pause(400);
 
     const afterCollapse = await browser.execute(() => {
       const aside = document.querySelector('aside[data-v3-sidebar]');
@@ -105,7 +97,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     );
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-02-collapsed-after-reload.png`);
 
-    // Restore expanded state for the remaining tests in this file.
     await clickSelector('aside[data-v3-sidebar] button[title="Expand sidebar"]');
     await browser.pause(400);
     const restoredExpanded = await browser.execute(() => {
@@ -119,7 +110,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     this.timeout(60000);
     await browser.pause(500);
 
-    // Leave a draft in the composer without sending it.
     const draftInput = await $('textarea[aria-label="Chat message input"]');
     await draftInput.waitForDisplayed({ timeout: 10000 });
     await draftInput.setValue('QA draft that should be discarded by New Chat');
@@ -147,11 +137,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     this.timeout(60000);
     await browser.pause(500);
 
-    // Seed a findable conversation. Type through the real composer (setting
-    // textarea.value directly never fires React's onChange, so the old inline
-    // injection sent nothing), then wait for the USER message — the
-    // conversation exists and is searchable the moment the user turn lands, so
-    // this no longer depends on a live Ollama assistant response.
     const seedTitle = `QA Search Target ${Date.now()}`;
     const composer = await $('textarea[aria-label="Chat message input"]');
     await composer.waitForDisplayed({ timeout: 15000 });
@@ -186,7 +171,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     console.log('SEARCH: live filter result:', JSON.stringify(filtered));
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-05-search-filtered.png`);
 
-    // Click the first (only) result and confirm it navigates + closes the modal.
     await clickSelector('#search-results [role="option"]');
     await browser.pause(400);
     const closedAfterClick = await waitForSelector(
@@ -196,7 +180,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     );
     console.log('SEARCH: modal closed after clicking a result:', closedAfterClick);
 
-    // Reopen and verify Escape closes it too.
     await clickSelector('aside[data-v3-sidebar] button[title="Search (⌘K)"]');
     await waitForSelector('div[role="dialog"][aria-modal="true"]', 5000);
     await browser.keys('Escape');
@@ -215,8 +198,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     const groupHeaders = await browser.execute(() => {
       const aside = document.querySelector('aside[data-v3-sidebar]');
       if (!aside) return [];
-      // Grab all small header-style divs inside the Recents block by text content
-      // (Sidebar.tsx groupConversations buckets: Pinned / Last hour / Today / ...).
       const headers = new Set<string>();
       const candidates = Array.from(aside.querySelectorAll('div')).filter((d) => {
         const txt = (d.textContent ?? '').trim();
@@ -275,10 +256,9 @@ describe('AGI Desktop v3 Sidebar', () => {
           'older one is archived/deleted. See Sidebar.tsx visibleProjects.',
       );
       await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-07b-project-not-visible-BUG.png`);
-      return; // remaining sub-steps need a visible row to operate on
+      return;
     }
 
-    // Rename the last (newly appended) row via its 3-dot menu.
     const renamedName = `QA Project ${Date.now()}`;
     await browser.execute(() => {
       const rows = Array.from(document.querySelectorAll('[data-testid="project-row"]'));
@@ -290,12 +270,9 @@ describe('AGI Desktop v3 Sidebar', () => {
         (moreBtn as HTMLElement).click();
         return;
       }
-      // Not hovered/active — force hover state via a real mouseover so React's
-      // onMouseEnter handler fires and reveals the actions.
       last?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     });
     await browser.pause(150);
-    // Retry the more-button click now that hover should be active.
     await browser.execute(() => {
       const rows = Array.from(document.querySelectorAll('[data-testid="project-row"]'));
       const last = rows[rows.length - 1];
@@ -325,8 +302,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     console.log('PROJECT RENAME: renamed row present:', renamed);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-08-project-renamed.png`);
 
-    // Archive it (new menu item added this session) and confirm it disappears
-    // and stays gone after a full reload.
     await browser.execute((name) => {
       const rows = Array.from(document.querySelectorAll('[data-testid="project-row"]'));
       const target = rows.find((r) => (r.textContent ?? '').includes(name));
@@ -377,8 +352,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     );
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-10-project-archived-after-reload.png`);
 
-    // Delete: create one more throwaway project and remove it via the
-    // 2-step confirm-delete menu item (mirrors ConversationRow's pattern).
     await clickSelector('aside[data-v3-sidebar] button[aria-label="New project"]');
     await browser.pause(500);
     await browser.execute(() => {
@@ -397,7 +370,7 @@ describe('AGI Desktop v3 Sidebar', () => {
       return last?.getAttribute('data-project-id') ?? null;
     });
     await waitForSelector('div[role="menu"]', 5000);
-    await clickButtonWithText('div[role="menu"]', 'Delete'); // arms confirm
+    await clickButtonWithText('div[role="menu"]', 'Delete');
     await waitForSelector('div[role="menu"]', 3000);
     const confirmDeleteClicked = await clickButtonWithText('div[role="menu"]', 'Confirm delete');
     console.log(
@@ -426,18 +399,10 @@ describe('AGI Desktop v3 Sidebar', () => {
   it('Local/Cloud toggle: shows a clear, non-confusing coming-soon message for Cloud (PA-3 gate, live-driven)', async function () {
     this.timeout(30000);
     // Standalone-run safety: when this test isn't preceded by the file's
-    // earlier tests (which already wait out initial mount), the sidebar may
-    // not be in the DOM yet — wait for it explicitly rather than a fixed pause.
     const sidebarReady = await waitForSelector('aside[data-v3-sidebar]', 15000);
     expect(sidebarReady).toBe(true);
     await browser.pause(300);
 
-    // Prior specs in this file (and prior full-suite runs, since collapse
-    // state persists to localStorage) may leave the sidebar collapsed, in
-    // which case LocalCloudToggle renders a single icon button with no
-    // role="tab" — the original version of this test silently found zero
-    // elements in that state and had no assertion to catch it. Force
-    // expanded first so the real tablist markup is present.
     const collapsedBefore = await browser.execute(() =>
       document.querySelector('aside[data-v3-sidebar]')?.getAttribute('data-collapsed'),
     );
@@ -452,17 +417,13 @@ describe('AGI Desktop v3 Sidebar', () => {
       ) as HTMLElement[];
       return tabs.map((t) => ({ label: t.textContent, selected: t.getAttribute('aria-selected') }));
     });
-    // Real assertion: the toggle must actually be reachable and start on Local.
     expect(tabsBefore.length).toBe(2);
-    expect(tabsBefore[0]?.selected).toBe('true'); // Local tab selected by default
+    expect(tabsBefore[0]?.selected).toBe('true');
 
     await clickSelector('aside[data-v3-sidebar] [role="tab"][aria-selected="false"]');
     await browser.pause(400);
 
     const bodyText = await browser.execute(() => document.body.textContent ?? '');
-    // The PA-3 "Web & Mobile only" gate was retired by the DCL-4 public-alpha
-    // decision (appModeStore.setMode now unconditionally accepts 'cloud').
-    // Its old refusal copy must never resurface.
     expect(bodyText.includes('AGI Cloud is available on Web & Mobile')).toBe(false);
 
     const modeAfterClick = await browser.execute(() => {
@@ -475,9 +436,6 @@ describe('AGI Desktop v3 Sidebar', () => {
       }));
     });
     console.log('CLOUD TOGGLE: tab state after click:', JSON.stringify(modeAfterClick));
-    // Current contract: clicking Cloud actually selects Cloud. Signed out,
-    // the shell must then present a real path into a session (the device
-    // sign-in surface), not a dead tab.
     expect(modeAfterClick[1]?.selected).toBe('true');
     const offersSignIn =
       bodyText.includes('Sign in') ||
@@ -486,8 +444,6 @@ describe('AGI Desktop v3 Sidebar', () => {
 
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-11-cloud-toggle.png`);
 
-    // Restore Local through the real UI so this file cannot leak Cloud mode
-    // into the next spec's boot (the smoke-failure poisoning on this branch).
     await clickSelector('aside[data-v3-sidebar] [role="tab"]:first-child');
     await browser.pause(400);
     const restored = await browser.execute(
@@ -514,9 +470,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     });
     console.log('ACCOUNT FOOTER: state before click:', JSON.stringify(footerState));
 
-    // Click the primary footer button (avatar + name/sign-in) and confirm it
-    // does something (opens AccountMenu if signed in, or Settings > Account
-    // if signed out) rather than being inert.
     await browser.execute(() => {
       const aside = document.querySelector('aside[data-v3-sidebar]');
       const buttons = Array.from(aside?.querySelectorAll('button') ?? []);
@@ -536,11 +489,9 @@ describe('AGI Desktop v3 Sidebar', () => {
     console.log('ACCOUNT FOOTER: result of clicking primary control:', JSON.stringify(afterClick));
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-12-account-footer.png`);
 
-    // Close whatever opened so it doesn't leak into later tests.
     await browser.keys('Escape');
     await browser.pause(200);
 
-    // Settings gear icon next to it should also work independently.
     await clickSelector('aside[data-v3-sidebar] button[aria-label="Settings"]');
     const settingsOpened = await waitForSelector('[role="dialog"]', 5000);
     console.log('ACCOUNT FOOTER: gear icon opens Settings dialog:', settingsOpened);
@@ -552,8 +503,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     this.timeout(30000);
     await browser.pause(500);
 
-    // Open a conversation-row menu then confirm Escape closes it (already
-    // covered per-menu, but re-verify from a cold state for the keyboard-nav item).
     await browser.execute(() => {
       const row = document.querySelector(
         '[data-testid="conversation-row"][data-conversation-active="true"]',
@@ -566,9 +515,6 @@ describe('AGI Desktop v3 Sidebar', () => {
     const menuClosed = await waitForSelector('div[role="menu"]', 3000, 'disappear');
     console.log('KEYBOARD: conversation-row menu opened then Escape-closed:', menuOpen, menuClosed);
 
-    // Focus-order sanity check: from the New Chat button, Tab should reach the
-    // Search button next in DOM order (both are focusable, unstyled-for-focus
-    // buttons — check they at least receive focus via .focus()).
     const tabFocusable = await browser.execute(() => {
       const newChatBtn = document.querySelector(
         'aside[data-v3-sidebar] button[title="New chat"]',

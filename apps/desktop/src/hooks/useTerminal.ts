@@ -1,15 +1,8 @@
-/**
- * useTerminal Hook
- *
- * A comprehensive hook for terminal operations that wraps Tauri backend commands
- * for creating sessions, sending input, managing history, and environment variables.
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import type { ShellTypeLiteral, TerminalSession, ShellInfo } from '../stores/terminalStore';
 
-// Types for terminal operations
 export interface TerminalOutput {
   sessionId: string;
   data: string;
@@ -28,47 +21,36 @@ export interface EnvironmentVariable {
 }
 
 export interface UseTerminalOptions {
-  /** Auto-connect to output events when session is created */
   autoConnect?: boolean;
-  /** Callback when output is received */
   onOutput?: (output: TerminalOutput) => void;
-  /** Callback when session exits */
   onExit?: (sessionId: string) => void;
-  /** Callback when error occurs */
   onError?: (error: Error) => void;
 }
 
 export interface UseTerminalReturn {
-  // Session Management
   createSession: (shellType: ShellTypeLiteral, cwd?: string) => Promise<string>;
   closeSession: (sessionId: string) => Promise<void>;
   listSessions: () => Promise<TerminalSession[]>;
 
-  // Input/Output
   sendInput: (sessionId: string, data: string) => Promise<void>;
   getOutput: (sessionId: string) => Promise<string>;
   resize: (sessionId: string, cols: number, rows: number) => Promise<void>;
 
-  // History
   getHistory: (sessionId: string, limit?: number) => Promise<string[]>;
   searchHistory: (sessionId: string, query: string, limit?: number) => Promise<string[]>;
   clearHistory: (sessionId: string) => Promise<void>;
 
-  // Environment Variables
   setEnv: (sessionId: string, key: string, value: string) => Promise<void>;
   getEnv: (sessionId: string, key: string) => Promise<string | null>;
   listEnv: (sessionId: string) => Promise<EnvironmentVariable[]>;
   unsetEnv: (sessionId: string, key: string) => Promise<void>;
 
-  // Shell Detection
   detectShells: () => Promise<ShellInfo[]>;
 
-  // State
   isLoading: boolean;
   error: Error | null;
   activeListeners: Map<string, UnlistenFn[]>;
 
-  // Utilities
   connectToSession: (sessionId: string) => Promise<void>;
   disconnectFromSession: (sessionId: string) => void;
 }
@@ -80,10 +62,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
   const [error, setError] = useState<Error | null>(null);
   const [activeListeners] = useState<Map<string, UnlistenFn[]>>(() => new Map());
 
-  // Cleanup listeners on unmount
-  // Note: activeListeners is a stable Map reference (initialized once via useState),
-  // so it must NOT be in the dependency array — Maps don't trigger re-renders.
-  // Using an empty dep array ensures cleanup runs exactly once on unmount.
   useEffect(() => {
     return () => {
       activeListeners.forEach((unlisteners) => {
@@ -110,10 +88,8 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [onError],
   );
 
-  // Connect to a session's output stream
   const connectToSession = useCallback(
     async (sessionId: string) => {
-      // Remove existing listeners for this session
       const existingListeners = activeListeners.get(sessionId);
       if (existingListeners) {
         existingListeners.forEach((unlisten) => unlisten());
@@ -123,7 +99,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       const outputEvent = `terminal-output-${sessionId}`;
       const exitEvent = `terminal-exit-${sessionId}`;
 
-      // AUDIT-TERMINAL-031 fix: Handle both string and object payload formats
       const outputUnlisten = await listen<string | { stream: string; data: string }>(
         outputEvent,
         (event) => {
@@ -148,7 +123,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
       );
 
       const exitUnlisten = await listen(exitEvent, () => {
-        // Cleanup listeners for this session
         const listeners = activeListeners.get(sessionId);
         if (listeners) {
           listeners.forEach((unlisten) => unlisten());
@@ -162,7 +136,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [activeListeners, onOutput, onExit],
   );
 
-  // Disconnect from a session's output stream
   const disconnectFromSession = useCallback(
     (sessionId: string) => {
       const listeners = activeListeners.get(sessionId);
@@ -174,7 +147,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [activeListeners],
   );
 
-  // Create a new terminal session
   const createSession = useCallback(
     async (shellType: ShellTypeLiteral, cwd?: string): Promise<string> => {
       setIsLoading(true);
@@ -200,7 +172,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [autoConnect, connectToSession, handleError],
   );
 
-  // Close a terminal session
   const closeSession = useCallback(
     async (sessionId: string): Promise<void> => {
       setIsLoading(true);
@@ -218,7 +189,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [disconnectFromSession, handleError],
   );
 
-  // List all active terminal sessions
   const listSessions = useCallback(async (): Promise<TerminalSession[]> => {
     setIsLoading(true);
     setError(null);
@@ -239,7 +209,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     }
   }, [handleError]);
 
-  // Send input to a terminal session
   const sendInput = useCallback(
     async (sessionId: string, data: string): Promise<void> => {
       setError(null);
@@ -253,7 +222,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Get output from a terminal session
   const getOutput = useCallback(
     async (sessionId: string): Promise<string> => {
       setError(null);
@@ -271,7 +239,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Resize terminal
   const resize = useCallback(
     async (sessionId: string, cols: number, rows: number): Promise<void> => {
       setError(null);
@@ -285,7 +252,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Get command history
   const getHistory = useCallback(
     async (sessionId: string, limit: number = 100): Promise<string[]> => {
       setError(null);
@@ -303,7 +269,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Search command history
   const searchHistory = useCallback(
     async (sessionId: string, query: string, limit: number = 50): Promise<string[]> => {
       setError(null);
@@ -325,7 +290,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Clear command history
   const clearHistory = useCallback(
     async (sessionId: string): Promise<void> => {
       setError(null);
@@ -338,7 +302,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Set environment variable
   const setEnv = useCallback(
     async (sessionId: string, key: string, value: string): Promise<void> => {
       setError(null);
@@ -351,7 +314,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Get environment variable
   const getEnv = useCallback(
     async (sessionId: string, key: string): Promise<string | null> => {
       setError(null);
@@ -364,7 +326,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // List all environment variables
   const listEnv = useCallback(
     async (sessionId: string): Promise<EnvironmentVariable[]> => {
       setError(null);
@@ -380,7 +341,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Unset environment variable
   const unsetEnv = useCallback(
     async (sessionId: string, key: string): Promise<void> => {
       setError(null);
@@ -393,7 +353,6 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
     [handleError],
   );
 
-  // Detect available shells
   const detectShells = useCallback(async (): Promise<ShellInfo[]> => {
     setIsLoading(true);
     setError(null);
@@ -409,36 +368,29 @@ export function useTerminal(options: UseTerminalOptions = {}): UseTerminalReturn
   }, [handleError]);
 
   return {
-    // Session Management
     createSession,
     closeSession,
     listSessions,
 
-    // Input/Output
     sendInput,
     getOutput,
     resize,
 
-    // History
     getHistory,
     searchHistory,
     clearHistory,
 
-    // Environment Variables
     setEnv,
     getEnv,
     listEnv,
     unsetEnv,
 
-    // Shell Detection
     detectShells,
 
-    // State
     isLoading,
     error,
     activeListeners,
 
-    // Utilities
     connectToSession,
     disconnectFromSession,
   };

@@ -1,14 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M43 / PAR-M44 — settings identity header and the Log Out row.
- *
- * M43: the signed-in account's photo was never rendered on Settings or Profile
- * (only on the Account screen), and the trailing element of the header was a
- * decorative `UserRound` glyph sitting in the slot users read as an affordance.
- * M44: Log Out was the 10th row of the "Cloud" section, gated on the `clerkUser`
- * object (null during Clerk's loading window, so the row flickered), and drew a
- * chevron although it opens a confirm Alert.
- */
 import React from 'react';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
@@ -56,7 +46,6 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-// testID-carrying icons so a subtree can be asserted to contain no glyph.
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const factory = (name: string) => {
@@ -183,8 +172,6 @@ describe('PAR-M43 — profile photo', () => {
 
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    // The header used to end in a static `UserRound` in the slot users read as
-    // "tap here". The card now holds only the avatar, the name and the subtitle.
     const header = within(getByLabelText('Edit profile'));
     expect(header.queryByTestId('icon-UserRound')).toBeNull();
     expect(header.getByText('Ada Lovelace')).toBeTruthy();
@@ -272,7 +259,6 @@ describe('PAR-M44 — Log Out placement', () => {
 
     expect(labels[labels.length - 1]).toBe('Log Out');
     expect(labels.indexOf('Log Out')).toBeGreaterThan(labels.indexOf('About. v2.1.0'));
-    // It must no longer sit inside the Cloud section, i.e. above Connectors.
     expect(labels.indexOf('Log Out')).toBeGreaterThan(labels.indexOf('Connectors. Cloud'));
   });
 
@@ -282,14 +268,11 @@ describe('PAR-M44 — Log Out placement', () => {
     const logout = within(getByLabelText('Log Out'));
     expect(logout.queryByTestId('icon-ChevronRight')).toBeNull();
     expect(logout.getByTestId('icon-LogOut')).toBeTruthy();
-    // The positive control: a navigating row in the same list still has one.
     const about = within(getByLabelText('About. v2.1.0'));
     expect(about.getByTestId('icon-ChevronRight')).toBeTruthy();
   });
 
   it('stays put through the Clerk loading window instead of flickering', () => {
-    // Clerk resolves `isClerkSignedIn` before the `user` object is populated.
-    // Gating on the object made the row appear, vanish and reappear.
     mockClerkState.user = null;
     mockClerkState.isLoaded = false;
 

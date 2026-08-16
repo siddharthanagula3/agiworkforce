@@ -9,8 +9,6 @@ import { useChatStore } from '../stores/chatStore';
 import { generateId } from '../lib/utils';
 import type { Conversation } from '../lib/types';
 
-// ─── Command item definitions ─────────────────────────────────────────────────
-
 interface CommandItem {
   id: string;
   icon: React.ReactNode;
@@ -18,8 +16,6 @@ interface CommandItem {
   shortcut?: string;
   onSelect: () => void;
 }
-
-// ─── Main CommandPalette component ────────────────────────────────────────────
 
 export function CommandPalette() {
   const commandPaletteOpen = useUIStore((s) => s.commandPaletteOpen);
@@ -141,8 +137,6 @@ export function CommandPalette() {
     },
   ];
 
-  // Escape closes the palette (cmdk handles this natively, but we also listen
-  // at capture phase to prevent bubbling to other Escape handlers)
   useEffect(() => {
     if (!commandPaletteOpen) return;
 
@@ -184,7 +178,6 @@ export function CommandPalette() {
       >
         <Command
           className="flex flex-col"
-          // Let cmdk manage keyboard navigation
           loop
         >
           {/* Search input */}

@@ -52,12 +52,6 @@ describe('dom-helpers', () => {
     expect(child.textContent).toBe('done');
   });
 
-  // SECURITY (audit batch-221 [HIGH] insecure output handling, fixed
-  // 2026-06-13): createElementWith's `attrs` option must drop event-handler
-  // attributes and javascript:/data:/vbscript: URL schemes, so a caller can
-  // never turn this helper into an XSS primitive. Regression coverage
-  // against the LIVE module — this hardening previously existed only in an
-  // orphaned, unimported duplicate at src/features/content/dom-helpers.ts.
   describe('createElementWith attrs hardening', () => {
     it('drops on* event-handler attributes', () => {
       const el = createElementWith({ tag: 'div', attrs: { onclick: 'alert(1)' } });

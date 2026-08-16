@@ -1,35 +1,3 @@
-/**
- * @file Persistence for the connector OAuth broker (migration 0097).
- *
- * Two stores, both server-only:
- *   - `connector_oauth_authorizations` — the in-flight leg. Holds the PKCE
- *     verifier (encrypted, server-side, never a cookie) and the SHA-256 of the
- *     state. Consumption is a conditional UPDATE, so a replayed callback loses
- *     the race and is rejected rather than exchanging the code twice.
- *   - `connector_oauth_grants` — the settled leg. Holds the user's encrypted
- *     access/refresh tokens, the scopes the provider actually granted, expiry,
- *     and revocation.
- *
- * WHY THE PRIVILEGED CONNECTION. Both tables carry RLS policies (0097) shaped
- * exactly like `user_custom_connectors` (0052) and
- * `connector_tool_permissions` (0069). Reads here still run through
- * `getNeonDb()` because the chat tool loop must decrypt a token outside any
- * request that carries a Clerk session (cloud-agent workflows included) — the
- * same regime every other credentialed connector read already uses. The tenant
- * boundary on this path is therefore the bound `user_id` predicate on every
- * statement, with the RLS policy as the database-level backstop for callers
- * that do come in user-scoped.
- *
- * WHY custom-connector-crypto FOR REFRESH TOKENS. `encryptConnectorToken` is
- * AES-256-GCM with a random 96-bit IV per value and an authentication tag,
- * keyed by `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` and fail-closed in
- * production. Nothing about it is specific to bearer headers, and both secrets
- * live in the same trust domain (a user's connector credentials), so reusing it
- * keeps one key to rotate rather than two. Refresh tokens are long-lived, so
- * the production fail-closed guard in that module is what makes the reuse safe:
- * a per-process random key would render every stored grant permanently
- * unreadable after a redeploy.
- */
 
 import 'server-only';
 
@@ -49,11 +17,6 @@ function isUndefinedTable(error: unknown): boolean {
   );
 }
 
-/**
- * Raised when the broker tables are not present in this deployment. The routes
- * translate it into an honest "not available in this environment" response
- * instead of pretending a flow started.
- */
 export class ConnectorOAuthStoreUnavailableError extends Error {
   constructor() {
     super('Connector OAuth storage is not available in this environment');
@@ -61,48 +24,21 @@ export class ConnectorOAuthStoreUnavailableError extends Error {
   }
 }
 
-/** In-flight authorization lifetime. Matches the GitHub install-state window. */
 export const PENDING_AUTHORIZATION_TTL_SECONDS = 600;
 
-// ─── In-flight authorizations ───────────────────────────────────────────────
-
-/**
- * Endpoints and identifiers that a DISCOVERED connector has no registry entry
- * to re-read on the callback leg (0115).
- *
- * They are pinned at start time rather than re-discovered at redemption so that
- * a protected-resource document which changes between the two legs cannot point
- * the code exchange at a different token endpoint. All fields are optional: a
- * registry-configured connector leaves them null and reads its endpoints from
- * `oauth-registry.ts` exactly as before.
- */
 export interface DiscoveredAuthorizationFacts {
   issuer?: string | null;
   authorizationEndpoint?: string | null;
   tokenEndpoint?: string | null;
-  /** RFC 8707 resource indicator the resulting token is bound to. */
   resourceUrl?: string | null;
   mcpUrl?: string | null;
   clientId?: string | null;
-  /**
-   * The SDK's `OAuthDiscoveryState` verbatim (0116).
-   *
-   * `auth()` reads this on the callback leg to perform the SEP-2352
-   * authorization-server binding check — comparing the issuer recorded when the
-   * flow started against what discovery reports now, before the code is
-   * redeemed. A provider that implements the accessor but returns nothing is
-   * treated by the SDK as broken, not as opting out, so this must round-trip
-   * across the two requests or no discovered connector can complete.
-   *
-   * Public discovery documents only; nothing secret.
-   */
   discoveryState?: unknown;
 }
 
 export interface PendingAuthorizationInput extends DiscoveredAuthorizationFacts {
   userId: string;
   connectorId: string;
-  /** Raw state — hashed here, never stored or logged in the clear. */
   state: string;
   codeVerifier: string;
   codeChallengeMethod: 'S256' | 'plain';
@@ -124,8 +60,6 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
   const db = getNeonDb();
   const expiresAt = new Date(Date.now() + PENDING_AUTHORIZATION_TTL_SECONDS * 1000).toISOString();
   try {
-    // Opportunistic sweep: a started-but-abandoned flow leaves a row holding an
-    // encrypted verifier, and nothing else ever deletes it.
     await db.execute(
       `delete from public.connector_oauth_authorizations
         where user_id = $1
@@ -180,16 +114,6 @@ interface PendingAuthorizationRow {
   discovery_state: unknown;
 }
 
-/**
- * Atomically claim a pending authorization by its state.
- *
- * The `consumed_at is null and expires_at > now()` predicate lives in the
- * UPDATE, so single-use is enforced by the database rather than by a
- * read-then-write window two concurrent callbacks could both pass.
- *
- * Returns null for an unknown, already-used, or expired state — the caller
- * must not distinguish those to the browser.
- */
 export async function consumePendingAuthorization(
   state: string,
 ): Promise<PendingAuthorization | null> {
@@ -219,9 +143,6 @@ export async function consumePendingAuthorization(
   try {
     codeVerifier = decryptConnectorToken(row.code_verifier_enc);
   } catch (error) {
-    // The row is already consumed at this point, so the flow cannot be
-    // resumed — the user must start over. Fail closed rather than attempting a
-    // non-PKCE exchange, which would silently drop the binding.
     logger.warn(
       { connectorId: row.connector_id, error: error instanceof Error ? error.message : 'unknown' },
       '[connector-oauth] stored PKCE verifier could not be decrypted — refusing the exchange',
@@ -242,8 +163,6 @@ export async function consumePendingAuthorization(
     resourceUrl: row.resource_url,
     mcpUrl: row.mcp_url,
     clientId: row.client_id,
-    // `jsonb` comes back parsed from the driver, but a text-mode driver would
-    // hand back a string; accept both rather than depending on driver mode.
     discoveryState:
       typeof row.discovery_state === 'string'
         ? (JSON.parse(row.discovery_state) as unknown)
@@ -251,30 +170,15 @@ export async function consumePendingAuthorization(
   };
 }
 
-// ─── Settled grants ─────────────────────────────────────────────────────────
-
 export interface StoredGrantTokens {
   accessToken: string;
   refreshToken: string | null;
   tokenType: string;
   grantedScopes: string[];
-  /** Absolute expiry, or null when the provider issued no `expires_in`. */
   accessTokenExpiresAt: Date | null;
   tokenEndpoint: string;
-  /**
-   * The authorization server this grant was minted by (0115).
-   *
-   * Null for a registry-configured connector, whose authorization server is
-   * fixed by the operator's descriptor. Set for a discovered connector, where
-   * it is the SEP-2352 control: the refresh path compares it against what
-   * discovery reports now and forces a clean re-authorization if the MCP server
-   * has moved to a different authorization server, rather than presenting the
-   * credential to a party that is no longer its intended audience.
-   */
   issuer?: string | null;
-  /** RFC 8707 resource indicator the token is bound to, when one was used. */
   resourceUrl?: string | null;
-  /** The MCP endpoint this grant authorizes; the only record of it when discovered. */
   mcpUrl?: string | null;
 }
 
@@ -325,7 +229,6 @@ export async function upsertConnectorOAuthGrant(
   }
 }
 
-/** Persist the result of a refresh without touching connected_at. */
 export async function updateConnectorOAuthGrantTokens(
   userId: string,
   connectorId: string,
@@ -367,11 +270,8 @@ export interface ConnectorOAuthGrant {
   grantedScopes: string[];
   accessTokenExpiresAt: Date | null;
   tokenEndpoint: string;
-  /** Authorization server that minted this grant; null for registry connectors. */
   issuer: string | null;
-  /** RFC 8707 resource the token is bound to, when one was requested. */
   resourceUrl: string | null;
-  /** MCP endpoint this grant authorizes; the only record of it when discovered. */
   mcpUrl: string | null;
   connectedAt: string;
   updatedAt: string;
@@ -392,11 +292,6 @@ interface GrantRow {
   updated_at: string;
 }
 
-/**
- * Raised when a stored grant exists but its ciphertext cannot be decrypted.
- * Distinct from "no grant" so the caller tells the user to reconnect rather
- * than silently treating an encrypted-but-unreadable credential as absent.
- */
 export class ConnectorGrantDecryptionError extends Error {
   constructor() {
     super('Stored authorization for this connector could not be decrypted');
@@ -453,13 +348,11 @@ function decodeGrantRow(row: GrantRow): ConnectorOAuthGrant {
   }
 }
 
-/** Auth-material-free view for API responses. Never returns a token. */
 export interface ConnectorOAuthGrantSummary {
   connectorId: string;
   grantedScopes: string[];
   connectedAt: string;
   updatedAt: string;
-  /** True when the access token is past its expiry and no refresh token exists. */
   needsReauthorization: boolean;
 }
 
@@ -500,15 +393,6 @@ export async function getUserConnectorOAuthGrantSummaries(
   }
 }
 
-/**
- * Revoke a grant locally: flag it AND drop both ciphertext columns in the same
- * statement (0097 constrains the pair, so a revoked row physically cannot hand
- * a token back). Returns true when a live grant was actually revoked.
- *
- * Provider-side revocation is attempted separately by the caller when the
- * registry declares a revocation endpoint; local revocation must succeed
- * regardless, so a provider outage can never leave a user unable to disconnect.
- */
 export async function revokeConnectorOAuthGrant(
   userId: string,
   connectorId: string,

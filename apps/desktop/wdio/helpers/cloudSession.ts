@@ -1,64 +1,19 @@
-/**
- * Shared scaffolding for the Desktop Cloud wdio specs.
- *
- * The native harness drives the REAL Tauri binary, so a Cloud spec has to
- * satisfy two independent boundaries:
- *
- *   1. Tauri IPC — device authorization runs through
- *      `account_start_device_authorization` / `account_poll_device_authorization`
- *      (see `apps/desktop/src/services/cloudAccountAuth.ts`), so
- *      `browser.tauri.mock` can complete a sign-in without a browser approval.
- *   2. HTTP — everything else (`/api/me`, `/api/models`,
- *      `/api/chat/conversations`, `/api/projects`, chat completions) leaves the
- *      webview through `guardedFetch`, which calls the page's global `fetch`.
- *      Patching `window.fetch` in-page therefore intercepts the exact requests
- *      the product makes, with no product-side test hooks.
- *
- * Response shapes are taken from the shared contracts, NOT invented:
- *   - `/api/me`                  → `MeResponseSchema`            (packages/contracts/cloud-contracts/src/me.ts)
- *   - `/api/chat/conversations`  → `ManagedCloudConversationListResponseSchema`
- *   - `/api/projects`            → `ManagedCloudProjectListResponseSchema`
- *   - `/api/models`              → `{ models: [...] }`           (apps/desktop/src/api/cloudApi.ts getCloudModels)
- *
- * No model id is hardcoded anywhere here. `/api/models` is stubbed EMPTY on
- * purpose: `resolveDesktopCloudPickerModels` still prepends the canonical Auto
- * routing profile from `@agiworkforce/types`, so the picker is non-empty
- * without this file asserting anything about the model catalog.
- */
 
-/** How a stubbed endpoint should behave for a given spec. */
 export type StubBehavior = 'ok' | 'server-error';
 
 export interface CloudApiStubOptions {
-  /** GET /api/me — the account snapshot that resolves the plan tier. */
   me?: StubBehavior;
-  /** GET /api/models — public discovery catalog. */
   models?: StubBehavior;
-  /** GET /api/chat/conversations — the Cloud conversation list. */
   conversations?: StubBehavior;
-  /** GET /api/projects — the Cloud project list. */
   projects?: StubBehavior;
-  /**
-   * POST /api/llm/v1/chat/completions. `'stall'` opens an SSE stream that
-   * never completes, which is how a spec holds the app in a streaming state.
-   */
   completions?: StubBehavior | 'stall';
 }
 
 const APP_MODE_STORAGE_KEY = 'app-mode-store';
 
-/** Selectors for the current native-first Cloud sign-in surface. */
 export const CLOUD_SIGN_IN_HEADING_SELECTOR = 'h1=Sign in to AGI Cloud';
 export const CLOUD_BROWSER_FALLBACK_SELECTOR = 'button=Sign in through your browser instead';
 
-/**
- * Replaces `window.fetch` with a stub for the Managed Cloud API surface.
- *
- * Anything that is not an `/api/` path falls through to the original `fetch`,
- * so the Vite dev server the debug binary is pointed at keeps working.
- * Unhandled `/api/` paths deliberately answer 404 rather than a fake success —
- * a spec must never pass because an endpoint it forgot silently "worked".
- */
 export async function installCloudApiStubs(options: CloudApiStubOptions = {}): Promise<void> {
   await browser.execute((opts: CloudApiStubOptions) => {
     const scope = window as unknown as Record<string, unknown>;
@@ -129,7 +84,6 @@ export async function installCloudApiStubs(options: CloudApiStubOptions = {}): P
 
       if (pathname === '/api/models') {
         if (stub.models === 'server-error') return unavailable('model catalog');
-        // Empty on purpose — see the file header.
         return Promise.resolve(jsonResponse({ models: [] }));
       }
 
@@ -146,8 +100,6 @@ export async function installCloudApiStubs(options: CloudApiStubOptions = {}): P
       if (pathname.startsWith('/api/llm/v1/chat/completions')) {
         if (stub.completions === 'server-error') return unavailable('chat completions');
         if (stub.completions === 'stall') {
-          // An SSE stream that emits one role delta and then never finishes,
-          // holding the app in the streaming state for the whole test.
           const encoder = new TextEncoder();
           const body = new ReadableStream<Uint8Array>({
             start(controller) {
@@ -181,7 +133,6 @@ export async function installCloudApiStubs(options: CloudApiStubOptions = {}): P
   }, options);
 }
 
-/** Restores the page's real `fetch`. Safe to call when no stub was installed. */
 export async function removeCloudApiStubs(): Promise<void> {
   await browser.execute(() => {
     const scope = window as unknown as Record<string, unknown>;
@@ -195,7 +146,6 @@ export async function removeCloudApiStubs(): Promise<void> {
   });
 }
 
-/** Every `/api/` path the stub has answered since it was installed. */
 export function recordedCloudApiCalls(): Promise<string[]> {
   return browser.execute(() => {
     const scope = window as unknown as Record<string, unknown>;
@@ -203,14 +153,6 @@ export function recordedCloudApiCalls(): Promise<string[]> {
   }) as Promise<string[]>;
 }
 
-/**
- * Builds an unsigned JWT the desktop session decoder can read.
- *
- * `cloudAccountAuth.buildSession` only base64-decodes the payload for `sub`,
- * `exp` and friends — it never verifies a signature (the server does that on
- * every request). This is a test credential for the local decoder, not a
- * forged server credential: nothing accepts it except the stubbed endpoints.
- */
 function fakeDeviceJwt(subject: string, lifetimeSeconds: number): string {
   const encode = (value: unknown) =>
     Buffer.from(JSON.stringify(value))
@@ -233,39 +175,17 @@ function fakeDeviceJwt(subject: string, lifetimeSeconds: number): string {
 }
 
 export interface DeviceAuthorizationMockOptions {
-  /** `sub` claim of the minted bearer. */
   subject?: string;
-  /** Bearer lifetime in seconds. */
   lifetimeSeconds?: number;
-  /**
-   * When true the credits call (`fetch_user_profile`) never resolves, holding
-   * the auth orchestrator inside the entitlement window that DES-C17 is about.
-   */
   hangCreditsFetch?: boolean;
 }
 
-/**
- * Mocks the native half of the device authorization flow so "Sign in to AGI
- * Cloud" completes without a real browser approval.
- *
- * Wire shapes come from `packages/client/client-runtime/src/deviceAuthorization.ts`
- * (`requestDeviceAuthorization` / `pollDeviceAuthorization`), which is what the
- * desktop client parses.
- */
-/**
- * Commands whose mocks MUST be live in the page before a sign-in is driven.
- * If any is missing, the app performs REAL device authorization over HTTP —
- * and with a web dev server running on localhost:3000 that produces a real
- * device code plus an endless (never-approved) poll loop, which is exactly
- * the "owned Cloud sign-in window never closed" hang measured on 2026-08-04.
- */
 const DEVICE_AUTH_MOCKED_COMMANDS = [
   'account_store_api_base_url',
   'account_start_device_authorization',
   'account_poll_device_authorization',
 ];
 
-/** Page-side mock entries the app's invoke seam will actually consult. */
 async function missingPageMocks(commands: string[]): Promise<string[]> {
   return browser.execute((names: string[]) => {
     const mocks =
@@ -279,11 +199,6 @@ export async function mockDeviceAuthorization(
 ): Promise<void> {
   await registerDeviceAuthorizationMocks(options);
 
-  // The service's own per-session mock-store clear reliably fails ("A
-  // sessionId is required for this command" at every session end), so a later
-  // spec file's registration can hit the stale Node-side cache and never be
-  // pushed into the fresh document. Verify the page seam and re-register once
-  // through a full reset before letting a sign-in run against real HTTP.
   let missing = await missingPageMocks(DEVICE_AUTH_MOCKED_COMMANDS);
   if (missing.length > 0) {
     await browser.tauri.restoreAllMocks().catch(() => {});
@@ -306,14 +221,6 @@ async function registerDeviceAuthorizationMocks(
   const accessToken = fakeDeviceJwt(subject, lifetimeSeconds);
   const refreshToken = `wdio-refresh-${subject}`;
 
-  // The app stores its canonical WEB_APP_URL immediately before requesting a
-  // device code. Learn the origin from that production call instead of
-  // duplicating Vite's env resolution in the Node-side WDIO process. In
-  // particular, Vite loads `.env.local` for the bundled renderer while WDIO
-  // does not, which previously made this helper fabricate an
-  // `https://agiworkforce.com` verification URL for an app configured with
-  // `http://localhost:3000`; the product correctly rejected it as untrusted
-  // before an owned sign-in window could open.
   const apiBaseUrlMock = await browser.tauri.mock('account_store_api_base_url');
   await apiBaseUrlMock.mockImplementation(function rememberCloudOrigin(args) {
     const apiBaseUrl = args?.['apiBaseUrl'];
@@ -362,7 +269,6 @@ async function registerDeviceAuthorizationMocks(
     }),
   });
 
-  // Native credential-vault writes: succeed silently, store nothing real.
   for (const command of [
     'account_store_access_token',
     'account_store_refresh_token',
@@ -375,10 +281,6 @@ async function registerDeviceAuthorizationMocks(
 
   const creditsMock = await browser.tauri.mock('fetch_user_profile');
   if (options.hangCreditsFetch) {
-    // Never resolves. `accountApi.withTimeout` gives up after 30 s, so this
-    // holds the auth orchestrator between STEP 1 (credential projected) and
-    // STEP 4 (plan tier written) — precisely the window in which the shell used
-    // to bounce a freshly approved device back to the sign-in screen.
     await creditsMock.mockImplementation(function hangForever() {
       return new Promise(() => {});
     });
@@ -391,19 +293,11 @@ async function registerDeviceAuthorizationMocks(
   }
 }
 
-/**
- * Chooses the explicit browser/device fallback and waits for its owned window
- * to close after the mocked approval. Native email/password sign-in remains
- * the product's primary Cloud authentication path.
- */
 export async function completeMockedDeviceSignIn(): Promise<void> {
   const signInButton = await $(CLOUD_BROWSER_FALLBACK_SELECTOR);
   await signInButton.waitForDisplayed({ timeout: 20_000 });
   await signInButton.click();
 
-  // Observe creation before waiting for destruction. Without this first gate,
-  // a fast handles read can see only `main` and falsely report completion
-  // before the async device-code request has opened its owned webview.
   await browser.waitUntil(
     async () => (await browser.getWindowHandles()).includes('cloud-sign-in'),
     {
@@ -413,8 +307,6 @@ export async function completeMockedDeviceSignIn(): Promise<void> {
     },
   );
 
-  // `authorizeDesktopDevice` opens the authorization window, then waits one
-  // clamped poll interval (>= 3 s) before the first — already approved — poll.
   await browser.waitUntil(
     async () => {
       const handles = await browser.getWindowHandles();
@@ -428,11 +320,6 @@ export async function completeMockedDeviceSignIn(): Promise<void> {
   );
 }
 
-/**
- * Closes an owned Tauri webview without using WebDriver's generic
- * `closeWindow()`. The embedded WebDriver provider can terminate the whole
- * native window session when that command targets a child webview.
- */
 export async function closeOwnedTauriWindow(label: string): Promise<boolean> {
   await browser.switchToWindow('main');
   return browser.execute(async (ownedWindowLabel: string) => {
@@ -456,7 +343,6 @@ export async function closeOwnedTauriWindow(label: string): Promise<boolean> {
   }, label) as Promise<boolean>;
 }
 
-/** Reads the persisted app mode without depending on any product test hook. */
 export function persistedAppMode(): Promise<string | null> {
   return browser.execute((key: string) => {
     try {
@@ -470,14 +356,6 @@ export function persistedAppMode(): Promise<string | null> {
   }, APP_MODE_STORAGE_KEY) as Promise<string | null>;
 }
 
-/**
- * Rewrites the persisted app-mode snapshot.
- *
- * Specs share ONE app-data profile (`wdio.conf.ts` globs every spec into a
- * single run and only wipes the profile in `onPrepare`), so a spec that leaves
- * Cloud selected boots the next spec into `AuthPage` — the failure recorded as
- * DES-C13. Every Cloud spec must restore Local in an `after()` hook.
- */
 export async function writePersistedAppMode(state: {
   mode: 'local' | 'cloud';
   hasSelectedMode: boolean;
@@ -515,9 +393,6 @@ export async function writePersistedAppMode(state: {
   );
 }
 
-/**
- * Returns the shell to a clean signed-out Local boot for the next spec file.
- */
 export async function restoreLocalModeProfile(): Promise<void> {
   await browser.tauri.restoreAllMocks().catch(() => undefined);
   await removeCloudApiStubs().catch(() => undefined);
@@ -527,10 +402,6 @@ export async function restoreLocalModeProfile(): Promise<void> {
   await composer.waitForDisplayed({ timeout: 60_000 });
 }
 
-/**
- * True when the Cloud sign-in screen is mounted. The legacy function name is
- * retained because several Cloud journey specs import it.
- */
 export async function deviceSignInCardVisible(): Promise<boolean> {
   return browser.execute(() => {
     const headings = Array.from(document.querySelectorAll('h1'));

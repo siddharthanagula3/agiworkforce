@@ -1,14 +1,3 @@
-/**
- * RT-03: GitHub webhook prompt injection via PR diff
- *
- * Tests that the prompt construction in the GitHub webhook handler:
- * - Wraps diff in <untrusted_pr_diff> fence
- * - Escapes tool-call markers
- * - Truncates diff > 50KB
- * - Handles empty diff (no LLM call)
- * - Handles binary diff (null bytes)
- * - Logs detection of known injection markers
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -29,13 +18,6 @@ vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 
 vi.mock('@agiworkforce/types', async () => {
-  // Spread the real module rather than listing exports. A factory mock replaces
-  // the module wholesale, so every symbol the route reaches transitively has to
-  // be present or Vitest throws at first read and the suite dies at LOAD, with
-  // no assertion having run. Listing them one at a time just moves the error to
-  // the next missing name (CAPABILITY_LAYERS, then SYNCED_APP_SURFACES, ...).
-  // Only the two model resolvers below are actually being stubbed, so only they
-  // are overridden — same pattern as __tests__/api/media-image-generate.test.ts.
   const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
   return {
     ...actual,
@@ -44,18 +26,11 @@ vi.mock('@agiworkforce/types', async () => {
   };
 });
 
-// ─── Capture the LLM prompt that was sent ────────────────────────────────────
 let capturedLLMPrompt = '';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// ─── GitHub app mock ──────────────────────────────────────────────────────────
-// Hoisted bindings — `vi.mock` factories run before the module body, so values
-// they reference must be initialized via `vi.hoisted` (which is hoisted with
-// the mocks) rather than as plain `const`s further down in the file. We hoist
-// `createHmac` from node:crypto too so the factory can verify signatures
 // without resorting to a `require()` (forbidden by the @typescript-eslint
-// no-require-imports rule).
 const { WEBHOOK_SECRET, mockGetPrDiff, mockPostIssueComment, hoistedCreateHmac } = vi.hoisted(
   () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -74,15 +49,11 @@ vi.mock('@/lib/github-app', () => ({
     const expected = 'sha256=' + hoistedCreateHmac('sha256', secret).update(body).digest('hex');
     return sig === expected;
   },
-  // Plain async function — vitest config `mockReset: true` clears vi.fn()
-  // implementations between tests, so a `vi.fn().mockResolvedValue(...)` here
-  // would return undefined for every test after the first.
   getInstallationAccessToken: async () => 'ghs_token',
   getPrDiff: (...args: unknown[]) => mockGetPrDiff(...args),
   postIssueComment: (...args: unknown[]) => mockPostIssueComment(...args),
 }));
 
-// ─── Neon DB mock ─────────────────────────────────────────────────────────────
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: vi
@@ -122,9 +93,7 @@ const BASE_PAYLOAD = {
   repository: { full_name: 'owner/repo' },
 };
 
-// Await the fire-and-forget background task by mocking a synchronous processReview
 async function waitForProcessReview(_response?: Response): Promise<void> {
-  // Allow microtasks and promises to settle
   await new Promise<void>((resolve) => setTimeout(resolve, 250));
 }
 
@@ -133,7 +102,6 @@ describe('RT-03: GitHub webhook prompt injection defense', () => {
     vi.clearAllMocks();
     capturedLLMPrompt = '';
 
-    // Default: LLM succeeds
     mockFetch.mockImplementation(async (url: string, options: RequestInit) => {
       if (typeof url === 'string' && url.includes('anthropic.com')) {
         const body = JSON.parse(options.body as string);
@@ -202,14 +170,13 @@ describe('RT-03: GitHub webhook prompt injection defense', () => {
   });
 
   it('truncates diff > 50KB and adds truncation notice', async () => {
-    const bigDiff = 'A'.repeat(51 * 1024); // 51 KB
+    const bigDiff = 'A'.repeat(51 * 1024);
     mockGetPrDiff.mockResolvedValue(bigDiff);
     const req = makeWebhookRequest(BASE_PAYLOAD);
     await POST(req);
     await waitForProcessReview(null as unknown as Response);
 
     expect(capturedLLMPrompt).toContain('[Diff truncated at 50 KB]');
-    // Prompt should be well under 55 KB (diff capped + overhead)
     expect(capturedLLMPrompt.length).toBeLessThan(55 * 1024);
   });
 
@@ -219,7 +186,6 @@ describe('RT-03: GitHub webhook prompt injection defense', () => {
     await POST(req);
     await waitForProcessReview(null as unknown as Response);
 
-    // LLM should NOT be called
     expect(mockFetch).not.toHaveBeenCalledWith(
       expect.stringContaining('anthropic.com'),
       expect.anything(),

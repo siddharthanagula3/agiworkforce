@@ -1,4 +1,3 @@
-// packages/contracts/types/src/design-system/provider-display.ts
 
 /**
  * Display-tier provider identity used by all 6 surfaces in model pickers and UI surfaces.
@@ -34,15 +33,10 @@ export type ProviderId =
 
 export interface ProviderDisplay {
   id: ProviderId;
-  /** Human-readable name shown in pickers. Stable across surfaces. */
   label: string;
-  /** Icon path resolved at build time per surface (web: /providers/, native: bundled, cli: ascii). */
   icon: string;
-  /** Brand-neutral hex used as a sidebar dot when icons aren't available (e.g., narrow CLI). */
   brandColor: string;
-  /** True when the provider is local (Ollama, LMStudio); affects "BYOK or Local" filter chips. */
   isLocal: boolean;
-  /** True when provider supports an explicit thinking/reasoning effort axis. */
   supportsEffort: boolean;
 }
 
@@ -153,7 +147,6 @@ export const PROVIDER_DISPLAY: Readonly<Record<ProviderId, ProviderDisplay>> = O
   },
 });
 
-/** Capability vocabulary for sub-labels in pickers. Locked from MASTER §1.1. */
 export type CapabilityTier = 'fastest' | 'balanced' | 'most-capable';
 
 export const CAPABILITY_LABEL: Readonly<Record<CapabilityTier, string>> = Object.freeze({

@@ -16,8 +16,6 @@ import type { Project as UnifiedProject } from '@agiworkforce/unified-chat';
 import { create } from 'zustand';
 import { resetProjectMetaStore } from './project-meta-store';
 
-// Explicit type annotation prevents TS4023 "cannot be named" errors when
-// the internal ProjectState from the package is not publicly exported.
 export const useProjectStore: typeof useChatProjectStore = useChatProjectStore;
 export type { UnifiedProject as Project };
 
@@ -53,11 +51,6 @@ function clearProjectViewModel(): void {
   useChatProjectStore.setState({ projects: [], activeProjectId: null });
 }
 
-/**
- * Replace the in-memory project view model with one account's canonical Cloud
- * rows. Starting a different account clears prior rows synchronously, and the
- * generation check prevents a late response from restoring them.
- */
 export function hydrateManagedCloudProjectStore({
   accountId,
   listProjects,
@@ -94,8 +87,6 @@ export function hydrateManagedCloudProjectStore({
       const current = useManagedCloudProjectSessionStore.getState();
       if (generation !== hydrationGeneration || current.accountId !== normalizedAccountId) return;
 
-      // Empty is authoritative. Retaining the previous cache here would expose
-      // another account's project names after sign-out/account switch.
       useChatProjectStore.setState({ projects: [...projects], activeProjectId: null });
       useManagedCloudProjectSessionStore.setState({
         accountId: normalizedAccountId,
@@ -126,7 +117,6 @@ export function hydrateManagedCloudProjectStore({
   return promise;
 }
 
-/** Clear all account-owned project metadata from the Web process. */
 export function resetManagedCloudProjectStore(): void {
   hydrationGeneration += 1;
   inFlightHydration = null;
@@ -139,7 +129,6 @@ export function resetManagedCloudProjectStore(): void {
   });
 }
 
-/** Fail-closed selector for callers that know the current Clerk account id. */
 export function getManagedCloudProjectsForAccount(
   accountId: string | null | undefined,
 ): UnifiedProject[] {
@@ -148,10 +137,6 @@ export function getManagedCloudProjectsForAccount(
   return useChatProjectStore.getState().projects;
 }
 
-/**
- * Static accessor for use outside React components (e.g., in service functions).
- * Returns the instructions for the currently active project.
- */
 export function getActiveProjectInstructions(accountId: string): string {
   const session = useManagedCloudProjectSessionStore.getState();
   if (session.status !== 'ready' || session.accountId !== accountId) return '';

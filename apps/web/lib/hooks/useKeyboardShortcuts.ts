@@ -98,8 +98,6 @@ export function useKeyboardShortcuts(
           continue;
         }
 
-        // Shortcuts WITH a scope only fire when the active scope matches.
-        // Shortcuts WITHOUT a scope are global and fire in every scope.
         if (shortcut.scope && scope !== shortcut.scope) {
           continue;
         }
@@ -194,10 +192,6 @@ export function formatShortcut(shortcut: { key: string; modifiers?: Modifiers })
   return parts.join('+');
 }
 
-// Read-only lookup registry for UI (e.g., a shortcuts help menu).
-// This registry does NOT dispatch shortcuts - it is only used to enumerate
-// registered shortcuts for display purposes. Actual dispatch is handled by
-// the useKeyboardShortcuts hook which listens for keydown events directly.
 const globalShortcutRegistry = new Map<string, KeyboardShortcut>();
 
 export function registerGlobalShortcut(id: string, shortcut: KeyboardShortcut): void {

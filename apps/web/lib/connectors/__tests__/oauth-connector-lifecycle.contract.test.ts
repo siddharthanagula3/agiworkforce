@@ -1,44 +1,16 @@
-/**
- * CRIT-001 lifecycle contract for a connector the API reports as `available`.
- *
- * The other connector tests each pin one leg with the neighbouring legs mocked.
- * This one runs the whole thing against the REAL registry, the REAL pending +
- * grant stores (over an in-memory database), the REAL start and callback route
- * handlers, the REAL access-token resolver, and the REAL tool discovery and
- * execution seams in `lib/user-connector-tools.ts`:
- *
- *   authorize → callback → credential storage → discovery → read action →
- *   write action → disconnect → reauthorize
- *
- * Only three things are faked, and none of them is a step in the contract:
- * the database, the network (the provider's token/revocation endpoints), and
- * the MCP transport. Everything the audit asked about — does the credential
- * actually reach a tool call, does the connector stop working after disconnect —
- * is exercised for real.
- *
- * The connector under test is a synthetic provider (`acme`) registered exactly
- * the way an operator registers one, because this repository ships ZERO OAuth
- * providers by default (lib/connectors/oauth-registry.ts). That is the point:
- * `available` is earned by configuration, and this test proves the flow behind
- * it is complete for whichever ids a deployment earns it for.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-
-// ─── Fakes: database, network, MCP transport ────────────────────────────────
 
 type Row = Record<string, unknown>;
 
 const mocks = vi.hoisted(() => ({
   pendings: [] as Row[],
   grants: [] as Row[],
-  /** Every MCP connect config seen, so the test can inspect the auth header. */
   mcpConnects: [] as Array<{ serverName: string; config: Record<string, unknown> }>,
   toolCalls: [] as Array<{ toolName: string; args: Record<string, unknown> }>,
   closedHandles: 0,
   fetches: [] as Array<{ url: string; body: string }>,
-  /** Token endpoint behaviour, swapped per test. */
   tokenResponse: {
     access_token: 'acme-access-1',
     refresh_token: 'acme-refresh-1',
@@ -49,7 +21,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 function hashState(state: string): string {
-  // Mirrors lib/connectors/pkce.hashOAuthState, which the store uses as the key.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('node:crypto').createHash('sha256').update(state).digest('hex');
 }
@@ -137,12 +108,6 @@ vi.mock('@agiworkforce/mcp', () => {
   };
 });
 
-/**
- * In-memory stand-in for the two broker tables plus the connector tables the
- * routes touch. Matched on SQL substrings and positional parameters exactly as
- * `lib/connectors/oauth-store.ts` writes them — an unrecognised statement
- * returns nothing rather than silently succeeding.
- */
 vi.mock('@/lib/server/neon-db', () => {
   const nowMs = () => Date.now();
   const run = (sql: string, params: unknown[] = []): Row[] => {
@@ -284,8 +249,6 @@ vi.mock('@/lib/server/neon-db', () => {
       const [userId] = params as [string];
       return mocks.grants.filter((g) => g['user_id'] === userId && g['revoked_at'] === null);
     }
-    // Everything else the routes touch in passing (user_connectors, custom
-    // connectors, github installations, tool permissions) is empty here.
     return [];
   };
   return {
@@ -332,7 +295,6 @@ function setOperatorConfiguration(): void {
   __resetConnectorOAuthRegistryCacheForTests();
 }
 
-/** Drive authorize → callback and return the state that bound the two legs. */
 async function completeAuthorization(): Promise<{ state: string; redirectUri: string }> {
   const start = await OAUTH_START(
     new NextRequest(`${APP_ORIGIN}/api/connectors/oauth/start?connectorId=acme&mode=json`),
@@ -401,20 +363,17 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
   it('authorizes, stores an encrypted grant, and reports the connector connected', async () => {
     const { state, redirectUri } = await completeAuthorization();
 
-    // The authorize leg bound a single-use state to a server-side verifier.
     expect(redirectUri).toBe(`${APP_ORIGIN}/api/connectors/oauth/callback`);
     expect(mocks.pendings).toHaveLength(1);
     expect(mocks.pendings[0]!['state_hash']).toBe(hashState(state));
     expect(mocks.pendings[0]!['code_verifier_enc']).not.toContain('acme');
 
-    // The callback exchanged the code and stored the tokens as ciphertext.
     expect(mocks.grants).toHaveLength(1);
     const grant = mocks.grants[0]!;
     expect(grant['granted_scopes']).toEqual(['read', 'write']);
     expect(String(grant['access_token_enc'])).not.toContain('acme-access-1');
     expect(String(grant['refresh_token_enc'])).not.toContain('acme-refresh-1');
 
-    // And the directory reports it — as connected, and as available.
     const listed = (await (
       await CONNECTORS_GET(new NextRequest(`${APP_ORIGIN}/api/connectors`))
     ).json()) as {
@@ -435,8 +394,6 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
     expect(names).toContain('mcp__acme__list_records');
     expect(names).toContain('mcp__acme__create_record');
 
-    // Discovery must reach the provider AS THE USER: the header carries the
-    // token the callback stored, decrypted, and nothing else.
     const connect = mocks.mcpConnects.find((c) => c.serverName === 'acme');
     expect(connect?.config).toMatchObject({
       url: 'https://acme.example.com/mcp',
@@ -462,7 +419,6 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
 
   it('refreshes an expired access token instead of asking the user to reconnect', async () => {
     await completeAuthorization();
-    // Expire the stored access token; the refresh token stays.
     mocks.grants[0]!['access_token_expires_at'] = new Date(Date.now() - 1000).toISOString();
     mocks.tokenResponse = {
       access_token: 'acme-access-2',
@@ -489,9 +445,6 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
       'needs-reauthorization',
     );
 
-    // Asking for a token is what settles it: there is nothing to refresh with,
-    // so `resolveConnectorAccessToken` revokes the grant rather than leaving a
-    // credential around that reads as connected and can never be used.
     const access = await resolveConnectorAccessToken('user-1', 'acme');
     expect(access).toEqual({ status: 'reauthorization-required', reason: 'expired' });
     expect(mocks.grants[0]!['revoked_at']).not.toBeNull();
@@ -500,14 +453,11 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
       await CONNECTORS_GET(new NextRequest(`${APP_ORIGIN}/api/connectors`))
     ).json()) as { connectors: Array<{ connectorId: string }>; available: string[] };
     expect(listAfter.connectors.find((c) => c.connectorId === 'acme')).toBeUndefined();
-    // Still available — the deployment can connect it; this user simply has to
-    // authorize again. Availability and connection are separate facts.
     expect(listAfter.available).toContain('acme');
   });
 
   it('disconnect revokes at the provider, destroys the ciphertext, and stops tool calls', async () => {
     await completeAuthorization();
-    // Warm the live MCP handle so the disconnect has something to close.
     await makeUserConnectorExecutor('user-1')('acme', 'list_records', {});
     expect(mocks.closedHandles).toBe(0);
 
@@ -516,15 +466,11 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
     );
     expect(response.status).toBe(200);
 
-    // Revoked at the provider, and the stored ciphertext is gone — 0097 forbids
-    // a revoked row from holding one.
     expect(mocks.fetches.some((f) => f.url.includes('/oauth/revoke'))).toBe(true);
     expect(mocks.grants[0]!['revoked_at']).not.toBeNull();
     expect(mocks.grants[0]!['access_token_enc']).toBeNull();
     expect(mocks.closedHandles).toBeGreaterThan(0);
 
-    // The connector stops being offered and stops executing on the very next
-    // call, rather than when a cache expires.
     expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
     const afterDisconnect = await makeUserConnectorExecutor('user-1')('acme', 'list_records', {});
     expect(afterDisconnect).toMatchObject({ handled: true, isError: true });
@@ -553,8 +499,6 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
     const access = await resolveConnectorAccessToken('user-1', 'acme');
     expect(access).toMatchObject({ status: 'ready', accessToken: 'acme-access-3' });
     expect(mocks.grants[0]!['revoked_at']).toBeNull();
-    // The provider narrowed the grant on reauthorization; the stored scopes
-    // follow the provider, never the request.
     expect(mocks.grants[0]!['granted_scopes']).toEqual(['read']);
   });
 

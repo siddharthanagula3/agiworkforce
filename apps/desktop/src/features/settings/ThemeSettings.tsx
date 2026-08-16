@@ -27,12 +27,7 @@ import type { ThemeDefinition } from '../../themes';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { ThemeEditorDialog } from './ThemeEditorDialog';
 
-/** localStorage key used by ThemeProvider — must stay in sync with main.tsx. */
 const THEME_STORAGE_KEY = 'agiworkforce-theme';
-
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
 
 const REQUIRED_COLOR_KEYS = [
   'background',
@@ -81,10 +76,6 @@ function validateTheme(
   return { valid: true, theme: raw as ThemeDefinition };
 }
 
-// ---------------------------------------------------------------------------
-// File I/O
-// ---------------------------------------------------------------------------
-
 function importThemeFromFile(onRefresh: () => void): void {
   const input = document.createElement('input');
   input.type = 'file';
@@ -126,10 +117,6 @@ function exportThemeToFile(theme: ThemeDefinition): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast.success(`Exported "${theme.name}"`);
 }
-
-// ---------------------------------------------------------------------------
-// ThemePreviewCard
-// ---------------------------------------------------------------------------
 
 type BaseThemeMode = 'light' | 'dark' | 'system';
 
@@ -289,10 +276,6 @@ function ThemePreviewCard({ mode, isSelected, onClick }: ThemePreviewCardProps) 
     </button>
   );
 }
-
-// ---------------------------------------------------------------------------
-// ThemeSwatch
-// ---------------------------------------------------------------------------
 
 interface ThemeSwatchProps {
   theme: ThemeDefinition;
@@ -457,10 +440,6 @@ function ThemeSwatch({ theme, isActive, isCustom, onClick, onExport, onDelete }:
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 export function ThemeSettings() {
   const selectedTheme = useSettingsStore((s) => s.windowPreferences.selectedTheme);
   const setSelectedTheme = useSettingsStore((s) => s.setSelectedTheme);
@@ -473,7 +452,6 @@ export function ThemeSettings() {
   const reduceMotion = useSettingsStore((s) => s.windowPreferences.reduceMotion ?? false);
   const setReduceMotion = useSettingsStore((s) => s.setReduceMotion);
 
-  // Use a counter to force re-render after custom theme mutations
   const [customThemes, setCustomThemes] = useState<ThemeDefinition[]>(() => getCustomThemes());
   const [showEditor, setShowEditor] = useState(false);
   const [deleteThemeId, setDeleteThemeId] = useState<string | null>(null);
@@ -493,7 +471,6 @@ export function ThemeSettings() {
 
   function handleDelete(themeId: string, themeName: string) {
     deleteCustomTheme(themeId);
-    // If the deleted theme was active, clear selection
     if (selectedTheme === themeId) {
       setSelectedTheme('');
       localStorage.removeItem(THEME_STORAGE_KEY);

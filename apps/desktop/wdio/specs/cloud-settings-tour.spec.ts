@@ -1,35 +1,3 @@
-/**
- * DES-C08 / DES-C09 / DES-C21 — native tour of Desktop Cloud settings.
- *
- * What this proves that no other harness can:
- *
- *  1. Every item in the Cloud settings navigation renders real content. Nine of
- *     them used to open agiworkforce.com in a child window gated on a Clerk
- *     BROWSER COOKIE Desktop never propagates, so they could silently land on
- *     /login while the app showed the user as signed in. The ones that can be
- *     served with the device bearer now render inline; the ones that cannot must
- *     carry an explicit "Sign in again to manage this" route.
- *  2. The founder demo path is screen-capturable. `contentProtected` maps to
- *     `NSWindow.sharingType = .none`, so a protected window is BLACK in any
- *     recording or screen share. The sign-in, account/settings and connector
- *     windows must never set it — on the shipped default, with no preference to
- *     enable first. Content protection has no getter in the Tauri JS API, so the
- *     decision is read from the registry `services/ownedWindowPresentation.ts`
- *     writes where it is made.
- *  3. The Account section exposes the account id, API keys, and account deletion,
- *     and states honestly that the account-wide session list cannot be served to
- *     a device token (`/api/settings/sessions` is Clerk-cookie-only).
- *
- * Session strategy. A real credentialed sign-in cannot run in an agent sandbox
- * (DESK-CLOUD-DCL2-LIVE-VERIFY-01), so this drives the REAL device-authorization
- * code path with its Tauri IPC commands mocked and a `window.fetch` shim for the
- * HTTP half. Nothing in the app is stubbed: `cloudAccountAuth.setSession`,
- * `refreshUserData`, the settings modal, and every API client run for real.
- *
- * Cleanup matters here: wdio specs share one app-data profile, so this spec
- * signs out and returns the shell to Local Mode in `after()` (the lesson from
- * DES-C13, where a leaked Cloud mode poisoned the next spec's boot).
- */
 
 import { waitForDesktopShell } from '../support/desktop-shell';
 
@@ -43,7 +11,6 @@ const SHARE_TITLE = 'Shared quarterly plan';
 const ARCHIVED_TITLE = 'Archived launch checklist';
 const API_KEY_NAME = 'WDIO seeded key';
 
-/** Nav labels DesktopCloudSettingsModal builds from SETTINGS_NAV_GROUPS_WEB. */
 const CLOUD_NAV_LABELS = [
   'General',
   'Account',
@@ -66,7 +33,6 @@ const CLOUD_NAV_LABELS = [
   'Plugins',
 ];
 
-/** Sections with no bearer-reachable API — they must offer the re-auth route. */
 const BRIDGED_LABELS = new Set([
   'General',
   'Safety',
@@ -90,11 +56,6 @@ interface OwnedWindowRecord {
   contentProtected: boolean;
 }
 
-/**
- * Answer every `/api/*` call in-page. Installed once, before sign-in, and torn
- * down in `after()`. A catch-all `{}` keeps an unrouted call from reaching the
- * network — the failure mode that turned DES-C14's Playwright specs vacuous.
- */
 async function installCloudApiShim(): Promise<void> {
   await browser.execute(
     (user: { id: string; email: string; name: string }, shareTitle, archivedTitle, apiKeyName) => {
@@ -367,8 +328,6 @@ async function mockDeviceAuthorizationIpc(retrying = false): Promise<void> {
     }),
   });
 
-  // A device bearer whose payload the desktop session builder can decode. The
-  // signature is never verified client-side; the server half is shimmed above.
   const base64Url = (value: unknown) =>
     Buffer.from(JSON.stringify(value), 'utf8')
       .toString('base64')
@@ -406,14 +365,6 @@ async function mockDeviceAuthorizationIpc(retrying = false): Promise<void> {
     await mock.mockReturnValue(null);
   }
 
-  // The service's per-session mock-store clear reliably fails, so a later
-  // file's registrations can hit the stale Node-side cache and never reach
-  // this document — the app then performs REAL device authorization and no
-  // owned window ceremony this test can observe. Verify the page seam and, if
-  // the device mocks did not land, re-run JUST their registration. Do NOT call
-  // restoreAllMocks here: this spec's `before` already installed the cloud API
-  // fetch shim via `installCloudApiShim`, and clearing every mock would nuke
-  // that shim and break the whole signed-in flow.
   const missing = await browser.execute(
     (names: string[]) => {
       const mocks =
@@ -473,7 +424,6 @@ describe('AGI Desktop Cloud settings tour', () => {
     this.timeout(180_000);
     await waitForDesktopShell();
 
-    // Normalize a leaked Cloud selection from an earlier spec.
     const localReturn = await $('button=Use Local Mode');
     if (await localReturn.isExisting()) {
       await localReturn.click();
@@ -481,15 +431,12 @@ describe('AGI Desktop Cloud settings tour', () => {
     }
 
     await installCloudApiShim();
-    // Explicitly OFF: the sign-in window must be capturable on the shipped
-    // default, not only when a preference the signed-out user cannot reach is on.
     await setPresentationMode(false);
     await mockDeviceAuthorizationIpc();
   });
 
   after(async function () {
     this.timeout(120_000);
-    // Leave the shared profile exactly as this spec found it (DES-C13).
     await setPresentationMode(false);
     await restoreCloudApiShim();
     await browser.execute(() => {
@@ -505,9 +452,6 @@ describe('AGI Desktop Cloud settings tour', () => {
     await cloudTab.waitForDisplayed({ timeout: 30_000 });
     await cloudTab.click();
 
-    // Since the native sign-in redesign (a3b1005c8), "Sign in to AGI Cloud"
-    // is the AuthPage heading; the owned-window device flow this test drives
-    // lives behind the explicit browser-fallback action.
     const signIn = await $('button=Sign in through your browser instead');
     await signIn.waitForDisplayed({ timeout: 30_000 });
     await signIn.click();
@@ -518,13 +462,9 @@ describe('AGI Desktop Cloud settings tour', () => {
       timeoutMsg: 'Desktop never created the owned Cloud sign-in window',
     });
 
-    // DES-C09: the first step of the demo must be visible to a screen recorder
-    // on the shipped default, with no preference to remember first.
     const signInWindow = await readOwnedWindowRecord('cloud-sign-in');
     expect(signInWindow?.contentProtected).toBe(false);
 
-    // The device poll approves on the first interval, so the shell must reach
-    // the signed-in Cloud surface without any real credential.
     await browser.waitUntil(async () => await $('button[aria-label="Settings"]').isExisting(), {
       timeout: 60_000,
       interval: 500,
@@ -558,7 +498,6 @@ describe('AGI Desktop Cloud settings tour', () => {
       const clicked = await clickSettingsNav(label);
       expect(clicked).toBe(true);
 
-      // Lazy sections resolve through Suspense and then fetch.
       await browser.pause(900);
       const snapshot = await readSettingsSnapshot();
 
@@ -567,13 +506,9 @@ describe('AGI Desktop Cloud settings tour', () => {
       expect(snapshot.hasErrorBoundary).toBe(false);
       expect(snapshot.text.length).toBeGreaterThan(0);
 
-      // The old copy advertised a "content-protected child window" — the exact
-      // window that is invisible on a shared screen (DES-C09).
       expect(snapshot.text).not.toContain('content-protected child window');
 
       if (BRIDGED_LABELS.has(label)) {
-        // DES-C08: a section Desktop cannot serve with its bearer must name the
-        // separate web sign-in and offer the recovery, not a bare Open button.
         expect(snapshot.hasReauthButton).toBe(true);
       }
     });
@@ -627,8 +562,6 @@ describe('AGI Desktop Cloud settings tour', () => {
       interval: 250,
       timeoutMsg: 'Security did not report the account two-factor status',
     });
-    // Presentation mode is a device preference and must be visible to the user
-    // who needs a capturable demo.
     expect(await $('input[aria-label="Presentation mode"]').isExisting()).toBe(true);
   });
 
@@ -650,7 +583,6 @@ describe('AGI Desktop Cloud settings tour', () => {
     expect(paneText).toContain(MOCK_USER.id);
     expect(await $('[data-testid="cloud-delete-account"]').isExisting()).toBe(true);
     expect(await $('[data-testid="cloud-sign-out-this-device"]').isExisting()).toBe(true);
-    // The blocked control must be explained, not faked.
     expect(paneText).toContain('does not accept');
   });
 
@@ -673,8 +605,6 @@ describe('AGI Desktop Cloud settings tour', () => {
       timeoutMsg: 'Desktop never created the owned Cloud account window',
     });
 
-    // DES-C09: the settings window is a read/manage surface and must never be
-    // excluded from screen capture, presentation mode or not.
     const accountWindow = await readOwnedWindowRecord('cloud-account');
     expect(accountWindow?.contentProtected).toBe(false);
 

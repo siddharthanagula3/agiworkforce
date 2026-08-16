@@ -1,22 +1,6 @@
-/**
- * Renders retrieved documents and server-resolved account facts into the single
- * user-role message the model sees.
- *
- * Retrieved document text is UNTRUSTED INPUT. It is sanitized, fenced with a
- * stable delimiter, and preceded by a fixed banner. The structural guarantees
- * that actually hold do NOT depend on the model obeying that banner:
- *
- *   - the model never emits a citation (ids are resolved server-side),
- *   - the hard-abstain gate runs before retrieval, so on a refused category no
- *     document is present at all,
- *   - the action allowlist is validated against the caller-supplied set.
- *
- * The banner is defence in depth on top of those, not the defence itself.
- */
 
 import type { RetrievedChunk, SupportAccountFact, SupportActionOption } from '../types';
 
-/** Delimiter the model is told to treat as a fence. Stripped from doc text. */
 const FENCE = '<<<AGI_SUPPORT_DOC>>>';
 const FENCE_END = '<<<AGI_SUPPORT_DOC_END>>>';
 
@@ -25,16 +9,11 @@ const MAX_HISTORY_TURNS = 6;
 const MAX_HISTORY_CHARS = 600;
 const MAX_QUESTION_CHARS = 2000;
 
-/**
- * Zero-width and bidirectional control characters — invisible text that can
- * make a document render differently from how a human reviewer reads it.
- */
 const INVISIBLE_CHARS = new RegExp(
   '[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]',
   'g',
 );
 
-/** Strip C0/C1 control characters, keeping \n (0x0A) and \t (0x09). */
 function stripControlCharacters(value: string): string {
   let cleaned = '';
   for (const character of value) {
@@ -52,13 +31,6 @@ function stripControlCharacters(value: string): string {
   return cleaned;
 }
 
-/**
- * Strip control characters that let text lie about its own structure, and
- * neutralise anything resembling the fence delimiters so a document cannot
- * close its own fence and pose as prompt-level text. Runs of newlines are
- * collapsed so a document cannot pad itself into pushing the real question out
- * of view.
- */
 export function sanitizeUntrustedText(value: string): string {
   return stripControlCharacters(value.normalize('NFKC').replace(INVISIBLE_CHARS, ''))
     .replace(/<<<+\s*AGI_SUPPORT_DOC[A-Z_]*\s*>>>+/gi, '[removed]')
@@ -80,10 +52,6 @@ export interface RenderContextInput {
   availableActions: SupportActionOption[];
 }
 
-/**
- * Build the single user-role message. The system prompt is separate and never
- * receives any of this.
- */
 export function renderSupportContext(input: RenderContextInput): string {
   const sections: string[] = [];
 
@@ -106,9 +74,6 @@ export function renderSupportContext(input: RenderContextInput): string {
   }
 
   if (input.accountFacts.length > 0) {
-    // A separate TRUSTED block: these are server-resolved facts about the
-    // authenticated caller's own account, produced by the account-context
-    // builder — never client- or model-supplied.
     const facts = input.accountFacts
       .map((fact) => `- ${sanitizeUntrustedText(fact.label)}: ${sanitizeUntrustedText(fact.value)}`)
       .join('\n');

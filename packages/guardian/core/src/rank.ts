@@ -1,10 +1,6 @@
-/**
- * Finding ranking and inline-comment budgeting.
- */
 import type { GuardianConfig } from './config.js';
 import { SEVERITY_WEIGHT, type Finding } from './schema.js';
 
-/** Composite ranking score; higher publishes first. */
 export function findingScore(finding: Finding): number {
   let score = SEVERITY_WEIGHT[finding.severity] * 1000;
   score += Math.round(finding.confidence * 100);
@@ -20,16 +16,10 @@ export function rankFindings(findings: readonly Finding[]): Finding[] {
   return [...findings].sort((a, b) => {
     const diff = findingScore(b) - findingScore(a);
     if (diff !== 0) return diff;
-    // Stable tie-break so output ordering is deterministic across runs.
     return a.fingerprint.localeCompare(b.fingerprint);
   });
 }
 
-/**
- * Select the findings that earn inline PR comments: ranked, above the inline
- * confidence threshold, inside the diff, and within the configured budget.
- * Everything else belongs in the check-run summary.
- */
 export function selectInlineFindings(
   findings: readonly Finding[],
   config: GuardianConfig,

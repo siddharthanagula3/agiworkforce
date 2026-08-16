@@ -1,10 +1,3 @@
-/**
- * The system prompt must be a constant with no interpolation point.
- *
- * If someone later "just adds" a parameter to inject the user's plan or the
- * retrieved docs into it, these fail — which is the whole point. The prompt is
- * the one place user and document text must never reach.
- */
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -45,8 +38,6 @@ describe('support system prompt', () => {
     expect(SUPPORT_SYSTEM_PROMPT).toContain('untrusted');
     expect(SUPPORT_SYSTEM_PROMPT).toContain('abstain');
     expect(SUPPORT_SYSTEM_PROMPT).toContain('citedChunkIds');
-    // The interface attaches sources itself; the model is told its links are
-    // discarded so it does not try to compensate by writing them into prose.
     expect(SUPPORT_SYSTEM_PROMPT).toContain('discarded');
   });
 });

@@ -42,11 +42,6 @@ import { CAPABILITY_LAYERS, type CapabilityLayer, type EffectiveCapabilityDocume
 
 export type CapabilityRequirementStrength = 'mandatory' | 'optional';
 
-/**
- * One task-declared capability requirement. `reason` is surfaced verbatim in
- * a rejection so a UI or log can explain WHY a task was refused, not just
- * which id failed.
- */
 export interface CapabilityRequirement {
   capabilityId: PlatformCapability;
   strength: CapabilityRequirementStrength;
@@ -56,7 +51,6 @@ export interface CapabilityRequirement {
 export interface CapabilityAdmissionRejection {
   capabilityId: PlatformCapability;
   reason?: string;
-  /** Which of the four layers withheld this capability — mirrors `EffectiveCapabilityDocument.deniedBy`. */
   deniedByLayers: readonly CapabilityLayer[];
 }
 
@@ -73,15 +67,6 @@ export type CapabilityAdmissionResult =
       rejected: readonly CapabilityAdmissionRejection[];
     };
 
-/**
- * Evaluate `requirements` against `document`. Returns `admitted: false` if
- * ANY `mandatory` requirement is missing from `document.granted` — a single
- * missing mandatory capability rejects the whole admission, regardless of
- * how many other requirements (mandatory or optional) are satisfied.
- * `optional` requirements never block admission: callers read
- * `grantedRequirementIds` (on success) or `document.granted` directly to
- * decide graceful degradation for the ones that were not satisfied.
- */
 export function evaluateCapabilityAdmission(
   document: EffectiveCapabilityDocument,
   requirements: readonly CapabilityRequirement[],
@@ -95,13 +80,7 @@ export function evaluateCapabilityAdmission(
 
     rejected.push({
       capabilityId: requirement.capabilityId,
-      // `reason` is genuinely optional (no "given but empty" state to preserve),
-      // so an absent requirement reason omits the key rather than assigning
-      // `undefined` — required under `exactOptionalPropertyTypes` and the
-      // semantically honest choice here (present-with-undefined and absent
-      // would mean the same thing to every reader of this type).
       ...(requirement.reason !== undefined ? { reason: requirement.reason } : {}),
-      // Absent from `deniedBy` means no layer ever granted it (denied by all four implicitly).
       deniedByLayers: document.deniedBy[requirement.capabilityId] ?? CAPABILITY_LAYERS,
     });
   }
@@ -110,10 +89,6 @@ export function evaluateCapabilityAdmission(
     return { admitted: false, code: 'mandatory_capability_unavailable', document, rejected };
   }
 
-  // Every `mandatory` requirement is granted (checked above) by construction.
-  // `optional` requirements are filtered against `document.granted` here so an
-  // unmet optional requirement never appears in `grantedRequirementIds` —
-  // "granted" must mean granted, not merely "requested and not blocking."
   return {
     admitted: true,
     document,

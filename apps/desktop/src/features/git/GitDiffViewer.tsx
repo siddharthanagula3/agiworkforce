@@ -16,13 +16,9 @@ import { Button } from '@/ui/Button';
 import { ScrollArea } from '@/ui/ScrollArea';
 
 interface GitDiffViewerProps {
-  /** Repository path */
   repoPath: string;
-  /** File path to show diff for (optional, shows all if not provided) */
   filePath?: string;
-  /** Whether to show staged diff */
   staged?: boolean;
-  /** Additional CSS classes */
   className?: string;
 }
 
@@ -32,9 +28,6 @@ interface DiffLine {
   lineNumber?: number;
 }
 
-/**
- * Parse diff content into structured lines.
- */
 function parseDiffContent(diffContent: string): DiffLine[] {
   const lines: DiffLine[] = [];
   const rawLines = diffContent.split('\n');
@@ -44,7 +37,6 @@ function parseDiffContent(diffContent: string): DiffLine[] {
   for (const line of rawLines) {
     if (line.startsWith('@@') || line.startsWith('diff ') || line.startsWith('index ')) {
       lines.push({ type: 'header', content: line });
-      // Extract starting line number from hunk header
       const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)/);
       if (match?.[1]) {
         lineNumber = parseInt(match[1], 10) - 1;
@@ -114,12 +106,10 @@ export function GitDiffViewer({
     }
   }, [repoPath, filePath, staged]);
 
-  // Fetch diff on mount and when parameters change
   useEffect(() => {
     fetchDiff();
   }, [fetchDiff]);
 
-  // Parse all diffs
   const parsedDiffs = useMemo(() => {
     return diffs.map((diff) => ({
       ...diff,
@@ -127,7 +117,6 @@ export function GitDiffViewer({
     }));
   }, [diffs]);
 
-  // Calculate total stats
   const totalStats = useMemo(() => {
     return diffs.reduce(
       (acc, diff) => ({

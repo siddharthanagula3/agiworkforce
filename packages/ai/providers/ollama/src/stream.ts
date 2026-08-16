@@ -1,20 +1,8 @@
-/**
- * Ollama NDJSON stream → StreamChunk translation.
- *
- * Ollama returns one JSON object per line, terminating when `done: true`. We
- * accumulate text deltas and emit `text-delta` chunks, then a final `usage`
- * + `stop` pair from the trailing record (which carries timing + token counts).
- *
- * Ollama doesn't stream tool-call deltas — it returns a single complete
- * `tool_calls` array on a non-final chunk. We synthesize tool-use-start +
- * tool-use-delta + tool-use-end events from that single chunk.
- */
 
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type { OllamaChatStreamChunk } from './types';
 
-// AUDIT-FIX: M-1 — structural validation guard + sentinel for parse/schema failures.
 function isOllamaChatStreamChunk(value: unknown): value is OllamaChatStreamChunk {
   if (typeof value !== 'object' || value === null) return false;
   const message = (value as { message?: unknown }).message;
@@ -44,7 +32,6 @@ export async function* parseOllamaStream(
         const line = buffer.slice(0, newlineIdx).trim();
         buffer = buffer.slice(newlineIdx + 1);
         if (!line) continue;
-        // AUDIT-FIX: M-1 — parse + validate; emit sentinel chunk on either failure.
         let parsed: unknown;
         try {
           parsed = JSON.parse(line);
@@ -59,7 +46,6 @@ export async function* parseOllamaStream(
         yield parsed;
       }
     }
-    // Flush trailing buffer (no trailing newline).
     const trailing = buffer.trim();
     if (trailing) {
       let parsed: unknown;
@@ -96,7 +82,6 @@ export async function* translateOllamaStream(
         yield { type: 'text-delta', delta: message.content };
       }
       if (message?.tool_calls && message.tool_calls.length > 0) {
-        // Ollama emits complete tool_calls in one shot; synthesize start/delta/end.
         for (const call of message.tool_calls) {
           const id = `ollama-tool-${++toolUseCounter}`;
           yield { type: 'tool-use-start', toolUseId: id, name: call.function.name };
@@ -131,10 +116,6 @@ export async function* translateOllamaStream(
       }
     }
   } finally {
-    // Ollama emits `done: true` on the trailing record. If the underlying
-    // NDJSON stream truncates (network drop, server crash, parser bail)
-    // we still need to surface a `stop` chunk so consumers terminate.
-    // Mirrors the openai/anthropic stream-translator tail.
     if (!stopEmitted) {
       yield { type: 'stop', reason: 'end_turn' };
     }

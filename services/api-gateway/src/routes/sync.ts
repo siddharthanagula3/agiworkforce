@@ -1,19 +1,3 @@
-/**
- * @file Sync API Routes
- * @security
- * - Rate limiting: Applied per-endpoint based on operation type
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Authentication: JWT required for all endpoints
- *
- * Rate limit rationale (OWASP compliant):
- * - POST /batch: 30/min - batch operations can be resource-intensive
- * - GET /updates: 60/min - polling for updates
- * - POST /resolve-conflict: 20/min - conflict resolution is rare
- * - GET /status: 60/min - status checks are lightweight
- * - POST /devices/register: 10/min - device registration
- * - DELETE /devices/:deviceId: 10/min - destructive operation
- * - Legacy endpoints: 30/min - moderate limit for backwards compatibility
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -26,17 +10,8 @@ import { logger } from '../lib/logger';
 const router: Router = Router();
 
 router.use(authenticateToken);
-// SECURITY: Baseline rate limit for all sync endpoints (100/min fallback)
 router.use(createRateLimiter('default'));
 
-// =============================================================================
-// Sync API - Aligned with Rust CloudSyncClient
-// =============================================================================
-// Sync data is stored in Neon (sync_data table)
-// This ensures data survives server restarts and scales across instances
-// TTL cleanup and max entries are handled by database triggers
-
-// SECURITY: Zod schemas for validation with .strict() to reject unexpected fields
 const syncItemSchema = z
   .object({
     id: z.string().max(100),
@@ -79,10 +54,6 @@ const deviceRegistrationSchema = z
   })
   .strict();
 
-// =============================================================================
-// POST /batch - Batch sync (matches Rust CloudSyncClient.sync_batch)
-// SECURITY: Rate limited to 30/min - batch operations can be resource-intensive
-// =============================================================================
 router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -91,15 +62,12 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
 
   const batch = batchSyncSchema.parse(req.body);
 
-  // M13 fix: Validate that the user_id in the batch body matches the authenticated
-  // user to prevent IDOR attacks where a client submits data for another user.
   if (batch.user_id !== user.userId) {
     throw new AppError('user_id mismatch', 403);
   }
 
   const db = getUserScopedClient(user);
 
-  // SECURITY (H11): Validate device_id ownership — prevent cross-user device contamination
   const rawDeviceId = (req.headers['x-device-id'] as string | undefined) ?? batch.device_id;
   let deviceId: string | undefined;
   if (rawDeviceId) {
@@ -129,10 +97,8 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
     remote_timestamp: string;
   }> = [];
 
-  // Process each item in the batch
   for (const item of batch.items) {
     try {
-      // Check for conflicts - look for existing entries with same entity_id
       const { data: existing } = await db
         .from('sync_data')
         .select('*')
@@ -141,14 +107,11 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // For now, simple last-write-wins with conflict detection
-      // Full conflict resolution would need entity_id and version columns in schema
       const existingEntry = existing?.[0];
       if (existingEntry && item.action === 'Update') {
         const existingTime = new Date(existingEntry.created_at).getTime();
         const itemTime = new Date(item.timestamp).getTime();
 
-        // Validate timestamps are valid numbers
         if (Number.isNaN(existingTime) || Number.isNaN(itemTime)) {
           logger.error(
             { existingTime: existingEntry.created_at, itemTime: item.timestamp },
@@ -158,7 +121,6 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
           continue;
         }
 
-        // If remote is newer, it's a conflict
         if (existingTime > itemTime) {
           conflicts.push({
             entity_id: item.entity_id,
@@ -172,7 +134,6 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
         }
       }
 
-      // Insert the sync item
       let parsedData = {};
       if (item.data) {
         try {
@@ -212,10 +173,6 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
   });
 });
 
-// =============================================================================
-// GET /updates - Pull updates since timestamp (matches CloudSyncClient.pull_updates)
-// SECURITY: Rate limited to 60/min - polling for updates
-// =============================================================================
 router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -227,7 +184,6 @@ router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, r
   const deviceId = req.headers['x-device-id'] as string | undefined;
 
   const db = getUserScopedClient(user);
-  // Query sync data from Neon
   let query = db
     .from('sync_data')
     .select('*')
@@ -235,7 +191,6 @@ router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, r
     .gt('created_at', since)
     .order('created_at', { ascending: true });
 
-  // Exclude data from the requesting device (they already have it)
   if (deviceId) {
     query = query.neq('device_id', deviceId);
   }
@@ -247,7 +202,6 @@ router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, r
     throw new AppError('Failed to pull updates', 500);
   }
 
-  // Transform to RemoteUpdate format expected by Rust client
   const updates = (syncData ?? []).map((row, index) => ({
     entity_type: row.sync_type,
     entity_id: row.id, // Using row id as entity_id for now
@@ -260,10 +214,6 @@ router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, r
   res.json(updates);
 });
 
-// =============================================================================
-// POST /resolve-conflict - Conflict resolution (matches CloudSyncClient.resolve_conflict)
-// SECURITY: Rate limited to 20/min - conflict resolution is rare
-// =============================================================================
 router.post(
   '/resolve-conflict',
   createRateLimiter('sync-resolve'),
@@ -277,8 +227,6 @@ router.post(
     const deviceId = req.headers['x-device-id'] as string | undefined;
 
     const db = getUserScopedClient(user);
-    // For now, just insert the resolved data as a new entry
-    // Full implementation would update existing entry with version check
     const { error } = await db.from('sync_data').insert({
       user_id: user.userId,
       device_id: deviceId ?? resolution.device_id,
@@ -300,10 +248,6 @@ router.post(
   },
 );
 
-// =============================================================================
-// GET /status - Get sync status (matches CloudSyncClient.get_sync_status)
-// SECURITY: Rate limited to 60/min - status checks are lightweight
-// =============================================================================
 router.get('/status', createRateLimiter('sync-status'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -311,13 +255,11 @@ router.get('/status', createRateLimiter('sync-status'), async (req: Request, res
   }
 
   const db = getUserScopedClient(user);
-  // Get counts for this user
   const { count: pendingCount } = await db
     .from('sync_data')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.userId);
 
-  // Get last sync timestamp
   const { data: lastSync } = await db
     .from('sync_data')
     .select('created_at')
@@ -334,10 +276,6 @@ router.get('/status', createRateLimiter('sync-status'), async (req: Request, res
   });
 });
 
-// =============================================================================
-// POST /devices/register - Register device (matches CloudSyncClient.register_device)
-// SECURITY: Rate limited to 10/min - device registration
-// =============================================================================
 router.post(
   '/devices/register',
   createRateLimiter('device-register'),
@@ -351,8 +289,6 @@ router.post(
 
     const db = getUserScopedClient(user);
 
-    // Store device registration in sync_data as a special type
-    // Full implementation would have a dedicated devices table
     const { error } = await db.from('sync_data').upsert(
       {
         user_id: user.userId,
@@ -379,10 +315,6 @@ router.post(
   },
 );
 
-// =============================================================================
-// DELETE /devices/:deviceId - Unregister device (matches CloudSyncClient.unregister_device)
-// SECURITY: Rate limited to 10/min - destructive operation
-// =============================================================================
 router.delete(
   '/devices/:deviceId',
   createRateLimiter('device-delete'),
@@ -398,7 +330,6 @@ router.delete(
     }
 
     const db = getUserScopedClient(user);
-    // Delete device registration and all sync data for this device
     const { error } = await db
       .from('sync_data')
       .delete()
@@ -414,11 +345,6 @@ router.delete(
   },
 );
 
-// =============================================================================
-// LEGACY ENDPOINTS - Keep for backwards compatibility
-// =============================================================================
-
-// SECURITY: .strict() rejects unexpected fields
 const legacySyncSchema = z
   .object({
     type: z.string().max(100),
@@ -427,8 +353,6 @@ const legacySyncSchema = z
   })
   .strict();
 
-// POST /push - Legacy push endpoint
-// SECURITY: Rate limited to 30/min for backwards compatibility
 router.post('/push', createRateLimiter('sync-legacy'), async (req: Request, res: Response) => {
   const { type, data, deviceId } = legacySyncSchema.parse(req.body);
   const user = req.user;
@@ -455,8 +379,6 @@ router.post('/push', createRateLimiter('sync-legacy'), async (req: Request, res:
   });
 });
 
-// GET /pull - Legacy pull endpoint
-// SECURITY: Rate limited to 30/min for backwards compatibility
 router.get('/pull', createRateLimiter('sync-legacy'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -465,7 +387,6 @@ router.get('/pull', createRateLimiter('sync-legacy'), async (req: Request, res: 
 
   const sinceRaw = req.query['since'];
   let since = typeof sinceRaw === 'string' ? Number(sinceRaw) : 0;
-  // Validate the timestamp is a valid number
   if (Number.isNaN(since) || since < 0) {
     since = 0;
   }
@@ -507,8 +428,6 @@ router.get('/pull', createRateLimiter('sync-legacy'), async (req: Request, res: 
   });
 });
 
-// DELETE /clear - Legacy clear endpoint
-// SECURITY: Rate limited to 30/min for backwards compatibility (destructive but legacy)
 router.delete('/clear', createRateLimiter('sync-legacy'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {

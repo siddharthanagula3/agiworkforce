@@ -3,22 +3,6 @@ import { AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 
-/**
- * useVoiceConversation — shared turn-taking loop for the two-way voice surfaces
- * (the inline VoiceInlineBar in chat and the /voice companion route).
- *
- * Owns the listen → think → speak cycle in both interaction modes:
- *  - hands-free: tap the orb to start; the recognizer finalizes on its own
- *    after end-of-utterance silence (no tap needed), and listening auto-resumes
- *    after the AI finishes speaking.
- *  - push-to-talk: the mic is live ONLY while the orb is held (press-in starts,
- *    press-out sends) and auto-relisten is disabled.
- *
- * Every capture goes through VoiceInput.startCaptureSession directly so the
- * session's `result` promise can drive the turn when the OS recognizer ends on
- * silence — the UI never sticks in 'listening' waiting for a tap.
- */
-
 export type VoiceConversationPhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 export interface SpeakCallbacks {
@@ -28,36 +12,21 @@ export interface SpeakCallbacks {
 }
 
 export interface UseVoiceConversationOptions {
-  /** Whether the conversation surface is active (visible / mounted). */
   enabled: boolean;
-  /** Push-to-talk: mic is live only while the orb is held; auto-relisten is off. */
-  /**
-   * Hold-to-talk. Optional, defaulting to hands-free: the chat voice overlay
-   * drops push-to-talk for ChatGPT parity while Settings > Voice still offers
-   * it, so the two surfaces differ without forking the hook.
-   */
   pttMode?: boolean;
   hapticsEnabled: boolean;
-  /** Send the final transcript to the chat engine; resolves with assistant text to speak. */
   sendMessage: (text: string) => Promise<string | null | undefined>;
-  /** Speak assistant text on the surface's TTS backend, wiring the given callbacks. */
   speak: (text: string, callbacks: SpeakCallbacks) => Promise<void>;
-  /** Stop any in-flight TTS. */
   stopSpeaking: () => void | Promise<void>;
-  /** Surface capture-start failures (permission, availability) to the user. */
   onCaptureError?: (err: unknown) => void;
-  /** Reports the stop→final STT latency in ms (0 when the recognizer finalized on its own). */
   onSttComplete?: (ms: number) => void;
 }
 
 interface CaptureEntry {
-  /** Set once this session's transcript has been handled — guards the tap /
-   *  PTT-release path racing the recognizer's own end-of-utterance final. */
   consumed: boolean;
   stopRequestedAt: number | null;
 }
 
-/** User-facing message for capture-start failures. Shared by both voice screens. */
 export function voiceCaptureErrorMessage(err: unknown): string {
   if (err instanceof VoiceInput.VoiceCaptureError) {
     if (err.code === 'mic-permission-denied') {
@@ -84,8 +53,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   const pttHeldRef = useRef(false);
   const captureRef = useRef<CaptureEntry | null>(null);
   const startListeningRef = useRef<() => void>(() => {});
-  // Latest-options ref keeps the handlers below stable while always reading
-  // fresh callbacks/prefs, so screens can pass inline closures safely.
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
@@ -104,7 +71,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     );
 
     if (!activeRef.current) return;
-    // Auto-final arrives straight from 'listening'; tap / PTT-release already set 'thinking'.
     setPhase('thinking');
     setAudioLevel(0);
 
@@ -120,8 +86,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
       aiResponse = await optionsRef.current.sendMessage(trimmed);
     } catch (err) {
       if (activeRef.current) {
-        // Prefer the sender's real, user-readable reason (sign-in gate,
-        // mode mismatch, …) over the generic retry copy.
         const message =
           err instanceof Error && err.message.trim()
             ? err.message
@@ -175,7 +139,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     setPhase('thinking');
     setAudioLevel(0);
     hapticTap();
-    // The final transcript arrives via session.result → processTranscript.
     await VoiceInput.stopCapture();
   }, [hapticTap]);
 
@@ -190,13 +153,10 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
         const entry: CaptureEntry = { consumed: false, stopRequestedAt: null };
         const session = await VoiceInput.startCaptureSession((event) => {
           if (!activeRef.current) return;
-          // Normalize metering from dB (-160..0) to 0..1
           const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
           setAudioLevel(normalized);
         });
         captureRef.current = entry;
-        // The recognizer finalizes on its own after end-of-utterance silence
-        // (continuous: false) — process that final without requiring a tap.
         session.result.then(
           ({ text }) => {
             void processTranscript(entry, text);
@@ -213,8 +173,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
         );
         if (!activeRef.current) return;
         if (viaPtt && !pttHeldRef.current) {
-          // Orb released before the recognizer finished starting — treat as a
-          // short press so the mic never stays hot after the finger lifts.
           void stopListeningAndProcess();
           return;
         }
@@ -235,7 +193,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     };
   }, [startListening]);
 
-  /** Hands-free tap: idle→listen, listening→send, speaking→interrupt+listen. */
   const handleOrbPress = useCallback(() => {
     if (phase === 'idle') {
       autoListenRef.current = true;
@@ -249,7 +206,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     }
   }, [phase, startListening, stopListeningAndProcess]);
 
-  /** PTT hold start: mic goes live only while held; never auto-relisten. */
   const handleOrbPressIn = useCallback(() => {
     pttHeldRef.current = true;
     autoListenRef.current = false;
@@ -261,7 +217,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     }
   }, [phase, startListening]);
 
-  /** PTT release: stop the mic and process whatever was captured. */
   const handleOrbPressOut = useCallback(() => {
     pttHeldRef.current = false;
     if (captureRef.current) {
@@ -283,7 +238,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     }
   }, [muted, hapticTap]);
 
-  /** Stop capture + TTS and disarm auto-relisten. Screens call this on end/close. */
   const endConversation = useCallback(async () => {
     autoListenRef.current = false;
     const entry = captureRef.current;
@@ -295,14 +249,10 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     await optionsRef.current.stopSpeaking();
   }, []);
 
-  // Flipping to PTT mid-conversation must kill hands-free auto-relisten.
   useEffect(() => {
     if (options.pttMode) autoListenRef.current = false;
   }, [options.pttMode]);
 
-  // The current native recognizer is a foreground-only interaction. Stop mic
-  // capture and speech immediately when the app becomes inactive/backgrounded;
-  // returning to AGI never resumes listening without another user gesture.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active' || !optionsRef.current.enabled) return;
@@ -330,7 +280,6 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     }
   }, [options.enabled, endConversation]);
 
-  // Release mic/recognizer/TTS if the surface unmounts while still active.
   useEffect(() => {
     return () => {
       activeRef.current = false;

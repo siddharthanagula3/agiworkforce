@@ -1,21 +1,9 @@
-/**
- * MessageList — mid-stream provider error notice.
- *
- * Pins the affordance gate: the incomplete-response notice is shown ONLY for
- * a last assistant message carrying metadata.streamError (additive
- * x_stream_error delta — see hasStreamError's doc comment), only once
- * streaming has stopped, and is mutually exclusive with Continue Generation.
- * The Retry button only renders when the host wired onRegenerateMessage — no
- * fake affordance (mirrors MessageList.continue.test.tsx's Continue gate).
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MessageList } from '../MessageList';
 import { useChatStore } from '../../stores/chatStore';
 import type { ChatMessage } from '../../lib/types';
 
-// Matches both the fallback copy ("This response may be incomplete — ...")
-// and the enriched copy ("Response may be incomplete: <classified message>").
 const NOTICE_TEXT = /response may be incomplete/i;
 const RETRY_NAME = /regenerate this response/i;
 
@@ -32,7 +20,6 @@ function seed(messages: ChatMessage[], isStreaming = false) {
 }
 
 beforeEach(() => {
-  // jsdom does not implement scrollIntoView; MessageList calls it on mount.
   Element.prototype.scrollIntoView = vi.fn();
   useChatStore.setState({ messagesByConversation: {}, isStreaming: false } as never);
 });
@@ -44,7 +31,6 @@ describe('MessageList mid-stream error notice', () => {
     seed([failedMidStream]);
     render(<MessageList conversationId="c1" showProvenanceFooter={false} />);
     expect(screen.getByText(NOTICE_TEXT)).toBeTruthy();
-    // The partial content is preserved, never replaced by the notice.
     expect(screen.getByText('partial answer before the connection dropped')).toBeTruthy();
   });
 
@@ -91,9 +77,6 @@ describe('MessageList mid-stream error notice', () => {
   });
 
   it('is mutually exclusive with Continue Generation', () => {
-    // A turn with BOTH a continuable finishReason and a streamError shouldn't
-    // realistically happen (see hasStreamError's doc comment), but the
-    // notice must not double up with Continue if it ever does.
     seed([{ ...failedMidStream, metadata: { finishReason: 'length', streamError: 'boom' } }]);
     render(
       <MessageList

@@ -1,9 +1,3 @@
-/**
- * CHT-003 fix: Custom confirmation dialog to replace window.confirm()
- *
- * Provides a non-blocking, styled confirmation dialog for high-risk actions.
- * Uses Radix AlertDialog for accessibility and proper modal behavior.
- */
 import React from 'react';
 import {
   AlertDialog,
@@ -67,9 +61,6 @@ export const RiskConfirmationDialog: React.FC<RiskConfirmationDialogProps> = ({
   );
 };
 
-/**
- * Hook for using confirmation dialog with Promise-based API
- */
 export interface ConfirmationState {
   isOpen: boolean;
   riskLevel: 'medium' | 'high';
@@ -85,7 +76,6 @@ export const useRiskConfirmation = () => {
     resolve: null,
   });
 
-  // Use ref to avoid dependency issues with resolve function
   const resolveRef = React.useRef<((confirmed: boolean) => void) | null>(null);
 
   const confirm = React.useCallback(

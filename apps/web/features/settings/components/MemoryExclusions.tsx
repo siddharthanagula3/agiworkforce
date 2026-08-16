@@ -1,31 +1,5 @@
 'use client';
 
-/**
- * Sensitive-data exclusions for account memory.
- *
- * Terms listed here are matched against every auto-memory candidate on the
- * SERVER, in `persistManagedAutoMemoryFacts`, before anything is written. That
- * placement is the point: filtering in the UI would leave the fact stored and
- * merely hidden, which tells the user something was excluded while it sits in
- * the database and keeps being fed to the model.
- *
- * The copy below is deliberately explicit that this governs NEW memories only.
- * Existing entries are listed underneath with their own delete control; silently
- * purging matching rows on save would delete user data on a rule they had no
- * chance to preview.
- *
- * Stored in the `memory` preference namespace (`user_settings.settings->'memory'`),
- * the same mechanism the capabilities and general namespaces use — no migration.
- *
- * DELIBERATELY NOT on `CLOUD_SAFE_SETTINGS_NAMESPACES`. That allowlist mirrors
- * settings to Desktop Managed Cloud, and Desktop's local memory is a different
- * store reached by a different write path — this filter does not run there.
- * Syncing the list would put the terms on a surface where they are not
- * enforced, which is the false-assurance shape this control exists to avoid.
- * These exclusions govern account memory written by the managed cloud chat
- * path, which is the only place `persistManagedAutoMemoryFacts` runs.
- */
-
 import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
@@ -36,7 +10,6 @@ import {
 
 const PREF_NAMESPACE = 'memory';
 
-/** Mirrors the server-side bounds in `managed-memory-context-service.ts`. */
 const MAX_TERMS = 50;
 const MIN_TERM_LENGTH = 3;
 
@@ -92,9 +65,6 @@ export function MemoryExclusions() {
       setTerms(next);
       setError(null);
     } catch (cause) {
-      // The list is NOT updated locally on failure. Showing the term as saved
-      // when the server rejected it is the exact false-assurance this feature
-      // exists to avoid.
       setError(cause instanceof Error ? cause.message : 'Could not save exclusions');
     } finally {
       setSaving(false);

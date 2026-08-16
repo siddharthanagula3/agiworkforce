@@ -1,14 +1,3 @@
-/**
- * Tests for POST /api/mobile/content-report.
- *
- * Covers (MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01):
- *   - Inserts a row into public.content_reports with the signed-in user's id.
- *   - Accepts anonymous (unauthenticated) reports — user_id null — since Local
- *     mode users with no Cloud account must still be able to file a report.
- *   - Validates category is one of the six allowed values and ids are present.
- *   - 400s on an invalid payload (bad category, missing ids, oversize note).
- *   - Uses on-conflict-do-nothing keyed on the client report id (idempotent).
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 

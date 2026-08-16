@@ -457,7 +457,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
 
   describe('Keyboard Shortcuts', () => {
     it('should handle Ctrl+Alt+Arrow keyboard shortcuts for docking', async () => {
-      // Capture the keydown handler registered via the mocked window.addEventListener
       let capturedKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
       vi.mocked(window.addEventListener).mockImplementation(
         (type: string, handler: EventListenerOrEventListenerObject) => {
@@ -473,7 +472,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         expect(result.current.actions).toBeDefined();
       });
 
-      // Clear mock after initial window_get_state call so we only see subsequent dock calls
       vi.mocked(invoke).mockClear();
 
       expect(capturedKeydownHandler).not.toBeNull();
@@ -496,7 +494,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     });
 
     it('should handle Ctrl+Alt+Right for docking right', async () => {
-      // Capture the keydown handler registered via the mocked window.addEventListener
       let capturedKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
       vi.mocked(window.addEventListener).mockImplementation(
         (type: string, handler: EventListenerOrEventListenerObject) => {
@@ -512,7 +509,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         expect(result.current.actions).toBeDefined();
       });
 
-      // Clear mock after initial window_get_state call so we only see subsequent dock calls
       vi.mocked(invoke).mockClear();
 
       expect(capturedKeydownHandler).not.toBeNull();
@@ -535,7 +531,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     });
 
     it('should handle Ctrl+Alt+Down for undocking', async () => {
-      // Capture the keydown handler registered via the mocked window.addEventListener
       let capturedKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
       vi.mocked(window.addEventListener).mockImplementation(
         (type: string, handler: EventListenerOrEventListenerObject) => {
@@ -551,7 +546,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         expect(result.current.actions).toBeDefined();
       });
 
-      // Clear mock after initial window_get_state call so we only see subsequent dock calls
       vi.mocked(invoke).mockClear();
 
       expect(capturedKeydownHandler).not.toBeNull();
@@ -620,7 +614,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     });
   });
 
-  // H57 — additional window manager edge-case tests
   describe('Closed window access (H57)', () => {
     it('returns undefined state gracefully after unmount', async () => {
       const { result, unmount } = renderHook(() => useWindowManager());
@@ -632,7 +625,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       const stateBeforeUnmount = result.current.state;
       unmount();
 
-      // The last rendered state snapshot is preserved; no error is thrown
       expect(stateBeforeUnmount).toBeDefined();
       expect(typeof stateBeforeUnmount.fullscreen).toBe('boolean');
     });
@@ -650,7 +642,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
             fullscreen: false,
           });
         }
-        // Simulate a closed/destroyed window rejecting every action
         return Promise.reject(new Error('Window already closed'));
       });
 
@@ -660,7 +651,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         expect(result.current.actions).toBeDefined();
       });
 
-      // Should not throw — errors are swallowed internally
       await expect(result.current.actions.toggleMaximize()).resolves.not.toThrow();
 
       consoleErrorSpy.mockRestore();
@@ -675,14 +665,12 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         expect(result.current.actions).toBeDefined();
       });
 
-      // Fire three toggleMaximize calls concurrently
       const results = await Promise.allSettled([
         result.current.actions.toggleMaximize(),
         result.current.actions.toggleMaximize(),
         result.current.actions.toggleMaximize(),
       ]);
 
-      // All should settle (fulfilled or rejected) without crashing the hook
       expect(results).toHaveLength(3);
     });
 
@@ -698,11 +686,8 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         result.current.actions.minimize(),
       ]);
 
-      // dock uses invoke('window_dock'), while minimize uses the Tauri Window API
-      // (getCurrentWindow().minimize()) rather than a custom invoke command.
       const invokeCalls = vi.mocked(invoke).mock.calls.map((c) => c[0]);
       expect(invokeCalls).toContain('window_dock');
-      // minimize is called via the native window API
       expect(mockWindowInstance.minimize).toHaveBeenCalled();
     });
   });
@@ -726,7 +711,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
       unmount();
 
       await waitFor(() => {
-        // Every unlisten function that was registered should have been called
         const called = unlistenFns.filter((fn) => fn.mock.calls.length > 0);
         expect(called.length).toBeGreaterThan(0);
       });
@@ -753,7 +737,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
 
       unmount();
 
-      // Dispatch a state event after unmount — should not change anything
       if (capturedCallback) {
         (capturedCallback as EventCb)({
           id: 999,
@@ -767,7 +750,6 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         });
       }
 
-      // The last rendered state is unchanged
       expect(result.current.state.fullscreen).toBe(stateAtUnmount);
     });
   });

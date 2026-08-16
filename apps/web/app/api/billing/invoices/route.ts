@@ -9,11 +9,6 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
 
-/**
- * GET /api/billing/invoices
- * List the current user's Stripe invoices.
- * Returns empty list if Stripe is not configured or user has no customer.
- */
 async function handleGetInvoices(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-invoices');
   if (rateLimitResponse) return rateLimitResponse;

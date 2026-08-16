@@ -1,68 +1,24 @@
-/**
- * stateBridge.ts — Bridge between zustand stores and the canonical AppStateStore.
- *
- * MIGRATION PATTERN (Task 1.3 PoC):
- *   The canonical AppStateStore in packages/client/client-runtime/src/state/ is the long-term
- *   target. During the transition, this bridge:
- *     1. Subscribes to existing zustand stores.
- *     2. Syncs relevant fields to appStateStore via setState.
- *     3. Wires model-switch broadcasts and settings persistence back to zustand.
- *
- *   This keeps ALL consumer components rendering correctly (they still read from
- *   the zustand stores they know about) while the canonical store becomes the
- *   single source of truth for cross-surface concerns.
- *
- * STORES BRIDGED (12 out of 67):
- *   1. auth.ts → AppState.auth (userId, email, planTier, isAuthenticated, accessToken)
- *   2. appModeStore.ts → AppState.chat.appMode
- *   3. notificationStore.ts → (no AppState field needed; bridge registers for future)
- *   4. thinkingStore.ts → AppState.settings.showThinking
- *   5. settingsDialogStore.ts → (UI-only; bridge registers for observability)
- *   6. windowStore.ts → (platform-specific; bridge ensures model-switch doesn't reset window)
- *   7. mcpStore.ts → AppState.mcp (connectedCount, isInitialized)
- *   8. mcpServerStore.ts → AppState.mcp.errorServerIds
- *   9. memoryStore.ts → AppState.memory (totalEntries, avgImportance, decayEnabled)
- *   10. modelStore.ts → AppState.chat.activeModelId + AppState.chat.activeProvider
- *   11. settingsStore.ts → AppState.settings (theme, language, chatFont)
- *   12. unifiedChatStore.ts → AppState.chat.isStreaming + AppState.chat.activeConversationId
- *
- * CALL ONCE at app startup (App.tsx or equivalent).
- * Returns a cleanup function that unsubscribes all bridges.
- */
 
 import { appStateStore } from '@agiworkforce/client-runtime';
 import type { AppState } from '@agiworkforce/client-runtime';
 
-// We import store types but not the full stores to avoid heavy initialization.
-// Each bridge function is called lazily when the store is available.
-
-/** Single cleanup registry for all bridge subscriptions. */
 const cleanupFns: Array<() => void> = [];
 
 function addCleanup(fn: () => void): void {
   cleanupFns.push(fn);
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 1: auth.ts → AppState.auth
-// ---------------------------------------------------------------------------
-
 export function bridgeAuthStore(): void {
-  // Dynamic import to avoid circular deps at module init time
   import('../auth')
     .then(({ useUnifiedAuthStore }) => {
       const unsubscribe = useUnifiedAuthStore.subscribe((state) => {
         appStateStore.setState((prev: AppState) => {
           const userId = state.user?.id ?? null;
           const email = state.user?.email ?? null;
-          // Read the canonical top-level fields, not the deprecated `account`
-          // mirror — that mirror is only refreshed by setAccount, so setUser or
-          // setPlan alone left this bridge holding a stale plan/token.
           const planTier = (state.plan ?? 'free') as AppState['auth']['planTier'];
           const isAuthenticated = state.isAuthenticated ?? false;
           const accessToken = state.accessToken ?? null;
 
-          // Object.is short-circuit: only update if something actually changed
           if (
             prev.auth.userId === userId &&
             prev.auth.email === email &&
@@ -98,10 +54,6 @@ export function bridgeAuthStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 2: appModeStore.ts → AppState.chat.appMode
-// ---------------------------------------------------------------------------
-
 export function bridgeAppModeStore(): void {
   import('../appModeStore')
     .then(({ useAppModeStore }) => {
@@ -125,10 +77,6 @@ export function bridgeAppModeStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 3: thinkingStore.ts → AppState.settings.showThinking
-// ---------------------------------------------------------------------------
-
 export function bridgeThinkingStore(): void {
   import('../thinkingStore')
     .then(({ useThinkingStore }) => {
@@ -149,16 +97,11 @@ export function bridgeThinkingStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 4: settingsStore.ts → AppState.settings (theme, language, chatFont)
-// ---------------------------------------------------------------------------
-
 export function bridgeSettingsStore(): void {
   import('../settingsStore')
     .then(({ useSettingsStore }) => {
       const unsubscribe = useSettingsStore.subscribe((state) => {
         appStateStore.setState((prev: AppState) => {
-          // settingsStore nests theme/language/chatFont inside windowPreferences
           const wp = state.windowPreferences as
             | {
                 theme?: string;
@@ -199,17 +142,10 @@ export function bridgeSettingsStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 5: modelStore.ts → AppState.chat.activeModelId + activeProvider
-// NOTE: Model IDs come from models.json at runtime — NEVER hardcoded here.
-// ---------------------------------------------------------------------------
-
 export function bridgeModelStore(): void {
   import('../modelStore')
     .then(({ useModelStore }) => {
       const unsubscribe = useModelStore.subscribe((state) => {
-        // selectedModel comes from modelStore which reads from models.json.
-        // We never hardcode a model ID here — we forward whatever the store resolved.
         const activeModelId = (state.selectedModel as string | null | undefined) ?? null;
         const activeProvider = (state.selectedProvider as string | null | undefined) ?? null;
 
@@ -232,10 +168,6 @@ export function bridgeModelStore(): void {
       console.warn('[stateBridge] Failed to bridge model store:', err);
     });
 }
-
-// ---------------------------------------------------------------------------
-// Bridge 6: mcpStore.ts → AppState.mcp.connectedCount + isInitialized
-// ---------------------------------------------------------------------------
 
 export function bridgeMcpStore(): void {
   import('../mcpStore')
@@ -266,18 +198,10 @@ export function bridgeMcpStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 7: mcpServerStore.ts → AppState.mcp.errorServerIds
-// mcpServerStore only has: config, isRunning, tools — no servers array.
-// We derive error status from config.running (isRunning=false means error risk).
-// ---------------------------------------------------------------------------
-
 export function bridgeMcpServerStore(): void {
   import('../mcpServerStore')
     .then(({ useMcpServerStore }) => {
       const unsubscribe = useMcpServerStore.subscribe((state) => {
-        // mcpServerStore tracks a single embedded server (not a list)
-        // Use empty array when running, synthetic ID when in error state
         const errorServerIds: string[] =
           !state.isRunning && state.error ? ['embedded-mcp-server'] : [];
 
@@ -298,18 +222,7 @@ export function bridgeMcpServerStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 8: memoryStore.ts → AppState.memory
-// MemoryState exposes: memories[], isLoading, error.
-// We derive totalEntries from memories.length; decay config is fetched on demand.
-// ---------------------------------------------------------------------------
-
 export function bridgeMemoryStore(): void {
-  // decayEnabled is not part of MemoryState; it comes from the real backend
-  // decay config (memory_get_decay_config). Fetch it once at bridge init and
-  // cache it here so the surfaced AppState toggle reflects actual backend state
-  // instead of a hardcoded default. Refreshed values (via setDecayConfig) flow
-  // in when this bridge is re-run.
   let decayEnabled = false;
 
   import('../../api/memory')
@@ -329,7 +242,6 @@ export function bridgeMemoryStore(): void {
     .then(({ useMemoryStore }) => {
       const unsubscribe = useMemoryStore.subscribe((state) => {
         const totalEntries = state.memories.length;
-        // avgImportance: compute from loaded memories (may be 0 if none loaded)
         const avgImportance =
           totalEntries > 0
             ? state.memories.reduce((acc, m) => acc + m.importance, 0) / totalEntries
@@ -356,14 +268,9 @@ export function bridgeMemoryStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 9: unifiedChatStore.ts → AppState.chat.isStreaming + activeConversationId
-// ---------------------------------------------------------------------------
-
 export function bridgeUnifiedChatStore(): void {
   import('../unifiedChatStore')
     .then((mod) => {
-      // unifiedChatStore may export useUnifiedChatStore or useChatStore
       const store =
         (mod as Record<string, unknown>)['useUnifiedChatStore'] ??
         (mod as Record<string, unknown>)['useChatStore'];
@@ -398,10 +305,6 @@ export function bridgeUnifiedChatStore(): void {
       console.warn('[stateBridge] Failed to bridge unifiedChat store:', err);
     });
 }
-
-// ---------------------------------------------------------------------------
-// Bridge 10: billingUsage.ts → AppState.subscriptions (remainingCreditCents etc.)
-// ---------------------------------------------------------------------------
 
 export function bridgeBillingUsageStore(): void {
   import('../billingUsage')
@@ -451,19 +354,13 @@ export function bridgeBillingUsageStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 11: logoutCleanup.ts — registers a cleanup that resets AppState on logout
-// ---------------------------------------------------------------------------
-
 export function bridgeLogoutCleanup(): void {
   import('../logoutCleanup')
     .then((mod) => {
-      // logoutCleanup may export a registerCleanup or similar
       const registerFn = (mod as Record<string, unknown>)['registerLogoutCleanup'];
       if (typeof registerFn !== 'function') return;
 
       (registerFn as (fn: () => void) => void)(() => {
-        // Reset canonical state on logout
         import('@agiworkforce/client-runtime')
           .then(({ initialAppState }) => {
             appStateStore.setState(() => initialAppState);
@@ -476,15 +373,9 @@ export function bridgeLogoutCleanup(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Bridge 12: notificationStore.ts — bridge for future unread count sync
-// ---------------------------------------------------------------------------
-
 export function bridgeNotificationStore(): void {
   import('../notificationStore')
     .then(({ useNotificationStore }) => {
-      // We only subscribe to unreadCount — not the full notification list
-      // (which is too large to replicate in canonical state)
       const unsubscribe = useNotificationStore.subscribe((_state) => {
         // Currently a no-op bridge: notification unread count is surface-specific
         // and doesn't need canonical propagation yet. Registered to prove the
@@ -497,16 +388,6 @@ export function bridgeNotificationStore(): void {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Master initialization
-// ---------------------------------------------------------------------------
-
-/**
- * Initialize all zustand → AppStateStore bridges.
- *
- * Call ONCE at app startup. Returns a cleanup function.
- * Safe to call multiple times (subsequent calls are no-ops due to guard).
- */
 let initialized = false;
 
 export function initStateBridges(): () => void {
@@ -515,7 +396,6 @@ export function initStateBridges(): () => void {
   }
   initialized = true;
 
-  // Wire all 12 bridges (lazy imports — non-blocking)
   bridgeAuthStore();
   bridgeAppModeStore();
   bridgeThinkingStore();
@@ -530,7 +410,6 @@ export function initStateBridges(): () => void {
   bridgeNotificationStore();
 
   return () => {
-    // Clean up all subscriptions
     for (const fn of cleanupFns) {
       try {
         fn();

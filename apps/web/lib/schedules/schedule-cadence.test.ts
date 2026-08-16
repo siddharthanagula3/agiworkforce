@@ -20,10 +20,6 @@ function deployedSweepSchedule(): string {
   return entry.schedule;
 }
 
-/**
- * Firings per day implied by a cron expression, for the day-granularity
- * expressions Vercel accepts. Fields coarser than a day only make it rarer.
- */
 function firingsPerDay(expression: string): number {
   const cron = parseCronExpression(expression);
   return cron.minute.sorted.length * cron.hour.sorted.length;
@@ -35,8 +31,6 @@ describe('schedule cadence floor', () => {
     const perDay = firingsPerDay(schedule);
     const deployedIntervalMs = Math.floor((24 * 60 * 60 * 1000) / perDay);
 
-    // If the deployed cron gets faster, the floor must follow it or the product
-    // keeps refusing cadences it could now actually deliver.
     expect(SWEEP_INTERVAL_MS).toBe(deployedIntervalMs);
   });
 
@@ -113,13 +107,6 @@ describe('schedule cadence floor', () => {
     }
   });
 
-  /**
-   * The cadence floor caps a task at one run per sweep, so a tier granting N
-   * tasks can put N runs into a single sweep's queue. Selling more of those than
-   * the platform attempts per day does not fail loudly — the overflow stays due
-   * and lands days late — which is how these quotas came to be sized for an
-   * hourly sweep that was never deployed.
-   */
   it('sells no more scheduled tasks than the deployed sweep attempts in a day', () => {
     const runsPerDay = firingsPerDay(deployedSweepSchedule()) * PLATFORM_SCHEDULE_RUNS_PER_SWEEP;
     const quotas = Object.values(BILLING_PLAN_PRODUCT_LIMITS)
@@ -129,8 +116,6 @@ describe('schedule cadence floor', () => {
       .filter((quota): quota is number => typeof quota === 'number');
 
     expect(quotas.reduce((total, quota) => total + quota, 0)).toBeLessThanOrEqual(runsPerDay);
-    // And no single tier may outrun a whole sweep on its own, or one user's
-    // backlog starves every other user's due tasks indefinitely.
     expect(Math.max(...quotas)).toBeLessThanOrEqual(PLATFORM_SCHEDULE_RUNS_PER_SWEEP);
   });
 

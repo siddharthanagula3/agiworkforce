@@ -1,11 +1,3 @@
-/**
- * Citations are structural, resolved server-side by chunk-id lookup.
- *
- * The invariant under test: an answer with no verifiable retrieved source is
- * never returned. It becomes an abstention. This also carries the positive
- * control that makes the "provider never called" assertions elsewhere
- * meaningful — the same harness DOES reach the provider here.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

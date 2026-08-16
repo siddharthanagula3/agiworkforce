@@ -1,13 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * Blocking WCAG 2.1 A/AA audit for public Web routes.
- *
- * Start the Web app first, then run `pnpm a11y:audit`. CI supplies the
- * production server URL through A11Y_BASE_URL. Navigation failures and empty
- * audit runs fail closed so this command can never report a false green.
- */
-
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium } from 'playwright';
 import fs from 'node:fs';

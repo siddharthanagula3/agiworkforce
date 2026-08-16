@@ -1,11 +1,3 @@
-/**
- * Settings Preferences API — lost-update regression
- *
- * PUT /api/settings/preferences must persist only the changed delta and merge
- * it atomically in SQL (`user_settings.settings || excluded.settings`). The
- * previous read-modify-write sent the whole read-merged doc, so a concurrent
- * writer's namespace was silently clobbered (lost update).
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -27,9 +19,6 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 import { PUT } from '@/app/api/settings/preferences/route';
 
-// Simulated stored doc at read time — the "current" the request reads. A
-// concurrent writer may change `theme` after this read; the fix must not let
-// this stale value win.
 const STORED = { theme: 'dark', profile: { bio: 'old' } };
 
 function makeRequest(body: unknown): NextRequest {
@@ -51,7 +40,6 @@ function getUpsert(): { sql: string; params: unknown[] } {
 describe('PUT /api/settings/preferences — lost-update fix', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // query #1 = readSettings (size guard); query #2 = upsert RETURNING.
     mockQuery
       .mockResolvedValueOnce([{ settings: STORED }])
       .mockResolvedValueOnce([{ settings: { ...STORED, profile: { bio: 'new' } } }]);
@@ -71,9 +59,6 @@ describe('PUT /api/settings/preferences — lost-update fix', () => {
 
     const { params } = getUpsert();
     const persisted = JSON.parse(params[1] as string);
-    // Regression: the old code sent { theme:'dark', profile:{bio:'new'} } — the
-    // stale `theme` would clobber a concurrent theme write. The fix sends only
-    // the changed namespace.
     expect(persisted).toEqual({ profile: { bio: 'new' } });
     expect(persisted).not.toHaveProperty('theme');
   });
@@ -95,7 +80,6 @@ describe('PUT /api/settings/preferences — lost-update fix', () => {
   it('returns the true post-merge doc from RETURNING', async () => {
     const res = await PUT(makeRequest({ namespace: 'profile', value: { bio: 'new' } }));
     const json = await res.json();
-    // Server returns the actual merged row (includes theme preserved by `||`).
     expect(json.settings).toEqual({ theme: 'dark', profile: { bio: 'new' } });
   });
 });

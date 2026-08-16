@@ -1,15 +1,3 @@
-/**
- * AudioPlayer - Audio playback component with waveform visualization
- *
- * Features:
- * - Play/pause/seek controls
- * - Visual waveform representation
- * - Progress indicator
- * - Duration display
- * - Keyboard controls (space for play/pause)
- * - Option to delete/discard recording
- * - Send as attachment option
- */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@shared/lib/utils';
@@ -17,29 +5,17 @@ import { Button } from '@shared/components/ui/button';
 import { Play, Pause, Trash2, Send, RotateCcw } from 'lucide-react';
 
 export interface AudioPlayerProps {
-  /** Audio source URL */
   src: string;
-  /** Audio blob (for creating File attachment) */
   audioBlob?: Blob;
-  /** Callback when user wants to send the audio */
   onSend?: (audioFile: File) => void;
-  /** Callback when user wants to discard the audio */
   onDiscard?: () => void;
-  /** Callback when user wants to re-record */
   onReRecord?: () => void;
-  /** Whether to show action buttons */
   showActions?: boolean;
-  /** Custom className */
   className?: string;
-  /** Size variant */
   size?: 'sm' | 'md' | 'lg';
-  /** Whether the component is compact (inline) */
   compact?: boolean;
 }
 
-/**
- * Format duration in MM:SS format
- */
 function formatDuration(seconds: number): string {
   if (!isFinite(seconds) || isNaN(seconds)) {
     return '00:00';
@@ -60,23 +36,16 @@ export const AudioPlayer = React.memo(function AudioPlayer({
   size = 'md',
   compact = false,
 }: AudioPlayerProps) {
-  // State
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [waveformData, setWaveformData] = useState<number[]>([]);
-  /**
-   * STB-28: true only when `waveformData` was measured from decoded audio.
-   * When false the bars are a neutral placeholder, not a property of the audio.
-   */
   const [waveformMeasured, setWaveformMeasured] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
 
-  // Size configurations
   const sizeConfig = {
     sm: {
       height: 32,
@@ -106,29 +75,16 @@ export const AudioPlayer = React.memo(function AudioPlayer({
 
   const config = sizeConfig[size];
   const barCount = useMemo(() => {
-    // Calculate number of bars based on available width
     return compact ? 24 : 48;
   }, [compact]);
 
-  /**
-   * STB-28: a flat, uniform bar row used whenever we have no decoded audio to
-   * measure — the normal case for a src-only message, and after a decode error.
-   *
-   * This previously rendered `0.2 + Math.random() * 0.8` per bar, i.e. an
-   * invented waveform presented as a property of the recording. It looked
-   * exactly like a real analysis, so a user reading loudness or silence off it
-   * was reading noise. A uniform row is visibly a placeholder.
-   */
   const placeholderWaveform = useMemo(
     () => Array.from({ length: barCount }, () => 0.35),
     [barCount],
   );
 
-  // Generate waveform data from audio
   useEffect(() => {
     if (!audioBlob) {
-      // No bytes to analyse — show the neutral placeholder, and mark it as such.
-      // Use queueMicrotask to avoid cascading renders.
       queueMicrotask(() => {
         setWaveformData(placeholderWaveform);
         setWaveformMeasured(false);
@@ -142,7 +98,6 @@ export const AudioPlayer = React.memo(function AudioPlayer({
         const arrayBuffer = await audioBlob.arrayBuffer();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-        // Get audio data from the first channel
         const rawData = audioBuffer.getChannelData(0);
         const samples = barCount;
         const blockSize = Math.floor(rawData.length / samples);
@@ -156,7 +111,6 @@ export const AudioPlayer = React.memo(function AudioPlayer({
           filteredData.push(sum / blockSize);
         }
 
-        // Normalize to 0-1 range
         const maxVal = Math.max(...filteredData);
         const normalizedData = filteredData.map((val) => (maxVal > 0 ? val / maxVal : 0.2));
 
@@ -165,8 +119,6 @@ export const AudioPlayer = React.memo(function AudioPlayer({
         audioContext.close();
       } catch (error) {
         console.error('Error analyzing audio:', error);
-        // Decode failed — fall back to the neutral placeholder (STB-28), never
-        // to invented amplitudes.
         setWaveformData(placeholderWaveform);
         setWaveformMeasured(false);
       }
@@ -175,7 +127,6 @@ export const AudioPlayer = React.memo(function AudioPlayer({
     analyzeAudio();
   }, [audioBlob, barCount, placeholderWaveform]);
 
-  // Initialize audio element
   useEffect(() => {
     const audio = new Audio(src);
     audioRef.current = audio;
@@ -214,7 +165,6 @@ export const AudioPlayer = React.memo(function AudioPlayer({
     };
   }, [src]);
 
-  // Handle play/pause
   const togglePlayPause = useCallback(() => {
     if (!audioRef.current) return;
 
@@ -226,7 +176,6 @@ export const AudioPlayer = React.memo(function AudioPlayer({
     setIsPlaying(!isPlaying);
   }, [isPlaying]);
 
-  // Handle seek on waveform click
   const handleSeek = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!audioRef.current || !progressRef.current || duration === 0) return;
@@ -242,11 +191,9 @@ export const AudioPlayer = React.memo(function AudioPlayer({
     [duration],
   );
 
-  // Handle send
   const handleSend = useCallback(() => {
     if (!audioBlob || !onSend) return;
 
-    // Create a File from the Blob
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const extension = audioBlob.type.includes('webm') ? 'webm' : 'mp3';
     const fileName = `voice-message-${timestamp}.${extension}`;
@@ -255,10 +202,8 @@ export const AudioPlayer = React.memo(function AudioPlayer({
     onSend(audioFile);
   }, [audioBlob, onSend]);
 
-  // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle space if no other element is focused
       if (e.code === 'Space' && document.activeElement === document.body) {
         e.preventDefault();
         togglePlayPause();
@@ -269,7 +214,6 @@ export const AudioPlayer = React.memo(function AudioPlayer({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [togglePlayPause]);
 
-  // Calculate progress percentage
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -324,7 +268,6 @@ export const AudioPlayer = React.memo(function AudioPlayer({
                 className={cn(
                   'rounded-full transition-colors duration-100',
                   isPlayed ? 'bg-primary' : 'bg-muted-foreground/30',
-                  // STB-28: dim the placeholder so it never reads as measured data.
                   !waveformMeasured && 'opacity-50',
                 )}
                 style={{

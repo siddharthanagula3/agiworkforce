@@ -1,11 +1,3 @@
-/**
- * PAR-M49 — the native launch screen is held past the first React commit and
- * released once the app is genuinely presentable.
- *
- * Expo hides the launch screen at the first drawn frame, which happens before
- * encrypted storage has hydrated and before the Newsreader faces have landed —
- * so the AGI wordmark rendered one frame in a Georgia fallback and popped.
- */
 import { renderHook } from '@testing-library/react-native';
 
 import {
@@ -14,7 +6,6 @@ import {
   useLaunchSplashRelease,
 } from '@/src/shared/hooks/useLaunchSplash';
 
-// `mock`-prefixed so Jest's module-factory hoisting allows the reference.
 const mockPreventAutoHideAsync = jest.fn<Promise<boolean>, []>();
 const mockHideAsync = jest.fn<Promise<boolean>, []>();
 
@@ -39,7 +30,6 @@ describe('holdLaunchSplash', () => {
     mockPreventAutoHideAsync.mockRejectedValue(new Error('No native splash screen registered'));
 
     expect(() => holdLaunchSplash()).not.toThrow();
-    // Flush the rejection; an unhandled one would fail the run.
     await Promise.resolve();
     await Promise.resolve();
   });

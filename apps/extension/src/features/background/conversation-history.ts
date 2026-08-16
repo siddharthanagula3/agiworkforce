@@ -41,111 +41,57 @@ const MAX_AGENT_EVENT_SERIALIZED_CHARS = 32_000;
 const MAX_AGENT_EVENT_SERIALIZED_CHARS_TOTAL = 512 * 1024;
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CONVERSATION_STORE_LOCK = 'agi-browser-conversation-store-v2';
-/**
- * Message cap for a task-scoped conversation. A daily task appends two
- * messages per run forever, so the thread has to be bounded or it eventually
- * blows the `chrome.storage.local` quota for every other conversation too.
- */
 const MAX_BACKGROUND_MESSAGES = 100;
 const MAX_CONVERSATION_TITLE_CHARS = 80;
 const BACKGROUND_DELIVERY_ID_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
   '\n\n[Answer truncated because it exceeded the browser-local history limit.]';
 
-/**
- * Bookkeeping bounds for the account-backed conversation mirror.
- *
- * These are deliberately fixed-size: they must never consume the content
- * budget in `HistoryNormalizationBudget`, or turning cloud sync on would start
- * evicting real messages.
- */
 const MAX_CLOUD_SYNC_ERROR_CHARS = 200;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Which runtime actually produced a turn.
- *
- * This is provenance, not a preference: it is stamped at the point of dispatch
- * by whichever code path executed the turn. It is the sole gate on account-
- * backed persistence, so it must never be inferred, defaulted, or backfilled.
- * An absent value means "unknown", which fails closed (never synced).
- */
 export type ConversationRuntime = 'managed-cloud' | 'local';
 
 export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
-  /** Retry-stable marker used to make background result delivery idempotent. */
   backgroundDeliveryId?: string;
   agentEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
-  /** The assistant turn used the per-request Quick overlay, not durable routing. */
   managedQuickMode?: boolean;
-  /** Exact catalog route that produced this assistant turn. */
   model?: string;
-  /** Canonical provider for `model`, re-derived from the catalog on restore. */
   provider?: string;
-  /** Validated durable descriptors emitted by `x_generated_files`. */
   generatedFiles?: GeneratedFileWire[];
-  /** Validated durable card envelopes emitted by `x_interactive_card`. */
   interactiveCards?: InteractiveCard[];
-  /**
-   * Runtime that actually produced this turn. Absent = unknown = never eligible
-   * for cloud persistence. Messages written before account-backed mirroring
-   * shipped therefore stay browser-local forever, by design.
-   */
   runtime?: ConversationRuntime;
-  /** Server-side `web_messages.id` (UUID). Minted lazily at the first sync attempt. */
   cloudMessageId?: string;
-  /** Wall-clock time the cloud accepted this exact content. */
   cloudSyncedAt?: number;
-  /** `content.length` at the moment of acceptance; a mismatch means "dirty, re-send". */
   cloudSyncedChars?: number;
-  /** Compact change detector for all fields mirrored in the cloud message payload. */
   cloudSyncedFingerprint?: string;
 }
 
-/**
- * Per-conversation mirror bookkeeping.
- *
- * The local record stays authoritative; this is only what we know about the
- * replica. `blockedReason: 'non-cloud-runtime'` is STICKY — a Local/BYOK turn
- * permanently disqualifies the thread and can never be cleared, which is what
- * makes the trust-boundary rule enforceable rather than advisory.
- */
 export interface ConversationCloudSyncState {
-  /** `web_conversations.id` (UUID). Minted when the first create is claimed. */
   conversationId?: string;
-  /**
-   * Server-confirmed workspace owning the replica. `null` is Personal;
-   * `undefined` is an older/unacknowledged binding and must never be used for
-   * a mutation whose scope could follow the account's current workspace.
-   */
   organizationId?: string | null;
-  /** False only while the first idempotent create has not been acknowledged. */
   createAcknowledged?: boolean;
-  /** Title last accepted by the server, so an update is only sent when it changed. */
   syncedTitle?: string;
   state: 'idle' | 'pending' | 'error' | 'blocked';
   blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
   lastError?: string;
   lastAttemptAt?: number;
-  /** Local backoff floor for 429/5xx. The shared client does not retry 4xx. */
   retryAfter?: number;
 }
 
 export interface ConversationEntry {
   id: string;
-  /** Exact account/session incarnation allowed to read or mutate this entry. */
   owner: ManagedCloudOwner;
   title: string;
   messages: HistoryMessage[];
   savedAt: number;
   routing: ConversationRoutingState;
-  /** Account-mirror bookkeeping. Absent until the first automatic sync attempt. */
   cloudSync?: ConversationCloudSyncState;
 }
 
@@ -153,28 +99,20 @@ export interface ConversationRoutingState {
   selectedModel: string;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
-  /** Catalog-validated reasoning preference for this browser-local conversation. */
   effort?: Effort;
 }
 
-/** One completed background run: what was asked, and what was generated. */
 export interface BackgroundTurn {
   prompt: string;
   answer: string;
   timestamp?: number;
-  /** Shared by both messages so a restarted worker cannot append the turn twice. */
   deliveryId?: string;
-  /**
-   * Runtime that produced `answer`. Required for cloud eligibility; an omitted
-   * value means the turn is never mirrored to the account.
-   */
   runtime?: ConversationRuntime;
 }
 
 export interface BackgroundTurnAppendResult {
   entry: ConversationEntry;
   status: 'inserted' | 'updated' | 'unchanged';
-  /** Exact assistant text proven present in the bounded record written to storage. */
   persistedAnswer: string;
 }
 
@@ -389,8 +327,6 @@ function normalizeHistoryMessage(
     if (message['managedQuickMode'] === true) normalized.managedQuickMode = true;
     if (isSafeModelReference(message['model'])) {
       const modelMetadata = getModelMetadataById(message['model']);
-      // Chrome's managed router admits catalog models only. Re-derive the
-      // provider from that catalog instead of trusting a mutable storage field.
       if (modelMetadata) {
         normalized.model = message['model'];
         normalized.provider = modelMetadata.provider;
@@ -408,11 +344,6 @@ function normalizeHistoryMessage(
     });
     if (interactiveCards.length > 0) normalized.interactiveCards = interactiveCards;
   }
-  // Cloud-mirror bookkeeping. Every field here is DROPPED on an unrecognized
-  // value rather than rejected: `normalizeConversationEntry` discards the whole
-  // conversation when any message fails to normalize, so a corrupt
-  // `cloudMessageId` must degrade the message to "unsynced" (it will be re-sent
-  // under a fresh id) instead of destroying the user's transcript.
   if (message['runtime'] === 'managed-cloud' || message['runtime'] === 'local') {
     normalized.runtime = message['runtime'];
   }
@@ -493,13 +424,6 @@ function normalizeRoutingState(value: unknown): ConversationRoutingState {
   return normalized;
 }
 
-/**
- * Validate the cloud-mirror bookkeeping attached to a stored conversation.
- *
- * Same discipline as the message normalizer: anything unrecognized is dropped,
- * never rejected. Losing the binding costs one duplicate cloud conversation;
- * rejecting the entry would cost the user their chat.
- */
 function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const raw = value as Record<string, unknown>;
@@ -546,7 +470,6 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   if (typeof raw['retryAfter'] === 'number' && Number.isFinite(raw['retryAfter'])) {
     normalized.retryAfter = raw['retryAfter'];
   }
-  // Nothing worth persisting: an all-defaults record only adds storage bytes.
   const isEmpty =
     normalized.state === 'idle' &&
     normalized.conversationId === undefined &&
@@ -560,7 +483,6 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   return isEmpty ? undefined : normalized;
 }
 
-/** Strip control characters and bound an error string before it reaches storage. */
 function boundCloudSyncErrorText(value: string): string | undefined {
   let stripped = '';
   for (
@@ -643,8 +565,6 @@ function normalizeMessages(
   if (!Array.isArray(value)) return [];
   const rawMessages = value.slice(-MAX_MESSAGES_PER_CONVERSATION);
   const normalized: HistoryMessage[] = [];
-  // Consume the aggregate budget newest-first so oversized conversations keep
-  // their latest usable turns instead of retaining the oldest prefix.
   for (let index = rawMessages.length - 1; index >= 0; index -= 1) {
     const message = normalizeHistoryMessage(rawMessages[index], budget);
     if (message) normalized.push(message);
@@ -653,24 +573,6 @@ function normalizeMessages(
   return normalized;
 }
 
-/**
- * Re-attach cloud-sync bookkeeping (and provenance) from the stored entry onto
- * an incoming message array.
- *
- * `upsertConversation` replaces `entry.messages` wholesale from the side
- * panel's 50-message window, and the panel knows nothing about
- * `cloudMessageId`. Without this, every save would look like "nothing has ever
- * been synced" and re-POST the entire thread under fresh ids.
- *
- * Matching is on (role, timestamp): the panel assigns `timestamp` once at push
- * time and never changes it, whereas `content` mutates on every stream chunk —
- * so content cannot be part of the key.
- *
- * `cloudSyncedChars` is carried verbatim on purpose. If the message grew since
- * it was accepted, the recorded length no longer matches the current content
- * and the sync worker re-sends it under the SAME `cloudMessageId`, which the
- * server upserts (`on conflict (id) do update`) instead of duplicating.
- */
 function carryForwardCloudSyncState(
   existing: readonly HistoryMessage[],
   incoming: HistoryMessage[],
@@ -685,9 +587,6 @@ function carryForwardCloudSyncState(
     if (!prior) return message;
     return {
       ...message,
-      // Provenance is carried forward when the incoming copy omits it. This is
-      // what lets a restored-from-history conversation keep its eligibility
-      // instead of failing closed on every restore.
       ...(message.runtime === undefined && prior.runtime !== undefined
         ? { runtime: prior.runtime }
         : {}),
@@ -719,11 +618,6 @@ function deriveTitle(messages: HistoryMessage[]): string {
   return text.length > 60 ? `${text.slice(0, 57)}...` : text;
 }
 
-/**
- * Accept a caller-supplied conversation title. Task names come from stored
- * task records, so collapse whitespace, strip control characters and bound the
- * length before it reaches the history list.
- */
 function normalizeConversationTitle(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const collapsed = value.replace(/\s+/g, ' ').trim();
@@ -815,9 +709,6 @@ function parseLegacyBrowserStore(value: unknown): BrowserConversationStore | und
   if (!value || typeof value !== 'object') return undefined;
   const store = value as Record<string, unknown>;
   if (store['version'] !== 1 || !Array.isArray(store['conversations'])) return undefined;
-  // Version-one entries predate account/session ownership. Even if a crafted
-  // record includes an owner-shaped property, the schema cannot prove who
-  // created it, so it must not be adopted into a Managed Cloud identity.
   return { ...EMPTY_STORE, conversations: [] };
 }
 
@@ -850,9 +741,6 @@ async function readStore(): Promise<BrowserConversationStore> {
     return { ...EMPTY_STORE, conversations: [] };
   }
 
-  // Legacy records predate account/session ownership. They cannot be safely
-  // attributed to the currently signed-in user, so remove rather than adopt
-  // them into a Managed Cloud identity.
   const boundedMigratedStore: BrowserConversationStore = {
     version: 2,
     activeConversationId: null,
@@ -886,8 +774,6 @@ function serializedByteLength(value: unknown): number {
 function fitConversationEntryToBudget(entry: ConversationEntry): ConversationEntry | undefined {
   if (serializedByteLength(entry) <= MAX_CONVERSATION_ENTRY_BYTES) return entry;
 
-  // Binary-search the smallest oldest-message prefix to evict. This avoids an
-  // O(n²) stringify loop while preserving the most recent durable turns.
   let low = 0;
   let high = entry.messages.length;
   while (low < high) {
@@ -903,20 +789,6 @@ function fitConversationEntryToBudget(entry: ConversationEntry): ConversationEnt
   return serializedByteLength(fitted) <= MAX_CONVERSATION_ENTRY_BYTES ? fitted : undefined;
 }
 
-/**
- * STORAGE PRESSURE ONLY — NEVER A CLOUD SIGNAL.
- *
- * Everything this function drops (30-day TTL, the 1 MiB per-entry cap, the
- * 4 MiB store cap) is an eviction forced by `chrome.storage.local` quota, not
- * an expression of user intent. Do NOT hang "mirror local state to the cloud"
- * logic off `writeStore` or off this function: doing so silently converts quota
- * pressure into permanent deletion of the account-side replica, which is the
- * longer-lived copy the user is relying on.
- *
- * Cloud DELETEs originate from exactly one place: an explicit user deletion via
- * `deleteConversation`, whose returned `cloudConversationId` is the only handle
- * any caller is given.
- */
 function boundConversationStoreForWrite(store: BrowserConversationStore): BrowserConversationStore {
   const candidates = pruneExpired(store.conversations)
     .slice(0, MAX_CONVERSATIONS)
@@ -940,8 +812,6 @@ function boundConversationStoreForWrite(store: BrowserConversationStore): Browse
       ]
     : candidates;
   const selectedEntryKeys = new Set<string>();
-  // Reserve framing/headroom for the active id and commas; a final exact check
-  // below handles escaped/non-ASCII strings without relying on this estimate.
   let usedBytes = 1_024;
   for (const entry of priority) {
     const entryBytes = serializedByteLength(entry);
@@ -1006,24 +876,6 @@ async function readAfterMutations(): Promise<BrowserConversationStore> {
   return withConversationStoreLock(readStore);
 }
 
-/**
- * Append a completed background turn (scheduled task, shortcut replay) to a
- * task-scoped conversation.
- *
- * Background runs are dispatched with a fixed `clientInstanceId` that no side
- * panel listens for — the panel filters `CHAT_CHUNK` on its own per-panel UUID
- * — so this is the only place their answer is retained. Without it the run is
- * generated, billed, and discarded.
- *
- * Two deliberate differences from `upsertConversation`:
- *  - the caller supplies the title (the task name), because `deriveTitle`
- *    would otherwise label the entry with the raw prompt;
- *  - `activeConversationId` is left alone. A task firing in the background must
- *    never switch the conversation an open side panel is showing.
- *
- * The read-append-write runs inside `mutateStore`, so two tasks completing at
- * once cannot lose each other's turn.
- */
 export async function appendBackgroundTurn(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -1089,9 +941,6 @@ export async function appendBackgroundTurn(
     const normalizedMessages = normalizeMessages([...retainedMessages, ...appended]).slice(
       -MAX_BACKGROUND_MESSAGES,
     );
-    // A retried delivery rewrites the same (role, timestamp) pair, so carry the
-    // prior `cloudMessageId` forward. Otherwise the retry would mint fresh ids
-    // and the account would end up with two copies of one background turn.
     const messages = existing
       ? carryForwardCloudSyncState(existing.messages, normalizedMessages)
       : normalizedMessages;
@@ -1102,8 +951,6 @@ export async function appendBackgroundTurn(
       messages,
       savedAt: Date.now(),
       routing: normalizeRoutingState(routing),
-      // Preserve the existing cloud binding: this entry is rebuilt from
-      // scratch, so without this the thread would be re-created in the account.
       ...(existing?.cloudSync ? { cloudSync: existing.cloudSync } : {}),
     };
     store.conversations = [
@@ -1135,30 +982,17 @@ export async function appendBackgroundTurn(
   });
 }
 
-/**
- * Keep a paid background answer renderable in browser-local history instead
- * of letting the generic message normalizer silently drop an oversized turn.
- */
 function normalizeBackgroundAnswer(value: string): string {
   const answer = value.trim();
   if (answer.length <= MAX_HISTORY_CONTENT_CHARS) return answer;
 
   const prefixLimit = MAX_HISTORY_CONTENT_CHARS - BACKGROUND_ANSWER_TRUNCATION_NOTICE.length;
   let prefix = answer.slice(0, prefixLimit);
-  // Avoid persisting a lone high surrogate when the UTF-16 boundary bisects a
-  // non-BMP character.
   const lastCodeUnit = prefix.charCodeAt(prefix.length - 1);
   if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) prefix = prefix.slice(0, -1);
   return `${prefix.trimEnd()}${BACKGROUND_ANSWER_TRUNCATION_NOTICE}`;
 }
 
-/**
- * Save an independent archived browser conversation.
- *
- * NOT a production path — no caller outside the test suite. It is deliberately
- * left without cloud-mirror semantics (no carry-forward, no binding): teaching
- * it sync would ship a cloud write path that nothing exercises in production.
- */
 export async function saveConversation(
   owner: ManagedCloudOwner,
   messages: HistoryMessage[],
@@ -1174,13 +1008,6 @@ export async function saveConversation(
   });
 }
 
-/**
- * Persist a browser conversation using the caller-owned identity.
- *
- * Side panels must use this API instead of inferring ownership from the
- * store-wide active pointer. Multiple Chrome windows can therefore retain
- * distinct conversations even when they save concurrently.
- */
 export async function upsertConversation(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -1198,15 +1025,11 @@ export async function upsertConversation(
     const existing = store.conversations.find(
       (entry) => entry.id === conversationId && sameManagedCloudOwner(entry.owner, owner),
     );
-    // The panel sends a plain transcript window with no cloud bookkeeping, so
-    // re-attach what the stored record already knows before it is overwritten.
     const carried = existing
       ? carryForwardCloudSyncState(existing.messages, normalizedMessages)
       : normalizedMessages;
     const entry: ConversationEntry = existing
       ? {
-          // `cloudSync` survives via this spread — the explicit fields below
-          // must never shadow it.
           ...existing,
           title: deriveTitle(carried),
           messages: carried,
@@ -1228,12 +1051,6 @@ export async function upsertConversation(
   });
 }
 
-/**
- * Persist a boot-time seed under a newly allocated window owner without
- * changing the store-wide active pointer or overwriting a turn that may have
- * already saved under that owner. This closes the gap where a side panel could
- * hydrate a colliding seed only in memory and lose it when the panel closed.
- */
 export async function persistConversationSeed(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -1260,14 +1077,6 @@ export async function persistConversationSeed(
   });
 }
 
-/**
- * Persist the current Chrome conversation, updating its existing record in
- * place.
- *
- * NOT a production path (see `saveConversation`) — the side panel uses
- * `upsertConversation`, which is the only writer that carries cloud-mirror
- * bookkeeping forward.
- */
 export async function saveActiveConversation(
   owner: ManagedCloudOwner,
   messages: HistoryMessage[],
@@ -1363,11 +1172,6 @@ export async function listConversations(owner: ManagedCloudOwner): Promise<Conve
   );
 }
 
-/**
- * Search browser-local history without sending titles or message content off
- * device. Every normalized query term must appear somewhere in the title or
- * transcript, allowing useful multi-word searches without inventing ranking.
- */
 export function filterConversations(
   entries: readonly ConversationEntry[],
   query: string,
@@ -1403,23 +1207,10 @@ export async function getConversation(
 }
 
 export interface ConversationDeletionRecord {
-  /**
-   * Present only when the deleted thread had a cloud replica the caller must
-   * also delete. This is the ONLY handle any code is given for a cloud DELETE —
-   * see the note on `boundConversationStoreForWrite` for why quota eviction
-   * must never produce one.
-   */
   cloudConversationId?: string;
-  /** Stable scope for the remote delete; null means Personal. */
   organizationId?: string | null;
 }
 
-/**
- * Delete a browser conversation the caller owns.
- *
- * Returns `undefined` when nothing was deleted, preserving the previous no-op
- * behavior for a missing or unowned id.
- */
 export async function deleteConversation(
   owner: ManagedCloudOwner,
   id: string,
@@ -1446,33 +1237,12 @@ export async function deleteConversation(
   });
 }
 
-// ─── Account-backed mirror bookkeeping ─────────────────────────────────────
-//
-// None of the functions below perform network I/O, and none of them may ever
-// start doing so: they all run inside `mutateStore`, which holds the
-// `navigator.locks` conversation-store lock. An HTTP round trip taken while
-// holding that lock would stall the other extension context's chat writes for
-// the duration of the request.
-
-/**
- * True when every message in the thread carries Managed Cloud provenance and
- * the thread has not been stickily disqualified.
- *
- * Fails closed on an empty transcript and on any message with no `runtime`
- * stamp (pre-feature records, and anything a future code path forgets to
- * stamp).
- */
 export function isCloudPersistenceEligible(entry: ConversationEntry): boolean {
   if (entry.cloudSync?.blockedReason === 'non-cloud-runtime') return false;
   if (entry.messages.length === 0) return false;
   return entry.messages.every((message) => message.runtime === 'managed-cloud');
 }
 
-/**
- * Non-cryptographic, compact change detector for the exact durable projection.
- * Two independent 32-bit accumulators make accidental collisions negligible;
- * this is only dirty-state bookkeeping, never a security or integrity check.
- */
 export function cloudMessageSyncFingerprint(message: HistoryMessage): string {
   const serialized = JSON.stringify({
     role: message.role,
@@ -1496,10 +1266,6 @@ export function cloudMessageSyncFingerprint(message: HistoryMessage): string {
     .padStart(8, '0')}`;
 }
 
-/**
- * Messages that still owe the cloud a write: non-empty content, and either
- * never accepted or accepted with any different mirrored content/metadata.
- */
 export function pendingCloudMessages(entry: ConversationEntry): HistoryMessage[] {
   return entry.messages.filter(
     (message) =>
@@ -1510,9 +1276,6 @@ export function pendingCloudMessages(entry: ConversationEntry): HistoryMessage[]
   );
 }
 
-/**
- * Read-only scan backing the worker's catch-up sweep.
- */
 export async function listConversationsNeedingCloudSync(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry[]> {
@@ -1538,17 +1301,6 @@ export async function listConversationsNeedingCloudSync(
   });
 }
 
-/**
- * Bind a local conversation to a cloud UUID and mint a `cloudMessageId` for
- * every message that lacks one.
- *
- * Idempotent by construction: an existing binding is returned unchanged, so two
- * concurrent flushes cannot create two cloud rows for one thread. Minting is
- * lazy, so empty and provenance-ineligible threads do not consume bookkeeping
- * space in the 4 MiB local budget.
- *
- * Returns `undefined` when the thread is missing or not cloud-eligible.
- */
 export async function claimCloudConversationBinding(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -1589,10 +1341,6 @@ export async function claimCloudConversationBinding(
   });
 }
 
-/**
- * Commit acceptance for messages the server confirmed. Unmatched ids are
- * ignored so a stale batch cannot mark a re-minted message as synced.
- */
 export async function recordCloudMessagesSynced(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -1629,9 +1377,6 @@ export async function recordCloudMessagesSynced(
       state: 'idle',
       ...(syncedTitle !== undefined ? { syncedTitle } : {}),
     };
-    // A successful write clears transient auth/backoff state, but terminal
-    // trust/deletion/workspace blocks are sticky and cannot be revived by a
-    // stale completion.
     const hasTerminalBlock =
       cloudSync.blockedReason === 'non-cloud-runtime' ||
       cloudSync.blockedReason === 'not-found' ||
@@ -1650,11 +1395,6 @@ export async function recordCloudMessagesSynced(
   });
 }
 
-/**
- * Record a non-fatal failure, backoff, or block. Never throws: this runs on the
- * failure path of a best-effort mirror, and a storage error here must not turn
- * into an unhandled rejection in the service worker.
- */
 export async function recordCloudSyncState(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -1672,8 +1412,6 @@ export async function recordCloudSyncState(
         ...(existing.cloudSync ?? { state: 'idle' }),
         ...patch,
       };
-      // Terminal blocks outrank every later state transition. In particular,
-      // a deleted cloud row is never rebound or partially re-created.
       const terminalReason = existing.cloudSync?.blockedReason;
       if (
         terminalReason === 'non-cloud-runtime' ||
@@ -1694,14 +1432,6 @@ export async function recordCloudSyncState(
   }
 }
 
-/**
- * Permanently disqualify a thread because a non-Managed-Cloud turn landed in
- * it. Sticky: `normalizeCloudSyncState` round-trips the reason and
- * `recordCloudSyncState` refuses to overwrite it.
- *
- * The existing cloud copy is deliberately left alone — a local turn means "stop
- * mirroring", not "delete what the user already has in their account".
- */
 export async function blockCloudPersistence(
   owner: ManagedCloudOwner,
   conversationId: string,

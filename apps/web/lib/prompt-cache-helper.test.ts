@@ -122,16 +122,11 @@ describe('calculateCacheSavings cache-write reporting', () => {
   });
 
   it('keeps the Anthropic 1.25x surcharge for callers with no model context', () => {
-    // No model and no resolved write rate: the default parameter applies,
-    // 1M * $3 * 1.25 = $3.75 = 375 cents.
     const { model: _model, ...withoutModel } = response;
     expect(calculateCacheSavings(withoutModel, 3).cacheWriteCostCents).toBe(375);
   });
 
   it('reports no read saving when the caller supplies no model', () => {
-    // Without a model there is no published read price to look up, so the read
-    // falls back to the input rate and the saving is zero rather than the 90%
-    // a flat multiplier used to invent.
     const { model: _model, ...withoutModel } = response;
     expect(calculateCacheSavings(withoutModel, 3).savedCostCents).toBe(0);
   });

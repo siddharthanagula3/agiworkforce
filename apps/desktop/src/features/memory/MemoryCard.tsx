@@ -1,9 +1,3 @@
-/**
- * MemoryCard Component
- *
- * Displays a single memory entry with expandable content,
- * category badge, importance stars, and action buttons.
- */
 import { memo, useCallback, useState } from 'react';
 import { ChevronDown, ChevronUp, Star, Trash2 } from 'lucide-react';
 
@@ -17,9 +11,6 @@ import { useMemoryStore } from '@/stores/memoryStore';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
 import { formatRelativeTime } from '@/lib/utils';
 
-/**
- * Category color mapping for visual distinction
- */
 const CATEGORY_COLORS: Record<MemoryCategory, { bg: string; text: string; border: string }> = {
   preference: {
     bg: 'bg-blue-500/10',
@@ -43,9 +34,6 @@ const CATEGORY_COLORS: Record<MemoryCategory, { bg: string; text: string; border
   },
 };
 
-/**
- * Category display labels
- */
 const CATEGORY_LABELS: Record<MemoryCategory, string> = {
   preference: 'Preference',
   fact: 'Fact',
@@ -55,15 +43,10 @@ const CATEGORY_LABELS: Record<MemoryCategory, string> = {
 
 export interface MemoryCardProps {
   memory: MemoryEntry;
-  /** Highlighted search text to display */
   highlightText?: string;
-  /** Callback when importance is changed */
   onImportanceChange?: (memory: MemoryEntry, newImportance: number) => void;
 }
 
-/**
- * Renders importance as star icons
- */
 function ImportanceStars({
   importance,
   onHover,
@@ -128,9 +111,6 @@ function ImportanceStars({
   );
 }
 
-/**
- * Highlights matching text in content
- */
 function HighlightedText({ text, highlight }: { text: string; highlight?: string }) {
   if (!highlight || !highlight.trim()) {
     return <span>{text}</span>;
@@ -153,9 +133,6 @@ function HighlightedText({ text, highlight }: { text: string; highlight?: string
   );
 }
 
-/**
- * Escapes special regex characters in a string
- */
 function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -171,15 +148,11 @@ export const MemoryCard = memo(function MemoryCard({
   const [isEditingImportance, setIsEditingImportance] = useState(false);
 
   const { forget, remember } = useMemoryStore();
-  // Parent often removes the card from the list when a memory is forgotten
-  // (the card unmounts before the finally block runs). Guard the
-  // post-await setState to avoid React's unmounted-component warning.
   const isMounted = useIsMounted();
 
   const categoryColors = CATEGORY_COLORS[memory.category];
   const categoryLabel = CATEGORY_LABELS[memory.category];
 
-  // Truncate content for preview
   const contentPreview =
     memory.content.length > 150 ? `${memory.content.slice(0, 150)}...` : memory.content;
   const showExpandButton = memory.content.length > 150;
@@ -201,7 +174,6 @@ export const MemoryCard = memo(function MemoryCard({
   const handleImportanceChange = useCallback(
     async (newImportance: number) => {
       try {
-        // Update the memory with new importance
         await remember(memory.category, memory.topic, memory.content, newImportance);
         onImportanceChange?.(memory, newImportance);
         setIsEditingImportance(false);

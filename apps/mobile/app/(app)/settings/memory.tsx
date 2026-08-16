@@ -24,10 +24,6 @@ import {
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const FILTER_CATEGORIES = ['All', 'Pinned'] as const;
 
 function formatCount(n: number): string {
@@ -68,14 +64,6 @@ export default function MemoryScreen() {
     ? setCloudGenerateMemory
     : setLocalGenerateMemory;
 
-  /**
-   * The master switch also drives the mode-scoped retrieval preference. In Cloud
-   * mode `setReferencePastChats` is the ONLY existing lever that reaches the
-   * account (`capabilities.memory` via services/cloudSettingsMapping.ts), and
-   * the server gates its own auto-memory writes on exactly that key — so a
-   * master switch that did not move it would leave the server still learning
-   * from this device's turns while the UI claimed memory was off.
-   */
   const handleMemoryEnabledChange = useCallback(
     (enabled: boolean) => {
       setMemoryEnabled(enabled);
@@ -83,11 +71,6 @@ export default function MemoryScreen() {
     },
     [setMemoryEnabled, setReferencePastChats],
   );
-  // The memory store's read/write path follows the CURRENT chat mode toggle
-  // (trust-boundary requirement — chat-time retrieval must match the active
-  // conversation's mode). When the user navigates here via a Local- or
-  // Cloud-labeled Settings row that doesn't match the current toggle, show an
-  // honest notice instead of silently listing the other mode's memories.
   const scopeMismatch =
     (scope === 'cloud' && !currentIsCloud) || (scope === 'local' && currentIsCloud);
 
@@ -118,10 +101,6 @@ export default function MemoryScreen() {
   const activeScopeKeyRef = useRef<string | null>(null);
   const editorScopeRef = useRef<AccountScopedUiState | null>(null);
 
-  // useMemoryStore is a mode-aware presentation facade over physically
-  // separate Local/Cloud stores. Clear that facade and every open editor before
-  // paint when the displayed scope changes; a Clerk switch while Local keeps
-  // the same `local` key and therefore preserves device-owned state.
   useLayoutEffect(() => {
     const nextScope = captureAccountScopedUiState(currentIsCloud ? 'cloud' : 'local');
     const nextKey = accountScopedUiStateKey(nextScope);
@@ -144,14 +123,11 @@ export default function MemoryScreen() {
     );
   }, []);
 
-  // Fetch on mount and whenever the actual owner/scope changes. The store also
-  // guards its async completion, so a slow Local read cannot overwrite Cloud.
   useEffect(() => {
     if (screenScopeKey === 'unavailable') return;
     void fetchMemories();
   }, [fetchMemories, screenScopeKey]);
 
-  // Auto-clear error after 5 seconds
   useEffect(() => {
     if (error) {
       const timer = setTimeout(clearError, 5_000);
@@ -161,7 +137,6 @@ export default function MemoryScreen() {
 
   const memoryFreshness = useMemo(() => describeMemoryFreshness(entries), [entries]);
 
-  // Determine displayed entries: search results or category-filtered entries
   const displayedEntries = useMemo(() => {
     const source = searchQuery.trim() ? filteredEntries : entries;
 
@@ -170,7 +145,6 @@ export default function MemoryScreen() {
     return source.filter((e) => e.pinned);
   }, [entries, filteredEntries, searchQuery, activeFilter]);
 
-  // Handlers
   const handleSearchChange = useCallback(
     (text: string) => {
       if (!isScopeCurrent()) return;
@@ -257,7 +231,6 @@ export default function MemoryScreen() {
     [isScopeCurrent, updateMemory],
   );
 
-  // Render helpers
   const renderItem = useCallback(
     ({ item }: { item: MemoryEntry }) => (
       <MemoryItem
@@ -516,10 +489,6 @@ export default function MemoryScreen() {
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 function LoadingSkeleton({ colors }: { colors: ColorScheme }) {
   return (

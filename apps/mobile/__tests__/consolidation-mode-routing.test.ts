@@ -1,11 +1,3 @@
-/**
- * Tests for consolidateFactsFromTurn (on-device) + the client-side consolidation gate.
- *
- * consolidateFactsFromTurn is LOCAL-ONLY: it writes learned facts to on-device
- * SQLite. Cloud auto-memory is owned by the managed server
- * (recordManagedAutoMemoryTurn, completed turns only, like web); callers gate on
- * shouldConsolidateMemoryOnClient, which only permits local turns.
- */
 
 jest.mock('../lib/mmkv', () => ({
   mmkvStorage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },

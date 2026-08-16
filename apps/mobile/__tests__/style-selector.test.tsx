@@ -1,20 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * StyleSelector — component tests
- *
- * Covers:
- *   - Renders 4 style options (Normal, Concise, Detailed, Creative)
- *   - Normal selected by default
- *   - Tapping option changes selection in chatStore
- *   - Shows descriptions for each option
- */
 
 import { render, fireEvent } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
-
-// ---------------------------------------------------------------------------
-// Mocks — must be before component import
-// ---------------------------------------------------------------------------
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const { View } = require('react-native');
@@ -76,24 +63,13 @@ jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import { StyleSelector } from '../src/features/chat/components/StyleSelector';
 import { useChatStore } from '../stores/chatStore';
 
-// The sheet reads the real safe area for its bottom inset (it previously
-// hardcoded a 34pt home indicator). Provide metrics rather than mocking the
-// hook, so a missing provider stays a visible failure.
 const METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 47, left: 0, right: 0, bottom: 34 },
 };
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function resetChatStore() {
   useChatStore.setState({ chatStyle: 'normal' });
@@ -106,10 +82,6 @@ function renderOpenStyleSelector() {
     </SafeAreaProvider>,
   );
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('StyleSelector', () => {
   beforeEach(() => {
@@ -146,7 +118,6 @@ describe('StyleSelector', () => {
   it('tapping an option changes selection in chatStore', () => {
     const { getByLabelText } = renderOpenStyleSelector();
 
-    // Tap Concise
     const conciseOption = getByLabelText('Concise style');
     fireEvent.press(conciseOption);
 

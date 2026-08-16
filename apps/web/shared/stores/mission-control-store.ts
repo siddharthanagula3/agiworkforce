@@ -1,19 +1,14 @@
-/**
- * Mission Store - AI Workforce Mission Control State Management
- * Manages mission planning, task delegation, and real-time employee status
- */
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
 
-// Task interface for mission plan
 export interface Task {
   id: string;
   description: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  assignedTo: string | null; // Employee name
+  assignedTo: string | null;
   toolRequired?: string;
   result?: string;
   error?: string;
@@ -21,34 +16,31 @@ export interface Task {
   completedAt?: Date;
 }
 
-// Employee log entry - standardized type for consistent logging
 export interface EmployeeLogEntry {
   timestamp: Date;
   message: string;
   type: 'info' | 'warning' | 'error' | 'success';
 }
 
-// Active employee status
 export interface ActiveEmployee {
   name: string;
   status: 'thinking' | 'using_tool' | 'idle' | 'error';
   currentTool: string | null;
   currentTask: string | null;
   log: EmployeeLogEntry[];
-  progress: number; // 0-100
+  progress: number;
 }
 
-// Message types for the mission log
 export interface MissionMessage {
   id: string;
-  from: string; // 'user' | 'system' | employee name
+  from: string;
   type:
     | 'user'
     | 'system'
     | 'employee'
-    | 'agent' // Multi-agent conversation messages
-    | 'assistant' // AI assistant responses
-    | 'status' // Status updates
+    | 'agent'
+    | 'assistant'
+    | 'status'
     | 'task_update'
     | 'plan'
     | 'error';
@@ -58,7 +50,7 @@ export interface MissionMessage {
     taskId?: string;
     employeeName?: string;
     employeeAvatar?: string;
-    role?: 'agent' | 'supervisor' | 'user'; // Agent conversation roles
+    role?: 'agent' | 'supervisor' | 'user';
     tool?: string;
     model?: string;
     tokens?: number;
@@ -73,7 +65,6 @@ export interface MissionMessage {
   };
 }
 
-/** Mission status type */
 export type MissionStatusType =
   | 'idle'
   | 'planning'
@@ -82,41 +73,31 @@ export type MissionStatusType =
   | 'completed'
   | 'failed';
 
-/** Employee status type */
 export type EmployeeStatusType = 'thinking' | 'using_tool' | 'idle' | 'error';
 
-/** Log entry type */
 export type LogEntryType = 'info' | 'warning' | 'error' | 'success';
 
-/** Mission mode type */
 export type MissionModeType = 'mission' | 'chat';
 
-/** State-only interface for mission data (without actions) */
 export interface MissionStateData {
-  // Mission planning
   missionPlan: Task[];
   currentMissionId: string | null;
   missionStatus: MissionStatusType;
 
-  // Active employees (using Record for Immer compatibility)
   activeEmployees: Record<string, ActiveEmployee>;
 
-  // Messages/logs
   messages: MissionMessage[];
 
-  // Execution context
   isOrchestrating: boolean;
   isPaused: boolean;
   error: string | null;
 
-  // Multi-agent chat integration
   mode: MissionModeType;
   activeChatSession: string | null;
   collaborativeAgents: string[];
 }
 
 export interface MissionState extends MissionStateData {
-  // Actions
   setMissionPlan: (plan: Task[]) => void;
   updateTaskStatus: (
     taskId: string,
@@ -138,7 +119,7 @@ export interface MissionState extends MissionStateData {
   ) => void;
   updateEmployeeProgress: (employeeName: string, progress: number) => void;
   addMessage: (message: Omit<MissionMessage, 'id' | 'timestamp'>) => void;
-  setMessages: (messages: MissionMessage[]) => void; // Bulk set messages (e.g., from database)
+  setMessages: (messages: MissionMessage[]) => void;
   startMission: (missionId: string, mode?: 'mission' | 'chat') => void;
   pauseMission: () => void;
   resumeMission: () => void;
@@ -148,7 +129,6 @@ export interface MissionState extends MissionStateData {
   setOrchestrating: (value: boolean) => void;
   cleanupCompletedTasks: () => void;
 
-  // NEW: Multi-agent chat actions
   setMode: (mode: 'mission' | 'chat') => void;
   setChatSession: (sessionId: string | null) => void;
   addCollaborativeAgent: (agentName: string) => void;
@@ -156,7 +136,6 @@ export interface MissionState extends MissionStateData {
   clearCollaborativeAgents: () => void;
   getAgentStatus: (agentName: string) => ActiveEmployee | undefined;
 
-  // Export the state data for external use (state-only, without actions)
   _getState: () => MissionStateData;
 }
 
@@ -165,7 +144,6 @@ const enableDevtools = process.env.NODE_ENV !== 'production';
 export const useMissionStore = create<MissionState>()(
   devtools(
     immer((set) => ({
-      // Initial state
       missionPlan: [],
       currentMissionId: null,
       missionStatus: 'idle',
@@ -178,14 +156,12 @@ export const useMissionStore = create<MissionState>()(
       activeChatSession: null,
       collaborativeAgents: [],
 
-      // Set mission plan from orchestrator
       setMissionPlan: (plan) =>
         set((state) => {
           state.missionPlan = plan;
           state.missionStatus = 'planning';
         }),
 
-      // Update individual task status
       updateTaskStatus: (taskId, status, assignedTo, result, error) =>
         set((state) => {
           const task = state.missionPlan.find((t) => t.id === taskId);
@@ -203,7 +179,6 @@ export const useMissionStore = create<MissionState>()(
           }
         }),
 
-      // Update employee status
       updateEmployeeStatus: (employeeName, status, currentTool, currentTask) =>
         set((state) => {
           let employee = state.activeEmployees[employeeName];
@@ -224,7 +199,6 @@ export const useMissionStore = create<MissionState>()(
           }
         }),
 
-      // Add log entry to employee
       addEmployeeLog: (
         employeeName: string,
         message: string,
@@ -241,7 +215,6 @@ export const useMissionStore = create<MissionState>()(
           }
         }),
 
-      // Update employee progress
       updateEmployeeProgress: (employeeName, progress) =>
         set((state) => {
           const employee = state.activeEmployees[employeeName];
@@ -250,7 +223,6 @@ export const useMissionStore = create<MissionState>()(
           }
         }),
 
-      // Add message to mission log
       addMessage: (message) =>
         set((state) => {
           state.messages.push({
@@ -260,17 +232,13 @@ export const useMissionStore = create<MissionState>()(
           });
         }),
 
-      // Bulk set messages (used when loading from database)
       setMessages: (messages) =>
         set((state) => {
           state.messages = messages;
         }),
 
-      // Start mission
       startMission: (missionId, mode = 'mission') =>
         set((state) => {
-          // Updated: Jan 15th 2026 - Fixed concurrent mission state corruption with mutex check
-          // Prevent concurrent mission starts from corrupting state
           if (state.isOrchestrating) {
             throw new Error('Mission already in progress');
           }
@@ -281,21 +249,18 @@ export const useMissionStore = create<MissionState>()(
           state.mode = mode;
         }),
 
-      // Pause mission
       pauseMission: () =>
         set((state) => {
           state.missionStatus = 'paused';
           state.isPaused = true;
         }),
 
-      // Resume mission
       resumeMission: () =>
         set((state) => {
           state.missionStatus = 'executing';
           state.isPaused = false;
         }),
 
-      // Complete mission
       completeMission: () =>
         set((state) => {
           state.missionStatus = 'completed';
@@ -303,7 +268,6 @@ export const useMissionStore = create<MissionState>()(
           state.isPaused = false;
         }),
 
-      // Fail mission
       failMission: (error) =>
         set((state) => {
           state.missionStatus = 'failed';
@@ -312,7 +276,6 @@ export const useMissionStore = create<MissionState>()(
           state.error = error;
         }),
 
-      // Reset state
       reset: () =>
         set((state) => {
           state.missionPlan = [];
@@ -328,36 +291,28 @@ export const useMissionStore = create<MissionState>()(
           state.collaborativeAgents = [];
         }),
 
-      // Set orchestrating flag
       setOrchestrating: (value) =>
         set((state) => {
           state.isOrchestrating = value;
         }),
 
-      // Cleanup completed tasks and idle employees
-      // Should be called periodically to prevent memory leaks
       cleanupCompletedTasks: () =>
         set((state) => {
           const oneHourAgo = Date.now() - 60 * 60 * 1000;
 
-          // Remove completed/failed tasks older than 1 hour
           state.missionPlan = state.missionPlan.filter((task) => {
             if ((task.status === 'completed' || task.status === 'failed') && task.completedAt) {
               return task.completedAt.getTime() > oneHourAgo;
             }
-            return true; // Keep pending and in_progress tasks
+            return true;
           });
 
-          // Remove idle employees that haven't been active for 1 hour
           const employeesToRemove: string[] = [];
           Object.entries(state.activeEmployees).forEach(([name, employee]) => {
             if (employee.status === 'idle' || employee.status === 'error') {
-              // Check if employee has any log entries
               if (employee.log.length > 0) {
-                // Get the timestamp from the last log entry
                 const lastEntry = employee.log[employee.log.length - 1]!;
                 const lastLogTime = lastEntry.timestamp.getTime();
-                // If no recent activity, mark for removal
                 if (lastLogTime < oneHourAgo) {
                   employeesToRemove.push(name);
                 }
@@ -365,12 +320,10 @@ export const useMissionStore = create<MissionState>()(
             }
           });
 
-          // Remove marked employees
           employeesToRemove.forEach((name) => {
             delete state.activeEmployees[name];
           });
 
-          // Limit message history to last 100 messages
           if (state.messages.length > 100) {
             state.messages = state.messages.slice(-100);
           }
@@ -378,7 +331,6 @@ export const useMissionStore = create<MissionState>()(
           void employeesToRemove;
         }),
 
-      // NEW: Multi-agent chat actions
       setMode: (mode: 'mission' | 'chat') =>
         set((state) => {
           state.mode = mode;
@@ -433,14 +385,8 @@ export const useMissionStore = create<MissionState>()(
   ),
 );
 
-// Setup periodic cleanup (runs every 5 minutes)
-// Use a module-level flag to prevent multiple interval creation on HMR
 let cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
 
-/**
- * Start the periodic cleanup interval
- * Call this when the app starts
- */
 export function startMissionCleanupInterval(): void {
   if (typeof window !== 'undefined' && !cleanupIntervalId) {
     cleanupIntervalId = setInterval(
@@ -448,14 +394,10 @@ export function startMissionCleanupInterval(): void {
         useMissionStore.getState().cleanupCompletedTasks();
       },
       5 * 60 * 1000,
-    ); // Every 5 minutes
+    );
   }
 }
 
-/**
- * Stop the periodic cleanup interval
- * Call this on logout or app shutdown to prevent memory leaks
- */
 export function stopMissionCleanupInterval(): void {
   if (cleanupIntervalId) {
     clearInterval(cleanupIntervalId);
@@ -463,40 +405,20 @@ export function stopMissionCleanupInterval(): void {
   }
 }
 
-// Initialize cleanup interval on module load
 if (typeof window !== 'undefined') {
-  // startMissionCleanupInterval already checks if cleanupIntervalId is null
   startMissionCleanupInterval();
 
-  // Cleanup on page unload to prevent memory leaks
   window.addEventListener('beforeunload', () => {
     stopMissionCleanupInterval();
   });
 }
 
-// ============================================================================
-// SELECTOR HOOKS (optimized with useShallow to prevent stale closures)
-// ============================================================================
-
-/**
- * Selector for mission plan - returns stable reference when plan hasn't changed
- */
 export const useMissionPlan = () => useMissionStore((state) => state.missionPlan);
 
-/**
- * Selector for active employees - returns stable reference when employees haven't changed
- */
 export const useActiveEmployees = () => useMissionStore((state) => state.activeEmployees);
 
-/**
- * Selector for mission messages - returns stable reference when messages haven't changed
- */
 export const useMissionMessages = () => useMissionStore((state) => state.messages);
 
-/**
- * Selector for mission status - uses useShallow to prevent unnecessary re-renders
- * when selecting multiple primitive values that form an object
- */
 export const useMissionStatus = () =>
   useMissionStore(
     useShallow((state) => ({
@@ -507,9 +429,6 @@ export const useMissionStatus = () =>
     })),
   );
 
-/**
- * Selector for collaborative mode state - uses useShallow for multi-value selection
- */
 export const useCollaborativeMode = () =>
   useMissionStore(
     useShallow((state) => ({
@@ -519,13 +438,7 @@ export const useCollaborativeMode = () =>
     })),
   );
 
-/**
- * Selector for a specific employee by name - stable reference when employee hasn't changed
- */
 export const useEmployee = (employeeName: string) =>
   useMissionStore((state) => state.activeEmployees[employeeName]);
 
-/**
- * Selector for current mission ID - primitive value, no shallow needed
- */
 export const useCurrentMissionId = () => useMissionStore((state) => state.currentMissionId);

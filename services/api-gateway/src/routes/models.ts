@@ -1,10 +1,3 @@
-/**
- * @file Model Catalog API Routes
- *
- * The API gateway serves the shared catalog from `@agiworkforce/types`.
- * Do not duplicate provider/model tables here; stale local copies have caused
- * deprecated or nonexistent IDs to leak into public API responses.
- */
 
 import { Router, type Request, type Response } from 'express';
 import {
@@ -58,10 +51,6 @@ function getActiveCatalogModels(): CatalogModel[] {
   return getModels({ includeDeprecated: false }).filter(isActiveModel).map(toCatalogModel);
 }
 
-// Canonical subscription tiers + documented legacy aliases. `pro_plus` was
-// removed and has no successor; it is intentionally NOT accepted here. Every
-// value normalizes to a SubscriptionAccessTier via the shared catalog so the
-// gateway never keeps its own tier ladder.
 const KNOWN_PLAN_TIERS: ReadonlySet<string> = new Set([
   'free',
   'basic',
@@ -82,9 +71,6 @@ function parsePlanTier(raw: unknown): SubscriptionAccessTier | undefined | null 
 }
 
 function allowedIdsForPlanTier(planTier: SubscriptionAccessTier): Set<string> {
-  // Ladder derived from the canonical catalog tiers (matches
-  // getMinimumRequiredTier): economy is the base; pro-and-up add pro_additions;
-  // max-and-up add flagship_additions. Basic/Free = economy only.
   const ids = new Set<string>(getAllowedModelsForTier('economy'));
 
   if (planTier === 'pro' || planTier === 'max' || planTier === 'enterprise') {
@@ -224,12 +210,6 @@ async function buildHealthMap(): Promise<Map<string, ProviderHealthInfo>> {
 
 const router = Router();
 
-// Router-level floor: every route below already declares its own, stricter
-// limiter, so no current limit changes. It exists so a route ADDED here later
-// cannot ship unlimited by omission — an absence no diff review would catch.
-// A DISTINCT limiter instance, never the same one a route uses: express-rate-
-// limit keeps one store per instance, so reusing an instance would count each
-// request twice against a single counter.
 router.use(createRateLimiter('default'));
 
 router.get('/', createRateLimiter('default'), async (req: Request, res: Response) => {

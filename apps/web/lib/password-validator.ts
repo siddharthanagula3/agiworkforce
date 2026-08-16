@@ -1,7 +1,3 @@
-/**
- * Password validation utility
- * Enforces strong password requirements
- */
 
 export const PASSWORD_REQUIREMENTS = {
   minLength: 12,
@@ -17,9 +13,6 @@ export interface PasswordValidationResult {
   strength: 'weak' | 'fair' | 'good' | 'strong';
 }
 
-/**
- * Validate password against security requirements
- */
 export function validatePassword(password: string): PasswordValidationResult {
   const errors: string[] = [];
 
@@ -28,27 +21,22 @@ export function validatePassword(password: string): PasswordValidationResult {
     return { valid: false, errors, strength: 'weak' };
   }
 
-  // Length check
   if (password.length < PASSWORD_REQUIREMENTS.minLength) {
     errors.push(`At least ${PASSWORD_REQUIREMENTS.minLength} characters required`);
   }
 
-  // Uppercase check
   if (PASSWORD_REQUIREMENTS.requireUppercase && !/[A-Z]/.test(password)) {
     errors.push('At least one uppercase letter (A-Z) required');
   }
 
-  // Lowercase check
   if (PASSWORD_REQUIREMENTS.requireLowercase && !/[a-z]/.test(password)) {
     errors.push('At least one lowercase letter (a-z) required');
   }
 
-  // Number check
   if (PASSWORD_REQUIREMENTS.requireNumber && !/[0-9]/.test(password)) {
     errors.push('At least one number (0-9) required');
   }
 
-  // Special character check
   if (
     PASSWORD_REQUIREMENTS.requireSpecial &&
     !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)
@@ -56,7 +44,6 @@ export function validatePassword(password: string): PasswordValidationResult {
     errors.push('At least one special character (!@#$%^&* etc.) required');
   }
 
-  // Calculate strength
   let strength: 'weak' | 'fair' | 'good' | 'strong' = 'weak';
   const passedChecks = [
     password.length >= PASSWORD_REQUIREMENTS.minLength,
@@ -77,9 +64,6 @@ export function validatePassword(password: string): PasswordValidationResult {
   };
 }
 
-/**
- * Format password requirements as readable text
- */
 export function getPasswordRequirementsText(): string {
   const reqs = [];
   if (PASSWORD_REQUIREMENTS.minLength) {

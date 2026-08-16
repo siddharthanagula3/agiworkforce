@@ -4,18 +4,14 @@ test.describe('Desktop App Smoke Tests', () => {
   test('app launches and main window renders', async ({ page }) => {
     const response = await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    // Verify we got a response (may redirect to login)
     expect(response?.status()).toBeLessThan(400);
 
-    // Wait for page to settle
     await page.waitForLoadState('networkidle', { timeout: 30000 });
 
-    // Page should have content — either the app or the login page
     const title = await page.title();
     expect(title).toBeTruthy();
 
     const html = await page.content();
-    // Either the #root div (SPA) or a login form should be present
     const hasRoot = html.includes('id="root"');
     const hasLoginForm =
       html.includes('Sign in') || html.includes('Sign In') || html.includes('Welcome');
@@ -26,7 +22,6 @@ test.describe('Desktop App Smoke Tests', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 30000 });
 
-    // The page should have interactive elements (buttons, links, inputs)
     const interactiveElements = await page.locator('button, a, input').count();
     expect(interactiveElements).toBeGreaterThan(0);
   });
@@ -46,8 +41,6 @@ test.describe('Desktop App Smoke Tests', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 30000 });
 
-    // The app shell must mount — either the SPA or a login surface that
-    // can lead to it. If neither is present, nothing else can pass.
     const html = await page.content();
     const hasShell =
       html.includes('id="root"') ||
@@ -58,9 +51,6 @@ test.describe('Desktop App Smoke Tests', () => {
       true,
     );
 
-    // The page must have a status banner / error region. The OfflineIndicator
-    // is always mounted even when online (it just renders nothing visible).
-    // Grep by role rather than by component.
     const liveRegions = await page.locator('[role="status"], [aria-live]').count();
     expect(
       liveRegions,

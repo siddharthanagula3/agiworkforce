@@ -69,10 +69,6 @@ import {
   DataLayerConfigError,
 } from '../types';
 
-/**
- * Step-by-step Neon runbook. Surfaced via the public export below so
- * consumers can read it from the package without spelunking the source.
- */
 export const MIGRATION_GUIDE = `
 1. Provision a Neon project. Create a database. Copy the connection string
    (Dashboard -> Connection Details -> "Pooled connection"); it looks like
@@ -99,10 +95,6 @@ export const MIGRATION_GUIDE = `
 Full guide: docs/current/source-of-truth.md and docs/current/technical-architecture.md.
 `.trim();
 
-/**
- * Lazy-load the driver so the package can be consumed in environments that
- * don't have `@neondatabase/serverless` installed until the adapter is used.
- */
 type NeonModule = typeof import('@neondatabase/serverless');
 
 let _neonModule: NeonModule | null = null;
@@ -149,7 +141,6 @@ function decodeJwtSub(jwt: string): string {
   if (!payloadSegment) {
     throw new DataLayerConfigError('Neon withUser: empty JWT payload segment.');
   }
-  // base64url -> base64
   const b64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
   const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
   let json: string;
@@ -157,7 +148,6 @@ function decodeJwtSub(jwt: string): string {
     if (typeof globalThis.atob === 'function') {
       json = globalThis.atob(padded);
     } else {
-      // Node fallback (older runtimes without globalThis.atob).
       json = Buffer.from(padded, 'base64').toString('utf8');
     }
   } catch (e) {
@@ -184,16 +174,7 @@ function decodeJwtSub(jwt: string): string {
 }
 
 export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
-  /** Optional pre-built pool. Skips construction (used in tests). */
   pool?: Pool;
-  /**
-   * Optional pre-built pool promise. When set, the adapter shares the pool
-   * with whatever upstream owns it; `dispose()` will NOT end the pool — only
-   * unbind any per-instance state (`boundSub`).
-   *
-   * `withUser()` uses this to hand the parent's pool to the child instance
-   * so a per-request adapter doesn't open a new TCP-WebSocket per call.
-   */
   poolPromise?: Promise<Pool>;
   /**
    * Opt in to the UNVERIFIED-JWT escape hatch.
@@ -214,30 +195,11 @@ export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
   unsafeAllowUnverifiedJwtSubject?: boolean;
 }
 
-/**
- * `DatabaseAdapter` implementation backed by `@neondatabase/serverless`'s
- * `Pool`. Lazy-connects (no socket activity at construction); safe to import
- * eagerly even when the env is misconfigured.
- */
 export class NeonDatabaseAdapter implements DatabaseAdapter {
   private poolPromise: Promise<Pool>;
   private boundSub: string | null = null;
-  /**
-   * The ACTIVE organization for this request, bound to
-   * `request.jwt.claim.org_id` so tenancy policies (migration 0073) can resolve
-   * a workspace context. Unlike `boundSub` this is NOT read from the token:
-   * organization membership is authoritative in the database, so
-   * `current_app_org_role()` looks it up rather than trusting a claim. Binding
-   * an organization the caller does not belong to therefore grants nothing —
-   * the role resolves NULL and every org branch denies.
-   */
   private boundOrgId: string | null = null;
   private disposed = false;
-  /**
-   * `true` when this instance owns the pool and should `pool.end()` on
-   * dispose. Child instances created by `withUser()` set this to `false`
-   * — the root adapter owns the pool lifetime.
-   */
   private ownsPool: boolean;
 
   constructor(private config: NeonDatabaseAdapterConfig) {
@@ -245,12 +207,9 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       this.poolPromise = Promise.resolve(config.pool);
       this.ownsPool = true;
     } else if (config.poolPromise) {
-      // Inherited pool from the parent adapter — do NOT end it on dispose.
       this.poolPromise = config.poolPromise;
       this.ownsPool = false;
     } else {
-      // Defer pool construction until first use so misconfigured boots
-      // don't crash on import.
       this.poolPromise = (async () => {
         const mod = await loadNeon();
         return new mod.Pool({
@@ -269,38 +228,12 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     return this.poolPromise;
   }
 
-  /**
-   * Open the transaction and bind the RLS session context for `client`.
-   *
-   * The statements are batched into as few network round trips as the
-   * Postgres wire protocol allows, because every one of them costs a full
-   * Neon RTT before the caller's own query even starts:
-   *
-   * - `BEGIN` and `SET LOCAL ROLE` carry no bound parameters, so they travel
-   *   together as one simple-protocol batch.
-   * - The two GUCs need bound parameters, and the extended protocol carries
-   *   exactly one statement per message — but a single `SELECT` may call
-   *   `set_config` more than once, so they still share one round trip.
-   *
-   * Semantics are unchanged from issuing them separately: the whole preamble
-   * runs inside the transaction opened by `BEGIN`, so both `SET LOCAL ROLE`
-   * and the `set_config(..., true)` bindings are transaction-scoped and
-   * cannot leak to the next borrower of this pooled connection.
-   */
   private async beginRlsScope(client: PoolClient): Promise<void> {
     if (this.boundSub === null) {
       await client.query('BEGIN');
       return;
     }
-    // Privilege restriction: run per-user queries as the NON-BYPASSRLS
-    // `app_rls` role so RLS policies actually apply. The owner role Neon
-    // connects as has BYPASSRLS and would otherwise ignore every policy.
     await client.query('BEGIN; SET LOCAL ROLE app_rls');
-    // Bind the RLS subject, plus the active organization for tenancy policies
-    // (0073). The org GUC is bound even when null so a pooled connection can
-    // never inherit a previous request's workspace context. set_config(...,
-    // true) is the transaction-local (SET LOCAL) form and, unlike
-    // `SET LOCAL ... = $1`, accepts a parameter.
     await client.query(
       "SELECT set_config('request.jwt.claim.sub', $1, true), " +
         "set_config('request.jwt.claim.org_id', $2, true)",
@@ -323,8 +256,6 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     }
     const client = await pool.connect();
     try {
-      // SET LOCAL is transaction-scoped, so a bound subject forces a one-shot
-      // transaction around the read; the GUCs die with it.
       await this.beginRlsScope(client);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
       await client.query('COMMIT');
@@ -341,11 +272,6 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
-  /**
-   * Run a parameterized INSERT / UPDATE / DELETE. Returns the affected row
-   * count from `result.rowCount`, falling back to 0 when the driver leaves
-   * it null (DDL, etc.).
-   */
   async execute(sql: string, params: unknown[] = []): Promise<number> {
     const pool = await this.getPool();
     if (this.boundSub === null) {
@@ -370,15 +296,6 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
-  /**
-   * Run `fn` inside a real SQL transaction. The sub-adapter passed to `fn`
-   * is bound to the held `PoolClient` so every query inside runs on the
-   * same connection. If `fn` resolves we COMMIT; if it throws we ROLLBACK.
-   *
-   * If a JWT has been bound via `withUser()` the same `SET LOCAL` GUC fires
-   * once at the top of the transaction — RLS sees the right subject for
-   * the duration.
-   */
   async transaction<T>(fn: (tx: DatabaseAdapter) => Promise<T>): Promise<T> {
     const pool = await this.getPool();
     const client = await pool.connect();
@@ -435,10 +352,6 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       );
     }
     const sub = decodeJwtSub(jwt);
-    // Preserve any organization already bound on this instance so the order of
-    // `withUser`/`withOrg` never changes the resulting scope.
-    // Hand the parent's pool promise down so the child re-uses the same
-    // pool instead of constructing a new TCP/WebSocket connection.
     const next = new NeonDatabaseAdapter({
       ...this.config,
       poolPromise: this.poolPromise,
@@ -448,19 +361,6 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     return next;
   }
 
-  /**
-   * Bind the ACTIVE organization for tenancy policies (migration 0073).
-   *
-   * Pass `null` to return to a purely personal scope. The value is bound to
-   * `request.jwt.claim.org_id` on every query in the resulting adapter.
-   *
-   * This is deliberately NOT read from the token. Organization membership lives
-   * in `organization_members` and `current_app_org_role()` reads it there, so
-   * binding an organization the caller is not a member of grants nothing: the
-   * role resolves NULL, org visibility denies, and `app_row_is_writable`
-   * refuses the write. Tenancy therefore cannot be forged from the client even
-   * if a caller passes an attacker-supplied id.
-   */
   withOrg(organizationId: string | null): DatabaseAdapter {
     const next = new NeonDatabaseAdapter({
       ...this.config,
@@ -471,20 +371,10 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     return next;
   }
 
-  /**
-   * Close the underlying pool when this adapter owns it. For child instances
-   * created by `withUser()` this only marks the instance disposed — the
-   * pool lifetime belongs to the root adapter.
-   *
-   * Safe to call repeatedly; subsequent `query()` / `execute()` /
-   * `transaction()` calls reject.
-   */
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
     if (!this.ownsPool) {
-      // Child adapter (from withUser) — boundSub is per-instance, so just
-      // marking disposed is enough. The shared pool keeps running.
       return;
     }
     try {
@@ -496,30 +386,11 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
-  /**
-   * Escape hatch: get the raw `Pool` (typed as `unknown` — the data-layer
-   * contract is vendor-neutral and we don't want consumers leaking the
-   * driver type). Cast it on the consumer side with eyes open.
-   */
   async raw(): Promise<unknown> {
     return this.getPool();
   }
 }
 
-/**
- * Sub-adapter passed to the `transaction()` callback. Holds a single
- * `PoolClient` so every query inside the transaction runs on the same
- * connection. We do NOT support nested `transaction()` calls — Postgres
- * doesn't allow nested top-level transactions, and the SAVEPOINT pattern
- * is best left to callers who actually want it.
- *
- * Calling `withUser()` on a transaction adapter throws — JWT scoping must
- * be set BEFORE the transaction (the outer adapter's `boundSub` propagates
- * via `SET LOCAL` at the top of the BEGIN).
- *
- * Calling `dispose()` on a transaction adapter is a no-op; the pool is
- * managed by the outer adapter.
- */
 class NeonTransactionAdapter implements DatabaseAdapter {
   constructor(private client: PoolClient) {}
 

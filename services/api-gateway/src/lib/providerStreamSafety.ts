@@ -15,8 +15,6 @@ const STOP_REASONS: ReadonlySet<StreamChunkStop['reason']> = new Set([
   'tool_use',
   'stop_sequence',
   // Refusal is a first-class safety stop (agent-event envelope member): a
-  // billable honest terminal stop, NOT a failed attempt — it must never hit
-  // the incomplete-stream refund/retry branches in routes/llm.ts.
   'refusal',
   'error',
   'cancel',
@@ -42,7 +40,6 @@ function isOptionalFiniteNumber(value: unknown): boolean {
   return value === undefined || (typeof value === 'number' && Number.isFinite(value));
 }
 
-/** Runtime-check an untrusted value produced by a provider SDK stream. */
 export function isCanonicalStreamChunk(value: unknown): value is StreamChunk {
   if (!isRecord(value) || typeof value.type !== 'string') return false;
 
@@ -130,9 +127,6 @@ function classificationInput(error: unknown): unknown {
   const rawCode = error.code;
   const message = typeof rawMessage === 'string' ? rawMessage : 'Unknown provider error';
 
-  // The shared classifier recognizes transport codes in the message/name.
-  // SDK Error.code is commonly non-enumerable or not inspected by the
-  // classifier, so include a bounded code prefix for classification only.
   const codePrefix =
     typeof rawCode === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(rawCode) ? `${rawCode}: ` : '';
 
@@ -193,8 +187,6 @@ function safeProviderStatus(classified: ClassifiedError): number {
     case 'capacity_off_switch':
       return 503;
     default:
-      // Provider auth/client errors are failures of the managed gateway's
-      // upstream integration, not failures of the caller's AGI session.
       return 502;
   }
 }
@@ -243,19 +235,6 @@ export function toSafeProviderFailure(
   };
 }
 
-/**
- * Managed failover admission (AUTO-ROUTER-MIGRATION-01): availability
- * failures of the upstream transport — 5xx-class, connection, or a provider
- * timeout — may rotate to the resolver's next cross-provider fallback route.
- * Provider rate limits never rotate even with a plan in hand (pinned in
- * `__tests__/routes/llm-managed-failover.test.ts`), and the gateway-owned
- * deadline never rotates because the shared per-request deadline has already
- * expired, so a further attempt could not run to completion anyway.
- *
- * This set is availability only. Credential rejections rotate under the
- * separate provider-scoped rule in `@agiworkforce/provider-runtime`'s
- * `CredentialFailoverState`, which routes.llm applies alongside this check.
- */
 const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'connection',
   'server_error',

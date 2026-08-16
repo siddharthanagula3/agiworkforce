@@ -43,11 +43,8 @@ const OLLAMA_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface OllamaAdapterConfig extends ProviderAdapterConfig {
-  /** Override for self-hosted/remote Ollama daemons. */
   baseUrl?: string;
-  /** Optional model context window override (forces num_ctx on every request). */
   forceContextWindow?: number;
-  /** Keep model loaded for N seconds (Ollama `keep_alive`). */
   keepAliveSeconds?: number;
 }
 
@@ -72,7 +69,6 @@ export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderA
     async *stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk> {
       const translated = translateChatRequest(req);
 
-      // Apply optional context override and keep_alive.
       if (config.forceContextWindow !== undefined) {
         translated.options = {
           ...(translated.options ?? {}),

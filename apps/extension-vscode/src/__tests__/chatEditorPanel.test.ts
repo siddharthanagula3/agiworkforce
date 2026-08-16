@@ -1,10 +1,3 @@
-/**
- * chatEditorPanel.test.ts — C13: chat in main editor (WebviewPanel)
- *
- * Verifies that `agi-workforce.openChatInEditor` is registered, creates an
- * independent WebviewPanel per invocation. The agent-mode keybinding is also
- * guarded here because it must open the permission chooser, not focus a tab.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
@@ -12,8 +5,6 @@ import { activate } from '../extension';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makeMockContext(): vscode.ExtensionContext {
   return {
@@ -50,8 +41,6 @@ function makeMockContext(): vscode.ExtensionContext {
     languageModelAccessInformation: {} as never,
   } as unknown as vscode.ExtensionContext;
 }
-
-// ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('agi-workforce.openChatInEditor', () => {
   interface PanelHarness {
@@ -228,7 +217,6 @@ describe('agi-workforce.openChatInEditor', () => {
   });
 
   it('does not interfere with sidebar webview registration', () => {
-    // Both sidebar and chat-editor panel commands should be registered
     expect(handlers.has('agi-workforce.openChatInEditor')).toBe(true);
     expect(handlers.has('agi-workforce.chat')).toBe(true);
   });

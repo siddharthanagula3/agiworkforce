@@ -1,9 +1,3 @@
-/**
- * Public auth surfaces should not emit signed-out API spam.
- *
- * Visiting /login or /signup while signed out must keep the page usable
- * without triggering 401 responses from /api/me.
- */
 
 import { test, expect } from '@playwright/test';
 
@@ -38,10 +32,6 @@ test.describe('public auth pages stay quiet', () => {
 });
 
 test.describe('authenticated routes stay quiet when signed out', () => {
-  // Regression: the project-detail route (/projects/[id]) fired
-  // `/api/projects` on mount unconditionally, emitting 401 console spam for a
-  // signed-out visitor. The authenticated shell now redirects to login before
-  // mounting the detail page, and must stay quiet throughout that transition.
   test('project detail does not emit 401s as a signed-out user', async ({ page }) => {
     const unauthorized: string[] = [];
     page.on('response', (response) => {

@@ -1,24 +1,5 @@
-/**
- * Contract between the Electron main process and the electron-target renderer
- * bundle (`VITE_BUILD_TARGET=electron`).
- *
- * This file is the single source of truth for the preload-exposed host bridge:
- * `electron/preload.ts` implements it, `electron/main.ts` registers the
- * matching IPC handlers, and the `src/lib/tauri-electron/*` shims consume it.
- * The renderer never sees Node or Electron APIs — only this `window.agiHost`
- * surface, exposed via `contextBridge` from a sandboxed preload.
- */
 import type { DesktopCloudUpdateAvailability } from '../desktopCloudUpdate';
 
-/**
- * Invoke-style commands the Electron main process implements natively.
- *
- * These mirror the Tauri commands the cloud sign-in path calls
- * (`src-tauri/src/sys/account/`): the Clerk Frontend API proxy, the device
- * authorization flow against our own API, and the OS-encrypted token store.
- * Everything else the renderer invokes falls through to `tauri-mock.ts`
- * exactly like the cloud-web build.
- */
 export const ELECTRON_BRIDGE_COMMANDS = [
   'account_clerk_native_request',
   'account_start_device_authorization',
@@ -38,7 +19,6 @@ export function isElectronBridgeCommand(command: string): command is ElectronBri
   return (ELECTRON_BRIDGE_COMMANDS as readonly string[]).includes(command);
 }
 
-/** IPC channel names. Renderer-facing only through the preload bridge. */
 export const ELECTRON_IPC_CHANNELS = {
   invokeBridge: 'agi:invoke-bridge',
   openExternal: 'agi:open-external',
@@ -67,7 +47,6 @@ export type ElectronWindowControlAction =
 
 export interface ElectronWindowControlRequest {
   action: ElectronWindowControlAction;
-  /** `setTitle` carries a string, `setAlwaysOnTop` a boolean. */
   value?: string | boolean;
 }
 
@@ -83,13 +62,6 @@ export interface ElectronNotifyRequest {
   body?: string;
 }
 
-/**
- * The surface `electron/preload.ts` exposes as `window.agiHost`.
- *
- * Feature-detect with `window.agiHost?.handles(command)` — the same renderer
- * bundle must degrade to plain cloud-web behavior when opened in a browser
- * tab (dev flows), where `agiHost` is undefined.
- */
 export interface ElectronHostBridge {
   readonly platform: string;
   readonly appVersion: string;

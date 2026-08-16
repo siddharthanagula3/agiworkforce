@@ -1,8 +1,3 @@
-/**
- * MessageAttachments Component
- *
- * Renders message attachments including images, videos, audio, and files.
- */
 
 import React, { memo } from 'react';
 import { FileText } from 'lucide-react';

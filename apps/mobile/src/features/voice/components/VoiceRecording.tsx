@@ -1,9 +1,3 @@
-/**
- * VoiceRecording — fullscreen recording UI.
- *
- * Shows an animated waveform, elapsed time, and Cancel / Send controls.
- * Used inside the voice companion flow and as a standalone sheet.
- */
 
 import { useEffect, useCallback } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
@@ -25,15 +19,10 @@ import { colors } from '@/src/ui/theme';
 import { formatClock } from '@/src/lib/time';
 
 interface VoiceRecordingProps {
-  /** Whether the recording panel is visible */
   visible: boolean;
-  /** Normalized audio level 0–1 from metering callbacks */
   audioLevel: number;
-  /** Elapsed recording time in milliseconds */
   durationMs: number;
-  /** User tapped cancel */
   onCancel: () => void;
-  /** User confirmed — stop recording and proceed to review */
   onSend: () => void;
 }
 
@@ -62,7 +51,6 @@ export function VoiceRecording({
 }: VoiceRecordingProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
-  // Outer ring pulse when active
   const ringScale = useSharedValue(1);
   const ringOpacity = useSharedValue(0);
   useEffect(() => {

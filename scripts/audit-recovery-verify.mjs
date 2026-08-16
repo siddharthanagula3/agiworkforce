@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Compare recovered AUDIT_PARTS per-batch severity counts against the
-// authoritative perBatch summaries stored in the workflow task outputs.
 import fs from 'node:fs';
 
 const ROOT = '/Users/siddhartha/Desktop/agiworkforce';
@@ -45,7 +43,6 @@ for (const [id, e] of [...expected.entries()].sort()) {
 }
 console.log(`\nbatches with expected data: ${expected.size}; mismatched: ${shortBatches.length}`);
 console.log(`mismatched ids: ${shortBatches.join(' ')}`);
-// aggregate check for 001-024,026-031 (no perBatch data; expected aggregate C10/H130/M495/L383)
 let agg = { c: 0, h: 0, m: 0, l: 0 };
 for (let i = 1; i <= 31; i++) {
   if (i === 25) continue;

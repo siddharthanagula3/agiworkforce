@@ -1,6 +1,3 @@
-/**
- * Unit tests for extractCandidateFacts — the keyword self-disclosure extractor.
- */
 import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
 
 const extractCandidateFacts = extractCandidateMemoryFacts;
@@ -65,7 +62,6 @@ describe('extractCandidateFacts', () => {
   });
 
   it('takes only the most specific (earliest) pattern per sentence', () => {
-    // "i'm a" should win over a later "i like" within the same sentence
     const out = extractCandidateFacts("I'm a developer who likes coffee");
     expect(out).toEqual(['User is a developer who likes coffee']);
   });

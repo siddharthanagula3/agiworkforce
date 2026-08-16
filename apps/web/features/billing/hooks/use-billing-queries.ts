@@ -27,22 +27,8 @@ import {
 import { getBillingPlanDisplay } from '@features/billing/lib/plan-display';
 import { isValidPlan, type PlanTier } from '@features/billing/components/Billing/types';
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
-/**
- * Billing plan types
- *
- * Aliased, not redeclared: `PlanTier` already derives the billable tiers from
- * the shared catalog (packages/contracts/types/src/billing-catalog.ts), and two
- * hand-written unions of the same thing drift one release at a time.
- */
 export type BillingPlan = PlanTier;
 
-/**
- * Subscription status types
- */
 export type SubscriptionStatus =
   | 'active'
   | 'trialing'
@@ -54,15 +40,11 @@ export type SubscriptionStatus =
   | 'paused'
   | 'none';
 
-/**
- * Complete billing information for a user
- */
 export interface BillingInfo {
   plan: BillingPlan;
   status: SubscriptionStatus;
   current_period_start: string | null;
   current_period_end: string | null;
-  /** Actual subscription amount is shown from Stripe invoices, never inferred from catalog USD. */
   price: number | null;
   currency: string | null;
   features: string[];
@@ -71,12 +53,6 @@ export interface BillingInfo {
   usage: BillingUsage;
 }
 
-/**
- * Public managed-usage percentage.
- *
- * Provider costs, ledger cents, token conversions, and allowance operands are
- * server-private by product policy.
- */
 export interface BillingUsage {
   usedPercent: number;
 }
@@ -189,13 +165,6 @@ export function useInvalidateBillingQueries(): () => void {
   };
 }
 
-// ============================================================================
-// SUBSCRIPTION HOOKS
-// ============================================================================
-
-/**
- * Subscription data structure
- */
 export interface Subscription {
   id: string;
   userId: string;
@@ -271,13 +240,6 @@ export function useSubscription(): UseQueryResult<Subscription | null, Error> {
   });
 }
 
-// ============================================================================
-// INVOICE HOOKS
-// ============================================================================
-
-/**
- * Invoice data structure
- */
 export interface Invoice {
   id: string;
   number: string;
@@ -293,9 +255,6 @@ export interface Invoice {
   lineItems: InvoiceLineItem[];
 }
 
-/**
- * Invoice line item
- */
 export interface InvoiceLineItem {
   id: string;
   description: string;
@@ -307,7 +266,6 @@ export interface InvoiceLineItem {
   };
 }
 
-/** Wire shape returned by GET /api/billing/invoices (Stripe snake_case). */
 interface InvoiceApiResponse {
   invoices?: Array<{
     id: string;
@@ -381,13 +339,6 @@ export function useInvoices(): UseQueryResult<Invoice[], Error> {
   });
 }
 
-// ============================================================================
-// PAYMENT METHOD HOOKS
-// ============================================================================
-
-/**
- * Payment method data structure
- */
 export interface PaymentMethod {
   id: string;
   type: 'card' | 'bank_account' | 'paypal';
@@ -413,7 +364,6 @@ export interface PaymentMethod {
   createdAt: string;
 }
 
-/** Wire shape returned by GET /api/billing/payment-methods (Stripe snake_case). */
 interface PaymentMethodApiResponse {
   payment_methods?: Array<{
     id: string;
@@ -497,10 +447,6 @@ export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
     },
   });
 }
-
-// ============================================================================
-// SUBSCRIPTION MUTATION HOOKS
-// ============================================================================
 
 /**
  * Cancel subscription mutation.

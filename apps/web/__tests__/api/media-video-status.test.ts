@@ -1,21 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// ---------------------------------------------------------------------------
-// Mock: server-only
-// ---------------------------------------------------------------------------
 vi.mock('server-only', () => ({}));
 
-// ---------------------------------------------------------------------------
-// Mock: rate-limit — allow by default
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: logger
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -25,18 +16,12 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: CORS helpers
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: errors — use real implementations so createError.* works correctly
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/errors', async () => {
   const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
   return {
@@ -46,32 +31,20 @@ vi.mock('@/lib/errors', async () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Mock: error-handler — real withErrorHandler so thrown AppErrors produce
-//        proper JSON responses (matching the live route behaviour)
-// ---------------------------------------------------------------------------
 vi.mock('@/lib/error-handler', async () => {
   const actual = await vi.importActual<typeof import('@/lib/error-handler')>('@/lib/error-handler');
   return { withErrorHandler: actual.withErrorHandler, handleError: actual.handleError };
 });
 
-// ---------------------------------------------------------------------------
-// Mock: Clerk auth
-// ---------------------------------------------------------------------------
 const mockGetClerkAuthUser = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: video task ownership
-// ---------------------------------------------------------------------------
 const mockGetVideoTaskOwner = vi.fn();
 
 vi.mock('@/lib/video-task-store', () => ({
-  // The route reads the whole record (owner + model, the latter for the
-  // Article 50(2) marker); ownership still comes from the same double.
   getVideoTask: async (...args: unknown[]) => {
     const userId = await mockGetVideoTaskOwner(...args);
     return userId ? { userId, model: 'synthetic-google-video-model' } : undefined;
@@ -108,20 +81,11 @@ vi.mock('@/lib/services/video-incident-alert-service', () => ({
   deliverPendingVideoIncidentAlert: (...args: unknown[]) => durableMocks.incidentAlert(...args),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock: global fetch (used for Runway / Google Veo status calls)
-// ---------------------------------------------------------------------------
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-// ---------------------------------------------------------------------------
-// Import route after all mocks are in place
-// ---------------------------------------------------------------------------
 import { GET, OPTIONS } from '@/app/api/media/video/status/route';
 
-// ---------------------------------------------------------------------------
-// Shared test helpers
-// ---------------------------------------------------------------------------
 const BASE_URL = 'http://localhost/api/media/video/status';
 
 const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
@@ -182,14 +146,10 @@ function makeUnauthRequest(taskId: string): NextRequest {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 describe('GET /api/media/video/status', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Happy-path defaults — Clerk auth succeeds
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetVideoTaskOwner.mockReturnValue(TEST_USER.userId);
     durableMocks.scoped.mockResolvedValue({
@@ -202,7 +162,6 @@ describe('GET /api/media/video/status', () => {
     durableMocks.delivered.mockResolvedValue(undefined);
     durableMocks.incidentAlert.mockResolvedValue(true);
 
-    // Set env vars
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     process.env['GOOGLE_API_KEY'] = 'test-google-key';
   });
@@ -264,9 +223,6 @@ describe('GET /api/media/video/status', () => {
     delete process.env['GOOGLE_API_KEY'];
   });
 
-  // =========================================================================
-  // OPTIONS / CORS preflight
-  // =========================================================================
   describe('OPTIONS', () => {
     it('should return 204 for preflight when no CORS handler intercepts', async () => {
       const { handleCorsPreflightRequest } = await import('@/lib/cors');
@@ -279,9 +235,6 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  // =========================================================================
-  // Authentication
-  // =========================================================================
   describe('Authentication', () => {
     it('should return 401 when authorization header is missing', async () => {
       const { createError } = await import('@/lib/errors');
@@ -332,9 +285,6 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  // =========================================================================
-  // Rate limiting
-  // =========================================================================
   describe('Rate limiting', () => {
     it('should return 429 when rate limited', async () => {
       const { withRateLimit } = await import('@/lib/rate-limit');
@@ -367,9 +317,6 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  // =========================================================================
-  // Request validation — task_id parameter
-  // =========================================================================
   describe('task_id validation', () => {
     it('should return 400 when task_id is missing', async () => {
       const response = await GET(makeRequest(null));
@@ -406,9 +353,6 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  // =========================================================================
-  // Ownership
-  // =========================================================================
   describe('Task ownership', () => {
     it('should fail closed when task ownership is missing', async () => {
       mockGetVideoTaskOwner.mockReturnValueOnce(undefined);
@@ -433,9 +377,6 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  // =========================================================================
-  // Happy path — Runway provider
-  // =========================================================================
   describe('Success — Runway PENDING status', () => {
     it('should return 200 with queued status when Runway task is PENDING', async () => {
       mockFetch.mockResolvedValueOnce({
@@ -530,9 +471,6 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  // =========================================================================
-  // Happy path — Google Veo provider
-  // =========================================================================
   describe('Success — Google Veo status', () => {
     it('should return 200 with queued status when Google operation is PENDING', async () => {
       mockFetch.mockResolvedValueOnce({
@@ -662,9 +600,6 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  // =========================================================================
-  // Provider error handling
-  // =========================================================================
   describe('Provider errors — Runway', () => {
     it('should return 404 when Runway returns 404', async () => {
       mockFetch.mockResolvedValueOnce({
@@ -799,9 +734,6 @@ describe('GET /api/media/video/status', () => {
     });
   });
 
-  // =========================================================================
-  // Status without metadata state (fallback to processing)
-  // =========================================================================
   describe('Edge cases', () => {
     it('should default to processing status for unknown Runway status strings', async () => {
       mockFetch.mockResolvedValueOnce({

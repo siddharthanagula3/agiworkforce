@@ -1,29 +1,5 @@
 import 'server-only';
 
-/**
- * POST /api/projects/[id]/duplicate — copy a project.
- *
- * There was no way to branch a project. Starting a variant of an existing piece
- * of work meant recreating its instructions by hand and re-uploading every
- * knowledge file, which is also how the same file ends up stored twice.
- *
- * WHAT COPIES, and why:
- *  - Project settings and instructions — the whole point; this is the
- *    configuration the user tuned.
- *  - Knowledge files, by REFERENCE to the same storage object. The bytes are
- *    already uploaded and content-addressed by checksum; re-uploading them
- *    would double storage for identical content and burn the new project's
- *    quota for no benefit.
- *  - NOT conversations. A conversation is a record of something that happened,
- *    not configuration. Copying them would fabricate history the user never
- *    had in the new project, and it is the one part of a duplicate nobody can
- *    undo by hand.
- *
- * The insert goes through the SAME `assert_user_resource_limit` guard as
- * create. A duplicate that bypassed the project quota would be a trivial way
- * around a paid limit.
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -49,7 +25,6 @@ function isSchemaNotReady(error: unknown): boolean {
   return code === '42P01' || code === '42703';
 }
 
-/** "Plan" -> "Plan (copy)", "Plan (copy)" -> "Plan (copy 2)". */
 function copyName(original: string): string {
   const trimmed = original.trim() || 'Project';
   const match = /^(.*)\s\(copy(?:\s(\d+))?\)$/.exec(trimmed);
@@ -71,8 +46,6 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
   const { id } = await context.params;
   const organizationId = await resolveActiveOrganizationId(db, userId);
 
-  // Owner-only, matching export: duplicating a shared project would copy
-  // someone else's material into an account they do not control.
   const [source] = await db.query<Record<string, unknown>>(
     `select * from user_projects
       where id = $1
@@ -128,9 +101,6 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     throw createError.internal('Failed to duplicate the project');
   }
 
-  // Knowledge files by reference. Copied AFTER the project exists so a quota
-  // rejection above leaves nothing behind, and version history is flattened to
-  // v1 because the copy has no history of its own.
   let copiedFiles = 0;
   try {
     const inserted = await db.query<{ id: string }>(
@@ -147,8 +117,6 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     );
     copiedFiles = inserted.length;
   } catch (error) {
-    // The project itself is real and usable; report it rather than rolling back
-    // a successful create because the file copy failed.
     if (!isSchemaNotReady(error)) {
       logger.error({ error, userId, sourceProjectId: id }, 'Failed to copy knowledge files');
     }
@@ -158,12 +126,6 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleDuplicateProject));
-// Not `export const OPTIONS = handleCorsPreflightRequest`. That helper's second
-// parameter is a `requireOrigin` boolean, but Next 16 types a route handler's
-// second parameter as the route context (`{ params: Promise<{ id: string }> }`),
-// so exporting it directly fails the typed-route constraint — and it can return
-// null, where a handler must always return a Response. `tsc --noEmit` does not
-// run that check; only `next build` does.
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
 }

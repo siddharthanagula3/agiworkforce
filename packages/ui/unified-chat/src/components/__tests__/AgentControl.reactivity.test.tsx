@@ -60,10 +60,6 @@ describe('AgentControl reactive state', () => {
     ).toBe('High');
   });
 
-  // The current catalog has no model without an effort ladder, so there is no
-  // entry that can demonstrate the hidden-control state. Restore the test when
-  // that capability shape exists again.
-
   it('uses only the selected model’s catalog-supported effort levels', () => {
     render(
       <AgentControl

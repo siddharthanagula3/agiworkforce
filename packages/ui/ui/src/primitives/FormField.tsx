@@ -6,75 +6,21 @@ import { Label } from './Label';
 import { Input, type InputProps } from './Input';
 import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
 
-/**
- * Drift resolution:
- * - Timer ref type: web's `ReturnType<typeof setTimeout>` over desktop's
- *   `NodeJS.Timeout` — portable across DOM/Node lib targets and the more
- *   idiomatic choice for a browser-facing shared component; `NodeJS.Timeout`
- *   only happens to work on desktop because its Tauri/Node-tooled build has
- *   `@types/node` in scope.
- * - Validate timing: kept web's `if (validate && touched)` gate on the debounced
- *   change handler over desktop's always-validate-internally version. Desktop's
- *   comment frames it as a deliberate fix, but `displayError` is gated by
- *   `touched` in both — so the only actual difference is that desktop invokes a
- *   caller-supplied `validate` (and starts/clears a timer) on every keystroke
- *   before the field is ever blurred, with zero visible effect. Web's version is
- *   leaner (no pre-touch invocations of what may not be a cheap/pure function)
- *   for the same rendered behavior, so it's the better default for a shared
- *   primitive.
- */
 export interface FormFieldProps extends Omit<InputProps, 'id'> {
-  /** Unique identifier for the field */
   id: string;
-  /** Label text for the field */
   label: string;
-  /** Optional description/help text */
   description?: string;
-  /** Error message to display */
   error?: string;
-  /** Success message to display */
   success?: string;
-  /** Whether the field is required */
   required?: boolean;
-  /** Whether to show inline validation icons */
   showValidationIcon?: boolean;
-  /** Custom validation function for real-time validation */
   validate?: (value: string) => string | undefined;
-  /** Debounce time for validation in ms (default: 300) */
   validateDebounce?: number;
-  /** Container class name */
   containerClassName?: string;
-  /** Label class name */
   labelClassName?: string;
-  /** Hint text shown below the input */
   hint?: string;
 }
 
-/**
- * A form field component with built-in validation support and accessibility.
- *
- * Features:
- * - Inline error/success messages with proper ARIA attributes
- * - Real-time validation with debouncing
- * - Required field indicators
- * - Description and hint text support
- * - Validation icons
- *
- * Usage:
- * ```tsx
- * <FormField
- *   id="email"
- *   label="Email Address"
- *   type="email"
- *   required
- *   error={errors.email}
- *   description="We'll never share your email."
- *   validate={(value) => {
- *     if (!value.includes('@')) return 'Please enter a valid email';
- *   }}
- * />
- * ```
- */
 function FormField({
   id,
   label,
@@ -97,22 +43,18 @@ function FormField({
   const [touched, setTouched] = React.useState(false);
   const validateTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Use external error if provided, otherwise use internal validation error
   const displayError = error ?? (touched ? internalError : undefined);
   const isValid = touched && !displayError && (success || inputProps.value);
 
-  // Generate unique IDs for ARIA attributes
   const errorId = `${id}-error`;
   const descriptionId = `${id}-description`;
   const hintId = `${id}-hint`;
 
-  // Build aria-describedby based on what's present
   const ariaDescribedBy =
     [description && descriptionId, hint && hintId, displayError && errorId]
       .filter(Boolean)
       .join(' ') || undefined;
 
-  // Cleanup timeout on unmount
   React.useEffect(() => {
     return () => {
       if (validateTimeoutRef.current) {
@@ -125,7 +67,6 @@ function FormField({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       onChange?.(e);
 
-      // Run validation with debouncing
       if (validate && touched) {
         if (validateTimeoutRef.current) {
           clearTimeout(validateTimeoutRef.current);
@@ -144,7 +85,6 @@ function FormField({
       setTouched(true);
       onBlur?.(e);
 
-      // Run immediate validation on blur
       if (validate) {
         const validationError = validate(e.target.value);
         setInternalError(validationError);

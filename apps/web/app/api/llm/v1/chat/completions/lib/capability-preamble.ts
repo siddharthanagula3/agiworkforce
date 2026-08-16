@@ -2,33 +2,6 @@ import 'server-only';
 
 import { isValidIanaTimeZone } from '@agiworkforce/types';
 
-/**
- * Base system preamble: identity, current date, and a truthful inventory of the
- * tools actually attached to THIS request.
- *
- * AUDIT-FIX SYS-1 / SYS-2 / SYS-3 / SYS-5 / SYS-6.
- *
- * Before this module the managed-cloud chat path assembled no base system
- * prompt at all. Every `role: 'system'` injection on the route was conditional
- * (research mode, AGI Work mode, skill catalog, project context, account
- * memory), so an ordinary chat turn reached the provider as a bare user message
- * with no identity, no capability statement, no tool inventory and no date.
- *
- * The consequences were all user-reported: the model answered as its underlying
- * vendor persona, had no trigger to reach for web search, dated itself by its
- * training data, and — most damagingly — denied having a sandbox or file system
- * while `execute_code` and `write_file` sat unmentioned in its tool array. Tools
- * were attached to the request and never described to the model, so it had to
- * infer its entire capability surface from raw JSON schemas.
- *
- * The inventory here is DERIVED from the resolved tool array rather than
- * hardcoded, so it cannot drift from what the request actually carries. A tool
- * that is gated off (by tier, by deployment flag, by provider support) simply
- * does not appear, and the model is told plainly that it has no tools rather
- * than being left to guess.
- */
-
-/** Human-readable line for each platform tool we know about. */
 const TOOL_DESCRIPTIONS: Record<string, string> = {
   web_search: 'search the live web and cite what you find',
   search_maps: 'open a real map search card for places or nearby categories',
@@ -38,27 +11,10 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     'run code in a sandboxed Linux environment with a real file system and a network connection',
   write_file: 'write a file into that sandbox',
   create_folder: 'create a folder in that sandbox',
-  // Must stay in step with the tool's own `format` enum in
-  // lib/services/managed-office-file-service.ts, which accepts docx and pptx
-  // only. Listing .xlsx here made the model offer spreadsheets it could not
-  // create: the call is rejected by the tool's schema as
-  // `invalid_office_file_request`. Spreadsheets come from the sandbox
-  // (`execute_code`), which is gated separately and may not be on this turn.
   create_office_file: 'produce .docx and .pptx files',
   skill: 'load a skill: a packaged set of instructions for a specific kind of task',
 };
 
-/**
- * Pull tool names out of a resolved tool array.
- *
- * Several shapes coexist on this route: OpenAI-style function tools
- * (`{ type: 'function', function: { name } }`) used by every platform-executed
- * tool, and provider-native server tools (`{ type: 'web_search_20250305',
- * name: 'web_search' }`) used by Anthropic, OpenAI Responses
- * (`{ type: 'web_search' }`), and Google grounding (`{ google_search: {} }`).
- * Unknown shapes are skipped rather than guessed at — an omission understates
- * our capabilities, which is the safe direction to fail.
- */
 export function extractToolNames(tools: unknown[] | undefined): string[] {
   if (!Array.isArray(tools)) return [];
   const names: string[] = [];
@@ -81,11 +37,6 @@ export function extractToolNames(tools: unknown[] | undefined): string[] {
       continue;
     }
 
-    // Provider-native hosted tools do not all carry a `name`. Missing these
-    // two exact, server-owned shapes made the preamble say "No tools are
-    // available" while the request actually contained web search. Models then
-    // followed that contradictory system instruction and replied that they
-    // could not browse instead of calling the attached tool.
     if (record['type'] === 'web_search' || record['type'] === 'web_search_2025_08_26') {
       names.push('web_search');
       continue;
@@ -98,11 +49,8 @@ export function extractToolNames(tools: unknown[] | undefined): string[] {
 }
 
 export interface CapabilityPreambleInput {
-  /** The fully-resolved tool array for this request — after every gate. */
   tools: unknown[] | undefined;
-  /** Validated browser-reported IANA time zone; never an authoritative clock. */
   timeZone?: string;
-  /** Injected for determinism in tests. */
   now?: Date;
 }
 
@@ -131,10 +79,6 @@ function formatLocalInstant(now: Date, timeZone: string | undefined): string | n
   return `${year}-${month}-${day} ${hour}:${minute}:${second} (${timeZone})`;
 }
 
-/**
- * Build the preamble. Returns null when there is nothing worth saying, so the
- * caller never injects an empty system message.
- */
 export function buildCapabilityPreamble(input: CapabilityPreambleInput): string | null {
   const now = input.now ?? new Date();
   const currentUtcTimestamp = now.toISOString();

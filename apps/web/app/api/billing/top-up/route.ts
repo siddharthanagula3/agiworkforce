@@ -38,19 +38,6 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-/**
- * The currency Stripe actually bills this subscription in.
- *
- * Read from Stripe rather than inferred from the caller's IP: someone who
- * subscribed in INR and is travelling must still be measured against the
- * currency their plan is billed in, not the country they happen to be in. This
- * mirrors the doctrine already stated on `getPriceSelectionForCurrency`.
- *
- * Fails CLOSED. A Stripe lookup failure returns no currency, and the caller
- * refuses the top-up — the alternative is defaulting to `'usd'`, which turns a
- * transient API error into exactly the silent cross-currency charge this guard
- * exists to prevent.
- */
 async function resolveSubscriptionCurrency(subscriptionId: string): Promise<string> {
   try {
     const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
@@ -142,22 +129,6 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Top-ups are priced in USD only (`usd_1_to_units_50_v1`), but subscription
-  // pricing IS regional — `lib/regional-pricing.ts` sells Basic/Pro/Max/Team in
-  // INR, so a subscriber's billing currency is not guaranteed to be USD. Billing
-  // a USD top-up against an INR subscription is not a hard Stripe error
-  // (mode:'payment' creates a PaymentIntent, not an invoice, so the Customer's
-  // pinned currency does not reject it) — it silently charges a different
-  // currency than every other line on that account, adding an unannounced forex
-  // conversion and a card-network cross-border fee the buyer never agreed to.
-  //
-  // So the currency is read from the live subscription, exactly as
-  // `/api/upgrade/preview` does, and a non-USD subscriber is refused rather than
-  // cross-charged. Defining a per-currency unit rate is a founder pricing
-  // decision, not a conversion this route may invent: the published INR plan
-  // prices are psychological price points, not one exchange rate (Basic
-  // $7→₹399 is ₹57/$, Pro $20→₹1999 is ₹100/$, Max 15x $200→₹24999 is ₹125/$),
-  // so no rate can be derived from them. Tracked in FoundersAssistance.md §28.
   const subscriptionCurrency = await resolveSubscriptionCurrency(billing.stripe_subscription_id);
   if (subscriptionCurrency !== 'usd') {
     throw createError.validation(
@@ -197,8 +168,6 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
       success_url: `${appUrl}/settings/billing?topup=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/settings/billing?topup=cancelled`,
       metadata,
-      // Stripe copies PaymentIntent metadata to the Charge. The refund handler
-      // uses this marker to distinguish a top-up refund from a plan refund.
       payment_intent_data: { metadata },
       ...buildCheckoutTaxParams({ hasExistingCustomer: true }),
     },

@@ -11,32 +11,14 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-/**
- * Animated waveform visualization with independently-moving bars.
- * Used in voice recording overlay and full-screen voice conversation.
- *
- * Colors:
- * - blue (#3b82f6)  = user speaking
- * - teal (#21808d)  = AI speaking
- * - purple (#a855f7) = thinking
- */
-
 interface WaveformProps {
-  /** Color of the bars */
   color: string;
-  /** Whether the waveform is actively animating */
   active?: boolean;
-  /** External audio level (0-1) to drive bar heights. If not provided, uses idle animation. */
   audioLevel?: number;
-  /** Number of bars. Default 7. */
   barCount?: number;
-  /** Max bar height in px. Default 48. */
   maxHeight?: number;
-  /** Min bar height in px. Default 6. */
   minHeight?: number;
-  /** Bar width in px. Default 4. */
   barWidth?: number;
-  /** Gap between bars in px. Default 4. */
   gap?: number;
 }
 
@@ -65,10 +47,8 @@ function WaveformBar({
 }) {
   const idleHeight = useSharedValue(minHeight);
 
-  // Each bar gets a unique phase offset for organic movement
   useEffect(() => {
     if (active) {
-      // Start idle wobble with staggered delays
       idleHeight.value = withDelay(
         index * 80,
         withRepeat(
@@ -86,10 +66,8 @@ function WaveformBar({
   }, [active, minHeight, maxHeight, index, idleHeight]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    // When audioLevel is provided and non-zero, use it to drive heights
     const level = audioLevel.value;
     if (active && level > 0.01) {
-      // Each bar responds slightly differently to audio level
       const phaseMultiplier = 0.6 + Math.sin((index * Math.PI) / 3) * 0.4;
       const targetHeight = minHeight + (maxHeight - minHeight) * level * phaseMultiplier;
       return {
@@ -135,7 +113,6 @@ export function Waveform({
     });
   }, [externalAudioLevel, audioLevel]);
 
-  // Pre-compute bar indices for stable keys
   const barIndices = useMemo(() => Array.from({ length: barCount }, (_, i) => i), [barCount]);
 
   return (

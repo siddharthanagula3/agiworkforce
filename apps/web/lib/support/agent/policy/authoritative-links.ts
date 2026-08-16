@@ -1,16 +1,8 @@
-/**
- * Authoritative links for each hard-abstain category.
- *
- * Every registered path is asserted to resolve to a real `app/**\/page.tsx` by
- * `authoritative-links.test.ts`, so an authoritative link cannot rot into a 404
- * — which would turn an honest refusal into a dead end.
- */
 
 import { SITE_URL } from '@/lib/seo/site';
 import type { HardAbstainCategory, SupportCitation } from '../types';
 
 export interface AuthoritativeLink {
-  /** Site-relative path. Must resolve to a real page. */
   path: string;
   title: string;
   description: string;
@@ -78,15 +70,10 @@ export const AUTHORITATIVE_LINKS: Readonly<Record<HardAbstainCategory, Authorita
     ],
   });
 
-/** Flat list of every registered path — used by the route-existence test. */
 export const ALL_AUTHORITATIVE_PATHS: readonly string[] = Object.freeze(
   Object.values(AUTHORITATIVE_LINKS).flatMap((links) => links.map((link) => link.path)),
 );
 
-/**
- * Static-data citation targets. Declared here rather than in the corpus adapter
- * so the same route-existence test covers them.
- */
 export const STATIC_DATA_CITATION_PATHS: readonly string[] = Object.freeze([
   '/help',
   '/pricing',

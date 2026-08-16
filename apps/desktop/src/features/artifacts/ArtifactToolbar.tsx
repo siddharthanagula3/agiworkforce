@@ -1,8 +1,3 @@
-/**
- * ArtifactToolbar Component
- *
- * Toolbar displayed on artifacts in chat messages with quick actions.
- */
 
 import { Check, Copy, Download, ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -34,8 +29,6 @@ export function ArtifactToolbar({
     useShallow((s) => ({ setActiveArtifact: s.setActiveArtifact, openPanel: s.openPanel })),
   );
   const [copied, setCopied] = useState(false);
-  // Toolbar may unmount mid-promise when the artifact panel closes or
-  // the active artifact swaps. Guard the post-await setState in handleCopy.
   const isMounted = useIsMounted();
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

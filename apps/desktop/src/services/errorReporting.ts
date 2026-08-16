@@ -37,7 +37,7 @@ class ErrorReportingService {
   private systemInfo: SystemInfo | null = null;
   private userActions: Array<{ action: string; timestamp: number }> = [];
   private maxUserActions = 20;
-  private isSending = false; // Prevents concurrent sends
+  private isSending = false;
 
   private options: ErrorReportingOptions = {
     enabled: true,
@@ -52,17 +52,10 @@ class ErrorReportingService {
     this.initializeSystemInfoSync();
   }
 
-  /**
-   * Cleanup the service - stops the batch timer.
-   * Call this when the service is no longer needed.
-   */
   public cleanup(): void {
     this.stopBatchTimer();
   }
 
-  /**
-   * Stop the batch timer.
-   */
   private stopBatchTimer(): void {
     if (this.batchTimer !== null) {
       window.clearInterval(this.batchTimer);
@@ -172,7 +165,6 @@ class ErrorReportingService {
   }
 
   private async sendBatch(): Promise<void> {
-    // Prevent concurrent sends - if already sending, new errors will be queued
     if (this.queue.length === 0 || this.isSending) {
       return;
     }
@@ -208,7 +200,6 @@ class ErrorReportingService {
     } catch (error) {
       console.error('Failed to send error batch:', error);
 
-      // Re-queue failed errors along with any new ones that came in during the send
       const combined = [...errors, ...this.queue];
       if (combined.length > 50) {
         const droppedCount = combined.length - 50;

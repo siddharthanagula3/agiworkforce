@@ -20,13 +20,6 @@ interface ConversationItemProps {
   snippet?: string;
 }
 
-/**
- * Single conversation row in the sidebar.
- * - Title + last message preview + relative time
- * - Swipe left to delete
- * - Long press for rename/delete menu
- * - Active state highlight with teal left border
- */
 export function ConversationItem({ conversation, isActive, snippet }: ConversationItemProps) {
   const router = useRouter();
   const deleteConversation = useChatStore((s) => s.deleteConversation);
@@ -66,7 +59,6 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
         conversation.title,
       );
     } else {
-      // Android: use Modal with TextInput (Alert.prompt is iOS-only)
       setRenameText(conversation.title);
       setRenameVisible(true);
     }
@@ -93,11 +85,6 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    // No "Archive" entry here. Archiving is wired in DrawerContent, which is
-    // the menu the app actually renders — this component is not mounted by any
-    // screen. Adding it here would only have been a second copy to keep in
-    // step, and its import of the archived-chats feature pulled the whole
-    // cloud-contracts graph into this module for no reachable benefit.
     Alert.alert(conversation.title, undefined, [
       { text: conversation.pinned ? 'Unpin' : 'Pin', onPress: handlePin },
       { text: 'Rename', onPress: handleRename },

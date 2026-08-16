@@ -8,11 +8,6 @@ interface CoworkDispatchState {
   setEnabled: (enabled: boolean) => void;
 }
 
-/**
- * Device-local authority for accepting new tasks from a paired Mobile
- * companion. Default-off is intentional: pairing alone never grants task
- * execution authority.
- */
 export const useCoworkDispatchStore = create<CoworkDispatchState>()(
   devtools(
     persist(

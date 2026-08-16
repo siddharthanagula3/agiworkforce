@@ -90,14 +90,6 @@ describe('resolveMobileImageGenerationRequest', () => {
   });
 });
 
-/**
- * Image mode is the composer's explicit output-kind switch. It shipped wired to
- * the video resolver but NOT to this one, so the composer could show the Image
- * chip and the image model's name while a prompt without an image noun fell
- * through to chat completions — the reported "it is using text model instead of
- * image model", where "Create an stylist anime MC" came back as a written
- * character profile.
- */
 describe('resolveMobileImageGenerationRequest — explicit Image mode', () => {
   const imageMode = { ...eligibleRequest, mediaMode: 'image' as const };
 

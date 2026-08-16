@@ -16,9 +16,6 @@ import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
 import { seoService } from '@/lib/seo/seo-optimizer';
 
-// i18n is initialized synchronously at module import time (see app/i18n/index.ts).
-// No async gate needed · rendering immediately prevents the blank-screen flash
-// that occurred when this component returned null on its first render cycle.
 export default function Providers({
   children,
   nonce,
@@ -26,7 +23,6 @@ export default function Providers({
   children: React.ReactNode;
   nonce?: string;
 }) {
-  // Initialize SEO service for marketing pages (structured data, meta tags)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       seoService.initialize();

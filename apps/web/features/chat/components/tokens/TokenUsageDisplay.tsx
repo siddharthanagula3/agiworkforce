@@ -1,7 +1,3 @@
-/**
- * Token Usage Display Component
- * Shows token count and cost per message (like ChatGPT/Claude.ai)
- */
 
 import { Badge } from '@agiworkforce/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
@@ -28,10 +24,8 @@ export function TokenUsageDisplay({
   className,
   variant = 'compact',
 }: TokenUsageDisplayProps) {
-  // Format cost to display
   const formattedCost = cost ? (cost < 0.01 ? `<$0.01` : `$${cost.toFixed(4)}`) : null;
 
-  // Format token counts
   const formatTokens = (num: number) => {
     if (num >= 1000) {
       return `${(num / 1000).toFixed(1)}K`;
@@ -92,7 +86,6 @@ export function TokenUsageDisplay({
     );
   }
 
-  // Detailed variant
   return (
     <div
       className={cn(

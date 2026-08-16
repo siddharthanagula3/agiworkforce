@@ -28,10 +28,6 @@ export type ManagedCloudAgentRunHeaders = Record<string, string>;
 export type ManagedCloudAgentRunFetch = (input: string, init?: RequestInit) => Promise<Response>;
 export type ManagedCloudAgentRunWait = (ms: number, signal?: AbortSignal) => Promise<void>;
 
-// The run handle/reference are declared in a leaf module so
-// `./tool-approval-resume` can validate a persisted reference without importing
-// this file back — see `./managed-cloud-agent-run-reference`. They are
-// re-declared here rather than forwarded with `export … from` so this module
 // stays their exported home for `scripts/check-cloud-contract-ownership.mjs`,
 // which reads exported declarations out of the canonical module list.
 export type ManagedCloudAgentRunHandle = RunHandle;
@@ -93,11 +89,6 @@ export interface ManagedCloudAgentRunClient {
     options?: ManagedCloudAgentRunReadOptions,
   ): Promise<CloudAgentRunSnapshotPage>;
   cancelRun(runId: string, options?: { signal?: AbortSignal }): Promise<CloudAgentRun>;
-  /**
-   * Answer a run's outstanding approval and leave. Returns once the server has
-   * accepted the decisions; it does NOT read the continuation stream, because
-   * the continuation is durable — see `resumeRun` in the client factory.
-   */
   resumeRun(
     runId: string,
     approvals: ManagedCloudAgentRunApproval[],
@@ -121,13 +112,6 @@ export const ManagedCloudAgentRunRequestIdSchema = z
   .max(128)
   .regex(/^[A-Za-z0-9._:-]+$/);
 
-/**
- * Reconcile public answer text rendered by a live stream with the same text
- * replayed from the durable canonical journal. The two transports can split
- * text at different chunk boundaries, so equality-only deduplication is not
- * sufficient. The caller retains `pending` and renders only
- * `unmatchedIncoming`.
- */
 export function reconcileManagedCloudPublicText(
   pending: string,
   incoming: string,
@@ -153,10 +137,6 @@ export class ManagedCloudAgentRunHttpError extends Error {
   }
 }
 
-/**
- * The approval was claimed by another surface between the list read and the
- * click. Nothing is lost — someone already answered it.
- */
 export class ManagedCloudAgentRunAlreadyResumingError extends ManagedCloudAgentRunHttpError {
   constructor(message: string) {
     super(message, 409);
@@ -164,7 +144,6 @@ export class ManagedCloudAgentRunAlreadyResumingError extends ManagedCloudAgentR
   }
 }
 
-/** The approval aged past the claim window and can no longer be answered. */
 export class ManagedCloudAgentRunApprovalExpiredError extends ManagedCloudAgentRunHttpError {
   constructor(message: string) {
     super(message, 410);
@@ -262,11 +241,6 @@ function isTransient(error: unknown): boolean {
   return error instanceof Error && error.name !== 'AbortError';
 }
 
-/**
- * Read the stable run handle returned by a completion request. Both headers
- * must be present and the path must match the validated run ID; clients never
- * follow an arbitrary URL supplied through a response header.
- */
 export function readManagedCloudAgentRunHandle(
   response: Pick<Response, 'headers'>,
 ): ManagedCloudAgentRunHandle | null {
@@ -378,8 +352,6 @@ export function createManagedCloudAgentRunClient(
           signal: options.signal,
         });
       } catch (error) {
-        // Two failures a UI must phrase differently from "something broke":
-        // somebody else already answered this, and it aged out.
         if (error instanceof ManagedCloudAgentRunHttpError) {
           if (error.status === 409) {
             throw new ManagedCloudAgentRunAlreadyResumingError(error.message);
@@ -391,12 +363,6 @@ export function createManagedCloudAgentRunClient(
         throw error;
       }
 
-      // The endpoint answers with the continuation's SSE stream, but the
-      // continuation is DURABLE: every event is journaled, and whoever is
-      // watching the run picks it up from the journal. A Tasks-page click is
-      // not a chat surface and has nowhere to render deltas, so hold the
-      // connection open only long enough to learn the decisions were accepted,
-      // then let go rather than pinning a stream nobody reads.
       await response.body?.cancel().catch(() => undefined);
     },
 

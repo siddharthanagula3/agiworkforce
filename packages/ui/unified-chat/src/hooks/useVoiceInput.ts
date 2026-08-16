@@ -49,7 +49,6 @@ export function useVoiceInput({ onTranscript }: UseVoiceInputOptions) {
       return;
     }
 
-    // Already listening — stop instead
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       return;
@@ -69,7 +68,6 @@ export function useVoiceInput({ onTranscript }: UseVoiceInputOptions) {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // 'aborted' happens on manual stop — not a real error
       if (event.error !== 'aborted') {
         setState('error');
       }

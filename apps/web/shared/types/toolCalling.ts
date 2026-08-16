@@ -1,7 +1,3 @@
-/**
- * Tool calling types for the web app
- * Provides proper type definitions for tool execution UI
- */
 
 export interface DiffData {
   file_path?: string;
@@ -59,7 +55,6 @@ export interface ToolCallUI {
   id: string;
   type: string;
   name: string;
-  // snake_case aliases used in components
   tool_name?: string;
   tool_description?: string;
   tool_id?: string;
@@ -96,7 +91,6 @@ export interface ToolExecutionStep {
   id: string;
   toolCallId: string;
   stepNumber: number;
-  // snake_case aliases used in components
   step_number?: number;
   tool_call: ToolCallUI;
   description: string;
@@ -140,7 +134,6 @@ export interface ToolResultUI {
   toolName: string;
   success: boolean;
   contents?: ToolResultContent[];
-  // Additional properties used in components
   expanded?: boolean;
   data?: unknown;
   output_type?: 'json' | 'table' | 'image' | 'code' | 'diff' | 'markdown' | 'text' | 'error';

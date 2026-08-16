@@ -14,8 +14,6 @@ interface AgentCardProps {
   onPress: (id: string) => void;
 }
 
-// Derived from the live palette: the status colours differ per theme, so a
-// module-scope constant would freeze one theme's values into both.
 function statusBarColor(
   status: Agent['status'],
   colors: ReturnType<typeof useThemeColors>,

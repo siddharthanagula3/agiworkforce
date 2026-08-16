@@ -7,7 +7,6 @@ describe('MARKDOWN_SANITIZE_SCHEMA', () => {
     const srcProtocols = MARKDOWN_SANITIZE_SCHEMA.protocols?.['src'] ?? [];
     expect(srcProtocols).toContain('data');
     expect(srcProtocols).toContain('blob');
-    // Default http(s) support is preserved.
     expect(srcProtocols).toContain('http');
     expect(srcProtocols).toContain('https');
   });

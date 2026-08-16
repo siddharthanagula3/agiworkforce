@@ -338,9 +338,6 @@ describe('resolveAutoRoute', () => {
             subscriptionTier,
             trustMode: 'managed_cloud',
           });
-          // Either the profile is refused outright (auto-max is not admitted
-          // for pro-class tiers — it fails closed, never downgrades to a
-          // flagship route) or the resolved chain is flagship-free.
           if (result.status === 'selected') {
             expect(flagship.has(result.modelKey.toLowerCase())).toBe(false);
             for (const fallback of result.fallbacks ?? []) {
@@ -351,8 +348,6 @@ describe('resolveAutoRoute', () => {
       }
     }
 
-    // And the fail-closed half explicitly: pro-class tiers cannot invoke the
-    // premium profile at all.
     const denied = resolveAutoRoute({
       selection: 'auto-max',
       taskType: 'reasoning',
@@ -654,11 +649,6 @@ describe('resolveAutoRoute', () => {
 });
 
 describe('resolveAutoRoute session capability admission (capability-handshake integration)', () => {
-  /**
-   * Session document where model/surface/settings grant both ids but the
-   * TIER layer withholds `canUseDeepResearch` — the four-layer intersection
-   * denies it with layer provenance, while `canUseWebSearch` stays granted.
-   */
   function sessionDocument() {
     return buildEffectiveCapabilityDocument({
       sessionId: 'sess_routing',
@@ -707,9 +697,6 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
   });
 
   it('refuses the whole resolution when a tier-admissible slot exists but a mandatory capability is session-denied (tier+capability compose)', () => {
-    // Identical request to the passing premium-coding selection above —
-    // the ONLY difference is the session-mandatory requirement the
-    // document's tier layer withholds. The model cannot weaken it.
     const result = resolveAutoRoute({
       selection: 'auto-premium',
       taskType: 'coding',

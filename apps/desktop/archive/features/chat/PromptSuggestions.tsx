@@ -1,9 +1,3 @@
-/**
- * PromptSuggestions Component
- *
- * Displays category pills and prompt suggestion cards in the empty chat state.
- * Lets users discover and quickly fill the input with curated prompt templates.
- */
 
 import React, { useState } from 'react';
 import { Code2, PenLine, Search, BarChart3, Sparkles, Zap } from 'lucide-react';

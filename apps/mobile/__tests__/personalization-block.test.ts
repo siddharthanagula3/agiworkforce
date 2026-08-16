@@ -1,6 +1,3 @@
-/**
- * Unit tests for renderPersonalizationBlock — the pure settings→prompt encoder.
- */
 import { renderPersonalizationBlock } from '../src/features/memory/services/personalization';
 import type { Personalization } from '../stores/settingsStore';
 

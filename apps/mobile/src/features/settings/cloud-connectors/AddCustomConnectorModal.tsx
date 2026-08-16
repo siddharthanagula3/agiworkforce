@@ -1,12 +1,3 @@
-/**
- * AddCustomConnectorModal — add a user-owned custom remote-MCP connector.
- *
- * Reuses the same server route as the web app (`POST /api/connectors/custom`),
- * which validates the URL (https, public host, no embedded credentials) and
- * enforces the per-tier limit. No OAuth app registration is needed, so this
- * works today. Client-side we only do cheap pre-checks; the server is
- * authoritative and its error message is surfaced verbatim.
- */
 import { useState, useCallback, useLayoutEffect, useRef } from 'react';
 import {
   Modal,
@@ -72,9 +63,6 @@ export function AddCustomConnectorModal({
     );
   }, []);
 
-  // The auth token is a secret. Clear every field before paint when the modal
-  // closes or its captured Cloud owner becomes stale, even if the parent keeps
-  // this mounted and later opens it for another account.
   useLayoutEffect(() => {
     const opened = visible && !wasVisibleRef.current;
     wasVisibleRef.current = visible;
@@ -161,7 +149,6 @@ export function AddCustomConnectorModal({
             borderTopRightRadius: 20,
             paddingHorizontal: 20,
             paddingTop: 20,
-            // Clear the home indicator: this sheet is flush to the bottom edge.
             paddingBottom: 20 + insets.bottom,
             gap: 12,
           }}
@@ -241,9 +228,6 @@ export function AddCustomConnectorModal({
                 <ActivityIndicator color={colors.textPrimary} />
               ) : (
                 <Text
-                  // The enabled button paints `colors.teal`, which inverts per
-                  // theme, so the label has to invert with it — a fixed white
-                  // disappeared on the light accent in dark mode.
                   style={{
                     color: canSubmit ? colors.accentText : colors.textMuted,
                     fontWeight: '700',

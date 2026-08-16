@@ -14,8 +14,6 @@ vi.mock('@/lib/services/schedule-service', () => ({
   createSchedule: vi.fn(),
   listSchedules: vi.fn(),
 }));
-// GOV-8: POST now resolves the caller's plan tier and asserts the per-plan
-// scheduled-task ceiling before persisting.
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn() },
 }));
@@ -85,8 +83,6 @@ describe('/api/schedules', () => {
     expect(createSchedule).toHaveBeenCalledWith(db, 'user-1', body);
   });
 
-  // GOV-8: an over-quota schedule is an entitlement refusal (403) with an
-  // upgrade path, and must never reach persistence.
   it('refuses to arm another unattended run past the plan ceiling', async () => {
     vi.mocked(assertScheduleQuota).mockRejectedValueOnce(
       new ScheduleLimitError('Free plans do not include scheduled tasks.', 'free', 0),

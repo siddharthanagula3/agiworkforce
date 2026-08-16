@@ -1,21 +1,9 @@
-/**
- * Client-side CSRF token management
- *
- * Provides utilities for fetching and caching CSRF tokens from the server.
- * Tokens are cached in memory with automatic refresh before expiry.
- */
 
 interface CsrfTokenResponse {
   token: string;
-  expiresIn: number; // milliseconds
+  expiresIn: number;
 }
 
-/**
- * Typed error thrown when /api/csrf returns a non-ok HTTP response.
- * Carries the HTTP `status` code so callers can distinguish e.g. 429
- * rate-limit responses from true network failures without breaking
- * callers that only use `instanceof Error` or `.message`.
- */
 export class CsrfTokenError extends Error {
   readonly status: number;
 
@@ -29,9 +17,6 @@ export class CsrfTokenError extends Error {
 let cachedToken: string | null = null;
 let tokenExpiry: number | null = null;
 
-/**
- * Fetch a fresh CSRF token from the server
- */
 async function fetchCsrfToken(): Promise<string> {
   const response = await fetch('/api/csrf', {
     method: 'GET',
@@ -53,16 +38,11 @@ async function fetchCsrfToken(): Promise<string> {
   return data.token;
 }
 
-/**
- * Get a valid CSRF token, fetching a new one if needed
- */
 export async function getCsrfToken(): Promise<string> {
-  // Return cached token if still valid
   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
     return cachedToken;
   }
 
-  // Fetch a new token
   return fetchCsrfToken();
 }
 
@@ -82,9 +62,6 @@ export async function addCsrfHeaders(headers: HeadersInit = {}): Promise<Headers
   };
 }
 
-/**
- * Clear the cached CSRF token (useful after logout or auth state changes)
- */
 export function clearCsrfToken(): void {
   cachedToken = null;
   tokenExpiry = null;

@@ -1,19 +1,3 @@
-/**
- * Settings sync gating — pure decisions extracted from mobile's
- * cloudSyncEngine.ts (pushSettings / pullSettings, pre-Wave-4).
- *
- * SCOPE NOTE: the single-document revision-based settings sync has two layers —
- * (1) WHEN to push/apply (pure booleans over a local dirty marker, cursors,
- * and snapshot strings,
- * identical shape across every surface), and (2) WHICH fields to project onto
- * the wire and back (mobile: services/cloudSettingsMapping.ts's
- * toCloudSettings/applyCloudSettings, built on mobile-only store types like
- * ThemeMode/FontPreference/PersonalizationStyle). Only (1) is extracted here.
- * (2) stays surface-owned: web and desktop have their own distinct settings
- * store shapes with no shared type to project through a common apply
- * function, so unifying it would mean inventing a cross-surface settings
- * schema no surface actually uses yet — out of scope for this extraction.
- */
 
 import type { CloudSafeSettings } from '@agiworkforce/cloud-contracts';
 
@@ -72,11 +56,6 @@ function mergeJsonObjects(base: JsonObject, overlay: JsonObject): JsonObject {
   return merged;
 }
 
-/**
- * Merge a partial cloud-safe settings document without replacing an entire
- * namespace. This preserves keys owned by another surface (for example a Web
- * editor preference when Mobile updates only the theme).
- */
 export function mergeCloudSafeSettings(
   base: CloudSafeSettings,
   overlay: CloudSafeSettings,
@@ -86,8 +65,6 @@ export function mergeCloudSafeSettings(
 
 function diffJsonObjects(base: JsonObject, current: JsonObject): JsonObject {
   const changed: JsonObject = {};
-  // Deliberately iterate only current keys. A narrower client omitting a field
-  // does not own that field and therefore cannot delete it accidentally.
   for (const [key, currentValue] of Object.entries(current)) {
     if (UNSAFE_OBJECT_KEYS.has(key)) continue;
     const baseValue = base[key];
@@ -101,7 +78,6 @@ function diffJsonObjects(base: JsonObject, current: JsonObject): JsonObject {
   return changed;
 }
 
-/** Return only fields changed by this client; omitted fields are never deletions. */
 export function diffCloudSafeSettings(
   base: CloudSafeSettings,
   current: CloudSafeSettings,
@@ -110,18 +86,11 @@ export function diffCloudSafeSettings(
 }
 
 export interface CloudSafeSettingsRebase {
-  /** Server winner with this client's post-request edits replayed field by field. */
   settings: CloudSafeSettings;
-  /** The exact client-owned delta replayed onto the server winner. */
   localChanges: CloudSafeSettings;
   hasLocalChanges: boolean;
 }
 
-/**
- * Three-way merge for an in-flight sync request. Changes are computed between
- * the local projection captured for the request and the latest live projection,
- * then replayed over the server-revision winner.
- */
 export function rebaseCloudSafeSettings(
   serverWinner: CloudSafeSettings,
   localRequestBase: CloudSafeSettings,
@@ -135,15 +104,6 @@ export function rebaseCloudSafeSettings(
   };
 }
 
-/**
- * Should a settings push happen? Two guards:
- *   1. `localDirtyMarker !== null` — null means this device has never
- *      changed a cloud-safe setting (factory defaults). A fresh device must
- *      NOT push defaults before pulling. The marker is never sent to the server;
- *      conflict resolution uses the last observed server revision.
- *   2. The current projection differs from what was last pushed — skip
- *      redundant POSTs on background sync cycles when nothing changed.
- */
 export function shouldPushSettings(
   localDirtyMarker: string | null,
   currentSnapshotJson: string,
@@ -153,12 +113,6 @@ export function shouldPushSettings(
   return currentSnapshotJson !== lastPushedSnapshotJson;
 }
 
-/**
- * Should a pulled settings response be applied to the live store? Only when
- * the cursor actually advanced (something changed server-side) AND the
- * pulled namespace bag is non-empty (an unchanged response is a no-op that
- * must not be treated as "apply nothing, but still count as a local change").
- */
 export function shouldApplyPulledSettings(
   advancedCursor: string,
   previousCursor: string,

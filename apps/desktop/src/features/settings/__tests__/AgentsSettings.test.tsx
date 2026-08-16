@@ -1,15 +1,8 @@
-/**
- * H44 — AgentsSettings tests
- *
- * Covers the execution preferences and approval override that are backed by
- * the live runtime, plus the custom-agent CRUD surface.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgentsSettings } from '../AgentsSettings';
 
-// ── Radix UI / jsdom compat polyfills ────────────────────────────────────────
 if (typeof Element.prototype.hasPointerCapture === 'undefined') {
   Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
 }
@@ -26,8 +19,6 @@ class MockResizeObserver {
   disconnect = vi.fn();
 }
 global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
-
-// ── Store mock ────────────────────────────────────────────────────────────────
 
 const mockSetAutoApproveTools = vi.fn().mockResolvedValue(undefined);
 const mockSetMaxTimeoutMinutes = vi.fn();
@@ -63,8 +54,6 @@ vi.mock('../../../stores/settingsStore', () => ({
 vi.mock('../CustomAgentsList', () => ({
   CustomAgentsList: () => <div>Custom Agents</div>,
 }));
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('AgentsSettings', () => {
   beforeEach(() => {

@@ -1,31 +1,6 @@
-/**
- * Analytics API
- *
- * TypeScript wrappers for ALL Tauri commands defined in
- * `apps/desktop/src-tauri/src/sys/commands/analytics.rs`.
- *
- * 29 commands total:
- *   Telemetry (6): track, flush, session-id, set-user-property, delete-all, get-session-id
- *   System/App metrics (6): get-system, get-app, increment-automations, increment-goals,
- *                            set-mcp-servers, set-cache-hit-rate
- *   Feature flags (2): get, get-all
- *   Usage & feature analytics (2): get-usage-stats, get-feature-usage
- *   ROI & aggregation (5): calculate-roi, process-metrics, user-metrics, tool-metrics, metric-trends
- *   Trend aliases (2): time-saved-trend, cost-saved-trend
- *   Reports (4): export-report, weekly-report, monthly-report, save-snapshot
- *   Top processes (1): get-top-processes
- *   Event tracking (2): track-workflow-view, acknowledge-milestone
- *
- * Convention: invoke() params are camelCase, command names are snake_case.
- */
 
 import { invoke } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types — mirroring Rust structs from analytics.rs, telemetry/, data/analytics/
-// ============================================================================
-
-/** Matches Rust `TelemetryEvent` in sys/telemetry/collector.rs */
 export interface TelemetryEvent {
   name: string;
   properties: Record<string, unknown>;
@@ -34,7 +9,6 @@ export interface TelemetryEvent {
   userId?: string;
 }
 
-/** Matches Rust `SystemMetrics` in sys/telemetry/analytics_metrics.rs */
 export interface SystemMetrics {
   cpuUsage: number;
   memoryUsedMb: number;
@@ -46,7 +20,6 @@ export interface SystemMetrics {
   uptimeSeconds: number;
 }
 
-/** Matches Rust `AppMetrics` in sys/telemetry/analytics_metrics.rs */
 export interface AppMetrics {
   automationsCount: number;
   goalsCount: number;
@@ -58,7 +31,6 @@ export interface AppMetrics {
   failedOperations: number;
 }
 
-/** Matches Rust `ROIReport` in data/analytics/roi_calculator.rs */
 export interface ROIReport {
   timeSavedHours: number;
   costSavingsUsd: number;
@@ -74,7 +46,6 @@ export interface ROIReport {
   reportEndDate: number;
 }
 
-/** Matches Rust `ProcessMetrics` in data/analytics/metrics_aggregator.rs */
 export interface ProcessMetrics {
   processType: string;
   executionCount: number;
@@ -88,7 +59,6 @@ export interface ProcessMetrics {
   errorRate: number;
 }
 
-/** Matches Rust `UserMetrics` in data/analytics/metrics_aggregator.rs */
 export interface UserMetrics {
   userId: string;
   automationCount: number;
@@ -100,7 +70,6 @@ export interface UserMetrics {
   avgSuccessRate: number;
 }
 
-/** Matches Rust `ToolMetrics` in data/analytics/metrics_aggregator.rs */
 export interface ToolMetrics {
   toolName: string;
   usageCount: number;
@@ -111,13 +80,11 @@ export interface ToolMetrics {
   totalTimeSavedHours: number;
 }
 
-/** Matches Rust `TrendPoint` in data/analytics/metrics_aggregator.rs */
 export interface TrendPoint {
   date: string;
   value: number;
 }
 
-/** Usage stats returned by analytics_get_usage_stats (JSON value) */
 export interface UsageStats {
   dau: number;
   mau: number;
@@ -131,7 +98,6 @@ export interface UsageStats {
   retentionRate: number;
 }
 
-/** Feature usage stats returned by analytics_get_feature_usage */
 export interface FeatureUsageEntry {
   featureName: string;
   usageCount: number;
@@ -140,11 +106,6 @@ export interface FeatureUsageEntry {
   lastUsed?: string;
 }
 
-// ============================================================================
-// 1. Telemetry Commands
-// ============================================================================
-
-/** Track a single telemetry event. */
 export async function analyticsTrackEvent(event: TelemetryEvent): Promise<void> {
   try {
     await invoke('analytics_track_event', { event });
@@ -154,7 +115,6 @@ export async function analyticsTrackEvent(event: TelemetryEvent): Promise<void> 
   }
 }
 
-/** Flush queued telemetry events to storage/backend. */
 export async function analyticsFlushEvents(): Promise<void> {
   try {
     await invoke('analytics_flush_events');
@@ -164,7 +124,6 @@ export async function analyticsFlushEvents(): Promise<void> {
   }
 }
 
-/** Get the current analytics session ID. */
 export async function analyticsGetSessionId(): Promise<string> {
   try {
     return await invoke<string>('analytics_get_session_id');
@@ -174,7 +133,6 @@ export async function analyticsGetSessionId(): Promise<string> {
   }
 }
 
-/** Set a user property for analytics segmentation. */
 export async function analyticsSetUserProperty(key: string, value: unknown): Promise<void> {
   try {
     await invoke('analytics_set_user_property', { key, value });
@@ -184,11 +142,6 @@ export async function analyticsSetUserProperty(key: string, value: unknown): Pro
   }
 }
 
-/**
- * TRUST-BOUNDARY: Push the current AppMode to the Rust telemetry collector so
- * that local-mode sessions are silenced at the Rust layer as well as the TS
- * layer. Call this on startup and whenever the mode changes.
- */
 export async function analyticsSetPrivacyMode(mode: string): Promise<void> {
   try {
     await invoke('analytics_set_privacy_mode', { mode });
@@ -197,7 +150,6 @@ export async function analyticsSetPrivacyMode(mode: string): Promise<void> {
   }
 }
 
-/** Delete all locally stored analytics data (GDPR). */
 export async function analyticsDeleteAllData(): Promise<void> {
   try {
     await invoke('analytics_delete_all_data');
@@ -207,11 +159,6 @@ export async function analyticsDeleteAllData(): Promise<void> {
   }
 }
 
-// ============================================================================
-// 2. System & App Metrics Commands
-// ============================================================================
-
-/** Collect current system metrics (CPU, memory, disk, network). */
 export async function metricsGetSystem(): Promise<SystemMetrics> {
   try {
     return await invoke<SystemMetrics>('metrics_get_system');
@@ -221,7 +168,6 @@ export async function metricsGetSystem(): Promise<SystemMetrics> {
   }
 }
 
-/** Collect current app-level metrics (automations, goals, MCP, cache). */
 export async function metricsGetApp(): Promise<AppMetrics> {
   try {
     return await invoke<AppMetrics>('metrics_get_app');
@@ -231,7 +177,6 @@ export async function metricsGetApp(): Promise<AppMetrics> {
   }
 }
 
-/** Increment the automations counter in app metrics. */
 export async function metricsIncrementAutomations(): Promise<void> {
   try {
     await invoke('metrics_increment_automations');
@@ -241,7 +186,6 @@ export async function metricsIncrementAutomations(): Promise<void> {
   }
 }
 
-/** Increment the goals counter in app metrics. */
 export async function metricsIncrementGoals(): Promise<void> {
   try {
     await invoke('metrics_increment_goals');
@@ -251,7 +195,6 @@ export async function metricsIncrementGoals(): Promise<void> {
   }
 }
 
-/** Set the MCP servers count in app metrics. */
 export async function metricsSetMcpServers(count: number): Promise<void> {
   try {
     await invoke('metrics_set_mcp_servers', { count });
@@ -261,7 +204,6 @@ export async function metricsSetMcpServers(count: number): Promise<void> {
   }
 }
 
-/** Set the cache hit rate in app metrics. */
 export async function metricsSetCacheHitRate(rate: number): Promise<void> {
   try {
     await invoke('metrics_set_cache_hit_rate', { rate });
@@ -271,11 +213,6 @@ export async function metricsSetCacheHitRate(rate: number): Promise<void> {
   }
 }
 
-// ============================================================================
-// 3. Usage & Feature Analytics Commands
-// ============================================================================
-
-/** Get aggregated usage statistics (DAU, MAU, session duration, etc). */
 export async function analyticsGetUsageStats(): Promise<UsageStats> {
   try {
     return await invoke<UsageStats>('analytics_get_usage_stats');
@@ -285,7 +222,6 @@ export async function analyticsGetUsageStats(): Promise<UsageStats> {
   }
 }
 
-/** Get per-feature usage breakdown. */
 export async function analyticsGetFeatureUsage(): Promise<FeatureUsageEntry[]> {
   try {
     return await invoke<FeatureUsageEntry[]>('analytics_get_feature_usage');
@@ -295,11 +231,6 @@ export async function analyticsGetFeatureUsage(): Promise<FeatureUsageEntry[]> {
   }
 }
 
-// ============================================================================
-// 5. ROI & Aggregation Commands
-// ============================================================================
-
-/** Calculate ROI report for a date range (epoch timestamps). */
 export async function analyticsCalculateRoi(
   startDate: number,
   endDate: number,
@@ -312,7 +243,6 @@ export async function analyticsCalculateRoi(
   }
 }
 
-/** Get process-type-level metrics for a date range. */
 export async function analyticsGetProcessMetrics(
   startDate: number,
   endDate: number,
@@ -328,7 +258,6 @@ export async function analyticsGetProcessMetrics(
   }
 }
 
-/** Get user-level metrics for a date range. */
 export async function analyticsGetUserMetrics(
   startDate: number,
   endDate: number,
@@ -341,7 +270,6 @@ export async function analyticsGetUserMetrics(
   }
 }
 
-/** Get tool-level metrics for a date range. */
 export async function analyticsGetToolMetrics(
   startDate: number,
   endDate: number,
@@ -354,7 +282,6 @@ export async function analyticsGetToolMetrics(
   }
 }
 
-/** Get trend data for a specific metric over N days. */
 export async function analyticsGetMetricTrends(
   metric: string,
   days: number,
@@ -367,11 +294,6 @@ export async function analyticsGetMetricTrends(
   }
 }
 
-// ============================================================================
-// 6. Trend Alias Commands
-// ============================================================================
-
-/** Get time-saved trend for N days (alias for metric_trends("time_saved")). */
 export async function analyticsGetTimeSavedTrend(days: number): Promise<TrendPoint[]> {
   try {
     return await invoke<TrendPoint[]>('analytics_get_time_saved_trend', { days });
@@ -381,7 +303,6 @@ export async function analyticsGetTimeSavedTrend(days: number): Promise<TrendPoi
   }
 }
 
-/** Get cost-saved trend for N days (alias for metric_trends("cost_saved")). */
 export async function analyticsGetCostSavedTrend(days: number): Promise<TrendPoint[]> {
   try {
     return await invoke<TrendPoint[]>('analytics_get_cost_saved_trend', { days });
@@ -391,11 +312,6 @@ export async function analyticsGetCostSavedTrend(days: number): Promise<TrendPoi
   }
 }
 
-// ============================================================================
-// 7. Report Commands
-// ============================================================================
-
-/** Export a formatted analytics report. Format: 'markdown' | 'csv' | 'json'. */
 export async function analyticsExportReport(
   format: string,
   startDate: number,
@@ -409,7 +325,6 @@ export async function analyticsExportReport(
   }
 }
 
-/** Generate a weekly analytics report for the current user. */
 export async function analyticsGenerateWeeklyReport(): Promise<string> {
   try {
     return await invoke<string>('analytics_generate_weekly_report');
@@ -419,7 +334,6 @@ export async function analyticsGenerateWeeklyReport(): Promise<string> {
   }
 }
 
-/** Generate a monthly analytics report for the current user. */
 export async function analyticsGenerateMonthlyReport(): Promise<string> {
   try {
     return await invoke<string>('analytics_generate_monthly_report');
@@ -429,7 +343,6 @@ export async function analyticsGenerateMonthlyReport(): Promise<string> {
   }
 }
 
-/** Save a snapshot of the current ROI data. */
 export async function analyticsSaveSnapshot(
   startDate: number,
   endDate: number,
@@ -443,11 +356,6 @@ export async function analyticsSaveSnapshot(
   }
 }
 
-// ============================================================================
-// 8. Top Processes Command
-// ============================================================================
-
-/** Get top N processes by execution count for a date range. */
 export async function analyticsGetTopProcesses(
   startDate: number,
   endDate: number,
@@ -465,11 +373,6 @@ export async function analyticsGetTopProcesses(
   }
 }
 
-// ============================================================================
-// 9. Event Tracking Commands
-// ============================================================================
-
-/** Track a workflow view event. */
 export async function trackWorkflowView(workflowId: string): Promise<void> {
   try {
     await invoke('track_workflow_view', { workflowId });
@@ -479,7 +382,6 @@ export async function trackWorkflowView(workflowId: string): Promise<void> {
   }
 }
 
-/** Acknowledge a milestone achievement. */
 export async function acknowledgeMilestone(milestoneId: string): Promise<void> {
   try {
     await invoke('acknowledge_milestone', { milestoneId });
@@ -489,45 +391,32 @@ export async function acknowledgeMilestone(milestoneId: string): Promise<void> {
   }
 }
 
-// ============================================================================
-// Static Client (optional class-based access)
-// ============================================================================
-
-/** Convenience class grouping all analytics API functions. */
 export const AnalyticsClient = {
-  // Telemetry
   trackEvent: analyticsTrackEvent,
   flushEvents: analyticsFlushEvents,
   getSessionId: analyticsGetSessionId,
   setUserProperty: analyticsSetUserProperty,
   deleteAllData: analyticsDeleteAllData,
-  // System/App Metrics
   getSystemMetrics: metricsGetSystem,
   getAppMetrics: metricsGetApp,
   incrementAutomations: metricsIncrementAutomations,
   incrementGoals: metricsIncrementGoals,
   setMcpServers: metricsSetMcpServers,
   setCacheHitRate: metricsSetCacheHitRate,
-  // Usage & Feature Analytics
   getUsageStats: analyticsGetUsageStats,
   getFeatureUsage: analyticsGetFeatureUsage,
-  // ROI & Aggregation
   calculateRoi: analyticsCalculateRoi,
   getProcessMetrics: analyticsGetProcessMetrics,
   getUserMetrics: analyticsGetUserMetrics,
   getToolMetrics: analyticsGetToolMetrics,
   getMetricTrends: analyticsGetMetricTrends,
-  // Trend Aliases
   getTimeSavedTrend: analyticsGetTimeSavedTrend,
   getCostSavedTrend: analyticsGetCostSavedTrend,
-  // Reports
   exportReport: analyticsExportReport,
   generateWeeklyReport: analyticsGenerateWeeklyReport,
   generateMonthlyReport: analyticsGenerateMonthlyReport,
   saveSnapshot: analyticsSaveSnapshot,
-  // Top Processes
   getTopProcesses: analyticsGetTopProcesses,
-  // Event Tracking
   trackWorkflowView,
   acknowledgeMilestone,
 } as const;

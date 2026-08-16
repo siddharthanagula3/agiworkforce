@@ -1,11 +1,3 @@
-/**
- * v3 empty-chat surface.
- *
- * Renders the workspace-aware greeting and capability-shaped starters in the
- * empty chat content area. Height is deliberately intrinsic, not `h-full`:
- * ChatInterface centres the greeting + composer as one group in the empty
- * state, and an `h-full` slot would re-open the dead gap between them.
- */
 import { BookOpen, Clock3, Download, FilePlus2 } from 'lucide-react';
 import { useChatStore } from '@agiworkforce/unified-chat';
 import { BrandedGreeting } from '../chat/BrandedGreeting';

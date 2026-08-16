@@ -1,9 +1,3 @@
-/**
- * Project duplication.
- *
- * There was no way to branch a project: starting a variant meant recreating
- * instructions by hand and re-uploading every knowledge file.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -77,7 +71,6 @@ describe('POST /api/projects/[id]/duplicate', () => {
 
     const insertCall = mocks.query.mock.calls[1];
     expect(String(insertCall?.[0])).toContain('insert into user_projects');
-    // The tuned configuration is the point of duplicating.
     expect(insertCall?.[1]).toContain('Always cite sources.');
     expect(insertCall?.[1]).toContain('Q3 Analysis (copy)');
   });
@@ -102,8 +95,6 @@ describe('POST /api/projects/[id]/duplicate', () => {
   });
 
   it('routes the insert through the same quota guard as create', async () => {
-    // A duplicate that bypassed the project quota would be a trivial way around
-    // a paid limit.
     mocks.query
       .mockResolvedValueOnce([SOURCE])
       .mockResolvedValueOnce([{ id: 'proj-2', name: 'Q3 Analysis (copy)' }])
@@ -114,8 +105,6 @@ describe('POST /api/projects/[id]/duplicate', () => {
   });
 
   it('never copies conversations', async () => {
-    // A conversation is a record of something that happened, not configuration;
-    // copying it would fabricate history in the new project.
     mocks.query
       .mockResolvedValueOnce([SOURCE])
       .mockResolvedValueOnce([{ id: 'proj-2', name: 'x' }])
@@ -152,8 +141,6 @@ describe('POST /api/projects/[id]/duplicate', () => {
   });
 
   it('still returns the project when the file copy fails', async () => {
-    // The project is real and usable; rolling back a successful create because
-    // the file copy failed would be the worse outcome.
     mocks.query
       .mockResolvedValueOnce([SOURCE])
       .mockResolvedValueOnce([{ id: 'proj-2', name: 'x' }])

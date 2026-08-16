@@ -38,11 +38,6 @@ import type { ProviderMode, StorageScope } from '../suite-contracts';
 import { SYNCED_APP_SURFACES } from '../suite-contracts';
 import { getSessionKindDefaults, type SessionKind, type SessionSyncPolicy } from './taxonomy';
 
-// ============================================================================
-// The Toggle
-// ============================================================================
-
-/** The one control the user sees. BYOK is a sub-mode of `'local'` — see module doc comment. */
 export type ExecutionProfileToggle = 'local' | 'cloud';
 
 export const EXECUTION_PROFILE_TOGGLES = [
@@ -50,11 +45,6 @@ export const EXECUTION_PROFILE_TOGGLES = [
   'cloud',
 ] as const satisfies readonly ExecutionProfileToggle[];
 
-// ============================================================================
-// The Five Planes
-// ============================================================================
-
-/** Where the acting identity/credential set is anchored. */
 export type ExecutionIdentitySource =
   | 'device_keychain'
   | 'byok_credential_store'
@@ -62,17 +52,14 @@ export type ExecutionIdentitySource =
 
 export interface ExecutionIdentityPlane {
   source: ExecutionIdentitySource;
-  /** Present when the identity is an authenticated AGI account (cloud, or a BYOK key linked to one). */
   accountUserId?: string | null;
 }
 
-/** Reuses the kernel's `StorageScope` and the taxonomy's `SessionSyncPolicy` — no parallel data-location enum. */
 export interface ExecutionDataPlane {
   storageScope: StorageScope;
   syncPolicy: SessionSyncPolicy;
 }
 
-/** Reuses the kernel's `ProviderMode` directly — the plane IS the provider-routing decision. */
 export interface ExecutionInferencePlane {
   providerMode: ProviderMode;
 }
@@ -81,7 +68,6 @@ export type ExecutionToolsSurface = 'local_process' | 'managed_sandbox';
 
 export interface ExecutionToolsPlane {
   executionSurface: ExecutionToolsSurface;
-  /** Must be `false` whenever `toggle === 'local'` — no automatic cloud tool egress (CLAUDE.md trust-boundary rule). */
   cloudExecutionAllowed: boolean;
 }
 
@@ -90,10 +76,6 @@ export type ExecutionOrchestrator = 'local_agent_loop' | 'managed_workflow_engin
 export interface ExecutionWorkflowPlane {
   orchestrator: ExecutionOrchestrator;
 }
-
-// ============================================================================
-// The Resolved Profile
-// ============================================================================
 
 export interface ExecutionProfile {
   toggle: ExecutionProfileToggle;
@@ -106,30 +88,11 @@ export interface ExecutionProfile {
 
 export interface ExecutionProfileInput {
   toggle: ExecutionProfileToggle;
-  /** Only meaningful when `toggle === 'local'`: on-device weights vs a direct BYOK key. Defaults to `'Local'`. */
   localInferenceMode?: Extract<ProviderMode, 'Local' | 'DirectByok'>;
-  /** Only meaningful when `toggle === 'cloud'`: gateway vs native managed routing. Defaults to `'ManagedGateway'`. */
   cloudInferenceMode?: Extract<ProviderMode, 'ManagedGateway' | 'ManagedNative'>;
-  /**
-   * `| undefined` is explicit (not just implied by `?:`) because
-   * `executionProfileForSessionKind` forwards this field through an optional
-   * chain (`input?.accountUserId`), whose static type includes `undefined`
-   * on top of the field's own optionality. `resolveExecutionProfile` below
-   * already normalizes omitted/`null`/`undefined` identically via `??
-   * null`, so accepting all three here matches what the function actually
-   * does rather than forcing callers to convert `undefined` to a dropped key.
-   */
   accountUserId?: string | null | undefined;
 }
 
-/**
- * Deterministically resolves all five planes from the visible toggle plus
- * the one genuinely independent sub-choice per side (which local inference
- * path; which cloud routing path). This is the concrete embodiment of "one
- * toggle resolving five planes" — hosts should call this rather than
- * constructing an `ExecutionProfile` by hand, so the planes can never drift
- * out of sync with each other.
- */
 export function resolveExecutionProfile(input: ExecutionProfileInput): ExecutionProfile {
   if (input.toggle === 'local') {
     const providerMode = input.localInferenceMode ?? 'Local';
@@ -164,10 +127,6 @@ export function resolveExecutionProfile(input: ExecutionProfileInput): Execution
   };
 }
 
-// ============================================================================
-// Cross-Plane Invariants
-// ============================================================================
-
 const LOCAL_PROVIDER_MODES: ReadonlySet<ProviderMode> = new Set<ProviderMode>([
   'Local',
   'DirectByok',
@@ -189,13 +148,6 @@ export interface ExecutionProfileViolation {
   message: string;
 }
 
-/**
- * Validates that every plane agrees with the visible toggle. A profile built
- * via `resolveExecutionProfile` always passes; this exists for profiles
- * received over a wire boundary (another surface, a persisted record) where
- * the type system alone cannot prove the planes were not tampered with or
- * hand-assembled inconsistently.
- */
 export function validateExecutionProfile(profile: ExecutionProfile): ExecutionProfileViolation[] {
   const violations: ExecutionProfileViolation[] = [];
   const add = (code: ExecutionProfileViolationCode, message: string) =>
@@ -259,11 +211,6 @@ export function validateExecutionProfile(profile: ExecutionProfile): ExecutionPr
   return violations;
 }
 
-/**
- * Throw-variant of `validateExecutionProfile`. Mirrors
- * `assertSessionInvariants` / `assertGeneratedFileTrustBoundary` — use at any
- * boundary that accepts an `ExecutionProfile` from outside this process.
- */
 export function assertExecutionProfile(profile: ExecutionProfile): void {
   const violations = validateExecutionProfile(profile);
   if (violations.length === 0) return;
@@ -272,23 +219,6 @@ export function assertExecutionProfile(profile: ExecutionProfile): void {
   throw new Error(`AGI execution-profile invariant violation [${codes}]:\n${messages}`);
 }
 
-// ============================================================================
-// Session-Kind Bridge (cross-module coherence with `./taxonomy`)
-// ============================================================================
-
-/**
- * `SessionKind`s directly governed by the single visible `ExecutionProfile`
- * toggle — exactly the consumer-chat surfaces the R5 adjudication names
- * ("Desktop's runtime composition root and Mobile's appMode-plus-egress-guard
- * stack are the existing implementations"). The other seven kinds
- * (`cloud_work`, `managed_sandbox`, `developer_local`, `developer_cloud`,
- * `browser_task`, `remote_projection`, `handoff_snapshot`) are deliberately
- * OUT OF SCOPE for this toggle: CC §4.3 treats managed developer/
- * knowledge-work runs and host-dependent remote/browser sessions as axes
- * independent of the two-way Local/Cloud consumer toggle, not variants of
- * it. Widening this union to all eleven `SessionKind`s would assert a
- * relationship the product does not have.
- */
 export type ExecutionProfileGovernedSessionKind = Extract<
   SessionKind,
   'cloud_chat' | 'desktop_local_chat' | 'desktop_byok_chat' | 'mobile_local_chat'
@@ -301,14 +231,6 @@ export const EXECUTION_PROFILE_GOVERNED_SESSION_KINDS = [
   'mobile_local_chat',
 ] as const satisfies readonly ExecutionProfileGovernedSessionKind[];
 
-/**
- * Resolves the `ExecutionProfile` that MUST govern a session of the given
- * governed kind. Derives the toggle and inference sub-choice from
- * `./taxonomy`'s `getSessionKindDefaults` trust boundary rather than a
- * second hardcoded mapping, so the two modules cannot drift apart — this
- * function is the ONLY place they touch. `execution-profile.test.ts` proves
- * the result matches the taxonomy defaults for every governed kind.
- */
 export function executionProfileForSessionKind(
   kind: ExecutionProfileGovernedSessionKind,
   input?: { accountUserId?: string | null },

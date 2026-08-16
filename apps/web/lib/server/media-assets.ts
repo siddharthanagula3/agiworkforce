@@ -5,13 +5,6 @@ import { logger } from '@/lib/logger';
 import { deleteStoredMedia } from '@/lib/server/media-storage';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
-/**
- * Repository for `media_assets` — the user-scoped catalog of AI-generated media.
- * User-scoped so web/desktop/mobile cloud all read the same Library by user_id.
- * All reads/writes degrade gracefully when the table hasn't been migrated yet
- * (undefined-table / undefined-column), so generation never 500s pre-migration.
- */
-
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -39,11 +32,6 @@ export type MediaKind = 'image' | 'video' | 'file';
 
 export interface InsertMediaAssetParams {
   userId: string;
-  /**
-   * Server-proven workspace captured when the operation was admitted. This is
-   * required because async completion must never re-resolve a later workspace.
-   * Explicit null preserves captured Personal provenance.
-   */
   organizationId: string | null;
   kind: MediaKind;
   mimeType: string;
@@ -57,11 +45,6 @@ export interface InsertMediaAssetParams {
   height?: number;
   sourceSurface?: string;
   metadata?: Record<string, unknown>;
-  /**
-   * Conversation that produced this asset (migration 0081). Provenance only —
-   * `on delete set null`, so deleting a chat never destroys its generated
-   * files. Absent for uploads, which have no source conversation.
-   */
   conversationId?: string;
 }
 
@@ -88,14 +71,6 @@ const REQUIRED_MEDIA_ASSET_COLUMNS = [
   ['deleted_at', 'timestamptz', 'YES', 'forbidden'],
 ] as const;
 
-/**
- * Prove that the deployed media catalog has the complete schema used by the
- * current image and video persistence paths. Column names alone are not
- * enough: migration 0081 originally pointed `conversation_id` at the gateway
- * compatibility table, while Web writes `web_conversations` ids. Callers must
- * fail closed unless the complete column shape and the single canonical
- * `on delete set null` foreign key are present.
- */
 export async function isMediaAssetStoreReady(
   db: MediaAssetQueryClient = getNeonDb(),
 ): Promise<boolean> {
@@ -182,8 +157,6 @@ async function insertMediaAssetRow(
   organizationId: string | null,
 ): Promise<string | null> {
   const rows = await db.query<{ id: string }>(
-    // `conversation_id` is provenance only (migration 0081). Deleting a
-    // conversation sets it NULL; it never destroys the asset.
     `insert into public.media_assets
        (user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
         prompt, provider, model, width, height, source_surface, metadata,
@@ -212,7 +185,6 @@ async function insertMediaAssetRow(
 }
 
 export interface UpsertVideoMediaAssetParams {
-  /** Stable id shared with the durable video job and R2 object. */
   id: string;
   userId: string;
   organizationId: string | null;
@@ -227,14 +199,6 @@ export interface UpsertVideoMediaAssetParams {
   metadata: Record<string, unknown>;
 }
 
-/**
- * Idempotently catalog a completed async video under its job UUID.
- *
- * Unlike the legacy insert helper this is strict: video completion must fail
- * when the catalog schema is unavailable, because a provider URL without an
- * owner-scoped media row is not a deliverable result. A conflicting UUID owned
- * by another tenant returns no row and is treated as an integrity failure.
- */
 export async function upsertVideoMediaAsset(p: UpsertVideoMediaAssetParams): Promise<string> {
   const rows = await getNeonDb().query<{ id: string }>(
     `insert into public.media_assets (
@@ -278,7 +242,6 @@ export async function upsertVideoMediaAsset(p: UpsertVideoMediaAssetParams): Pro
   return id;
 }
 
-/** Remove only the stable video row owned by this job's tenant. */
 export async function deleteVideoMediaAsset(id: string, userId: string): Promise<boolean> {
   const rows = await getNeonDb().query<{ id: string }>(
     `delete from public.media_assets
@@ -312,7 +275,6 @@ function mapRow(row: Record<string, unknown>): MediaAsset {
   };
 }
 
-/** Record a generated asset. Returns the new id, or null if not yet migrated. */
 export async function insertMediaAsset(p: InsertMediaAssetParams): Promise<string | null> {
   const db = getNeonDb();
   try {
@@ -329,11 +291,6 @@ export async function insertMediaAsset(p: InsertMediaAssetParams): Promise<strin
   }
 }
 
-/**
- * Catalog a generated image batch in one transaction. Object bytes are staged
- * first by the caller; either every row commits and becomes reachable through
- * `/api/files`, or no row does and the caller removes all staged objects.
- */
 export async function insertMediaAssetsAtomically(
   assets: readonly InsertMediaAssetParams[],
 ): Promise<string[] | null> {
@@ -361,7 +318,6 @@ export async function insertMediaAssetsAtomically(
   }
 }
 
-/** List the current user's media, newest first. Empty array if not yet migrated. */
 export async function listMediaAssets(
   userId: string,
   opts?: { kind?: MediaKind; limit?: number },
@@ -393,12 +349,6 @@ export async function listMediaAssets(
   }
 }
 
-/**
- * One row of the Library listing (`GET /api/library`). Unlike `MediaAsset`
- * (the older gallery shape) it carries `metadata` so the route can surface
- * the persisted filename / surface / previewable / origin classification
- * (Wave A, `generated-file-persist.ts`) with documented legacy fallbacks.
- */
 export interface LibraryAssetRow {
   id: string;
   kind: string;
@@ -414,30 +364,16 @@ export interface LibraryAssetRow {
 
 export interface ListLibraryAssetsOptions {
   kind?: MediaKind;
-  /** Filter on persisted classification; missing metadata folds to 'file'. */
   surface?: 'artifact' | 'file';
-  /** Coarse provenance bucket derived from metadata.origin. */
   origin?: 'generated' | 'uploaded';
-  /** Filename/prompt substring (ILIKE, wildcards escaped). */
   search?: string;
-  /**
-   * When true, list only soft-deleted assets within the 30-day recovery window
-   * ("Recently deleted" bin) instead of live ones. Assets past 30 days are
-   * treated as permanently purged and never listed.
-   */
   deleted?: boolean;
   limit?: number;
   offset?: number;
 }
 
-/**
- * `metadata.origin` values that mark a row as user-uploaded. No writer emits
- * them yet (every current pipeline is generation), but the clause keeps the
- * uploaded/generated filter honest when upload cataloging ships.
- */
 const UPLOAD_ORIGINS = ['upload', 'uploaded'] as const;
 
-/** Escape `%`, `_` and `\` so user input matches literally under ILIKE. */
 function escapeIlike(term: string): string {
   return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
@@ -457,13 +393,6 @@ function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
   };
 }
 
-/**
- * Library listing over `media_assets` — owner-scoped, filterable, offset
- * paginated (caller probes with limit+1 for has_more). LEGACY rows (before
- * Wave A) have no `metadata.surface`; the surface filter treats them as
- * 'file' via coalesce, mirroring the client contract's `.catch('file')`.
- * Empty array when the table has not been migrated yet.
- */
 export async function listLibraryAssets(
   userId: string,
   opts: ListLibraryAssetsOptions = {},
@@ -500,8 +429,6 @@ export async function listLibraryAssets(
       );
     }
 
-    // Live library excludes soft-deleted rows; the Recently-deleted bin lists only
-    // soft-deleted rows still inside the 30-day recovery window (older = purged).
     const lifecycleClause = opts.deleted
       ? "and deleted_at is not null and deleted_at > now() - interval '30 days'"
       : 'and deleted_at is null';
@@ -525,12 +452,6 @@ export async function listLibraryAssets(
   }
 }
 
-/**
- * One asset row with ownership + storage pointer, for the authenticated
- * byte-serving route (`/api/files/[id]`). Unlike the Library list shape this
- * includes `userId` (authorization check), `storagePathname` (R2 key), and
- * `metadata` (original filename for Content-Disposition).
- */
 export interface MediaAssetForServing {
   id: string;
   userId: string;
@@ -543,11 +464,6 @@ export interface MediaAssetForServing {
   deletedAt: string | null;
 }
 
-/**
- * Fetch a single asset by id REGARDLESS of owner — the caller must compare
- * `userId` and return 403 on mismatch. Returns null when the row does not
- * exist or the table has not been migrated yet.
- */
 export async function getMediaAssetById(id: string): Promise<MediaAssetForServing | null> {
   const db = getNeonDb();
   try {
@@ -579,11 +495,6 @@ export async function getMediaAssetById(id: string): Promise<MediaAssetForServin
   }
 }
 
-/**
- * Fetch a live asset only when it belongs to the authenticated user and their
- * currently active workspace. A miss deliberately combines unknown, foreign,
- * and other-workspace ids so byte-serving routes never leak row existence.
- */
 export async function getActiveWorkspaceMediaAssetById(
   userId: string,
   id: string,
@@ -621,7 +532,6 @@ export async function getActiveWorkspaceMediaAssetById(
   }
 }
 
-/** Idempotency lookup for the direct-upload completion transaction. */
 export async function getMediaAssetByStoragePathname(
   userId: string,
   storagePathname: string,
@@ -659,7 +569,6 @@ export async function getMediaAssetByStoragePathname(
   }
 }
 
-/** Soft-delete one of the user's assets. Returns true when a row was updated. */
 export async function softDeleteMediaAsset(userId: string, id: string): Promise<boolean> {
   const db = getNeonDb();
   try {
@@ -680,13 +589,6 @@ export async function softDeleteMediaAsset(userId: string, id: string): Promise<
   }
 }
 
-/**
- * Restore a soft-deleted asset from the Recently-deleted bin. Owner-scoped and
- * bounded to the same 30-day recovery window the bin lists — an asset deleted
- * longer ago is considered permanently purged and cannot be restored. Returns
- * false if there is no matching restorable row (already live, not owned, or
- * past the window).
- */
 export async function restoreMediaAsset(userId: string, id: string): Promise<boolean> {
   const db = getNeonDb();
   try {
@@ -708,13 +610,6 @@ export async function restoreMediaAsset(userId: string, id: string): Promise<boo
   }
 }
 
-/**
- * Permanently delete a soft-deleted asset and its stored bytes.
- *
- * The owner-scoped row is locked while object storage is deleted so Restore
- * cannot race an erasure. The database pointer is removed only after storage
- * succeeds; failures therefore remain retryable instead of orphaning bytes.
- */
 export async function permanentlyDeleteMediaAsset(userId: string, id: string): Promise<boolean> {
   const db = getNeonDb();
   try {

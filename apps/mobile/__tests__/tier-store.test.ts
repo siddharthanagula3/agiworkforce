@@ -1,20 +1,4 @@
-/**
- * tierStore — unit tests
- *
- * Verifies:
- *  - Defaults to 'free' tier
- *  - refreshTier() fetches the mobile /api/me capability handshake
- *  - paid access is derived from plan status, never the raw tier alone
- *  - account-scoped entitlement state is cleared atomically on sign-out
- *  - refreshTier() falls back to cached tier on network error
- *  - refreshTier() de-duplicates concurrent calls
- *  - setTier() overrides locally
- *  - MMKV persistence layer is called on tier update
- */
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -34,12 +18,7 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// Mock api — inject controlled /api/auth/me responses.
-// Note: jest.mock() is hoisted to the top of the file by Babel, so we cannot
-// reference variables defined in the test body here. Use jest.fn() inside the
-// factory and retrieve it via jest.mocked() after import.
 jest.mock('../services/api', () => {
-  // Plain ES class — no TS parameter property syntax (Babel cannot hoist it)
   function MockApiPaywallError(
     this: { feature: string; requiredTier: string; reason: string; name: string; message: string },
     feat: string,
@@ -60,10 +39,6 @@ jest.mock('../services/api', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Imports
-// ---------------------------------------------------------------------------
-
 import {
   useTierStore,
   ensureCloudEntitlementsReadyForRequest,
@@ -75,22 +50,12 @@ import {
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 
-// Retrieve the mock function reference AFTER imports (the factory ran during hoisting)
 const mockApiGet = api.get as jest.Mock;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getState() {
   return useTierStore.getState();
 }
 
-/**
- * Build a full contract-valid /api/me payload (see packages/services
- * cloud-contracts/me.ts). refreshTier() now validates responses with
- * parseMeResponse, so partial payloads throw and fall back to the cached tier.
- */
 function mePayload(
   tier: string,
   {
@@ -161,24 +126,13 @@ function resetStore() {
   } as never);
 }
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
   jest.clearAllMocks();
   __resetCloudAccountSessionForTests();
   activateCloudAccount('tier-test-user-a');
-  // refreshTier returns early outside Cloud Mode — Local Mode has no
-  // managed-cloud plan to read and egressGuard blocks /api/me before any
-  // network I/O. The store default is 'local', so these tests must opt in.
   useChatAppModeStore.setState({ appMode: 'cloud' });
   resetStore();
 });
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('tierStore defaults', () => {
   it('starts with tier = free', () => {
@@ -220,8 +174,6 @@ describe('refreshTier — success cases', () => {
   });
 
   it('keeps cached tier when the payload violates the /api/me contract', async () => {
-    // Partial payloads (missing id/email/plan envelope) fail parseMeResponse —
-    // the store must degrade to the cached tier, exactly like a network error.
     useTierStore.setState({ tier: 'pro', isRefreshing: false, lastRefreshedAt: null });
     mockApiGet.mockResolvedValueOnce({ plan: { tier: 'basic' } });
 
@@ -320,13 +272,11 @@ describe('refreshTier — success cases', () => {
 
 describe('refreshTier — failure cases', () => {
   it('keeps cached tier when network call fails', async () => {
-    // Set an initial cached tier
     useTierStore.setState({ tier: 'pro', isRefreshing: false, lastRefreshedAt: null });
     mockApiGet.mockRejectedValueOnce(new Error('Network error'));
 
     await getState().refreshTier();
 
-    // Tier must remain 'pro', not reset to 'free'
     expect(getState().tier).toBe('pro');
   });
 
@@ -349,25 +299,19 @@ describe('refreshTier — failure cases', () => {
 
 describe('refreshTier — concurrent call de-duplication', () => {
   it('skips a second concurrent call if one is already in flight', async () => {
-    // Make the first call slow so the second call sees isRefreshing=true
     let resolveFirst!: (v: unknown) => void;
     const firstPromise = new Promise<{ plan: string }>((resolve) => {
       resolveFirst = resolve;
     });
     mockApiGet.mockReturnValueOnce(firstPromise);
 
-    // Start first refresh without awaiting
     const first = getState().refreshTier();
 
-    // Yield to let the first async step run (the `set({ isRefreshing: true })` line
-    // runs synchronously before the first await, so after one microtask tick it is set)
     await Promise.resolve();
 
-    // Second concurrent call while first is in flight — must not invoke api.get again
     await getState().refreshTier();
     expect(mockApiGet).toHaveBeenCalledTimes(1);
 
-    // Resolve the first call
     resolveFirst(mePayload('basic'));
     await first;
     expect(getState().tier).toBe('basic');

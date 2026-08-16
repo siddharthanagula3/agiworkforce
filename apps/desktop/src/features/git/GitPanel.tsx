@@ -25,9 +25,7 @@ import { GitDiffViewer } from './GitDiffViewer';
 import { GitStatusPanel } from './GitStatusPanel';
 
 interface GitPanelProps {
-  /** Repository path */
   repoPath: string;
-  /** Additional CSS classes */
   className?: string;
 }
 
@@ -57,12 +55,10 @@ export function GitPanel({ repoPath, className }: GitPanelProps) {
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
 
-  // Update repo path when prop changes
   useEffect(() => {
     setRepoPath(repoPath);
   }, [repoPath, setRepoPath]);
 
-  // Fetch status on mount
   useEffect(() => {
     if (repoPath) {
       refreshStatus();

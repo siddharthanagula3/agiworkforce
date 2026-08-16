@@ -1,19 +1,5 @@
-/**
- * WCAG 2.1 AA contrast ratio verification tests
- *
- * Verifies that the color pairs defined in globals.css meet WCAG 2.1 AA
- * minimum contrast ratios:
- *   - 4.5:1 for normal text (< 18pt or < 14pt bold)
- *   - 3.0:1 for large text (>= 18pt or >= 14pt bold) and UI components
- *
- * Reference: https://www.w3.org/TR/WCAG21/#contrast-minimum
- */
 
 import { describe, it, expect } from 'vitest';
-
-// ---------------------------------------------------------------------------
-// WCAG contrast math utilities
-// ---------------------------------------------------------------------------
 
 function hexToSRGB(hex: string): [number, number, number] {
   const clean = hex.replace('#', '');
@@ -48,7 +34,6 @@ function contrastRatio(hex1: string, hex2: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-/** Convert hsl(H S% L%) to hex */
 function hslToHex(h: number, s: number, l: number): string {
   const sn = s / 100;
   const ln = l / 100;
@@ -66,37 +51,25 @@ function hslToHex(h: number, s: number, l: number): string {
 const WCAG_AA_NORMAL = 4.5;
 const WCAG_AA_LARGE = 3.0;
 
-// ---------------------------------------------------------------------------
-// Color pairs from globals.css
-// ---------------------------------------------------------------------------
+const LIGHT_BG = hslToHex(40, 23, 97);
+const LIGHT_FG = hslToHex(222.2, 84, 4.9);
+const LIGHT_MUTED_FG = hslToHex(215.4, 16.3, 44);
+const LIGHT_SIDEBAR_BG = hslToHex(45, 17, 95);
+const LIGHT_SIDEBAR_FG = hslToHex(240, 5.3, 26.1);
 
-// Light mode (:root)
-const LIGHT_BG = hslToHex(40, 23, 97); // --background: 40 23% 97%
-const LIGHT_FG = hslToHex(222.2, 84, 4.9); // --foreground: 222.2 84% 4.9%
-const LIGHT_MUTED_FG = hslToHex(215.4, 16.3, 44); // --muted-foreground: 215.4 16.3% 44%
-const LIGHT_SIDEBAR_BG = hslToHex(45, 17, 95); // --sidebar-background: 45 17% 95%
-const LIGHT_SIDEBAR_FG = hslToHex(240, 5.3, 26.1); // --sidebar-foreground
-
-// Light chat tokens (hex literals from globals.css)
 const CHAT_BG_LIGHT = '#faf9f7';
 const CHAT_TEXT_PRIMARY_LIGHT = '#1a1a1a';
 const CHAT_TEXT_SECONDARY_LIGHT = '#636363';
 
-// Dark mode (.dark)
-const DARK_BG = hslToHex(240, 12, 7); // --background: 240 12% 7%
-const DARK_FG = hslToHex(210, 40, 98); // --foreground: 210 40% 98%
-const DARK_MUTED_FG = hslToHex(215, 20.2, 65.1); // --muted-foreground: 215 20.2% 65.1%
-const DARK_SIDEBAR_BG = hslToHex(233, 29, 6); // --sidebar-background: 233 29% 6%
-const DARK_SIDEBAR_FG = hslToHex(240, 5, 65); // --sidebar-foreground: 240 5% 65%
+const DARK_BG = hslToHex(240, 12, 7);
+const DARK_FG = hslToHex(210, 40, 98);
+const DARK_MUTED_FG = hslToHex(215, 20.2, 65.1);
+const DARK_SIDEBAR_BG = hslToHex(233, 29, 6);
+const DARK_SIDEBAR_FG = hslToHex(240, 5, 65);
 
-// Dark chat tokens (hex literals from globals.css)
 const CHAT_BG_DARK = '#0f0f13';
 const CHAT_TEXT_PRIMARY_DARK = '#e4e4e7';
 const CHAT_TEXT_SECONDARY_DARK = '#a1a1a6';
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('WCAG 2.1 AA contrast ratios · light mode', () => {
   it('--background vs --foreground: >= 4.5:1', () => {
@@ -153,40 +126,25 @@ describe('WCAG 2.1 AA contrast ratios · dark mode', () => {
 });
 
 describe('WCAG 2.1 AA contrast ratios · large text and graphics (>= 3:1)', () => {
-  /**
-   * Sidebar borders (--sidebar-border, --border, --chat-border-subtle/strong) are
-   * purely decorative separators between surface areas that share very similar hues.
-   * WCAG 1.4.11 (Non-text Contrast) requires 3:1 only for "components and states"
-   * that convey information · not for decorative borders.
-   * We verify the correct semantic role here and document the actual ratios.
-   */
   it('light sidebar-bg vs sidebar-border is decorative (< 3:1 acceptable)', () => {
-    // --sidebar-border: 214.3 31.8% 91.4%
     const sidebarBorder = hslToHex(214.3, 31.8, 91.4);
     const ratio = contrastRatio(LIGHT_SIDEBAR_BG, sidebarBorder);
-    // These are background-to-background dividers · intentionally subtle
-    // WCAG exception: purely decorative borders between surface zones
-    expect(ratio).toBeGreaterThan(1.0); // must be distinct, not identical
+    expect(ratio).toBeGreaterThan(1.0);
   });
 
   it('dark chat-border-strong is visually distinct from chat-bg (> 1:1)', () => {
-    // #2d2d35 on #0f0f13 · subtle structural divider, not a UI control
     const chatBorderStrong = '#2d2d35';
     const ratio = contrastRatio(CHAT_BG_DARK, chatBorderStrong);
-    // Decorative layout separator · must be different from background
     expect(ratio).toBeGreaterThan(1.0);
   });
 
   it('focus ring (--ring) has >= 3:1 contrast with dark background', () => {
-    // --ring: 224.3 76.3% 52% · used for focus indicators (non-decorative)
-    // Updated from 48% (2.83:1 · failed) to 52% (3.24:1 · WCAG AA pass)
     const focusRing = hslToHex(224.3, 76.3, 52);
     const ratio = contrastRatio(DARK_BG, focusRing);
     expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
   });
 
   it('focus ring (--ring) has >= 3:1 contrast with light background', () => {
-    // --ring light: 221.2 83.2% 53.3%
     const focusRingLight = hslToHex(221.2, 83.2, 53.3);
     const ratio = contrastRatio(LIGHT_BG, focusRingLight);
     expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_LARGE);

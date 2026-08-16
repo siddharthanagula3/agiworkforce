@@ -1,18 +1,4 @@
 #!/usr/bin/env node
-// AGI license gate.
-//
-// Fails the build when ported third-party code carries a forbidden license or
-// comes from a study-only / forbidden upstream. Part of the adapt-don't-rebuild
-// execution loop (docs/strategy/11-execution-playbook.md §0).
-//
-// It validates every port block documented in THIRD_PARTY_LICENSES.md. A "port
-// block" is a `## Heading` section that declares a `**License**:` line.
-// Documentation sections (tables, notes) without a `**License**:` line are
-// ignored. Dependency-free so it runs anywhere (CI, pre-commit, locally).
-//
-// Usage:
-//   node scripts/check-licenses.mjs            validate THIRD_PARTY_LICENSES.md
-//   node scripts/check-licenses.mjs --selftest prove the gate catches bad input
 
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -67,7 +53,6 @@ const REVIEW = new Set([
   'NOASSERTION',
 ]);
 
-// Upstreams that must NEVER be a port source, regardless of any license string.
 const DENIED_UPSTREAMS = [
   'claude-code',
   'anthropics/claude-code',
@@ -92,7 +77,7 @@ function scanNotices(text) {
   for (const block of blocks) {
     const name = block.split('\n')[0].trim();
     const licenseMatch = block.match(/^\s*-\s*\*\*License\*\*:\s*([^\n]+)/im);
-    if (!licenseMatch) continue; // documentation section, not a port block
+    if (!licenseMatch) continue;
     const upstream = (block.match(/^\s*-\s*\*\*Upstream\*\*:\s*([^\n]+)/im) || [
       '',
       '',

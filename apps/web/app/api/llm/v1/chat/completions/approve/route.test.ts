@@ -283,8 +283,6 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
     );
     expect(toolMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
       customConnectorLimit: 25,
-      // GOV-7: the resume path now passes the plan tier so it applies the same
-      // per-plan connector-tool ceiling the original turn did.
       planTier: 'pro',
       isToolDenied: expect.any(Function),
     });

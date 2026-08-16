@@ -12,48 +12,12 @@ export const metadata = buildMetadata({
   path: '/cookies',
 });
 
-/*
- * COOKIE POLICY
- *
- * The previous version listed three categories and named no cookie, no
- * controller and no duration, and it claimed a CSRF cookie that does not exist:
- * lib/csrf.ts carries the comment "Cookie name reserved for future CSRF
- * implementation: 'csrf-token'" — the actual control is an `x-csrf-token`
- * request header bound to a session. In the EU a cookie policy is expected to
- * name what is set, so the table below does.
- *
- * 2026-08-14 — completed against an enumeration of the code rather than memory.
- * A `grep` for `document.cookie`, `cookies().set`, `localStorage.setItem` and
- * `sessionStorage.setItem` across apps/web found the published table was short
- * by two cookies and silent about roughly fifteen storage keys, several of
- * which hold an identifier or a credential. Under the ePrivacy rules and the
- * DPDP notice obligation the question is "what does this site store on my
- * device", not "what does it store in a file called a cookie", so local and
- * session storage are now disclosed in the same detail.
- *
- * Two claims were checked and deliberately WRITTEN NARROWLY rather than dropped
- * or widened:
- *  - Stripe. `@stripe/stripe-js` is a real dependency and `loadStripe()` is
- *    called at features/billing/services/stripe-payments.ts:400 — but it is
- *    called INSIDE the payment-confirmation path, not at page load. So Stripe's
- *    cookies appear when you confirm a payment, and not from browsing. The row
- *    says exactly that. Do not upgrade it to "on every page"; do not delete it.
- *  - `__Host-anon-session-id` previously said "until the browsing session
- *    ends". lib/csrf.ts:276 sets `Max-Age=86400`, so it is 24 hours.
- *
- * IF YOU ADD A COOKIE OR A STORAGE KEY, ADD IT HERE IN THE SAME CHANGE.
- * The enumeration that built these tables is:
- *   grep -rn "document\.cookie\s*=\|cookies()\.set\|localStorage\.setItem\|sessionStorage\.setItem" \
- *     apps/web/{app,lib,shared,features} --include="*.ts" --include="*.tsx"
- */
-
 interface CookieRow {
   name: string;
   category: 'Strictly necessary' | 'Functional' | 'Analytics' | 'Payment';
   controller: string;
   purpose: string;
   duration: string;
-  /** Where in this repository the cookie is set. Keeps the table checkable. */
   source: string;
 }
 
@@ -114,14 +78,6 @@ const COOKIES: CookieRow[] = [
   },
 ];
 
-/**
- * Local and session storage.
- *
- * Not cookies, and disclosed anyway. The rule that matters to a reader is what
- * this site puts on their device, and several of these hold more than a
- * preference. Sorted so the ones carrying an identifier or a credential come
- * first, because those are the rows someone is actually looking for.
- */
 interface StorageRow {
   key: string;
   store: 'Local storage' | 'Session storage';

@@ -6,35 +6,10 @@ import { toast } from 'sonner';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useAppModeStore, selectPrivacyMode } from './appModeStore';
-// Picking an on-device provider is not a boundary cross out of the Local
-// workspace. Shared with App.tsx's Local-mode model picker so the two cannot
-// disagree about which runtimes count as local; this store previously kept a
-// byte-identical copy of the same set.
-//
-// Today every provider that reaches the check below is catalog-derived
-// (COMPUTER_USE_MODEL_OPTIONS is built from getAllModels(), and
-// useCloudVoiceController resolves its provider through getModelMetadataById),
-// and packages/contracts/types/src/models.json carries no local-provider
-// model. So the guard's live job is the NEGATIVE one — stripping a cloud
-// provider inside a Local workspace — and `isLocalProvider` returning true
-// here is not currently reachable. It is kept because the strip must not fire
-// on an on-device provider if the options list ever gains one.
 import { isLocalProvider } from '../types/provider';
 
-/** Wire values of the Rust `ChatExecutionMode` enum (sys/commands/chat/types.rs,
- *  `#[serde(rename_all = "snake_case")]`). */
 type OpaExecutionMode = 'local_only' | 'byok' | 'cloud_managed';
 
-/**
- * TRUST BOUNDARY (desktop-trust-boundary-01): every OPA task submission
- * carries the execution boundary so the Rust vision router stays fail-closed.
- * The workspace privacy mode is the OUTER gate: a persisted or per-task
- * provider pick must never widen the boundary — a Local workspace with a
- * stale localStorage provider must not egress OPA screenshots, and a Managed
- * workspace must stay 'cloud_managed'. There is deliberately no 'byok'
- * branch here: task-time BYOK consent (fork/preview/consent flow) is future
- * work, and until it exists a provider string alone is not consent.
- */
 const opaExecutionMode = (): OpaExecutionMode =>
   selectPrivacyMode(useAppModeStore.getState()) === 'managed' ? 'cloud_managed' : 'local_only';
 
@@ -64,7 +39,6 @@ export interface DesktopComputerAction {
   timestamp: number;
 }
 
-// Session payload returned by the desktop-native computer_use.rs commands.
 export interface DesktopComputerUseSession {
   id: string;
   actions: DesktopComputerAction[];
@@ -72,7 +46,6 @@ export interface DesktopComputerUseSession {
   started_at: number;
 }
 
-// Zoom region request/response from computer_use.rs
 export interface ZoomRegionRequest {
   x: number;
   y: number;
@@ -96,11 +69,6 @@ export interface ZoomRegionResponse {
   saved_path?: string;
 }
 
-// Wire representation of Rust `CompletionReason` from
-// automation/computer_use/observe_plan_act.rs (`#[serde(tag = "type",
-// rename_all = "snake_case")]`). Keep this tagged object intact: treating it
-// as a string renders failures as `[object Object]` and hides why native
-// desktop control stopped.
 export type OpaCompletionReason =
   | { type: 'task_complete' }
   | { type: 'max_iterations_reached' }
@@ -201,14 +169,12 @@ interface ComputerUseState {
   cancellingOpaExecutionId: string | null;
   lastOpaResult: OpaTaskResult | null;
 
-  // Settings
   computerUseEnabled: boolean;
   consentAccepted: boolean;
   allowedApps: string[];
   deniedApps: string[];
   hideAppsOnTask: boolean;
 
-  // Existing actions
   startSession: () => Promise<void>;
   stopSession: () => Promise<void>;
   captureScreen: () => Promise<void>;
@@ -216,7 +182,6 @@ interface ComputerUseState {
   clearLog: () => void;
   reset: () => void;
 
-  // Settings actions
   setComputerUseEnabled: (enabled: boolean) => void;
   setConsentAccepted: (accepted: boolean) => void;
   addAllowedApp: (app: string) => void;
@@ -225,7 +190,6 @@ interface ComputerUseState {
   removeDeniedApp: (app: string) => void;
   setHideAppsOnTask: (hide: boolean) => void;
 
-  // Newly wired actions
   click: (x: number, y: number) => Promise<void>;
   moveMouse: (x: number, y: number) => Promise<void>;
   typeText: (text: string) => Promise<void>;
@@ -247,13 +211,8 @@ interface ComputerUseState {
       maxActions?: number;
       targetApplication?: string;
       successIndicators?: string[];
-      /** Stream 2: explicit model id resolved from the canonical catalog. */
       model?: string;
-      /** Stream 2: explicit provider name override (`anthropic`, `openai`,
-       *  `google`, `xai`). Resolved from `model` if omitted. */
       provider?: string;
-      /** Exact native execution owner. Callers that need scoped cancellation
-       *  should create this UUID and retain it for `cancelOpaTask`. */
       executionId?: string;
     },
   ) => Promise<OpaTaskResult | null>;
@@ -278,14 +237,12 @@ export const useComputerUseStore = create<ComputerUseState>()(
       cancellingOpaExecutionId: null,
       lastOpaResult: null,
 
-      // Settings defaults
       computerUseEnabled: false,
       consentAccepted: false,
       allowedApps: [],
       deniedApps: [],
       hideAppsOnTask: true,
 
-      // Settings actions
       setComputerUseEnabled: (enabled: boolean) => {
         if (!enabled) void get().cancelOpaTask();
         set({ computerUseEnabled: enabled });
@@ -366,7 +323,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
             'computerUse/captureScreen',
           );
 
-          // Log the screenshot action
           get().logAction({
             action_type: 'screenshot',
             coordinates: null,
@@ -425,10 +381,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
           'computerUse/reset',
         );
       },
-
-      // -----------------------------------------------------------------------
-      // Newly wired commands
-      // -----------------------------------------------------------------------
 
       click: async (x, y) => {
         try {
@@ -610,7 +562,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
         try {
           return await invoke<number>('computer_use_suggest_zoom_level', { width, height });
         } catch {
-          // Fallback: larger elements need less zoom
           if (width > 100 || height > 100) return 2.0;
           if (width > 50 || height > 50) return 4.0;
           return 8.0;
@@ -642,12 +593,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
           undefined,
           'computerUse/executeOpa/start',
         );
-        // Pull the persisted model/provider settings as defaults. The keys
-        // are written by ComputerUseSettings.tsx:194-195 when the user picks
-        // a model in the settings UI; this is NOT a hallucinated storage
-        // contract (audit 2026-05-20 §8 flagged it as dead but mis-traced
-        // the write-side). See constants/storageKeys.ts for the canonical
-        // names — do not hardcode them in new call sites.
         const persistedModel =
           typeof window !== 'undefined'
             ? window.localStorage.getItem(STORAGE_KEYS.COMPUTER_USE_MODEL)
@@ -659,9 +604,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
         const resolvedProvider = options?.provider ?? persistedProvider ?? null;
         const resolvedModel = options?.model ?? persistedModel ?? null;
         const executionMode = opaExecutionMode();
-        // A non-local provider pick cannot ride along inside the Local
-        // boundary: strip it so the Rust router picks a local vision model
-        // instead of dead-ending on an impossible provider/boundary pair.
         const providerCrossesLocalBoundary =
           executionMode === 'local_only' &&
           resolvedProvider !== null &&
@@ -783,7 +725,6 @@ export const useComputerUseStore = create<ComputerUseState>()(
   ),
 );
 
-/** Subscribe to Tauri computer_use events for reactive updates. Returns cleanup fn. */
 export function subscribeToComputerUseEvents(): () => void {
   const unlisteners: Promise<UnlistenFn>[] = [];
 
@@ -803,10 +744,6 @@ export function subscribeToComputerUseEvents(): () => void {
     ),
   );
 
-  // Screen captures reach the frontend as `agi:screenshot` from the AGI UI
-  // executor (ui/events/frontend_events.rs); nothing has ever emitted a
-  // `computer_use:`-prefixed screenshot. The payload carries only the image,
-  // so the screen dimensions stay as `captureScreen` last measured them.
   unlisteners.push(
     listen<{ screenshot: { imageBase64: string } }>('agi:screenshot', (event) => {
       useComputerUseStore.setState({
@@ -843,7 +780,6 @@ export function subscribeToComputerUseEvents(): () => void {
   };
 }
 
-// Selectors
 export const selectIsActive = (state: ComputerUseState) => state.isActive;
 export const selectSessionId = (state: ComputerUseState) => state.sessionId;
 export const selectCurrentScreenshot = (state: ComputerUseState) => state.currentScreenshot;
@@ -870,7 +806,6 @@ export const selectLastClickPosition = (state: ComputerUseState) => {
   return null;
 };
 
-// Settings selectors
 export const selectComputerUseEnabled = (state: ComputerUseState) => state.computerUseEnabled;
 export const selectConsentAccepted = (state: ComputerUseState) => state.consentAccepted;
 export const selectAllowedApps = (state: ComputerUseState) => state.allowedApps;

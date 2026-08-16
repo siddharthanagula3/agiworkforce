@@ -1,6 +1,3 @@
-/**
- * Deterministic fixture builders shared by guardian-core tests.
- */
 import { computeFingerprint } from '../fingerprint.js';
 import { FindingSchema, SCHEMA_VERSION, type Finding, type ScannerRun } from '../schema.js';
 

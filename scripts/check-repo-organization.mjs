@@ -11,9 +11,6 @@ const warnings = [];
 
 const allowedRootFiles = new Set([
   '.git',
-  // Repository-wide AGI Guardian policy. The GitHub integration resolves this
-  // conventional root filename directly, so relocating it would disconnect
-  // the review configuration from the service that owns it.
   '.agi-guardian.yml',
   '.claudeignore',
   '.dockerignore',
@@ -32,22 +29,7 @@ const allowedRootFiles = new Set([
   'CHANGELOG.md',
   'CLAUDE.md',
   'CONTRIBUTING.md',
-  // Two files, two roles, deliberately not merged.
-  //
-  // AuditRemediationLedger.md is the REQUIREMENTS ledger: every finding from
-  // the five audit artifacts, with its task ID, resolution mode and acceptance
-  // criteria. It says what must become true and is the stop gate.
-  //
-  // ExecutionPlan.md is the WORK QUEUE: the subset verified against the current
-  // tree, carrying the `Writes:`/`Verify:` metadata a scheduler needs to run
-  // items in parallel without two agents clobbering the same file. It says what
-  // to do next.
-  //
-  // Merging them would lose one or the other — a ledger entry has no collision
-  // key, and a queue item has no acceptance criteria.
   'AuditRemediationLedger.md',
-  // Items the remediation cannot finish in code: dashboard toggles, credentials,
-  // and product decisions. Root-level so it is seen, not filed away.
   'FoundersAssistance.md',
   'ExecutionPlan.md',
   'Cargo.lock',
@@ -61,21 +43,8 @@ const allowedRootFiles = new Set([
   'SECURITY.md',
   'THIRD_PARTY_LICENSES.md',
   'TODO.md',
-  // India DPDP Act instruments, root-level for the same reason
-  // FoundersAssistance.md is: they must be seen, not filed away.
-  //
-  // BREACH_RUNBOOK.md is read under incident pressure, on the worst day, by
-  // whoever is awake. A runbook nested three directories deep is a runbook
-  // nobody finds at 2am, and the notification clock it exists to protect starts
-  // the moment anyone becomes aware — not when they locate the procedure.
-  //
-  // DPDP_PROGRESS.md carries the decision log, the clauses awaiting counsel, and
-  // the founder decisions the compliance work cannot make for itself. Filing it
-  // under docs/ would put questions addressed to a human where only agents look.
   'BREACH_RUNBOOK.md',
   'DPDP_PROGRESS.md',
-  // Hardening-mission root instruments (root-level by design — REMEDIATION_BRIEF.md
-  // is the operating contract and references audit.sh/audit-report.md "at the repo root").
   'REMEDIATION_BRIEF.md',
   'REMEDIATION_LOG.md',
   'audit-report.md',
@@ -85,11 +54,6 @@ const allowedRootFiles = new Set([
   'eslint.config.mjs',
   'node-version.txt',
   'ollama-manifest.json',
-  // knip resolves its config from the repo root and offers no way to relocate
-  // it, so this is root-level by tool constraint rather than by choice. Backs
-  // `check:knip` / `check:knip:production`; the rationale, the first-run
-  // numbers, and the path to making it a CI gate live in
-  // docs/engineering/dead-code-detection.md.
   'knip.json',
   'package.json',
   'pnpm-lock.yaml',
@@ -106,23 +70,16 @@ const knownRootDebt = new Set([
   'AUDIT_BATCHES',
   'AUDIT_FINDINGS.md',
   'AUDIT_MANIFEST.txt',
-  // Session report deliverable. Transient — relocate under docs/ after the
-  // P2 PR lands; tracked as known root debt (not unclassified) until then.
   'OVERNIGHT_REPORT.md',
   'AUDIT_PARTS',
   'AUDIT_STATE.md',
   'AUDIT_TAXONOMY.md',
   'REMEDIATION_PRIORITY.md',
   'SKILL.md',
-  // VC-demo production-push workflow deliverables (audit map / public-pages audit /
-  // reference analysis / session notes). Transient — relocate under docs/ once the
-  // push lands; tracked as known root debt (not unclassified) until then.
   'PHASE2_MAP.md',
   'PUBLIC_PAGES_AUDIT.md',
   'REFERENCE_ANALYSIS.md',
   'SKILL_SESSION.md',
-  // Agent<>founder handoff ledger (keys / docs / decisions the founder still owes).
-  // Transient — relocate under docs/ once the production push settles.
   'founder_work.md',
   'libnull.rlib',
 ]);
@@ -198,9 +155,6 @@ for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
   errors.push(`Unclassified root file: ${entry.name}`);
 }
 
-// audit/ is the live evidence-ledger root and must remain both required and
-// protected from cleanup. tasks/ and reports/ remain optional disposable roots;
-// durable conclusions live in docs/agent-context/known-flaws.md and docs/current.
 if (!isProtectedCleanupPath('audit')) {
   errors.push('scripts/clean-repo.mjs must protect the live audit/ evidence ledger.');
 }

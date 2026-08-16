@@ -22,11 +22,6 @@ test.describe('Self-Healing Agent', () => {
   }) => {
     const prompt = 'Read /invalid/path/config.json and continue the task';
 
-    // The cloud chat pipeline treats LLM transport errors as fatal (cloudApi.ts
-    // calls onError and aborts on non-OK responses), and there's no
-    // chat-level retry surface. Validate the rendering pipeline by mocking
-    // a recovery-themed assistant response directly; the failure→retry flow
-    // remains a tracked product follow-up.
     mockLLM.setMockResponse(
       /invalid\/path\/config\.json/i,
       'Initial attempt failed due to a missing file. Starting self-healing recovery: I validated fallback paths, regenerated config, and resumed execution.',
@@ -39,10 +34,6 @@ test.describe('Self-Healing Agent', () => {
     await expect(chatInput).toBeVisible({ timeout: 20000 });
     await chatInput.fill(prompt);
 
-    // In web-mode CI the Send button can stay disabled when the chat pipeline
-    // is gated behind a desktop runtime or subscription requirement. The test
-    // still asserts that the UI reaches a clear gated state instead of hanging
-    // on startup or silently swallowing the request.
     const desktopRuntimeGate = page.getByText(
       /This feature requires the AGI Workforce desktop application/i,
     );

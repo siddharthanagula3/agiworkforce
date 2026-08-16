@@ -85,9 +85,6 @@ describe('Stripe upgrade preview tokens', () => {
   });
 
   it('refuses a token whose seat count does not match the applied seat count', () => {
-    // The proration a customer confirms is quantity-dependent. Without seats in
-    // the HMAC, a client could preview 2 seats and apply 50 against the 2-seat
-    // proration figure.
     const twoSeatToken = createUpgradePreviewToken(
       {
         userId: 'user_123',

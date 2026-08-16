@@ -1,4 +1,3 @@
-/** Cross-surface account settings for optional break and quiet-hours nudges. */
 
 export const TIME_FOCUS_PREFERENCES_NAMESPACE = 'time-focus';
 export const BREAK_REMINDER_MINUTES = [30, 60, 120, 240] as const;
@@ -8,13 +7,9 @@ export type TimeFocusWeekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface QuietHoursPreferences {
   enabled: boolean;
-  /** JavaScript weekday numbers: Sunday = 0 through Saturday = 6. */
   days: readonly TimeFocusWeekday[];
-  /** 24-hour clock time in HH:MM form. */
   startTime: string;
-  /** 24-hour clock time in HH:MM form. */
   endTime: string;
-  /** IANA timezone used when the setting was saved. */
   timezone: string;
 }
 
@@ -56,10 +51,6 @@ export function clockTimeToMinutes(value: string): number | null {
   return hour * 60 + minute;
 }
 
-/**
- * One clock-window evaluator for browser and native notification consumers.
- * Equal endpoints are treated as disabled, never as an implicit 24-hour lock.
- */
 export function isMinuteWithinQuietHours(
   minuteOfDay: number,
   startTime: string,
@@ -158,7 +149,6 @@ export function isDateWithinQuietHours(date: Date, schedule: QuietHoursPreferenc
   return activeQuietHoursStartDateKey(date, schedule) !== null;
 }
 
-/** Stable dismissal key for both sides of an overnight quiet-hours window. */
 export function getQuietHoursWindowKey(date: Date, schedule: QuietHoursPreferences): string | null {
   const startDateKey = activeQuietHoursStartDateKey(date, schedule);
   return startDateKey
@@ -192,7 +182,6 @@ export function defaultTimeFocusPreferences(timezone = 'UTC'): TimeFocusPreferen
   };
 }
 
-/** Runtime-normalizes untrusted account JSON and disables malformed schedules. */
 export function normalizeTimeFocusPreferences(
   value: unknown,
   fallbackTimezone = 'UTC',

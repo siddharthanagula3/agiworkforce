@@ -19,10 +19,6 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/scim/v2/Groups — supports `displayName eq "x"` and `externalId eq`,
- * plus 1-based pagination, scoped to the token's connection.
- */
 export async function GET(request: NextRequest): Promise<Response> {
   return withScim(request, async (context, baseUrl) => {
     const params = new URL(request.url).searchParams;
@@ -41,13 +37,6 @@ export async function GET(request: NextRequest): Promise<Response> {
   });
 }
 
-/**
- * POST /api/scim/v2/Groups.
- *
- * A new group carries no role mapping. Mapping a group to an organization role
- * is a deliberate admin action in the AGI console — an IdP must not be able to
- * decide, by naming a group, what privileges its members receive.
- */
 export async function POST(request: NextRequest): Promise<Response> {
   return withScim(request, async (context, baseUrl) => {
     const body = await readScimBody(request);

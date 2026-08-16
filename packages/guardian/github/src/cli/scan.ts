@@ -1,21 +1,3 @@
-/**
- * AGI Guardian scan CLI — the deterministic worker entry point.
- *
- * Runs the curated repository checks, normalizes their results into the
- * Guardian finding schema, applies `.agi-guardian.yml` policy, and writes:
- *
- *   guardian-report.json  — full run record (findings, scanner runs, decision)
- *   guardian-checks.json  — ready-to-POST Check Run payloads
- *   guardian-summary.md   — the single editable PR summary comment body
- *
- * Exit code: 0 unless the policy decision is `failure` (blocking mode only),
- * or the runner itself crashes. Shadow/advisory runs always exit 0 so the
- * workflow stays green while the check-run conclusions carry the verdict.
- *
- * Security: child processes are spawned with argument arrays (no shell), a
- * hard timeout, and bounded output capture; all captured output is
- * secret-redacted before it reaches findings or logs.
- */
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -79,8 +61,6 @@ function runCheck(
 ): Promise<{ execution: adapters.RepoCheckExecution; durationMs: number }> {
   return new Promise((resolvePromise) => {
     const startedAt = Date.now();
-    // Argument array, no shell: the script name comes from our own catalog,
-    // never from repository-controlled input.
     const child = spawn('pnpm', ['run', entry.script], {
       cwd: repoRoot,
       shell: false,
@@ -186,7 +166,6 @@ async function main(): Promise<number> {
     created_at: new Date().toISOString(),
   });
 
-  // Build category check payloads: findings grouped by catalog group.
   const groups: Record<
     CatalogEntry['group'],
     { name: string; findings: Finding[]; scanners: ScannerRun[] }

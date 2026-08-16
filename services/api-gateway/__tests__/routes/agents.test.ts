@@ -56,8 +56,6 @@ vi.mock('../../src/lib/neonClients', () => {
   testState.profileEq.mockReturnValue(profileQuery);
   testState.profileSelect.mockReturnValue(profileQuery);
 
-  // Canonical profile/device reads use the user-scoped client. The unowned
-  // approval compatibility table uses the explicit system client.
   const serviceClient = {
     from: vi.fn((table: string) => {
       if (table === 'profiles') {

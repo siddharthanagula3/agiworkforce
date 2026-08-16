@@ -19,42 +19,10 @@ import {
   type CloudCodeOwner,
 } from './cloud-code-session-service';
 
-/**
- * The decision half of the Cloud Code approval boundary.
- *
- * `cloud-code-agent-service` writes a `cloud_code_agent_approvals` row as
- * 'pending' and parks the turn in `awaiting_approval`. Until this module existed
- * that was the end of the story: the table declared 'approved'/'rejected'/
- * 'expired' and a `decided_at`, and nothing in production ever wrote them, so a
- * suspended turn could never be answered and never finished. This file owns the
- * transitions out of 'pending' and the resume that follows.
- *
- * WHAT MAKES IT SAFE
- *  - **Ownership.** The session is re-read through the owner-scoped session
- *    query, and the turn is matched on `session_id` + owner, so a turn id from
- *    another tenant reads as not found rather than as a decidable approval.
- *  - **Exactly once.** The decision is a conditional UPDATE guarded on
- *    `state = 'pending'`. Two concurrent decisions cannot both match, so the
- *    losing one is rejected instead of resuming the turn a second time. The turn
- *    row is then claimed out of `awaiting_approval` with the same shape of
- *    guard.
- *  - **The command is read back, never echoed.** The command handed to the
- *    sandbox comes from the approval row, so what the user saw is what runs even
- *    if the caller sends a different string.
- *  - **Expiry is enforced, not decorative.** The decision UPDATE requires
- *    `expires_at > now()`, and a stale row is transitioned to 'expired' instead
- *    of being left pending forever.
- *  - **The list cannot advertise what the decide path will refuse.** An
- *    approval is decidable only while its turn is still `awaiting_approval`, so
- *    both the sweep and the read carry that predicate. See
- *    `retireUndecidableApprovals` for why a pending row can outlive its turn.
- */
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type CloudCodeApprovalDecision = 'approve' | 'reject';
 
-/** A stale approval is gone for a reason the user can act on. */
 export class CloudCodeApprovalExpiredError extends Error {
   constructor(message = 'This approval request expired and can no longer be decided') {
     super(message);
@@ -107,34 +75,6 @@ function requireTurnId(turnId: unknown): string {
   return turnId;
 }
 
-/**
- * Retire every pending row in one session that can no longer be decided.
- *
- * Runs on the read path because there is no scheduler for this table. A user who
- * opens the pending list is exactly the person who must not be shown an approval
- * that can no longer be granted, so the sweep happens before the read rather
- * than as a background job that may not exist.
- *
- * TWO WAYS A ROW BECOMES UNDECIDABLE, and both are swept here:
- *
- *  1. `expires_at` passed. The decision UPDATE requires `expires_at > now()`,
- *     so the row is already dead to `decideCloudCodeAgentApproval`.
- *
- *  2. **The turn left `awaiting_approval` without the row being decided.** The
- *     approval row and the turn row are written by separate statements, so
- *     anything that moves the turn on its own strands the row: the reservation
- *     and executor failure paths in `cloud-code-agent-service` clobber the turn
- *     to 'failed' with no state guard, a cancelled turn is never decided, and
- *     0082 anticipates a reaper for turns whose invocation died mid-flight.
- *     `decideCloudCodeAgentApproval` refuses any turn that is not
- *     `awaiting_approval`, so without this the row would sit 'pending' forever
- *     — listed to the user on every load and rejected on every attempt to
- *     answer it. That is a gate the product shows and cannot honour.
- *
- * 'expired' is the terminal state used for both. 0082 allows only
- * 'pending' | 'approved' | 'rejected' | 'expired', and the row was never
- * decided, so 'approved'/'rejected' would be a lie about what the user did.
- */
 async function retireUndecidableApprovals(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
@@ -154,24 +94,15 @@ async function retireUndecidableApprovals(
   );
 }
 
-/** Every approval still awaiting a decision in one Code session. */
 export async function listCloudCodeAgentApprovals(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   sessionId: string,
 ): Promise<CloudCodeAgentApproval[]> {
   validateCloudCodeSessionId(sessionId);
-  // Throws not-found for a session this owner cannot see, so the approval list
-  // cannot be used to probe other tenants' sessions.
   await getCloudCodeSession(db, owner, sessionId);
   await retireUndecidableApprovals(db, owner, sessionId);
 
-  // `t.state = 'awaiting_approval'` is not redundant with the sweep above. The
-  // sweep and this read are separate statements, so a turn that fails between
-  // them would otherwise be listed once more; and a row the sweep somehow missed
-  // must still never be offered, because the decide path would refuse it. The
-  // list and the decide path have to agree on decidability or the user is shown
-  // a button that cannot work.
   const rows = await db.query<ApprovalRow>(
     `select a.turn_id, a.step_index, a.command, a.reason, a.expires_at, a.created_at, t.goal
        from cloud_code_agent_approvals a
@@ -197,19 +128,6 @@ export async function listCloudCodeAgentApprovals(
   }));
 }
 
-/**
- * Rebuild the transcript of a suspended turn from its persisted steps.
- *
- * The turn's in-memory message list died with the invocation that suspended it,
- * and 0082 stores steps rather than provider messages, so the transcript is
- * reconstructed as the tool_use/tool_result pairs those steps represent. Ids are
- * synthesized from the step index: they only have to pair an assistant call with
- * its result inside this one request, which is all a provider requires.
- *
- * Assistant prose between steps is not persisted and is therefore not restored.
- * The model gets the goal and the full tool history, which is what it needs to
- * continue; it does not get its own earlier commentary back.
- */
 function rebuildTurnMessages(goal: string, steps: StepRow[]): ProviderMessage[] {
   const messages: ProviderMessage[] = [{ role: 'user', content: goal }];
   for (const step of steps) {
@@ -244,13 +162,6 @@ export interface DecideCloudCodeAgentApprovalInput {
   signal: AbortSignal;
 }
 
-/**
- * Record a decision and resume the suspended turn exactly once.
- *
- * A rejection resumes too: the loop tells the model the user declined so it can
- * choose another approach. Silently dropping the turn on rejection would leave a
- * paid-for turn parked forever with no final message.
- */
 export async function decideCloudCodeAgentApproval(
   input: DecideCloudCodeAgentApprovalInput,
 ): Promise<CloudCodeAgentTurnRecord> {
@@ -283,9 +194,6 @@ export async function decideCloudCodeAgentApproval(
   const turn = turnRows[0];
   if (!turn) throw new CloudCodeNotFoundError();
   if (turn.state !== 'awaiting_approval') {
-    // Retire the row on the way out. A user who only ever POSTs a decision never
-    // runs the read-path sweep, and leaving the row 'pending' is what turns a
-    // failed turn into an approval that is listed forever and refused forever.
     await db.query(
       `update cloud_code_agent_approvals
           set state = 'expired', decided_at = now()
@@ -298,9 +206,6 @@ export async function decideCloudCodeAgentApproval(
     throw new CloudCodeUnavailableError('This turn has no recorded model and cannot be resumed');
   }
 
-  // THE exactly-once gate. Only a row that is still 'pending' and still in date
-  // can be moved, so a replayed request, a double-click, and a second reviewer
-  // racing the first all collapse to one decision.
   const decided = await db.query<{ command: string }>(
     `update cloud_code_agent_approvals
         set state = $3, decided_at = now()
@@ -335,10 +240,6 @@ export async function decideCloudCodeAgentApproval(
     throw new CloudCodeConflictError('This approval has already been decided');
   }
 
-  // Claim the turn out of the suspended state before any sandbox work. The
-  // approval UPDATE above already elected a single winner, so this can only fail
-  // if the turn moved for some other reason — in which case the decision stands
-  // but there is nothing left to resume.
   const claimed = await db.query<{ id: string }>(
     `update cloud_code_agent_turns
         set state = 'running', updated_at = now()
@@ -360,8 +261,6 @@ export async function decideCloudCodeAgentApproval(
   const initialStepIndex = stepRows.reduce((max, step) => Math.max(max, step.step_index), 0);
   const messages = rebuildTurnMessages(turn.goal, stepRows);
 
-  // The suspending call itself was never stored as a step, so it is appended
-  // here from the approval row — the command the user actually saw.
   const approvalToolUseId = `approval-${stepIndex}`;
   messages.push({
     role: 'assistant',
@@ -390,9 +289,6 @@ export async function decideCloudCodeAgentApproval(
     model: turn.model,
     provider: turn.provider ?? resolveProviderFromModel(turn.model),
     planTier,
-    // Derived, not caller-supplied: the resume is one billable continuation of
-    // this specific decision, so a retried HTTP call reuses the reservation
-    // instead of opening a second one.
     idempotencyKey: `cc-resume:${turnId}:${stepIndex}`,
     signal: input.signal,
     priorMessages: messages,

@@ -1,9 +1,5 @@
 export { RuntimeEnv, isTauri, isCloudWeb, isTest, getRuntimeEnv } from './detect';
 
-// Local/Cloud trust-boundary resolver. Mirrored from index.ts because
-// apps/desktop/vite.config.ts aliases the package root to this file: the
-// shared unified-chat ModelSelector imports this symbol, so without the
-// mirror the desktop bundle fails to build with MISSING_EXPORT.
 export { resolveClientChatExecutionMode } from './mode';
 
 export { command, commandWithWarning } from './desktop-command';
@@ -19,9 +15,6 @@ export type { EventCallback, UnlistenFn } from './events';
 
 export { routeToCloud } from './http';
 
-// Canonical Cloud agent-run projection. Desktop aliases the package root to
-// this browser-safe entrypoint, so keep the portable reducer available here
-// as well as from index.ts. It has no Tauri or Node dependency.
 export {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
@@ -42,10 +35,6 @@ export type {
   FinishAgentActivityLocallyOptions,
 } from './agentActivity';
 
-// Per-surface priority send pipeline (messageQueueManager) — Task 1.4.
-// Mirrored from index.ts so the web/desktop bundle (which aliases
-// @agiworkforce/client-runtime -> desktop-index.ts via apps/desktop/vite.config.ts:293)
-// can resolve these symbols at build time.
 export {
   createMessageQueue,
   createWebStorageAdapter,
@@ -70,12 +59,6 @@ export type {
   SyncKvStore,
 } from './queue';
 
-// Shared offline queue + sync manager factories. Mirrored so the
-// desktop bundle (which aliases the package root to this file) can
-// resolve `createOfflineQueue` and `createOfflineSyncManager` without
-// the subpath import shape that the alias breaks. Web/Next reaches the
-// `./offline-queue` and `./offline-sync` subpath exports directly via
-// the package.json `exports` map.
 export { createOfflineQueue } from './offline-queue';
 export type {
   MessageRetryStatus,

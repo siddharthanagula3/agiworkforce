@@ -1,15 +1,3 @@
-/**
- * AuthShell composition tests (/login and /signup share this shell).
- *
- * The 2026-07 auth-page rework made two structural promises:
- * 1. The Clerk card renders BEFORE the brand panel in the DOM — auth leads
- *    focus order, and the single-column mobile layout stacks the card first
- *    (grid placement moves the brand panel left only on desktop).
- * 2. The brand panel keeps its full content: title, lede, trust points, and
- *    the surface meta line.
- * jsdom has no layout engine, so DOM order is the testable contract behind
- * the responsive stacking; the visual breakpoints live in globals.css.
- */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AuthShell } from '@/features/marketing/components/AuthShell';
@@ -45,7 +33,6 @@ describe('AuthShell', () => {
     const card = screen.getByTestId('clerk-card').closest('.agi-auth-card');
     const brand = screen.getByRole('complementary', { name: 'Why AGI' });
     expect(card).not.toBeNull();
-    // compareDocumentPosition: FOLLOWING means brand comes after the card.
     expect(card!.compareDocumentPosition(brand) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 

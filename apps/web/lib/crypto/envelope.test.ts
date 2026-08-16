@@ -68,7 +68,6 @@ describe('versioned envelope', () => {
     const oldRing = ring({ TEST_KEY: KEY_ONE, TEST_KEY_ID: 'k1' });
     const sealed = sealEnvelope(oldRing, 'grant-token');
 
-    // The exact rotation state: k2 is active, k1 only survives as retired.
     const rotated = ring({
       TEST_KEY: KEY_TWO,
       TEST_KEY_ID: 'k2',
@@ -96,8 +95,6 @@ describe('versioned envelope', () => {
       TEST_KEY_RETIRED: `k2:${KEY_TWO}`,
     });
     const sealed = sealEnvelope(loaded, 'grant-token');
-    // Relabel k1's ciphertext as k2. Trial decryption would still open it with
-    // k1; resolution by embedded id must not.
     const mislabelled = sealed.replace(`${ENVELOPE_VERSION}.k1.`, `${ENVELOPE_VERSION}.k2.`);
 
     expect(() => openEnvelope(loaded, mislabelled, 'hex-triple')).toThrow();
@@ -185,19 +182,6 @@ describe('legacy layouts', () => {
   });
 });
 
-/**
- * The point of the module: these are the paths live traffic takes.
- *
- *   POST /api/connectors/custom       -> lib/user-connector-tools.ts:792
- *   GET  /api/connectors/oauth/callback -> lib/connectors/oauth-store.ts:343
- *        both -> lib/custom-connector-crypto.ts -> openEnvelope
- *   POST /api/github/webhook          -> getInstallationAccessToken()
- *        -> lib/github-app.ts decryptToken() -> openEnvelope
- *
- * Each test below rotates the env the way the runbook says to and asserts the
- * production function still returns the secret. Before the ring, every one of
- * these threw on the retired key's ciphertext.
- */
 describe('production readers survive a rotation', () => {
   it('decryptConnectorToken opens a value sealed under the retired key', async () => {
     const stored = sealEnvelope(ring({ TEST_KEY: KEY_ONE }), 'mcp-bearer', 'hex-triple');
@@ -210,7 +194,6 @@ describe('production readers survive a rotation', () => {
     const { decryptConnectorToken, encryptConnectorToken } =
       await import('../custom-connector-crypto');
     expect(decryptConnectorToken(stored)).toBe('mcp-bearer');
-    // New writes go under the ACTIVE key, in the layout the previous build reads.
     expect(envelopeKeyId(encryptConnectorToken('fresh'))).toBeNull();
     expect(
       openEnvelope(ring({ TEST_KEY: KEY_TWO }), encryptConnectorToken('fresh'), 'hex-triple')
@@ -302,13 +285,6 @@ describe('production readers survive a rotation', () => {
 describe('scripts/reencrypt.mjs', () => {
   type Row = Record<string, string | null>;
 
-  /**
-   * Stands in for the Neon client by executing the statements the sweep emits
-   * rather than reimplementing its intent: the WHERE clause and the SET list
-   * are read out of the SQL text. A predicate this cannot evaluate is a
-   * failure, not a silent pass — the whole idempotency claim rests on the
-   * sweep actually filtering on the key-version column.
-   */
   function fakeClient(rows: Row[], idColumn: string) {
     const writes: string[] = [];
     const matches = (row: Row, clause: string, params: unknown[]) =>
@@ -355,10 +331,6 @@ describe('scripts/reencrypt.mjs', () => {
     return import('../../../../scripts/reencrypt.mjs');
   }
 
-  /**
-   * The real entry from the script, not a hand-written stand-in: a typo in the
-   * table, id column or layout of a shipped target has to fail this suite.
-   */
   async function connectorTargetEntry() {
     const { REENCRYPT_TARGETS } = await loadScript();
     return REENCRYPT_TARGETS['custom-connectors'];
@@ -384,8 +356,6 @@ describe('scripts/reencrypt.mjs', () => {
         auth_header_key_version: 'k1',
         auth_header_enc: sealEnvelope(oldRing, 'token-b', 'hex-triple'),
       },
-      // Revoked grant shape: no secret left, but the row still has to leave the
-      // sweep or the keyset loop would return it forever.
       { id: 'c', auth_header_key_version: 'k1', auth_header_enc: null },
     ];
   }
@@ -406,8 +376,6 @@ describe('scripts/reencrypt.mjs', () => {
     expect(first).toMatchObject({ scanned: 3, rewritten: 2, stamped: 1 });
     expect(rows.every((row) => row['auth_header_key_version'] === 'k2')).toBe(true);
 
-    // The retired key is gone from this ring: the rows only open now because
-    // they were genuinely re-encrypted, not merely relabelled.
     expect(
       openEnvelope(newKeyOnly, rows[0]?.['auth_header_enc'] as string, 'hex-triple').plaintext,
     ).toBe('token-a');
@@ -453,8 +421,6 @@ describe('scripts/reencrypt.mjs', () => {
 
     expect(envelopeKeyId(rows[0]?.['auth_header_enc'] as string)).toBe('k2');
 
-    // Not a one-way door: the production reader of this column opens what the
-    // sweep just wrote. Without this, --format=versioned would brick the column.
     vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', KEY_TWO);
     vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_ID', 'k2');
     vi.resetModules();
@@ -465,13 +431,9 @@ describe('scripts/reencrypt.mjs', () => {
   it('refuses --format=versioned for a column whose reader cannot parse it', async () => {
     const { assertFormatSupported, REENCRYPT_TARGETS } = await loadScript();
 
-    // What `--target=two-factor --apply --format=versioned` hits in main(),
-    // before a database connection is opened.
     expect(() => assertFormatSupported(['two-factor'], 'versioned')).toThrow(
       /two-factor .* cannot take --format=versioned/,
     );
-    // `--target=all` must refuse outright rather than rotate the ready columns
-    // and abort on the one that is not.
     expect(() => assertFormatSupported(Object.keys(REENCRYPT_TARGETS), 'versioned')).toThrow(
       /two-factor/,
     );
@@ -508,8 +470,6 @@ describe('scripts/reencrypt.mjs', () => {
   it('stamps a row production wrote under the active key without re-sealing it', async () => {
     const { reencryptTarget } = await loadScript();
     const connectorTarget = await connectorTargetEntry();
-    // The normal shape after the env swap: the app sealed this row with the new
-    // key, but key_version still carries the column default.
     const alreadyCurrent = sealEnvelope(rotatedRing, 'token-new', 'hex-triple');
     const rows: Row[] = [
       { id: 'a', auth_header_key_version: 'k1', auth_header_enc: alreadyCurrent },

@@ -40,14 +40,9 @@ type StoredProjectChatHandoff = z.infer<typeof ProjectChatHandoffSchema>;
 
 export interface ProjectChatHandoff extends StoredProjectChatHandoff {
   attachments?: File[];
-  /** True after a hard reload discarded browser-owned File objects. */
   attachmentsUnavailable: boolean;
 }
 
-// File objects cannot be serialized into sessionStorage. A same-tab App Router
-// navigation keeps this module alive, so retain them under the validated handoff
-// id. The stored attachmentCount makes a hard reload fail visibly instead of
-// silently sending a text-only request.
 const pendingAttachments = new Map<string, File[]>();
 const acknowledgedHandoffIds = new Set<string>();
 
@@ -86,12 +81,6 @@ export function saveProjectChatHandoff(
   return id;
 }
 
-/**
- * Read without deleting. The destination acknowledges only after its user turn
- * is durably committed, so auth/network failures before provider egress cannot
- * destroy the project prompt. The page owns an in-flight guard to prevent a
- * Strict Mode replay while this claim is active.
- */
 export function readProjectChatHandoff(
   storage: ProjectChatHandoffStorage,
   expectedProjectId: string | null,
@@ -125,10 +114,6 @@ export function acknowledgeProjectChatHandoff(
   storage: ProjectChatHandoffStorage,
   handoffId: string,
 ): void {
-  // Tombstone first. Even when an unusual browser policy makes removeItem
-  // throw after getItem succeeded, this tab cannot replay the paid turn. The
-  // handoff's stable message IDs provide the server-side idempotency backstop
-  // across a hard reload.
   acknowledgedHandoffIds.add(handoffId);
   let raw: string | null = null;
   try {

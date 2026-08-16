@@ -1,30 +1,16 @@
-/**
- * set-token route: Clerk-based validation
- *
- * Tests cover the contract that:
- *   - garbage / invalid access_token → 401
- *   - refresh_token alone (no access_token) → 400 (Clerk handles rotation internally)
- *   - valid access_token alone → 200 + access cookie set
- *   - valid access_token + refresh_token → 200 + both cookies set
- *   - oversize tokens (>4 KiB) → 400 from zod
- *   - both empty → 400
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-// Rate-limit mock — always pass through in tests.
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-// CSRF mock — let every request through; we test the body-validation path.
 vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
-// Cookies mock — capture writes so we can assert which cookies were set.
 const cookieWrites: Array<{ name: string; value: string }> = [];
 vi.mock('next/headers', () => ({
   cookies: vi.fn(async () => ({
@@ -34,7 +20,6 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// Clerk backend mock — controls whether JWT is considered valid.
 const mockVerifyToken = vi.fn();
 vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
@@ -57,7 +42,6 @@ describe('set-token route (Clerk)', () => {
   beforeEach(() => {
     cookieWrites.length = 0;
     mockVerifyToken.mockClear();
-    // Default: token is invalid
     mockVerifyToken.mockRejectedValue(new Error('invalid token'));
   });
 
@@ -94,7 +78,6 @@ describe('set-token route (Clerk)', () => {
     const json = await res.json();
     expect(json.ok).toBe(false);
     expect(cookieWrites).toEqual([]);
-    // verifyToken is never called when no access token
     expect(mockVerifyToken).not.toHaveBeenCalled();
   });
 

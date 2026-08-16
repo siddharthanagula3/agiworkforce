@@ -8,11 +8,6 @@ interface ErrorBoundaryProps {
   retry: () => void;
 }
 
-/**
- * Root-level error boundary for App Store review resilience.
- * Uses inline styles only (no NativeWind) since this may render
- * before the CSS provider initializes.
- */
 export default function RootErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const router = useRouter();
   const colors = useThemeColors();
