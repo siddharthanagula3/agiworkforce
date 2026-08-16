@@ -1,7 +1,11 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import modelsCatalogJson from '@agiworkforce/types/models.json' with { type: 'json' };
 import { injectMockCloudAuth } from './utils/mock-cloud-auth';
-import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
+import {
+  cloudConversationFixture,
+  expectCloudShellReady,
+  mockCloudApi,
+} from './utils/mock-cloud-api';
 
 interface CatalogFixtureModel {
   name: string;
@@ -55,6 +59,35 @@ function resolveEconomyChatModels(): Array<{ id: string; name: string; provider:
 
 const SEEDED_MODELS = resolveEconomyChatModels();
 
+const ALPHA_TITLE = 'Alpha seeded conversation';
+const BETA_TITLE = 'Beta seeded conversation';
+
+/**
+ * Conversations the sidebar tests act on.
+ *
+ * `mockCloudApi` defaults to none, so the sidebar rendered only its own "New
+ * chat" row and every conversation assertion had nothing to find.
+ */
+const SEEDED_CONVERSATIONS = [
+  cloudConversationFixture({ id: 'conv-alpha', title: ALPHA_TITLE }),
+  cloudConversationFixture({ id: 'conv-beta', title: BETA_TITLE }),
+];
+
+/** A sidebar conversation row by its title. */
+function conversationRow(page: Page, title: string) {
+  return page.getByTestId('conversation-row').filter({ hasText: title }).first();
+}
+
+/**
+ * Open a row's action menu. Pin, Rename, Archive and Delete live behind the
+ * row's "More options" overflow button — they are not direct buttons on the
+ * row, which is what the previous revision of these tests assumed.
+ */
+async function openRowMenu(row: ReturnType<typeof conversationRow>): Promise<void> {
+  await row.hover();
+  await row.locator('button').last().click();
+}
+
 /**
  * Chat workflow E2E.
  *
@@ -77,17 +110,22 @@ const SEEDED_MODELS = resolveEconomyChatModels();
 test.describe('Chat Workflow', () => {
   test.beforeEach(async ({ page }) => {
     await injectMockCloudAuth(page);
-    await mockCloudApi(page, { models: SEEDED_MODELS });
+    await mockCloudApi(page, { models: SEEDED_MODELS, conversations: SEEDED_CONVERSATIONS });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expectCloudShellReady(page);
   });
 
   test('should create a new conversation', async ({ page }) => {
-    const newChatButton = page.getByRole('button', { name: /new chat/i });
-    await expect(newChatButton, 'New chat button not available').toBeVisible();
+    const rows = page.getByTestId('conversation-row');
+    await expect(rows.filter({ hasText: ALPHA_TITLE })).toHaveCount(1);
+    const before = await rows.count();
 
+    const newChatButton = page.getByRole('button', { name: /new chat/i }).first();
+    await expect(newChatButton, 'New chat button not available').toBeVisible();
     await newChatButton.click();
-    await expect(page.getByTestId('conversation-list').locator('li').first()).toBeVisible();
+
+    await expect(rows).toHaveCount(before + 1);
+    await expect(page.getByRole('textbox', { name: /message/i })).toBeVisible();
   });
 
   test('should send a message and receive response', async ({ page }) => {
@@ -103,51 +141,60 @@ test.describe('Chat Workflow', () => {
   });
 
   test('should display conversation history', async ({ page }) => {
-    const conversationsList = page.getByTestId('conversation-list');
-    await expect(conversationsList, 'Conversation list not available').toBeVisible();
-
-    await expect(conversationsList).toBeVisible();
+    const rows = page.getByTestId('conversation-row');
+    await expect(rows.filter({ hasText: ALPHA_TITLE }), 'Seeded conversation missing').toHaveCount(
+      1,
+    );
+    await expect(rows.filter({ hasText: BETA_TITLE })).toHaveCount(1);
   });
 
   test('should pin/unpin conversations', async ({ page }) => {
-    const conversationItem = page.getByTestId('conversation-item').first();
-    await expect(conversationItem, 'No conversation items available').toBeVisible();
+    const row = conversationRow(page, ALPHA_TITLE);
+    await expect(row, 'No conversation rows available').toBeVisible();
 
-    const pinButton = conversationItem.getByRole('button', { name: /pin/i });
-    await expect(pinButton, 'Pin button not present').toBeVisible();
+    await openRowMenu(row);
+    await expect(page.getByRole('menuitem', { name: /^pin$/i })).toBeVisible();
+    await page.getByRole('menuitem', { name: /^pin$/i }).click();
 
-    await pinButton.click();
-    await expect(pinButton).toHaveAttribute('aria-label', /Unpin/i);
+    // The same entry has to flip, or "pinned" was never recorded.
+    await openRowMenu(row);
+    await expect(page.getByRole('menuitem', { name: /^unpin$/i })).toBeVisible();
+    await page.keyboard.press('Escape');
   });
 
   test('should delete a conversation', async ({ page }) => {
-    const conversationItem = page.getByTestId('conversation-item').first();
-    await expect(conversationItem, 'No conversation items available').toBeVisible();
+    const rows = page.getByTestId('conversation-row');
+    const before = await rows.count();
+    const row = conversationRow(page, ALPHA_TITLE);
+    await expect(row, 'No conversation rows available').toBeVisible();
 
-    const initialCount = await page.getByTestId('conversation-item').count();
-    const deleteButton = conversationItem.getByRole('button', { name: /delete/i });
-    await expect(deleteButton, 'Delete button not present').toBeVisible();
+    await openRowMenu(row);
+    // Deleting is a two-click confirm inside the menu itself, not a separate
+    // dialog: the first click flips the same entry to "Confirm delete" and only
+    // the second one calls onDelete (ConversationRow.tsx). The previous
+    // revision clicked once and then looked for a confirm *button* that never
+    // renders, so it asserted a deletion that had not been requested.
+    await page.getByRole('menuitem', { name: /^delete$/i }).click();
+    await page.getByRole('menuitem', { name: /^confirm delete$/i }).click();
 
-    await deleteButton.click();
-
-    const confirmButton = page.getByRole('button', { name: /delete|confirm/i });
-    if (await confirmButton.isVisible()) {
-      await confirmButton.click();
-    }
-
-    const newCount = await page.getByTestId('conversation-item').count();
-    expect(newCount).toBeLessThan(initialCount);
+    await expect(rows.filter({ hasText: ALPHA_TITLE })).toHaveCount(0);
+    await expect(rows).toHaveCount(before - 1);
   });
 
   test('should search conversations', async ({ page }) => {
-    const searchInput = page.getByRole('searchbox', { name: /search/i });
-    await expect(searchInput, 'Search input not available').toBeVisible();
+    // Search is a command-palette style modal opened from the sidebar, not an
+    // inline searchbox — there is no element with role=searchbox on this shell.
+    await page
+      .getByRole('button', { name: /search/i })
+      .first()
+      .click();
 
-    await searchInput.fill('test');
-    await page.waitForTimeout(500);
+    const panel = page.getByTestId('search-modal-panel');
+    await expect(panel, 'Search panel did not open').toBeVisible();
 
-    // Search renders a filtered list — the list itself should be visible
-    await expect(page.getByTestId('conversation-list')).toBeVisible();
+    await panel.locator('input').first().fill('Alpha');
+    await expect(panel).toContainText(ALPHA_TITLE);
+    await page.keyboard.press('Escape');
   });
 
   test('should display streaming response', async ({ page }) => {
@@ -155,12 +202,16 @@ test.describe('Chat Workflow', () => {
     await expect(chatInput, 'Chat input not available').toBeVisible();
 
     await chatInput.fill('Tell me a long story');
-    const sendButton = page.getByRole('button', { name: /send/i });
-    await sendButton.click();
+    await page.getByRole('button', { name: /send/i }).click();
 
-    const streamingIndicator = page.locator('[data-streaming="true"]').first();
-    await expect(streamingIndicator).toBeVisible({ timeout: 5000 });
-    await expect(streamingIndicator).not.toBeVisible({ timeout: 30000 });
+    // The composer's send control is a three-state button: it becomes Stop for
+    // exactly the duration of the stream. There is no `data-streaming`
+    // attribute anywhere in the source — the Stop affordance IS the rendered
+    // streaming state, so assert on it rather than on a marker that never
+    // existed.
+    const stopButton = page.getByRole('button', { name: /stop/i });
+    await expect(stopButton).toBeVisible({ timeout: 5000 });
+    await expect(stopButton).toBeHidden({ timeout: 30000 });
   });
 
   test('should edit a message', async ({ page }) => {
@@ -194,20 +245,24 @@ test.describe('Chat Workflow', () => {
     await expect(statsPanel).toContainText(/tokens|cost/i);
   });
 
-  test('should handle offline state gracefully', async ({ page, context }) => {
+  test('should handle offline state gracefully', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
     await expect(chatInput, 'Chat input not available').toBeVisible();
 
-    await context.setOffline(true);
+    // `context.setOffline(true)` alone proves nothing here: every `/api/` call
+    // is fulfilled by a Playwright route, and a locally fulfilled route never
+    // touches the network, so it succeeds offline exactly as it does online.
+    // This test only ever went green because the completion endpoint was
+    // unimplemented and failed for every send, offline or not. Abort the
+    // completion instead, which is the condition being asserted.
+    await page.route('**/api/llm/v1/chat/completions', (route) =>
+      route.abort('internetdisconnected'),
+    );
+
     await chatInput.fill('This should fail');
+    await page.getByRole('button', { name: /send/i }).click();
 
-    const sendButton = page.getByRole('button', { name: /send/i });
-    await sendButton.click();
-
-    const errorMessage = page.getByRole('alert');
-    await expect(errorMessage).toBeVisible({ timeout: 10000 });
-
-    await context.setOffline(false);
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 10000 });
   });
 
   test('should complete entire flow: send query and receive answer without errors', async ({
