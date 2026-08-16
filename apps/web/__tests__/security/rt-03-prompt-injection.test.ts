@@ -28,10 +28,21 @@ vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 
-vi.mock('@agiworkforce/types', () => ({
-  getTaskModelForProvider: () => 'fixture-model',
-  getProviderDefaultModel: () => 'fixture-model',
-}));
+vi.mock('@agiworkforce/types', async () => {
+  // Spread the real module rather than listing exports. A factory mock replaces
+  // the module wholesale, so every symbol the route reaches transitively has to
+  // be present or Vitest throws at first read and the suite dies at LOAD, with
+  // no assertion having run. Listing them one at a time just moves the error to
+  // the next missing name (CAPABILITY_LAYERS, then SYNCED_APP_SURFACES, ...).
+  // Only the two model resolvers below are actually being stubbed, so only they
+  // are overridden — same pattern as __tests__/api/media-image-generate.test.ts.
+  const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  return {
+    ...actual,
+    getTaskModelForProvider: () => 'fixture-model',
+    getProviderDefaultModel: () => 'fixture-model',
+  };
+});
 
 // ─── Capture the LLM prompt that was sent ────────────────────────────────────
 let capturedLLMPrompt = '';

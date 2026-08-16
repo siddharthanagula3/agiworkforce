@@ -92,9 +92,21 @@ describe('resolveOrgMembership', () => {
     const { db, issued } = makeDb(() => [{ organization_id: ORG, role: 'admin' }]);
     const membership = await resolveOrgMembership(db, 'user-1');
     expect(membership).toEqual({ organizationId: ORG, role: 'admin' });
-    expect(issued[0]!.sql).toMatch(/from public\.organization_members/i);
-    expect(issued[0]!.sql).toMatch(/where user_id = \$1/i);
+
+    // Two statements, and the split is the security property worth pinning.
+    // First the ACTIVE organization is derived server-side from the caller's own
+    // user_settings row, joined against organization_members so an id the user
+    // is not a member of cannot be selected...
+    expect(issued[0]!.sql).toMatch(/from public\.user_settings/i);
+    expect(issued[0]!.sql).toMatch(/join public\.organization_members/i);
+    expect(issued[0]!.sql).toMatch(/where s\.user_id = \$1/i);
     expect(issued[0]!.params).toEqual(['user-1']);
+
+    // ...then the role is read for exactly that server-derived pair. Both are
+    // bound parameters; neither can come from a request.
+    expect(issued[1]!.sql).toMatch(/from public\.organization_members/i);
+    expect(issued[1]!.sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
+    expect(issued[1]!.params).toEqual([ORG, 'user-1']);
   });
 
   it('returns null when the caller belongs to no organization', async () => {

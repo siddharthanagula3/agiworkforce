@@ -29,7 +29,19 @@ const CONNECTOR = '44444444-4444-4444-8444-444444444444';
 
 function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
   mockQuery.mockImplementation(async (sql: string) => {
-    if (/from public\.organization_members/i.test(sql) && /where user_id = \$1/i.test(sql)) {
+    // resolveOrgMembership issues TWO statements: it first derives the active
+    // organization from the caller's own user_settings row (joined against
+    // organization_members so an id they do not belong to cannot be selected),
+    // then reads the role for that server-derived pair. A fake that answered
+    // only the old single query returned nothing for the first one, so
+    // membership resolved null and every route answered 403.
+    if (/from public\.user_settings/i.test(sql) && /where s\.user_id = \$1/i.test(sql)) {
+      return [{ organization_id: ORG }];
+    }
+    if (
+      /from public\.organization_members/i.test(sql) &&
+      /where organization_id = \$1 and user_id = \$2/i.test(sql)
+    ) {
       return [{ organization_id: ORG, role }];
     }
     if (/select user_id, role, joined_at/i.test(sql)) {
