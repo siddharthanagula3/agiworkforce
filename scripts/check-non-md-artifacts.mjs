@@ -106,6 +106,12 @@ for (const file of listFilesRecursive('tasks/team-status')) {
 const allowedLiveNonMarkdownPrefixes = [
   'docs/agent-context/',
   'docs/api/',
+  // The consolidated remediation register: `register.json` is the machine-
+  // readable index the wave documents are generated from, and the security
+  // scan it absorbed keeps its own JSON/JSONL evidence beside it. Same
+  // rationale as docs/agent-context/ — a live, queried artifact, not raw
+  // historical output.
+  'docs/remediation/',
   'docs/design/ui-ux-reference-2026-07/',
   'docs/spec/artifacts/',
   'audit/desktop-ui-computer-use/screenshots/',

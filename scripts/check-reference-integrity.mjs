@@ -79,9 +79,19 @@ const PACKAGE_PATTERN = /@agiworkforce\/[a-z0-9-]+/g;
 const PROVENANCE_VERBS =
   /\b(?:ported|moved|migrated|extracted|replaces?|replaced|formerly|previously|superseded|supersedes|lifted|copied|deleted|removed|retired|renamed|was\s+at|used\s+to|no\s+longer|instead\s+of)\b/i;
 
-/** Historical records legitimately cite files that were later deleted. */
+/**
+ * Historical records legitimately cite files that were later deleted, and defect
+ * registers legitimately cite files that do not exist yet — "this component is
+ * missing" is the finding, so the unresolvable path is the evidence.
+ */
 const EXCLUDED_FILES = new Set(['CHANGELOG.md']);
-const EXCLUDED_PREFIXES = ['docs/archive/', 'audit/', 'apps/desktop/archive/', 'node_modules/'];
+const EXCLUDED_PREFIXES = [
+  'docs/archive/',
+  'audit/',
+  'docs/remediation/',
+  'apps/desktop/archive/',
+  'node_modules/',
+];
 
 const TEST_PATH = /(?:^|\/)__tests__\/|\.(?:test|spec|stories|bench)\.[cm]?[jt]sx?$/;
 
