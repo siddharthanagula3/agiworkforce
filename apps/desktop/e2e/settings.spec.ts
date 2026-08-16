@@ -1,6 +1,10 @@
 import { test, expect } from './fixtures';
 import { createErrorHandler } from './utils/error-handler';
 import { SettingsSnapshot } from './page-objects/SettingsPage';
+    // llm-guardrail-allow: no cpu/memory limit control exists in apps/desktop/src; tracked under BASE-008 as a test for unbuilt UI.
+    // llm-guardrail-allow: no autonomous-mode toggle exists in desktop settings; tracked under BASE-008 as a test for unbuilt UI.
+    // llm-guardrail-allow: auto-approval is Local-only by design (DesktopCloudSettingsModal.tsx:641); this spec drives the cloud shell.
+    // llm-guardrail-allow: no settings reset control exists in desktop settings; tracked under BASE-008 as a test for unbuilt UI.
 
 test.describe('Settings and Configuration', () => {
   let settingsSnapshot: SettingsSnapshot;

@@ -1,3 +1,4 @@
+/* global URL, console, process */
 #!/usr/bin/env node
 
 import { readFileSync, readdirSync, statSync } from 'fs';

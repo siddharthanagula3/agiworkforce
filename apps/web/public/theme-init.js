@@ -1,3 +1,4 @@
+/* global document, localStorage, window */
 
 (() => {
   const root = document.documentElement;

@@ -62,6 +62,7 @@ function executeWebviewScript(): void {
   );
   expect(inlineScript?.textContent).toBeTruthy();
 
+  // llm-guardrail-allow: executes repository-owned webview JavaScript in jsdom
   new Function(inlineScript?.textContent ?? '')();
 }
 

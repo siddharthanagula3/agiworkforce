@@ -11,6 +11,7 @@ const skip = !liveEnabled || apiKey.length === 0;
 
 const SUITE_TIMEOUT_MS = 15 * 60 * 1000;
 
+// llm-guardrail-allow: paid live-network call, gated by AGIWORKFORCE_LIVE_TEST
 describe.skipIf(skip)('live output quality', () => {
   it.each(loadAllDatasets())(
     'meets the $suite gate',

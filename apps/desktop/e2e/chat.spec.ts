@@ -152,6 +152,11 @@ test.describe('Chat Workflow', () => {
   });
 
   test('should edit a message', async ({ page }) => {
+    const chatInput = page.getByRole('textbox', { name: /message/i });
+    await chatInput.fill('Original question');
+    await page.getByRole('button', { name: /send/i }).click();
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+
     const messageItem = page.locator('[data-testid="message-item"][data-role="user"]').last();
     await expect(messageItem, 'No user message available to edit').toBeVisible();
 

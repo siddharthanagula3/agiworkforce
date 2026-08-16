@@ -40,6 +40,7 @@ function boot(): void {
   const inline = Array.from(parsed.querySelectorAll('script')).find((s) =>
     s.textContent?.includes('acquireVsCodeApi()'),
   );
+  // llm-guardrail-allow: executes repository-owned webview JavaScript in jsdom
   new Function(inline?.textContent ?? '')();
 }
 

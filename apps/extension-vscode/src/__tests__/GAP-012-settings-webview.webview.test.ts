@@ -76,6 +76,7 @@ function boot(): ReturnType<typeof vi.fn> {
   const script = Array.from(parsed.querySelectorAll('script')).find((candidate) =>
     candidate.textContent?.includes('acquireVsCodeApi()'),
   );
+  // llm-guardrail-allow: executes repository-owned settings webview JavaScript in jsdom
   new Function(script?.textContent ?? '')();
   return postMessage;
 }
@@ -102,6 +103,7 @@ describe('settings webview', () => {
     expect(html).toMatch(/script-src\s+'nonce-settings-test-nonce'/u);
     expect(html).not.toMatch(/script-src[^;]*'unsafe-(?:inline|eval)'/u);
     for (const script of scripts) {
+      // llm-guardrail-allow: parser-only use in a test; the function is never invoked here
       expect(() => new Function(script.textContent ?? '')).not.toThrow();
     }
   });

@@ -1,3 +1,4 @@
+// llm-guardrail-allow: the inverse marker that reports WHY the live suite was
 
 import { describe, expect, it } from 'vitest';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
@@ -7,6 +8,7 @@ const apiKey = process.env['ANTHROPIC_API_KEY'];
 const skip = !liveEnabled || !apiKey;
 const ANTHROPIC_CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
+// llm-guardrail-allow: paid live-network call, gated by AGIWORKFORCE_LIVE_TEST
 describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
   it('streams a tiny completion via /api/v1/providers/anthropic/stream', async () => {
     const express = (await import('express')).default;
@@ -71,5 +73,6 @@ describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
 });
 
 describe.skipIf(!skip)('provider stream route — anthropic e2e (skipped)', () => {
+  // llm-guardrail-allow: placeholder that names the two env vars to set
   it.skip('set AGIWORKFORCE_LIVE_TEST=1 + ANTHROPIC_API_KEY to run', () => {});
 });
