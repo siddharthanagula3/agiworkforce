@@ -20,6 +20,16 @@ interface CloudMessageState {
   addCloudConversation: (conversation: ConversationSummary) => void;
   patchCloudConversation: (id: string, patch: Partial<ConversationSummary>) => void;
   removeCloudConversation: (id: string) => void;
+  /**
+   * Put back a conversation an optimistic delete removed, at the position it
+   * held, together with any messages that were dropped with it. Appending
+   * instead would silently reorder the list after a failed delete.
+   */
+  restoreCloudConversation: (
+    conversation: ConversationSummary,
+    index: number,
+    messages?: ChatMessage[],
+  ) => void;
   clearCloudData: () => void;
 }
 
@@ -114,6 +124,19 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
           return {
             conversations: state.conversations.filter((c) => c.id !== id),
             messages: remainingMessages,
+          };
+        });
+      },
+
+      restoreCloudConversation: (conversation, index, messages) => {
+        set((state) => {
+          if (state.conversations.some((c) => c.id === conversation.id)) return state;
+          const conversations = [...state.conversations];
+          const at = Math.max(0, Math.min(index, conversations.length));
+          conversations.splice(at, 0, conversation);
+          return {
+            conversations,
+            ...(messages ? { messages: { ...state.messages, [conversation.id]: messages } } : {}),
           };
         });
       },

@@ -239,6 +239,20 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
   );
 }
 
+function optimisticFact(text: string): MemoryFact {
+  const now = new Date().toISOString();
+  const id =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? `pending_${globalThis.crypto.randomUUID()}`
+      : `pending_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+  return { id, text, createdAt: now, updatedAt: now, pending: true };
+}
+
+function asMemoryError(error: unknown, fallback: string): Error {
+  const detail = error instanceof Error ? error.message.trim() : '';
+  return new Error(detail ? `${fallback} (${detail})` : fallback);
+}
+
 function CloudMemoryTab() {
   const [facts, setFacts] = useState<MemoryFact[]>([]);
   const [syncStatus, setSyncStatus] = useState<MemoryEditorDataAdapter['syncStatus']>('idle');
@@ -260,17 +274,71 @@ function CloudMemoryTab() {
       facts,
       syncStatus,
       hydrateFromServer,
+      // Local memory (useMemoryStore) applies these synchronously and syncs
+      // afterwards, so local mode has always felt instant while cloud mode sat
+      // waiting on a round trip in the same screen. These bring cloud to
+      // parity: apply first, reconcile with the server row, and put the list
+      // back if the write fails. Each rethrows so MemoryEditor can say why the
+      // list just changed back.
       add: async (text) => {
-        const created = await createCloudMemory(text);
-        setFacts((current) => [created, ...current]);
+        const optimistic = optimisticFact(text);
+        setFacts((current) => [optimistic, ...current]);
+        try {
+          const created = await createCloudMemory(text);
+          setFacts((current) =>
+            current.map((fact) => (fact.id === optimistic.id ? created : fact)),
+          );
+        } catch (error) {
+          setFacts((current) => current.filter((fact) => fact.id !== optimistic.id));
+          throw asMemoryError(error, 'Could not save that memory. It has been removed again.');
+        }
       },
       update: async (id, text) => {
-        const updated = await updateCloudMemory(id, text);
-        setFacts((current) => current.map((fact) => (fact.id === id ? updated : fact)));
+        let previous: MemoryFact | undefined;
+        setFacts((current) =>
+          current.map((fact) => {
+            if (fact.id !== id) return fact;
+            previous = fact;
+            return { ...fact, text, updatedAt: new Date().toISOString() };
+          }),
+        );
+        try {
+          const updated = await updateCloudMemory(id, text);
+          setFacts((current) => current.map((fact) => (fact.id === id ? updated : fact)));
+        } catch (error) {
+          if (previous) {
+            const restored = previous;
+            setFacts((current) => current.map((fact) => (fact.id === id ? restored : fact)));
+          }
+          throw asMemoryError(error, 'Could not save that edit. The earlier text is back.');
+        }
       },
       remove: async (id) => {
-        await deleteCloudMemory(id);
-        setFacts((current) => current.filter((fact) => fact.id !== id));
+        let removed: MemoryFact | undefined;
+        let removedIndex = -1;
+        setFacts((current) => {
+          removedIndex = current.findIndex((fact) => fact.id === id);
+          if (removedIndex === -1) return current;
+          removed = current[removedIndex];
+          return current.filter((fact) => fact.id !== id);
+        });
+        try {
+          await deleteCloudMemory(id);
+        } catch (error) {
+          // Restored at its original index rather than appended, so a failed
+          // delete does not silently reorder the list.
+          if (removed) {
+            const restored = removed;
+            const at = removedIndex;
+            setFacts((current) => {
+              if (current.some((fact) => fact.id === restored.id)) return current;
+              const next = [...current];
+              next.splice(Math.max(0, Math.min(at, next.length)), 0, restored);
+              return next;
+            });
+          }
+          throw asMemoryError(error, 'Could not delete that memory. It has been put back.');
+        }
       },
       clear: async () => {
         let failedDeletes = 0;
