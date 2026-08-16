@@ -175,6 +175,7 @@ test.describe('authenticated primary workflows', () => {
   test('opt-in: cheapest live Google image generates, downloads, reloads, and appears in Library', async ({
     page,
   }, testInfo) => {
+    // llm-guardrail-allow: this test performs an explicitly authorized billed provider request and must remain opt-in.
     test.skip(
       process.env['RUN_LIVE_MEDIA_E2E'] !== '1',
       'Set RUN_LIVE_MEDIA_E2E=1 to authorize a real billed provider request.',

@@ -1,3 +1,4 @@
+/* global AbortSignal, fetch */
 #!/usr/bin/env node
 
 import { strict as assert } from 'node:assert';

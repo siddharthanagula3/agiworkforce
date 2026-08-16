@@ -52,6 +52,7 @@ describe('getWebviewContent — F-01 regression: script must parse without Synta
     expect(scripts.length).toBeGreaterThan(0);
     for (const script of scripts) {
       const body = script.textContent ?? '';
+      // llm-guardrail-allow: parser-only use in a test; the constructed function is never invoked
       expect(() => new Function(body)).not.toThrow();
     }
   });

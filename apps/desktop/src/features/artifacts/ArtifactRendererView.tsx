@@ -1,3 +1,4 @@
+    // llm-guardrail-allow: "eval(" mentions here are prose describing the CSP, not executable code
 
 import React, { useMemo } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -293,6 +294,7 @@ function DiagramRenderer({
       </div>
       {svg ? (
         <div
+          // llm-guardrail-allow: svg is DOMPurify-sanitized via sanitizeSvg() above, not raw model/user output
           dangerouslySetInnerHTML={{ __html: sanitizeSvg(svg) }}
           className="flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         />

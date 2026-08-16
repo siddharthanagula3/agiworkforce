@@ -115,6 +115,7 @@ async function collect(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
+// llm-guardrail-allow: paid live-network call, gated by AGI_LIVE_PROVIDER_SMOKE
 describe.skipIf(!LIVE)('tool loop, live end to end', () => {
   it(
     'has a real model call a real tool and use the real result',

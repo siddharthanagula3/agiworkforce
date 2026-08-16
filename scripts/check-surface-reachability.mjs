@@ -231,6 +231,7 @@ export function readAllowlist(rawJson) {
   return allowlist;
 }
 
+/* global console */
 /**
  * Compare one surface's measured unreachable set against its declared
  * exceptions.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global console */
 import { execFileSync } from 'node:child_process';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

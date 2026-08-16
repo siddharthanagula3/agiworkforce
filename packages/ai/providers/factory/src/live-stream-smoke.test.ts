@@ -171,6 +171,7 @@ async function smokeOne(
   return outcome;
 }
 
+// llm-guardrail-allow: paid live-network call, gated by AGI_LIVE_PROVIDER_SMOKE
 describe.skipIf(!LIVE)('live provider streaming (shared TS adapters)', () => {
   it('streams text from every provider whose key is valid', { timeout: 300_000 }, async () => {
     const env = loadEnvKeys();
