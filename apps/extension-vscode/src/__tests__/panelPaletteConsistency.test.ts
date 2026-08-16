@@ -50,7 +50,13 @@ describe('sidebar panel palette', () => {
   });
 
   it('states the colour policy truthfully in its own header', () => {
-    const header = source.slice(0, source.indexOf('export function getWebviewContent'));
+    // Strip JSDoc line-leaders before matching. The policy sentence wraps
+    // inside a block comment, so a phrase spanning the wrap is separated by
+    // "\n * " — and `\s` does not match that literal asterisk, which made the
+    // assertion fail on a purely cosmetic reflow rather than on the wording.
+    const header = source
+      .slice(0, source.indexOf('export function getWebviewContent'))
+      .replace(/^[ \t]*\*[ \t]?/gm, '');
     expect(header).toMatch(
       /surfaces,\s*text, controls, focus, and state colours follow the host theme/i,
     );

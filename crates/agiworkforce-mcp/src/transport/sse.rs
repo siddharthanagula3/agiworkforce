@@ -207,6 +207,12 @@ fn build_sse_client(url: &str, timeouts: &McpTimeouts) -> Result<reqwest::Client
     // rather than at each caller where a new one could forget it. Release
     // builds refuse this outright; debug builds allow loopback only.
     crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)?;
+    // The policy above already bails in release, so this is unreachable there.
+    // Gating the call site as well keeps `danger_accept_invalid_certs` out of
+    // the release binary entirely, so the guarantee survives someone later
+    // dropping the policy call — and it is what `rust/disabled-certificate-check`
+    // flagged, since the query cannot see the early-return guard.
+    #[cfg(debug_assertions)]
     if !timeouts.verify_tls {
         builder = builder.danger_accept_invalid_certs(true);
     }

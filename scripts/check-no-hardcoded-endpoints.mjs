@@ -118,7 +118,17 @@ const PROVIDER_HOSTS = [
   'api.stability.ai',
 ];
 
-const HOST_PATTERN = new RegExp(PROVIDER_HOSTS.map((h) => h.replace(/\./g, '\\.')).join('|'), 'g');
+/**
+ * Escape every regex metacharacter, not just `.`. The previous form escaped
+ * dots alone, which left backslash unescaped (js/incomplete-sanitization) and
+ * was too partial for CodeQL to recognise as escaping at all — so each host
+ * literal above was additionally reported as an unescaped-dot hostname regexp
+ * (js/incomplete-hostname-regexp). Today's host list contains only dots, so
+ * this changes no current match; it makes the escaping complete and evident.
+ */
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const HOST_PATTERN = new RegExp(PROVIDER_HOSTS.map(escapeRegExp).join('|'), 'g');
 
 /** Line is entirely a comment — the literal is documentation, not a call. */
 function isCommentLine(line) {

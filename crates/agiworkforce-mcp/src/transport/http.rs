@@ -40,13 +40,23 @@ pub(crate) fn connect(
     }
     // No global `.timeout()` on the client — POSTs are wrapped per-call, and the
     // optional GET stream is long-lived.
-    let mut builder = reqwest::Client::builder();
+    let builder = reqwest::Client::builder();
     // Release builds refuse this outright; debug builds allow loopback only.
     crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)
         .context("[mcp http]")?;
-    if !timeouts.verify_tls {
-        builder = builder.danger_accept_invalid_certs(true);
-    }
+    // The policy above already bails in release, so this is unreachable there.
+    // Gating the call site as well keeps `danger_accept_invalid_certs` out of
+    // the release binary entirely, so the guarantee survives someone later
+    // dropping the policy call — and it is what `rust/disabled-certificate-check`
+    // flagged, since the query cannot see the early-return guard. Shadowing
+    // rather than `mut`: the gated block is the only mutation here, so `mut`
+    // would be an unused-mut error in release under `-D warnings`.
+    #[cfg(debug_assertions)]
+    let builder = if timeouts.verify_tls {
+        builder
+    } else {
+        builder.danger_accept_invalid_certs(true)
+    };
     let client = builder.build().context("build reqwest client")?;
 
     Ok(TransportConn::Http {
