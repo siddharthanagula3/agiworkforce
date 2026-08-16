@@ -556,6 +556,7 @@ function managedOutboundRoutingPayload(): {
   };
 }
 
+// Provider display order in the grouped picker.
 const PROVIDER_GROUP_ORDER: ProviderId[] = [
   'anthropic',
   'openai',
@@ -6084,6 +6085,9 @@ function buildUI(): void {
     }
   }
 
+  // Install the module-scope hook so notification clicks, the boot sequence and
+  // the Workflows task rows can open a stored background result through the
+  // same restore path a history entry uses.
   openStoredConversation = async (conversationId: string): Promise<boolean> => {
     try {
       const restored = await restoreHistoryEntry(conversationId);
@@ -8018,6 +8022,8 @@ function buildUI(): void {
         setRecordingStatus('Open an approved web page before starting a recording.', 'error');
         return;
       }
+      // Sync the value-capture choice to the active tab's content script before
+      // recording begins (the toggle may have been set on a different tab).
       if (!(await syncCaptureValues())) {
         recordingStartUrl = null;
         setRecordingStatus(t('spRecordingPrivacySaveFailed'), 'error');
