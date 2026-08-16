@@ -24,23 +24,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
-import {
-  Settings,
-  LogOut,
-  ChevronUp,
-  LibraryBig,
-  CalendarClock,
-  FileText,
-  FolderOpen,
-  ListChecks,
-  Menu,
-  MessageSquare,
-  Scale,
-  ShieldCheck,
-  TerminalSquare,
-} from 'lucide-react';
+import { Settings, LogOut, ChevronUp, FileText, Menu, Scale, ShieldCheck } from 'lucide-react';
 import {
   Sidebar,
+  useConfirm,
   type SidebarSession,
   type SidebarProject,
   type SidebarNavItem,
@@ -57,6 +44,8 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
+import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
 import { getBillingPlanPricing } from '@agiworkforce/types';
@@ -74,11 +63,17 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const { openSettings } = useSettingsModal();
   const { signOut: clerkSignOut } = useClerk();
   const { user, logout, isLoading: isAuthLoading, initialized: isAuthInitialized } = useAuthStore();
+  const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const subscription = useBillingStore((s) => s.subscription);
   const isBillingLoading = useBillingStore((s) => s.isLoading);
   const isBillingInitialized = useBillingStore((s) => s.initialized);
 
   const [collapsed, setCollapsed] = useState(false);
+
+  // Destructive-action confirmation (shell-nav-ia-gap-01): the product's own
+  // AlertDialog with a red confirm, not `window.confirm`. `useConfirm` returns
+  // an awaitable boolean, so the guards below keep the same shape.
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
 
   // ---- Narrow-viewport navigation (WEB-APPSHELL-MOBILE-SIDEBAR-01) ----
   // Below 768px the persistent ~260px sidebar reduced every route on this
@@ -171,15 +166,20 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const handleDeleteSession = useCallback(
     async (id: string) => {
       const convo = conversations.find((c) => c.id === id);
-      const label = convo?.title ? `"${convo.title}"` : 'this conversation';
-      if (
-        typeof window !== 'undefined' &&
-        !window.confirm(`Delete ${label}? This can't be undone.`)
-      )
-        return;
+      const label = convo?.title ? `“${convo.title}”` : 'this conversation';
+      // Same dialog and same copy the chat shell uses — delete-conversation is
+      // the app's most frequent destructive action and must not look like a
+      // browser alert on one route and a product dialog on another.
+      const confirmed = await confirmDestructive({
+        title: 'Delete conversation?',
+        description: `Delete ${label} and every message in it. This cannot be undone.`,
+        confirmText: 'Delete conversation',
+        variant: 'destructive',
+      });
+      if (!confirmed) return;
       await deleteConversation(id);
     },
-    [conversations, deleteConversation],
+    [confirmDestructive, conversations, deleteConversation],
   );
   const handleRenameSession = useCallback(
     (id: string, title: string) => void updateConversation(id, { title }),
@@ -228,6 +228,19 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const handleProjectPin = useCallback((projectId: string) => toggleStar(projectId), [toggleStar]);
   const handleProjectDelete = useCallback(
     async (projectId: string) => {
+      // The shared <Sidebar> invokes this straight from the project row's
+      // three-dot menu with no confirmation of its own, so this shell deleted a
+      // project on a single stray click — worse than the native confirm the chat
+      // shell at least had. Same dialog and copy as ProjectSettingsDialog.
+      const project = storeProjects.find((p) => p.id === projectId);
+      const label = project?.name ? `“${project.name}”` : 'This project';
+      const confirmed = await confirmDestructive({
+        title: 'Delete project?',
+        description: `${label} will be permanently deleted. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
+        confirmText: 'Delete project',
+        variant: 'destructive',
+      });
+      if (!confirmed) return;
       try {
         await webManagedCloudProjects.deleteProject(projectId);
         removeProjectFromStore(projectId);
@@ -235,72 +248,26 @@ export function WebAppShell({ children }: WebAppShellProps) {
         toast.error(error instanceof Error ? error.message : 'Failed to delete project');
       }
     },
-    [removeProjectFromStore],
+    [confirmDestructive, removeProjectFromStore, storeProjects],
   );
   const handleProjectCreate = useCallback(() => router.push('/chat/projects'), [router]);
 
+  // ONE rail definition, shared with WebChatPage — see `app-nav-items.ts` for
+  // why (the two hand-maintained copies had drifted and this shell was the only
+  // one exposing Tasks).
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
-    () => [
-      {
-        id: 'chat-home',
-        label: 'Chat',
-        icon: MessageSquare,
-        onClick: () => router.push('/chat'),
-        isActive: pathname === '/chat',
-      },
-      {
-        id: 'code',
-        label: 'Code',
-        icon: TerminalSquare,
-        onClick: () => router.push('/chat/code'),
-        isActive: pathname.startsWith('/chat/code'),
-      },
-      // Keep the section that owns this shell visible and selected. Without
-      // this item the Projects hub/detail pages dropped their own primary nav
-      // destination, even though the chat shell exposes it persistently.
-      {
-        id: 'projects',
-        label: 'Projects',
-        icon: FolderOpen,
-        onClick: () => router.push('/chat/projects'),
-        isActive: pathname.startsWith('/chat/projects'),
-      },
-      // Library — same persistent entry the chat page's sidebar carries, so
-      // navigating between /projects and /library keeps the link visible.
-      {
-        id: 'library',
-        label: 'Library',
-        icon: LibraryBig,
-        onClick: () => router.push('/chat/library'),
-        isActive: pathname.startsWith('/chat/library'),
-      },
-      {
-        id: 'tasks',
-        label: 'Tasks',
-        icon: ListChecks,
-        onClick: () => router.push('/tasks'),
-        isActive: pathname.startsWith('/tasks'),
-      },
-      {
-        id: 'schedules',
-        label: 'Schedules',
-        icon: CalendarClock,
-        onClick: () => router.push('/chat/schedules'),
-        isActive: pathname.startsWith('/chat/schedules'),
-      },
-      {
-        id: 'customize',
-        label: 'Customize',
-        icon: Settings,
+    () =>
+      buildAppNavItems({
+        pathname,
+        navigate: (href) => router.push(href),
         // CRIT-008: open the modal in place. `/settings/general` renders a
         // SettingsModalRedirect whose only job is to reopen this modal and
         // replace back to /chat, so routing there tore down and remounted
         // whatever page the shell was wrapping.
-        onClick: () => openSettings('general'),
-        isActive: false,
-      },
-    ],
-    [openSettings, pathname, router],
+        onOpenCustomize: () => openSettings('general'),
+        isAdmin: isWorkspaceAdmin,
+      }),
+    [isWorkspaceAdmin, openSettings, pathname, router],
   );
 
   // ---- Account footer ----
@@ -463,6 +430,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
 
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
+      {/* Destructive-action confirm (delete conversation / delete project). */}
+      {destructiveConfirmDialog}
       {/* Desktop: persistent/collapsible sidebar. Narrow: replaced by the
           header trigger + modal drawer below (WEB-APPSHELL-MOBILE-SIDEBAR-01). */}
       {!isNarrowViewport && (

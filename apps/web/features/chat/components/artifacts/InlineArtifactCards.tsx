@@ -177,7 +177,11 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
         {canRender ? (
           <iframe
             title={artifact.title || 'Artifact preview'}
-            sandbox="allow-scripts"
+            // 80px static thumbnail, same reasoning as the gallery grid: no
+            // scripts to run, and running them only produced inherited-CSP
+            // violations. The interactive viewer (ArtifactPreview) keeps
+            // allow-scripts, because there the execution is the point.
+            sandbox=""
             srcDoc={(() => {
               if (artifact.type === 'html') {
                 return buildSandboxSrcDoc(artifact.content.slice(0, 800));

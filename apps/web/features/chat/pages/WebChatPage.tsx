@@ -68,11 +68,6 @@ import {
   Keyboard,
   Globe,
   LogOut,
-  FolderOpen,
-  LibraryBig,
-  CalendarClock,
-  MessageSquare,
-  TerminalSquare,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
@@ -85,6 +80,7 @@ import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
 import {
   Sidebar,
+  useConfirm,
   type SidebarSession,
   type SidebarNavItem,
   type SidebarProject,
@@ -111,11 +107,17 @@ import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
 import { printConversation } from '../lib/print-conversation';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
+import {
+  MessageInlineEditProvider,
+  type MessageInlineEditController,
+} from '../components/messages/MessageBubble';
 import { ChatLoadingState } from '../components/messages/ChatLoadingState';
 import { ImageTranscriptRecoveryNotice } from '../components/ImageTranscriptRecoveryNotice';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
+import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
@@ -234,6 +236,26 @@ type NewImageGenerationTurn = Omit<ImagePromptTranscriptRecovery, 'phase' | 'sta
  * concurrently with any other chat's send.
  */
 const NEW_CHAT_SEND_GUARD_KEY = '__new_conversation__';
+
+/** Placeholder title every lazily created chat conversation starts with. */
+const NEW_CHAT_TITLE = 'New Chat';
+/** Placeholder titles the image / video harnesses create their conversation with. */
+const IMAGE_GENERATION_TITLE = 'Image generation';
+const VIDEO_GENERATION_TITLE = 'Video generation';
+
+/**
+ * MEDIA-TITLE-03: titles the auto-titler is allowed to replace.
+ *
+ * These are the three literals the app itself assigns at creation time — never
+ * something a user typed — so overwriting one with the first prompt is a repair,
+ * not a surprise. Anything else (a rename, or a title this effect already set)
+ * is left alone.
+ */
+const AUTO_TITLE_PLACEHOLDERS: ReadonlySet<string> = new Set([
+  NEW_CHAT_TITLE,
+  IMAGE_GENERATION_TITLE,
+  VIDEO_GENERATION_TITLE,
+]);
 
 type PendingByokHandoff = {
   sourceConversationId: string;
@@ -574,6 +596,20 @@ function mobileNavigationFocusable(root: HTMLElement): HTMLElement[] {
 export default function WebChatPage() {
   useArtifactCloudSync();
 
+  /**
+   * Destructive-action confirmation (shell-nav-ia-gap-01).
+   *
+   * Delete-conversation and delete-project used to call native `window.confirm()`
+   * from this page while the SAME project delete, reached from
+   * ProjectSettingsDialog, showed the styled AlertDialog with a red confirm.
+   * `useConfirm` is the shared promise-based wrapper around that exact
+   * AlertDialog primitive (packages/ui/ui/src/primitives/ConfirmDialog.tsx) — it
+   * existed with zero call sites in the whole repo. Same await-a-boolean shape
+   * as `window.confirm`, so the guards below read the same but the user sees the
+   * product's own dialog with a red confirm and specific consequence copy.
+   */
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+
   // Core chat UI previously had zero i18n coverage — every string, including
   // the composer placeholder, was hardcoded English even though full
   // translation resources already exist (packages/ui/i18n/locales/*, the single
@@ -809,6 +845,7 @@ export default function WebChatPage() {
   // Web-specific hooks for the sidebar footer slot.
   const { signOut: clerkSignOut } = useClerk();
   const { user: clerkUser } = useUser();
+  const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const { user: compatibilityUser, logout } = useAuthStore();
   const canonicalUser = useBillingStore((s) => s.user);
   const clerkAccountUser = useMemo<ChatAccountIdentity | null>(() => {
@@ -832,7 +869,11 @@ export default function WebChatPage() {
   const { openSettings } = useSettingsModal();
 
   // Project store — same data source already used by the filter dropdown in <Sidebar>
-  const { projects: storeProjects, isReady: projectsReady } = useManagedCloudProjects();
+  const {
+    projects: storeProjects,
+    isReady: projectsReady,
+    retry: refreshProjects,
+  } = useManagedCloudProjects();
   const updateProjectInStore = useProjectStore((s) => s.updateProject);
   const removeProjectFromStore = useProjectStore((s) => s.removeProject);
   const setStoreProjects = useProjectStore((s) => s.setProjects);
@@ -1377,7 +1418,7 @@ export default function WebChatPage() {
           options.conversationId ||
           urlConversationId ||
           bareChatSessionId ||
-          (await createConversation('New Chat', activeModelId, sendProjectId).then((c) => {
+          (await createConversation(NEW_CHAT_TITLE, activeModelId, sendProjectId).then((c) => {
             if (c) {
               freshConvId = c.id;
               // The composer's toggles live under the pending key until this
@@ -1796,7 +1837,7 @@ export default function WebChatPage() {
           let convId = displayedConversationId;
           if (!convId) {
             const fresh = await createConversation(
-              'Image generation',
+              IMAGE_GENERATION_TITLE,
               activeModelId,
               activeProjectId,
             );
@@ -2314,7 +2355,7 @@ export default function WebChatPage() {
           let convId = displayedConversationId;
           if (!convId) {
             const fresh = await createConversation(
-              'Video generation',
+              VIDEO_GENERATION_TITLE,
               activeModelId,
               activeProjectId,
             );
@@ -2352,6 +2393,9 @@ export default function WebChatPage() {
           const placeholderMetadata: MessageMetadata = {
             toolType: 'video-generation',
             videoStatus: 'queued',
+            // Sizes VideoGenerationPlaceholder to the requested shape before the
+            // provider returns anything, so the transcript doesn't jump later.
+            ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
           };
           addMessage(
             {
@@ -2441,6 +2485,10 @@ export default function WebChatPage() {
               videoStatus: started.status,
               videoProvider: started.provider,
               videoModel: started.model,
+              // Carried forward from placeholderMetadata: the placeholder stays
+              // sized correctly for the whole in-flight window, not just the
+              // instant before the start request resolves.
+              ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
             };
             updateOwnMessage(assistantMessageId, {
               content: '',
@@ -2951,13 +2999,14 @@ export default function WebChatPage() {
       // migration dropped this confirmation that the prior ConversationListItem
       // had; restore it for parity.
       const conversation = conversations.find((c) => c.id === id);
-      const label = conversation?.title ? `"${conversation.title}"` : 'this conversation';
-      if (
-        typeof window !== 'undefined' &&
-        !window.confirm(`Delete ${label}? This can't be undone.`)
-      ) {
-        return;
-      }
+      const label = conversation?.title ? `“${conversation.title}”` : 'this conversation';
+      const confirmed = await confirmDestructive({
+        title: 'Delete conversation?',
+        description: `Delete ${label} and every message in it. This cannot be undone.`,
+        confirmText: 'Delete conversation',
+        variant: 'destructive',
+      });
+      if (!confirmed) return;
       const deleted = await deleteConversation(id);
       if (!deleted) return;
       if (id === displayedConversationId) {
@@ -2966,7 +3015,14 @@ export default function WebChatPage() {
         router.push('/chat');
       }
     },
-    [conversations, deleteConversation, displayedConversationId, router, setActiveConversation],
+    [
+      confirmDestructive,
+      conversations,
+      deleteConversation,
+      displayedConversationId,
+      router,
+      setActiveConversation,
+    ],
   );
 
   const handleRenameSession = useCallback(
@@ -3072,13 +3128,19 @@ export default function WebChatPage() {
   const handleProjectDelete = useCallback(
     async (projectId: string) => {
       const project = storeProjects.find((p) => p.id === projectId);
-      const label = project?.name ? `"${project.name}"` : 'this project';
-      if (
-        typeof window !== 'undefined' &&
-        !window.confirm(`Delete ${label}? This can't be undone.`)
-      ) {
-        return;
-      }
+      const label = project?.name ? `“${project.name}”` : 'this project';
+      // Same dialog the project-detail Settings pane already used for this exact
+      // action — the sidebar three-dot menu was the one route that still fell
+      // back to a native browser confirm.
+      // Copy matches ProjectSettingsDialog's dialog verbatim — same action, so
+      // the consequence a user reads must not depend on which menu they used.
+      const confirmed = await confirmDestructive({
+        title: 'Delete project?',
+        description: `${label} will be permanently deleted. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
+        confirmText: 'Delete project',
+        variant: 'destructive',
+      });
+      if (!confirmed) return;
       // Optimistic remove, with rollback on server failure so the sidebar
       // never lies about what actually got deleted.
       removeProjectFromStore(projectId);
@@ -3091,7 +3153,7 @@ export default function WebChatPage() {
         toast.error(err instanceof Error ? err.message : 'Failed to delete project');
       }
     },
-    [storeProjects, removeProjectFromStore, setStoreProjects],
+    [confirmDestructive, storeProjects, removeProjectFromStore, setStoreProjects],
   );
 
   // Project settings dialog derived data
@@ -3130,16 +3192,26 @@ export default function WebChatPage() {
   );
 
   // Auto-title: when the second message arrives (first assistant reply), derive title
-  // from the first user message content if the conversation is still named "New Chat".
+  // from the first user message content if the conversation still carries one of the
+  // app's own placeholder titles.
   // Intentionally only re-runs on messages.length, not the full messages array, to
   // avoid re-running on every streaming chunk.
+  //
+  // MEDIA-TITLE-03: the guard used to test `title === 'New Chat'` only, while the
+  // image and video paths lazily create their conversation as 'Image generation' /
+  // 'Video generation'. Those two literals permanently bypassed the auto-titler, so
+  // every media chat in the sidebar read "Image generation" forever while a text chat
+  // beside it read its own prompt. Matching all three placeholders retitles new media
+  // chats AND repairs already-stuck ones the next time they are opened; a title the
+  // user (or this effect) has already set is never overwritten.
   useEffect(() => {
     if (!displayedConversationId || displayedMessages.length !== 2) return;
     const convo = conversations.find((c) => c.id === displayedConversationId);
-    if (!convo || convo.title !== 'New Chat') return;
+    if (!convo || !AUTO_TITLE_PLACEHOLDERS.has(convo.title)) return;
     const firstUser = displayedMessages[0];
     if (!firstUser || firstUser.role !== 'user') return;
-    const title = firstUser.content.trim().slice(0, 60).replace(/\n/g, ' ') || 'New Chat';
+    const title = firstUser.content.trim().slice(0, 60).replace(/\n/g, ' ');
+    if (!title || title === convo.title) return;
     updateConversation(displayedConversationId, { title });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayedMessages.length, displayedConversationId, conversations, updateConversation]);
@@ -3398,29 +3470,32 @@ export default function WebChatPage() {
     [displayedConversationId, router],
   );
 
-  const handleEditMessage = useCallback(
-    (id: string) => {
-      if (!displayedConversationId || isStreaming) return;
+  /**
+   * Every guard an edit of `id` has to clear, resolved against the CURRENT
+   * transcript. Returns the message plus its rollback plan, or null having
+   * already told the user why (toast / upgrade dialog).
+   *
+   * Shared by the three entry points below so opening the editor and saving from
+   * it can never disagree about whether the edit is allowed — the transcript can
+   * change while the editor is open.
+   */
+  const planMessageEdit = useCallback(
+    (id: string): { message: Message; plan: PendingEditRollback } | null => {
+      if (!displayedConversationId || isStreaming) return null;
       if (isImageTranscriptMutationInFlight(id)) {
         toast.error('Wait for this image turn to finish saving before editing it.');
-        return;
+        return null;
       }
       const idx = displayedMessages.findIndex((m) => m.id === id);
       const msg = idx >= 0 ? displayedMessages[idx] : undefined;
-      if (!msg || msg.role !== 'user') return;
+      if (!msg || msg.role !== 'user') return null;
       if (isTrialExhausted) {
         handleOpenUpgradeDialog();
-        return;
+        return null;
       }
-      // DATA-LOSS FIX: stash the rollback and prefill the composer, but do NOT
-      // delete anything yet. The original transcript stays visible while the
-      // user edits; sendContent performs the deletion only when (and if) they
-      // resubmit. Previously this deleted the message + all later messages from
-      // the DB immediately, so abandoning the edit lost them permanently.
       const plan = planEditRollback(displayedMessages, id, displayedConversationId);
-      if (!plan) return;
-      pendingEditRollbackRef.current = plan;
-      setComposerPrefill(msg.content);
+      if (!plan) return null;
+      return { message: msg, plan };
     },
     [
       displayedConversationId,
@@ -3430,6 +3505,116 @@ export default function WebChatPage() {
       isTrialExhausted,
       handleOpenUpgradeDialog,
     ],
+  );
+
+  /**
+   * Fallback Edit action, and the flag ChatMessageList reads to decide whether
+   * the Edit item renders at all. With the inline-edit provider mounted (it is,
+   * below) MessageBubble routes the click through `beginEdit` instead and this
+   * never fires; a surface WITHOUT the provider still gets the original
+   * composer-prefill behaviour rather than a dead menu item.
+   *
+   * DATA-LOSS FIX: stash the rollback, delete nothing. The original transcript
+   * stays intact while the user edits; sendContent performs the deletion only
+   * when (and if) they resubmit.
+   */
+  const handleEditMessage = useCallback(
+    (id: string) => {
+      const planned = planMessageEdit(id);
+      if (!planned) return;
+      pendingEditRollbackRef.current = planned.plan;
+      setComposerPrefill(planned.message.content);
+    },
+    [planMessageEdit],
+  );
+
+  /**
+   * CLR-05: inline edit, wired to the bubble instead of the composer.
+   *
+   * `beginEdit` runs the guards and answers whether the editor may open.
+   * `submitEdit` resubmits the revised text in place of the original — the same
+   * data-loss-safe replacement Regenerate uses (`sendReplacingMessages` deletes
+   * the replaced server rows only once the new turn is durable), and the same
+   * two refusals: a Local → BYOK boundary crossing, and a turn whose recorded
+   * send options cannot be replayed.
+   */
+  const messageInlineEditHandlers = useMemo<MessageInlineEditController>(
+    () => ({
+      beginEdit: (id) => planMessageEdit(id) !== null,
+      submitEdit: (id, content) => {
+        const next = content.trim();
+        if (!next) return;
+        const planned = planMessageEdit(id);
+        if (!planned) return;
+        const conversationId = displayedConversationId;
+        if (!conversationId) return;
+        // Same trust boundary as handleSend / handleRegenerateMessage: an edited
+        // resend replays the whole on-device transcript under `activeModelId`,
+        // so it must refuse rather than silently cross Local → BYOK.
+        const boundaryRefusal = resolveRegenerateBoundaryRefusal({
+          conversation: displayedConversation,
+          messages: displayedMessages,
+          targetModelId: activeModelId,
+        });
+        if (boundaryRefusal) {
+          setChatError(boundaryRefusal, conversationId);
+          return;
+        }
+        // Replay the options the ORIGINAL turn recorded (search / thinking /
+        // code / work mode / style), exactly as Regenerate does — the composer's
+        // current toggles are not what this message was sent with.
+        const editedIndex = displayedMessages.findIndex((m) => m.id === id);
+        const followingAssistant =
+          editedIndex >= 0
+            ? displayedMessages.slice(editedIndex + 1).find((m) => m.role === 'assistant')
+            : undefined;
+        const replayDecision = getRegenerateReplayDecision({
+          userMetadata: planned.message.metadata,
+          assistantMetadata: followingAssistant?.metadata,
+        });
+        if (!replayDecision.ok) {
+          setChatError(replayDecision.message, conversationId);
+          return;
+        }
+        const replayOptions = replayToSendOptions(replayDecision.replay);
+        void sendReplacingMessages(planned.plan.rollbackIds, (onTurnCommitted) =>
+          sendMessage(next, {
+            model: activeModelId,
+            conversationId,
+            attachments: planned.message.attachments,
+            ...replayOptions,
+            onTurnCommitted,
+          }),
+        );
+      },
+    }),
+    [
+      activeModelId,
+      displayedConversation,
+      displayedConversationId,
+      displayedMessages,
+      planMessageEdit,
+      sendMessage,
+      sendReplacingMessages,
+      setChatError,
+    ],
+  );
+
+  /**
+   * Stable context identity. The handlers above close over `displayedMessages`,
+   * so they get a new identity on every streaming chunk — publishing THAT
+   * straight to the provider would re-render every MessageBubble in the
+   * transcript per chunk and defeat the list's memoization (see BUG-27/BUG-28).
+   * Same ref-bridge idiom as `sendReplacingMessagesRef` above.
+   */
+  const messageInlineEditHandlersRef = useRef(messageInlineEditHandlers);
+  messageInlineEditHandlersRef.current = messageInlineEditHandlers;
+  const messageInlineEdit = useMemo<MessageInlineEditController>(
+    () => ({
+      beginEdit: (id) => messageInlineEditHandlersRef.current.beginEdit(id),
+      submitEdit: (id, content) => messageInlineEditHandlersRef.current.submitEdit(id, content),
+    }),
+    [],
   );
 
   const handleRegenerateMessage = useCallback(
@@ -3749,67 +3934,25 @@ export default function WebChatPage() {
   // used to be a separate four-entry array that omitted Escape, Cmd+Shift+C
   // and Cmd+Shift+R — all bound and working, none of them listed.
 
-  // Top-level Chat / Code destinations stay visible in the production sidebar.
-  // The rail body still owns chat recents; this Chat item is the stable mode
-  // destination paired with Code, not a second recents list. 'Artifacts' was
-  // already removed (it linked to the
-  // /gallery marketing page; artifacts open via the header ArtifactsToggleButton).
-  // Skills, Plugins, and Connectors now live in the Settings modal. The top-level
-  // 'Customize' entry opens General because that is where the user's name, work
-  // profile, and cross-chat instructions are edited; Skills remains its own
-  // plainly labelled Settings item.
+  // Top-level destinations stay visible in the production sidebar. The rail body
+  // still owns chat recents; the Chat item is the stable mode destination paired
+  // with Code, not a second recents list. Skills, Plugins, and Connectors live in
+  // the Settings modal; the 'Customize' entry opens General because that is where
+  // the user's name, work profile, and cross-chat instructions are edited.
+  //
+  // The rail itself is defined ONCE in `app-nav-items.ts` and shared with
+  // WebAppShell. This file used to keep its own copy, which drifted (it was
+  // missing Tasks entirely, and hardcoded `isActive: true` for Chat so the
+  // selection was wrong on /chat/[sessionId]). Add or reorder destinations there.
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
-    () => [
-      {
-        id: 'chat-home',
-        label: 'Chat',
-        icon: MessageSquare,
-        onClick: () => router.push('/chat'),
-        isActive: true,
-      },
-      {
-        id: 'code',
-        label: 'Code',
-        icon: TerminalSquare,
-        onClick: () => router.push('/chat/code'),
-        isActive: false,
-      },
-      // Persistent Projects entry (claude.ai parity). The Projects *section* in
-      // the sidebar body only renders once the user has at least one project, so
-      // a zero-project user previously had NO way to reach /projects. This nav
-      // link is always present.
-      {
-        id: 'projects',
-        label: 'Projects',
-        icon: FolderOpen,
-        onClick: () => router.push('/chat/projects'),
-        isActive: false,
-      },
-      // Library — browse generated files without scrolling back to their
-      // origin message (ChatGPT-Library / mobile-LibraryScreen parity).
-      {
-        id: 'library',
-        label: 'Library',
-        icon: LibraryBig,
-        onClick: () => router.push('/chat/library'),
-        isActive: false,
-      },
-      {
-        id: 'schedules',
-        label: 'Schedules',
-        icon: CalendarClock,
-        onClick: () => router.push('/chat/schedules'),
-        isActive: false,
-      },
-      {
-        id: 'customize',
-        label: 'Customize',
-        icon: Settings,
-        onClick: () => openSettings('general'),
-        isActive: false,
-      },
-    ],
-    [openSettings, router],
+    () =>
+      buildAppNavItems({
+        pathname: pathname ?? '/chat',
+        navigate: (href) => router.push(href),
+        onOpenCustomize: () => openSettings('general'),
+        isAdmin: isWorkspaceAdmin,
+      }),
+    [isWorkspaceAdmin, openSettings, pathname, router],
   );
 
   const handleLogout = useCallback(async () => {
@@ -3817,7 +3960,20 @@ export default function WebChatPage() {
     await clerkSignOut({ redirectUrl: '/login' });
   }, [clerkSignOut, logout]);
 
-  const currentTier = subscription?.tier ?? 'free';
+  /**
+   * `?? 'free'` alone is not safe here. `/api/me` answering 401 clears
+   * `subscription` to null while setting `initialized` and recording no error,
+   * so the fallback renders a confident "Free" for whoever is actually signed
+   * in. Observed in the running app: a Max 15x subscriber opened Upgrade and
+   * saw Free marked "Your current plan" beside an "Upgrade to Basic — $7/month"
+   * button — a downgrade presented as an upgrade.
+   *
+   * `billingPolicyReady` already encodes "do we actually know the plan", so the
+   * Free fallback is only applied once the answer is trustworthy. Until then the
+   * tier is undefined and the dialog withholds the current-plan claim rather
+   * than guessing.
+   */
+  const currentTier = subscription?.tier ?? (billingPolicyReady ? 'free' : undefined);
   const {
     displayName,
     userInitial,
@@ -3958,6 +4114,9 @@ export default function WebChatPage() {
       className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
     >
       {/* Dialogs lifted from ChatSidebar to the page level */}
+      {/* Destructive-action confirm (delete conversation / delete project). One
+          instance for the page; `confirmDestructive` fills in the copy. */}
+      {destructiveConfirmDialog}
       <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
       <KeyboardShortcutsDialog
         open={keyboardShortcutsOpen}
@@ -4100,7 +4259,7 @@ export default function WebChatPage() {
                 A dropdown trigger (chevron) exposes Rename / Move to project /
                 Delete; Rename swaps the title for an inline input. */}
             {activeConversationTitle &&
-              activeConversationTitle !== 'New Chat' &&
+              activeConversationTitle !== NEW_CHAT_TITLE &&
               displayedConversationId && (
                 <ConversationTitleMenu
                   title={activeConversationTitle}
@@ -4251,31 +4410,37 @@ export default function WebChatPage() {
                 {/* Provide the manual tool-approval resolver to per-message
                     approval cards (MessageBubble consumes it via context). */}
                 <ToolApprovalProvider value={resolveToolApproval}>
-                  <ChatMessageList
-                    messages={chatMessages}
-                    currentTier={currentTier}
-                    conversationId={displayedConversationId}
-                    isLoading={isLoading && !isStreaming}
-                    isUserTyping={isUserTyping}
-                    onRegenerate={handleRegenerateMessage}
-                    onRetryResearch={handleRetryResearch}
-                    retryingResearchMessageId={retryingResearchMessageId}
-                    onContinue={handleContinueMessage}
-                    onEdit={handleEditMessage}
-                    onDelete={handleDeleteMessage}
-                    onReact={handleReactMessage}
-                    onPin={handlePinMessage}
-                    branchGroupsByMessageId={branchGroupsByMessageId}
-                    branchingMessageId={branchingMessageId}
-                    onBranch={createBranch}
-                    onSwitchBranch={switchBranch}
-                    onRegenerateImage={handleRegenerateImageInPlace}
-                    onResumeVideo={handleResumeVideo}
-                    onRetryVideo={handleRetryVideo}
-                    onSendMessage={setComposerPrefill}
-                    onPaywallUpgrade={handlePaywallRecovery}
-                    onPaywallDismiss={handlePaywallDismiss}
-                  />
+                  {/* CLR-05: lets a user message turn itself into an editor in
+                      place. Same context idiom as ToolApprovalProvider — the
+                      page owns the guards and the replacing resend; the bubble
+                      only owns whether its own editor is open. */}
+                  <MessageInlineEditProvider value={messageInlineEdit}>
+                    <ChatMessageList
+                      messages={chatMessages}
+                      currentTier={currentTier}
+                      conversationId={displayedConversationId}
+                      isLoading={isLoading && !isStreaming}
+                      isUserTyping={isUserTyping}
+                      onRegenerate={handleRegenerateMessage}
+                      onRetryResearch={handleRetryResearch}
+                      retryingResearchMessageId={retryingResearchMessageId}
+                      onContinue={handleContinueMessage}
+                      onEdit={handleEditMessage}
+                      onDelete={handleDeleteMessage}
+                      onReact={handleReactMessage}
+                      onPin={handlePinMessage}
+                      branchGroupsByMessageId={branchGroupsByMessageId}
+                      branchingMessageId={branchingMessageId}
+                      onBranch={createBranch}
+                      onSwitchBranch={switchBranch}
+                      onRegenerateImage={handleRegenerateImageInPlace}
+                      onResumeVideo={handleResumeVideo}
+                      onRetryVideo={handleRetryVideo}
+                      onSendMessage={setComposerPrefill}
+                      onPaywallUpgrade={handlePaywallRecovery}
+                      onPaywallDismiss={handlePaywallDismiss}
+                    />
+                  </MessageInlineEditProvider>
                 </ToolApprovalProvider>
               </div>
 
@@ -4378,6 +4543,7 @@ export default function WebChatPage() {
           }}
           project={projectForSettings}
           onUpdate={(id, updates) => updateProjectInStore(id, updates)}
+          onDuplicated={refreshProjects}
           onDelete={(id) => {
             removeProjectFromStore(id);
             setProjectSettingsId(null);

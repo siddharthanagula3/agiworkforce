@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { X, Code, Layers, Plus } from 'lucide-react';
 import { useArtifactsStore } from '@/features/chat/stores/artifacts-store';
 import type { Artifact } from '@/features/chat/stores/artifacts-store';
+import { useArtifactIndex } from '@/features/chat/hooks/use-artifact-index';
 import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPreview';
 import type { ArtifactData } from '@/features/chat/components/artifacts/ArtifactPreview';
 
@@ -397,7 +398,12 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
         >
           <iframe
             title={`${title} preview`}
-            sandbox="allow-scripts"
+            // A 33%-scaled, aria-hidden, pointer-events-none thumbnail of the
+            // first 1200 characters. It has no reason to execute anything, and
+            // allowing scripts meant every HTML artifact logged a CSP violation
+            // from about:srcdoc — the srcdoc document inherits the page's
+            // script-src, which is 'self' plus a nonce this frame cannot carry.
+            sandbox=""
             srcDoc={`<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#f8f5ee;color:#39362e}*{max-width:100%}</style></head><body>${(content ?? '').slice(0, 1200)}</body></html>`}
             style={{
               pointerEvents: 'none',
@@ -973,7 +979,50 @@ type OverlayState =
   | { kind: 'category' }
   | { kind: 'wizard'; category: ArtifactCategory };
 
-export function GalleryClient() {
+/**
+ * One row in the gallery grid: either a locally-derived artifact (has `content`
+ * and a `local` handle, so it can open in the preview panel) or an index-only
+ * row from another device's conversation (metadata only — opens the source
+ * conversation, which re-derives it).
+ */
+interface GalleryArtifact {
+  id: string;
+  title: string;
+  type: Artifact['type'];
+  language?: string | undefined;
+  content?: string | undefined;
+  createdAt: Date;
+  conversationId?: string | undefined;
+  /** Present only when this device has the artifact derived locally. */
+  local?: Artifact;
+}
+
+export interface GalleryClientProps {
+  /**
+   * Which chrome this instance is mounted inside.
+   *
+   * `marketing` (default) is the public `/gallery` route: Header + MarketingFooter
+   * wrap it and the browser VIEWPORT is the scroll container, so a `100vh` floor
+   * is exactly right.
+   *
+   * `app` is `/chat/artifacts`, which mounts this SAME component inside
+   * `WebAppShell`. There the scroll container is the shell's content area — a
+   * `fixed inset-0` flex child, shorter than the viewport whenever the shell
+   * renders its narrow-viewport header — so a `100vh` floor overflows by the
+   * header's height and leaves a dead scrollable band under the content.
+   * Measured at 700x800: 800px of content in a 752px box.
+   *
+   * Two floors have to give way, not one. The inline `100vh` below is the
+   * obvious one; globals.css also applies
+   * `[data-design='agi']:not(.agi-chrome-band):not(.agi-modal-scope) { min-height: 100vh }`
+   * to this component's own root. Both switch to `100%`, which resolves against
+   * the shell's definite-height scroll box on the root (so `--agi-bg` still
+   * paints the full content area rather than stopping at the last card).
+   */
+  chrome?: 'marketing' | 'app';
+}
+
+export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>('yours');
   const [mounted, setMounted] = useState(false);
@@ -985,11 +1034,49 @@ export function GalleryClient() {
   }, []);
 
   const artifacts = useArtifactsStore((s) => s.artifacts);
+  const { artifacts: indexedArtifacts } = useArtifactIndex();
 
-  const sortedArtifacts = useMemo(
-    () => [...artifacts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
-    [artifacts],
-  );
+  /**
+   * The gallery's set = locally-derived artifacts ⊕ the account-wide index.
+   *
+   * Web derives artifacts from message markdown at render time, so the local
+   * store only covers conversations THIS device has opened. The index
+   * (migration 0120) covers the account. They share the same deterministic ids,
+   * so merging is by identity — no reconciliation.
+   *
+   * Local wins on collision: it carries real `content`, which is what lets a
+   * card render a live thumbnail and open in the preview panel. An index-only
+   * row has no content by design (the index stores none), so it renders as a
+   * card without a thumbnail and opens its source conversation, where it is
+   * re-derived in full.
+   */
+  const sortedArtifacts = useMemo(() => {
+    const byId = new Map<string, GalleryArtifact>();
+    for (const a of indexedArtifacts) {
+      byId.set(a.id, {
+        id: a.id,
+        title: a.title ?? 'Untitled artifact',
+        type: a.type as Artifact['type'],
+        language: a.language ?? undefined,
+        content: undefined,
+        createdAt: new Date(a.createdAt),
+        conversationId: a.conversationId,
+      });
+    }
+    for (const a of artifacts) {
+      byId.set(a.id, {
+        id: a.id,
+        title: a.title,
+        type: a.type,
+        language: a.language,
+        content: a.content,
+        createdAt: a.createdAt,
+        conversationId: a.conversationId,
+        local: a,
+      });
+    }
+    return [...byId.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }, [artifacts, indexedArtifacts]);
 
   const handleCategorySelect = (category: ArtifactCategory) => {
     if (category.id === 'scratch') {
@@ -1011,7 +1098,7 @@ export function GalleryClient() {
   };
 
   return (
-    <div data-design="agi">
+    <div data-design="agi" style={chrome === 'app' ? { minHeight: '100%' } : undefined}>
       {/* Pulse keyframes injected inline once */}
       <style>{`
         @keyframes agi-pulse {
@@ -1022,7 +1109,7 @@ export function GalleryClient() {
 
       <div
         style={{
-          minHeight: '100vh',
+          minHeight: chrome === 'app' ? '100%' : '100vh',
           background: 'var(--agi-bg)',
           color: 'var(--agi-ink)',
         }}
@@ -1197,11 +1284,28 @@ export function GalleryClient() {
                     <ArtifactCard
                       key={artifact.id}
                       title={artifact.title}
-                      language={artifact.language}
+                      // Index rows carry no language for non-code types; fall
+                      // back to the artifact type so the badge still says
+                      // something true rather than rendering empty.
+                      language={artifact.language ?? artifact.type}
                       subtitle={`Created ${relativeTime(artifact.createdAt)}`}
                       type={artifact.type}
                       content={artifact.content}
-                      onClick={() => setSelectedArtifact(artifact)}
+                      onClick={() => {
+                        // Derived locally on this device: open it in the preview
+                        // panel directly, since we hold the content.
+                        if (artifact.local) {
+                          setSelectedArtifact(artifact.local);
+                          return;
+                        }
+                        // Index-only: the content lives in the message that
+                        // produced it, so send the user there. Rendering the
+                        // conversation re-derives the artifact under this same
+                        // id and the panel opens on it.
+                        if (artifact.conversationId) {
+                          router.push(`/chat/${artifact.conversationId}`);
+                        }
+                      }}
                     />
                   ))}
                 </div>
