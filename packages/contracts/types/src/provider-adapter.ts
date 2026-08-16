@@ -23,7 +23,7 @@
  */
 
 import type { Provider } from './provider';
-import type { ModelMetadata, ModelCapabilities } from './model-catalog';
+import type { ModelMetadata, ModelCapabilities, ModelType } from './model-catalog';
 import type { Effort } from './design-system/effort';
 
 // ============================================================================
@@ -525,6 +525,16 @@ export interface ModelInfo {
   id: string;
   name?: string;
   provider: Provider;
+  /**
+   * What kind of model this is — `reasoning`, `image`, `video`, `embedding`…
+   *
+   * Every model in the registry carries one, but the projection in
+   * `getProviderModelCatalog` used to drop it, so every `ModelInfo` reported
+   * `undefined`. Anything asking "does this provider have a usable text model"
+   * silently got the wrong answer rather than a type error, because the field
+   * was absent from the interface too.
+   */
+  modelType?: ModelType;
   contextWindow?: number;
   maxOutputTokens?: number;
   capabilities?: Partial<ModelCapabilities>;
