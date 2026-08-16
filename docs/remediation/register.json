@@ -14653,6 +14653,23 @@
       ],
       "merged_from": [],
       "resolution_note": "[2026-08-16] Raised this session; needs a founder/product call."
+    },
+    {
+      "id": "DPDP-90",
+      "title": "The in-flight web_artifact_index table has no account-erasure classification, so committing its migration will fail the erasure guard",
+      "domain": "compliance/dpdp",
+      "severity": "HIGH",
+      "status": "open",
+      "effort": "S",
+      "evidence": "apps/web/db/neon/0121_artifact_index.sql (untracked, in-flight) creates public.web_artifact_index keyed by user_id, with an RLS policy scoping reads to current_app_user_id(). It is absent from all three partitions in apps/web/lib/server/account-erasure.ts, so `account-erasure.test.ts > classifies every user-scoped table in the schema` fails with [ 'web_artifact_index' ]. The guard exists because that list had once fallen 26 tables behind the schema while erasure still reported complete: true.",
+      "fix": "Add { table: 'web_artifact_index', column: 'user_id' } to USER_SCOPED_TABLES IN THE SAME COMMIT as the migration. It cannot land earlier: the same test also fails a table that is classified but absent from the schema, so the entry breaks CI until 0121 is committed. Erasure itself tolerates the ordering either way — a missing table is reported skipped, not failed.",
+      "sources": ["apps/web/lib/server/account-erasure.test.ts"],
+      "code_refs": [
+        "apps/web/db/neon/0121_artifact_index.sql:42",
+        "apps/web/lib/server/account-erasure.ts:53"
+      ],
+      "merged_from": [],
+      "resolution_note": "[2026-08-16] Raised this session. Verified both directions on a clean checkout: the entry alone fails CI, the migration alone fails locally. They must land together."
     }
   ],
   "waves": [
