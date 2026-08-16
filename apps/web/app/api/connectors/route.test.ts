@@ -245,11 +245,31 @@ describe('/api/connectors managed-cloud capability boundary', () => {
   });
 
   it('answers an unbuilt connector honestly instead of pretending it saved', async () => {
-    // airtable with nothing configured: not operator-mapped, no OAuth app.
-    const response = await POST(postRequest('airtable'));
+    // trello: no remote MCP endpoint, not operator-mapped, no OAuth app. This
+    // used to be airtable, but 2f4cebaf4 gave airtable a self-service MCP
+    // endpoint, so it now takes the authorization branch below rather than
+    // this one — see the next test.
+    const response = await POST(postRequest('trello'));
 
     expect(response.status).toBe(501);
-    await expect(response.json()).resolves.toMatchObject({ connectorId: 'airtable' });
+    await expect(response.json()).resolves.toMatchObject({ connectorId: 'trello' });
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('insert into user_connectors')),
+    ).toBe(false);
+  });
+
+  it('sends a self-service MCP connector to authorization rather than saving a row', async () => {
+    // airtable has a remote MCP endpoint with `clientRegistration: 'cimd'`, so
+    // it connects by running the authorization flow, not by flipping a row.
+    // The honest answer is 409 + where to send the user — and, exactly as for
+    // the unbuilt case above, still no insert.
+    const response = await POST(postRequest('airtable'));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      connectorId: 'airtable',
+      oauthStartPath: expect.stringContaining('connectorId=airtable'),
+    });
     expect(
       mocks.query.mock.calls.some(([sql]) => String(sql).includes('insert into user_connectors')),
     ).toBe(false);
