@@ -1,0 +1,128 @@
+# Third-Party Licenses
+
+This file documents source code in this proprietary repository that was
+ported from third-party open-source projects, along with the upstream license
+that travels with that code.
+
+## OpenClaw
+
+- **Upstream**: [openclaw/openclaw](https://github.com/openclaw/openclaw)
+- **License**: MIT
+- **Copyright**: © 2025 Peter Steinberger
+- **Imported into**: `packages/ai/provider-protocol/src/`
+- **Files derived from OpenClaw**:
+  - `packages/ai/provider-protocol/src/openai-responses-payload-policy.ts`
+    ← `src/agents/openai-responses-payload-policy.ts`
+  - `packages/ai/provider-protocol/src/openai-reasoning-effort.ts`
+    ← `src/agents/openai-reasoning-effort.ts`
+  - `packages/ai/provider-protocol/src/system-prompt-cache-boundary.ts`
+    ← `src/agents/system-prompt-cache-boundary.ts`
+  - `packages/ai/provider-protocol/src/anthropic-payload-policy.ts`
+    ← `src/agents/anthropic-payload-policy.ts` (Sprint 2)
+  - `packages/ai/provider-protocol/src/openai-completions-compat.ts`
+    ← `src/agents/openai-completions-compat.ts` (Sprint 2)
+  - `packages/ai/provider-protocol/src/provider-attribution.ts`
+    ← simplified port of `src/agents/provider-attribution.ts` (Sprint 2 — stripped plugin-manifest scanning, kept pure capability resolution)
+  - `packages/ai/provider-protocol/src/lib/prompt-cache-stability.ts`
+    ← `src/agents/prompt-cache-stability.ts`
+  - `packages/ai/provider-protocol/src/lib/string-utils.ts`
+    ← subset of `src/shared/string-coerce.ts`
+  - `packages/ai/provider-protocol/src/openai-tool-schema.ts`
+    ← `src/agents/openai-tool-schema.ts` (Sprint 3 — drops the strict-tool-setting re-export which depends on provider-attribution-via-plugin-runtime)
+  - `packages/ai/provider-protocol/src/tool-parameter-schema.ts`
+    ← simplified port of `src/agents/pi-tools-parameter-schema.ts` (Sprint 3 — replaces ModelCompatConfig sourcing with explicit `unsupportedKeywords` arg)
+  - `packages/ai/provider-protocol/src/lib/clean-for-gemini.ts`
+    ← `src/agents/schema/clean-for-gemini.ts` (Sprint 3 — TypeBox return type replaced with `unknown`)
+  - `packages/contracts/types/src/provider-adapter.ts`
+    ← interface shape adapted from `packages/plugin-sdk/src/provider-entry.ts` (`ProviderPlugin` type) (Sprint 2)
+  - `packages/tools/mcp/src/types.ts`
+    ← shape mirrors `src/config/types.mcp.ts` and `src/agents/pi-bundle-mcp-types.ts` (Sprint 4a — code is freshly written, only the config/catalog shapes are aligned for ecosystem compat; not a literal port)
+  - `packages/tools/skills/src/types.ts`, `loader.ts`, `merge.ts`, `format.ts`
+    ← skill format and precedence rules mirror OpenClaw's `src/agents/skills/*` (Sprint 4a — code is freshly written; the markdown+YAML-frontmatter file format and the 6-tier precedence order are the ecosystem-compatibility surface, not OpenClaw-licensed material)
+  - `packages/ai/provider-protocol/src/anthropic-tool-payload-compat.ts`
+    ← `src/agents/pi-embedded-runner/anthropic-family-tool-payload-compat.ts` (Tier-1D — generic `StreamFn` type replaces the `@mariozechner/pi-agent-core` dependency so adapters don't need to inherit pi-agent-core types)
+  - `packages/tools/apply-patch/src/parse.ts`, `apply-update.ts`, `types.ts`, `index.ts`
+    ← `src/agents/apply-patch.ts` + `apply-patch-update.ts` (deferred-completion pass — minimal `FSBridge` interface (5 methods: readFile/writeFile/remove/mkdirp/exists) replaces OpenClaw's sandbox-aware `SandboxFsBridge` + `boundary-file-read` + `fs-safe` stack; default `nodeFSBridge()` provided for real disk)
+- **Adaptations**:
+  - Stripped OpenClaw plugin-sdk imports; helpers are pure functions
+  - Renamed boundary marker constant (`OPENCLAW_CACHE_BOUNDARY` → `AGIWORKFORCE_CACHE_BOUNDARY`)
+  - Adjusted import paths to the new package layout
+  - Adopted single-quote / TS strict-mode style consistent with this repo
+
+### MIT License (OpenClaw)
+
+```
+MIT License
+
+Copyright (c) 2025 Peter Steinberger
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## SkillSpector
+
+- **Upstream**: [NVIDIA/skillspector](https://github.com/NVIDIA/skillspector)
+- **License**: Apache-2.0
+- **Copyright**: © NVIDIA Corporation
+- **Imported into**: `tools/skill-vetting/`
+- **Adoption**: Vendored the runnable scanner package (`src/skillspector/**`, 57 modules + YARA rules) plus `pyproject.toml`. Upstream `LICENSE` and `THIRD_PARTY_NOTICES.md` are preserved verbatim at `tools/skill-vetting/LICENSE` and `tools/skill-vetting/THIRD_PARTY_NOTICES.md`.
+- **Local changes**: trimmed upstream `tests/`, `docs/`, `Dockerfile`, `extensions/`, `uv.lock` (kept only the two sample fixtures under `samples/`); added our `README.md` and `verify.sh`; rewrote `model_registry.yaml` to AGI catalog model IDs sourced from `packages/contracts/types/src/models.json`. No upstream source files were modified.
+
+## PptxGenJS
+
+- **Upstream**: [gitbrent/PptxGenJS](https://github.com/gitbrent/PptxGenJS)
+- **License**: MIT
+- **Copyright**: Copyright (c) 2015-2022 Brent Ely
+- **Used by**: `apps/web/lib/services/managed-office-file-service.ts`
+- **Adoption**: Runtime dependency only; no upstream source was copied or adapted into this repository. The package generates editable Managed Cloud `.pptx` files on the server.
+- **Notice**: The complete MIT license is distributed in the installed `pptxgenjs` package.
+
+## Porting policy
+
+`scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:
+every `## Heading` that declares a `**License**:` line is validated against the
+allowed-license set, and its `**Upstream**:` is checked against the study-only
+denylist. Add a port block here before merging any adapted third-party code.
+
+### Approved donor repositories (porting allowlist)
+
+| Repository   | License           | Use                                                 |
+| ------------ | ----------------- | --------------------------------------------------- |
+| codex-rs     | Apache-2.0        | Runtime: tool trait, compaction, exec-policy wiring |
+| continue     | Apache-2.0        | VS Code surface: IDE host, autocomplete, lazy-apply |
+| opencode     | MIT               | Agent patterns                                      |
+| odysseus     | MIT               | Workspace patterns (provider detect, tool parsing)  |
+| SkillSpector | Apache-2.0        | Skill/plugin/MCP pre-install vetting                |
+| gemini-cli   | Apache-2.0        | Compaction prompt, sandbox profiles                 |
+| supermemory  | MIT (schema only) | Memory data model                                   |
+| LMCache      | Apache-2.0        | Managed-cloud KV-cache (service)                    |
+| liteparse    | Apache-2.0        | On-device document parsing                          |
+| VoxCPM       | Apache-2.0        | Text-to-speech                                      |
+| supervision  | MIT               | Vision utilities (pair with a permissive VLM)       |
+
+### Study-only / forbidden (never ported)
+
+| Source              | Reason                                 |
+| ------------------- | -------------------------------------- |
+| claude-code         | Anthropic proprietary — no license     |
+| crush               | FSL-1.1 — competing-use ban            |
+| auto-code-rover     | SONAR source-available — competing-use |
+| Devon               | AGPL-3.0 — copyleft                    |
+| Ultralytics YOLO    | AGPL-3.0 — use a permissive detector   |
+| init, chat-template | No license — all rights reserved       |

@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker/modelConstants';
 import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
@@ -20,6 +19,19 @@ export function getNonce(): string {
   return randomBytes(24).toString('base64url');
 }
 
+/**
+ * COLOUR POLICY — geometry and the terra brand accent are AGI-owned; surfaces,
+ * text, controls, focus, and state colours follow the host theme. The sidebar
+ * sits directly above native History, Context, and Memory views, so pinning the
+ * webview dark in a light or high-contrast host makes one product look like two
+ * unrelated extensions. `agiVsCodeCssVars` remains the fallback for hosts that
+ * omit a VS Code colour token.
+ *
+ * Stateful foreground/background pairs must still come from the same family.
+ * Warning, error, diff, button, and focus colours therefore use matching host
+ * tokens with complete AGI fallbacks rather than mixing a host background with
+ * a fixed-palette foreground.
+ */
 export function getWebviewContent(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,

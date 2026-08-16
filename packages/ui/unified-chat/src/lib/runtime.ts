@@ -310,6 +310,7 @@ type StreamEventPayload =
       type: 'done';
       finishReason?: string;
       streamError?: { message: string; code?: string; retryable?: boolean };
+      usage?: CloudMessageProjection['usage'];
     }
   | {
       type: 'error';

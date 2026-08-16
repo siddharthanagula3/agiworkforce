@@ -1,4 +1,3 @@
-
 import type {
   ChatRuntime,
   CloudApprovalTurnProjection,
@@ -307,6 +306,7 @@ export class WebRuntime implements ChatRuntime {
             type: 'done',
             ...(finishReason ? { finishReason } : {}),
             ...(streamError ? { streamError } : {}),
+            ...(projection.usage ? { usage: projection.usage } : {}),
           });
         },
         (err: Error) => {
@@ -454,6 +454,7 @@ export class WebRuntime implements ChatRuntime {
           type: 'done',
           ...(outcome.finishReason ? { finishReason: outcome.finishReason } : {}),
           ...(outcome.streamError ? { streamError: outcome.streamError } : {}),
+          ...(outcome.messageProjection?.usage ? { usage: outcome.messageProjection.usage } : {}),
         });
       }
     } finally {
@@ -485,6 +486,14 @@ export class WebRuntime implements ChatRuntime {
 
   async deleteConversation(conversationId: string): Promise<void> {
     await deleteCloudConversation(conversationId);
+  }
+
+  async deleteMessages(conversationId: string, messageIds: string[]): Promise<void> {
+    if (messageIds.length === 0) return;
+    const persistence = createCloudChatPersistenceClient();
+    for (const messageId of messageIds) {
+      await persistence.deleteMessage(conversationId, messageId);
+    }
   }
 
   async renameConversation(conversationId: string, title: string): Promise<void> {

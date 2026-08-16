@@ -15,7 +15,7 @@ const RULES = [
   { name: 'hsla-literal', re: /hsla?\s*\(/ },
   {
     name: 'named-color-prop',
-    re: /(?:^|;|\{)\s*(?:color|background(?:-color)?|border(?:-\w+)?-color|outline(?:-color)?|box-shadow|text-decoration-color|caret-color|fill|stroke)\s*:\s*(?!var\()(?!transparent)(?!inherit)(?!initial)(?!currentColor)(?!none)[a-z]{3,}/,
+    re: /(?:^|;|\{)\s*(?:color|background(?:-color)?|border(?:-\w+)?-color|outline(?:-color)?|box-shadow|text-decoration-color|caret-color|fill|stroke)\s*:\s*(?!var\()(?!color-mix\()(?!light-dark\()(?!transparent)(?!inherit)(?!initial)(?!currentColor)(?!none)[a-z]{3,}/,
   },
 ];
 
