@@ -25,18 +25,23 @@ describe('/apps navigation', () => {
     replace.mockClear();
   });
 
-  it('sends a signed-out visitor to sign-in with /apps as the return path', () => {
+  it('offers sign-in with /apps as the return path, rather than performing it', () => {
+    // /apps is indexed at sitemap priority 0.9. It used to render null and
+    // replace the location, so a visitor arriving from a marketing CTA saw a
+    // blank frame and a redirect that never said what the page was.
     useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
 
     render(<AppsPage />);
 
-    expect(replace).toHaveBeenCalledWith('/login?redirectTo=%2Fapps');
+    const signIn = screen.getByRole('link', { name: /sign in to browse apps/i });
+    expect(signIn).toHaveAttribute('href', '/login?redirectTo=%2Fapps');
+    expect(replace).not.toHaveBeenCalled();
   });
 
-  it('never bounces a signed-out visitor back to the page whose CTA sent them here', () => {
+  it('never sends a signed-out visitor back to the page whose CTA sent them here', () => {
     useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
 
-    render(<AppsPage />);
+    const { container } = render(<AppsPage />);
 
     const integrationsSource = readFileSync(
       join(__dirname, '..', 'integrations', 'page.tsx'),
@@ -46,6 +51,9 @@ describe('/apps navigation', () => {
 
     for (const call of replace.mock.calls) {
       expect(String(call[0]).startsWith('/integrations')).toBe(false);
+    }
+    for (const link of container.querySelectorAll('a')) {
+      expect(link.getAttribute('href')?.startsWith('/integrations')).toBeFalsy();
     }
   });
 
