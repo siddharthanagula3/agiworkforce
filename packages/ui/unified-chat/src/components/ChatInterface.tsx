@@ -457,6 +457,7 @@ export function ChatInterface({
     stopGeneration,
     continueGeneration,
     regenerate,
+    editAndResend,
     resolveToolApproval,
     isStreaming,
     isApprovalTurnLive,
@@ -895,6 +896,10 @@ export function ChatInterface({
               // turn and a stale answer behind on reload, so the affordance is
               // omitted rather than faked.
               onRegenerateMessage={runtime?.deleteMessages ? regenerate : undefined}
+              // Editing is edit-and-resend, so it needs the same durable
+              // delete Regenerate does — see `editAndResend`. Without it the
+              // Edit control is not rendered at all.
+              onEditMessage={runtime?.deleteMessages ? editAndResend : undefined}
               onToolApprove={runtime?.resolveToolApproval ? handleToolApprove : undefined}
               onToolReject={runtime?.resolveToolApproval ? handleToolReject : undefined}
               approvalTurnExpired={runtime?.resolveToolApproval ? !isApprovalTurnLive : undefined}

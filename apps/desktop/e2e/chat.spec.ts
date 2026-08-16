@@ -214,21 +214,16 @@ test.describe('Chat Workflow', () => {
     await expect(stopButton).toBeHidden({ timeout: 30000 });
   });
 
-  // DESK-202. This is a specification, not a regression guard: none of what it
-  // drives has ever been built. `data-testid="message-item"`, the per-message
-  // edit control, and `textarea[data-editing="true"]` have zero occurrences in
-  // `apps/desktop/src`. The store half exists and is stranded —
-  // `chatStore.editMessage` is defined and re-exported through
-  // `unifiedChatStore`, and nothing calls either. Wiring an editor UI to that
-  // action is what closes this; deleting the test would erase the only written
-  // record of the intent, and inventing a UI to satisfy it would be guessing at
-  // a design nobody specified.
-  test.fixme('should edit a message', async ({ page }) => {
-    const messageItem = page.getByTestId('message-item').last();
-    await expect(messageItem, 'No messages available to edit').toBeVisible();
+  // Addressed by role: only USER turns are editable, and `.last()` over every
+  // message would land on the assistant reply, where no edit control exists by
+  // design (rewriting a reply would let the transcript claim the model said
+  // something it never said).
+  test('should edit a message', async ({ page }) => {
+    const messageItem = page.locator('[data-testid="message-item"][data-role="user"]').last();
+    await expect(messageItem, 'No user message available to edit').toBeVisible();
 
     await messageItem.hover();
-    const editButton = messageItem.getByRole('button', { name: /edit/i });
+    const editButton = messageItem.getByRole('button', { name: /edit message/i });
     await expect(editButton, 'Edit button not present').toBeVisible();
 
     await editButton.click();
@@ -237,10 +232,14 @@ test.describe('Chat Workflow', () => {
     await editInput.clear();
     await editInput.fill('Edited message content');
 
-    const saveButton = page.getByRole('button', { name: /save/i });
-    await saveButton.click();
+    await page.getByRole('button', { name: /^save$/i }).click();
 
-    await expect(messageItem).toContainText('Edited message content');
+    // Editing is edit-and-RESEND: the old exchange is deleted and the turn
+    // re-runs, so the assertion is on the feed rather than on the original
+    // element, which no longer exists.
+    await expect(
+      page.locator('[data-testid="message-item"][data-role="user"]').last(),
+    ).toContainText('Edited message content');
   });
 
   // DESK-202. Also unbuilt: there is no stats affordance and no

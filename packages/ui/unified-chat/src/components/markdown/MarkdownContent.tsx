@@ -49,7 +49,7 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
           variant="ghost"
           size="sm"
           onClick={handleCopy}
-          className="h-7 gap-1.5 px-2 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+          className="h-7 gap-1.5 px-2 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
           aria-label={copied ? 'Code copied' : 'Copy code'}
         >
           {copied ? (
