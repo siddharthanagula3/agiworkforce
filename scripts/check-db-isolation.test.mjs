@@ -361,3 +361,41 @@ test('pass 3 stays quiet when there is no TypeScript surface to scan at all', ()
   const result = runOnSandbox({ [`${NEON}/0001_shares.sql`]: SHARES_MIGRATION });
   assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
 });
+
+test('a comment mentioning a scope token cannot satisfy the owner check', () => {
+  // Regression: resolvesToScope scanned 600 raw characters after a declaration
+  // for tokens like user_id, comments included, so prose near a statement was
+  // enough to silence an RLS-bypass finding. waitlistService.ts passed for
+  // exactly that reason until an unrelated edit moved the comment out of range.
+  const result = runOnSandbox({
+    [`${NEON}/0001_shares.sql`]: SHARES_MIGRATION,
+    'apps/web/lib/shares.ts': [
+      "import { getNeonDb } from './db';",
+      '// Historical note: the retired RPC took (p_user_id text, p_code text)',
+      '// and resolved the caller from user_id before the adapter landed.',
+      'export async function listShares() {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from shared_sessions order by created_at desc`);',
+      '}',
+    ].join('\n'),
+  });
+
+  assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}${result.stderr}`);
+  assert.match(result.stderr, /shared_sessions/);
+  assert.match(result.stderr, /no owner constraint/);
+});
+
+test('a real owner constraint in code still satisfies the owner check', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_shares.sql`]: SHARES_MIGRATION,
+    'apps/web/lib/shares.ts': [
+      "import { getNeonDb } from './db';",
+      'export async function listShares(userId) {',
+      '  const db = getNeonDb();',
+      '  return db.query(`select id from shared_sessions where user_id = $1`, [userId]);',
+      '}',
+    ].join('\n'),
+  });
+
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stdout}${result.stderr}`);
+});

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { stripComments } from './lib/module-graph.mjs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -112,6 +113,14 @@ const ALLOWLIST = [
   { match: /api\/health/, reason: 'health probe touches no user data' },
   { match: /api\/releases/, reason: 'release metadata is global, not user-owned' },
   { match: /api\/waitlist/, reason: 'waitlist rows are pre-account' },
+  {
+    match: /lib\/services\/waitlistService\.ts$/,
+    tables: ['cloud_managed_waitlist', 'waitlist'],
+    reason:
+      'the same pre-account rows the api/waitlist entry retires, reached through the service ' +
+      'rather than the route: a waitlist row is an email captured before any account exists, ' +
+      'so there is no owner to constrain by',
+  },
   {
     match: /lib\/server\/account-erasure\.ts$/,
     tables: ['media_assets'],
@@ -448,8 +457,13 @@ function tablesIn(sql) {
   return [...found];
 }
 
-function resolvesToScope(source, name, depth) {
+// Comments are stripped before the scope-token scan. The window below is 600
+// raw characters after a declaration, so a doc comment that merely MENTIONS
+// user_id was enough to convince this check the statement was owner-scoped.
+// waitlistService.ts passed for exactly that reason until the prose moved.
+function resolvesToScope(rawSource, name, depth) {
   if (depth < 0) return false;
+  const source = stripComments(rawSource);
   const decl = new RegExp(`(?:const|let|var)\\s+${name}\\b[\\s\\S]{0,600}`, 'g');
   const blocks = source.match(decl);
   if (!blocks) return false;
