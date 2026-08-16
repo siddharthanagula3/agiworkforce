@@ -1,11 +1,16 @@
-
 import type { BrowserContext, Page, Route } from '@playwright/test';
 
 export const MOCK_LLM_RESPONSE = 'Mock response for E2E testing.';
 
+export const MOCK_LLM_USAGE = {
+  prompt_tokens: 128,
+  completion_tokens: 64,
+  total_tokens: 192,
+} as const;
+
 function buildAnthropicSSEBody(text: string): string {
   const lines: string[] = [
-    `data: ${JSON.stringify({ type: 'message_start', message: { id: 'mock-msg-e2e', type: 'message', role: 'assistant', content: [], model: 'fixture-stream-model', usage: { input_tokens: 5, output_tokens: 10 } } })}`,
+    `data: ${JSON.stringify({ type: 'message_start', message: { id: 'mock-msg-e2e', type: 'message', role: 'assistant', content: [], model: 'fixture-stream-model', usage: { input_tokens: MOCK_LLM_USAGE.prompt_tokens, output_tokens: 0 } } })}`,
     '',
     `data: ${JSON.stringify({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })}`,
     '',
@@ -13,7 +18,7 @@ function buildAnthropicSSEBody(text: string): string {
     '',
     `data: ${JSON.stringify({ type: 'content_block_stop', index: 0 })}`,
     '',
-    `data: ${JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 10 } })}`,
+    `data: ${JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: MOCK_LLM_USAGE.completion_tokens } })}`,
     '',
     `data: ${JSON.stringify({ type: 'message_stop' })}`,
     '',
@@ -35,6 +40,7 @@ function buildOpenAISSEBody(text: string): string {
     created: Math.floor(Date.now() / 1000),
     model: 'fixture-stream-model',
     choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+    usage: MOCK_LLM_USAGE,
   });
   return `data: ${chunk}\n\ndata: ${done}\n\ndata: [DONE]\n\n`;
 }
@@ -52,7 +58,7 @@ function buildOpenAIJSONBody(text: string): string {
         finish_reason: 'stop',
       },
     ],
-    usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
+    usage: MOCK_LLM_USAGE,
   });
 }
 
@@ -99,7 +105,11 @@ const LLM_ROUTE_ENTRIES: Array<{
             index: 0,
           },
         ],
-        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10, totalTokenCount: 15 },
+        usageMetadata: {
+          promptTokenCount: MOCK_LLM_USAGE.prompt_tokens,
+          candidatesTokenCount: MOCK_LLM_USAGE.completion_tokens,
+          totalTokenCount: MOCK_LLM_USAGE.total_tokens,
+        },
       }),
   },
   {
@@ -114,7 +124,11 @@ const LLM_ROUTE_ENTRIES: Array<{
             index: 0,
           },
         ],
-        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10, totalTokenCount: 15 },
+        usageMetadata: {
+          promptTokenCount: MOCK_LLM_USAGE.prompt_tokens,
+          candidatesTokenCount: MOCK_LLM_USAGE.completion_tokens,
+          totalTokenCount: MOCK_LLM_USAGE.total_tokens,
+        },
       });
       return `data: ${event}\n\n`;
     },
