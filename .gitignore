@@ -266,3 +266,8 @@ _archive/
 # here; these accumulate from local UI debugging. Generalizes the earlier
 # one-off /qa-inchat*.png entries above.
 /*.png
+
+# Python bytecode from the skill-vetting test run. Untracked either way, but
+# the model-id guard walks the working tree and cannot decode a .pyc.
+__pycache__/
+*.pyc
