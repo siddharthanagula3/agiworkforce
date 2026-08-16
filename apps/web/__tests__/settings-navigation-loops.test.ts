@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -136,13 +135,20 @@ describe('CRIT-008 route graph', () => {
     expect(cycles).toEqual([]);
   });
 
-  it('sends a signed-out visitor from /apps to sign-in, not back to /integrations', () => {
+  it('offers a signed-out /apps visitor sign-in, and never routes them back to /integrations', () => {
     const integrations = readFileSync(join(APP_DIR, 'integrations', 'page.tsx'), 'utf8');
     expect(integrations).toContain('href="/apps"');
 
+    // /apps no longer forces navigation at all: it renders an explanation with
+    // a sign-in link, so it contributes no redirect edge. The loop this guards
+    // against is a forced one, so the graph stays redirect-only — the offer is
+    // asserted directly instead.
     const appsTargets = edges.get('/apps') ?? new Set<string>();
-    expect([...appsTargets]).toContain('/login');
     expect([...appsTargets]).not.toContain('/integrations');
+
+    const appsSource = readFileSync(join(APP_DIR, 'apps', 'page.tsx'), 'utf8');
+    expect(appsSource).toContain('/login?redirectTo=%2Fapps');
+    expect(appsSource).not.toMatch(/router\.(replace|push)\(/u);
   });
 });
 
