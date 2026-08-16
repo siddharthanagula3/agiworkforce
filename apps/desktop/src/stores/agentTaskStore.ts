@@ -981,7 +981,13 @@ function mergeNativeTaskSnapshot(
   snapshot: NativeTaskSnapshot,
   recoveredAt: string,
 ): AgentTask {
-  const lastResult = snapshot.context?.tool_results.at(-1);
+  // `?.` on `context` but not on `tool_results`: the type declares the array
+  // required, but this value crosses the Rust IPC boundary, so that is a claim
+  // rather than a guarantee. A context that arrives without the array threw
+  // "Cannot read properties of undefined (reading 'at')" out of pauseTask and
+  // resumeTask, which caught it and surfaced a generic failure toast — so a
+  // paused task looked like a failed one.
+  const lastResult = snapshot.context?.tool_results?.at(-1);
   return {
     ...task,
     status: snapshot.state,

@@ -176,6 +176,12 @@ vi.mock('../lib/tauri-mock', async () => {
     isTauri: false,
     isCloudWeb: false,
     isDesktopUiDevLocal: false,
+    // tauri-mock re-exports this from runtimeEnvironment. Omitting it from the
+    // factory does not fall back to the real module — Vitest throws
+    // `No "isElectronHost" export is defined on the "../lib/tauri-mock" mock`
+    // the first time an importer reads it, which took out whole render suites
+    // at the error boundary rather than failing one assertion.
+    isElectronHost: false,
     supportsLocalAppMode: false,
     isTauriContext: () => false,
     listen: vi.fn().mockResolvedValue(() => {}),

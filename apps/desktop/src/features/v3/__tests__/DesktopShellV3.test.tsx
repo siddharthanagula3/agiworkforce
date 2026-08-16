@@ -56,6 +56,9 @@ vi.mock('../../../lib/tauri-mock', () => ({
   isTauri: true,
   isCloudWeb: false,
   isDesktopUiDevLocal: false,
+  // tauri-mock re-exports isElectronHost from runtimeEnvironment; a factory
+  // that omits it makes Vitest throw on first read rather than fall through.
+  isElectronHost: false,
   supportsLocalAppMode: true,
   isTauriContext: () => true,
   listen: nativeHandoffMock.listen,
@@ -147,7 +150,14 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     setDraftContent: unifiedChatMock.setDraftContent,
     appendDraftContent: unifiedChatMock.appendDraftContent,
   };
-  const modelStoreState = { models: [] };
+  // `getSelectedModel` is part of the real store's contract (modelStore.ts) and
+  // DesktopShellV3 calls it during render, so a stub without it throws
+  // "state.getSelectedModel is not a function" before anything is asserted.
+  const modelStoreState = {
+    models: [] as Array<Record<string, unknown>>,
+    selectedModelId: '',
+    getSelectedModel: () => undefined,
+  };
   const useChatStore = (selector: (state: typeof sharedStoreState) => unknown) =>
     selector(sharedStoreState);
   const useChatModelStore = (selector: (state: typeof modelStoreState) => unknown) =>
@@ -724,7 +734,10 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(picker.activeProjectId).toBeNull();
     expect(props?.['canUseAgiWork']).toBe(false);
     expect(props?.['agiWorkUnavailableReason']).toBe(
-      'Choose a model with verified agentic capability to use AGI Work. Project chat still works.',
+      // Reworded in 1e858a7f1 (lib/modelCapabilityGates.ts) without updating
+      // this assertion — the same commit that left the VS Code extension mocks
+      // and the webview snapshots stale.
+      'Choose a model verified for agentic planning and tool execution. Project chat still works.',
     );
   });
 
