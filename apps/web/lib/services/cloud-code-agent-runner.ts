@@ -5,6 +5,7 @@ import { routeExecutionTool } from '@/lib/e2b/execution-tools';
 import type { CloudCodeToolOutcome, CloudCodeToolRunner } from './cloud-code-agent-loop';
 
 const MAX_READ_BYTES = 200_000;
+const LIST_FILES_LIMIT = 500;
 
 function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
@@ -63,17 +64,24 @@ export function createCloudCodeToolRunner(
           isError: true,
         };
       }
-      if (!executor.runCommand) {
+      if (!executor.listFiles) {
         return { output: 'This sandbox cannot list files.', isError: true };
       }
       try {
-        const result = await executor.runCommand({
-          command: `ls -A1 ${JSON.stringify(relative)} | head -500`,
-          cwd: workspacePath,
-          timeoutMs: 30_000,
-        });
-        const output = result.stdout || result.stderr;
-        return { output: output || '(empty)', isError: result.exitCode !== 0 };
+        // This used to build `ls -A1 ${JSON.stringify(relative)}` and hand it
+        // to a real shell. Double quotes do not stop a POSIX shell expanding
+        // $(…), backticks or ${…}, and normalizeWorkspacePath screens neither,
+        // so a listing path could run commands. The sandbox exposes a
+        // structured listing that involves no shell at all.
+        const entries = await executor.listFiles(inWorkspace(relative));
+        if (entries === null) {
+          return { output: `Could not list "${relative}".`, isError: true };
+        }
+        const output = entries
+          .slice(0, LIST_FILES_LIMIT)
+          .map((entry) => (entry.isDir ? `${entry.name}/` : entry.name))
+          .join('\n');
+        return { output: output || '(empty)', isError: false };
       } catch (error) {
         return {
           output: error instanceof Error ? error.message : String(error),
