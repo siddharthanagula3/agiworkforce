@@ -54,6 +54,142 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
     const q = norm(sql);
     const p = params;
 
+    // ---------------------------------------------------------------------
+    // Batched membership statements. These sit ahead of their single-row
+    // counterparts because several share a prefix; each is keyed on the array
+    // parameter that distinguishes it.
+    // ---------------------------------------------------------------------
+
+    if (q.includes('from scim_provisioned_users') && q.includes('id = any(')) {
+      const ids = (p[0] as string[]) ?? [];
+      const matched = state.scim_provisioned_users.filter(
+        (row) =>
+          ids.includes(String(row['id'])) &&
+          row['connection_id'] === p[1] &&
+          row['organization_id'] === p[2],
+      );
+      return q.startsWith('select id from')
+        ? matched.map((row) => ({ id: row['id'] }))
+        : matched.map((row) => ({ ...row }));
+    }
+
+    if (q.startsWith('insert into scim_group_members') && q.includes('unnest(')) {
+      for (const scimUserId of (p[1] as string[]) ?? []) {
+        const exists = state.scim_group_members.some(
+          (row) => row['group_id'] === p[0] && row['scim_user_id'] === scimUserId,
+        );
+        if (exists) continue;
+        state.scim_group_members.push({
+          group_id: p[0],
+          scim_user_id: scimUserId,
+          organization_id: p[2],
+          created_at: now(),
+        });
+      }
+      return [];
+    }
+
+    if (q.startsWith('delete from scim_group_members') && q.includes('scim_user_id = any(')) {
+      const ids = (p[2] as string[]) ?? [];
+      state.scim_group_members = state.scim_group_members.filter(
+        (row) =>
+          !(
+            row['group_id'] === p[0] &&
+            row['organization_id'] === p[1] &&
+            ids.includes(String(row['scim_user_id']))
+          ),
+      );
+      return [];
+    }
+
+    if (q.includes('from profiles') && q.includes('lower(email) = any(')) {
+      const wanted = new Set(((p[0] as string[]) ?? []).map((email) => email.toLowerCase()));
+      return state.profiles
+        .filter((row) => wanted.has(String(row['email'] ?? '').toLowerCase()))
+        .map((row) => ({ id: row['id'], email: String(row['email'] ?? '').toLowerCase() }));
+    }
+
+    if (q.startsWith('update scim_provisioned_users as target') && q.includes('linked_user_id')) {
+      const ids = (p[0] as string[]) ?? [];
+      const linked = (p[1] as string[]) ?? [];
+      ids.forEach((id, index) => {
+        const row = state.scim_provisioned_users.find(
+          (entry) => entry['id'] === id && entry['organization_id'] === p[2],
+        );
+        if (!row) return;
+        row['linked_user_id'] = linked[index] ?? null;
+        row['linked_at'] = now();
+      });
+      return [];
+    }
+
+    if (
+      q.includes('from scim_group_members m') &&
+      q.includes('scim_groups g') &&
+      q.includes('any(')
+    ) {
+      const ids = (p[0] as string[]) ?? [];
+      const edges = state.scim_group_members.filter(
+        (row) => ids.includes(String(row['scim_user_id'])) && row['organization_id'] === p[1],
+      );
+      return edges.flatMap((edge) => {
+        const group = state.scim_groups.find((entry) => entry['id'] === edge['group_id']);
+        if (!group || group['connection_id'] !== p[2]) return [];
+        return [{ scim_user_id: edge['scim_user_id'], mapped_role: group['mapped_role'] }];
+      });
+    }
+
+    if (q.startsWith('delete from organization_members') && q.includes('user_id = any(')) {
+      const ids = (p[1] as string[]) ?? [];
+      const before = state.organization_members.length;
+      state.organization_members = state.organization_members.filter(
+        (row) =>
+          !(
+            row['organization_id'] === p[0] &&
+            ids.includes(String(row['user_id'])) &&
+            row['role'] !== 'owner'
+          ),
+      );
+      return new Array(before - state.organization_members.length).fill({}) as FakeRow[];
+    }
+
+    if (q.startsWith('insert into organization_members') && q.includes('unnest(')) {
+      const organizationId = p[0] as string;
+      const userIds = (p[1] as string[]) ?? [];
+      // The role-bearing form binds roles in $3; the other inserts a literal
+      // 'member' and must leave a manually-set role alone, exactly as a null
+      // role parameter does in the single-row statement.
+      const roles = q.includes('entry.role') ? ((p[2] as Array<string | null>) ?? []) : null;
+
+      userIds.forEach((userId, index) => {
+        const mappedRole = roles ? (roles[index] ?? null) : null;
+        const existing = state.organization_members.find(
+          (row) => row['organization_id'] === organizationId && row['user_id'] === userId,
+        );
+        if (existing) {
+          if (existing['role'] === 'owner') {
+            // untouchable
+          } else if (existing['provisioning_source'] === 'scim') {
+            existing['role'] = mappedRole ?? 'member';
+          } else if (mappedRole !== null) {
+            existing['role'] = mappedRole;
+          }
+          existing['provisioning_source'] = 'scim';
+          existing['provisioned_at'] = now();
+          return;
+        }
+        state.organization_members.push({
+          organization_id: organizationId,
+          user_id: userId,
+          role: mappedRole ?? 'member',
+          provisioning_source: 'scim',
+          provisioned_at: now(),
+          joined_at: now(),
+        });
+      });
+      return [];
+    }
+
     if (q.includes('from scim_tokens') && q.includes('token_prefix = $1')) {
       const nowMs = Date.now();
       return state.scim_tokens.filter(

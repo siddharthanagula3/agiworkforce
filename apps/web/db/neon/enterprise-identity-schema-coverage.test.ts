@@ -12,7 +12,30 @@ const IDENTITY_SOURCE_DIRS = [
   'app/api/scim',
 ];
 
-const NOT_A_TABLE = new Set(['set', 'select', 'values', 'only', 'lateral']);
+// `from unnest($1::uuid[])` names a set-returning function, not a relation, so
+// no migration will ever create it. Listed explicitly rather than inferred from
+// a following parenthesis, because `insert into t (cols)` has one too and
+// skipping on that would quietly stop checking real tables.
+const SET_RETURNING_FUNCTIONS = [
+  'unnest',
+  'generate_series',
+  'jsonb_array_elements',
+  'json_array_elements',
+  'jsonb_array_elements_text',
+  'jsonb_to_recordset',
+  'json_to_recordset',
+  'regexp_split_to_table',
+  'string_to_table',
+];
+
+const NOT_A_TABLE = new Set([
+  'set',
+  'select',
+  'values',
+  'only',
+  'lateral',
+  ...SET_RETURNING_FUNCTIONS,
+]);
 
 async function walk(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
