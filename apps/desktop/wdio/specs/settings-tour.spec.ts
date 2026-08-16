@@ -1,23 +1,10 @@
 import { resolveScreenDir } from '../support/dom';
 import { closeAnySettingsDialog, waitForSettingsReady } from '../support/close-settings';
-// Live-interaction QA pass over the full desktop Settings surface (local mode):
-// App.tsx -> SettingsPanel (gear icon in the v3 sidebar). Opens the modal for
-// real, walks every nav section, and records DOM evidence (text snapshot +
-// screenshot) so a human/agent can review what actually rendered instead of
-// trusting a static code read. See docs/agent-context/known-flaws.md for the
-// already-logged findings this pass cross-checks (DESK-SETTINGS-IA-01,
-// DESKTOP-PLAN-TIER-DISPLAY-STALE-01, DESKTOP-BYOK-PROVIDER-UI-COVERAGE-01,
-// DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01, DESKTOP-MISC-CRITICAL-GAPS-01).
 
 const SCREEN_DIR = resolveScreenDir('settings');
 
-// Canonical rendered order from packages/ui/ui/src/settings-nav.ts
-// (SETTINGS_NAV_GROUPS after Local-only visibility filtering).
 const NAV_LABELS = [
   'General',
-  // Account, Billing, and Usage are LOCAL_HIDDEN_TABS (SettingsPanel.tsx):
-  // this tour runs the LOCAL shell, where those sections intentionally do not
-  // exist — the cloud modal's sections are toured by cloud-settings-tour.
   'Personalization',
   'Privacy',
   'Models & Keys',
@@ -57,8 +44,6 @@ function getContentSnapshot() {
   return browser.execute(() => {
     const nav = document.querySelector('nav[aria-label="Settings sections"]');
     const dialog = nav?.closest('[role="dialog"]') ?? document.querySelector('[role="dialog"]');
-    // The content pane is the nav's direct sibling. Do not couple this evidence
-    // collector to Tailwind class order; class serialization is not a DOM contract.
     const contentRoot = nav?.nextElementSibling;
     const text = (contentRoot?.textContent ?? '').replace(/\s+/g, ' ').trim();
     const hasErrorBoundary = /encountered an unexpected error|Something went wrong/i.test(text);
@@ -78,10 +63,6 @@ describe('AGI Desktop Settings — full live tour', () => {
   it('opens via the sidebar gear icon and shows General by default', async () => {
     await browser.pause(1500);
 
-    // A prior spec's failure can leave the settings dialog open on an
-    // arbitrary tab — possibly DIRTY, in which case Escape raises the discard
-    // confirmation. Close through the shared helper so the gear opens fresh
-    // on General.
     expect(await closeAnySettingsDialog()).toBe(true);
 
     const gear = await $('button[aria-label="Settings"]');

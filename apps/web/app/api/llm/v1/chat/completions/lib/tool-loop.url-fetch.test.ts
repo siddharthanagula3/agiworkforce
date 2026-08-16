@@ -1,12 +1,3 @@
-/**
- * Integration test: url_fetch through the REAL tool-loop dispatch.
- *
- * Proves the full agentic path with mocked HTTP + provider:
- *   model emits a url_fetch tool_call → the loop executes the real
- *   executeUrlFetch (fetch + DNS mocked) → the tool result returns to the
- *   model on the next step → a cumulative x_search_results source event is
- *   emitted → the final answer streams and terminates with [DONE].
- */
 
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
@@ -16,9 +7,6 @@ vi.mock('node:dns/promises', () => ({
   lookup: dnsMocks.lookup,
 }));
 
-// Mock the table-driven adapter dispatch seam the loop calls per step:
-// buildToolLoopStream(provider, processed, stepRequest, responseModel, sink)
-// — the same seam research-loop.test.ts mocks.
 const factoryMocks = vi.hoisted(() => ({ streamRequest: vi.fn() }));
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: factoryMocks.streamRequest,
@@ -28,7 +16,6 @@ import { runToolLoop, fetchSourcesEvent } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 
-/** Build a provider SSE ReadableStream from data lines. */
 function sseStream(events: unknown[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const payload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') + 'data: [DONE]\n\n';
@@ -122,18 +109,15 @@ describe('tool-loop url_fetch integration', () => {
     try {
       const output = await collect(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
 
-      // 1. Timeline: running with the domain phrase, then completed.
       expect(output).toContain('"x_tool_status"');
       expect(output).toContain('"name":"url_fetch"');
       expect(output).toContain('"status_phrase":"Fetching example.com"');
       expect(output).toContain('"status":"completed"');
 
-      // 2. Tool result event with the extracted page content.
       expect(output).toContain('"x_tool_result"');
       expect(output).toContain('illustrative examples');
       expect(output).not.toContain('<html>');
 
-      // 3. Source joined the citations flow via the cumulative x_search_results shape.
       expect(output).toContain('"x_search_results"');
       expect(output).toContain('"tool":"url_fetch"');
       expect(output).toContain('"type":"web_search_result"');
@@ -141,18 +125,13 @@ describe('tool-loop url_fetch integration', () => {
       expect(output).toContain('"title":"Example Domain"');
       expect(output).toContain('"position":1');
 
-      // 4. Final answer streamed and the stream terminated.
       expect(output).toContain('The page describes the example domain. [1]');
       expect(output).toContain('data: [DONE]');
 
-      // 5. The real HTTP layer was exercised exactly once, for the model's URL.
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]).toBe('https://example.com/');
 
-      // 6. The second model call received the assistant tool_calls turn AND the
-      //    tool result message, so the model could ground its answer.
       expect(factoryMocks.streamRequest).toHaveBeenCalledTimes(2);
-      // stepRequest is the 3rd argument of buildToolLoopStream.
       const secondRequest = factoryMocks.streamRequest.mock.calls[1]?.[2] as {
         messages: Array<{ role: string; content: string; tool_call_id?: string }>;
       };
@@ -176,14 +155,11 @@ describe('tool-loop url_fetch integration', () => {
     try {
       const output = await collect(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
 
-      // Failed status + structured error result; no fabricated sources; no fetch issued.
       expect(output).toContain('"status":"failed"');
       expect(output).toContain('Fetch failed (url_not_allowed)');
       expect(output).not.toContain('"x_search_results"');
       expect(fetchMock).not.toHaveBeenCalled();
 
-      // The error was fed back to the model as a tool message (loop continued).
-      // stepRequest is the 3rd argument of buildToolLoopStream.
       const secondRequest = factoryMocks.streamRequest.mock.calls[1]?.[2] as {
         messages: Array<{ role: string; content: string }>;
       };

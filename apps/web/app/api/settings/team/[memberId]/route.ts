@@ -15,9 +15,6 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { requireTeamAdminAccess } from '../team-admin-access';
 
-// memberId param format: "<organizationId>:<userId>" · matches the composite
-// key shape returned by the team list route so the caller does not need to
-// carry both IDs separately.
 const MEMBER_ID_RE = /^([0-9a-f-]{36}):(.+)$/;
 
 const PatchRoleSchema = z.object({
@@ -76,11 +73,6 @@ async function requireAnotherOwnerBeforeDemotion(
   }
 }
 
-/**
- * DELETE /api/settings/team/[memberId]
- * Remove a member from the organization.
- * memberId = "<organizationId>:<userId>"
- */
 async function handleRemove(
   request: NextRequest,
   context: { params: Promise<{ memberId: string }> },
@@ -107,14 +99,12 @@ async function handleRemove(
 
       const requester = await requireAdminAccess(tx, organizationId, requesterId);
 
-      // Prevent self-removal via this endpoint · use a separate leave flow.
       if (targetUserId === requesterId) {
         throw createError.validation(
           'You cannot remove yourself. Use the leave organization flow.',
         );
       }
 
-      // Owners cannot be removed by admins.
       const [targetRow] = await tx.query<OrganizationMemberRow>(
         `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
@@ -139,9 +129,6 @@ async function handleRemove(
         [organizationId, targetUserId],
       );
 
-      // Removing a member frees their seat: the AFTER DELETE trigger decrements
-      // `organizations.seats_consumed`, and their organization-scoped access ends
-      // with the membership row that every org predicate resolves through.
       return targetRow.role;
     }),
   );
@@ -165,11 +152,6 @@ async function handleRemove(
   return NextResponse.json({ message: 'Member removed' });
 }
 
-/**
- * PATCH /api/settings/team/[memberId]
- * Update a member's role.
- * memberId = "<organizationId>:<userId>"
- */
 async function handleUpdateRole(
   request: NextRequest,
   context: { params: Promise<{ memberId: string }> },
@@ -203,11 +185,6 @@ async function handleUpdateRole(
 
       const requester = await requireAdminAccess(tx, organizationId, requesterId);
 
-      // 0085 makes "exactly one owner" a database fact
-      // (idx_org_members_single_owner). Promoting a second owner here could only
-      // ever produce a unique violation, and demote-owner-then-promote-self is
-      // exactly the escalation the transfer flow exists to control. Point the
-      // caller at it instead of failing on a constraint name.
       if (newRole === 'owner') {
         throw createError.conflict(
           'An organization has exactly one owner. Use POST /api/settings/organization/transfer-ownership to move ownership.',
@@ -250,8 +227,6 @@ async function handleUpdateRole(
     eventType: 'member_role_changed',
     request,
     organizationId,
-    // A privilege escalation is a warning-level event even when it succeeds:
-    // an auditor should be able to filter promotions out of routine churn.
     severity: newRole === 'owner' || newRole === 'admin' ? 'warning' : 'info',
     detail: {
       resourceType: 'organization_member',

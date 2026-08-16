@@ -1,18 +1,3 @@
-/**
- * Golden fixtures for buildNonStreamResponse's CURRENT wire output.
- *
- * response-builder.ts is provider-agnostic (confirmed by reading it: it only
- * ever touches the normalized `llmResponse` shape lib/llm-providers/base.ts's
- * LLMProviderResponse defines, never a vendor SDK type) and is NOT being
- * rewritten by the Wave 2 step 5 migration. This suite exists to pin down
- * its exact JSON output for representative inputs -- most importantly the
- * `citations`/`search_results` top-level fields sourced today from
- * lib/llm-providers/anthropic.ts's sendRequest (see its L303-372) -- so the
- * eventual canonical-adapter response assembler has an executable target
- * for the `llmResponse` shape it must produce, not just a prose contract.
- *
- * Assertions were captured FROM the real implementation, not predicted.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -155,11 +140,6 @@ describe('buildNonStreamResponse golden fixture', () => {
         cacheReadTokens: undefined,
         cacheWriteTokens: undefined,
         cacheWrite1hTokens: undefined,
-        // CPST Stage-0 additive telemetry (design doc §4.3, phase 1). Asserted
-        // exactly rather than loosened to objectContaining, so an unreviewed
-        // seventh key cannot appear in the ledger payload unnoticed. The
-        // fixture carries no routePlanId and never rotated, so routePlanId,
-        // retries, and fallbackReason must stay absent.
         taskOutcome: 'unknown',
         verifierResult: 'skipped',
         fallbackUsed: false,
@@ -385,17 +365,11 @@ describe('buildNonStreamResponse golden fixture', () => {
   });
 });
 
-/**
- * CPST Stage-0 telemetry, managed cloud only
- * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, phase 1:
- * additive keys in the existing `usage` jsonb, no migration).
- */
 describe('buildNonStreamResponse CPST usage telemetry', () => {
   function finalizedUsage(): Record<string, unknown> {
     const call = mockFinalizeManagedUsageRequest.mock.lastCall?.[0] as {
       usage: Record<string, unknown>;
     };
-    // The service JSON.stringifies this into the jsonb parameter.
     return JSON.parse(JSON.stringify(call.usage));
   }
 

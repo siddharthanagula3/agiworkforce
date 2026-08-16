@@ -23,18 +23,12 @@ import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import type { ArtifactData } from './ArtifactPreview';
 import { toast } from 'sonner';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface InlineArtifactCardsProps {
   artifacts: ArtifactData[];
-  /** Called when user clicks a card or the overflow card · opens the panel. */
   onOpen?: (artifactId: string) => void;
   className?: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Map artifact type to a human-readable badge label. */
 function typeBadge(type: ArtifactData['type']): string {
   switch (type) {
     case 'html':
@@ -65,7 +59,6 @@ function typeBadge(type: ArtifactData['type']): string {
   }
 }
 
-/** Category word for the Claude-style "{Kind} · {EXT}" subtitle (e.g. "Code", "Document"). */
 function kindLabel(type: ArtifactData['type']): string {
   switch (type) {
     case 'html':
@@ -90,7 +83,6 @@ function kindLabel(type: ArtifactData['type']): string {
   }
 }
 
-/** Short uppercase extension for the subtitle (e.g. MD, HTML, PY). */
 function extLabel(artifact: ArtifactData): string {
   const raw = (artifact.language || artifact.type || '').toLowerCase();
   const map: Record<string, string> = {
@@ -134,7 +126,6 @@ export function TypeIcon({ type, className }: { type: ArtifactData['type']; clas
   }
 }
 
-/** Badge color per artifact type. */
 function badgeClass(type: ArtifactData['type']): string {
   switch (type) {
     case 'html':
@@ -154,13 +145,7 @@ function badgeClass(type: ArtifactData['type']): string {
   }
 }
 
-// ─── Single Full-Width Card (Fix 44) ─────────────────────────────────────────
-
 function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
-  // The sandboxed thumbnail iframe is client-only: buildSandboxSrcDoc runs DOMPurify,
-  // which needs a real DOM. Gate on mount so the server renders an inert placeholder
-  // and the real srcDoc is applied by a post-mount re-render (no SSR crash, no blank
-  // iframe from hydration not re-syncing the attribute). See useMounted.
   const mounted = useMounted();
   const canRender = mounted && ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
   const generatedFileSummary = summarizeGeneratedFileBundle({
@@ -194,12 +179,6 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
             title={artifact.title || 'Artifact preview'}
             sandbox="allow-scripts"
             srcDoc={(() => {
-              // For html artifacts: use buildSandboxSrcDoc so the thumbnail
-              // preview is a correctly structured single document (no double-
-              // wrap). The iframe has sandbox="allow-scripts" (NO
-              // allow-same-origin), so the null-origin sandbox is the boundary.
-              // For other types: inject raw content into a minimal shell (they
-              // don't contain scripts that need execution in the thumbnail).
               if (artifact.type === 'html') {
                 return buildSandboxSrcDoc(artifact.content.slice(0, 800));
               }
@@ -261,8 +240,6 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
   );
 }
 
-// ─── Overflow Row ─────────────────────────────────────────────────────────────
-
 function OverflowRow({ count, onClick }: { count: number; onClick: () => void }) {
   return (
     <button
@@ -278,8 +255,6 @@ function OverflowRow({ count, onClick }: { count: number; onClick: () => void })
     </button>
   );
 }
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 const MAX_VISIBLE = 3;
 

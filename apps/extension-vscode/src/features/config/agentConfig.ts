@@ -17,12 +17,6 @@ export interface OpenAgentConfigOptions {
   fileSystem?: AgentConfigFileSystem;
 }
 
-/**
- * Open the CLI-owned configuration file in the active extension host.
- *
- * In Remote Development this intentionally resolves the remote home directory,
- * matching the host that launches the local app-server.
- */
 export async function openAgentConfig(options: OpenAgentConfigOptions = {}): Promise<string> {
   const configPath = agentConfigPath(options.homeDirectory);
   const configDirectory = path.dirname(configPath);

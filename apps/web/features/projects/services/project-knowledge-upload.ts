@@ -30,12 +30,6 @@ export async function removeProjectKnowledgeFile(projectId: string, fileId: stri
   return createWebProjectKnowledgeClient().remove(projectId, fileId);
 }
 
-/**
- * Browser adapter for the shared managed-project knowledge transaction.
- * Web contributes only its CSRF/session transport; validation, checksum,
- * presign, upload, registration, and response verification stay shared with
- * Desktop and Mobile.
- */
 export async function uploadProjectKnowledgeFile({
   projectId,
   file,

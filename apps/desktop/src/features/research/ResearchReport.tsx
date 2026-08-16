@@ -1,13 +1,3 @@
-/**
- * ResearchReport
- *
- * The final research report view showing:
- * - Markdown report with inline citations linked to sources
- * - Sources list at bottom (numbered)
- * - Copy report button
- * - Export to PDF button (via documentStore)
- * - "Start New Research" button
- */
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -217,7 +207,6 @@ Mode: ${result.mode} | Sources cited: ${result.sources_cited} | Confidence: ${re
 `;
 }
 
-// Re-export an open-url helper for use within reports (external links)
 export function ResearchReportExternalLink({
   url,
   children,

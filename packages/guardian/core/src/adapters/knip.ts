@@ -1,9 +1,3 @@
-/**
- * Knip JSON reporter adapter (`knip --reporter json`).
- *
- * Knip findings are unused files/exports/dependencies: technical debt, never
- * blocking by default.
- */
 import { z } from 'zod';
 
 import { toEvidence, type AdapterOutcome, type RawFinding } from './types.js';

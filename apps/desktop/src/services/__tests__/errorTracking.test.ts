@@ -8,8 +8,6 @@ vi.mock('../analytics', () => ({
   },
 }));
 
-// Drive the desktop privacy mode so the trust-boundary telemetry gate is testable.
-// Default 'managed' (telemetry allowed) keeps existing tests exercising the full path.
 const { privacyModeMock } = vi.hoisted(() => ({
   privacyModeMock: vi.fn(() => 'managed' as string),
 }));
@@ -39,7 +37,6 @@ describe('ErrorTrackingService', () => {
 
   describe('trust boundary — telemetry suppression (BYOK is private, not just Local)', () => {
     beforeEach(() => {
-      // Enable reporting so ONLY the privacy gate can suppress; ignore init-time tracks.
       service.updateConfig({ enabled: true });
       vi.mocked(analytics.track).mockClear();
     });
@@ -100,7 +97,7 @@ describe('ErrorTrackingService', () => {
       const newService = new ErrorTrackingService();
       const config = newService.getConfig();
 
-      expect(config.dsn).toBe('https://examplePublicKey@o0.ingest.sentry.io/0'); //examplePublicKey@o0.ingest.sentry.io/0');
+      expect(config.dsn).toBe('https://examplePublicKey@o0.ingest.sentry.io/0');
     });
 
     it('should not initialize when disabled', () => {
@@ -169,7 +166,6 @@ describe('ErrorTrackingService', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const error = new Error('Test error');
-      // When disabled, captureError returns immediately without side effects
       expect(() => service.captureError(error)).not.toThrow();
 
       consoleSpy.mockRestore();
@@ -192,7 +188,6 @@ describe('ErrorTrackingService', () => {
     });
 
     it('should silently return when disabled', () => {
-      // When disabled, captureMessage returns immediately without side effects
       expect(() => service.captureMessage('Test message')).not.toThrow();
     });
 

@@ -6,12 +6,6 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { cn } from '../../lib/utils';
 import { useSimpleModeStore } from '../../stores/ui';
 
-/**
- * Format a duration in milliseconds into a human-readable string.
- * Under 60 s → "12s"
- * 60 s+      → "2m 13s"
- * Exactly on minute → "1m"
- */
 function formatThinkingDuration(ms: number): string {
   const totalSeconds = Math.round(ms / 1000);
   if (totalSeconds < 60) {
@@ -35,9 +29,7 @@ interface ReasoningAccordionProps {
   };
   className?: string;
   isStreaming?: boolean;
-  /** Auto-expand when streaming starts */
   autoExpandOnStream?: boolean;
-  /** Show preview of content in header when collapsed */
   showPreview?: boolean;
 }
 
@@ -55,16 +47,13 @@ export function ReasoningAccordion({
   const [hasUserCollapsed, setHasUserCollapsed] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const prevStreamingRef = useRef(isStreaming);
-  // Track when thinking started for live elapsed timer
   const startTimeRef = useRef<number>(Date.now());
   const [elapsedMs, setElapsedMs] = useState<number>(0);
 
-  // Live elapsed timer — ticks every second while streaming, cleans up when done
   useEffect(() => {
     if (!isStreaming) {
       return;
     }
-    // Reset start time when streaming begins
     startTimeRef.current = Date.now();
     setElapsedMs(0);
 
@@ -78,7 +67,6 @@ export function ReasoningAccordion({
     };
   }, [isStreaming]);
 
-  // Auto-expand when streaming starts (unless user manually collapsed or in simple mode)
   useEffect(() => {
     if (
       autoExpandOnStream &&
@@ -92,14 +80,12 @@ export function ReasoningAccordion({
     prevStreamingRef.current = isStreaming;
   }, [isStreaming, autoExpandOnStream, hasUserCollapsed, isSimpleMode]);
 
-  // Auto-scroll to bottom when content updates during streaming
   useEffect(() => {
     if (isStreaming && isOpen && contentRef.current) {
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
     }
   }, [content, isStreaming, isOpen]);
 
-  // Handle user toggle
   const handleToggle = () => {
     const newState = !isOpen;
     setIsOpen(newState);
@@ -117,7 +103,6 @@ export function ReasoningAccordion({
     return { lines: lines.length, words, duration, steps };
   }, [content, metadata]);
 
-  // Get last few lines for streaming preview
   const streamingPreview = useMemo(() => {
     if (!isStreaming || !showPreview || isOpen) return null;
     const lines = content.split('\n').filter((l) => l.trim());
@@ -173,7 +158,6 @@ export function ReasoningAccordion({
               {isSimpleMode
                 ? 'Thought about this'
                 : (() => {
-                    // Prefer server-reported duration (seconds → ms), fall back to client elapsed
                     const durationMs = stats.duration > 0 ? stats.duration * 1000 : elapsedMs;
                     return `Thought for ${formatThinkingDuration(durationMs)}`;
                   })()}

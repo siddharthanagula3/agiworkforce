@@ -1,25 +1,3 @@
-/**
- * E2E spec — 06: voice-record-and-send
- *
- * Critical path:
- *   Long-press mic in chat composer → the inline voice bar appears
- *   The orb is visible (voice-orb) with the thread still behind it
- *   Mute reports itself on the button, unmistakably
- *   Tap the white X → voice dismissed, composer visible again
- *
- * Rewritten for PAR-M01: the full-screen VoiceConversationScreen this spec used
- * to drive was deleted. Voice is now one presentation — an inline bar over the
- * live thread — and it is hands-free, so capture starts with the bar rather
- * than on an orb tap. Phase labels are no longer rendered on screen; the bar
- * signals state through the orb and the mic button.
- *
- * Precondition: onboarding is complete (including the voice recording
- * disclosure) and microphone permission is granted on the simulator. This spec
- * does not seed transcripts through launch arguments.
- *
- * NOTE: Detox must be installed before running.
- *   pnpm add -D detox@20
- */
 
 import { device, element, by, waitFor } from 'detox';
 
@@ -65,8 +43,6 @@ describe('Voice record and send — on-device STT', () => {
   });
 
   it('the mic reports itself as live', async () => {
-    // The label names the action the current state affords, so "Mute" showing
-    // means the microphone is open.
     await waitFor(element(by.label('Mute microphone')))
       .toBeVisible()
       .withTimeout(6000);

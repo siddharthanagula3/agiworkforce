@@ -119,8 +119,6 @@ async function checkWellKnown(origin: string): Promise<NLWebEndpoint | null> {
     return null;
   }
 
-  // Validate that the response looks like JSON.
-  // M-03 audit 2026-05-19: cap probe-body parse to MAX_NLWEB_PROBE_BYTES.
   if (resp.body) {
     if (safeJsonParse(resp.body, MAX_NLWEB_PROBE_BYTES) === undefined) {
       return null;
@@ -143,7 +141,6 @@ async function probeEndpoint(
     return null;
   }
 
-  // Accept 2xx and 405 (Method Not Allowed — endpoint exists but rejects HEAD)
   if (resp.status < 400 || resp.status === 405) {
     return { url, type, status: 'available' };
   }
@@ -201,7 +198,6 @@ function collectSchemaTypes(data: unknown, out: string[], depth = 0): void {
       }
     }
 
-    // Recurse into nested objects
     for (const key of Object.keys(obj)) {
       if (key !== '@type') {
         collectSchemaTypes(obj[key], out, depth + 1);
@@ -214,9 +210,6 @@ function checkResponseHeaders(): { hasNLWebHeader: boolean; hasMCPHeader: boolea
   let hasNLWebHeader = false;
   let hasMCPHeader = false;
 
-  // Try Performance API (serverTiming can carry custom header info)
-  // For response headers, we inspect via a same-origin HEAD to the current page
-  // But that would be wasteful — instead, check meta tags that some servers emit
   const metaTags = document.querySelectorAll('meta[http-equiv]');
   for (const meta of metaTags) {
     const name = (meta.getAttribute('http-equiv') ?? '').toLowerCase();
@@ -261,16 +254,13 @@ export async function detectNLWeb(pageUrl: string): Promise<NLWebDetectionResult
 
   logger.debug('NLWeb: starting detection for', origin);
 
-  // Synchronous checks first (no network, no delay)
   result.schemaTypes = parseJsonLdSchemaTypes();
   const metaHeaders = checkResponseHeaders();
 
-  // Fire all network probes concurrently
   const [wellKnown, askEndpoint, mcpEndpoint, pageHeaders] = await Promise.all([
     checkWellKnown(origin).catch((): null => null),
     probeEndpoint(origin, 'ask', 'ask').catch((): null => null),
     probeEndpoint(origin, 'mcp', 'mcp').catch((): null => null),
-    // Only probe page headers over the network if meta tags were inconclusive
     metaHeaders.hasNLWebHeader || metaHeaders.hasMCPHeader
       ? Promise.resolve(metaHeaders)
       : probeCurrentPageHeaders().catch(() => ({
@@ -279,12 +269,10 @@ export async function detectNLWeb(pageUrl: string): Promise<NLWebDetectionResult
         })),
   ]);
 
-  // Collect discovered endpoints
   if (wellKnown) result.endpoints.push(wellKnown);
   if (askEndpoint) result.endpoints.push(askEndpoint);
   if (mcpEndpoint) result.endpoints.push(mcpEndpoint);
 
-  // If we found an MCP-Server header but no /mcp endpoint, add it as unknown
   if (pageHeaders.hasMCPHeader && !mcpEndpoint) {
     result.endpoints.push({
       url: `${origin}/mcp`,
@@ -293,7 +281,6 @@ export async function detectNLWeb(pageUrl: string): Promise<NLWebDetectionResult
     });
   }
 
-  // Determine overall support
   result.supported =
     result.endpoints.length > 0 ||
     result.schemaTypes.length > 0 ||

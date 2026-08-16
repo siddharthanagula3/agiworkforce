@@ -1,14 +1,5 @@
 'use client';
 
-/**
- * Web adapter for the package-owned slash command menu.
- *
- * The package owns the built-in catalog, filtering rules, menu markup, and
- * interaction surface. Web contributes only its user-defined commands and
- * server-loaded skills, then translates framework-neutral icon names to
- * Lucide elements.
- */
-
 import React, {
   forwardRef,
   useCallback,
@@ -68,7 +59,6 @@ interface SkillMeta {
 }
 
 export interface SlashCommandMenuHandle {
-  /** Handle a keyboard key. Returns true if the event was consumed. */
   handleKey: (key: string) => boolean;
 }
 

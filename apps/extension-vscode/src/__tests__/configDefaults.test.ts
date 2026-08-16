@@ -1,12 +1,3 @@
-/**
- * configDefaults.test.ts — A3 guarantee.
- *
- * Asserts that the DEFAULTS in `utils/config.ts` match the `default` field
- * declared in `package.json contributes.configuration`. Prevents the drift
- * the senior review flagged: a literal in code (e.g. `?? 300`) silently
- * diverging from the package.json default (also `300`) until someone changes
- * package.json without touching the code.
- */
 
 import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
@@ -42,7 +33,6 @@ function readPkgConfigSettings(): Record<string, PkgConfigContrib> {
   return readPackageJson().contributes?.configuration?.properties ?? {};
 }
 
-/** Map from DEFAULTS key → package.json `agiWorkforce.<x>` setting key. */
 const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   apiEndpoint: 'agiWorkforce.apiEndpoint',
   agentPlanMode: 'agiWorkforce.agent.planMode',

@@ -1,15 +1,3 @@
-/**
- * Component tests for LibraryView — the /library page body.
- *
- * Covers:
- *   - Signed-out: no fetch fires (auth-gated data loading).
- *   - Grid renders shared GeneratedFileCards from the API page.
- *   - Filter chips re-fetch with origin/kind params.
- *   - Search box sends the debounced q param.
- *   - Honest empty states (default vs. uploaded vs. search miss).
- *   - Error state with a Retry that re-fetches.
- *   - Show more appends the next offset page.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';

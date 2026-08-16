@@ -1,36 +1,3 @@
-/**
- * ConnectorConnectCard — the inline Connect card for lazy authentication.
- *
- * A connector tool was called, the provider answered 401/403, and the server
- * turned that into a structured "connect required" tool result instead of
- * failing the turn (`apps/web/lib/connectors/connect-required.ts`). This card
- * is what the user sees in the conversation: which connector needs
- * authorization, which tool asked for it, what scopes the flow will request,
- * and a Connect action pointing at the same-origin OAuth broker.
- *
- * Surface-neutral: plain DOM + `cn`, no Next.js/Tauri/Chrome APIs. The Connect
- * action is an ordinary same-origin anchor, which every shell that renders this
- * package can follow.
- *
- * HONESTY RULES THIS CARD ENFORCES
- * - No Connect button when the envelope carries `connectUrl: null`. That is the
- *   state of every connector in a deployment with no OAuth application
- *   configured — which is the default today, since the provider registry ships
- *   empty — and the card says so rather than rendering a button that would
- *   bounce off a 501.
- * - No claim of an automatic retry. Nothing resumes the suspended turn after
- *   the OAuth callback returns, so the card offers an explicit Retry that
- *   re-runs the turn from the user's last message and says exactly that.
- *
- * UNTRUSTED DISPLAY DATA. `connectorName` and `scopes` originate from an
- * operator-supplied provider descriptor and, for a step-up challenge, from a
- * provider's `WWW-Authenticate` header. They are rendered as React text nodes
- * only. The href is the pre-verified `connectUrl` (see
- * `readConnectorConnectRequest`); no URL is ever built from display data.
- *
- * No markdown renderer and no `dangerouslySetInnerHTML` anywhere below.
- * llm-guardrail-allow: the line above is the prohibition, not a call site.
- */
 
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Plug, RotateCw, ShieldAlert } from 'lucide-react';
@@ -38,16 +5,10 @@ import { Plug, RotateCw, ShieldAlert } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { buildConnectHref, type ConnectorConnectRequest } from '../lib/connector-connect-required';
 
-/** How many scopes to list before collapsing the rest into a count. */
 const MAX_VISIBLE_SCOPES = 8;
 
 export interface ConnectorConnectCardProps {
   request: ConnectorConnectRequest;
-  /**
-   * Re-runs the whole exchange from the user's last message (the same
-   * mechanism as Regenerate). Omitted when the surface has no regenerate
-   * wiring, in which case no Retry button is shown rather than a dead one.
-   */
   onRetryTurn?: () => void;
   className?: string;
 }
@@ -81,9 +42,6 @@ function explanationFor(request: ConnectorConnectRequest, toolLabel: string): st
 }
 
 function ConnectorConnectCardImpl({ request, onRetryTurn, className }: ConnectorConnectCardProps) {
-  // Read on the client only: the first client render must match the server
-  // render, so the returnPath is attached after mount. Without it the broker
-  // sends the user to /connectors and they lose the conversation.
   const [returnPath, setReturnPath] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;

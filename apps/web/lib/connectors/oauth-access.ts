@@ -1,15 +1,3 @@
-/**
- * @file Per-user access-token resolution for OAuth connectors.
- *
- * The one place the chat tool loop asks "can I call this connector as this
- * user right now?". Owns refresh-on-expiry, and owns the decision to give up
- * and ask for reconnection.
- *
- * Refresh is pre-emptive (a token expiring inside the skew window is refreshed
- * before the call) AND reactive (`forceRefresh` after a 401), because a
- * provider can invalidate a token before its stated expiry — the lazy-auth path
- * in lib/user-connector-tools.ts depends on the reactive form.
- */
 
 import 'server-only';
 
@@ -32,7 +20,6 @@ import {
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import { refreshDiscoveredGrant } from '@/lib/connectors/mcp-discovery';
 
-/** Refresh a token that expires within this window rather than racing the call. */
 const EXPIRY_SKEW_MS = 60_000;
 
 export type ConnectorAccessOutcome =
@@ -44,13 +31,6 @@ export type ConnectorAccessOutcome =
   /** Authorized once, but the stored credential can no longer be used. */
   | { status: 'reauthorization-required'; reason: 'expired' | 'refresh-failed' | 'undecryptable' };
 
-/**
- * Resolve a usable access token for (`userId`, `connectorId`).
- *
- * Never throws for an expected failure — every branch is a status the caller
- * can turn into an honest tool result. Only a genuinely unexpected error (a
- * database fault) propagates.
- */
 export async function resolveConnectorAccessToken(
   userId: string,
   connectorId: string,
@@ -58,12 +38,6 @@ export async function resolveConnectorAccessToken(
 ): Promise<ConnectorAccessOutcome> {
   const provider = getConnectorOAuthProvider(connectorId);
 
-  // A connector with no operator-registered provider is NOT automatically
-  // unconfigured any more: it may have been authorized through discovery
-  // against the vendor's own MCP endpoint, in which case a real grant exists
-  // and reporting `not-configured` would tell the user to set up something that
-  // is already working. `getMcpEndpoint` is the cheap static check; the grant
-  // read below is what actually decides.
   if (!provider && !getMcpEndpoint(connectorId)) return { status: 'not-configured' };
 
   let grant;
@@ -96,16 +70,10 @@ export async function resolveConnectorAccessToken(
 
   const refreshToken = grant.refreshToken;
   if (!refreshToken) {
-    // Nothing to refresh WITH, and we only get here because the token is
-    // expiring or was just rejected. A grant that cannot produce a usable token
-    // must not keep reading as connected.
     await revokeConnectorOAuthGrant(userId, connectorId);
     return { status: 'reauthorization-required', reason: 'expired' };
   }
 
-  // DISCOVERED GRANTS refresh through `auth()`, not through the registry: their
-  // client identity lives in `mcp_oauth_clients` keyed by issuer, and there is
-  // no provider descriptor holding a client id and secret to pass here.
   if (grant.mcpUrl) {
     const outcome = await refreshDiscoveredGrant({
       mcpUrl: grant.mcpUrl,
@@ -116,8 +84,6 @@ export async function resolveConnectorAccessToken(
     });
 
     if (outcome.status === 'authorization-server-changed') {
-      // SEP-2352. The credential is addressed to a party that no longer serves
-      // this resource; dropping it is the point, not a side effect.
       await revokeConnectorOAuthGrant(userId, connectorId);
       return { status: 'reauthorization-required', reason: 'refresh-failed' };
     }
@@ -142,9 +108,6 @@ export async function resolveConnectorAccessToken(
   }
 
   if (!provider) {
-    // A grant exists but there is neither a registry provider nor a recorded
-    // MCP URL to refresh against — the shape a pre-0115 discovered grant would
-    // have. Nothing can renew it, so ask for a clean reconnect.
     return { status: 'reauthorization-required', reason: 'expired' };
   }
 
@@ -178,20 +141,11 @@ export async function resolveConnectorAccessToken(
       },
       '[connector-oauth] token refresh failed',
     );
-    // A dead refresh token can never recover; drop the grant so the UI and the
-    // tool loop both stop claiming the connector is usable. A transient failure
-    // (5xx, timeout) leaves the grant in place to retry on the next turn.
     if (isDead) await revokeConnectorOAuthGrant(userId, connectorId);
     return { status: 'reauthorization-required', reason: 'refresh-failed' };
   }
 }
 
-/**
- * Disconnect: revoke at the provider when it exposes an endpoint, then drop the
- * local ciphertext. Provider revocation is attempted FIRST because it needs the
- * token that local revocation destroys, and it is best-effort so an outage
- * cannot block the disconnect.
- */
 export async function disconnectConnectorOAuthGrant(
   userId: string,
   connectorId: string,

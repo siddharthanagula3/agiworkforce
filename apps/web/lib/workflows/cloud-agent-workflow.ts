@@ -155,7 +155,6 @@ function workflowContinuation(
   );
 }
 
-/** One bounded, retriable Workflow step. Provider and tool side effects replay from receipts. */
 export async function executeCloudAgentWorkflowInvocation(
   rawInput: CloudAgentWorkflowInput,
 ): Promise<WorkflowInvocationResult> {
@@ -240,8 +239,6 @@ export async function executeCloudAgentWorkflowInvocation(
   try {
     for await (const chunk of generator) {
       for (const projected of projectCloudAgentWorkflowChunk(chunk)) {
-        // Write first. If journal persistence then fails, the step retry may
-        // replay this sequence; all clients suppress duplicate envelopes.
         await writer.write(new TextEncoder().encode(projected.sse));
         if (projected.envelope) {
           await appendCloudAgentEvent(db, {
@@ -334,7 +331,6 @@ export async function closeCloudAgentWorkflowStream(): Promise<void> {
   await writer.close();
 }
 
-/** Durable orchestration only; all I/O and non-determinism stay in steps. */
 export async function cloudAgentWorkflow(rawInput: CloudAgentWorkflowInput): Promise<void> {
   'use workflow';
 

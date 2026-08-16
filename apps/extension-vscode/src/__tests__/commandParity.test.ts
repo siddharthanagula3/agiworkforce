@@ -1,15 +1,3 @@
-/**
- * commandParity.test.ts — A2 parity guarantee.
- *
- * Asserts that every command declared in `package.json contributes.commands`
- * is registered at runtime by calling `activate(mockContext)`. Catches the
- * "dropped handler in a refactor" class of regression that no other test in
- * this suite covers.
- *
- * Implementation: reads package.json at test time, mocks
- * `vscode.commands.registerCommand` to record ids, runs activate(), then
- * compares the recorded set against the declared set.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
@@ -110,10 +98,6 @@ describe('package.json ↔ runtime command parity', () => {
 
     activate(makeMockContext());
 
-    // Some commands are intentionally registered without being in package.json
-    // (e.g. internal helpers triggered via `executeCommand` from other code,
-    // bridge auto-actions, etc.). Allowlist them here so the test still flags
-    // accidental drift in the user-facing surface.
     const allowedUndeclared = new Set<string>([
       // Add ids here only with a comment explaining why they're hidden.
     ]);
@@ -163,12 +147,10 @@ describe('package.json ↔ runtime command parity', () => {
   });
 
   it('parity holds on second activate after reset (module-state isolation)', () => {
-    // First activation
     activate(makeMockContext());
     const firstIds = [...registeredIds];
     expect(firstIds.length).toBeGreaterThan(0);
 
-    // Simulate reload: reset subsystem health module-level state then re-activate
     __resetSubsystemHealthForTests();
     registeredIds = [];
     activate(makeMockContext());

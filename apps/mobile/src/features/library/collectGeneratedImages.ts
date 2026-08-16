@@ -1,9 +1,3 @@
-/**
- * Derives the list of generated images shown in the Library tab directly from
- * the existing chat message stores — there is no separate generated-image
- * store on mobile, so this reads the same ChatMessage records the chat screen
- * renders (message.type === 'image') rather than persisting a second copy.
- */
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import { getDurableGeneratedImagePath } from '@/src/features/image/services/imagegen';
 

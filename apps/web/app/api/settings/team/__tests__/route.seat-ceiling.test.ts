@@ -55,12 +55,6 @@ const targetProfile = {
   avatar_url: null,
 };
 
-/**
- * Exactly what the Neon driver raises when the AFTER INSERT trigger's
- * `update organizations set seats_consumed = seats_consumed + 1` re-evaluates
- * `organizations_seats_within_license` against the value the OTHER transaction
- * just committed.
- */
 function seatCeilingViolation() {
   const error = new Error(
     'new row for relation "organizations" violates check constraint "organizations_seats_within_license"',
@@ -80,10 +74,10 @@ function request(body: unknown) {
 
 function primeHappyPathUntilInsert() {
   mockQuery
-    .mockResolvedValueOnce([]) // advisory lock
-    .mockResolvedValueOnce([adminMembership]) // requester
-    .mockResolvedValueOnce([targetProfile]) // profile lookup
-    .mockResolvedValueOnce([]); // not already a member
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([adminMembership])
+    .mockResolvedValueOnce([targetProfile])
+    .mockResolvedValueOnce([]);
 }
 
 describe('POST /api/settings/team seat ceiling', () => {
@@ -109,22 +103,9 @@ describe('POST /api/settings/team seat ceiling', () => {
     expect(response.status).toBe(409);
     const body = (await response.json()) as { error: { message: string } };
     expect(body.error.message).toMatch(/no licensed seats available/i);
-    // The remedy is named, so the admin is not left guessing.
     expect(body.error.message).toMatch(/removing a member|revoking a pending invitation/i);
   });
 
-  /**
-   * THE CONCURRENT CASE.
-   *
-   * Two admins invite against one remaining seat. Both pass every application
-   * check — the requester is an admin, the target exists, the target is not
-   * already a member — because at the moment each of them read, the seat was
-   * free. Only ONE of the INSERTs survives: the trigger's counter UPDATE takes
-   * a row lock on the single organizations row, so the second transaction
-   * blocks, re-reads the committed `seats_consumed`, and trips the CHECK.
-   *
-   * The route must therefore return 201 once and 409 once — never 201 twice.
-   */
   it('lets only one of two concurrent grants against the last seat succeed', async () => {
     const createdRow = {
       ...adminMembership,
@@ -136,15 +117,12 @@ describe('POST /api/settings/team seat ceiling', () => {
     };
 
     let insertsAttempted = 0;
-    // The requester lookup and the "already a member" probe hit the same SQL,
-    // so they are distinguished by the user id parameter.
     mockQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
       const text = String(sql);
       if (text.includes('pg_advisory_xact_lock')) return [];
       if (text.includes('from public.profiles')) return [targetProfile];
       if (text.includes('insert into public.organization_members')) {
         insertsAttempted += 1;
-        // The first grant commits the last seat; the second aborts on the CHECK.
         if (insertsAttempted === 1) return [createdRow];
         throw seatCeilingViolation();
       }
@@ -166,7 +144,7 @@ describe('POST /api/settings/team seat ceiling', () => {
 
   it('does not consume a seat when the target is already a member', async () => {
     mockQuery
-      .mockResolvedValueOnce([]) // advisory lock
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([adminMembership])
       .mockResolvedValueOnce([targetProfile])
       .mockResolvedValueOnce([{ ...adminMembership, user_id: 'target-user', role: 'member' }]);
@@ -176,8 +154,6 @@ describe('POST /api/settings/team seat ceiling', () => {
     );
 
     expect(response.status).toBe(409);
-    // Burning a seat on a no-op is a revenue defect in the customer's favour
-    // and a support ticket in ours.
     expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
   });
 

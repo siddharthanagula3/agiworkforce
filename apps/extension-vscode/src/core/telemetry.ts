@@ -1,19 +1,8 @@
-/**
- * telemetry.ts — Anonymous usage telemetry for AGI Workforce VS Code extension
- *
- * Uses VS Code's built-in TelemetryLogger API. Respects both:
- * - VS Code global telemetry setting (vscode.env.isTelemetryEnabled)
- * - Extension-level agiWorkforce.telemetryEnabled setting
- *
- * No PII is collected. All events are anonymous.
- */
 
 import * as vscode from 'vscode';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
-
-// ─── Event names ─────────────────────────────────────────────────────────────
 
 export const TelemetryEvents = {
   EXTENSION_ACTIVATED: 'extension/activated',
@@ -24,24 +13,6 @@ export const TelemetryEvents = {
 
 type TelemetryEventName = (typeof TelemetryEvents)[keyof typeof TelemetryEvents];
 
-// ─── Secret redaction (D3) ──────────────────────────────────────────────────
-
-/**
- * Patterns that match common secret / credential formats, paired with the text
- * that replaces a match. Anything matching is replaced before the value leaves
- * the extension — this runs on telemetry properties AND on the git diff that
- * `contextBuilder` forwards to the model, so a gap here is a live credential in
- * an upstream prompt.
- *
- * Kept in parity with the Rust redactor (`apps/cli/src/secret_redaction.rs`)
- * and the shared TS one (`packages/platform/utils/src/logger.ts`); those two
- * caught credential URLs, Groq, xAI and fine-grained GitHub PATs while this
- * table did not.
- *
- * Order matters: more specific patterns first so we don't double-redact.
- * Character classes are kept mutually exclusive around their separators so a
- * non-matching line cannot backtrack.
- */
 const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [
     /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g,
@@ -88,12 +59,6 @@ function redactProperties(props: Record<string, string>): Record<string, string>
   return out;
 }
 
-// ─── Telemetry endpoint allowlist ────────────────────────────────────────────
-
-// PR-5C (F-22): exact-host allowlist. Previously `endsWith('.' + domain)`
-// permitted any *.agiworkforce.com subdomain — a subdomain takeover (a
-// real class per Veracode 2025 supply-chain reports) would route
-// telemetry to an attacker. Pin to exact hosts only.
 const ALLOWED_TELEMETRY_HOSTS = new Set<string>([
   'telemetry.agiworkforce.com',
   'agiworkforce.com',
@@ -110,20 +75,12 @@ function isAllowedTelemetryEndpoint(url: string): boolean {
   }
 }
 
-// ─── Telemetry service ───────────────────────────────────────────────────────
-
 const TELEMETRY_FLUSH_INTERVAL_MS = 30_000;
 const TELEMETRY_BATCH_MAX = 50;
 
 let logger: vscode.TelemetryLogger | undefined;
 let sessionId: string | undefined;
 
-/**
- * In-memory batch buffer. One POST per flush of N≤50 events instead of
- * one POST per event. Flushes on 30s timer, on size threshold, and on
- * extension dispose. If the network call fails, events are dropped (no
- * persistent retry queue — telemetry must never grow unbounded).
- */
 class TelemetryBatcher implements vscode.Disposable {
   private buffer: Array<Record<string, unknown>> = [];
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -152,7 +109,6 @@ class TelemetryBatcher implements vscode.Disposable {
     });
   }
 
-  /** Test-only inspector. */
   size(): number {
     return this.buffer.length;
   }
@@ -169,7 +125,6 @@ class TelemetryBatcher implements vscode.Disposable {
 
 let batcher: TelemetryBatcher | undefined;
 
-/** Test-only: reset module state between tests. */
 export function __resetTelemetryForTests(): void {
   batcher?.dispose();
   batcher = undefined;
@@ -199,28 +154,19 @@ function getCommonProperties(): Record<string, string> {
   };
 }
 
-/**
- * Initialize the telemetry service. Call once during extension activation.
- * Returns a Disposable that cleans up the logger.
- */
 export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
   sessionId = generateSessionId();
 
-  // Resolve the telemetry endpoint once at activation time.
-  // If not configured, all events are silently suppressed — never thrown.
   const telemetryEndpoint =
     vscode.workspace.getConfiguration('agiWorkforce').get<string>('telemetryEndpoint') ??
     'https://telemetry.agiworkforce.com/v1/events';
 
-  // Security: validate the endpoint against the domain allowlist to prevent data exfiltration
-  // via malicious configuration. If invalid, all telemetry is silently suppressed.
   if (!isAllowedTelemetryEndpoint(telemetryEndpoint)) {
     console.warn(
       `[AGI Workforce] Telemetry endpoint "${telemetryEndpoint}" is not in the allowed domain list. Telemetry is disabled.`,
     );
   }
 
-  /** Fire-and-forget HTTP POST. Never throws — telemetry must not affect the caller. */
   function postBatch(payload: Record<string, unknown>): void {
     if (!vscode.env.isTelemetryEnabled) return;
     if (!telemetryEndpoint) return;
@@ -271,8 +217,6 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
     ignoreUnhandledErrors: true,
   });
 
-  // Wrap so the disposable returned to extension.ts also flushes the
-  // batch buffer + tears down the timer on extension deactivation.
   const localBatcher = batcher;
   logger = innerLogger;
   const composite: vscode.Disposable = {
@@ -282,11 +226,6 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
     },
   };
 
-  // Note: do NOT push to context.subscriptions here — extension.ts pushes the
-  // returned Disposable, which is this composite. Pushing twice would cause
-  // double-disposal on deactivation.
-
-  // Log activation event
   logEvent(TelemetryEvents.EXTENSION_ACTIVATED, {
     model: normalizeConfiguredModelId(Config.model()),
   });
@@ -294,9 +233,6 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
   return composite;
 }
 
-/**
- * Log a telemetry event. Respects both VS Code and extension-level telemetry settings.
- */
 export function logEvent(eventName: TelemetryEventName, properties?: Record<string, string>): void {
   try {
     if (logger === undefined) return;
@@ -313,9 +249,6 @@ export function logEvent(eventName: TelemetryEventName, properties?: Record<stri
   }
 }
 
-/**
- * Log an error event.
- */
 export function logError(error: Error | string, properties?: Record<string, string>): void {
   try {
     if (logger === undefined) return;

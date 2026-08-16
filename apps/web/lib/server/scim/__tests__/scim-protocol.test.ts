@@ -54,7 +54,6 @@ describe('SCIM filter parsing', () => {
 
   it('refuses attributes outside the allowlist, which is what keeps SQL out of reach', () => {
     expect(() => parseScimUserFilter('linked_user_id eq "someone-else"')).toThrowError(ScimError);
-    // A group filter cannot reach a user attribute and vice versa.
     expect(() => parseScimGroupFilter('userName eq "ada@example.com"')).toThrowError(ScimError);
   });
 
@@ -65,9 +64,6 @@ describe('SCIM filter parsing', () => {
   });
 
   it('never lets a quoted value carry SQL out of the parser', () => {
-    // The value survives verbatim as DATA. It is bound as a parameter by the
-    // caller, and the attribute — the only thing that reaches SQL text — came
-    // from a fixed allowlist.
     const filter = parseScimUserFilter('userName eq "\\" or 1=1 --"');
     expect(filter).toEqual({ attribute: 'userName', operator: 'eq', value: '" or 1=1 --' });
   });
@@ -204,8 +200,6 @@ describe('SCIM responses', () => {
     const config = scimServiceProviderConfig('https://example.com/api/scim/v2');
     expect(config.patch.supported).toBe(true);
     expect(config.filter.supported).toBe(true);
-    // Claiming bulk or sort support would make an IdP send requests this
-    // provider rejects.
     expect(config.bulk.supported).toBe(false);
     expect(config.sort.supported).toBe(false);
     expect(config.etag.supported).toBe(false);

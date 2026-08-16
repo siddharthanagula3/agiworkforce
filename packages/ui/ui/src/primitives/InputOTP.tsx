@@ -5,15 +5,6 @@ import { OTPInput, OTPInputContext } from 'input-otp';
 import { Dot } from 'lucide-react';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed.
-// input-otp's own OTPInputProps is a discriminated union (plain vs. custom
-// `render` prop) that doesn't destructure/spread cleanly through a wrapper
-// that also reshapes className/containerClassName — attempts to derive this
-// precisely produced inconsistent errors across this monorepo's various
-// tsconfigs. Extends real DOM input attributes instead of a loose index
-// signature (which widened className/containerClassName to `unknown` on
-// destructure); `maxLength` stays explicitly required since input-otp
-// requires it, and the spread is cast at the JSX boundary rather than
 // threaded through the exported prop type.
 interface InputOTPProps extends Omit<
   React.InputHTMLAttributes<HTMLInputElement>,

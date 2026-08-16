@@ -1,11 +1,3 @@
-/**
- * Shared TypeScript/JavaScript import-graph utilities for repository guardrails.
- *
- * The point of this module is to replace lexical "does the string appear
- * anywhere in the tree" checks with a real reachability walk from a surface's
- * entry points. A lexical check reports green for a module that no entry point
- * can ever load; a reachability walk cannot.
- */
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -37,7 +29,6 @@ const TEST_DIRECTORY_PATTERN =
   /(?:^|\/)(?:__tests__|__mocks__|__fixtures__|__snapshots__|e2e|wdio|detox|playwright|archive|fixtures|test|tests)(?:\/|$)/;
 const TEST_FILE_PATTERN = /\.(?:test|spec|stories|bench|node-test)\.[cm]?[jt]sx?$/;
 
-/** True for files that are test scaffolding rather than shipped product code. */
 export function isTestPath(relativePath) {
   const posix = relativePath.split(path.sep).join('/');
   return TEST_DIRECTORY_PATTERN.test(posix) || TEST_FILE_PATTERN.test(posix);
@@ -48,7 +39,6 @@ export function isSourceFile(filePath) {
   return SOURCE_EXTENSIONS.includes(path.extname(filePath));
 }
 
-/** Recursively list source files under `directory` (absolute paths). */
 export function listSourceFiles(directory, files = []) {
   if (!fs.existsSync(directory)) return files;
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -63,19 +53,12 @@ export function listSourceFiles(directory, files = []) {
   return files;
 }
 
-/**
- * Remove comments from JS/TS source while preserving string, template and
- * regular-expression literals, so that a commented-out import never
- * contributes a phantom edge to the graph.
- */
 export function stripComments(source) {
   const chunks = [];
   const push = (text) => {
     chunks.push(text);
   };
 
-  // The character (or identifier) most recently emitted, used to tell a regular
-  // expression literal apart from a division operator.
   let previousMeaningful = '';
   let index = 0;
   const templateDepth = [];
@@ -113,8 +96,6 @@ export function stripComments(source) {
     'await',
   ]);
 
-  // Copies a quoted run verbatim starting at `index` (the opening quote), so
-  // that `'// not a comment'` survives. Returns the index after the close.
   const copyQuoted = (quote) => {
     let cursor = index + 1;
     let literal = quote;
@@ -133,8 +114,6 @@ export function stripComments(source) {
     return cursor;
   };
 
-  // Copies a template-literal run; stops at the close backtick or at `${`,
-  // which hands control back so the embedded expression is scanned normally.
   const copyTemplateRun = (startIndex) => {
     let cursor = startIndex;
     let literal = '';
@@ -257,21 +236,13 @@ export function stripComments(source) {
 }
 
 const SPECIFIER_PATTERNS = [
-  // `import x from 'm'`, `import type {x} from 'm'`, `export * from 'm'`,
-  // `export { x } from 'm'` -- every binding form ends in `from '<specifier>'`.
   /\bfrom\s*['"]([^'"\n]+)['"]/g,
-  // Side-effect import: `import './m'`
   /\bimport\s+['"]([^'"\n]+)['"]/g,
-  // Dynamic `import('m')`. Template-literal specifiers cannot be resolved
-  // statically and are reported by the caller instead of silently dropped.
   /\bimport\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g,
-  // `require('m')` and TS `import x = require('m')`
   /\brequire\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g,
-  // `new Worker(new URL('./m', import.meta.url))`
   /\bnew\s+URL\s*\(\s*['"]([^'"\n]+)['"]\s*,\s*import\.meta\.url\s*\)/g,
 ];
 
-/** All module specifiers referenced by a source string. */
 export function parseSpecifiers(source) {
   const stripped = stripComments(source);
   const specifiers = new Set();
@@ -284,8 +255,6 @@ export function parseSpecifiers(source) {
   return specifiers;
 }
 
-// Resolution touches the filesystem thousands of times per surface. Cache one
-// directory listing per parent so a whole-repo walk stays under a second.
 const directoryEntryCache = new Map();
 
 function directoryEntries(directory) {
@@ -303,7 +272,6 @@ function directoryEntries(directory) {
   return cached;
 }
 
-/** Clears the resolver's filesystem cache (tests mutate temp trees). */
 export function resetModuleGraphCache() {
   directoryEntryCache.clear();
 }
@@ -318,7 +286,6 @@ function resolveAsFile(candidate) {
     const withExtension = candidate + extension;
     if (entryKind(withExtension) === 'file') return withExtension;
   }
-  // TypeScript NodeNext writes ./x.js for ./x.ts
   const jsMatch = candidate.match(/^(.*)\.(c|m)?js$/);
   if (jsMatch) {
     const prefix = jsMatch[1];
@@ -340,13 +307,6 @@ function resolveAsDirectory(candidate) {
   return null;
 }
 
-/**
- * Build a specifier resolver.
- *
- * `aliases` maps an alias to an absolute filesystem target. A trailing `/*`
- * marks a prefix alias (`@/*` -> `<surface>/src`); anything else is an exact
- * package alias that may still be suffixed with a subpath.
- */
 export function createResolver(aliases = {}) {
   const entries = Object.entries(aliases).sort(([a], [b]) => b.length - a.length);
 
@@ -380,7 +340,6 @@ export function createResolver(aliases = {}) {
   };
 }
 
-/** Walk the import graph and return every file reachable from `entries`. */
 export function collectReachable(entries, resolve, options = {}) {
   const { onEdge } = options;
   const reachable = new Set();
@@ -410,10 +369,6 @@ export function collectReachable(entries, resolve, options = {}) {
   return reachable;
 }
 
-/**
- * Map every workspace package name to its source entry point so cross-package
- * imports keep the walk connected instead of stopping at a bare specifier.
- */
 export function collectWorkspacePackageAliases(repoRoot, roots = ['packages', 'services']) {
   const aliases = {};
 

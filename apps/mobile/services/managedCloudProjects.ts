@@ -25,9 +25,4 @@ async function requestJson(request: ManagedCloudProjectsTransportRequest): Promi
   }
 }
 
-/**
- * Mobile transport adapter for the canonical Managed Cloud projects client.
- * `api` retains auth refresh, TLS pinning, timeout, and Local-mode egress guards;
- * the shared client owns paths, request shaping, and runtime response validation.
- */
 export const managedCloudProjects = createManagedCloudProjectsClient({ requestJson });

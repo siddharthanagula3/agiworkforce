@@ -1,19 +1,3 @@
-/**
- * buildAdapterStreamResponse (stream-transform.ts) · the packages/ai/providers
- * adapter-path sibling of buildStreamResponse, proven separately in
- * stream-transform-usage.test.ts (the still-untouched legacy path) and
- * packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts (wire
- * bytes at the assembler level, no route/billing wiring).
- *
- * Neither of those exercises the REAL route function end-to-end with
- * billing: this suite feeds a StreamChunk sequence through
- * `buildAdapterStreamResponse` itself and asserts both (a) the exact SSE
- * bytes on the wire, including `data: [DONE]` framing, and (b)
- * managed usage finalization / LLMCostCalculator.calculateCost /
- * recordModelUsage are called with the correct reconciliation math -- the
- * money path advisor flagged as unverified by the assembler-level parity
- * test alone.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -224,11 +208,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
         cacheReadTokens: 10,
         cacheWriteTokens: undefined,
         cacheWrite1hTokens: undefined,
-        // CPST Stage-0 additive telemetry (design doc §4.3, phase 1). Asserted
-        // exactly, so an unreviewed key cannot reach the ledger unnoticed. This
-        // fixture carries a null task type and never rotated, so taskFamily,
-        // taskFamilyConfidence, routePlanId, retries, and fallbackReason must
-        // all stay absent.
         taskOutcome: 'unknown',
         verifierResult: 'skipped',
         fallbackUsed: false,
@@ -346,13 +325,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
 });
 
 describe('buildAdapterStreamResponse · TTFT timing', () => {
-  // Regression test for a real bug found while wiring this function into
-  // route.ts: `startAnthropicStream` (adapter-factory.ts) awaits the first
-  // StreamChunk before this function is even called (to detect an immediate
-  // upstream error before committing to a 200 response), so a `Date.now()`
-  // taken INSIDE this function would measure only the time since that peek
-  // resolved -- always ~0ms -- silently breaking the `llm_ttft_slo_breach`
-  // alert. `streamStartedAt` must be the caller's pre-peek timestamp.
   it('computes ttftMs relative to the caller-supplied streamStartedAt, not an internal clock', async () => {
     vi.useFakeTimers();
     try {
@@ -363,8 +335,6 @@ describe('buildAdapterStreamResponse · TTFT timing', () => {
         { type: 'stop', reason: 'end_turn' },
       ];
 
-      // Simulate startAnthropicStream's peek: 1500ms of real upstream
-      // latency elapses BEFORE buildAdapterStreamResponse is ever invoked.
       vi.advanceTimersByTime(1500);
 
       const response = await buildAdapterStreamResponse(

@@ -4,45 +4,6 @@ import { NextResponse } from 'next/server';
 import { withCorsAndSecurityHeaders } from './lib/cors';
 import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-route-contract';
 
-/**
- * Build a per-request Content-Security-Policy string with a nonce.
- *
- * The nonce replaces 'unsafe-inline' in script-src, preventing arbitrary inline
- * script injection (XSS). Next.js reads the nonce from the Content-Security-
- * Policy *request* header (set in buildCspResponse) and stamps it onto every
- * framework-injected bootstrap/hydration script.
- *
- * NOTE on the prod-wide 500 of 2026-06-14: this nonce + request-header rewriting
- * pattern was briefly suspected and swapped for 'unsafe-inline', but the actual
- * cause was `apps/web/package.json` `"type":"module"` breaking Vercel's CommonJS
- * function launcher (PR #392) — every Node render crashed regardless of CSP. The
- * nonce path was innocent; it is restored here.
- *
- * NOTE on style-src 'unsafe-inline': Tailwind, Radix, and ~28 components use
- * inline `style=` attributes, so style-src 'unsafe-inline' must stay regardless.
- */
-/**
- * The Clerk Frontend API origin this deployment loads ClerkJS from, as a
- * leading-space CSP token, or `''` when it cannot be derived.
- *
- * A **development** Clerk instance serves ClerkJS from `*.clerk.accounts.dev`,
- * which the static allowlist already covers. A **production** instance serves
- * it from the CNAME'd subdomain of your own domain — `clerk.agiworkforce.com`
- * — which matches neither `*.clerk.accounts.dev` nor `*.clerk.com`. So the
- * swap from `pk_test_` to `pk_live_` silently broke every auth screen: CSP
- * blocked `clerk.browser.js`, `<SignIn />` never mounted, and `/login`
- * rendered its marketing column beside an empty space with no error visible to
- * the user. Nothing about the Clerk instance was wrong — DNS resolved and its
- * API answered 200 the whole time.
- *
- * The host is derived from the publishable key rather than hardcoded, because
- * the key already encodes it (`pk_<env>_<base64("<fapi-host>$")>`). Hardcoding
- * `clerk.agiworkforce.com` would work today and rot on the next domain change,
- * and would leave preview deployments on a different instance broken.
- *
- * Shape-validated as a hostname before use, matching the R2 origin below: an
- * env typo must not be able to widen `script-src` to an arbitrary host.
- */
 function clerkFapiOrigin(): string {
   const key = process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY']?.trim();
   const encoded = key?.replace(/^pk_(test|live)_/u, '');
@@ -58,17 +19,8 @@ function clerkFapiOrigin(): string {
 }
 
 function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = "'none'"): string {
-  // WEB-13 / WEB-20 (audit 2026-05-19): allow framing the artifact sandbox
-  // origin so the cross-origin renderer at sandbox.agiworkforce.com can be
-  // embedded by the chat UI. When NEXT_PUBLIC_SANDBOX_ORIGIN is unset the
-  // parent falls back to a same-origin srcDoc iframe — no frame-src change
-  // needed in that case ('self' already covers it).
   const sandboxOrigin = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim().replace(/\/+$/, '');
   const sandboxFrameSrc = sandboxOrigin ? ` ${sandboxOrigin}` : '';
-  // Direct browser uploads use short-lived presigned PUT URLs on the account's
-  // R2 S3-compatible endpoint. Keep this exact-origin: validating Cloudflare's
-  // 32-hex account-id shape prevents an env typo from widening connect-src to
-  // an attacker-controlled host.
   const r2AccountId = process.env['CLOUDFLARE_R2_ACCOUNT_ID']?.trim();
   const r2BucketName = process.env['CLOUDFLARE_R2_BUCKET_NAME']?.trim();
   const r2PrivateBucketName = process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME']?.trim();
@@ -103,20 +55,12 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
 }
 
 function buildCspResponse(request: NextRequest): NextResponse {
-  // Generate a cryptographically-secure per-request nonce.
   const nonce = btoa(crypto.randomUUID());
-  // Generated PDFs are served from an authenticated, owner-scoped route and
-  // intentionally embedded by the same-origin artifact viewer. The route
-  // rejects this preview mode for every non-PDF MIME, so source HTML and other
-  // generated files keep the site-wide frame-ancestors 'none' boundary.
   const isPdfPreview =
     request.nextUrl.pathname.startsWith('/api/files/') &&
     request.nextUrl.searchParams.get('preview') === 'pdf';
   const csp = buildCspWithNonce(nonce, isPdfPreview ? "'self'" : "'none'");
 
-  // Forward the nonce to Server Components via request headers (read in the root
-  // layout via next/headers → headersList.get('x-nonce')). Setting the CSP on
-  // the *request* header is how Next stamps the nonce onto its framework scripts.
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('x-agi-pathname', `${request.nextUrl.pathname}${request.nextUrl.search}`);
@@ -181,29 +125,6 @@ function attachApiCors(request: NextRequest, response: Response): Response {
     : response;
 }
 
-/**
- * Send browsers that land on the API host back to the app host.
- *
- * `api.agiworkforce.com` serves first-party `/api/*` routes directly and exposes
- * a narrow OpenAI-compatible alias set through the host rewrites in
- * `next.config.ts`. Everything else on that host fell through to the same Next
- * app, so it happily served the marketing site and the signed-in chat UI on a
- * hostname that was never meant to render either.
- *
- * That is how "Authentication required" appears while the sidebar still shows
- * your account: the page renders, but it is not the origin the session belongs
- * to, so every authed request fails. The UI looks signed in and the API
- * disagrees — the confusing half-state rather than a clean redirect to login.
- *
- * Only the exact `api.` + app-host pair is matched. Preview deployments
- * (`agiworkforce-<hash>.vercel.app`) and localhost must keep serving the app
- * normally, so a looser check — "not the app host" — would take the whole
- * preview environment down.
- *
- * Proxy runs before next.config.ts rewrites. Direct `/api/*` requests and the
- * exact raw rewrite sources are therefore left alone. Unknown `/v1/*` paths
- * still bounce instead of widening the public compatibility surface.
- */
 function apiHostRedirect(request: NextRequest): NextResponse | null {
   const host = request.headers.get('host');
   if (!host) return null;
@@ -220,8 +141,6 @@ function apiHostRedirect(request: NextRequest): NextResponse | null {
     `${request.nextUrl.pathname}${request.nextUrl.search}`,
     `https://${appHost}`,
   );
-  // 307, not 308: a POST to a mistyped API path must not be silently cached as
-  // permanently living on the app host.
   return NextResponse.redirect(target, 307);
 }
 
@@ -237,13 +156,6 @@ export const proxy: NextMiddleware = async (request, event) => {
     return attachApiCors(request, buildCspResponse(request));
   }
 
-  // The root page is auth-aware: app/page.tsx calls auth() so signed-in users
-  // land in the product while signed-out users see marketing. It therefore
-  // needs Clerk's request context even though it is publicly reachable. Use a
-  // native exact-path check here instead of teaching Clerk's deprecated route
-  // matcher about a non-auth path. When `/` bypasses clerkMiddleware(), the
-  // signed-in RSC render throws "auth() was called but Clerk can't detect usage
-  // of clerkMiddleware()".
   if (
     request.nextUrl.pathname === '/' ||
     isClerkSessionRoute(request) ||
@@ -258,26 +170,6 @@ export const proxy: NextMiddleware = async (request, event) => {
 
 export const config = {
   matcher: [
-    /*
-     * Run on all routes except:
-     * - static files and Next.js internals
-     * - .well-known/workflow/* — Workflow SDK flow/step callbacks carry
-     *   internal binary payloads and must bypass Clerk/CSP request rewriting.
-     * - api/stripe-webhook — must read raw request body bytes for HMAC
-     *   signature verification via stripe.webhooks.constructEvent. Even
-     *   though Next.js proxy doesn't normally consume the body,
-     *   auth/session handling touches request.headers and any future change
-     *   that touches the body would silently break signature verification.
-     *   Excluding the path is the defense-in-depth fix. (WEB-4 audit fix,
-     *   2026-05-03; routes also retain `export const runtime = 'nodejs'`
-     *   to ensure Stripe SDK HMAC works.)
-     * - api/media/video/openrouter-webhook — same raw-body HMAC boundary for
-     *   signed provider terminal events; the route verifies bytes before JSON.
-     * - api/mobile/iap/*-notifications — store-owned callbacks authenticate
-     *   their Apple JWS / Google Pub/Sub OIDC payloads and have no Clerk session.
-     * - api/llm/v1/audio/transcriptions — multipart/form-data; same
-     *   class of risk if proxy ever needs to inspect.
-     */
     '/((?!_next/static|_next/image|favicon.ico|\\.well-known/workflow/|api/stripe-webhook|api/media/video/openrouter-webhook|api/mobile/iap/apple-notifications|api/mobile/iap/google-notifications|api/llm/v1/audio|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     '/((?!api/stripe-webhook$|api/media/video/openrouter-webhook$|api/mobile/iap/apple-notifications$|api/mobile/iap/google-notifications$|api/llm/v1/audio)(?:api|trpc)(?:/.*)?)',
     '/__clerk/(.*)',

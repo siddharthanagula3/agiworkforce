@@ -30,7 +30,7 @@ describe('createArtifactStore', () => {
   it('is idempotent for identical content (no version bump despite new timestamps)', () => {
     const s = createArtifactStore();
     s.getState().upsertArtifact(artifact({ updatedAt: '2026-06-21T00:00:00.000Z' }));
-    s.getState().upsertArtifact(artifact({ updatedAt: '2026-06-21T09:99:99.000Z' })); // re-derived later
+    s.getState().upsertArtifact(artifact({ updatedAt: '2026-06-21T09:99:99.000Z' }));
     expect(s.getState().artifacts).toHaveLength(1);
     expect(s.getState().getArtifactVersions('a1')).toHaveLength(1);
     expect(s.getState().getArtifact('a1')?.version).toBe(1);
@@ -44,7 +44,6 @@ describe('createArtifactStore', () => {
     expect(versions).toHaveLength(2);
     expect(s.getState().getArtifact('a1')?.version).toBe(2);
     expect(s.getState().getArtifact('a1')?.content).toBe('print(2)');
-    // createdAt preserved from the original
     expect(s.getState().getArtifact('a1')?.createdAt).toBe('2026-06-21T00:00:00.000Z');
   });
 

@@ -1,10 +1,3 @@
-/**
- * E2B universal execution router — logic tests (mocked executor; no live sandbox).
- *
- * The load-bearing property is FAIL-CLOSED: a missing/erroring executor returns an
- * explicit error to the model, never a silent no-op and never a provider-native
- * fallback.
- */
 import { describe, it, expect, vi } from 'vitest';
 import {
   EXECUTE_CODE_TOOL,
@@ -121,11 +114,6 @@ describe('routeExecutionTool — output cap', () => {
 });
 
 describe('resolveCodeExecutionTools — native-always / fail-closed', () => {
-  // The E2B execution path is NOT wired into this request seam (the server-side tool
-  // loop that would run platform-executed E2B tools is unreachable in prod). So this
-  // router is byte-for-byte the pre-P3 behavior regardless of E2B configuration:
-  // provider-native interpreter for anthropic/google/openai, fail-closed for the rest.
-  // Configuring E2B (E2B_API_KEY) deliberately changes NOTHING here → zero regression.
   it('openai → provider-native code_interpreter', () => {
     expect(resolveCodeExecutionTools('openai')).toEqual([{ type: 'code_interpreter' }]);
   });
@@ -153,9 +141,6 @@ describe('resolveCodeExecutionTools — native-always / fail-closed', () => {
 });
 
 describe('providerRoutesToE2B — §8 routing table', () => {
-  // AGI owns one cross-provider sandbox contract. Provider-native execution
-  // remains the flag-off fallback, but the managed cut-over routes every
-  // provider through E2B so files and tool events behave identically.
   it.each(['anthropic', 'Anthropic', 'ANTHROPIC'])(
     'anthropic (%s) → true (durable E2B artifacts)',
     (p) => {
@@ -166,7 +151,6 @@ describe('providerRoutesToE2B — §8 routing table', () => {
     expect(providerRoutesToE2B(p)).toBe(true);
   });
 
-  // E2B-credit tier: OpenAI + all others route to E2B.
   it.each(['openai', 'OpenAI'])('openai (%s) → true (avoids per-session interpreter fees)', (p) => {
     expect(providerRoutesToE2B(p)).toBe(true);
   });

@@ -3,37 +3,17 @@
  * native (WebView) import so it is unit-testable in isolation. Rendered by
  * {@link SafeArtifactPreview} in a JS-disabled WebView.
  */
-// Imported from the token module rather than the theme barrel, which pulls in
-// react-native and would break this file's isolation from native code.
 import { lightColors } from '@/src/ui/theme/tokens';
 
 export type PreviewableKind = 'html' | 'svg' | 'mermaid';
 
-// The preview document is a page of model-authored content, not app chrome:
-// artifacts are written assuming a light page, so it always renders on the
-// light surface tokens regardless of the app theme.
 const PREVIEW_SURFACE = lightColors.background;
 const PREVIEW_TEXT = lightColors.textPrimary;
 
-/** Pinned mermaid version served from jsDelivr; the only external origin the
- *  mermaid sandbox's CSP permits. */
 const MERMAID_CDN = 'https://cdn.jsdelivr.net';
 const MERMAID_SRC_URL = `${MERMAID_CDN}/npm/mermaid@11/dist/mermaid.min.js`;
 
-/**
- * Build the mermaid-preview document. The UNTRUSTED diagram source is injected
- * as a JSON string literal (via JSON.stringify) — it is DATA, never interpolated
- * as HTML/JS — and rendered by the trusted, pinned mermaid library in
- * `securityLevel: 'strict'` (which sanitizes diagram labels). The rendering
- * WebView enables JS ONLY for this document and exposes NO RN bridge, so even a
- * hypothetical escape is confined to the WebView. CSP permits scripts solely
- * from the pinned mermaid CDN.
- */
 export function buildMermaidPreviewHtml(source: string): string {
-  // JSON.stringify does NOT escape `<`, so a literal `</script>` inside the diagram
-  // source would prematurely close the <script> block and break out into HTML.
-  // Escape `<` to `<` (decodes back to `<` as a string value) to keep the
-  // untrusted source strictly inside the data literal.
   const encoded = JSON.stringify(source).replace(/</g, '\\u003c');
   const csp = `default-src 'none'; script-src ${MERMAID_CDN} 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:;`;
   return [
@@ -61,13 +41,6 @@ export function buildMermaidPreviewHtml(source: string): string {
 const CONTENT_SECURITY_POLICY =
   "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:;";
 
-/**
- * Wrap untrusted artifact content in a self-contained document whose CSP
- * neutralizes external loads (and, together with the WebView's disabled
- * JavaScript, any embedded scripts). For `html` the content is placed in the
- * body; inner `<html>/<head>/<body>` tags the model emitted are ignored by the
- * parser, and OUR head/CSP governs the document.
- */
 export function buildSandboxedArtifactHtml(content: string, kind: PreviewableKind): string {
   const body = kind === 'svg' ? `<div>${content}</div>` : content;
   return [

@@ -1,14 +1,4 @@
-/**
- * Unit tests for modelStore.
- *
- * Mobile starts from local models: selectable ids are local rows with an active
- * runtime/download preset or local auto modes. Cloud provider ids require an
- * explicit invite unlock before the store accepts them.
- */
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -23,10 +13,6 @@ jest.mock('../lib/mmkv', () => ({
     removeItem: jest.fn(),
   },
 }));
-
-// ---------------------------------------------------------------------------
-// Import module under test AFTER mocks
-// ---------------------------------------------------------------------------
 
 import {
   AUTO_MODES,
@@ -44,10 +30,6 @@ import {
   canAccessCloudModelForTier,
   getDefaultCloudModelIdForTier,
 } from '../src/features/model-picker/service';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const LITE_MODEL_ID = requireLocalModel(
   (model) => model.role === 'lite-mode',
@@ -93,10 +75,6 @@ function resetStore() {
   });
   useTierStore.setState({ tier: 'free', billingTier: 'free' });
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('modelStore', () => {
   beforeEach(() => {
@@ -186,7 +164,6 @@ describe('modelStore', () => {
       const manyIds = [
         ...localIds,
         ...AUTO_MODES.map((mode) => mode.id),
-        // Second pass — duplicates should be deduped before capping.
         ...localIds,
         ...AUTO_MODES.map((mode) => mode.id),
       ].filter((id): id is string => id !== undefined);
@@ -194,9 +171,7 @@ describe('modelStore', () => {
         getState().setModel(id);
       }
 
-      // Cap is enforced — never exceeds MAX_RECENT.
       expect(getState().recentModels.length).toBeLessThanOrEqual(5);
-      // No duplicates in the list.
       const recents = getState().recentModels;
       expect(new Set(recents).size).toBe(recents.length);
     });

@@ -7,15 +7,12 @@ import { ArrowLeft, FileText, Code, Tag, Database, Terminal, Hash, User } from '
 import { cn } from '@shared/lib/utils';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 
-// ─── API types ────────────────────────────────────────────────────────────────
-
 interface SkillMeta {
   name: string;
   description: string;
   source: string;
 }
 
-// Source label mapping (mirrors DirectoryModal helper)
 function skillSourceLabel(source: string): string {
   if (source === 'bundled' || source === 'managed-local') return 'Built-in';
   if (source === 'personal') return 'Personal';
@@ -24,11 +21,7 @@ function skillSourceLabel(source: string): string {
   return source;
 }
 
-// ─── Tab type ─────────────────────────────────────────────────────────────────
-
 type DetailTab = 'preview' | 'code';
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function DetailSkeleton() {
   return (
@@ -45,8 +38,6 @@ function DetailSkeleton() {
   );
 }
 
-// ─── CodeView ────────────────────────────────────────────────────────────────
-
 function CodeView({ content }: { content: string }) {
   return (
     <div className="code-block-container group relative">
@@ -61,8 +52,6 @@ function CodeView({ content }: { content: string }) {
     </div>
   );
 }
-
-// ─── MetaRow ─────────────────────────────────────────────────────────────────
 
 function MetaRow({
   icon: Icon,
@@ -84,8 +73,6 @@ function MetaRow({
   );
 }
 
-// ─── SkillDetailPage ──────────────────────────────────────────────────────────
-
 export default function SkillDetailPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = use(params);
   const decodedName = decodeURIComponent(name);
@@ -98,7 +85,6 @@ export default function SkillDetailPage({ params }: { params: Promise<{ name: st
   const [bodyError, setBodyError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>('preview');
 
-  // Fetch skill metadata from the list endpoint
   useEffect(() => {
     let cancelled = false;
     setMetaLoading(true);
@@ -130,7 +116,6 @@ export default function SkillDetailPage({ params }: { params: Promise<{ name: st
     };
   }, [decodedName]);
 
-  // Fetch skill body lazily
   useEffect(() => {
     let cancelled = false;
     setBodyLoading(true);

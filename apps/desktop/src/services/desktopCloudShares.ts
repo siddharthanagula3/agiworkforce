@@ -47,7 +47,6 @@ function shareError(body: unknown, status: number): string {
   );
 }
 
-/** Publish a Managed Cloud conversation without crossing the Local boundary. */
 export async function createDesktopCloudShare(input: CreateDesktopCloudShareInput) {
   const request = createManagedCloudRequestContext('Managed Cloud conversation sharing');
   const payload = CreateShareRequestSchema.parse({

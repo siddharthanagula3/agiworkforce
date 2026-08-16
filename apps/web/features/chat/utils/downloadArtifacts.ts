@@ -1,10 +1,3 @@
-/**
- * Shared "download all artifacts as a zip" helper.
- *
- * Single source of truth reused by BOTH the artifact panel header and the inline
- * artifact cards under a multi-file message (ponytail: one implementation, not
- * two). Takes a minimal structural shape so it works for any artifact-like type.
- */
 
 export interface DownloadableArtifact {
   title?: string;
@@ -101,7 +94,6 @@ function triggerBrowserDownload(blob: Blob, fileName: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-/** Build the real archive bytes separately so the binary contract is directly testable. */
 export async function createArtifactsZip(
   artifacts: readonly DownloadableArtifact[],
 ): Promise<ArrayBuffer> {
@@ -128,7 +120,6 @@ export async function createArtifactsZip(
   return zip.generateAsync({ type: 'arraybuffer' });
 }
 
-/** Download one persisted generated file through its authenticated byte endpoint. */
 export async function downloadGeneratedFile(
   uri: string,
   fileName: string,

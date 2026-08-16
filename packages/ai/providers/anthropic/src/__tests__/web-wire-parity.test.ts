@@ -1,12 +1,3 @@
-/**
- * Proves the full pipeline -- translateAnthropicStream (this package) into
- * OpenAIWireAssembler.sseChunks({wireMode:'legacy-web'}) (@agiworkforce/
- * provider-protocol) -- reproduces the web v1 route's pre-Wave-2 wire bytes
- * EXACTLY, for the same Anthropic event fixtures captured against the real
- * (unmodified) legacy implementation in apps/web/app/api/llm/v1/chat/
- * completions/__tests__/stream-transform.golden.test.ts. Any drift here is
- * a byte-stability regression in the migration this package is part of.
- */
 
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -32,10 +23,6 @@ async function collectWire(
 
 describe('web v1 wire parity · streaming', () => {
   it('matches the golden fixture for text, web_search, thinking, and tool_use', async () => {
-    // Mirrors apps/web/app/api/llm/v1/chat/completions/__tests__/
-    // stream-transform.golden.test.ts's "reshapes text, server-managed
-    // web_search, thinking, and tool_use" fixture exactly (same events,
-    // JSON-object form instead of SSE-framed text).
     const seq = [
       {
         type: 'message_start',
@@ -253,10 +240,6 @@ describe('web v1 wire parity · streaming', () => {
     ];
 
     const wire = await collectWire(seq, { model: ANTHROPIC_PREMIUM_MODEL_ID });
-    // 'default' mode still emits the normal 'stop' translation (unaffected
-    // by wireMode) as a full spec-compliant envelope -- only the
-    // server-tool-use/thinking-delta chunks produce nothing, since
-    // emitReasoningContent defaults off.
     expect(wire).toHaveLength(1);
     expect(wire[0]).toMatchObject({
       object: 'chat.completion.chunk',
@@ -296,8 +279,6 @@ describe('web v1 wire parity · non-streaming', () => {
         content: [{ url: 'https://example.com' }],
       },
     });
-    // code_execution_tool_result must NOT be aggregated into any
-    // non-streaming field -- the legacy response never surfaced it.
     assembler.ingest({
       type: 'server-tool-result',
       toolUseId: 'srvtool_2',

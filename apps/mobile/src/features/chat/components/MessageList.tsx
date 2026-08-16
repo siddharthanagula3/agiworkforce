@@ -28,12 +28,9 @@ interface MessageListProps {
   onEditMessage?: (messageId: string, newContent: string) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
-  /** Called when user taps a quoted message to reply */
   onQuoteReply?: (message: ChatMessage) => void;
-  /** Called when user reacts to a message */
   onReaction?: (messageId: string, reaction: 'thumbsUp' | 'thumbsDown' | null) => void;
   onPairDesktop?: () => void;
-  /** Called when the user allows/denies a suspended MCP/connector tool call. */
   onResolveToolApproval?: (
     messageId: string,
     toolCallId: string,
@@ -41,10 +38,6 @@ interface MessageListProps {
   ) => void;
 }
 
-/**
- * Performant message list using FlashList.
- * Auto-scrolls to bottom on new messages and during streaming.
- */
 export function MessageList({
   messages,
   onApprove,
@@ -62,12 +55,9 @@ export function MessageList({
   const colors = useThemeColors();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
 
-  // Raw boolean ref — used inside scroll handler to avoid stale closure
   const isNearBottomRef = useRef(true);
-  // Drives the visible scroll-to-bottom FAB
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  // Animated opacity for the FAB fade-in/out
   const fabOpacity = useSharedValue(0);
   const fabStyle = useAnimatedStyle(() => ({ opacity: fabOpacity.value }));
 
@@ -75,7 +65,6 @@ export function MessageList({
     listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
-  // Auto-scroll to bottom when new messages arrive or content streams in
   const lastMessage = messages[messages.length - 1];
   const lastContent = lastMessage?.content;
   const lastIsStreaming = lastMessage?.isStreaming;
@@ -89,7 +78,6 @@ export function MessageList({
     }
   }, [messages.length, lastContent, lastIsStreaming]);
 
-  // Fade FAB in/out whenever visibility toggles
   useEffect(() => {
     fabOpacity.value = withTiming(showScrollButton ? 1 : 0, {
       duration: 200,
@@ -140,11 +128,6 @@ export function MessageList({
         keyExtractor={keyExtractor}
         contentContainerStyle={{ paddingVertical: 8 }}
         showsVerticalScrollIndicator={false}
-        // Scroll restoration (FlashList v2): keep the visible message anchored when
-        // content height changes — so streaming tokens, late-arriving synced turns,
-        // or keyboard show/hide don't jump the scroll position. Auto-follow the
-        // bottom only when the user is already near it; open the thread at the
-        // latest message rather than the top.
         maintainVisibleContentPosition={{
           autoscrollToBottomThreshold: NEAR_BOTTOM_THRESHOLD,
           startRenderingFromBottom: true,
@@ -213,10 +196,6 @@ const styles = StyleSheet.create({
   },
 });
 
-// ---------------------------------------------------------------------------
-// SwipeReplyWrapper — swipe right on any message to quote-reply
-// ---------------------------------------------------------------------------
-
 interface SwipeReplyWrapperProps {
   message: ChatMessage;
   onSwipeReply?: (message: ChatMessage) => void;
@@ -256,13 +235,11 @@ function SwipeReplyWrapper({ message, onSwipeReply, colors, children }: SwipeRep
 
   const handleSwipeOpen = useCallback(
     (direction: 'left' | 'right') => {
-      // Only trigger on left-side swipe (user swipes right to reveal left actions)
       if (direction !== 'left') return;
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
       onSwipeReply?.(message);
-      // Close the swipeable after triggering
       swipeableRef.current?.close();
     },
     [message, onSwipeReply, hapticsEnabled],

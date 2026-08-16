@@ -1,12 +1,3 @@
-/**
- * Main-process implementations of the invoke-style commands the electron
- * renderer bridge exposes (see `src/lib/tauri-electron/bridgeContract.ts`).
- *
- * Each command mirrors its Tauri counterpart in `src-tauri/src/sys/account/`:
- * the Clerk FAPI proxy, the device authorization flow against our own API,
- * and the OS-encrypted token store. Arguments arrive from the renderer and
- * are validated here — the renderer is not trusted.
- */
 import { CLOUD_APP_ORIGIN, isAllowedApiBaseUrl } from './config';
 import { executeClerkNativeRequest } from './clerkProxy';
 import { clearSecrets, getSecret, isSecretKey, setSecret, type SecretKey } from './secretStore';

@@ -1,21 +1,3 @@
-/**
- * A completed Checkout Session is not a payment confirmation.
- *
- * `checkout.session.completed` says the browser finished the flow. What the
- * customer is actually entitled to is the STATUS of the Stripe subscription,
- * and `effectivePlanTier`
- * (packages/contracts/types/src/subscription-entitlement.ts) grants the paid
- * tier for exactly `active` and `trialing`. The session provisioning path used
- * to seed `status = 'active'` and only overwrite it if
- * `stripe.subscriptions.retrieve` happened to succeed, so a Stripe outage — or
- * a session carrying no subscription at all — wrote an entitled row for a
- * purchase nobody had confirmed.
- *
- * These cases pin the fail-closed behaviour: no subscription row is written,
- * and the throw reaches the route, which answers 500 so Stripe redelivers the
- * event (`mark_stripe_event_failed` leaves it retryable — see
- * apps/web/db/neon/0020_functions.sql).
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -144,8 +126,6 @@ describe('entitlement is provisioned only from a confirmed Stripe subscription',
       subscriptions: {
         retrieve: vi.fn().mockResolvedValue({
           id: 'sub_live_3',
-          // Delayed-notification payment method: the session completed, the
-          // money has not arrived.
           status: 'incomplete',
           customer: 'cus_1',
           items: {
@@ -177,7 +157,6 @@ describe('entitlement is provisioned only from a confirmed Stripe subscription',
     await upsertSubscriptionFromSession(db, stripe, session);
 
     const [upsert] = subscriptionUpsertCalls();
-    // Insert parameter order: user_id, status, plan_tier, ...
     expect(upsert?.[1]?.[1]).toBe('incomplete');
     expect(upsert?.[1]?.[2]).toBe('pro');
   });

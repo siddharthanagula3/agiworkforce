@@ -9,11 +9,6 @@ import {
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
-// Zero-leak chokepoint: the SSE call below targets OUR managed cloud
-// (`${API_URL}/api/llm/...`). Route it through guardedFetch so that, in Local
-// mode, the request is refused BEFORE any network I/O (fail-closed). guardedFetch
-// delegates to secureFetch (TLS pinning) for allowed requests, so pin coverage
-// is preserved.
 import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError } from './api';
 import { ensureLlmGateOpen } from './llmGate';
@@ -32,11 +27,6 @@ import {
   type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 
-/**
- * One chat-completions wire message. Normal user/assistant/system turns use
- * this shape. Durable approval resumes never accept client-replayed messages;
- * the server restores the trusted checkpoint identified by `run_id`.
- */
 export interface ChatWireMessage {
   role: string;
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
@@ -44,9 +34,6 @@ export interface ChatWireMessage {
   tool_call_id?: string;
 }
 
-/** OpenAI-style tool_call fragment streamed by the server-tool path (Anthropic
- *  cloud chat auto-tools: web_search, code execution). Fragments accumulate by
- *  `index`; `function.arguments` arrives in pieces and must be concatenated. */
 export interface StreamToolCallFragment {
   index: number;
   id?: string;
@@ -54,14 +41,6 @@ export interface StreamToolCallFragment {
   function?: { name?: string; arguments?: string };
 }
 
-/**
- * Tool lifecycle status event (`x_tool_status`). `type` distinguishes the
- * server-tool family ('server_tool_use') from MCP ('mcp_tool_use').
- * `processSseLine` validates the raw wire payload against the shared
- * `ToolStatusPayloadSchema` cloud contract before it reaches `onDelta`; the
- * fields stay optional here because a payload that fails validation is passed
- * through UNCHANGED (defensive fallback) rather than dropped.
- */
 export interface StreamToolStatus {
   type?: string;
   name?: string;
@@ -89,15 +68,6 @@ export interface StreamToolApprovalRequest {
   args?: unknown;
 }
 
-/**
- * One durable file the model generated in the E2B sandbox this turn
- * (`x_generated_files`, emitted once by the server tool loop before [DONE]).
- * `uri` is the RELATIVE authed route `/api/files/{id}` on the cloud origin —
- * consumers resolve it against API_URL and attach the Bearer token when
- * fetching. Wire shape is validated by the shared cloud contract
- * (`GeneratedFileWireSchema` in `@agiworkforce/cloud-contracts`) at the point of
- * consumption (chatExecutionStore).
- */
 export interface StreamGeneratedFile {
   id: string;
   file_name: string;
@@ -112,41 +82,16 @@ export interface StreamDelta {
   content?: string;
   role?: string;
   finish_reason?: string | null;
-  // Tool-calling wire fields (server already emits these; see tool-loop.ts /
-  // stream-transform.ts). The mobile store accumulates them into
-  // message.toolCalls so ToolCallTimeline renders the agentic steps.
   tool_calls?: StreamToolCallFragment[];
   x_tool_status?: StreamToolStatus;
   x_tool_result?: StreamToolResult;
   x_tool_approval_request?: StreamToolApprovalRequest;
-  /** Runtime-validated, durable Cloud agent activity envelope. */
   x_agent_event?: AgentEventEnvelope;
-  /** Whole content_block object for a finished server code-execution tool. */
   x_code_result?: unknown;
-  /** Whole content_block object for a finished server web-search tool. */
   x_search_results?: unknown;
-  /** Durable descriptors for files generated in the sandbox this turn. */
   x_generated_files?: { files?: StreamGeneratedFile[] };
-  /**
-   * One interactive card (map search, clarify, ...). Left `unknown` on purpose:
-   * the shape is validated by `parseInteractiveCardDelta` from
-   * `@agiworkforce/cloud-contracts`, which NEVER throws and degrades an
-   * unrecognised kind to `recognized: false` with its authored fallback text.
-   * Typing it here would duplicate that contract and invite drift.
-   */
   x_interactive_card?: unknown;
-  /**
-   * Additive marker for a mid-stream provider failure (after the response
-   * had already committed a 200) — the classified error payload. The
-   * server still ends the stream cleanly with [DONE], so finish_reason
-   * alone cannot reliably signal this (see packages/ai/provider-protocol's
-   * openai-wire-compat.ts and packages/ui/unified-chat's hasStreamError doc
-   * comments for why). `code`/`retryable` are present when the provider
-   * adapter supplied them. Consumed by chatExecutionStore to persist
-   * metadata.streamError and drive the incomplete-response notice.
-   */
   x_stream_error?: { message: string; code?: string; retryable?: boolean };
-  /** Internal marker: content/event came from the durable run journal. */
   durableReplay?: true;
 }
 
@@ -154,43 +99,15 @@ export interface StreamCallbacks {
   onDelta: (delta: StreamDelta) => void;
   onDone: () => void;
   onError: (error: Error) => void;
-  /** Optional: called when a reconnect attempt is starting (attempt number, 1-based) */
   onReconnecting?: (attempt: number) => void;
-  /**
-   * Optional: called whenever ANY bytes arrive on the wire — including SSE
-   * keepalive comments and long server-tool gaps that never produce a parsed
-   * delta. Drives the stall watchdog so it only fires on true silence.
-   */
   onActivity?: () => void;
-  /** Stable, serializable cursor for reconnecting to the server-owned run. */
   onRunReference?: (reference: ManagedCloudAgentRunReference) => void;
 }
 
-/** Maximum number of reconnect attempts on a network interruption */
 const MAX_RECONNECT_ATTEMPTS = 3;
 
-/** Exponential backoff delays (ms) for reconnect attempts */
 const RECONNECT_DELAYS = [1_000, 2_500, 5_000];
 
-/**
- * Attempt a single streaming fetch and consume the SSE stream.
- * Returns true when the stream ends cleanly (onDone was called),
- * or throws on network-level errors so the caller can retry.
- */
-/**
- * Parse one raw SSE line (`data: {...}` / `data: [DONE]`) and fire onDelta for
- * any choice delta or finish_reason. Returns true when the line is the `[DONE]`
- * sentinel so the caller can finalize. Shared by the streaming reader and the
- * non-streaming `response.text()` fallback so both parse identically.
- */
-/**
- * Validate the known tool-event fields of a raw delta against the shared
- * cloud contracts (packages/contracts/cloud-contracts/src/tool-events.ts)
- * before it reaches the accumulator. A field that fails validation is left
- * UNCHANGED (never dropped) — defensive fallback in case a future emitter
- * drifts from the contract in a way this parser doesn't yet model; today
- * every known emitter conforms (see the contract's own doc comment).
- */
 function sanitizeToolEventFields(delta: StreamDelta): void {
   if (delta.x_tool_status !== undefined) {
     delta.x_tool_status = parseToolStatusDelta(delta.x_tool_status) ?? delta.x_tool_status;
@@ -207,9 +124,6 @@ function sanitizeToolEventFields(delta: StreamDelta): void {
     if (agentEvent) {
       delta.x_agent_event = agentEvent;
     } else {
-      // Canonical activity drives durable UI state, so an invalid envelope is
-      // never retained as a permissive fallback. Answer content in the same
-      // delta remains intact.
       delete delta.x_agent_event;
     }
   }
@@ -238,18 +152,8 @@ function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
   return false;
 }
 
-/**
- * Initial-turn endpoint. The durable resume path is not retyped here: it is
- * `TOOL_APPROVAL_RESUME_PATH` from the cloud contract, so a server-side move
- * cannot leave Mobile posting approvals at a stale URL.
- */
 const COMPLETIONS_PATH = '/api/llm/v1/chat/completions';
 
-/**
- * Authenticated, trust-boundary-aware Mobile client for the durable managed
- * run journal. `guardedFetch` keeps Local mode fail-closed, while Cloud mode
- * uses the same Bearer token and surface label as the initial SSE request.
- */
 export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
   return createManagedCloudAgentRunClient({
     baseUrl: API_URL,
@@ -273,28 +177,13 @@ interface InitialStreamRequest {
   stream: true;
   operationId: string;
   thinking?: boolean;
-  /** Reasoning effort. Includes `none`/`minimal` for models that support them
-   *  (the server accepts any effort string and validates it per model). */
   effort?: Effort | 'none' | 'minimal';
-  /** When true, the server injects its built-in web_search tool for this turn. */
   web_search?: boolean;
-  /** When true, the server runs its multi-turn Deep Research loop for this turn. */
   research?: boolean;
-  /** When true, the server injects its built-in E2B code-execution tool for this turn. */
   code_execution?: boolean;
-  /** When true, the server offers sandbox-backed document/file creation tools. */
   office_creation?: boolean;
-  /** Paid Cloud product mode; independent from approval/permission policy. */
   work_mode?: CloudWorkMode;
-  /** Exact Managed Cloud catalog name. Mobile never resolves or sends the body. */
   skill_name?: string;
-  /**
-   * Interactive-card kinds this client can RENDER. The server offers a
-   * card-producing tool only when the caller proves it can display the result
-   * (`applyMapSearchCardCapability` in the web request processor), so omitting
-   * this is why mobile never received a map card: the tool was never attached.
-   * Advertise only what is actually implemented here.
-   */
   x_interactive_cards?: { supported: string[]; canRespond: boolean };
 }
 
@@ -312,11 +201,6 @@ async function attemptStream(
 ): Promise<boolean> {
   const token = await getAuthToken();
 
-  // The completions schema expects `thinking_mode` (a boolean), NOT `thinking` —
-  // `thinking` is an OBJECT { type, budget_tokens }. Sending our boolean flag as
-  // `thinking` fails Zod validation with HTTP 400 ("expected object, received
-  // boolean"), which is the exact bug that made EVERY cloud chat reply silently
-  // fail. Remap the boolean to thinking_mode; never send a bare boolean as thinking.
   const { operationId, ...requestBody } = body;
   const payload =
     'thinking' in requestBody
@@ -347,17 +231,12 @@ async function attemptStream(
       body: JSON.stringify(payload),
       signal,
     },
-    // Stream via expo/fetch so `response.body` is a real ReadableStream and the
-    // reply renders token-by-token (RN's global fetch exposes no readable body).
     { stream: true },
   );
 
   if (!response.ok) {
     const text = await response.text();
 
-    // Detect structured paywall response: HTTP 429 + { kind: 'paywall', ... }.
-    // Throw ApiPaywallError so the caller can distinguish paywall from other
-    // stream errors and show the PaywallBottomSheet instead of a generic toast.
     if (response.status === 429) {
       try {
         const parsed = JSON.parse(text) as Record<string, unknown>;
@@ -369,22 +248,11 @@ async function attemptStream(
           );
         }
       } catch (jsonErr) {
-        // If jsonErr is our ApiPaywallError, re-throw it
         if (jsonErr instanceof ApiPaywallError) throw jsonErr;
         // Otherwise fall through to generic error below
       }
     }
 
-    // Detect a model-tier-gate rejection: HTTP 403 + { error: { code:
-    // 'model_not_available', requiredTier, message } } — thrown when the
-    // selected model requires a higher subscription tier than the user has
-    // (e.g. an Auto-mode routing slot resolving to a Pro-only model for a Free
-    // account). Without this, the rejection fell through to the generic "HTTP
-    // 403: ..." Error below, which chatExecutionStore intentionally renders as
-    // a blank "Something went wrong" bubble — an actionable, user-fixable
-    // condition (pick another model / upgrade) with zero actionable UI.
-    // Reusing ApiPaywallError gets the existing PaywallBottomSheet upgrade
-    // prompt for free, consistent with every other tier-gate in the app.
     if (response.status === 403) {
       try {
         const parsed = JSON.parse(text) as { error?: Record<string, unknown> };
@@ -404,10 +272,6 @@ async function attemptStream(
     return false;
   }
 
-  // The response becomes a server-owned durable run as soon as these headers
-  // are available. Publish the handle before consuming the body so a socket
-  // drop after any tool side effect switches to journal replay instead of
-  // re-posting the completion request.
   if (response.headers) {
     const runHandle = readManagedCloudAgentRunHandle(response);
     if (runHandle) {
@@ -417,13 +281,6 @@ async function attemptStream(
 
   const reader = response.body?.getReader();
 
-  // The streaming request is dispatched through expo/fetch (see guardedFetch
-  // `{ stream: true }` above), whose `response.body` IS a real ReadableStream —
-  // so `getReader()` succeeds and the reply renders token-by-token below.
-  // This fallback remains as defence-in-depth: if a runtime ever returns a null
-  // body (RN's global whatwg-fetch, or a mocked Response in tests), read the
-  // whole SSE buffer at once via `response.text()` through the same line parser.
-  // Non-incremental but correct — a working reply beats a streamed nothing.
   if (!reader) {
     const full = await response.text();
     for (const line of full.split('\n')) {
@@ -445,7 +302,6 @@ async function attemptStream(
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      // Keep the last incomplete line in the buffer
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
@@ -477,22 +333,8 @@ function resolveProviderFromModel(modelId: string | undefined): Provider {
   return metadata.provider;
 }
 
-/**
- * Returns true if the error looks like a transient network interruption
- * (as opposed to a deliberate abort or an application-level HTTP error).
- *
- * NOTE: mobile intentionally does NOT use `@agiworkforce/provider-runtime`'s
- * `classifyError` here. That classifier is tuned for provider-SDK error objects
- * (Anthropic/OpenAI shapes) and marks a bare RN `fetch` `TypeError` as
- * non-retryable — but on mobile a fetch `TypeError` IS the common transient
- * failure (cellular drop / NAT timeout) and must be retried. The error shapes
- * differ by surface, so this local predicate is the correct fit, not a
- * duplication to consolidate.
- */
 function isNetworkError(err: unknown): boolean {
   if (err instanceof TypeError) {
-    // fetch throws TypeError on network failure, but also for malformed requests.
-    // Only treat network-specific messages as transient (worth retrying).
     const msg = err.message.toLowerCase();
     return (
       msg.includes('network') ||
@@ -507,20 +349,11 @@ function isNetworkError(err: unknown): boolean {
       err instanceof DOMException &&
       err.name === 'AbortError')
   ) {
-    // AbortError from the user or timeout controller — not a network error
     return false;
   }
   return false;
 }
 
-/**
- * SSE streaming consumer for `/api/llm/v1/chat/completions`.
- * Uses fetch + ReadableStream (RN 0.76+ supports this natively).
- *
- * Network-level errors (TypeError from fetch/read) trigger automatic
- * reconnection with exponential backoff up to MAX_RECONNECT_ATTEMPTS times.
- * The caller can track reconnect attempts via the optional onReconnecting callback.
- */
 export async function streamChat(
   body: InitialStreamRequest,
   callbacks: StreamCallbacks,
@@ -532,30 +365,16 @@ export async function streamChat(
     });
     ensureLlmGateOpen(resolveProviderFromModel(body.model));
   } catch (err) {
-    // Deliver fatal pre-flight errors through the callbacks contract (like every
-    // other terminal failure in this function) rather than rejecting the promise —
-    // callers such as the Compare screen only listen via onError and would
-    // otherwise hang forever waiting for a result.
     callbacks.onError(err instanceof Error ? err : new Error(String(err)));
     return;
   }
 
-  // Per-attempt timeout — each stream attempt gets a fresh timeout so backoff
-  // waits don't eat into the next attempt's time budget.
   let timeoutController = new AbortController();
   let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
   let combinedSignal = signal
     ? combineAbortSignals([signal, timeoutController.signal])
     : timeoutController.signal;
 
-  // Once the first token arrives the connection is proven alive, so the
-  // per-attempt response timeout (time-to-first-token guard) is replaced by a
-  // rolling stall watchdog: every delta re-arms a shorter TIMEOUTS.STREAM_STALL
-  // timer on the SAME timeoutController. A healthy long generation keeps
-  // re-arming it; a socket that dies silently mid-stream (iOS suspension,
-  // cell handoff) stops delivering chunks, the watchdog fires, the pending
-  // `reader.read()` aborts, and the turn finalizes through onError instead of
-  // leaving the composer stuck in the streaming state forever.
   const rearmStallWatchdog = () => {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
@@ -680,8 +499,6 @@ export async function streamChat(
   };
 
   for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
-    // Bail out immediately if the caller or timeout aborted. A timeout abort
-    // must surface via onError so the store resets; only a user cancel is silent.
     if (combinedSignal.aborted) {
       clearTimeout(timeoutId);
       if (!signal?.aborted) {
@@ -692,19 +509,16 @@ export async function streamChat(
       return;
     }
 
-    // Backoff before retry attempts (not before the first attempt)
     if (attempt > 0) {
       const delay = RECONNECT_DELAYS[attempt - 1] ?? RECONNECT_DELAYS[RECONNECT_DELAYS.length - 1];
       callbacks.onReconnecting?.(attempt);
 
       await new Promise<void>((resolve, reject) => {
-        // If already aborted, skip the wait entirely
         if (combinedSignal.aborted) {
           reject(new AbortError('Aborted during reconnect backoff'));
           return;
         }
         const tid = setTimeout(resolve, delay);
-        // Cancel the wait if the signal aborts during backoff
         combinedSignal.addEventListener(
           'abort',
           () => {
@@ -714,8 +528,6 @@ export async function streamChat(
           { once: true },
         );
       }).catch(() => {
-        // Aborted during backoff — the combinedSignal check below decides
-        // whether to surface it (timeout) or exit silently (user cancel).
         clearTimeout(timeoutId);
       });
 
@@ -729,7 +541,6 @@ export async function streamChat(
         return;
       }
 
-      // Reset timeout for this new attempt so backoff waits don't eat the budget
       clearTimeout(timeoutId);
       timeoutController = new AbortController();
       timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
@@ -744,14 +555,9 @@ export async function streamChat(
         clearTimeout(timeoutId);
         return;
       }
-      // onError was already called inside attemptStream for non-network errors
       clearTimeout(timeoutId);
       return;
     } catch (err) {
-      // A user-initiated cancel is silent (no error UI). A timeout is NOT: it must
-      // surface an error, or the request hangs with the assistant message stuck
-      // "streaming" forever and zero feedback — the exact silent failure this path
-      // used to produce. Distinguish the two by which signal actually aborted.
       if (signal?.aborted) {
         clearTimeout(timeoutId);
         return;
@@ -768,38 +574,21 @@ export async function streamChat(
       if (isNetworkError(err)) {
         lastNetworkError = err instanceof Error ? err : new Error(String(err));
         if (await recoverFromDurableRun(attempt + 1)) return;
-        // Continue to next attempt
         continue;
       }
 
-      // Non-network error — surface immediately, no retry. Preserve the original
-      // error instance so callers can pattern-match (e.g. ApiPaywallError → the
-      // execution store renders the PaywallBottomSheet).
       callbacks.onError(err instanceof Error ? err : new Error(String(err)));
       clearTimeout(timeoutId);
       return;
     }
   }
 
-  // All reconnect attempts exhausted
   clearTimeout(timeoutId);
   callbacks.onError(
     lastNetworkError ?? new Error('Stream failed after maximum reconnect attempts'),
   );
 }
 
-/**
- * Resume a suspended tool-approval turn by stable server-owned `run_id` plus
- * the user's decisions. The trusted transcript, tool arguments, policy and
- * event cursor are restored from the durable server checkpoint.
- *
- * DELIBERATELY SINGLE-ATTEMPT — unlike `streamChat`, this does NOT retry on a
- * network drop. The `/approve` endpoint EXECUTES the approved tool calls
- * (connector writes, MCP side effects); re-POSTing the same body after a mid-
- * execution disconnect would risk double-executing an already-approved,
- * side-effecting tool call. A dropped resume surfaces as an error so the user
- * can explicitly retry (a fresh decision, not an automatic replay).
- */
 export async function streamToolApprovalResume(
   body: ApprovalResumeRequest,
   callbacks: StreamCallbacks,
@@ -823,8 +612,6 @@ export async function streamToolApprovalResume(
     ? combineAbortSignals([signal, timeoutController.signal])
     : timeoutController.signal;
 
-  // Same rolling stall watchdog as streamChat: a healthy continuation keeps
-  // re-arming it; a socket that dies silently mid-stream aborts the pending read.
   const rearmStallWatchdog = () => {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
@@ -844,7 +631,6 @@ export async function streamToolApprovalResume(
   } catch (err) {
     clearTimeout(timeoutId);
     if (signal?.aborted) {
-      // User-initiated cancel — silent by contract.
       return;
     }
     if (timeoutController.signal.aborted) {

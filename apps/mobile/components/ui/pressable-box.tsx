@@ -13,24 +13,6 @@ export interface PressableBoxProps extends Omit<PressableProps, 'style'> {
   style?: StyleProp<ViewStyle> | StyleFn;
 }
 
-/**
- * Drop-in `Pressable` that keeps function-form `style` working under NativeWind.
- *
- * `babel.config.js` sets `jsxImportSource: 'nativewind'`, so every element is
- * created through NativeWind's JSX runtime. Its cssInterop reads `style` as a
- * *value* — when the prop is React Native's `({ pressed }) => style` callback,
- * the callback is never invoked and the resolved styles are dropped entirely.
- * The element then renders with no styling at all: cards lose their background,
- * radius and margins; absolutely-positioned buttons collapse into flow layout.
- *
- * Plain-object `style` on `Pressable` is unaffected, which is why the breakage
- * looks arbitrary — two Pressables in the same file behave differently based
- * only on the form of the prop.
- *
- * This wrapper tracks `pressed` itself and hands React Native a plain style, so
- * NativeWind only ever sees a resolved value. Call sites keep the idiomatic
- * `style={({ pressed }) => ({ ... })}` signature.
- */
 export function PressableBox({
   style,
   onPressIn,

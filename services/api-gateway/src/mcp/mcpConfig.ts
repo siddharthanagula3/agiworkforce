@@ -1,30 +1,9 @@
-/**
- * @file MCP Server Configuration
- *
- * Defines which MCP servers are available for web/mobile clients via the API gateway proxy.
- * Servers are loaded from a JSON config file at startup, with a fallback to an empty list.
- *
- * Config file location (checked in order):
- *   1. MCP_CONFIG_PATH environment variable
- *   2. ./mcp-servers.json (relative to process cwd)
- *
- * Each server entry specifies a transport (stdio or http) and connection details.
- */
 
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { z } from 'zod';
 import { logger } from '../lib/logger';
 
-// =============================================================================
-// SCHEMAS
-// =============================================================================
-
-/**
- * SECURITY: Allowlist of permitted MCP server binary names.
- * Only simple binary names are allowed — no paths, no shell metacharacters.
- * Add new entries here when onboarding a new MCP server type.
- */
 const ALLOWED_MCP_COMMANDS = new Set([
   'npx',
   'node',
@@ -45,13 +24,10 @@ const ALLOWED_MCP_COMMANDS = new Set([
   'mcp-server-sequential-thinking',
 ]);
 
-/** Validate that a stdio command is in the allowlist and contains no path separators */
 function validateStdioCommand(command: string): boolean {
-  // Reject any path separators — only allow simple binary names
   if (command.includes('/') || command.includes('\\')) {
     return false;
   }
-  // Reject shell metacharacters
   if (/[;&|`$(){}]/.test(command)) {
     return false;
   }
@@ -76,7 +52,6 @@ const httpTransportSchema = z.object({
     (urlStr) => {
       try {
         const hostname = new URL(urlStr).hostname;
-        // Reject loopback, link-local, and private network addresses to prevent SSRF
         return !/(^localhost$|^127\.|^10\.|^172\.(1[6-9]|2\d|3[01])\.|^192\.168\.|^169\.254\.|^0\.0\.0\.0$|^::1$|^::ffff:127\.|^\[::1\]$)/i.test(
           hostname,
         );
@@ -103,25 +78,13 @@ const mcpConfigFileSchema = z.object({
   servers: z.array(mcpServerEntrySchema),
 });
 
-// =============================================================================
-// TYPES
-// =============================================================================
-
 export type StdioTransport = z.infer<typeof stdioTransportSchema>;
 export type HttpTransport = z.infer<typeof httpTransportSchema>;
 export type McpTransport = z.infer<typeof transportSchema>;
 export type McpServerEntry = z.infer<typeof mcpServerEntrySchema>;
 
-// =============================================================================
-// CONFIG LOADING
-// =============================================================================
-
 let cachedConfig: McpServerEntry[] | null = null;
 
-/**
- * Load MCP server configuration from the config file.
- * Results are cached after the first load.
- */
 export function loadMcpConfig(): McpServerEntry[] {
   if (cachedConfig !== null) {
     return cachedConfig;
@@ -140,7 +103,6 @@ export function loadMcpConfig(): McpServerEntry[] {
     const parsed = JSON.parse(raw);
     const validated = mcpConfigFileSchema.parse(parsed);
 
-    // Filter to enabled servers only
     cachedConfig = validated.servers.filter((s) => s.enabled);
     logger.info(
       { count: cachedConfig.length, path: configPath },
@@ -154,28 +116,17 @@ export function loadMcpConfig(): McpServerEntry[] {
   }
 }
 
-/**
- * Get a specific server entry by ID.
- */
 export function getServerEntry(serverId: string): McpServerEntry | undefined {
   const servers = loadMcpConfig();
   return servers.find((s) => s.id === serverId);
 }
 
-/**
- * Force-reload the configuration (useful for testing or hot-reload).
- */
 export function reloadMcpConfig(): McpServerEntry[] {
   cachedConfig = null;
   return loadMcpConfig();
 }
 
-// =============================================================================
-// INTERNALS
-// =============================================================================
-
 function resolveConfigPath(): string | null {
-  // 1. Explicit env var
   const envPath = process.env['MCP_CONFIG_PATH'];
   if (envPath) {
     const resolved = resolve(envPath);
@@ -184,7 +135,6 @@ function resolveConfigPath(): string | null {
     return null;
   }
 
-  // 2. Default location relative to cwd
   const defaultPath = resolve(process.cwd(), 'mcp-servers.json');
   if (existsSync(defaultPath)) return defaultPath;
 

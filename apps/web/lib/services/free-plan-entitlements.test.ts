@@ -26,10 +26,6 @@ describe('managed cloud resource entitlements', () => {
     expect(getCustomRemoteMcpLimit(plan)).toBe(connectors);
   });
 
-  // Regression: a local `toEnforceableLimit` copy omitted the 'custom' arm, so
-  // Enterprise's 'custom' limits resolved to 0 and the create routes threw
-  // `createError.validation` before doing any work — Enterprise accounts could
-  // not create a single Project or custom connector.
   it('does not treat a negotiated Enterprise limit as zero', () => {
     expect(getProjectLimit('enterprise')).not.toBe(0);
     expect(getCustomRemoteMcpLimit('enterprise')).not.toBe(0);
@@ -62,8 +58,6 @@ describe('managed cloud resource entitlements', () => {
     expect(isUserResourceLimitError({ code: '23505', message: 'unique violation' })).toBe(false);
   });
 
-  // Regression: only a per-file byte cap and a 20-files-per-project COUNT cap
-  // existed, so spreading large files across projects held unbounded storage.
   describe('knowledge storage quota', () => {
     it.each([
       ['free', 100 * 1024 ** 2],

@@ -6,11 +6,6 @@ import { getRoutingSlotModel } from '@agiworkforce/types';
 
 const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
 
-/**
- * Transcription mode - kept for backward compatibility
- * 'web-speech' uses the browser's Web Speech API (streaming, realtime)
- * 'whisper' uses backend Whisper transcription (more accurate, batch)
- */
 export type TranscriptionMode = 'web-speech' | 'whisper';
 
 type SpeechRecognitionLike = EventTarget & {
@@ -39,9 +34,6 @@ const getSpeechRecognitionConstructor = (): SpeechRecognitionConstructorLike | u
   return windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
 };
 
-/**
- * Voice transcription result from the backend (Whisper)
- */
 export interface VoiceTranscription {
   text: string;
   language: string | null;
@@ -49,80 +41,41 @@ export interface VoiceTranscription {
   confidence: number | null;
 }
 
-/**
- * Voice settings from the backend
- */
 export interface VoiceSettings {
   provider: 'cloud' | 'webspeech' | 'local';
   model: string;
   language: string | null;
 }
 
-/**
- * Options for the useVoiceTranscription hook
- */
 export interface UseVoiceTranscriptionOptions {
-  /** Use Whisper Cloud (remote) when true, Web Speech API (local) when false (default) */
   preferWhisperCloud?: boolean;
-  /** Language code for transcription (e.g., 'en', 'es', 'fr') */
   language?: string;
-  /** Audio format for recording (default: 'webm') */
   audioFormat?: 'webm' | 'mp3' | 'wav' | 'ogg';
-  /** Callback when transcription result is received */
   onResult?: (transcript: string) => void;
-  /** Callback when an error occurs */
   onError?: (error: string) => void;
-  /** Callback when recording starts */
   onRecordingStart?: () => void;
-  /** Callback when recording stops */
   onRecordingStop?: () => void;
-  /**
-   * Host-owned Managed Cloud request context captured before microphone access.
-   * The context pins account + session authority while resolving the current
-   * bearer only at the final transport boundary.
-   */
   getCloudRequestContext?: () => Pick<ManagedCloudRequestContext, 'assertBoundary' | 'fetch'>;
 }
 
-/**
- * State for voice transcription
- */
 export interface VoiceTranscriptionState {
-  /** Whether audio is currently being recorded */
   isRecording: boolean;
-  /** Whether audio is being transcribed by the backend */
   isTranscribing: boolean;
-  /** Final transcript from the backend */
   transcript: string;
-  /** Interim transcript (not used for backend transcription, kept for API compatibility) */
   interimTranscript: string;
-  /** Error message if any */
   error: string | null;
 }
 
-/**
- * Return type for the useVoiceTranscription hook
- */
 export interface UseVoiceTranscriptionReturn extends VoiceTranscriptionState {
-  /** Start recording audio */
   startRecording: () => Promise<void>;
-  /** Stop recording and get the transcription */
   stopRecording: () => Promise<string>;
-  /** Stop recording and discard captured audio without transcribing it. */
   cancelRecording: () => void;
-  /** Toggle recording on/off */
   toggleRecording: () => Promise<void>;
-  /** Clear the current transcript */
   clearTranscript: () => void;
-  /** Whether the browser supports MediaRecorder */
   isSupported: boolean;
-  /** Available local Whisper implementations */
   availableLocalWhisper: string[];
-  /** Configure voice settings on the backend */
   configure: (settings: Partial<VoiceSettings>) => Promise<void>;
-  /** Get current voice settings */
   getSettings: () => Promise<VoiceSettings>;
-  /** Check available local Whisper implementations */
   checkLocalWhisper: () => Promise<string[]>;
 }
 
@@ -183,9 +136,7 @@ export function useVoiceTranscription(
   > | null>(null);
   const transcriptionAbortControllerRef = useRef<AbortController | null>(null);
   const operationGenerationRef = useRef(0);
-  // HKS-005 fix: Track mount state to prevent setState after unmount
   const isMountedRef = useRef(true);
-  // BUG-VT-02: Ref mirror of isRecording for stale-closure-safe concurrent session guard
   const isRecordingRef = useRef(false);
 
   const abortActiveTranscription = useCallback((reason: string): void => {
@@ -238,9 +189,6 @@ export function useVoiceTranscription(
     [],
   );
 
-  /**
-   * Check available local Whisper implementations
-   */
   const checkLocalWhisperImpl = useCallback(async (): Promise<string[]> => {
     try {
       const availability = await voiceCheckLocalWhisper();
@@ -250,9 +198,6 @@ export function useVoiceTranscription(
     }
   }, []);
 
-  /**
-   * Configure voice settings on the backend
-   */
   const configureImpl = useCallback(
     async (settings: Partial<VoiceSettings>): Promise<void> => {
       try {
@@ -267,9 +212,6 @@ export function useVoiceTranscription(
     [onError],
   );
 
-  /**
-   * Get current voice settings from the backend
-   */
   const getSettingsImpl = useCallback(async (): Promise<VoiceSettings> => {
     try {
       return await voiceGetSettings();
@@ -281,10 +223,8 @@ export function useVoiceTranscription(
     }
   }, [onError]);
 
-  // Check browser support on mount
   useEffect(() => {
     isMountedRef.current = true;
-    // BUG-VT-06: isSupported reflects MediaRecorder OR any SpeechRecognition availability
     const supported =
       typeof MediaRecorder !== 'undefined' ||
       typeof (window as typeof globalThis & { SpeechRecognition?: unknown }).SpeechRecognition !==
@@ -294,7 +234,6 @@ export function useVoiceTranscription(
 
     setIsSupported(supported);
 
-    // Check for available local whisper implementations
     if (supported) {
       checkLocalWhisperImpl().then((available) => {
         setAvailableLocalWhisper(available);
@@ -302,10 +241,8 @@ export function useVoiceTranscription(
     }
 
     return () => {
-      // HKS-005 fix: Mark as unmounted to prevent setState calls
       isMountedRef.current = false;
       invalidateOperation('Voice transcription was cancelled because the view closed.');
-      // Cleanup on unmount
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
@@ -316,7 +253,6 @@ export function useVoiceTranscription(
           // Ignore speech recognition shutdown failures
         }
       }
-      // BUG-VT-04: Stop MediaRecorder on unmount so the OS recording indicator clears
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         try {
           mediaRecorderRef.current.onstop = null;
@@ -330,18 +266,14 @@ export function useVoiceTranscription(
     };
   }, [checkLocalWhisperImpl, invalidateOperation]);
 
-  // Configure provider when preferWhisperCloud changes (configure backend for Whisper Cloud when enabled)
   useEffect(() => {
     if (preferWhisperCloud) {
-      // When using Whisper Cloud, configure backend accordingly
       configureImpl({ provider: 'cloud' as const }).catch((err) => {
-        // AUDIT-P3-ERROR: Cloud provider configuration failure
         console.debug('[VoiceTranscription] Cloud provider configuration failed:', err);
       });
     }
   }, [preferWhisperCloud, configureImpl]);
 
-  // Auto-clear transient voice errors so stale banners do not block input affordances.
   useEffect(() => {
     if (!state.error) return;
     const timeoutId = window.setTimeout(() => {
@@ -351,19 +283,14 @@ export function useVoiceTranscription(
     return () => window.clearTimeout(timeoutId);
   }, [state.error]);
 
-  // Configure language when it changes
   useEffect(() => {
     if (language) {
       configureImpl({ language }).catch((err) => {
-        // AUDIT-P3-ERROR: Language configuration failure - error state already set by configureImpl
         console.debug('[VoiceTranscription] Language configuration failed:', err);
       });
     }
   }, [language, configureImpl]);
 
-  /**
-   * Get the MIME type for the selected audio format
-   */
   const getMimeType = useCallback((): string => {
     const mimeTypes: Record<string, string> = {
       webm: 'audio/webm;codecs=opus',
@@ -372,32 +299,24 @@ export function useVoiceTranscription(
       ogg: 'audio/ogg;codecs=opus',
     };
 
-    // Check if the preferred MIME type is supported
     const format = audioFormat || 'webm';
     const preferredMime = mimeTypes[format] || 'audio/webm;codecs=opus';
     if (MediaRecorder.isTypeSupported(preferredMime)) {
       return preferredMime;
     }
 
-    // Fallback to webm
     if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
       return 'audio/webm;codecs=opus';
     }
 
-    // Fallback to webm without codec
     if (MediaRecorder.isTypeSupported('audio/webm')) {
       return 'audio/webm';
     }
 
-    // Last resort - let browser choose
     return '';
   }, [audioFormat]);
 
-  /**
-   * Start recording audio from the microphone
-   */
   const startRecording = useCallback(async (): Promise<void> => {
-    // AUDIT-VOICE-043 fix: Use preferWhisperCloud - when false, use Web Speech (local); when true, use Whisper Cloud
     if (!preferWhisperCloud) {
       const SpeechRecognitionCtor = getSpeechRecognitionConstructor();
 
@@ -408,7 +327,6 @@ export function useVoiceTranscription(
         return;
       }
 
-      // BUG-VT-02: Use ref guard to avoid stale closure capturing old isRecording state
       if (isRecordingRef.current) {
         return;
       }
@@ -468,7 +386,6 @@ export function useVoiceTranscription(
         const speechEvent = event as Event & { error?: string };
         const errorCode = speechEvent.error || 'unknown';
         const errorMessage = `Speech recognition error: ${errorCode}`;
-        // BUG-VT-02: Keep ref in sync
         isRecordingRef.current = false;
         if (isMountedRef.current) {
           setState((prev) => ({
@@ -481,7 +398,6 @@ export function useVoiceTranscription(
       };
 
       recognition.onend = () => {
-        // BUG-VT-02: Keep ref in sync
         isRecordingRef.current = false;
         if (isMountedRef.current) {
           setState((prev) => ({
@@ -496,7 +412,6 @@ export function useVoiceTranscription(
       try {
         speechRecognitionRef.current = recognition;
         recognition.start();
-        // BUG-VT-02: Keep ref in sync
         isRecordingRef.current = true;
         if (isMountedRef.current) {
           setState((prev) => ({
@@ -510,7 +425,6 @@ export function useVoiceTranscription(
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : 'Failed to start speech recognition';
-        // BUG-VT-02: Keep ref in sync
         isRecordingRef.current = false;
         if (isMountedRef.current) {
           setState((prev) => ({
@@ -531,7 +445,6 @@ export function useVoiceTranscription(
       return;
     }
 
-    // BUG-VT-02: Use ref guard instead of stale state value
     if (isRecordingRef.current) {
       return;
     }
@@ -548,7 +461,6 @@ export function useVoiceTranscription(
       request.assertBoundary();
       cloudRequestContextRef.current = request;
 
-      // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -586,7 +498,6 @@ export function useVoiceTranscription(
       mediaRecorder.onerror = (event) => {
         if (operationGeneration !== operationGenerationRef.current) return;
         const errorMessage = `Recording error: ${(event as ErrorEvent).message || 'Unknown error'}`;
-        // BUG-VT-02: Keep ref in sync
         isRecordingRef.current = false;
         setState((prev) => ({
           ...prev,
@@ -597,10 +508,9 @@ export function useVoiceTranscription(
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(100); // Collect data every 100ms
+      mediaRecorder.start(100);
       acquiredStream = null;
 
-      // BUG-VT-02: Keep ref in sync
       isRecordingRef.current = true;
       setState((prev) => ({
         ...prev,
@@ -619,7 +529,6 @@ export function useVoiceTranscription(
       }
       if (!isMountedRef.current || operationGeneration !== operationGenerationRef.current) return;
       const errorMessage = getMediaErrorMessage(err);
-      // BUG-VT-02: Keep ref in sync
       isRecordingRef.current = false;
       setState((prev) => ({
         ...prev,
@@ -641,11 +550,7 @@ export function useVoiceTranscription(
     invalidateOperation,
   ]);
 
-  /**
-   * Stop recording and transcribe the audio
-   */
   const stopRecording = useCallback(async (): Promise<string> => {
-    // AUDIT-VOICE-043 fix: Check if using Web Speech (not Whisper Cloud)
     if (!preferWhisperCloud && speechRecognitionRef.current) {
       const recognition = speechRecognitionRef.current;
       speechRecognitionRef.current = null;
@@ -655,7 +560,6 @@ export function useVoiceTranscription(
         // noop
       }
       const final = speechFinalTranscriptRef.current.trim();
-      // BUG-VT-02: Keep ref in sync
       isRecordingRef.current = false;
       if (isMountedRef.current) {
         setState((prev) => ({
@@ -668,7 +572,6 @@ export function useVoiceTranscription(
       return final;
     }
 
-    // BUG-VT-02: Use ref guard for accurate current value
     if (!isRecordingRef.current || !mediaRecorderRef.current) {
       return state.transcript;
     }
@@ -681,7 +584,6 @@ export function useVoiceTranscription(
 
       mediaRecorder.onstop = async () => {
         if (mediaRecorderRef.current === mediaRecorder) mediaRecorderRef.current = null;
-        // Stop all tracks
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
@@ -699,14 +601,12 @@ export function useVoiceTranscription(
           return;
         }
 
-        // Create blob from chunks
         const mimeType = mediaRecorder.mimeType || 'audio/webm';
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         audioChunksRef.current = [];
 
         if (audioBlob.size === 0) {
           const error = 'No audio recorded';
-          // HKS-005 fix: Check if still mounted before setState
           if (isMountedRef.current) {
             setState((prev) => ({
               ...prev,
@@ -719,8 +619,6 @@ export function useVoiceTranscription(
           return;
         }
 
-        // Start transcription
-        // HKS-005 fix: Check if still mounted before setState
         if (isMountedRef.current) {
           setState((prev) => ({
             ...prev,
@@ -786,7 +684,6 @@ export function useVoiceTranscription(
           }
           const transcript = (payload?.text || '').trim();
 
-          // HKS-005 fix: Check if still mounted before setState
           if (isMountedRef.current && operationGeneration === operationGenerationRef.current) {
             setState((prev) => ({
               ...prev,
@@ -807,7 +704,6 @@ export function useVoiceTranscription(
             err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
               ? err.message
               : String(err);
-          // HKS-005 fix: Check if still mounted before setState
           if (isMountedRef.current) {
             setState((prev) => ({
               ...prev,
@@ -841,10 +737,6 @@ export function useVoiceTranscription(
     fetchWithAbortableTimeout,
   ]);
 
-  /**
-   * Stop capture without transcription. Mode/account switches use this path so
-   * a hidden recorder cannot keep the microphone open or upload discarded audio.
-   */
   const cancelRecording = useCallback((): void => {
     invalidateOperation('Voice transcription was cancelled.');
     const recognition = speechRecognitionRef.current;
@@ -890,9 +782,6 @@ export function useVoiceTranscription(
     onRecordingStop?.();
   }, [invalidateOperation, onRecordingStop]);
 
-  /**
-   * Toggle recording on/off
-   */
   const toggleRecording = useCallback(async (): Promise<void> => {
     if (state.isRecording) {
       await stopRecording();
@@ -901,9 +790,6 @@ export function useVoiceTranscription(
     }
   }, [state.isRecording, startRecording, stopRecording]);
 
-  /**
-   * Clear the current transcript
-   */
   const clearTranscript = useCallback((): void => {
     setState((prev) => ({
       ...prev,
@@ -913,9 +799,6 @@ export function useVoiceTranscription(
     }));
   }, []);
 
-  /**
-   * Public API for configuring voice settings
-   */
   const configure = useCallback(
     async (settings: Partial<VoiceSettings>): Promise<void> => {
       await configureImpl(settings);
@@ -923,16 +806,10 @@ export function useVoiceTranscription(
     [configureImpl],
   );
 
-  /**
-   * Public API for getting voice settings
-   */
   const getSettings = useCallback(async (): Promise<VoiceSettings> => {
     return getSettingsImpl();
   }, [getSettingsImpl]);
 
-  /**
-   * Public API for checking local Whisper availability
-   */
   const checkLocalWhisper = useCallback(async (): Promise<string[]> => {
     const available = await checkLocalWhisperImpl();
     setAvailableLocalWhisper(available);
@@ -954,9 +831,6 @@ export function useVoiceTranscription(
   };
 }
 
-/**
- * Get a user-friendly error message for media errors
- */
 function getMediaErrorMessage(err: unknown): string {
   if (err instanceof DOMException) {
     switch (err.name) {
@@ -984,16 +858,13 @@ function getMediaErrorMessage(err: unknown): string {
   return 'Failed to access microphone';
 }
 
-/**
- * Get the file format extension from MIME type
- */
 function getFormatFromMimeType(mimeType: string): string {
   if (mimeType.includes('webm')) return 'webm';
   if (mimeType.includes('mp3') || mimeType.includes('mpeg')) return 'mp3';
   if (mimeType.includes('wav')) return 'wav';
   if (mimeType.includes('ogg')) return 'ogg';
   if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'm4a';
-  return 'webm'; // Default to webm
+  return 'webm';
 }
 
 export default useVoiceTranscription;

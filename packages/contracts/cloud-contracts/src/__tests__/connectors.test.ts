@@ -1,8 +1,3 @@
-/**
- * Tests for the connectors REST API contract mirrored from
- * `apps/web/app/api/connectors/route.ts` and
- * `apps/web/app/api/connectors/custom/route.ts`.
- */
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -157,7 +152,6 @@ describe('DisconnectResponseSchema', () => {
 });
 
 describe('custom-connector contract (apps/web/app/api/connectors/custom/route.ts)', () => {
-  // Real GET /api/connectors/custom row shape (getUserCustomConnectorSummaries).
   const customConnector = {
     id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     shortId: 'a1b2c3d4e5',

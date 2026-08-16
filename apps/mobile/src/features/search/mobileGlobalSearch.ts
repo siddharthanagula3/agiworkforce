@@ -38,10 +38,6 @@ function includesQuery(query: string, ...values: Array<string | null | undefined
   return values.some((value) => value?.toLocaleLowerCase().includes(query));
 }
 
-/**
- * Builds the visible global-search projection from already-authorized stores.
- * Callers own Local/Cloud filtering before passing data into this pure helper.
- */
 export function buildMobileGlobalSearchGroups(input: {
   query: string;
   conversations: ReadonlyArray<ConversationSummary>;
@@ -111,10 +107,6 @@ export function buildMobileGlobalSearchGroups(input: {
   };
 }
 
-/**
- * Projects the attachments already present in authorized transcripts into
- * searchable file rows without copying file bytes or broadening access.
- */
 export function collectSearchableMobileFiles(
   conversations: ReadonlyArray<ConversationSummary>,
   messagesByConversation: Readonly<Record<string, ReadonlyArray<ChatMessage>>>,

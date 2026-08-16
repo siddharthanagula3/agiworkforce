@@ -46,10 +46,7 @@ interface ProfileRowProps {
 export default function ProfileScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  // isClerkSignedIn is the real v1 auth signal; `user` from useAuthStore is
-  // always null in v1 (initialize() sets it to null and nothing else writes it).
   const { isClerkSignedIn, signOut } = useAuthStore();
-  // Clerk user exposes the actual email for the cloud profile header.
   const { user: clerkUser } = useUser();
   const localConversations = useChatStore((s) => s.conversations);
   const loadConversations = useChatStore((s) => s.loadConversations);
@@ -62,8 +59,6 @@ export default function ProfileScreen() {
   const personalization = isCloudMode ? cloudPersonalization : localPersonalization;
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
 
-  // In cloud mode, cloudConversations is authoritative (cloud store only holds
-  // cloud conversations). In local mode, filter by executionMode.
   const modeConversations = useMemo(
     () =>
       (isCloudMode
@@ -98,8 +93,6 @@ export default function ProfileScreen() {
   const subtitle = isCloudMode
     ? cloudEmail || (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
     : personalization.occupation || 'Private on this device';
-  // Gate cloud account section on the real Clerk signal, not on useAuthStore.user
-  // which is permanently null in v1.
   const hasCloudAccount = FEATURES.auth && isClerkSignedIn;
 
   useEffect(() => {

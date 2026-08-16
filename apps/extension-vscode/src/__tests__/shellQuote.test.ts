@@ -1,10 +1,3 @@
-/**
- * shellQuote.test.ts — D5 cross-platform shell escape coverage
- *
- * Ensures `shellQuoteForCurrentPlatform` produces correct quoting on POSIX
- * (single-quote with `'\''` escape) and Windows (double-quote with `""` and
- * stripping of backtick / `$`).
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shellQuoteForCurrentPlatform } from '../platform/workspaceFolders';

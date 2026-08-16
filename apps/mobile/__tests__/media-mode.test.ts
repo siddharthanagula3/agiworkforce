@@ -1,12 +1,3 @@
-/**
- * Media mode: entering/leaving image and video modes swaps the SELECTED model
- * and restores the user's own text model on the way out.
- *
- * The regression these guard is the one that made the old boolean toggles
- * misleading: a user must never be left on a media model that cannot answer
- * their next text message, and must never have their text model silently
- * replaced by the other media model.
- */
 
 import { getRoutingSlotModel, isModelLive, modelsCatalog } from '@agiworkforce/types';
 import {
@@ -52,8 +43,6 @@ describe('media mode', () => {
         (model) => model.capabilities.videoGen === true && model.modelType !== 'video',
       );
 
-      // Keep this test discriminating: the catalog currently contains at least
-      // one such model, so an empty fixture cannot make the exclusion pass.
       expect(genericCapabilityModels.length).toBeGreaterThan(0);
       expect(listMediaModels('video')).not.toEqual(
         expect.arrayContaining(genericCapabilityModels.map((model) => model.id)),
@@ -173,12 +162,6 @@ describe('media mode', () => {
       expect(mediaModelIdForMode('video')).toBe(resolveMediaModelId('video'));
     });
 
-    /**
-     * The regression that shipped in the first version of this: media models are
-     * routing SLOT models, not picker-selectable chat models, so `setModel`
-     * silently rejected them. Writing there was both a no-op and the wrong idea
-     * — the chat selection must survive a media round trip untouched.
-     */
     it('never overwrites the user chat-model selection', () => {
       enterMediaMode('image');
       expect(useModelStore.getState().selectedModel).toBe(TEXT_MODEL);
@@ -218,7 +201,6 @@ describe('media mode', () => {
   it('does not persist media mode, so a cold start never resumes on a media model', () => {
     enterMediaMode('video');
 
-    // `partialize` is the persistence contract; media mode must be absent from it.
     const persisted = JSON.parse(
       JSON.stringify(
         (

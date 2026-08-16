@@ -1,29 +1,3 @@
-/**
- * @file resend-client.ts
- *
- * The repo's FIRST transactional email path.
- *
- * VERIFIED BEFORE WRITING THIS: there is no `resend` (or sendgrid/postmark/
- * nodemailer) dependency anywhere in this repo — `lib/services/organization-
- * invitation-service.ts` documents the same absence and ships copy-a-link
- * instead of sending mail. So this calls the Resend REST API over `fetch`
- * rather than adding an npm dependency (lockfile edits are blocked by the
- * repo's hooks anyway, and one HTTP POST does not justify an SDK).
- *
- * # It never throws into the request path
- *
- * A support escalation must not 500 because an email provider had a bad
- * minute. Every failure is returned as a typed value, and the caller downgrades
- * the response mode (`email` → `unavailable`) rather than losing the user's
- * escalation. The row is already persisted by then, so a human sweeping the
- * table can still find it.
- *
- * # SSRF surface: none
- *
- * `RESEND_ENDPOINT` is a module constant. No part of it is derived from a
- * request. The only user-influenced values are the recipient (`reply_to`, from a
- * validated email) and the body (redacted upstream by transcript.ts).
- */
 
 import 'server-only';
 
@@ -46,15 +20,11 @@ export interface SendEmailInput {
   subject: string;
   text: string;
   html: string;
-  /** So a human can hit reply and reach the user. Half the async channel. */
   replyTo?: string;
-  /** Resend deduplicates the same payload/key for 24 hours (max 256 chars). */
   idempotencyKey?: string;
 }
 
-/** `SendEmailInput` plus the sender identity, for callers outside support. */
 export interface TransactionalEmailInput extends SendEmailInput {
-  /** Verified sending address. Support and notifications use DIFFERENT ones. */
   from: string;
 }
 
@@ -84,7 +54,6 @@ async function postOnce(
       return {
         ok: false,
         retryable: isRetryable(response.status),
-        // Truncate: a provider error body is not a place to store an essay.
         detail: `${response.status} ${detail.slice(0, 500)}`.trim(),
       };
     }
@@ -102,19 +71,6 @@ async function postOnce(
   }
 }
 
-/**
- * The shared transport: one POST, one retry, one error taxonomy.
- *
- * Extracted so a second email channel does not copy this logic. Two divergent
- * senders is the same drift that produced two secret-pattern lists and three
- * keyboard-shortcut lists elsewhere in this repo — the copy always falls behind
- * on retries, timeouts, or truncation, and nobody notices until mail stops.
- *
- * The API KEY is shared (one Resend account); the FROM address is not, because
- * a product notification arriving from the support mailbox trains users to
- * reply to the wrong place and muddies deliverability reputation between an
- * address a human watches and one nobody does.
- */
 export async function sendTransactionalEmail(
   input: TransactionalEmailInput,
 ): Promise<SendEmailResult> {
@@ -153,8 +109,6 @@ export async function sendTransactionalEmail(
 
   let last = await postOnce(apiKey, payload, idempotencyKey);
   if (!last.ok && last.retryable) {
-    // One retry with jitter. More than one and a slow provider turns into a
-    // hung request handler.
     await new Promise((resolve) => setTimeout(resolve, 250 + Math.floor(Math.random() * 500)));
     last = await postOnce(apiKey, payload, idempotencyKey);
   }
@@ -173,8 +127,6 @@ export async function sendSupportEmail(input: SendEmailInput): Promise<SendEmail
   const config = getHandoffConfig();
 
   if (!config.resendApiKey || !config.emailConfigured) {
-    // Honest, not silent: the caller surfaces this to the user as "nothing was
-    // sent", with a mailto fallback.
     return {
       delivered: false,
       reason: 'not_configured',

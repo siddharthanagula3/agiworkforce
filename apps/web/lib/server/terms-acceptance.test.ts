@@ -65,8 +65,6 @@ describe('recordTermsAcceptance', () => {
   });
 
   it('keeps the first acceptance of a version when the flow is re-entered', async () => {
-    // The upsert's conflict predicate suppresses the update for a version
-    // already on record, so it returns no row and the stored instant stands.
     mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce([
       {
         terms_version: CURRENT_TERMS_VERSION,
@@ -79,9 +77,6 @@ describe('recordTermsAcceptance', () => {
 
     expect(acceptance.acceptedAt).toBe('2026-08-01T09:00:00.000Z');
     expect(mocks.query.mock.calls[1]?.[0]).toMatch(/select terms_version/i);
-    // The suppression itself is a database predicate, so it cannot be exercised
-    // against a mocked driver — assert the upsert still carries it, or the
-    // no-op above would silently become a timestamp rewrite.
     expect(mocks.query.mock.calls[0]?.[0]).toMatch(
       /on conflict \(id\) do update[\s\S]*where public\.profiles\.terms_version is distinct from excluded\.terms_version/i,
     );

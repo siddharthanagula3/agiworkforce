@@ -1,9 +1,3 @@
-/**
- * resolveTurnEffort fixes the silently-dropped reasoning-effort bug: effort_levels
- * models send the picked effort regardless of the Thinking toggle, unsupported
- * (stale cross-model) values are dropped, and none/minimal are forwarded when
- * supported.
- */
 import { resolveTurnEffort } from '../src/features/chat/utils/turnEffort';
 
 const EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh', 'max'] as const;

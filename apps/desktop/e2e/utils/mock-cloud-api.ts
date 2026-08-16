@@ -6,28 +6,6 @@ import {
   type MockCloudAuthOptions,
 } from './mock-cloud-auth';
 
-/**
- * The Managed Cloud API surface every Desktop Cloud spec has to answer before
- * the v3 shell can mount.
- *
- * WHY THIS EXISTS (DES-C14). `App.tsx` hydrates the cloud conversation boundary
- * with `loadConversations` + `loadProjects` the moment a Cloud session appears.
- * Specs that mocked only `/api/me` and `/api/settings/sync` left both of those
- * calls unrouted: they hit the network, rejected, and the shell reported a
- * conversation-boundary failure instead of rendering — so every assertion after
- * `injectMockCloudAuth` was either red or, when it only counted optional
- * elements, vacuously green. `cloud-surfaces.spec.ts` had already worked this
- * out in-repo; this module is that route set, corrected and shared.
- *
- * ORDERING. Playwright matches routes last-registered-first. The `**\/api/**`
- * catch-all is therefore registered FIRST here so that every specific route
- * below it — including the account endpoints — takes precedence, and so that no
- * unrouted `/api/` call can reach the network. A spec that needs a different
- * answer for one endpoint registers its own route AFTER calling
- * `mockCloudApi()`; being registered later, it wins.
- */
-
-/** Wire shape of `ManagedCloudConversationWireSchema` (cloud-contracts). */
 export interface CloudConversationWire {
   id: string;
   title: string | null;
@@ -41,7 +19,6 @@ export interface CloudConversationWire {
   updated_at: string;
 }
 
-/** Wire shape of `ManagedCloudMessageWireSchema` (cloud-contracts). */
 export interface CloudMessageWire {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -55,30 +32,16 @@ export interface CloudMessageWire {
 }
 
 export interface MockCloudApiOptions extends MockCloudAuthOptions {
-  /** Models returned by `GET /api/models`; empty deliberately makes the managed picker unavailable. */
   models?: Array<{ id: string; name: string; provider: string }>;
-  /** Text the mocked managed-cloud completion streams back, word by word. */
   assistantReply?: string;
-  /** Conversation list returned by `GET /api/chat/conversations`. */
   conversations?: CloudConversationWire[];
-  /** Messages returned by `GET /api/chat/conversations/:id`, keyed by id. */
   messagesByConversation?: Record<string, CloudMessageWire[]>;
-  /** Conversation returned by `POST /api/chat/conversations`. */
   createdConversation?: CloudConversationWire;
-  /** Projects returned by `GET /api/projects`. */
   projects?: unknown[];
-  /** Items returned by `GET /api/library`. */
   libraryItems?: unknown[];
-  /** Runs returned by `GET /api/llm/v1/chat/completions/runs`. */
   agentRuns?: unknown[];
 }
 
-/**
- * Desktop's browser-target bundle talks to `/api/*` same-origin, but a few
- * callers (notably the account snapshot) use the absolute cloud origin. Fulfil
- * every mocked response with permissive CORS headers so the cross-origin ones
- * are readable instead of silently failing the preflight.
- */
 function fulfillJson(route: Route, body: unknown, status = 200): Promise<void> {
   return route.fulfill({
     status,
@@ -92,7 +55,6 @@ function isPreflight(route: Route): boolean {
   return route.request().method() === 'OPTIONS';
 }
 
-/** Build a conversation in the exact wire shape the cloud chat client parses. */
 export function cloudConversationFixture(
   overrides: Partial<CloudConversationWire> & Pick<CloudConversationWire, 'id'>,
 ): CloudConversationWire {
@@ -111,7 +73,6 @@ export function cloudConversationFixture(
   };
 }
 
-/** Build a message in the exact wire shape the cloud chat client parses. */
 export function cloudMessageFixture(
   overrides: Partial<CloudMessageWire> & Pick<CloudMessageWire, 'id' | 'role' | 'content'>,
 ): CloudMessageWire {
@@ -126,13 +87,6 @@ export function cloudMessageFixture(
   };
 }
 
-/**
- * Install the full Managed Cloud API mock, including the account endpoints.
- *
- * Call this INSTEAD of `mockCloudAccountEndpoints` (it calls it for you, in the
- * order that makes the account routes win over the catch-all), and always
- * before `page.goto`.
- */
 export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}): Promise<void> {
   const models = options.models ?? [];
   const assistantReply = options.assistantReply ?? 'Mocked managed cloud reply.';
@@ -142,8 +96,6 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
   const libraryItems = options.libraryItems ?? [];
   const agentRuns = options.agentRuns ?? [];
 
-  // 1. Catch-all first => lowest precedence. Without it an unrouted `/api/`
-  //    call reaches the network and the boundary reports "Failed to fetch".
   await page.route('**/api/**', (route) => {
     const url = new URL(route.request().url());
     if (!url.pathname.startsWith('/api/')) return route.fallback();
@@ -153,13 +105,8 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
     return fulfillJson(route, {});
   });
 
-  // 2. Account endpoints (`/api/me`, `/api/settings/sync`). Registered after the
-  //    catch-all so the seeded plan/user is what the shell actually reads.
   await mockCloudAccountEndpoints(page, options);
 
-  // 3. The endpoints the catch-all's empty `{}` would violate the contract for.
-  //    Every shape below comes from `managed-cloud-chat-client.ts`, which parses
-  //    each response with a zod schema and throws a contract error otherwise.
   await page.route('**/api/models**', (route) => {
     if (isPreflight(route)) {
       return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
@@ -182,25 +129,21 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
       options.createdConversation ??
       cloudConversationFixture({ id: conversationId });
 
-    // POST /messages — persist one turn. `{ message: { id } }`.
     if (messagesMatch && method === 'POST') {
       return fulfillJson(route, { message: { id: `msg-${Date.now()}` } });
     }
-    // DELETE /messages/:id — `{ success: true }`.
     if (messageMatch && method === 'DELETE') {
       return fulfillJson(route, { success: true });
     }
 
     if (detailMatch) {
       const conversationId = decodeURIComponent(detailMatch[1] ?? '');
-      // PUT — rename/repin. `{ conversation }`, NOT `{ success: true }`.
       if (method === 'PUT' || method === 'PATCH') {
         return fulfillJson(route, { conversation: resolveConversation(conversationId) });
       }
       if (method === 'DELETE') {
         return fulfillJson(route, { success: true });
       }
-      // GET — conversation + one page of messages.
       const messages = messagesByConversation[conversationId] ?? [];
       return fulfillJson(route, {
         conversation: resolveConversation(conversationId),
@@ -210,7 +153,6 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
       });
     }
 
-    // POST on the collection — create. `{ conversation }`.
     if (method === 'POST') {
       const conversation =
         options.createdConversation ??
@@ -229,14 +171,6 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
     return fulfillJson(route, { projects });
   });
 
-  // Managed-cloud chat completion. `cloudApi.streamCloudChat` POSTs here and
-  // reads the reply as an SSE stream; the catch-all's `{}` produced a response
-  // body with no events at all, so every send ended in "AGI Cloud completed
-  // without returning a response. Please retry." — an error banner that looked
-  // like a broken chat rather than an unimplemented mock.
-  //
-  // Registered before the `/runs` route below so that route still wins for its
-  // own path: Playwright matches the most recently registered handler first.
   await page.route('**/api/llm/v1/chat/completions', (route) => {
     if (isPreflight(route)) {
       return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
@@ -276,17 +210,6 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
   });
 }
 
-/**
- * Assert the Cloud shell actually mounted, and name the failure if it did not.
- *
- * This is the assertion DES-C14 asks every cloud spec to carry: the conversation
- * boundary must not have failed. It checks both shapes the failure has taken —
- * the full-screen "Could not open Cloud Mode" takeover and the inline
- * `conversation-boundary-error` banner that replaced it — so the check survives
- * whichever one is in the tree, and a regression to unrouted cloud endpoints
- * fails HERE with an obvious message instead of leaving a downstream assertion
- * to time out on a missing element.
- */
 export async function expectCloudShellReady(page: Page, timeout = 30000): Promise<void> {
   await expect
     .poll(async () => page.locator('[data-v3-shell]').count(), {
@@ -308,15 +231,10 @@ export async function expectCloudShellReady(page: Page, timeout = 30000): Promis
   ).toHaveCount(0);
 }
 
-/**
- * One call for the common case: seed the mock session, install the API mocks,
- * navigate, and prove the Cloud shell reached a usable state.
- */
 export async function gotoCloudShell(
   page: Page,
   options: MockCloudApiOptions & {
     url?: string;
-    /** Register spec-specific routes here; they win over `mockCloudApi`'s. */
     routes?: (page: Page) => Promise<void>;
   } = {},
 ): Promise<void> {

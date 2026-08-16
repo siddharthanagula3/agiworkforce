@@ -1,17 +1,4 @@
-/**
- * ageGate service — unit tests
- *
- * Covers:
- *   - detectRegionRule: timezone → threshold mapping
- *   - getAgeThreshold: returns correct threshold per region
- *   - confirmAgeGate: persists record, sets isMinor correctly
- *   - isAgeGateConfirmed / isMinorMode: read persisted state
- *   - clearAgeGate: erasure path
- */
 
-// ---------------------------------------------------------------------------
-// Mocks — before imports
-// ---------------------------------------------------------------------------
 
 const mockStorage = new Map<string, string>();
 
@@ -24,7 +11,6 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
-// Control Intl.DateTimeFormat to inject different timezones per test.
 let _mockTimezone = 'America/New_York';
 
 const originalIntl = global.Intl;
@@ -48,10 +34,6 @@ afterAll(() => {
   Object.defineProperty(global, 'Intl', { configurable: true, value: originalIntl });
 });
 
-// ---------------------------------------------------------------------------
-// Import after mocks
-// ---------------------------------------------------------------------------
-
 import {
   detectRegionRule,
   getAgeThreshold,
@@ -61,17 +43,9 @@ import {
   clearAgeGate,
 } from '../src/features/auth/services/ageGate';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function setTimezone(tz: string) {
   _mockTimezone = tz;
 }
-
-// ---------------------------------------------------------------------------
-// detectRegionRule
-// ---------------------------------------------------------------------------
 
 describe('detectRegionRule — country thresholds', () => {
   afterEach(() => {
@@ -141,10 +115,6 @@ describe('detectRegionRule — country thresholds', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// getAgeThreshold
-// ---------------------------------------------------------------------------
-
 describe('getAgeThreshold', () => {
   afterEach(() => {
     setTimezone('America/New_York');
@@ -165,10 +135,6 @@ describe('getAgeThreshold', () => {
     expect(getAgeThreshold()).toBe(13);
   });
 });
-
-// ---------------------------------------------------------------------------
-// confirmAgeGate + isAgeGateConfirmed + isMinorMode
-// ---------------------------------------------------------------------------
 
 describe('confirmAgeGate', () => {
   beforeEach(() => {
@@ -227,10 +193,6 @@ describe('confirmAgeGate', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// isAgeGateConfirmed — without any record
-// ---------------------------------------------------------------------------
-
 describe('isAgeGateConfirmed', () => {
   beforeEach(() => mockStorage.clear());
 
@@ -243,10 +205,6 @@ describe('isAgeGateConfirmed', () => {
     expect(isAgeGateConfirmed()).toBe(true);
   });
 });
-
-// ---------------------------------------------------------------------------
-// clearAgeGate
-// ---------------------------------------------------------------------------
 
 describe('clearAgeGate', () => {
   it('removes the stored record', () => {

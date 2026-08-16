@@ -1,34 +1,12 @@
-// packages/ui/unified-chat/src/components/InlineToolCallGroup.tsx
-//
-// Collapsible group header that wraps multiple InlineToolCall rows.
-// Matches the Claude pattern:
-//   "Used Filesystem integration, loaded tools ▾"
-// The header collapses/expands all child tool-call rows beneath.
-//
-// Usage:
-//   <InlineToolCallGroup integrationName="Filesystem" summary="loaded tools">
-//     <InlineToolCall id="t1" label="List Directory" status="success" iconStyle="badge" />
-//     <InlineToolCall id="t2" label="Read" status="success" iconStyle="badge" />
-//   </InlineToolCallGroup>
 
 import { useState, useCallback, type KeyboardEvent, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export interface InlineToolCallGroupProps {
-  /**
-   * Name of the integration (e.g. "Filesystem", "Brave Search", "Python").
-   * Rendered as: "Used {integrationName} integration, {summary} ▾"
-   */
   integrationName: string;
-  /**
-   * Short summary appended after the integration name
-   * (e.g. "loaded tools", "10 results", "ran 3 commands").
-   */
   summary: string;
-  /** Whether the group starts expanded. Defaults to true. */
   defaultOpen?: boolean;
-  /** The stacked InlineToolCall rows. */
   children: ReactNode;
   className?: string;
 }

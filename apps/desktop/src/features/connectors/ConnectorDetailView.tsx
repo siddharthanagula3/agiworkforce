@@ -1,15 +1,3 @@
-/**
- * ConnectorDetailView — per-tool permission management panel.
- *
- * Shown when the user clicks "Configure" on a connected connector.
- * Renders each tool exposed by the connector with:
- *   - Tool name + description
- *   - Destructive badge (red dot) when tool.destructive === true
- *   - Permission dropdown: Always allow / Needs approval / Blocked
- *
- * Persistence: Hybrid (local vault in Tauri, Neon-backed managed cloud).
- * Storage adapter: packages/ui/unified-chat/src/lib/connectorPermissionStore.ts
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, ChevronLeft, Loader2, Shield, Puzzle } from 'lucide-react';
@@ -36,16 +24,11 @@ export interface ConnectorTool {
   destructive: boolean;
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
-
 interface ConnectorDetailViewProps {
   connector: ConnectorDef;
-  /** Tools exposed by this connector. Null means loading; undefined means no live schema. */
   tools?: ConnectorTool[] | null;
   onBack: () => void;
 }
-
-// ── Permission row ────────────────────────────────────────────────────────────
 
 interface PermissionRowProps {
   tool: ConnectorTool;
@@ -113,26 +96,19 @@ function PermissionRow({ tool, level, onChange, saving }: PermissionRowProps) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetailViewProps) {
   const resolvedTools: ConnectorTool[] = tools ?? [];
   const toolSchemaUnavailable = tools === undefined || (Array.isArray(tools) && tools.length === 0);
 
-  // Map: toolName → permission level
   const [permissions, setPermissions] = useState<Record<string, ConnectorPermissionLevel>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
-  // View may unmount when user clicks Back mid-permission-save.
   const isMounted = useIsMounted();
   const [loadError, setLoadError] = useState<string | null>(null);
-  // CON-26: a failed permission write used to be console.error-only, so the
-  // optimistic toggle rolled back with no explanation on screen.
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const store = getConnectorPermissionStore();
 
-  // Load saved permissions on mount
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
@@ -143,11 +119,9 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
       .then((saved) => {
         if (cancelled) return;
         const map: Record<string, ConnectorPermissionLevel> = {};
-        // Seed with defaults first
         for (const tool of resolvedTools) {
           map[tool.name] = defaultPermissionForTool(tool.destructive);
         }
-        // Override with persisted values
         for (const tp of saved) {
           map[tp.toolName] = tp.level;
         }
@@ -157,7 +131,6 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
       .catch((err: unknown) => {
         if (cancelled) return;
         setLoadError(err instanceof Error ? err.message : String(err));
-        // Seed defaults so the UI is still usable
         const map: Record<string, ConnectorPermissionLevel> = {};
         for (const tool of resolvedTools) {
           map[tool.name] = defaultPermissionForTool(tool.destructive);
@@ -174,15 +147,12 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
 
   const handleChange = useCallback(
     async (tool: ConnectorTool, level: ConnectorPermissionLevel) => {
-      // Optimistic update
       setPermissions((prev) => ({ ...prev, [tool.name]: level }));
       setSaving((prev) => ({ ...prev, [tool.name]: true }));
       if (isMounted.current) setSaveError(null);
       try {
         await store.set(connector.id, tool.name, level, tool.destructive);
       } catch (err) {
-        // Rollback on failure — and say so. A permission toggle that snaps back
-        // without explanation is indistinguishable from a mis-click.
         if (isMounted.current) {
           const previous = permissions[tool.name] ?? defaultPermissionForTool(tool.destructive);
           setPermissions((prev) => ({ ...prev, [tool.name]: previous }));

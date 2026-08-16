@@ -7,9 +7,6 @@ import {
 import { PerformanceMark, PerformanceMeasure, PerformanceMetrics } from '../types/analytics';
 import { analytics } from './analytics';
 
-/**
- * Extended performance entry for first input delay.
- */
 interface PerformanceEventTimingEntry extends PerformanceEntry {
   processingStart: number;
   processingEnd: number;
@@ -18,9 +15,6 @@ interface PerformanceEventTimingEntry extends PerformanceEntry {
   target?: EventTarget | null;
 }
 
-/**
- * Extended performance entry for layout shift.
- */
 interface LayoutShiftEntry extends PerformanceEntry {
   value: number;
   hadRecentInput: boolean;
@@ -55,9 +49,6 @@ class PerformanceMonitoringService {
     this.stopMemoryMonitoring();
   }
 
-  /**
-   * Stop memory monitoring interval.
-   */
   private stopMemoryMonitoring(): void {
     if (this.memoryMonitorInterval) {
       clearInterval(this.memoryMonitorInterval);
@@ -307,7 +298,6 @@ class PerformanceMonitoringService {
   }
 
   public monitorMemory(interval: number = 5000): ReturnType<typeof setInterval> {
-    // Stop any existing monitoring interval before starting a new one
     this.stopMemoryMonitoring();
 
     this.memoryMonitorInterval = setInterval(async () => {

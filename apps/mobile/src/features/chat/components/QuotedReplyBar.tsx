@@ -7,16 +7,10 @@ import { useTierStore } from '@/src/features/billing/store';
 import type { ChatMessage } from '@/types/chat';
 
 interface QuotedReplyBarProps {
-  /** The message being quoted/replied to */
   message: ChatMessage;
-  /** Called when user dismisses the quote */
   onDismiss: () => void;
 }
 
-/**
- * Shows a compact quoted message card above the input bar.
- * Displayed when user swipes right on a message to quote-reply.
- */
 export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
   const colors = useThemeColors();
   const subscriptionTier = useTierStore((s) => s.tier);

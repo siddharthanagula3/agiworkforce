@@ -17,7 +17,6 @@ const ChatMessageList = React.forwardRef<HTMLDivElement, ChatMessageListProps>(
       disableAutoScroll,
     } = useAutoScroll({
       smooth,
-      // Cast to avoid React version type mismatch between root and package ReactNode
 
       content: children as any,
     });

@@ -27,9 +27,6 @@ describe('computerUseStore', () => {
     window.localStorage.removeItem(STORAGE_KEYS.COMPUTER_USE_MODEL);
     window.localStorage.removeItem(STORAGE_KEYS.COMPUTER_USE_PROVIDER);
     useComputerUseStore.getState().reset();
-    // TRUST BOUNDARY (desktop-trust-boundary-01): pin the workspace mode so
-    // the executionMode each OPA submission sends is deterministic, not an
-    // accident of the non-Tauri test environment's default.
     useAppModeStore.setState({ mode: 'local' });
   });
 

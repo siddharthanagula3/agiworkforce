@@ -11,12 +11,6 @@ export const metadata = buildMetadata({
   path: '/connectors/mcp-directory',
 });
 
-// Hand-picked subset of the servers Desktop's built-in registry can actually
-// install (see mcp_get_registry in apps/desktop/src-tauri/src/sys/commands/mcp.rs).
-// Keep this list a subset of that registry: every entry here claims Desktop can
-// install it, so adding a server Desktop does not carry makes the page lie.
-// All of them are stdio (npm/pip) processes, which is why none can be added from
-// the browser — the web custom-connector dialog only accepts remote HTTP/SSE URLs.
 const REFERENCE_MCPS = [
   {
     name: 'Filesystem',

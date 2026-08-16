@@ -1,8 +1,3 @@
-/**
- * buildAttachedDocumentContext turns non-image chat attachments into REAL text
- * (via the shared on-device docParser) instead of a bare reference stub, and
- * fails closed to an honest reference for unsupported/binary files.
- */
 const mockParseDocument = jest.fn();
 jest.mock('../services/docParser', () => ({
   parseDocument: (...args: unknown[]) => mockParseDocument(...args),

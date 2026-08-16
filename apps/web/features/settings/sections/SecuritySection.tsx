@@ -1,22 +1,5 @@
 'use client';
 
-/**
- * SecuritySection — wires the previously-orphaned TwoFactorPanel (session
- * timeout + change password) into the reachable in-app Settings modal.
- * TwoFactorPanel itself was fully built (features/settings/components/
- * Settings/TwoFactor.tsx) and backed by real Neon/Clerk endpoints, but was
- * only ever imported by features/settings/pages/UserSettings.tsx, which is
- * not mounted by any route — making the whole security tab unreachable.
- *
- * Authenticator (TOTP) enrollment lives in TwoFactorEnrollmentPanel below.
- * This route is the product's only 2FA enrollment surface — the mobile app
- * links here (WEB_SECURITY_URL) rather than enrolling on device.
- *
- * Same fix pattern as NotificationsSection.tsx: a section component owning
- * its own form + query wiring, added to WebSettingsModal's sectionContent
- * map and the shared SettingsModal nav config.
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -60,11 +43,6 @@ export function SecuritySection() {
     mode: 'onBlur',
   });
 
-  // `user_settings.two_factor_enabled` is a mirror column; the authority is
-  // `user_two_factor.enabled` behind GET /api/settings/2fa. Once
-  // TwoFactorEnrollmentPanel has read that route, its answer wins over the
-  // mirror — the two disagree for any account enrolled before the mirror was
-  // last written, and a form save must not persist the stale value.
   const authoritativeTwoFactor = useRef<boolean | null>(null);
 
   useEffect(() => {
@@ -86,8 +64,6 @@ export function SecuritySection() {
     [updateSettingsMutation],
   );
 
-  // Feed the real value into the form without marking it dirty, so saving the
-  // session timeout cannot silently write `false` over a live enrollment.
   const handleTwoFactorStatus = useCallback(
     (status: TwoFactorStatus) => {
       authoritativeTwoFactor.current = status.enabled;

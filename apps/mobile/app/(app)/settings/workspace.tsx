@@ -1,21 +1,3 @@
-/**
- * Workspace (Team) screen.
- *
- * Web has had Settings → Team for some time. Mobile had only a row that opened
- * the web page in a browser, so a workspace owner could not see who was in
- * their workspace — or remove someone — from the phone.
- *
- * ENTITLEMENT comes from the server (`access.canManageTeam` on
- * /api/settings/organization), which is the authority the API itself enforces.
- * The settings row that leads here was previously hidden by a local
- * `canUseBillingPlanCapability` check; that check happens to agree with the
- * server today, but it is a second copy of a rule only the server owns, and a
- * hidden row cannot tell the user why the option is missing.
- *
- * Workspace CREATION stays on web: it takes a name and slug with uniqueness
- * feedback, and duplicating that form here would be a second place to keep
- * those rules correct.
- */
 import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, RefreshControl, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -52,16 +34,10 @@ type LoadState =
   | { kind: 'ready'; overview: WorkspaceOverview; members: WorkspaceMember[] }
   | { kind: 'error'; message: string };
 
-/** Role names are plain words; plan ids are NOT — see planLabel. */
 function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-/**
- * Plan ids are wire values, not display text: title-casing `max_15x` yields
- * "Max_15x" in front of the user. The catalog owns the real label and
- * normalizes anything it does not recognise.
- */
 function planLabel(plan: string): string {
   return getBillingPlanPricing(plan).label;
 }
@@ -121,8 +97,6 @@ export default function WorkspaceScreen() {
     if (state.kind !== 'ready' || !state.overview.workspace) return;
     const workspaceId = state.overview.workspace.id;
 
-    // Alert.prompt is iOS-only; Android gets the web form rather than a
-    // control that silently does nothing.
     if (Platform.OS !== 'ios') {
       void openExternalUrl(WEB_TEAM_URL);
       return;

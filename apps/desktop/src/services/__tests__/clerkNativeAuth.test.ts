@@ -1,11 +1,3 @@
-/**
- * Contract tests for the native Clerk Frontend API client.
- *
- * The transport is injected, so these assert the exact wire shapes this client
- * sends and the exact user-facing sentence produced for every failure branch —
- * including the one this whole rewrite exists to eliminate: a 5xx must never
- * read as an account or credential rejection.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -61,8 +53,6 @@ describe('clerkNativeAuth wire contract', () => {
 
   beforeEach(() => {
     envStub(PUBLISHABLE_KEY);
-    // Sign-in runs from the Cloud workspace; the trust-boundary guard below
-    // refuses it anywhere else.
     useAppModeStore.setState({ mode: 'cloud' });
     resetClerkClient();
     calls = [];
@@ -125,7 +115,6 @@ describe('clerkNativeAuth wire contract', () => {
     await createIdentifierSignIn('demo@example.com');
     expect(calls[1]?.clientToken).toBe('client_jwt_v2');
 
-    // Nothing survives the ceremony.
     resetClerkClient();
     await createIdentifierSignIn('demo@example.com');
     expect(calls[2]?.clientToken).toBeNull();
@@ -290,8 +279,6 @@ describe('clerkNativeAuth failure mapping', () => {
     expect(mapped.clerkCode).toBe(code);
   });
 
-  // These codes carry a useful server-authored explanation, so the mapping
-  // classifies them but keeps Clerk's own sentence rather than overwriting it.
   it.each([
     ['user_locked', 'account_locked'],
     ['strategy_for_user_invalid', 'invalid_credentials'],
@@ -320,11 +307,6 @@ describe('clerkNativeAuth failure mapping', () => {
     expect(mapped.message).not.toMatch(/password/i);
   });
 
-  /**
-   * The defect this rewrite removes: a backend 500 was reported to the user as
-   * "AGI Cloud rejected the device sign-in request", which blamed the account
-   * for a server fault and made the failure look unfixable by retrying.
-   */
   it.each([500, 502, 503, 504])(
     'states HTTP %s as a service fault and never as a rejection',
     (status) => {

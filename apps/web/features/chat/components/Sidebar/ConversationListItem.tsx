@@ -1,12 +1,3 @@
-/**
- * ConversationListItem - Clean, minimal conversation item
- *
- * Redesigned with:
- * - Minimal default state (title + time only)
- * - Indicators shown subtly
- * - Actions on hover
- * - Progressive disclosure
- */
 
 import React, { useState, useCallback, memo } from 'react';
 import {
@@ -64,7 +55,6 @@ interface ConversationListItemProps {
   onArchive?: () => void;
   onShare?: () => void;
   onDuplicate?: () => void;
-  /** Called with the chosen project id when user selects "Move to project". */
   onMoveToProject?: (projectId: string) => void;
 }
 
@@ -89,7 +79,6 @@ export const ConversationListItem = memo(function ConversationListItem({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const projects = useProjectStore((s) => s.projects);
 
-  // Memoize event handlers to prevent unnecessary re-renders
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {

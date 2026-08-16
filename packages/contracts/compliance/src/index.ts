@@ -1,24 +1,3 @@
-/**
- * @agiworkforce/compliance
- *
- * EU AI Act Article 50 transparency obligations for AGI.
- *
- * Public exports — two thematic groups:
- *
- *   - **Article50Disclosure** — first-run "you are interacting with AI"
- *     disclosure (Article 50(1)). Combined with Apple Guideline 5.1.2(i)
- *     named-provider consent so the user is never double-prompted.
- *
- *   - **Article50Marker** — machine-readable provenance + `<meta>` tag for
- *     every AI-generated text / audio / image / video export (Article 50(2)).
- *
- * Plus:
- *   - the LLM HTTP-client gate that runs before the first `/api/llm/*` call,
- *   - the Chinese-HQ provider default-off registry (PRD V5 R-023).
- *
- * Verbatim citations and the canonical EU AI Act source URL live in
- * `article50-text.ts`.
- */
 
 export {
   ARTICLE_50_1_VERBATIM,
@@ -69,15 +48,6 @@ export {
   isLlmGateOpen,
 } from './llm-gate';
 
-/**
- * Convenience namespace aliases requested by the integration spec. Lets
- * downstream call sites import either the named symbols or the grouped
- * "Article50Disclosure" / "Article50Marker" identifiers as a barrel.
- *
- *   import { Article50Disclosure, Article50Marker } from '@agiworkforce/compliance';
- *   Article50Disclosure.compose({ ... });
- *   Article50Marker.injectAiGeneratedMetaTag({ ... });
- */
 import {
   composeFirstRunDisclosure,
   isDisclosureSatisfied,

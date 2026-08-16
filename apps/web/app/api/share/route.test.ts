@@ -1,18 +1,9 @@
-/**
- * GET /api/share — the caller's own share links.
- *
- * The endpoint did not exist: a user could create a share and revoke one whose
- * URL they still had, but had no way to see what they had published. Any
- * "Shared links" screen therefore had nothing to call, which is why the mobile
- * one shipped as a placeholder.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
-  // Typed as rest-arg fns so the module factories below can forward through.
   authUser: vi.fn(async (..._args: unknown[]) => ({ userId: 'user-1' })),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
 }));
@@ -82,7 +73,6 @@ describe('GET /api/share', () => {
     await call();
 
     const [sql, params] = mocks.query.mock.calls[0]!;
-    // owner_id is the access control here, matching the DELETE path.
     expect(sql).toContain('owner_id = $1');
     expect(params).toEqual(['user-1']);
   });
@@ -92,8 +82,6 @@ describe('GET /api/share', () => {
     await call();
 
     const [sql] = mocks.query.mock.calls[0]!;
-    // This is an index; selecting `messages` would return every shared
-    // conversation body in one response.
     expect(sql).not.toMatch(/\bmessages\b/);
   });
 
@@ -102,8 +90,6 @@ describe('GET /api/share', () => {
 
     const body = await (await call()).json();
 
-    // A user must be able to see and revoke a link that has lapsed; filtering
-    // it out leaves them unable to clean up a URL still referenced elsewhere.
     expect(body.shares).toHaveLength(1);
     expect(body.shares[0].expired).toBe(true);
   });
@@ -139,15 +125,12 @@ describe('POST /api/share — link lifetime', () => {
     );
   }
 
-  /** Days between now and the `expires_at` the route passed to the insert. */
   function insertedExpiryDays(): number {
     const params = mocks.query.mock.calls[0]?.[1] as unknown[];
     const expiresAt = new Date(String(params[params.length - 1]));
     return Math.round((expiresAt.getTime() - Date.now()) / 86_400_000);
   }
 
-  // Regression: expiry was hardcoded to 7 days with no caller control, so a
-  // transcript shared for one review stayed live for a week.
   it('defaults to seven days when the caller says nothing', async () => {
     await post({ title: 'Session' });
     expect(insertedExpiryDays()).toBe(7);
@@ -158,8 +141,6 @@ describe('POST /api/share — link lifetime', () => {
     expect(insertedExpiryDays()).toBe(1);
   });
 
-  // Bounded on purpose: a free-form number would let a caller mint a link that
-  // effectively never expires.
   it('rejects a lifetime outside the allowed set', async () => {
     const response = await post({ title: 'Session', expires_in_days: 3650 });
     expect(response.status).toBe(400);

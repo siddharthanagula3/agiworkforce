@@ -36,11 +36,11 @@ describe('leaveOrganization', () => {
   it('removes only the authenticated membership and frees its seat through the delete', async () => {
     const h = harness();
     h.query
-      .mockResolvedValueOnce([]) // user lock
-      .mockResolvedValueOnce([member()]) // membership scope
-      .mockResolvedValueOnce([]) // organization lock
-      .mockResolvedValueOnce([member()]) // re-read inside both locks
-      .mockResolvedValueOnce([{ organization_id: ORG_A, role: 'member' }]); // delete returning
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member()])
+      .mockResolvedValueOnce([{ organization_id: ORG_A, role: 'member' }]);
 
     await expect(
       leaveOrganization(h.db, { userId: 'user-1', organizationId: ORG_A }),

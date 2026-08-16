@@ -23,14 +23,6 @@ describe('OnboardingWizard BYOK submission', () => {
     invokeMock.mockResolvedValue(undefined);
   });
 
-  // Regression test: onboarding's BYOK paste flow used to call
-  // `secret_manager_set` with a made-up key name (e.g. `open_router_api_key`).
-  // That store is never read back by the LLM router/provider-routing path
-  // (only by unrelated tool-specific consumers like the Research settings'
-  // Perplexity key), so a key pasted here would "save" with no error yet
-  // silently never work for chat. It must go through `save_api_key` with the
-  // canonical provider id instead — the same path Settings → Models & Keys
-  // uses, which registers the provider on the LLM router immediately.
   it('saves a pasted OpenRouter key via save_api_key with the canonical provider id', async () => {
     const user = userEvent.setup();
     render(<OnboardingWizard onComplete={vi.fn()} />);

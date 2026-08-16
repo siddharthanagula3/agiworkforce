@@ -1,21 +1,6 @@
-/**
- * Unit tests for createStore.
- *
- * Coverage targets:
- *  - Object.is short-circuit (no render storm)
- *  - setState with actual mutations
- *  - subscribe / unsubscribe lifecycle
- *  - onChange fires before listeners
- *  - Render-storm test: single boolean flip → <5 re-renders
- *  - Property test: N sequential mutations → N listener invocations (no skips)
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { createStore } from '../createStore';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 interface Counter {
   value: number;
@@ -25,10 +10,6 @@ interface Counter {
 function makeCounterStore(onChange?: Parameters<typeof createStore<Counter>>[1]) {
   return createStore<Counter>({ value: 0, flag: false }, onChange);
 }
-
-// ---------------------------------------------------------------------------
-// Basic correctness
-// ---------------------------------------------------------------------------
 
 describe('createStore — basic correctness', () => {
   it('returns initial state from getState()', () => {
@@ -42,9 +23,9 @@ describe('createStore — basic correctness', () => {
     store.subscribe(listener);
 
     const before = store.getState();
-    store.setState((s) => s); // same reference
+    store.setState((s) => s);
     expect(listener).not.toHaveBeenCalled();
-    expect(store.getState()).toBe(before); // same reference
+    expect(store.getState()).toBe(before);
   });
 
   it('setState with Object.is-equal value is a no-op', () => {
@@ -52,8 +33,7 @@ describe('createStore — basic correctness', () => {
     const listener = vi.fn();
     store.subscribe(listener);
 
-    store.setState((_s) => ({ value: 0, flag: false })); // new object, same values → NOT same ref
-    // Object.is checks reference equality for objects; a new object is a change
+    store.setState((_s) => ({ value: 0, flag: false }));
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
@@ -62,7 +42,7 @@ describe('createStore — basic correctness', () => {
     const listener = vi.fn();
     store.subscribe(listener);
 
-    store.setState((_n) => 42); // Object.is(42, 42) === true
+    store.setState((_n) => 42);
     expect(listener).not.toHaveBeenCalled();
   });
 
@@ -89,10 +69,6 @@ describe('createStore — basic correctness', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Subscribe / unsubscribe
-// ---------------------------------------------------------------------------
-
 describe('createStore — subscribe / unsubscribe', () => {
   it('subscribe returns an unsubscribe function', () => {
     const store = makeCounterStore();
@@ -104,7 +80,7 @@ describe('createStore — subscribe / unsubscribe', () => {
 
     unsub();
     store.setState((s) => ({ ...s, value: 2 }));
-    expect(listener).toHaveBeenCalledTimes(1); // no additional calls
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it('multiple subscribers all receive notifications', () => {
@@ -132,10 +108,6 @@ describe('createStore — subscribe / unsubscribe', () => {
     expect(b).toHaveBeenCalledTimes(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// onChange ordering: fires BEFORE listeners
-// ---------------------------------------------------------------------------
 
 describe('createStore — onChange fires before listeners', () => {
   it('onChange is called before listener', () => {
@@ -171,14 +143,10 @@ describe('createStore — onChange fires before listeners', () => {
     const onChange = vi.fn();
     const store = createStore<number>(5, onChange);
 
-    store.setState(() => 5); // Object.is(5, 5) === true
+    store.setState(() => 5);
     expect(onChange).not.toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Render-storm test
-// ---------------------------------------------------------------------------
 
 describe('createStore — render-storm protection', () => {
   it('single boolean flip causes exactly 1 listener notification', () => {
@@ -188,11 +156,10 @@ describe('createStore — render-storm protection', () => {
       renderCount++;
     });
 
-    // Simulate rapid boolean toggle (e.g. streaming flag)
     store.setState((s) => ({ ...s, flag: true }));
 
     expect(renderCount).toBe(1);
-    expect(renderCount).toBeLessThan(5); // acceptance criterion: <5 per render cycle
+    expect(renderCount).toBeLessThan(5);
   });
 
   it('no-op setState does not increment render count', () => {
@@ -202,7 +169,6 @@ describe('createStore — render-storm protection', () => {
       renderCount++;
     });
 
-    // 100 no-op calls
     for (let i = 0; i < 100; i++) {
       store.setState((s) => s);
     }
@@ -223,16 +189,11 @@ describe('createStore — render-storm protection', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// useSyncExternalStore compatibility
-// ---------------------------------------------------------------------------
-
 describe('createStore — useSyncExternalStore compatibility', () => {
   it('subscribe signature matches useSyncExternalStore (subscribe returns () => void)', () => {
     const store = makeCounterStore();
     const unsub = store.subscribe(() => {});
     expect(typeof unsub).toBe('function');
-    // Should not throw
     expect(() => unsub()).not.toThrow();
   });
 
@@ -243,10 +204,6 @@ describe('createStore — useSyncExternalStore compatibility', () => {
     expect(ref1).toBe(ref2);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Property test: random mutation sequence
-// ---------------------------------------------------------------------------
 
 describe('createStore — property: mutation sequence integrity', () => {
   it('N unique values → exactly N listener calls, final state is last value', () => {
@@ -272,7 +229,6 @@ describe('createStore — property: mutation sequence integrity', () => {
     let mutations = 0;
     for (let i = 0; i < 100; i++) {
       if (i % 3 === 0) {
-        // no-op: same value
         store.setState(() => current);
       } else {
         current = i;

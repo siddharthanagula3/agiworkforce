@@ -1,8 +1,3 @@
-/**
- * Health Check API Tests
- *
- * Tests for the health endpoint that checks database, Stripe, and environment
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -11,10 +6,8 @@ const stripeMocks = vi.hoisted(() => ({
   retrievePrice: vi.fn(),
 }));
 
-// Store original env vars
 const originalEnv = { ...process.env };
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -32,7 +25,6 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   getConfiguredStripePriceIds: vi.fn(() => ['price_configured']),
 }));
 
-// Mock Stripe - must be a class for 'new Stripe()' to work
 vi.mock('stripe', () => ({
   default: class MockStripe {
     products = {
@@ -44,7 +36,6 @@ vi.mock('stripe', () => ({
   },
 }));
 
-// Mock Neon DB
 const mockNeonQuery = vi.fn().mockResolvedValue([{ '?column?': 1 }]);
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
@@ -56,13 +47,11 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-// Import after mocks
 import { GET } from '@/app/api/health/route';
 
 describe('Health Check API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Set required env vars — health route checks DATABASE_URL (Neon)
     process.env['DATABASE_URL'] = 'postgresql://test:test@localhost/test';
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_123';
     stripeMocks.retrievePrice.mockResolvedValue({
@@ -70,12 +59,10 @@ describe('Health Check API', () => {
       type: 'recurring',
       recurring: { interval: 'month' },
     });
-    // Re-apply mockNeonQuery default after clearAllMocks
     mockNeonQuery.mockResolvedValue([{ '?column?': 1 }]);
   });
 
   afterEach(() => {
-    // Restore original env
     process.env = { ...originalEnv };
   });
 
@@ -98,7 +85,6 @@ describe('Health Check API', () => {
     });
 
     it('should return unhealthy status when database check fails', async () => {
-      // Override Neon mock to throw an error
       mockNeonQuery.mockRejectedValueOnce(new Error('Connection failed'));
 
       const request = new NextRequest('http://localhost/api/health', {
@@ -115,7 +101,6 @@ describe('Health Check API', () => {
     });
 
     it('should return unhealthy status when Stripe check fails', async () => {
-      // Remove Stripe key to trigger unhealthy status
       delete process.env['STRIPE_SECRET_KEY'];
 
       const request = new NextRequest('http://localhost/api/health', {
@@ -146,7 +131,6 @@ describe('Health Check API', () => {
     });
 
     it('should return unhealthy status when environment variables are missing', async () => {
-      // Remove required Neon env vars
       delete process.env['DATABASE_URL'];
       delete process.env['AGI_DATABASE_URL'];
 
@@ -162,7 +146,6 @@ describe('Health Check API', () => {
     });
 
     it('should handle empty result from DB as healthy (no rows found)', async () => {
-      // Neon returning an empty array is a successful query — DB is reachable
       mockNeonQuery.mockResolvedValueOnce([]);
 
       const request = new NextRequest('http://localhost/api/health', {
@@ -184,7 +167,6 @@ describe('Health Check API', () => {
       const data = await response.json();
 
       expect(data.timestamp).toBeDefined();
-      // Verify it's a valid ISO date
       const timestamp = new Date(data.timestamp);
       expect(timestamp.getTime()).not.toBeNaN();
     });

@@ -1,26 +1,3 @@
-/**
- * Regression tests for LOW-MOB-3 — notification handler running before
- * authentication has resolved (red-team finding 2026-05).
- *
- * Pre-fix: `setNavigatorReady(true)` was never called by the layout, so
- * `safeNavigate` always took the deferred path; meanwhile
- * `handleNotificationResponse` would call `safeNavigate('/(app)/...)` even
- * when there was no session. The redirect-to-login effect in `_layout.tsx`
- * would normally catch this, but for a frame the navigator could land on
- * `/(app)` and the loading-state of various authenticated stores could
- * read.
- *
- * Post-fix:
- *   1. `_layout.tsx` calls `setNavigatorReady(true)` on mount.
- *   2. `_layout.tsx` calls `setCurrentSession(session)` whenever the
- *      cloud auth session changes.
- *   3. `handleNotificationResponse` checks `_currentSession` and routes
- *      to `/(auth)/login` if null.
- *
- * The tests below feed mocked `Notifications.NotificationResponse`
- * objects through the listener path and assert the router was called with
- * the right route in each scenario.
- */
 
 const mockRouterPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -29,8 +6,6 @@ jest.mock('expo-router', () => ({
   },
 }));
 
-// expo-notifications: capture the response listener callback so we can
-// invoke it directly from a test.
 let capturedResponseListener:
   | ((response: {
       actionIdentifier: string;
@@ -89,9 +64,6 @@ import {
 } from '../services/notifications';
 import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from '../services/notificationCategories';
 
-// setupNotificationListeners has a singleton guard — calling it twice
-// short-circuits without re-registering. Register once for the whole
-// suite; reset only the per-test router spy.
 beforeAll(() => {
   setupNotificationListeners(null);
   setNavigatorReady(true);
@@ -118,19 +90,15 @@ describe('handleNotificationResponse — auth gate', () => {
   it('routes to /(auth)/login when no session is set', () => {
     setCurrentSession(null);
     fireNotification({ type: 'task_completed', route: '/(app)/companion' });
-    // setTimeout-deferred safeNavigate may take one tick; flush.
     jest.useFakeTimers();
     jest.advanceTimersByTime(200);
     jest.useRealTimers();
-    // Either the immediate path or the deferred path must have routed to
-    // login. We assert the route equals login.
     expect(mockRouterPush).toHaveBeenCalled();
     const lastCall = mockRouterPush.mock.calls[mockRouterPush.mock.calls.length - 1];
     expect(lastCall![0]).toEqual({ pathname: '/(auth)/login' });
   });
 
   it('routes to /(auth)/login when session is explicitly cleared after sign-out', () => {
-    // Simulate a sign-in then a sign-out before a notification fires.
     setCurrentSession({
       access_token: 't',
       refresh_token: 'r',
@@ -216,11 +184,6 @@ describe('handleNotificationResponse — auth gate', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// MOBILE-AGENT-NOTIF-DEADEND-01 — agent lifecycle notifications must land on a
-// LIVE screen, never the FEATURES.agents-gated <FeatureUnavailable/> dead end.
-// ---------------------------------------------------------------------------
-
 describe('handleNotificationResponse — no dead-end deep links', () => {
   function signIn(): void {
     setCurrentSession({
@@ -240,7 +203,6 @@ describe('handleNotificationResponse — no dead-end deep links', () => {
       signIn();
       fireNotification({ type, agentId: 'agent-1' });
       expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/agents' });
-      // Must never deep-link to the FEATURES.agents-gated dead-end screens.
       for (const call of mockRouterPush.mock.calls) {
         const target = call[0] as { pathname?: string } | string;
         const pathname = typeof target === 'string' ? target : target?.pathname;
@@ -256,12 +218,6 @@ describe('handleNotificationResponse — no dead-end deep links', () => {
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/agents' });
   });
 
-  // PP-23 — the web push producer and this client disagreed on the event name.
-  // `apps/web/lib/services/schedule-notification-service.ts` sends
-  // `{ type: 'schedule_run', taskId }`; the union here only had
-  // `schedule_triggered`, so the one push the backend actually sends fell to
-  // `default:` and opened app home. Assert the wire literal, not the union
-  // member, because it is the producer's string that has to keep matching.
   it('routes the schedule_run push the web backend actually sends to /(app)/schedules', () => {
     signIn();
     fireNotification({ type: 'schedule_run', taskId: 'task-1' });

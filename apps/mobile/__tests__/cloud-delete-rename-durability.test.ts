@@ -1,20 +1,3 @@
-/**
- * Mobile cloud conversation delete + rename durability (P2 silent-data-loss fix).
- *
- * Logic-level (not cross-device integration): only services/api and MMKV are
- * mocked; the real chat/cloud/sync-state stores run.
- *
- * Delete: a swallowed failure used to hide a conversation that still existed
- * server-side (privacy loss) and let it resurrect on the next pull. The fix
- * confirms the server delete (with retry) BEFORE hiding it locally, and
- * surfaces a hard failure instead of silently hiding it.
- *
- * Rename: a swallowed PUT failure used to strand the new title in this device's
- * cache, where the next list-replace/pull reverted it. The fix marks the
- * conversation dirty (sync-engine retry) and preserves the dirty title against
- * setCloudConversations / applyConversationDeltas until the push lands — while a
- * remote DELETE still always wins.
- */
 import { Alert } from 'react-native';
 
 jest.mock('../lib/mmkv', () => ({
@@ -135,10 +118,9 @@ describe('cloud conversation delete durability', () => {
 
     await useChatMessageStore.getState().deleteConversation('c1');
 
-    // Still present — the user is NOT told it is gone while it persists server-side.
     expect(convExists('c1')).toBe(true);
     expect(Alert.alert).toHaveBeenCalledTimes(1);
-    expect(mockDelete).toHaveBeenCalledTimes(3); // retried transient failures
+    expect(mockDelete).toHaveBeenCalledTimes(3);
   });
 
   it('treats a 404 as an already-deleted success (idempotent, no retry)', async () => {
@@ -189,9 +171,8 @@ describe('cloud conversation rename durability', () => {
   it('setCloudConversations does NOT revert a locally-dirty rename (loadConversations clobber guard)', async () => {
     seedCloud('c1', 'Old');
     mockPut.mockRejectedValue(new Error('HTTP 500'));
-    await useChatMessageStore.getState().renameConversation('c1', 'New'); // dirty, local title 'New'
+    await useChatMessageStore.getState().renameConversation('c1', 'New');
 
-    // loadConversations replaces the cache with a stale server snapshot (old title).
     useChatCloudMessageStore
       .getState()
       .setCloudConversations([
@@ -206,7 +187,6 @@ describe('cloud conversation rename durability', () => {
     mockPut.mockResolvedValueOnce(undefined as never);
     await useChatMessageStore.getState().renameConversation('c1', 'New');
 
-    // A successful push clears the dirty flag.
     useCloudSyncStateStore.getState().clearDirty(['c1'], []);
     useChatCloudMessageStore.getState().setCloudConversations([
       {
@@ -259,11 +239,9 @@ describe('cloud conversation rename durability', () => {
     useCloudSyncStateStore.getState().markConversationDirty('c1');
     useChatCloudMessageStore.getState().patchCloudConversation('c1', { title: 'New' });
 
-    // Stale non-deleted delta with the old title must NOT revert the dirty rename.
     applyConversationDeltas([convDelta('c1', 'Old', null)]);
     expect(convTitle('c1')).toBe('New');
 
-    // A tombstone delta MUST remove it even though it is dirty (delete wins).
     applyConversationDeltas([convDelta('c1', 'Old', T)]);
     expect(convExists('c1')).toBe(false);
   });

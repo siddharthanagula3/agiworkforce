@@ -3,24 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { KEYBOARD_SHORTCUT_DOCS, useKeyboardShortcuts } from './use-keyboard-shortcuts';
 
-/**
- * There used to be three parallel shortcut lists: the `handleKeyDown` if-chain
- * (what fires), a `shortcuts` array returned from this hook that nothing read,
- * and a four-entry array in `WebChatPage` that WAS the one the shortcuts dialog
- * displayed. They drifted — Escape, Cmd+Shift+C and Cmd+Shift+R all worked and
- * none appeared in the dialog.
- *
- * `KEYBOARD_SHORTCUT_DOCS` is now the one documented list. These tests pin it
- * to the bindings in BOTH directions, because either kind of drift is a lie:
- * a documented shortcut that does nothing, or a working shortcut nobody can
- * discover.
- */
-
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Dispatch a keydown as the real listener sees it (window-level). */
 function press(key: string, modifiers: { meta?: boolean; shift?: boolean } = {}) {
   const event = new KeyboardEvent('keydown', {
     key,
@@ -47,8 +33,6 @@ const HANDLER_KEYS = [
 type HandlerKey = (typeof HANDLER_KEYS)[number];
 
 function renderWithSpies() {
-  // `vi.fn()` infers a constructable signature that the hook's option type
-  // rejects, so the mocks are declared with the callback shape up front.
   const handlers = {} as Record<HandlerKey, ReturnType<typeof vi.fn<() => void>>>;
   for (const key of HANDLER_KEYS) handlers[key] = vi.fn<() => void>();
   const view = renderHook(() => useKeyboardShortcuts(handlers));
@@ -57,7 +41,6 @@ function renderWithSpies() {
 
 describe('KEYBOARD_SHORTCUT_DOCS', () => {
   it('documents every shortcut the hook binds', () => {
-    // Each entry here corresponds to one branch of handleKeyDown.
     expect(KEYBOARD_SHORTCUT_DOCS.map((doc) => doc.description)).toEqual([
       'Open search',
       'Show keyboard shortcuts',
@@ -101,8 +84,6 @@ describe('useKeyboardShortcuts bindings', () => {
   });
 
   it('every documented shortcut actually fires something', () => {
-    // The direction that matters most: a shortcut listed in Settings that does
-    // nothing when pressed.
     const { handlers } = renderWithSpies();
     const pressed = KEYBOARD_SHORTCUT_DOCS.map((doc) => {
       press(doc.key.length === 1 ? doc.key.toLowerCase() : doc.key, {

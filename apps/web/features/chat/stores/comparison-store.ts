@@ -1,13 +1,3 @@
-/**
- * Comparison Store
- *
- * Tracks which A/B comparison option the user selected per message.
- * Web-only; kept separate from the shared unified-chat store to avoid
- * polluting the cross-surface package with web-specific metadata shapes.
- *
- * Key: `${conversationId}:${messageId}`
- * Value: 'a' | 'b'
- */
 import { create } from 'zustand';
 
 interface ComparisonState {

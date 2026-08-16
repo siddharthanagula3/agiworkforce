@@ -1,16 +1,5 @@
 'use client';
 
-/**
- * Help settings section.
- *
- * Settings had no Help entry at all, so `/help`, `/status`, and `/changelog`
- * shipped but were unreachable from inside the product — a user looking for
- * "is it down?" or "what changed?" had no path to either.
- *
- * Every destination here is an existing route. Nothing is invented: if a link
- * is added below, the page must already exist.
- */
-
 import {
   BookOpen,
   Bug,

@@ -8,11 +8,6 @@ export interface ApprovalResolutionOptions {
   reason?: string;
 }
 
-/**
- * Resolve a Desktop approval through its authoritative native channel before
- * removing it from the local queue. Shared by Desktop approval surfaces and
- * the authenticated Mobile companion control runtime.
- */
 export async function resolveApprovalRequest(
   approval: ApprovalRequest,
   decision: 'approve' | 'reject',

@@ -1,15 +1,3 @@
-/**
- * The shared `settings` bundle is translated into all twelve supported
- * locales, but Desktop rendered English literals over it, so the language
- * switcher on the General tab stayed in English after a switch.
- *
- * Scope: these assertions cover only the strings that were wired to the
- * corpus — the theme/language labels and the allowed-directories heading and
- * add action. The rest of both screens is still English literals with no
- * corpus keys, so passing here does not mean either screen is localized.
- * They run against the real `@agiworkforce/i18n` corpus rather than a stub
- * `t`, so a component that goes back to a literal fails here.
- */
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -73,9 +61,6 @@ describe('General settings tab renders the shared translation corpus', () => {
     expect(screen.queryByText('Language')).not.toBeInTheDocument();
   });
 
-  // Note: this passes with the t() calls reverted to literals — it does not
-  // guard the wiring. What it catches is a mistyped key, which resolves to the
-  // raw key text ("settings:theme") instead of the shipped English wording.
   it('resolves the English wording rather than a raw key name', () => {
     renderGeneralTab();
 

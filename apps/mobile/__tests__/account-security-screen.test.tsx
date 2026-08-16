@@ -36,8 +36,6 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
-// PAR-M39: the Web handoffs present the in-app browser sheet rather than
-// backgrounding the app, but they keep the same host allowlist.
 jest.mock('../lib/safeOpenURL', () => ({
   openInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
 }));
@@ -57,15 +55,10 @@ jest.mock('../src/features/chat/store/appModeStore', () => ({
   ) => selector({ appMode: mockAppMode, setAppMode: mockSetAppMode }),
 }));
 
-// The screen reads the Clerk user to offer "Change password" — Clerk owns the
-// credential, so this is the same updatePassword call web makes rather than a
-// second password store. No ClerkProvider wraps a unit render, so stub it.
 jest.mock('@clerk/expo', () => ({
   useUser: () => ({ user: { updatePassword: mockUpdatePassword } }),
 }));
 
-// App Lock is a device setting, not an account one: the screen reports the real
-// SecureStore-backed flag, so the store is stubbed as hydrated + off here.
 jest.mock('../lib/biometricFlagStore', () => ({
   useBiometricFlag: (selector: (state: { hydrated: boolean; enabled: boolean }) => unknown) =>
     selector({ hydrated: true, enabled: false }),
@@ -213,8 +206,6 @@ describe('Mobile Account Security screen', () => {
 
     expect(screen.getByText('Chat is set to Local Mode')).toBeTruthy();
     expect(mockFetchStatus).not.toHaveBeenCalled();
-    // Session timeout and the activity log are account reads on the same
-    // boundary — Local Mode must not reach for either.
     expect(mockFetchSessionTimeout).not.toHaveBeenCalled();
     expect(mockFetchAuditLog).not.toHaveBeenCalled();
     expect(mockFetchAccountSessions).not.toHaveBeenCalled();
@@ -247,7 +238,6 @@ describe('Mobile Account Security screen', () => {
     await waitFor(() => expect(screen.getByText('Session timeout')).toBeTruthy());
     expect(screen.getByText('30 min')).toBeTruthy();
     expect(screen.getByText('Change password')).toBeTruthy();
-    // The repeat run is collapsed with its count rather than filling the list.
     await waitFor(() => expect(screen.getByText('Rate limit exceeded ×2')).toBeTruthy());
     expect(screen.getByText('Login success')).toBeTruthy();
   });
@@ -259,8 +249,6 @@ describe('Mobile Account Security screen', () => {
     await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
     fireEvent.press(screen.getByText('Session timeout'));
 
-    // 60 → 120 optimistically, then back to 60 once the save fails, so the row
-    // never reports a timeout the account never accepted.
     await waitFor(() => expect(mockSaveSessionTimeout).toHaveBeenCalledWith(120));
     await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
   });
@@ -270,8 +258,6 @@ describe('Mobile Account Security screen', () => {
 
     await waitFor(() => expect(screen.getByText('iPhone (this device)')).toBeTruthy());
     expect(screen.getByLabelText('Macintosh · Chrome 141. 3h ago')).toBeTruthy();
-    // The current row carries no revoke action — signing THIS device out is the
-    // account sign-out flow, not a device row.
     expect(screen.getByLabelText('iPhone (this device). Active now').props.accessibilityRole).toBe(
       undefined,
     );
@@ -284,7 +270,6 @@ describe('Mobile Account Security screen', () => {
     await waitFor(() => expect(screen.getByText('Macintosh · Chrome 141')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Macintosh · Chrome 141. 3h ago'));
 
-    // Tapping alone must not revoke anything.
     expect(mockRevokeAccountSession).not.toHaveBeenCalled();
     const buttons = alertSpy.mock.calls.at(-1)?.[2] as Array<{
       text?: string;
@@ -295,7 +280,6 @@ describe('Mobile Account Security screen', () => {
     });
 
     await waitFor(() => expect(mockRevokeAccountSession).toHaveBeenCalledWith('sess_laptop'));
-    // Two reads: the initial load and the post-revoke re-read.
     await waitFor(() => expect(mockFetchAccountSessions).toHaveBeenCalledTimes(2));
     alertSpy.mockRestore();
   });

@@ -1,13 +1,3 @@
-/**
- * Share API
- *
- * POST /api/share — create a shareable link for a conversation session.
- * GET  /api/share — list the caller's own share links.
- *
- * The GET was missing, so a user could mint share links and revoke a link they
- * still had the URL for, but had no way to see what they had published. Surfaces
- * wanting a "Shared links" screen had nothing to call.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
@@ -25,7 +15,6 @@ export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
 }
 
-/** Selectable link lifetimes, in days. Keep in sync with the schema below. */
 const DEFAULT_SHARE_EXPIRY_DAYS = 7;
 
 const CreateShareSchema = z.object({
@@ -33,21 +22,11 @@ const CreateShareSchema = z.object({
   model_id: z.string().optional(),
   provider: z.string().optional(),
   messages: z.array(z.record(z.string(), z.unknown())).default([]),
-  /**
-   * How long the link stays live. Previously hardcoded to 7 days with no way
-   * to ask for anything else — a user sharing a transcript for a single review
-   * had no way to make it short-lived, and one sharing reference material had
-   * no way to make it last.
-   *
-   * Bounded by an enum rather than a free number so a caller cannot mint a link
-   * that effectively never expires; the retention story stays predictable.
-   */
   expires_in_days: z
     .union([z.literal(1), z.literal(7), z.literal(30)])
     .default(DEFAULT_SHARE_EXPIRY_DAYS),
 });
 
-// Sanitize messages - strip local absolute paths from display_args to avoid leaking local FS info
 function sanitizeMessages(
   messages: Array<Record<string, unknown>>,
 ): Array<Record<string, unknown>> {
@@ -78,11 +57,9 @@ async function handleCreateShare(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'share-create');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Auth via Clerk (handles both cookie session and Bearer token).
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  // Validate body
   let rawBody: unknown = {};
   try {
     rawBody = await request.json();
@@ -96,7 +73,6 @@ async function handleCreateShare(request: NextRequest) {
   }
   const { title, model_id, provider, messages, expires_in_days: expiresInDays } = parsed.data;
 
-  // Generate 24-char base64url token (144 bits entropy)
   const token = randomBytes(18).toString('base64url');
 
   const sanitizedMessages = sanitizeMessages(messages);
@@ -148,18 +124,6 @@ type SharedSessionListRow = {
   created_at: string;
 };
 
-/**
- * GET /api/share — the caller's own share links, newest first.
- *
- * Owner-scoped: `owner_id = $1` is the access control, matching the DELETE in
- * [token]/route.ts. Never selects `messages` — this is an index, and returning
- * every shared conversation body would be both large and needless.
- *
- * Expired rows are returned rather than filtered out, with `expired` computed
- * so the caller can show and revoke them. Hiding them would leave a user unable
- * to clean up links they can still see referenced elsewhere, and it is the same
- * conflation GOV-28 called out on the read path.
- */
 async function handleListShares(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'share-view');
   if (rateLimitResponse) return rateLimitResponse;

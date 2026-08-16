@@ -131,8 +131,6 @@ describe('ComposerContextControls', () => {
       },
     }));
 
-    // Fresh-install shape: no folder attached. The shell-execution warning is
-    // about a workspace that does not exist yet, so no chip should alarm.
     render(<ComposerContextControls mode="local" folderPath={null} folderLabel={null} />);
 
     expect(

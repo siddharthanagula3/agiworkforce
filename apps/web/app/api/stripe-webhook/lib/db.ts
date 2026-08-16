@@ -79,10 +79,6 @@ export async function handleCreditTopUp(
     throw new Error('Credit top-up session amount or currency does not match its purchase');
   }
 
-  // checkout.session.completed and checkout.session.async_payment_succeeded
-  // are distinct Stripe events for one async Checkout Session. Event-level
-  // idempotency cannot stop both from granting balance, so the purchase itself
-  // carries a stable session receipt in the credit transaction.
   const transactionDescription = `Credit top-up purchase ${session.id}`;
   const existingPurchase = await db.query<{ id: string }>(
     `select id from credit_transactions
@@ -95,7 +91,6 @@ export async function handleCreditTopUp(
     return;
   }
 
-  // M7: Validate credit amount against actual Stripe PaymentIntent amount
   if (session.payment_intent) {
     const paymentIntentId =
       typeof session.payment_intent === 'string'
@@ -441,27 +436,12 @@ export async function upsertSubscriptionFromSession(
 
   let currentPeriodStart: Date | null = null;
   let currentPeriodEnd: Date | null = null;
-  // Entitlement status is whatever Stripe says the subscription is, and nothing
-  // else. It starts unset — a completed Checkout Session is evidence that the
-  // browser finished the flow, not that money was taken: with a delayed
-  // notification payment method the session completes while the subscription is
-  // still `incomplete`. Assuming `active` here (the previous default) granted
-  // the paid tier whenever Stripe could not be reached, because
-  // `effectivePlanTier` in packages/contracts/types/src/subscription-entitlement.ts
-  // entitles exactly `active`/`trialing`.
   let status: string | null = null;
   let cancelAtPeriodEnd: boolean = false;
   let canceledAt: Date | null = null;
   let stripeCouponId: string | null = null;
-  // Seat count Stripe is actually billing. Read from the subscription item when
-  // the subscription is available (authoritative), otherwise from the session
-  // line item, and never from metadata.
   let billedSeats: number | null = resolveCheckoutSessionSeats(session);
 
-  // Every session that reaches this function is a `mode: 'subscription'`
-  // checkout (app/api/checkout/route.ts is the only creator; top-ups branch
-  // away in handlers.ts). One without a subscription id cannot be confirmed as
-  // paid, so it provisions nothing.
   if (!stripeSubId) {
     logger.error(
       { sessionId: session.id, userId: resolvedUserId },
@@ -498,28 +478,9 @@ export async function upsertSubscriptionFromSession(
       { error, subscriptionId: stripeSubId },
       'Failed to retrieve subscription details; refusing to provision an unconfirmed entitlement',
     );
-    // Fail closed and let the route return 500: `mark_stripe_event_failed`
-    // leaves the event retryable (apps/web/db/neon/0020_functions.sql), so
-    // Stripe's redelivery provisions the purchase once Stripe answers again.
-    // Swallowing this granted the paid tier on an assumed `active` status.
     throw new Error('Cannot provision entitlement: Stripe subscription status is unconfirmed');
   }
 
-  // Tax outcome for this sale, recorded before anything is provisioned.
-  //
-  // `automatic_tax` can complete with 0 (unregistered jurisdiction, or a
-  // reverse-charge B2B buyer who supplied a VAT number) — that is a correct
-  // calculation, not a miss. What must never pass silently is a session where
-  // Stripe could NOT calculate (`failed` / `requires_location_inputs`) or where
-  // automatic tax was never requested: the money has already moved, so the
-  // company owes tax on a sale it did not collect tax for, and only a loud,
-  // greppable record makes that reconcilable.
-  //
-  // Entitlement is deliberately NOT withheld here. The buyer has paid; the
-  // amount they were charged is Stripe's, and revoking access over an
-  // accounting shortfall would punish the customer for our misconfiguration.
-  // The fail-closed guard that matters (an unpaid or incomplete checkout) is
-  // the subscription status read above, not this.
   const taxOutcome = describeSessionTax(session);
   if (taxOutcome.calculated) {
     logger.info(
@@ -690,9 +651,6 @@ export async function upsertSubscriptionFromSession(
         'Checkout metadata seat count differs from the seat count Stripe is billing; the Stripe quantity is authoritative',
       );
     }
-    // The purchased seat count is a BILLING fact and belongs on the org, not on
-    // the buyer's personal subscription row. `seats_consumed` stays
-    // trigger-maintained by membership; billing only ever writes what was bought.
     await persistPurchasedSeatsOnOrganization(db, {
       ownerUserId: resolvedUserId,
       seats: purchasedSeats.seats,
@@ -847,22 +805,6 @@ export async function upsertSubscriptionFromSession(
   }
 }
 
-/**
- * Tier already recorded for a subscription whose Stripe Price is no longer
- * registered.
- *
- * A deployment only ever registers the Prices it currently sells, so every
- * price change, currency split or retired experiment strands the customers
- * still billed on the old Price. Throwing on those renewals 500s the webhook
- * until Stripe exhausts its retries, after which the period never advances and
- * credits are never reset — an existing subscriber silently loses the plan they
- * are still paying for, against the price-protection promise in /terms.
- *
- * The recorded tier is the honest answer because it can only have been written
- * from a Price that WAS registered at purchase. It cannot invent entitlement: a
- * subscription that was never provisioned as paid has no paid tier to return,
- * and those still fail loudly at the call site.
- */
 async function resolveGrandfatheredPlanTier(
   db: DatabaseAdapter,
   stripeSubId: string | null,
@@ -991,10 +933,6 @@ export async function updateSubscriptionFromStripeSubscription(
         [stripeSubId],
       )
       .catch((fetchError: unknown) => {
-        // A READ error must NOT be silently treated as "no existing subscription":
-        // that falls through to the create/upsert path and bypasses the
-        // isNewPeriod reset-vs-allocate distinction, mis-allocating credits.
-        // Re-throw so the webhook returns non-2xx and Stripe retries.
         logger.error({ error: fetchError, stripeSubId }, 'Failed to check existing subscription');
         throw fetchError instanceof Error ? fetchError : new Error(String(fetchError));
       });
@@ -1004,15 +942,6 @@ export async function updateSubscriptionFromStripeSubscription(
     if (existingSub) {
       resolvedUserId = existingSub.user_id;
 
-      // Ordering guard: Stripe does not guarantee webhook delivery order, so a
-      // stale `customer.subscription.updated` (created before a cancel) can
-      // arrive AFTER `customer.subscription.deleted`. `canceled` is terminal —
-      // Stripe never reactivates a deleted subscription id (a resubscribe mints
-      // a NEW id) — so refuse to resurrect a locally-canceled row back to an
-      // active/paid state. Without this, the stale event would flip `status`
-      // (and re-derive `plan_tier` from the still-paid price) back to active and
-      // silently re-entitle a canceled user, since entitlement reads gate on the
-      // stored `status`.
       if (existingSub.status === 'canceled' && updateData.status !== 'canceled') {
         logger.warn(
           { stripeSubId, incomingStatus: updateData.status },
@@ -1076,8 +1005,6 @@ export async function updateSubscriptionFromStripeSubscription(
       const updatedRow = updated[0];
 
       if (updatedRow && purchasedSeats.perSeat) {
-        // Covers seat changes made in Stripe's hosted billing portal, which
-        // reach us only as customer.subscription.updated.
         await persistPurchasedSeatsOnOrganization(db, {
           ownerUserId: resolvedUserId,
           seats: purchasedSeats.seats,
@@ -1133,10 +1060,6 @@ export async function updateSubscriptionFromStripeSubscription(
             { error: creditError, userId: resolvedUserId, subscriptionId: updatedRow.id },
             'Failed to allocate/reset credits for subscription',
           );
-          // Entitlement and its usage ledger are one billing outcome. Returning
-          // 2xx here would acknowledge the Stripe event while leaving the user
-          // on the new plan with a stale or missing allowance. Re-throw so
-          // Stripe retries the idempotent reconciliation.
           throw creditError;
         }
       }
@@ -1332,9 +1255,6 @@ export async function updateSubscriptionFromStripeSubscription(
         }
 
         if (upsertedRow && purchasedSeats.perSeat) {
-          // customer.subscription.created can beat checkout.session.completed.
-          // Both paths persist seats identically so the stored count does not
-          // depend on Stripe's delivery order.
           await persistPurchasedSeatsOnOrganization(db, {
             ownerUserId: resolvedUserId,
             seats: purchasedSeats.seats,

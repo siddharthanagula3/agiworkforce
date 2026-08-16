@@ -2,18 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
-/**
- * WEB-13 (audit 2026-05-19): regression test. Fails CI if any TSX/TS file
- * under `apps/web/` reintroduces `sandbox="allow-scripts allow-same-origin"`
- * outside the one dedicated cross-origin renderer. That combination defeats
- * the iframe boundary when the framed document shares the parent's origin.
- * The artifact renderer is hosted on sandbox.agiworkforce.com and must retain
- * its distinct origin so postMessage events can be authenticated.
- *
- * This test runs as a pure file-system grep so it executes in CI without
- * spinning up a real browser.
- */
-
 const WEB_ROOT = join(__dirname, '..', '..');
 const DESKTOP_ROOT = join(WEB_ROOT, '..', 'desktop');
 
@@ -78,15 +66,9 @@ describe('iframe-sandbox regression (WEB-13)', () => {
       } catch {
         continue;
       }
-      // Look for the W3C-spec-defeating combination, in any order, with
-      // arbitrary whitespace between tokens. Allow tokens to appear in any
-      // order so e.g. "allow-same-origin allow-scripts" is also flagged.
       const lines = text.split('\n');
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!;
-        // Skip comment-only lines (JSDoc/multiline, single-line, HTML comment)
-        // to avoid flagging this test's own docstring + the helper modules
-        // that legitimately reference the bad pattern in prose.
         const trimmed = line.trim();
         if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('<!--')) {
           continue;

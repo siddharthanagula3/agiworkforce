@@ -1,7 +1,3 @@
-/**
- * Authentication Store Unit Tests
- * Tests for the Zustand authentication store state management
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuthStore } from './authentication-store';
@@ -14,7 +10,6 @@ const logoutStoreMocks = vi.hoisted(() => ({
   artifactReset: vi.fn(),
 }));
 
-// Mock the auth service
 vi.mock('@shared/services/authentication-manager', () => ({
   authService: {
     getCurrentUser: vi.fn(),
@@ -28,7 +23,6 @@ vi.mock('@shared/services/authentication-manager', () => ({
   },
 }));
 
-// Mock the logger
 vi.mock('@shared/lib/logger', () => ({
   logger: {
     auth: vi.fn(),
@@ -37,7 +31,6 @@ vi.mock('@shared/lib/logger', () => ({
   },
 }));
 
-// Mock other stores that are cleaned up on logout
 vi.mock('./mission-control-store', () => ({
   useMissionStore: Object.assign(vi.fn(), {
     getState: vi.fn(() => ({ reset: logoutStoreMocks.missionReset })),
@@ -57,9 +50,6 @@ vi.mock('./artifact-store', () => ({
   }),
 }));
 
-// The cleanup registry deliberately imports every user-scoped store. Those
-// modules are not collaborators of this unit test, and loading their real
-// feature trees made the first logout assertion depend on transform speed.
 vi.mock('./layout-store', () => ({}));
 vi.mock('./user-profile-store', () => ({}));
 vi.mock('./web-chat-store', () => ({}));
@@ -76,7 +66,6 @@ vi.mock('@/features/chat/stores/style-store', () => ({}));
 vi.mock('@/features/connectors/stores/tool-permissions-store', () => ({}));
 vi.mock('@agiworkforce/unified-chat', () => ({}));
 
-// Mock localStorage
 const localStorageMock = {
   getItem: vi.fn(),
   setItem: vi.fn(),
@@ -91,16 +80,10 @@ describe('Authentication Store', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    // Reset the store state
     useAuthStore.getState().reset();
 
-    // Default to a signed-IN Clerk cookie so the existing initialize() tests
-    // exercise the /api/me path. `initialize()` now short-circuits when the
-    // Clerk `__client_uat` cookie indicates signed-out (see clerk-session.ts);
-    // individual tests override this to assert the signed-out fast path.
     document.cookie = '__client_uat=9999999999';
 
-    // Import the mocked auth service
     const authModule = await import('@shared/services/authentication-manager');
     mockAuthService = authModule.authService;
   });
@@ -272,7 +255,6 @@ describe('Authentication Store', () => {
 
   describe('Logout', () => {
     it('should logout and reset state', async () => {
-      // First, set authenticated state
       const mockUser: AuthUser = {
         id: 'user-123',
         email: 'test@example.com',
@@ -293,7 +275,6 @@ describe('Authentication Store', () => {
 
       expect(useAuthStore.getState().isAuthenticated).toBe(true);
 
-      // Now logout
       vi.mocked(mockAuthService.logout).mockResolvedValue({ error: null });
 
       await useAuthStore.getState().logout();
@@ -315,14 +296,6 @@ describe('Authentication Store', () => {
     });
 
     it('cleans up the other stores even if one store fails during logout', async () => {
-      // AUDIT-FIX regression test: cleanupAllStores() used to await one
-      // Promise.all() over all 10 store dynamic imports, then reset them
-      // sequentially — a single rejected import (e.g. a stale chunk hash
-      // right after a deploy) or a throwing reset() aborted every cleanup
-      // scheduled after it in that fixed order, silently leaving the
-      // previous user's data in the other stores. Each store's cleanup is
-      // now an independent Promise.allSettled task, so a failure in one
-      // (notification-store here) must not block the others.
       const { useNotificationStore } = await import('./notification-store');
       const { logger } = await import('@shared/lib/logger');
 
@@ -340,8 +313,6 @@ describe('Authentication Store', () => {
         expect.any(Error),
       );
 
-      // logout() itself must still complete and clear auth state even
-      // though one store's cleanup task failed.
       const state = useAuthStore.getState();
       expect(state.isAuthenticated).toBe(false);
       expect(state.user).toBeNull();
@@ -512,7 +483,6 @@ describe('Authentication Store', () => {
     });
 
     it('should reset state completely', () => {
-      // Set some state
       const user: AuthUser = {
         id: 'user-123',
         email: 'test@example.com',
@@ -524,7 +494,6 @@ describe('Authentication Store', () => {
       useAuthStore.getState().updateUser(user);
       useAuthStore.getState().setError('Some error');
 
-      // Reset
       useAuthStore.getState().reset();
 
       const state = useAuthStore.getState();
@@ -560,9 +529,6 @@ describe('Authentication Store', () => {
     });
 
     it('skips getCurrentUser when signed out (no Clerk session cookie)', async () => {
-      // Signed-out fast path: with __client_uat cleared, initialize() must NOT
-      // probe /api/me (which would 401 + spam the console) and must resolve to
-      // the cleared, initialized state. Regression: public-auth-clean e2e.
       document.cookie = '__client_uat=0';
       vi.mocked(mockAuthService.getCurrentUser).mockResolvedValue({
         user: { id: 'user-1', email: 'test@example.com', name: 'Test', role: 'user', plan: 'free' },
@@ -613,7 +579,6 @@ describe('Authentication Store', () => {
       const promise1 = useAuthStore.getState().initialize();
       const promise2 = useAuthStore.getState().initialize();
 
-      // Resolve the auth call
       resolveAuth!({
         user: {
           id: 'user-1',
@@ -627,7 +592,6 @@ describe('Authentication Store', () => {
 
       await Promise.all([promise1, promise2]);
 
-      // Should only have been called once
       expect(mockAuthService.getCurrentUser).toHaveBeenCalledTimes(1);
       expect(useAuthStore.getState().initialized).toBe(true);
     });
@@ -673,18 +637,14 @@ describe('Authentication Store', () => {
     });
 
     it('handles initialization timeout', async () => {
-      // Mock getCurrentUser to never resolve (simulating timeout)
       vi.mocked(mockAuthService.getCurrentUser).mockImplementation(
         () => new Promise(() => {}), // never resolves
       );
 
-      // The initialize function has a 5s timeout via Promise.race
-      // We need to advance timers
       vi.useFakeTimers();
 
       const initPromise = useAuthStore.getState().initialize();
 
-      // Advance past the 5s timeout
       await vi.advanceTimersByTimeAsync(6000);
 
       await initPromise;
@@ -728,7 +688,6 @@ describe('Authentication Store', () => {
       });
 
       expect(result.success).toBe(false);
-      // Should stringify the object
       expect(result.error).toBeDefined();
     });
   });

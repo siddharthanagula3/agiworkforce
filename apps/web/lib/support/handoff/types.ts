@@ -28,10 +28,8 @@
  *     able to find it.
  */
 
-/** Where the escalation was raised from. */
 export type HandoffSurface = 'web-app' | 'marketing';
 
-/** Why the agent escalated. `hard_abstain` covers the four refuse-to-guess categories. */
 export type HandoffReason =
   | 'user_requested'
   | 'hard_abstain'
@@ -39,10 +37,6 @@ export type HandoffReason =
   | 'no_citation'
   | 'action_refused';
 
-/**
- * Lifecycle of one escalation. Deliberately has no `connecting`:
- * a session is either `waiting` (with a deadline) or it is not live.
- */
 export type HandoffStatus =
   | 'waiting'
   | 'connected'
@@ -52,7 +46,6 @@ export type HandoffStatus =
   | 'cancelled'
   | 'undeliverable';
 
-/** Why live chat is or is not on offer. Surfaced so the UI can be specific. */
 export type HandoffAvailabilityReason =
   | 'live'
   | 'not_configured'
@@ -62,28 +55,18 @@ export type HandoffAvailabilityReason =
 
 export interface HandoffFallbackChannel {
   channel: 'email';
-  /** The address the transcript is mailed to. */
   address: string;
-  /** Plain-language reply expectation, e.g. "within one business day". */
   expectedReply: string;
-  /**
-   * False when no email provider is configured. The UI must then degrade to a
-   * plain mailto: and must NOT claim anything was sent.
-   */
   configured: boolean;
 }
 
 export interface HandoffAvailability {
   live: boolean;
   reason: HandoffAvailabilityReason;
-  /** Render verbatim. e.g. "No one is available right now". */
   headline: string;
-  /** Render verbatim. */
   detail: string;
   fallback: HandoffFallbackChannel;
-  /** How long a live wait is allowed to last before it converts to email. */
   waitTimeoutSeconds: number;
-  /** Server-dictated poll cadence. The client obeys it; it does not choose one. */
   pollIntervalMs: number;
   checkedAt: string;
 }
@@ -91,11 +74,9 @@ export interface HandoffAvailability {
 export interface HandoffTranscriptTurn {
   role: 'user' | 'assistant' | 'system';
   content: string;
-  /** ISO timestamp. */
   at: string;
 }
 
-/** What the agent already tried, so the human does not retread it. */
 export interface HandoffAttemptedAction {
   action: string;
   outcome: 'succeeded' | 'failed' | 'refused' | 'confirmation_pending';
@@ -111,12 +92,10 @@ export interface HandoffCitation {
 export interface HandoffCreateRequest {
   surface: HandoffSurface;
   reason: HandoffReason;
-  /** One-line agent summary of the problem. */
   summary: string;
   transcript: HandoffTranscriptTurn[];
   attemptedActions?: HandoffAttemptedAction[];
   citations?: HandoffCitation[];
-  /** Required when signed out. IGNORED when signed in — Clerk's address wins. */
   contactEmail?: string;
   conversationId?: string;
   pagePath?: string;
@@ -135,7 +114,6 @@ export type HandoffCreateResponse =
       sessionId: string;
       referenceId: string;
       status: 'waiting';
-      /** REQUIRED. A live wait without a deadline is the bug this whole module prevents. */
       waitExpiresAt: string;
       waitTimeoutSeconds: number;
       pollIntervalMs: number;
@@ -160,7 +138,6 @@ export type HandoffCreateResponse =
       status: 'undeliverable';
       headline: string;
       detail: string;
-      /** Prefilled mailto carrying the reference id — the last honest resort. */
       mailtoHref: string;
       nextStep: HandoffNextStep;
     };
@@ -169,7 +146,6 @@ export interface HandoffStatusResponse {
   sessionId: string;
   referenceId: string;
   status: HandoffStatus;
-  /** First name only. Never an email address or a user id. */
   agentDisplayName?: string;
   waitExpiresAt?: string;
   pollIntervalMs: number;
@@ -191,12 +167,10 @@ export interface HandoffMessagesResponse {
   sessionId: string;
   status: HandoffStatus;
   messages: HandoffMessage[];
-  /** Pass back as `?after=` on the next poll. */
   nextAfter: number;
   pollIntervalMs: number;
 }
 
-/** Server-derived account context. NEVER client-supplied. */
 export interface HandoffAccountContext {
   signedIn: boolean;
   userId: string | null;
@@ -206,11 +180,9 @@ export interface HandoffAccountContext {
   usagePercentage: number | null;
   usageResetAt: string | null;
   hasUsageRemaining: boolean | null;
-  /** Non-fatal note when a lookup timed out or failed, so the human knows it is missing, not zero. */
   degraded?: string;
 }
 
-/** Queue row shown to a human agent. */
 export interface HandoffQueueEntry {
   sessionId: string;
   referenceId: string;
@@ -222,10 +194,6 @@ export interface HandoffQueueEntry {
   signedIn: boolean;
 }
 
-/**
- * The claim payload. This is what makes "the user never repeats themselves"
- * true: the human receives the whole context in the claim response.
- */
 export interface HandoffClaimResponse {
   sessionId: string;
   referenceId: string;
@@ -247,7 +215,6 @@ export interface HandoffPresenceState {
   status: 'online' | 'offline';
   maxConcurrentSessions: number;
   lastHeartbeatAt: string | null;
-  /** When this presence goes stale without another heartbeat. */
   expiresAt: string | null;
   heartbeatIntervalMs: number;
 }

@@ -18,8 +18,6 @@ describe('quick-start intents', () => {
   });
 
   it('gives prefill surfaces a stem the user continues typing after', () => {
-    // A stem that does not end in a space forces the user to add one, and reads
-    // as a completed sentence when it is not.
     for (const intent of QUICK_START_INTENTS) {
       expect(quickStartIntentPrompt(intent).endsWith(' ')).toBe(true);
     }
@@ -32,8 +30,6 @@ describe('quick-start intents', () => {
   });
 
   it('never advertises an intent the surface cannot honour', () => {
-    // A chip leading straight to a refusal is the failure this vocabulary exists
-    // to prevent, so callers filter by what they actually support.
     const withoutMedia = availableQuickStartIntents({ image: false, video: false });
     expect(withoutMedia).not.toContain('image');
     expect(withoutMedia).not.toContain('video');

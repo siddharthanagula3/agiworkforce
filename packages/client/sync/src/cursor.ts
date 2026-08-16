@@ -1,18 +1,4 @@
-/**
- * Cursor arithmetic shared by every delta-sync engine (mobile TS, desktop
- * Rust, the web route). `server_version` is a Postgres bigint serialized as a
- * string; comparisons must be numeric, never a raw lexicographic string
- * compare (that would misorder "9" vs "10"). Implemented as length-then-
- * lexicographic comparison on the leading-zero-stripped string, which is
- * exact for arbitrary-precision non-negative integers without needing a
- * bigint literal or library.
- *
- * Mirrors apps/desktop/src-tauri/src/data/cloud_sync.rs's `bigint_greater` /
- * `max_cursor` / `select_next_cursor` byte-for-byte (see fixture suite (d) —
- * __fixtures__/cursor-compare.json — replayed against both).
- */
 
-/** True when non-negative integer string `a` is strictly greater than `b`. */
 export function bigintGreater(a: string, b: string): boolean {
   const na = a.replace(/^0+/, '') || '0';
   const nb = b.replace(/^0+/, '') || '0';
@@ -20,7 +6,6 @@ export function bigintGreater(a: string, b: string): boolean {
   return na > nb;
 }
 
-/** The largest of `base` and `versions` by `bigintGreater`. Empty strings are ignored. */
 export function maxCursor(base: string, ...versions: string[]): string {
   let max = base;
   for (const v of versions) if (v && bigintGreater(v, max)) max = v;

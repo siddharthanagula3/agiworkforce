@@ -1,14 +1,3 @@
-/**
- * Tool Store
- *
- * Manages tool executions, file operations, terminal commands, and approval workflows.
- * Split from unifiedChatStore for better modularity.
- *
- * Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(immer(...))))
- * - Export selectors for all state slices
- * - subscribeWithSelector for granular subscriptions
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -180,9 +169,6 @@ export interface ApprovalRequest {
   messageId?: string;
 }
 
-/**
- * State for tracking a streaming tool execution
- */
 export interface ToolStreamStateEntry {
   tool_id: string;
   tool_name: string;
@@ -202,20 +188,14 @@ export interface ToolStreamStateEntry {
   parameters?: Record<string, unknown>;
 }
 
-/**
- * Cap an array to `limit` most-recent entries.
- * Returns the original array reference unchanged when under the limit.
- */
 function capArray<T>(arr: T[], limit: number): T[] {
   return arr.length > limit ? arr.slice(-limit) : arr;
 }
 
-// Named cap limits — single source of truth for all array size guards in this store.
-const FILE_OPS_LIMIT = 200; // fileOperations, terminalCommands, toolExecutions, screenshots
-const ACTION_LOG_LIMIT = 500; // actionLog entries (newest-first via unshift + slice)
-const PENDING_APPROVALS_LIMIT = 50; // pendingApprovals queue depth
+const FILE_OPS_LIMIT = 200;
+const ACTION_LOG_LIMIT = 500;
+const PENDING_APPROVALS_LIMIT = 50;
 
-// v2 drops the persisted `trustedWorkflows` map (see the partialize note).
 const STORAGE_VERSION = 2;
 
 function upsertApprovalAuditEntry(
@@ -224,9 +204,6 @@ function upsertApprovalAuditEntry(
   status: ActionLogStatus,
   extras?: Partial<ActionLogEntry>,
 ): void {
-  // Clone the approval to avoid reading from a mutated Immer draft proxy.
-  // Callers (e.g., rejectOperation) may mutate the draft before passing it here,
-  // and reading nested properties from a mutated draft can produce stale values.
   const approvalSnapshot = {
     ...approval,
     scope: approval.scope ? { ...approval.scope } : undefined,
@@ -285,36 +262,29 @@ function upsertApprovalAuditEntry(
 }
 
 export interface ToolState {
-  // Operations
   fileOperations: FileOperation[];
   terminalCommands: TerminalCommand[];
   toolExecutions: ToolExecution[];
   screenshots: Screenshot[];
   actionLog: ActionLogEntry[];
 
-  // Approvals
   pendingApprovals: ApprovalRequest[];
   trustedWorkflows: Record<string, TrustedWorkflow>;
 
-  // Context and plan
   activeContext: ContextItem[];
   workflowContext: WorkflowContext | null;
   plan: PlanData | null;
 
-  // Tool streaming
   activeToolStreams: Map<string, ToolStreamStateEntry>;
 
-  // Filters
   filters: {
     fileOperations: FileOperationType[];
     terminalStatus: ('success' | 'error')[];
     toolNames: string[];
   };
 
-  // Actions - File operations
   addFileOperation: (op: Omit<FileOperation, 'timestamp'>) => void;
 
-  // Actions - Terminal commands
   addTerminalCommand: (cmd: Omit<TerminalCommand, 'timestamp'>) => void;
   updateTerminalOutput: (payload: {
     command_id: string;
@@ -324,63 +294,51 @@ export interface ToolState {
     duration_ms: number;
   }) => void;
 
-  // Actions - Tool executions
   addToolExecution: (exec: Omit<ToolExecution, 'timestamp'>) => void;
 
-  // Actions - Screenshots
   addScreenshot: (screenshot: Omit<Screenshot, 'timestamp'>) => void;
 
-  // Actions - Action log
   addActionLogEntry: (entry: Omit<ActionLogEntry, 'createdAt' | 'updatedAt'>) => void;
   updateActionLogEntry: (id: string, updates: Partial<ActionLogEntry>) => void;
   clearActionLog: () => void;
   clearToolHistory: () => void;
 
-  // Actions - Plan
   setWorkflowContext: (context: WorkflowContext | null) => void;
   setPlan: (plan: PlanData | null) => void;
   updatePlanStep: (stepId: string, updates: Partial<PlanStep>) => void;
   clearPlan: () => void;
 
-  // Actions - Approvals
   addApprovalRequest: (request: Omit<ApprovalRequest, 'createdAt' | 'status'>) => void;
   approveOperation: (id: string) => void;
   rejectOperation: (id: string, reason?: string) => void;
   removeApprovalRequest: (id: string) => void;
 
-  // Actions - Trusted workflows
   setTrustedWorkflow: (workflow: TrustedWorkflow) => void;
   removeTrustedWorkflow: (hash: string) => void;
   recordTrustedAction: (hash: string, signature: string) => void;
   isActionTrusted: (hash: string | undefined, signature: string | undefined) => boolean;
 
-  // Actions - Context
   addContextItem: (item: ContextItem) => void;
   removeContextItem: (id: string) => void;
   clearContext: () => void;
 
-  // Actions - Tool streaming
   updateToolStream: (toolId: string, state: Partial<ToolStreamStateEntry>) => void;
   removeToolStream: (toolId: string) => void;
   clearToolStreams: () => void;
   getActiveToolStreams: () => ToolStreamStateEntry[];
   cancelToolExecution: (toolId: string) => void;
 
-  // Actions - Filters
   setFileOperationFilter: (types: FileOperationType[]) => void;
   setTerminalStatusFilter: (statuses: ('success' | 'error')[]) => void;
   setToolNameFilter: (names: string[]) => void;
 
-  // Approval timeout tracking
   approvalTimeoutTimers: Map<string, ReturnType<typeof setTimeout>>;
 
-  // Actions - Approval timeout
   startApprovalTimeout: (approvalId: string) => void;
   clearApprovalTimeout: (approvalId: string) => void;
   clearAllApprovalTimeouts: () => void;
   handleApprovalTimeout: (approvalId: string) => void;
 
-  // Actions - Reset
   resetOnLogout: () => void;
 }
 
@@ -389,7 +347,6 @@ export const useToolStore = create<ToolState>()(
     persist(
       subscribeWithSelector(
         immer((set, get) => ({
-          // Initial state
           fileOperations: [],
           terminalCommands: [],
           toolExecutions: [],
@@ -408,24 +365,20 @@ export const useToolStore = create<ToolState>()(
             toolNames: [],
           },
 
-          // File operations
           addFileOperation: (op) =>
             set(
               (state) => {
                 state.fileOperations.push({ ...op, timestamp: new Date() });
-                // AUDIT-006-017 fix: Cap fileOperations at 200 entries
                 state.fileOperations = capArray(state.fileOperations, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addFileOperation',
             ),
 
-          // Terminal commands
           addTerminalCommand: (cmd) =>
             set(
               (state) => {
                 state.terminalCommands.push({ ...cmd, timestamp: new Date() });
-                // AUDIT-006-017 fix: Cap terminalCommands at 200 entries
                 state.terminalCommands = capArray(state.terminalCommands, FILE_OPS_LIMIT);
               },
               undefined,
@@ -449,31 +402,26 @@ export const useToolStore = create<ToolState>()(
               'tool/updateTerminalOutput',
             ),
 
-          // Tool executions
           addToolExecution: (exec) =>
             set(
               (state) => {
                 state.toolExecutions.push({ ...exec, timestamp: new Date() });
-                // AUDIT-006-017 fix: Cap toolExecutions at 200 entries
                 state.toolExecutions = capArray(state.toolExecutions, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addToolExecution',
             ),
 
-          // Screenshots
           addScreenshot: (screenshot) =>
             set(
               (state) => {
                 state.screenshots.push({ ...screenshot, timestamp: new Date() });
-                // AUDIT-006-017 fix: Cap screenshots at 200 entries
                 state.screenshots = capArray(state.screenshots, FILE_OPS_LIMIT);
               },
               undefined,
               'tool/addScreenshot',
             ),
 
-          // Action log
           addActionLogEntry: (entry) =>
             set(
               (state) => {
@@ -483,7 +431,6 @@ export const useToolStore = create<ToolState>()(
                   createdAt: now,
                   updatedAt: now,
                 });
-                // Cap at 500 entries — unshift prepends, so slice from the front keeps newest entries.
                 if (state.actionLog.length > ACTION_LOG_LIMIT) {
                   state.actionLog = state.actionLog.slice(0, ACTION_LOG_LIMIT);
                 }
@@ -532,7 +479,6 @@ export const useToolStore = create<ToolState>()(
               'tool/clearToolHistory',
             ),
 
-          // Plan
           setWorkflowContext: (context) =>
             set(
               (state) => {
@@ -602,7 +548,6 @@ export const useToolStore = create<ToolState>()(
               'tool/clearPlan',
             ),
 
-          // Approvals
           addApprovalRequest: (request) => {
             set(
               (state) => {
@@ -619,7 +564,6 @@ export const useToolStore = create<ToolState>()(
                   state.pendingApprovals[index] = normalized;
                 } else {
                   state.pendingApprovals.push(normalized);
-                  // AUDIT-006-018 fix: Cap pendingApprovals at 50 entries
                   if (state.pendingApprovals.length > PENDING_APPROVALS_LIMIT) {
                     state.pendingApprovals = state.pendingApprovals.slice(-PENDING_APPROVALS_LIMIT);
                   }
@@ -630,11 +574,6 @@ export const useToolStore = create<ToolState>()(
               undefined,
               'tool/addApprovalRequest',
             );
-            // Native MCP confirmations are owned by the Rust request channel.
-            // Starting the configurable frontend timer here can hide the prompt
-            // early or, worse, apply an "auto-approve" UI policy while Rust is
-            // still waiting. The backend emits tool:confirmation_timeout after
-            // its fixed fail-closed deadline, and that event removes the prompt.
             if (request.type === 'mcp_tool') {
               get().clearApprovalTimeout(request.id);
             } else {
@@ -652,7 +591,6 @@ export const useToolStore = create<ToolState>()(
                   upsertApprovalAuditEntry(state.actionLog, approval, 'success', {
                     result: 'Approved by user',
                   });
-                  // Remove directly - no need to update status on an item being removed
                   state.pendingApprovals.splice(index, 1);
                 }
               },
@@ -668,7 +606,6 @@ export const useToolStore = create<ToolState>()(
                 const index = state.pendingApprovals.findIndex((a) => a.id === id);
                 if (index !== -1) {
                   const approval = state.pendingApprovals[index]!;
-                  // Record rejection details before removing (preserves audit trail)
                   approval.status = 'rejected';
                   approval.rejectedAt = new Date();
                   if (reason) approval.rejectionReason = reason;
@@ -696,7 +633,6 @@ export const useToolStore = create<ToolState>()(
             );
           },
 
-          // Trusted workflows
           setTrustedWorkflow: (workflow) =>
             set(
               (state) => {
@@ -750,7 +686,6 @@ export const useToolStore = create<ToolState>()(
             return Boolean(workflow?.actionSignatures.includes(signature));
           },
 
-          // Context
           addContextItem: (item) =>
             set(
               (state) => {
@@ -778,13 +713,11 @@ export const useToolStore = create<ToolState>()(
               'tool/clearContext',
             ),
 
-          // Tool streaming
           updateToolStream: (toolId, updates) => {
             set(
               (state) => {
                 const existing = state.activeToolStreams.get(toolId);
                 if (existing) {
-                  // Filter out undefined values to avoid overwriting valid data with undefined
                   const filteredUpdates = Object.fromEntries(
                     Object.entries(updates).filter(([_, v]) => v !== undefined),
                   );
@@ -826,9 +759,6 @@ export const useToolStore = create<ToolState>()(
               'tool/updateToolStream',
             );
 
-            // Cleanup completed/errored tool streams after a short delay.
-            // This prevents unbounded growth of activeToolStreams when tools
-            // complete but are not explicitly removed by the event listener.
             const resolvedStatus = updates.status;
             if (resolvedStatus === 'completed' || resolvedStatus === 'error') {
               setTimeout(() => {
@@ -902,7 +832,6 @@ export const useToolStore = create<ToolState>()(
             }
           },
 
-          // Filters
           setFileOperationFilter: (types) =>
             set(
               (state) => {
@@ -930,9 +859,7 @@ export const useToolStore = create<ToolState>()(
               'tool/setToolNameFilter',
             ),
 
-          // Approval timeout actions
           startApprovalTimeout: (approvalId) => {
-            // Lazy import to avoid circular dependency at module load time
             let timeoutSeconds = 300;
             try {
               // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -951,7 +878,6 @@ export const useToolStore = create<ToolState>()(
               // Use defaults if settings store is not available
             }
 
-            // Clear any existing timer for this approval
             const existingTimer = get().approvalTimeoutTimers.get(approvalId);
             if (existingTimer !== undefined) {
               clearTimeout(existingTimer);
@@ -964,7 +890,6 @@ export const useToolStore = create<ToolState>()(
             set(
               (state) => {
                 state.approvalTimeoutTimers.set(approvalId, timerId);
-                // Stamp the timeout seconds on the approval request for UI display
                 const approval = state.pendingApprovals.find((a) => a.id === approvalId);
                 if (approval) {
                   approval.timeoutSeconds = timeoutSeconds;
@@ -1022,13 +947,9 @@ export const useToolStore = create<ToolState>()(
 
             const approval = get().pendingApprovals.find((a) => a.id === approvalId);
             if (!approval) {
-              // Approval was already handled (approved/rejected manually)
               return;
             }
 
-            // A native MCP request may only be resolved by
-            // respond_tool_confirmation or the backend timeout event. Never
-            // apply the configurable UI timeout policy to this trust boundary.
             if (approval.type === 'mcp_tool') {
               get().clearApprovalTimeout(approvalId);
               return;
@@ -1076,7 +997,6 @@ export const useToolStore = create<ToolState>()(
                 `Approval timed out: "${approval.description}" was automatically approved`,
               );
             } else {
-              // 'pause' — leave the approval pending but notify the user and pause the agent
               set(
                 (state) => {
                   state.approvalTimeoutTimers.delete(approvalId);
@@ -1085,7 +1005,6 @@ export const useToolStore = create<ToolState>()(
                 'tool/handleApprovalTimeout/pause',
               );
               toast.warning(`Agent paused: "${approval.description}" is waiting for your decision`);
-              // Pause the active agent through the agent store
               const agentStatus = useAgentStore.getState().agentStatus;
               if (agentStatus && agentStatus.status === 'running') {
                 useAgentStore.getState().setAgentStatus({
@@ -1096,11 +1015,9 @@ export const useToolStore = create<ToolState>()(
             }
           },
 
-          // Reset
           resetOnLogout: () => {
             set(
               (state) => {
-                // Clear all approval timeout timers inside set() to prevent race with concurrent startApprovalTimeout
                 state.approvalTimeoutTimers.forEach((timerId) => clearTimeout(timerId));
                 state.fileOperations = [];
                 state.terminalCommands = [];
@@ -1127,12 +1044,6 @@ export const useToolStore = create<ToolState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        // `trustedWorkflows` is the standing auto-approval list for tool
-        // actions, and nothing in the approval UI populates it — `isActionTrusted`
-        // has no production caller. A blanket "skip the confirmation prompt"
-        // record has to be created by a deliberate user grant, so it stays in
-        // memory until an approval control writes it; carrying an unattributable
-        // one across restarts is the wrong default for a permission boundary.
         partialize: (state) => ({
           filters: state.filters,
         }),
@@ -1152,7 +1063,6 @@ export const useToolStore = create<ToolState>()(
   ),
 );
 
-// Selectors
 export const selectFileOperations = (state: ToolState) => state.fileOperations;
 export const selectTerminalCommands = (state: ToolState) => state.terminalCommands;
 export const selectToolExecutions = (state: ToolState) => state.toolExecutions;
@@ -1166,7 +1076,6 @@ export const selectPlan = (state: ToolState) => state.plan;
 export const selectActiveToolStreams = (state: ToolState) => state.activeToolStreams;
 export const selectFilters = (state: ToolState) => state.filters;
 
-// Derived selectors
 export const selectRecentFileOperations = (state: ToolState) => state.fileOperations.slice(0, 50);
 
 export const selectSuccessfulTerminalCommands = (state: ToolState) =>
@@ -1181,13 +1090,8 @@ export const selectHighRiskApprovals = (state: ToolState) =>
 export const selectRunningToolStreams = (state: ToolState) =>
   Array.from(state.activeToolStreams.values()).filter((stream) => stream.status === 'running');
 
-// Re-export ContextItem type
 export type { ContextItem };
 
-/**
- * Payload for `tool:event` Tauri events emitted by the agentic loop.
- * Mirrors the Rust `ToolEvent` enum serialized with `serde(tag = "type", rename_all = "snake_case")`.
- */
 export interface ToolEventPayload {
   type: 'started' | 'progress' | 'completed';
   id: string;
@@ -1203,24 +1107,20 @@ export interface ToolEventPayload {
   duration_ms?: number;
   result_preview?: string;
   error?: string;
-  /** Optional parallel group identifier for grouping concurrent tool executions. */
   parallel_group?: string;
 }
 
-/** Payload for `agentic:loop-started` event */
 interface AgenticLoopStartedPayload {
   conversation_id: number;
   max_iterations: number;
 }
 
-/** Payload for `agentic:loop-status` event */
 interface AgenticLoopStatusPayload {
   conversation_id: number;
   iteration: number;
   max_iterations: number;
 }
 
-/** Payload for `agentic:loop-ended` event */
 interface AgenticLoopEndedPayload {
   conversation_id: number;
   iterations_used: number;
@@ -1275,13 +1175,6 @@ function updateAgentCurrentStep(displayName: string, success: boolean): void {
   });
 }
 
-/**
- * Canonical desktop handler for tool lifecycle events.
- *
- * This owns the Tauri `tool:event` interpretation path and keeps the
- * tool stream store, chat timeline/message metadata, and agent trail/status
- * in sync from one place.
- */
 export function applyCanonicalToolEvent(payload: ToolEventPayload): void {
   const toolId = payload.id;
   const messageId = payload.message_id;
@@ -1391,28 +1284,16 @@ export function applyCanonicalToolEvent(payload: ToolEventPayload): void {
   updateAgentCurrentStep(displayName, success);
 }
 
-/**
- * Initializes the Tauri event listeners for tool events and agentic loop lifecycle.
- * - `tool:event` — updates toolStore streams, chatStore timeline/message metadata, and agentStore state
- * - `agentic:loop-started` — sets agenticLoopStatus to active
- * - `agentic:loop-status` — updates current iteration count
- * - `agentic:loop-ended` — clears agenticLoopStatus
- *
- * Guards against double-initialization. Safe to call multiple times.
- */
 export async function initializeToolEventListener(): Promise<void> {
   if (toolEventListenerInitialized || !isTauri) {
     return;
   }
 
-  // Set flag after all listeners are registered (not before) to avoid partial init
   try {
-    // --- tool:event ---
     await listen<ToolEventPayload>('tool:event', (event) => {
       applyCanonicalToolEvent(event.payload);
     });
 
-    // --- agentic:loop-started ---
     await listen<AgenticLoopStartedPayload>('agentic:loop-started', (event) => {
       const { conversation_id, max_iterations } = event.payload;
       useChatStore.getState().setAgenticLoopStatus({
@@ -1423,7 +1304,6 @@ export async function initializeToolEventListener(): Promise<void> {
       });
     });
 
-    // --- agentic:loop-status ---
     await listen<AgenticLoopStatusPayload>('agentic:loop-status', (event) => {
       const { conversation_id, iteration, max_iterations } = event.payload;
       useChatStore.getState().setAgenticLoopStatus({
@@ -1434,12 +1314,10 @@ export async function initializeToolEventListener(): Promise<void> {
       });
     });
 
-    // --- agentic:loop-ended ---
     await listen<AgenticLoopEndedPayload>('agentic:loop-ended', (_event) => {
       useChatStore.getState().setAgenticLoopStatus(null);
     });
 
-    // --- agentic:message-consumed ---
     await listen<{ pending_message: { id: string } }>('agentic:message-consumed', (event) => {
       const pendingId = event.payload?.pending_message?.id;
       if (pendingId) {
@@ -1447,7 +1325,6 @@ export async function initializeToolEventListener(): Promise<void> {
       }
     });
 
-    // --- compaction:auto-triggered ---
     await listen<{
       conversation_id: number;
       current_tokens: number;
@@ -1460,7 +1337,6 @@ export async function initializeToolEventListener(): Promise<void> {
       });
     });
 
-    // --- compaction:completed ---
     await listen<{
       conversation_id: number;
       messages_compacted: number;
@@ -1475,7 +1351,6 @@ export async function initializeToolEventListener(): Promise<void> {
       );
     });
 
-    // All listeners registered successfully — mark as initialized
     toolEventListenerInitialized = true;
   } catch (error) {
     console.error('[ToolStore] Failed to initialize tool event listener:', error);

@@ -31,10 +31,6 @@ import { Linking } from 'react-native';
 import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export type ReportCategory =
   | 'harmful'
   | 'inaccurate'
@@ -47,24 +43,14 @@ export type ContentReport = {
   id: string;
   messageId: string;
   conversationId: string;
-  /** Abbreviated content excerpt — max 500 chars to avoid storing full responses */
   contentExcerpt: string;
   category: ReportCategory;
   userNote: string;
   createdAt: string;
-  /**
-   * Whether the device mail client was actually opened with this report.
-   * Not a claim that the mail was sent — only the user can do that.
-   */
   emailHandoffOpened: boolean;
-  /**
-   * Whether the server intake route accepted this report. False when offline or
-   * in Local Mode (egress-blocked), where the on-device copy is the fallback.
-   */
   serverAcknowledged: boolean;
 };
 
-/** What genuinely happened to a report, so the UI can say it without lying. */
 export type ReportDelivery =
   /** Accepted by the server trust-and-safety intake route. */
   | { kind: 'submitted-to-server' }
@@ -79,10 +65,6 @@ export type SaveContentReportResult = {
   report: ContentReport;
   delivery: ReportDelivery;
 };
-
-// ---------------------------------------------------------------------------
-// Storage
-// ---------------------------------------------------------------------------
 
 const MMKV_KEY = 'content-reports:v1';
 const SUPPORT_EMAIL = 'support@agiworkforce.com';
@@ -103,16 +85,10 @@ function writeReports(reports: ContentReport[]): void {
   storage.set(MMKV_KEY, JSON.stringify(reports));
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/** Returns all stored content reports. */
 export function getContentReports(): ContentReport[] {
   return readReports();
 }
 
-/** Clears all stored reports (DSAR erasure path). */
 export function clearContentReports(): void {
   storage.delete(MMKV_KEY);
 }
@@ -146,7 +122,6 @@ export async function openSupportEmail(report: ContentReport): Promise<boolean> 
     if (!canOpen) return false;
     await Linking.openURL(mailto);
   } catch {
-    // Mail client unavailable — the report is still saved locally.
     return false;
   }
 
@@ -173,8 +148,6 @@ async function submitReportToServer(report: ContentReport): Promise<boolean> {
     });
     return true;
   } catch {
-    // Offline / Local Mode (EgressBlockedError) / server error — keep the
-    // on-device copy. A failed upload must never lose or throw away the report.
     return false;
   }
 }
@@ -206,14 +179,11 @@ export async function saveContentReport(params: {
     serverAcknowledged: false,
   };
 
-  // Persist before any network / mail hand-off so a failing transport can never
-  // lose the report.
   const existing = readReports();
   const updated = [report, ...existing].slice(0, MAX_STORED_REPORTS);
   writeReports(updated);
 
   // Primary sink: the server trust-and-safety intake. Falls back to on-device
-  // when offline or in Local Mode.
   const submitted = await submitReportToServer(report);
   if (submitted) {
     report.serverAcknowledged = true;
@@ -234,7 +204,6 @@ export async function saveContentReport(params: {
       delivery: { kind: 'email-composer-opened' },
     };
   }
-  // Mail client unavailable — still report the server outcome truthfully.
   return {
     report,
     delivery: { kind: submitted ? 'submitted-to-server' : 'email-unavailable' },

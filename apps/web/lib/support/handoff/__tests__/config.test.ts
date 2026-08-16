@@ -1,7 +1,3 @@
-/**
- * Config must fail closed. A deployment that configured nothing must not be able
- * to claim a human is there or that an email was sent.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +11,6 @@ import {
 
 beforeEach(() => {
   vi.unstubAllEnvs();
-  // Clear anything the ambient environment might have set.
   for (const key of [
     'AGI_SUPPORT_LIVE_HANDOFF_ENABLED',
     'AGI_SUPPORT_FALLBACK_EMAIL',
@@ -40,7 +35,6 @@ describe('getHandoffConfig · fail-closed defaults', () => {
     const config = getHandoffConfig();
     expect(config.fallbackEmail).toBe(DEFAULT_FALLBACK_EMAIL);
     expect(config.fromEmail).toBe(DEFAULT_FALLBACK_EMAIL);
-    // Addresses alone are not a channel.
     expect(config.emailConfigured).toBe(false);
   });
 

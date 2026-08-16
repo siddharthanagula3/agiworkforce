@@ -1,10 +1,3 @@
-/**
- * Authentication Service — Clerk adapter
- *
- * Wraps Clerk auth for the auth store. Login/register/password flows are
- * handled by Clerk UI components (<SignIn>, <SignUp>, etc.) and are no longer
- * callable from code. getCurrentUser() and logout() delegate to Clerk.
- */
 
 import { logger } from '@shared/lib/logger';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
@@ -12,16 +5,8 @@ import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 export interface AuthUser {
   id: string;
   email: string;
-  /** Canonical display name resolved by GET /api/me (PER-8). */
   name?: string;
-  /**
-   * What the assistant should call the user. Resolved server-side from the
-   * `general` settings namespace — PER-2: the greeting used to read a
-   * `localStorage['agi.profile.preferredName']` key that nothing in the
-   * repository ever wrote.
-   */
   preferredName?: string;
-  /** Self-described role from Settings → General, when set. */
   workDescription?: string;
   avatar?: string;
   role?: string;
@@ -57,8 +42,6 @@ class AuthService {
       if (!response.ok) {
         return { user: null, error: 'Not authenticated' };
       }
-      // Validate against the shared /api/me contract (packages/services) —
-      // a mismatch throws into the catch below instead of drifting silently.
       const data = parseMeResponse(await response.json());
       const authUser: AuthUser = {
         id: data.id,
@@ -89,20 +72,6 @@ class AuthService {
     return { user: null, error: 'Use Clerk sign-up flow' };
   }
 
-  /**
-   * End the Clerk session.
-   *
-   * This used to return `{ error: null }` without doing anything. Call sites
-   * that also invoke `useClerk().signOut()` themselves were unaffected, but the
-   * ones that only call `useAuthStore.logout()` — the chat header's "Log out"
-   * button and the inactivity auto-logout — merely cleared local state: the
-   * Clerk session cookie survived, so the next `resyncSession()` resolved
-   * `/api/me` again and signed the user straight back in.
-   *
-   * Clerk's browser instance is the only sign-out surface reachable from a
-   * plain module, and signing out twice is a no-op, so the call sites that
-   * already sign out stay correct.
-   */
   async logout(): Promise<{ error: string | null }> {
     if (typeof window === 'undefined') return { error: null };
     const clerk = (window as unknown as Record<string, unknown>)['Clerk'] as

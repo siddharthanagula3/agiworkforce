@@ -5,10 +5,8 @@ import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/voice/transcribe/route';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 
-// Mock server-only module
 vi.mock('server-only', () => ({}));
 
-// Mock rate limiting — pass through by default
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
   withRateLimitHandler: vi.fn(
@@ -18,7 +16,6 @@ vi.mock('@/lib/rate-limit', () => ({
   ),
 }));
 
-// Mock logger
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -28,14 +25,12 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock CORS helpers
 vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
 
-// Mock env utility
 vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
     const envMap: Record<string, string> = {
@@ -46,13 +41,11 @@ vi.mock('@shared/utils/env', () => ({
   getOptionalEnv: vi.fn(() => undefined),
 }));
 
-// Mock Clerk auth — controls whether getClerkAuthUser succeeds or throws
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Mock error utilities (withErrorHandler uses AppError internally)
 vi.mock('@/lib/errors', () => {
   class AppError extends Error {
     code: string;
@@ -79,12 +72,9 @@ vi.mock('@/lib/errors', () => {
   };
 });
 
-// The voice/transcribe route re-exports from @/app/api/llm/v1/audio/transcriptions/route
-// which uses global fetch to call OpenAI. We mock fetch globally.
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// Helper: create a multipart FormData request with an audio file
 function makeFormDataRequest(
   options: {
     includeFile?: boolean;
@@ -98,10 +88,6 @@ function makeFormDataRequest(
   const formData = new FormData();
 
   if (includeFile) {
-    // Route validates magic bytes (B4 fix) — must start with a real audio
-    // signature, not a placeholder string. Use the EBML/WebM signature
-    // (0x1A 0x45 0xDF 0xA3) followed by arbitrary padding so the upload
-    // passes both MIME-type and magic-byte sniff checks.
     const ebmlMagic = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]);
     const padding = new Uint8Array(32).fill(0);
     const audioBlob = new Blob([ebmlMagic, padding], { type: 'audio/webm' });
@@ -128,7 +114,6 @@ function makeFormDataRequest(
   });
 }
 
-// Helper: create a mock OpenAI success response
 function makeOpenAISuccessResponse(text = 'Hello world') {
   return {
     ok: true,
@@ -138,7 +123,6 @@ function makeOpenAISuccessResponse(text = 'Hello world') {
   };
 }
 
-// Helper: create a mock OpenAI error response
 function makeOpenAIErrorResponse(status: number, body = 'Transcription failed') {
   return {
     ok: false,
@@ -152,10 +136,8 @@ describe('POST /api/voice/transcribe', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user via Clerk
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: 'test@example.com' });
 
-    // Default: OpenAI responds with a successful transcription
     mockFetch.mockResolvedValue(makeOpenAISuccessResponse('Hello world'));
   });
 
@@ -224,7 +206,7 @@ describe('POST /api/voice/transcribe', () => {
   });
 
   it('uses the canonical voice-routing model when model is not specified', async () => {
-    const request = makeFormDataRequest(); // no model specified
+    const request = makeFormDataRequest();
     await POST(request);
 
     expect(mockFetch).toHaveBeenCalledOnce();
@@ -253,7 +235,7 @@ describe('POST /api/voice/transcribe', () => {
   });
 
   it('should not include language in forwarded form data when not provided', async () => {
-    const request = makeFormDataRequest(); // no language
+    const request = makeFormDataRequest();
     await POST(request);
 
     const [, options] = mockFetch.mock.calls[0] as [string, { body: FormData }];
@@ -284,7 +266,6 @@ describe('POST /api/voice/transcribe', () => {
   });
 
   it('should handle non-JSON response from OpenAI gracefully', async () => {
-    // OpenAI occasionally returns plain text on certain success paths
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -295,12 +276,10 @@ describe('POST /api/voice/transcribe', () => {
     const request = makeFormDataRequest();
     const response = await POST(request);
 
-    // Non-JSON responses should still return 200 with the raw text body
     expect(response.status).toBe(200);
   });
 
   it('should return 400 when form data cannot be parsed', async () => {
-    // Sending a plain JSON body (not multipart) should fail form data parsing
     const request = new NextRequest('http://localhost/api/voice/transcribe', {
       method: 'POST',
       headers: { authorization: 'Bearer valid-token', 'content-type': 'application/json' },
@@ -309,7 +288,6 @@ describe('POST /api/voice/transcribe', () => {
 
     const response = await POST(request);
 
-    // The route returns 400 when formData() parsing fails
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.error.message).toMatch(/invalid multipart form data/i);

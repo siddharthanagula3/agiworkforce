@@ -1,15 +1,3 @@
-/**
- * CurrentActionBadge — compact, always-visible indicator showing what the
- * agent is currently doing (thinking / searching / coding / running) plus a
- * brief grace period for completed actions.
- *
- * Reads from `budgetStore.actionTrail`. Hosts push entries via
- * `useBudgetStore.getState().pushAction(...)` whenever a tool starts/ends.
- *
- * Two exports:
- *   - `CurrentActionBadge` — single most-recent active action
- *   - `CurrentActionStack` — list of all parallel active actions (max 5 + overflow)
- */
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Brain,

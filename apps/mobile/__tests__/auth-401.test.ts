@@ -1,22 +1,4 @@
-/**
- * Mobile Auth 401 Handling — E2E Smoke Tests
- *
- * Tests the Wave 1 auth interceptor in apps/mobile/services/api.ts.
- *
- * Scenarios covered:
- *  - 401 response triggers token refresh
- *  - Successful refresh retries the original request
- *  - Failed refresh triggers sign-out
- *  - Concurrent 401s only trigger one refresh (de-duplication)
- *  - Non-401 errors pass through normally
- *  - 2xx responses return parsed JSON
- *  - Timeout fires AbortController
- */
 
-// ---------------------------------------------------------------------------
-// Mocks — factories use jest.fn() inline so Babel hoisting works correctly.
-// References to the mock functions are obtained after import via jest.mocked().
-// ---------------------------------------------------------------------------
 
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(),
@@ -25,25 +7,18 @@ jest.mock('../services/authSession', () => ({
   clearAuthSession: jest.fn(),
 }));
 
-// Mock Alert so the handleUnrecoverableAuth UI call does not throw in test env
 jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
 }));
 
-// Mock the constants used by the api client
 jest.mock('../lib/constants', () => ({
   API_URL: 'https://api.test.local',
   TIMEOUTS: { DEFAULT: 10_000 },
 }));
 
-// combineAbortSignals is a trivial helper — pass through the first signal
 jest.mock('../lib/abortSignal', () => ({
   combineAbortSignals: (signals: AbortSignal[]) => signals[0],
 }));
-
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
 
 import { api } from '../services/api';
 import {
@@ -54,15 +29,10 @@ import {
 } from '../services/authSession';
 import { Alert } from 'react-native';
 
-// Typed references to the mock functions
 const mockGetAuthToken = getAuthToken as jest.Mock;
 const mockGetAuthHeaders = getAuthHeaders as jest.Mock;
 const mockRefreshAuthSession = refreshAuthSession as jest.Mock;
 const mockClearAuthSession = clearAuthSession as jest.Mock;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function mockToken(token: string) {
   mockGetAuthToken.mockResolvedValue(token);
@@ -83,21 +53,12 @@ function makeResponse(status: number, body: unknown): Response {
   } as unknown as Response;
 }
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
   jest.clearAllMocks();
-  // Default: valid session token
   mockToken('access-token-valid');
   mockRefreshAuthSession.mockResolvedValue(false);
   mockClearAuthSession.mockResolvedValue(undefined);
 });
-
-// ---------------------------------------------------------------------------
-// 1. Successful 2xx requests
-// ---------------------------------------------------------------------------
 
 describe('2xx responses', () => {
   it('returns parsed JSON from a successful GET', async () => {
@@ -132,22 +93,15 @@ describe('2xx responses', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. 401 triggers token refresh then retries
-// ---------------------------------------------------------------------------
-
 describe('401 handling — refresh and retry', () => {
   it('retries the request with a new token after successful refresh', async () => {
     const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
-    // First call returns 401, second (retry) returns 200
     fetchSpy
       .mockResolvedValueOnce(makeResponse(401, { error: 'Unauthorized' }))
       .mockResolvedValueOnce(makeResponse(200, { data: 'retried' }));
 
-    // Refresh succeeds with a new token
     mockRefreshAuthSession.mockResolvedValueOnce(true);
-    // Second getSession call (after refresh) returns new token
     mockGetAuthHeaders
       .mockResolvedValueOnce({ Authorization: 'Bearer access-token-valid' })
       .mockResolvedValueOnce({ Authorization: 'Bearer new-refreshed-token' });
@@ -160,23 +114,16 @@ describe('401 handling — refresh and retry', () => {
   });
 
   it('does not retry a second time when _skipAuthRetry is set (avoids infinite loop)', async () => {
-    // This is tested indirectly: after refresh fails, we throw and do not call fetch again
     const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
     fetchSpy.mockResolvedValueOnce(makeResponse(401, { error: 'Unauthorized' }));
 
-    // Refresh fails
     mockRefreshAuthSession.mockResolvedValueOnce(false);
 
     await expect(api.get('/api/expired')).rejects.toThrow('401');
-    // Only 1 fetch call — no retry when refresh fails
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 3. Failed refresh triggers sign-out
-// ---------------------------------------------------------------------------
 
 describe('failed refresh triggers local cloud-session cleanup', () => {
   it('clears the auth session facade when refresh returns no session', async () => {
@@ -212,21 +159,15 @@ describe('failed refresh triggers local cloud-session cleanup', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Concurrent 401s only trigger one refresh
-// ---------------------------------------------------------------------------
-
 describe('concurrent 401 de-duplication', () => {
   it('serialises concurrent refresh calls — only one network call is made', async () => {
     const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
-    // Both requests return 401 on first attempt, then 200
     fetchSpy
       .mockResolvedValueOnce(makeResponse(401, {}))
       .mockResolvedValueOnce(makeResponse(401, {}))
       .mockResolvedValue(makeResponse(200, { ok: true }));
 
-    // Slow refresh so both 401s arrive before refresh completes
     let resolveRefresh!: (value: unknown) => void;
     const refreshPromise = new Promise((resolve) => {
       resolveRefresh = resolve;
@@ -234,25 +175,17 @@ describe('concurrent 401 de-duplication', () => {
 
     mockRefreshAuthSession.mockReturnValueOnce(refreshPromise.then(() => true));
 
-    // Kick off both concurrent requests (don't await yet)
     const req1 = api.get('/api/concurrent-1');
     const req2 = api.get('/api/concurrent-2');
 
-    // Allow both to hit the 401 path, then resolve the refresh
     await Promise.resolve();
     resolveRefresh(undefined);
 
-    // Both should resolve without error
     await Promise.allSettled([req1, req2]);
 
-    // refreshSession should only have been called once despite two 401s
     expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 5. Non-401 errors pass through normally
-// ---------------------------------------------------------------------------
 
 describe('non-401 errors pass through', () => {
   it('throws for 403 Forbidden without attempting refresh', async () => {
@@ -283,10 +216,6 @@ describe('non-401 errors pass through', () => {
     expect(mockRefreshAuthSession).not.toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 6. HTTP methods — basic coverage
-// ---------------------------------------------------------------------------
 
 describe('HTTP method helpers', () => {
   it('api.post sends method=POST with JSON body', async () => {

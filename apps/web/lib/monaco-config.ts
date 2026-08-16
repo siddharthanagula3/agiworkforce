@@ -1,8 +1,5 @@
 import type { Monaco } from '@monaco-editor/react';
 
-/**
- * Default Monaco Editor options for consistent styling across the app
- */
 export const defaultEditorOptions = {
   fontSize: 14,
   fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
@@ -11,10 +8,6 @@ export const defaultEditorOptions = {
   scrollBeyondLastLine: false,
 };
 
-/**
- * Configure Monaco TypeScript compiler options for better IntelliSense
- * Call this in beforeMount handler before the editor loads
- */
 export function configureMonacoTypescript(monaco: Monaco): void {
   monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
     target: monaco.languages.typescript.ScriptTarget.ES2020,
@@ -29,7 +22,6 @@ export function configureMonacoTypescript(monaco: Monaco): void {
     noSyntaxValidation: false,
   });
 
-  // Also configure JavaScript defaults for consistency
   monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
     target: monaco.languages.typescript.ScriptTarget.ES2020,
     allowNonTsExtensions: true,
@@ -43,9 +35,6 @@ export function configureMonacoTypescript(monaco: Monaco): void {
   });
 }
 
-/**
- * Convert app theme to Monaco theme name
- */
 export function getMonacoTheme(theme: 'dark' | 'light' | 'system'): string {
   if (theme === 'system') {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;

@@ -1,29 +1,5 @@
-/**
- * VSCode extension trust-boundary tests.
- *
- * The VSCode extension preserves the canonical plan tiers
- * rather than the binary local/cloud split. The trust boundary is enforced by:
- *   - tierResolver: resolves the active tier from bridge data, config, and fallback
- *   - HTTPS-only endpoint validation: rejects non-https endpoints except localhost
- *   - byok as safe default: under-gates rather than over-grants
- */
 
 import { describe, it, expect } from 'vitest';
-
-// ---------------------------------------------------------------------------
-// Tier ordering — imported from the REAL resolver, not re-declared.
-//
-// This file previously defined its own TIER_ORDER/tierAtLeast copies, so the
-// assertions below tested the copy rather than production code and would stay
-// green through any real-code change. The local copy had in fact already
-// drifted: it still listed the pre-2026-06-30 'hobby' and the never-shipped
-// 'pro_plus', neither of which exists in the shipping tier set
-// (see billing-catalog.ts, where the paid
-// entry tier is Basic).
-//
-// `vitest.config.ts` aliases `vscode` to a mock, so importing the resolver
-// (which imports vscode) works here.
-// ---------------------------------------------------------------------------
 
 import { TIER_ORDER, tierAtLeast } from '../integrations/tierResolver';
 
@@ -33,7 +9,6 @@ describe('tier resolver ordering', () => {
   });
 
   it('byok is the default fallback tier (safe under-gate)', () => {
-    // Mirrors tierResolver.ts: `return 'byok'` as the safe default.
     const DEFAULT_TIER = 'byok';
     expect(TIER_ORDER.indexOf(DEFAULT_TIER)).toBeGreaterThan(TIER_ORDER.indexOf('local'));
     expect(TIER_ORDER.indexOf(DEFAULT_TIER)).toBeLessThan(TIER_ORDER.indexOf('basic'));
@@ -45,18 +20,11 @@ describe('tier resolver ordering', () => {
   });
 
   it('tierAtLeast — local and byok are peers, not a ladder', () => {
-    // The canonical ordering (packages/contracts/types/src/design-system/
-    // user-identity.ts) ranks local / byok / free all at 0: they are three
-    // unpaid access modes, not ascending privilege levels. The previous local
-    // copy of this helper modelled them as a strict ladder and asserted
-    // local < byok — a false hierarchy that only survived because the test
-    // exercised the copy instead of the real comparator.
     expect(tierAtLeast('local', 'byok')).toBe(true);
     expect(tierAtLeast('byok', 'local')).toBe(true);
   });
 
   it('CRITICAL: no unpaid tier reaches the first paid tier', () => {
-    // This is the invariant that actually matters for the trust boundary.
     for (const unpaid of ['local', 'byok', 'free'] as const) {
       expect(tierAtLeast(unpaid, 'basic')).toBe(false);
     }
@@ -79,10 +47,6 @@ describe('tier resolver ordering', () => {
     expect(tierAtLeast('byok', 'unknown')).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Endpoint validation — mirrors apps/extension-vscode/src/utils/api.ts
-// ---------------------------------------------------------------------------
 
 const ENDPOINT_ALLOWED_HOSTS = new Set([
   'api.agiworkforce.com',
@@ -136,14 +100,8 @@ describe('endpoint validation', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Trust-boundary gate invariants for VSCode extension
-// ---------------------------------------------------------------------------
-
 describe('vscode extension trust-boundary gates', () => {
   it('CRITICAL: byok default never over-grants to managed-cloud features', () => {
-    // byok tier < basic; if the bridge provides no tier, fall to byok.
-    // Ensures no accidental managed-cloud access for unauthenticated sessions.
     const defaultTier = 'byok';
     expect(tierAtLeast(defaultTier, 'basic')).toBe(false);
     expect(tierAtLeast(defaultTier, 'pro')).toBe(false);
@@ -157,9 +115,6 @@ describe('vscode extension trust-boundary gates', () => {
   });
 
   it('tier transitions are monotonic (non-decreasing — equal ranks are peers)', () => {
-    // TIER_ORDER is a strict array, but the canonical ranking has ties
-    // (local/byok are both rank 0), so the correct property is "a higher-listed
-    // tier always meets a lower-listed one", not strict two-way inequality.
     for (let i = 0; i < TIER_ORDER.length - 1; i++) {
       const lower = TIER_ORDER[i]!;
       const higher = TIER_ORDER[i + 1]!;

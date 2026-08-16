@@ -52,7 +52,6 @@ export function checkSubscriptionGate(): SubscriptionGateResult {
     };
   }
 
-  // Free users are now allowed access to the app generally
   return {
     hasAccess: true,
     currentTier: planTier,

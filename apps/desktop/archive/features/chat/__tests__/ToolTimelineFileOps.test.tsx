@@ -1,13 +1,3 @@
-/**
- * ToolTimeline File-Op Structured Display Tests
- *
- * Covers:
- * - File-op rows (Write/Edit) show extension badge (e.g., "RS", "HTML")
- * - File-op rows show the basename, not the full path
- * - Diff +N / -N counts are rendered for completed edit entries
- * - Non-file-op tools (Read, Bash) fall through to the default row layout
- * - Snapshot: a completed Edit entry with a diff
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -59,7 +49,6 @@ describe('ToolTimeline — file-op structured rows', () => {
     render(<ToolTimeline entries={entries} />);
     await setup.click(screen.getByRole('button'));
 
-    // Extension badge
     expect(screen.getByText('RS')).toBeInTheDocument();
   });
 
@@ -103,7 +92,6 @@ describe('ToolTimeline — file-op structured rows', () => {
     render(<ToolTimeline entries={entries} />);
     await setup.click(screen.getByRole('button'));
 
-    // sampleDiff has 2 additions and 1 removal
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
   });
@@ -124,9 +112,7 @@ describe('ToolTimeline — file-op structured rows', () => {
     render(<ToolTimeline entries={entries} />);
     await setup.click(screen.getByRole('button'));
 
-    // Should show the display name as text (default row layout), not an extension badge
     expect(screen.getByText('Read')).toBeInTheDocument();
-    // Extension badge "RS" should NOT appear because Read is not a write/edit op
     expect(screen.queryByText('RS')).not.toBeInTheDocument();
   });
 

@@ -1,11 +1,3 @@
-/**
- * share-preview.tsx
- *
- * HIGH-MOB-03 fix (2026-05-04): Share intent content is shown here for user
- * review before any LLM call is made. The user must tap "Send to Chat" to
- * proceed. Content is sanitised and length-capped before display and before
- * being passed to sendMessage.
- */
 import { useState } from 'react';
 import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,16 +8,9 @@ import { useTheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 
-/** Hard cap on shared text that will be forwarded to the LLM (100 KB). */
 const MAX_SHARED_BYTES = 100 * 1024;
 
-/**
- * Wrap shared content in a named XML tag so the model treats it as external
- * data rather than instructions. System prompt must instruct the model to
- * treat content inside <shared_via_intent> as untrusted user-supplied text.
- */
 function sanitiseSharedText(raw: string): { text: string; truncated: boolean } {
-  // Remove prompt-injection markers that could escape the wrapper tag
   const cleaned = raw.replace(/<\/?shared_via_intent>/gi, '').replace(/<\/?system>/gi, '');
 
   const encoder = new TextEncoder();
@@ -35,7 +20,6 @@ function sanitiseSharedText(raw: string): { text: string; truncated: boolean } {
     return { text: `<shared_via_intent>\n${cleaned}\n</shared_via_intent>`, truncated: false };
   }
 
-  // Truncate to byte limit, then back off to the nearest valid char boundary
   const truncated = new TextDecoder().decode(bytes.slice(0, MAX_SHARED_BYTES));
   return {
     text: `<shared_via_intent>\n${truncated}\n</shared_via_intent>`,

@@ -1,23 +1,3 @@
-/**
- * Patch parser — turns the OpenClaw `*** Begin Patch / *** End Patch` markup
- * into typed `Hunk` objects. Adapted from the parser inside OpenClaw
- * `src/agents/apply-patch.ts` (MIT, Peter Steinberger).
- *
- * Markers:
- *   *** Begin Patch
- *   *** Add File: <path>
- *   +<line>
- *   *** Delete File: <path>
- *   *** Update File: <path>
- *   *** Move to: <newPath>
- *   @@ <optional context line> @@
- *   @@
- *   -<old line>
- *   +<new line>
- *    (space-prefixed) <context line>
- *   *** End of File
- *   *** End Patch
- */
 
 import type { Hunk, UpdateFileChunk, UpdateFileHunk } from './types';
 
@@ -67,7 +47,6 @@ export function parsePatch(input: string): Hunk[] {
       i = next;
       continue;
     }
-    // Skip unrecognized line — defensive against trailing whitespace etc.
     i += 1;
   }
 
@@ -100,8 +79,6 @@ function readAddBody(lines: string[], start: number): { contents: string; next: 
     } else if (line === '') {
       out.push('');
     } else {
-      // Unprefixed lines inside an Add block are tolerated (some authors
-      // forget the `+`); preserve verbatim.
       out.push(line);
     }
     i += 1;
@@ -136,7 +113,6 @@ function readUpdateBody(
 
     let changeContext: string | undefined;
     if (line.startsWith(CHANGE_CONTEXT_MARKER)) {
-      // AUDIT-FIX: alert-406 — bound whitespace runs to avoid polynomial-redos.
       changeContext = line
         .slice(CHANGE_CONTEXT_MARKER.length)
         .replace(/\s{0,256}@@\s{0,256}$/, '')
@@ -179,7 +155,6 @@ function readUpdateBody(
         oldLines.push('');
         newLines.push('');
       } else {
-        // Unrecognized; treat as context.
         oldLines.push(inner);
         newLines.push(inner);
       }
@@ -187,7 +162,6 @@ function readUpdateBody(
     }
 
     if (oldLines.length === 0 && newLines.length === 0 && changeContext === undefined) {
-      // Empty chunk separator; advance.
       continue;
     }
     chunks.push({

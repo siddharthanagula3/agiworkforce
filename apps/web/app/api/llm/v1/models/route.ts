@@ -106,12 +106,6 @@ async function handleListModels(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Unauthenticated callers get the free-tier model list. Authenticated
-  // callers get the model list for their actual subscription tier. A caller
-  // that explicitly presents an Authorization credential must never be
-  // silently downgraded to the public catalog when verification fails: that
-  // masks expired/revoked credentials and makes native clients behave as if
-  // their account lost entitlements.
   const presentedAuthorization = request.headers.has('authorization');
   let userId: string | null = null;
   try {

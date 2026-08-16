@@ -31,8 +31,6 @@ export interface ConversationRowProps {
   onMoveToProject: (conversationId: string, projectId: string | null) => void;
 }
 
-// ─── 3-dots menu item ─────────────────────────────────────────────────────────
-
 interface MenuItemProps {
   icon: LucideIcon;
   label: string;
@@ -70,8 +68,6 @@ function MenuItem({ icon: Icon, label, onClick, danger }: MenuItemProps) {
   );
 }
 
-// ─── conversation row (ChatGPT-style: hover → 3-dots → pin/rename/delete) ──────
-
 export function ConversationRow({
   conversation,
   active,
@@ -99,24 +95,18 @@ export function ConversationRow({
   const title = conversation.title || t('common.untitled');
   const showActions = hovered || menuOpen || active;
 
-  // Anchor the portaled menu to the trigger, flipping up near the viewport edge.
   const openMenu = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
     const openUp = rect.bottom + MENU_EST_HEIGHT > window.innerHeight;
     const preferredTop = openUp ? rect.top - MENU_EST_HEIGHT - 4 : rect.bottom + 4;
-    // Clamp to the viewport. The horizontal axis was already clamped, but the
-    // vertical was not: flipping up from a row near the top of the window
-    // produced a NEGATIVE top, so the menu opened above the viewport edge and
-    // Pin/Rename were cut off with nothing to scroll.
     const top = Math.max(8, Math.min(preferredTop, window.innerHeight - MENU_EST_HEIGHT - 8));
     setMenuPos({ top, left });
     setConfirmDelete(false);
     setMenuOpen(true);
   }, []);
 
-  // Close the menu on outside click / Escape.
   useEffect(() => {
     if (!menuOpen) return;
     function onDoc(e: MouseEvent) {
@@ -136,7 +126,6 @@ export function ConversationRow({
     };
   }, [menuOpen]);
 
-  // Focus + select the title when entering inline rename.
   useEffect(() => {
     if (!editing) return;
     setDraft(conversation.title);

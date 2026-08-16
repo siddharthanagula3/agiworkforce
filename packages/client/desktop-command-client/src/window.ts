@@ -1,10 +1,5 @@
-/**
- * Window API — typed wrappers for window_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export type DockPosition = 'left' | 'right' | 'top' | 'bottom';
 
@@ -16,8 +11,6 @@ export interface WindowStatePayload {
   maximized: boolean;
   fullscreen: boolean;
 }
-
-// ---- Window Commands ----
 
 export async function windowGetState(): Promise<WindowStatePayload> {
   return command<WindowStatePayload>('window_get_state');

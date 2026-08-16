@@ -58,7 +58,6 @@ export function buildApiMessageContent(message: Message): string | ApiContentPar
     if (attachment.assetId) {
       parts.push({ type: 'file', file: { asset_id: attachment.assetId } });
     } else if (attachment.type === 'image' && attachment.content) {
-      // Compatibility for an in-flight pre-migration message that has not reloaded.
       parts.push({ type: 'image_url', image_url: { url: attachment.content } });
     }
   }

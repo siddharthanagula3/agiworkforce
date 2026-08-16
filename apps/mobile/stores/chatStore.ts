@@ -1,7 +1,3 @@
-/**
- * Barrel re-export. All implementation lives in stores/chat/*.
- * Consumer imports remain unchanged: `import { useChatStore } from '@/stores/chatStore'`
- */
 export type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 export type { CloudWorkMode } from '@agiworkforce/types';
 export type { SendMessageOptions } from './chat/chatExecutionStore';
@@ -26,7 +22,6 @@ import type { PaywallErrorState } from '@/src/features/chat/utils/paywallRecover
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { CloudWorkMode } from '@agiworkforce/types';
 
-/** Combined state shape — mirrors the original useChatStore state interface. */
 export interface CombinedChatState {
   conversations: ConversationSummary[];
   currentConversationId: string | null;
@@ -34,7 +29,6 @@ export interface CombinedChatState {
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
   isStreaming: boolean;
-  /** Conversation ids with a live stream — scope composer streaming state to the open conversation via this, not the global isStreaming. */
   streamingConversationIds: string[];
   streamingContent: string;
   streamingReasoning: string;
@@ -156,14 +150,7 @@ function buildCombinedState(
   exec: ReturnType<typeof useChatExecutionStore.getState>,
   view: ReturnType<typeof useChatViewStore.getState>,
 ): CombinedChatState {
-  // SEPARATION-FIX: merge Local + Cloud conversations for UI display only.
-  // The two lists live in physically separate MMKV namespaces and must never
-  // be written back into each other's stores. Cloud conversations come after
-  // local so local chats are shown first in list order.
   const mergedConversations = [...msg.conversations, ...cloud.conversations];
-  // Each conversation has exactly one message owner. Cloud keys override only
-  // legacy residue with the same id; a display-time union would conceal a
-  // storage-boundary violation instead of correcting its writer.
   const mergedMessages: Record<string, ChatMessage[]> = { ...msg.messages, ...cloud.messages };
   return {
     conversations: mergedConversations,
@@ -228,7 +215,6 @@ function buildCombinedState(
   };
 }
 
-/** Partial state that can be passed to setState — routes to the correct sub-store. */
 type SettableState = Partial<
   Pick<
     CombinedChatState,
@@ -243,13 +229,6 @@ type SettableState = Partial<
   >
 >;
 
-/**
- * Unified selector hook — mirrors the original useChatStore shape so all
- * existing consumers work without modification.
- *
- * Also exposes `.getState()` and `.setState()` static methods to match the
- * Zustand store API expected by non-component callers (realtime.ts, _layout.tsx).
- */
 export function useChatStore<T>(selector: (state: CombinedChatState) => T): T {
   const msgSlice = useChatMessageStore();
   const cloudSlice = useChatCloudMessageStore();
@@ -267,10 +246,6 @@ useChatStore.getState = (): CombinedChatState => {
   );
 };
 
-/**
- * setState routes message-domain fields to useChatMessageStore.
- * All realtime.ts / _layout.tsx callers only mutate conversations/messages/currentConversationId.
- */
 useChatStore.setState = (
   updater: SettableState | ((state: CombinedChatState) => SettableState),
 ): void => {

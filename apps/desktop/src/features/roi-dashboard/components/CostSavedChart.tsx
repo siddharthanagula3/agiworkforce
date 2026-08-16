@@ -7,7 +7,6 @@ interface CostSavedChartProps {
   loading?: boolean;
 }
 
-// Recharts tooltip props interface
 interface TooltipPayloadItem {
   value?: number;
   payload?: AutomationChartData;

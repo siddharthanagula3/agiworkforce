@@ -1,31 +1,5 @@
-/**
- * Regression tests for FIX-MOB-10 — TLS pinning chokepoint
- * (red-team finding HIGH-MOB-04, scaffolded 2026-05-05).
- *
- * **What is and isn't tested here**
- *
- * The actual TLS pinning enforcement happens at the platform layer
- * (iOS URLSession via NSPinnedDomains; Android via
- * network_security_config.xml). React Native's JS-side fetch can't
- * introspect TLS, so the only thing this module can enforce in JS is
- * "is this URL covered by our pin manifest?"
- *
- * The tests below pin the contract of `secureFetch` itself:
- *   - today (`PINNING_ENFORCED = false`): transparent passthrough so we
- *     can wire it into every call site without behaviour change;
- *   - once flipped on: hosts with no provisioned pin entry are REFUSED with
- *     `PinningError`, which is the intended fail-CLOSED behaviour.
- *
- * The drift sentinel asserts that `lib/pinning.ts` still exposes the
- * config knob and that `services/secureFetch.ts` actually consults it,
- * so a future refactor that accidentally short-circuits enforcement is
- * caught by the test rather than by a security incident.
- */
 
 const mockFetch = jest.fn();
-
-// We replace global fetch in beforeEach; this avoids needing to mock
-// a node-level dependency.
 
 let mockEnforced = false;
 const mockPins: Record<string, ReadonlyArray<string>> = {};
@@ -108,7 +82,6 @@ describe('secureFetch — passthrough mode (PINNING_ENFORCED = false)', () => {
 describe('secureFetch — enforced mode (PINNING_ENFORCED = true)', () => {
   it('refuses requests to hosts with no provisioned pins (fail-closed)', async () => {
     mockEnforced = true;
-    // mockPins['agiworkforce.com'] is empty → no pins → must refuse.
     await expect(secureFetch('https://agiworkforce.com/api/health')).rejects.toBeInstanceOf(
       PinningError,
     );
@@ -175,8 +148,6 @@ describe('drift sentinel — config knobs are still exposed', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'pinning.ts'), 'utf8');
     expect(src).toMatch(/export\s+const\s+PINS_BY_HOST/);
     expect(src).toMatch(/export\s+const\s+PINNING_ENFORCED/);
-    // The empty pin arrays are intentional for now — the test fails noisily
-    // if someone removes the config without doing the deploy-side cert work.
     expect(src).toContain('agiworkforce.com');
     expect(src).toContain('signaling.agiworkforce.com');
   });

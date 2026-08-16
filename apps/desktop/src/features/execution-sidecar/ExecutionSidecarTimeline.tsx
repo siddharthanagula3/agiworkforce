@@ -88,7 +88,6 @@ export function ExecutionSidecarTimeline() {
   const toolTimelineByMessage = useChatStore((s) => s.toolTimelineByMessage);
   const activeToolStreams = useToolStore((s) => s.activeToolStreams);
 
-  // Flatten all tool timeline entries from all messages, ordered by message
   const allEntries = useMemo(() => {
     const entries: ToolLabelEntry[] = [];
     const byMessage = toolTimelineByMessage;
@@ -101,7 +100,6 @@ export function ExecutionSidecarTimeline() {
     return entries;
   }, [toolTimelineByMessage]);
 
-  // Active streams that do not yet have timeline entries
   const orphanStreams = useMemo(() => {
     const entryIds = new Set(allEntries.map((e) => e.id));
     return Array.from(activeToolStreams.values()).filter(
@@ -109,7 +107,6 @@ export function ExecutionSidecarTimeline() {
     );
   }, [activeToolStreams, allEntries]);
 
-  // Auto-scroll to bottom when new entries arrive
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {

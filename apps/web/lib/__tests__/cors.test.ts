@@ -38,8 +38,6 @@ describe('isOriginAllowed', () => {
 
   it('rejects the literal null origin even with requireOrigin off', async () => {
     const { isOriginAllowed } = await import('../cors');
-    // file:// pages and sandboxed iframes serialize their origin as "null";
-    // the Electron shell must never ship on file:// for exactly this reason.
     expect(isOriginAllowed('null')).toBe(false);
   });
 

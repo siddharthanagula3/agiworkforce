@@ -10,7 +10,6 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 
-/** Legacy alias for the canonical percentage/reset managed-usage summary. */
 async function handleGetAnalytics(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'usage-analytics');
   if (rateLimitResponse) return rateLimitResponse;

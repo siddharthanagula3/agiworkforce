@@ -13,70 +13,19 @@ import { eraseUserAccountData, eraseUserMedia } from '@/lib/server/account-erasu
 import { GET as exportUserDataGet } from '@/app/api/user/export/route';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
-/**
- * GET /api/user/data
- *
- * GDPR Article 20: Right to Data Portability
- *
- * Settings → Privacy → "Export data" calls this endpoint expecting a
- * downloadable JSON file. It delegates to the canonical export handler at
- * /api/user/export (same GDPR export logic, same rate limiting) so there is
- * a single source of truth for what gets exported.
- *
- * Authentication: Required (Bearer token or session cookie)
- * Rate Limit: 5 requests per hour (see /api/user/export)
- */
 export const GET = exportUserDataGet;
 
-/**
- * DELETE /api/user/data
- *
- * GDPR Article 17: Right to Erasure (Right to be Forgotten)
- *
- * This endpoint allows authenticated users to request deletion of all their
- * personal data from the system. This is a destructive, irreversible operation.
- *
- * The operation calls the `delete_user_data` database function which:
- * - Deletes user profile data
- * - Removes subscription records
- * - Clears credit transactions
- * - Removes device authorizations
- * - Deletes email preferences
- * - Removes beta redemptions
- * - Clears organization memberships
- *
- * Note: Auth user account deletion must be handled separately via the auth provider.
- *
- * Authentication: Required (Bearer token or session cookie)
- * Rate Limit: 3 requests per hour (security-sensitive)
- */
-
-// Hardcoded deletion order · children first to respect FK constraints.
-// NEVER interpolate user-supplied values into SQL; these names are constants.
-/**
- * PER-24: the hardcoded eleven-table list that used to live here covered
- * neither the user's conversations, artifacts, memories and settings nor any
- * stored media, named a table that does not exist (`device_authorizations`;
- * the real one is `device_authorization_codes`) and swallowed that as a warn.
- * The verified inventory now lives in `lib/server/account-erasure.ts` and is
- * shared with the scheduled purge cron, so the two paths cannot disagree about
- * what "delete my data" means.
- */
-
 async function handleDeleteUserData(request: NextRequest) {
-  // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
     return preflightResponse;
   }
 
-  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
   }
 
-  // Rate limiting - strict for this sensitive operation (3 requests per hour)
   const rateLimitResponse = await withRateLimit(request, 'user-data-delete');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -86,7 +35,6 @@ async function handleDeleteUserData(request: NextRequest) {
     const { userId } = await getClerkAuthUser(request);
     const db = getNeonDb();
 
-    // Log the deletion request for audit purposes
     logger.info(
       {
         userId,
@@ -95,10 +43,6 @@ async function handleDeleteUserData(request: NextRequest) {
       'User requested GDPR data deletion',
     );
 
-    // The legacy SECURITY DEFINER procedure predates video admission, managed
-    // usage reservations, and the incident outbox. Once the durable video
-    // schema exists, always use the canonical fenced erasure path below. This
-    // avoids a destructive check-then-delete window before a job row exists.
     let durableVideoSchemaProvisioned = true;
     try {
       const schema = await db.query<{ provisioned: boolean }>(
@@ -106,15 +50,12 @@ async function handleDeleteUserData(request: NextRequest) {
       );
       durableVideoSchemaProvisioned = schema[0]?.provisioned === true;
     } catch (error) {
-      // Erasure must fail closed when the lifecycle owner cannot be inspected.
       logger.error(
         { userId, error },
         'Could not inspect durable video schema; bypassing legacy GDPR function',
       );
     }
 
-    // Attempt the legacy delete_user_data stored procedure only before the
-    // durable video migration is provisioned.
     let rpcSucceeded = false;
     let rpcData: unknown = null;
 
@@ -134,7 +75,6 @@ async function handleDeleteUserData(request: NextRequest) {
         }
       } catch (err: unknown) {
         const pgErr = err as { code?: string; message?: string };
-        // 42883 = undefined_function in native Postgres
         const isMissingFn =
           pgErr.code === '42883' ||
           pgErr.message?.includes('function') ||
@@ -150,9 +90,6 @@ async function handleDeleteUserData(request: NextRequest) {
     }
 
     if (rpcSucceeded) {
-      // PER-24: the stored procedure is SQL-only — it cannot reach object
-      // storage, so every generated image and chat attachment survived a
-      // "successful" GDPR deletion. Remove the bytes here.
       const mediaErasure = await eraseUserMedia(userId);
       if (mediaErasure.mediaObjectsFailed > 0) {
         logger.error(
@@ -184,11 +121,6 @@ async function handleDeleteUserData(request: NextRequest) {
       );
     }
 
-    // Fallback: manual deletion in FK-safe order using parameterized SQL,
-    // including the stored media BYTES (PER-24/PER-25).
-    // This endpoint erases application data but explicitly preserves the auth
-    // account. Use the separate expiring video fence; the account-purge flags
-    // belong only to DELETE /api/user/delete-account.
     const erasure = await eraseUserAccountData(userId, {
       retainProfile: true,
       scope: 'data',

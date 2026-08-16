@@ -1,19 +1,5 @@
-/**
- * Chrome extension trust-boundary tests.
- *
- * The extension acts as a thin relay between the web page and the desktop
- * bridge (port 8787). Trust boundaries enforced here:
- *   - Only messages from trusted origins reach the desktop bridge
- *   - No LLM logic runs in the extension — desktop is the LLM brain
- *   - Network egress is limited to api.agiworkforce.com (enforced by policy.ts)
- *   - No API keys are stored in the extension; keys live in the desktop keychain
- */
 
 import { describe, it, expect } from 'vitest';
-
-// ---------------------------------------------------------------------------
-// Origin validation — mirrors apps/extension/src/background/policy.ts
-// ---------------------------------------------------------------------------
 
 const TRUSTED_ORIGINS = new Set([
   'https://agiworkforce.com',
@@ -51,11 +37,6 @@ describe('origin validation', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Native bridge port — desktop listens on port 8787; extension connects only there.
-// The bridge forwards to the desktop LLM engine — no keys in the extension.
-// ---------------------------------------------------------------------------
-
 const DESKTOP_BRIDGE_PORT = 8787;
 
 describe('desktop bridge port contract', () => {
@@ -69,20 +50,13 @@ describe('desktop bridge port contract', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Trust-boundary gate invariants for Chrome extension
-// ---------------------------------------------------------------------------
-
 describe('extension trust-boundary invariants', () => {
   it('CRITICAL: no API keys are stored in extension storage (keys live in desktop keychain)', () => {
-    // The extension never stores or reads LLM API keys — it relays to desktop
-    // This is verified architecturally: grep for sk_live/sk_test in extension src returns nothing
     const extensionHandlesApiKeys = false;
     expect(extensionHandlesApiKeys).toBe(false);
   });
 
   it('CRITICAL: LLM inference runs on desktop, not in extension', () => {
-    // Chrome extension = relay only; desktop = LLM brain (per AGENTS.md)
     const extensionRunsLLM = false;
     expect(extensionRunsLLM).toBe(false);
   });
@@ -95,7 +69,6 @@ describe('extension trust-boundary invariants', () => {
   });
 
   it('waitlist service routes byok/sync/billing sources correctly', () => {
-    // Mirrors apps/extension/src/lib/waitlistService.ts normaliseSource
     const normaliseSource = (source: string): 'byok' | 'sync' | 'billing' | 'other' => {
       return source === 'byok' || source === 'sync' || source === 'billing' ? source : 'other';
     };
@@ -108,10 +81,6 @@ describe('extension trust-boundary invariants', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Egress policy — all network calls must go through the allowed host list
-// ---------------------------------------------------------------------------
-
 describe('egress policy', () => {
   const ALLOWED_EGRESS_HOSTS = new Set(['api.agiworkforce.com', 'agiworkforce.com']);
 
@@ -120,8 +89,6 @@ describe('egress policy', () => {
   });
 
   it('CRITICAL: third-party LLM APIs are NOT in the allowed egress list', () => {
-    // Extension must not call OpenAI/Anthropic APIs directly — all inference
-    // goes through the desktop bridge (port 8787) which enforces its own egress
     expect(ALLOWED_EGRESS_HOSTS.has('api.openai.com')).toBe(false);
     expect(ALLOWED_EGRESS_HOSTS.has('api.anthropic.com')).toBe(false);
   });

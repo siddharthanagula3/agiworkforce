@@ -25,16 +25,12 @@ export interface ScheduledTaskRunJournal {
   createdAt: number;
   updatedAt: number;
   recoveryAttempts: number;
-  /** Durable tombstone: recovery may cancel this request but must never resume it. */
   cancellationPending: boolean;
   cancellationAttempts: number;
-  /** Successful tenant-scoped request-id lookups that returned no server run. */
   cancellationAbsenceObservations: number;
   cancellationRequestedAt?: number;
   cancellationLastAttemptAt?: number;
-  /** Present on journals created after pre-dispatch absence tracking shipped. */
   dispatchPreparedAt?: number;
-  /** Written immediately before the request is handed to Managed Cloud. */
   dispatchStartedAt?: number;
   cloudRun?: ManagedCloudAgentRunReference;
   routing?: ChromeManagedRoutingMetadata;
@@ -177,7 +173,6 @@ export async function loadScheduledTaskRunJournals(): Promise<ScheduledTaskRunJo
   return (await readStore()).runs;
 }
 
-/** Exact recovery identity: owner incarnation, prompt, and cancellation state. */
 export function canResumeScheduledTaskRunJournal(
   journal: ScheduledTaskRunJournal,
   owner: ManagedCloudOwner,

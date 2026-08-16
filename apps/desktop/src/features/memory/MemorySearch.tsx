@@ -1,9 +1,3 @@
-/**
- * MemorySearch Component
- *
- * Search input with debounce for filtering memories.
- * Displays search results with highlighted matching text.
- */
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Search, X, Loader2 } from 'lucide-react';
 
@@ -15,17 +9,11 @@ import type { MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 
 export interface MemorySearchProps {
-  /** Callback when search query changes (debounced) */
   onSearch?: (query: string) => void;
-  /** Callback when search results are found */
   onResults?: (results: MemoryEntry[]) => void;
-  /** Placeholder text */
   placeholder?: string;
-  /** Debounce delay in milliseconds */
   debounceMs?: number;
-  /** Additional class names */
   className?: string;
-  /** Whether to use the store's search API or filter locally */
   useApiSearch?: boolean;
 }
 
@@ -50,14 +38,11 @@ export const MemorySearch = memo(function MemorySearch({
     useShallow((s) => ({ search: s.search, memories: s.memories, isLoading: s.isLoading })),
   );
 
-  // Perform search with debounce
   useEffect(() => {
-    // Clear previous timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
 
-    // Set up debounced search
     timeoutRef.current = setTimeout(async () => {
       onSearch?.(query);
 
@@ -71,11 +56,9 @@ export const MemorySearch = memo(function MemorySearch({
 
       try {
         if (useApiSearch) {
-          // Use the backend search API
           const results = await apiSearch(query, 50);
           onResults?.(results);
         } else {
-          // Filter locally
           const lowercaseQuery = query.toLowerCase();
           const filtered = memories.filter(
             (memory) =>
@@ -87,14 +70,12 @@ export const MemorySearch = memo(function MemorySearch({
         }
       } catch (error) {
         console.error('[MemorySearch] Search failed:', error);
-        // On error, fall back to showing all memories
         onResults?.(memories);
       } finally {
         setIsSearching(false);
       }
     }, debounceMs);
 
-    // Cleanup timeout on unmount or when dependencies change
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -170,9 +151,6 @@ export const MemorySearch = memo(function MemorySearch({
   );
 });
 
-/**
- * Hook for managing memory search state
- */
 export function useMemorySearch(initialQuery = '') {
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<MemoryEntry[]>([]);
@@ -180,7 +158,6 @@ export function useMemorySearch(initialQuery = '') {
 
   const { memories } = useMemoryStore(useShallow((s) => ({ memories: s.memories })));
 
-  // Update results when memories change and no active search
   useEffect(() => {
     if (!query.trim()) {
       setResults(memories);

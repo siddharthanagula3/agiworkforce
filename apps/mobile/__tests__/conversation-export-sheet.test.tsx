@@ -1,17 +1,3 @@
-/**
- * Regression: ConversationExportSheet previously used @gorhom/bottom-sheet's
- * plain (non-modal) BottomSheet. With no BottomSheetModalProvider in this
- * app, a plain BottomSheet renders inline rather than through a native modal
- * window layer — the four export options ("Export as PDF/Text/Markdown",
- * "Copy All Messages") were visible on screen but completely absent from the
- * accessibility tree (confirmed live via XcodeBuildMCP: neither a snapshot
- * nor a label-based wait could find them, despite the screenshot showing
- * them rendered). A VoiceOver user could not use this sheet at all.
- *
- * Fixed by switching to React Native's native Modal, the same proven pattern
- * already used by FileExportButton.tsx. This test locks in that every export
- * option is actually queryable/visible when `visible` is true.
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';

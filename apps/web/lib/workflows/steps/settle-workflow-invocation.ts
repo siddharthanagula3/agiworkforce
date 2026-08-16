@@ -20,23 +20,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
 import type { CloudAgentWorkflowInput } from '../cloud-agent-workflow-input';
 
-/**
- * Step-side settlement for a durable cloud agent invocation.
- *
- * WHY THIS FILE EXISTS SEPARATELY: everything under `lib/workflows/steps/` runs
- * inside a `"use step"` invocation, which is an ordinary serverless Node.js
- * invocation and may reach for Node APIs freely. The module that declares
- * `"use workflow"` may not: the Workflow compiler bundles that module's live
- * module graph for a deterministic VM sandbox and fails the build on any
- * transitive `node:*`/native dependency it can still reach after step bodies
- * have been replaced with dispatch stubs. Settlement is not a step itself — it
- * is called from inside two steps — so a plain function left in the workflow
- * module stayed live in that graph and dragged pino, argon2, jsonwebtoken,
- * `node:crypto` and `node:path` into the sandbox bundle. Nothing here is
- * conditional on the boundary: the same functions run with the same inputs, on
- * the step side of it.
- */
-
 export type WorkflowTerminalOutcome = 'completed' | 'failed' | 'cancelled' | 'awaiting_input';
 
 export function terminalState(outcome: WorkflowTerminalOutcome): AgentTaskState | null {
@@ -52,24 +35,6 @@ export function terminalState(outcome: WorkflowTerminalOutcome): AgentTaskState 
   }
 }
 
-/**
- * Save the assistant turn the durable run produced, using the journal as the
- * source of truth for its text.
- *
- * WHY THIS EXISTS: before durable runs, the only writer of an assistant message
- * was the client that watched the stream. That is exactly the assumption
- * detachment breaks — the laptop is closed, the tab is gone, and nobody is
- * holding the bytes. Without this the work is done, billed, and journalled, yet
- * the conversation shows no reply at all when the user comes back.
- *
- * `awaiting_input` persists its partial text WITHOUT the truncated marker: the
- * turn is not cut off, it is mid-flight waiting on a human, and the row is what
- * lets an unattended approval card be reconstructed later.
- *
- * Idempotency comes from the message id: the upsert keys on
- * `assistant_message_id`, so a retried Workflow step and the original client's
- * own save collapse onto one row instead of duplicating the turn.
- */
 async function persistWorkflowAssistantTurn(
   db: ReturnType<typeof getNeonDb>,
   input: CloudAgentWorkflowInput,

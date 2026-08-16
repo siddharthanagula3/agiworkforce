@@ -6,22 +6,6 @@ interface AuthPageProps {
   onAuthSuccess?: () => void;
 }
 
-/**
- * Signed-out Cloud gate for Desktop hosts.
- *
- * Mirrors the web app's EMBEDDED auth shell
- * (`apps/web/features/marketing/components/AuthShell.tsx`, the
- * `embedded`/`?surface=desktop` variant): one compact centered column —
- * brand row with a secure-sign-in badge and the sign-in card. Hosts with a
- * Local execution plane also get a one-line Local Mode note; the cloud-only
- * Electron shell must never advertise one. The earlier split layout (42%
- * marketing aside + oversized card) diverged from every other AGI sign-in
- * surface and clipped the card on smaller windows; do not reintroduce it.
- *
- * Scroll behavior: `overflow-y-auto` container + `m-auto` child, NOT flex
- * centering — a card taller than the window must scroll, not clip at both
- * ends.
- */
 export function AuthPage({ onAuthSuccess }: AuthPageProps) {
   return (
     <div className="flex h-full min-h-full flex-col bg-background">

@@ -19,8 +19,6 @@ describe('buildMeCapabilityHandshake — document identity', () => {
   it('carries sessionId=userId, a schema-prefixed CONTENT version, and the injected computedAt', () => {
     const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
     expect(document.sessionId).toBe('user_1');
-    // W5 versioning tail: no longer the bare schema constant — the version
-    // is `<schema>#<content-hash>` so input-layer changes are detectable.
     expect(document.version).not.toBe(ME_CAPABILITY_HANDSHAKE_VERSION);
     expect(document.version.startsWith(`${ME_CAPABILITY_HANDSHAKE_VERSION}#`)).toBe(true);
     expect(document.computedAt).toBe('2026-07-15T00:00:00.000Z');

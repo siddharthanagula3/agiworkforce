@@ -16,7 +16,6 @@ function ArtifactIcon({ type }: { type: Artifact['type'] }) {
     case 'research':
       return <FlaskConical size={16} className="shrink-0 text-[var(--chat-text-muted)]" />;
     default:
-      // html, react, code, svg, mermaid, image → Code2
       return <Code2 size={16} className="shrink-0 text-[var(--chat-text-muted)]" />;
   }
 }

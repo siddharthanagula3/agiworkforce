@@ -76,9 +76,6 @@ describe('UpgradePlanDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'See all plans' }));
 
-    // Team is a published per-seat price, not a negotiated one. "Custom" and a
-    // sales hand-off contradicted BILLING_PLAN_PRICING.team and the pricing
-    // page, which sells Team self-serve.
     expect(screen.queryByText('Custom')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Contact sales' })).toBeNull();
     expect(screen.getByText('$25')).toBeTruthy();

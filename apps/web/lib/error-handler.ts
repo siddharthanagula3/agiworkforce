@@ -11,14 +11,6 @@ import {
   type TraceContext,
 } from './observability/trace-context';
 
-/**
- * WEB-10 (audit 2026-05-03): generic user-facing fallbacks per
- * status-code class. Several call sites construct AppError instances
- * by passing raw cloud database error messages (table names, constraint
- * violations, PGRST codes) which would otherwise propagate to the
- * client response body. We log the original message + details
- * server-side and return a safe summary to the caller.
- */
 const GENERIC_MESSAGES: Record<number, string> = {
   400: 'Bad request',
   401: 'Authentication required',
@@ -33,9 +25,6 @@ const GENERIC_MESSAGES: Record<number, string> = {
   503: 'Service temporarily unavailable',
 };
 
-/** A small set of error codes that are safe to render verbatim - these
- *  are app-defined (not service-leak vectors) and the UI uses them to
- *  drive recovery flows (e.g. credit_required → upgrade prompt). */
 const SAFE_TO_EXPOSE_CODES = new Set<string>([
   'CREDIT_REQUIRED',
   'SUBSCRIPTION_REQUIRED',
@@ -43,10 +32,6 @@ const SAFE_TO_EXPOSE_CODES = new Set<string>([
   'VALIDATION_ERROR',
   'INVALID_MODEL',
   'CSRF_REQUIRED',
-  // Conflicts are raised via createError.conflict() with app-defined,
-  // user-facing messages ("already at the file cap", "slug already taken",
-  // "already a member") that the UI needs to explain what to do next — same
-  // rationale as VALIDATION_ERROR, never a SQL/service-leak vector.
   'CONFLICT',
 ]);
 
@@ -57,11 +42,7 @@ function safeErrorMessage(error: AppError): string {
   return GENERIC_MESSAGES[error.statusCode] ?? 'Request failed';
 }
 
-/**
- * Error handler middleware for API routes
- */
 export function handleError(error: unknown, requestId?: string): NextResponse {
-  // Log the error
   if (error instanceof AppError) {
     logger.error(
       {
@@ -81,8 +62,6 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
         error: {
           code: error.code,
           message: safeErrorMessage(error),
-          // WEB-10: only forward `details` when the code is safe to
-          // expose - Neon / SQL details are otherwise dropped.
           ...(error.details && SAFE_TO_EXPOSE_CODES.has(error.code)
             ? { details: error.details }
             : {}),
@@ -93,7 +72,6 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
     );
   }
 
-  // Handle Zod validation errors
   if (error && typeof error === 'object' && 'issues' in error) {
     const zodError = error as { issues: Array<{ path: (string | number)[]; message: string }> };
     const validationError = createError.validation(
@@ -129,7 +107,6 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
     );
   }
 
-  // Handle unknown errors
   const internalError = createError.internal(
     'An unexpected error occurred',
     process.env.NODE_ENV === 'development' ? String(error) : undefined,
@@ -162,7 +139,6 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
 
 type HeaderBearing = { headers?: { get?: (key: string) => string | null } };
 
-/** Read a header off the first handler argument without assuming it is a Request. */
 function readHeader(source: unknown, name: string): string | null {
   const get = (source as HeaderBearing | undefined)?.headers?.get;
   if (typeof get !== 'function') return null;
@@ -173,20 +149,6 @@ function readHeader(source: unknown, name: string): string | null {
   }
 }
 
-/**
- * Wrapper for API route handlers with error handling and request tracing.
- *
- * This is the ingress for SCALE-VER-006 correlation: it establishes the trace
- * context for the request, so every `logger.*` line and every `withSpan` call
- * anywhere below the handler shares one `trace_id` (see
- * `lib/observability/trace-context.ts`). An inbound W3C `traceparent` is joined
- * when it is well-formed; anything else starts a fresh trace.
- *
- * The resolved `traceparent` and `x-request-id` are echoed on the response so a
- * user reporting a failure carries the id that finds their logs. Header writes
- * are best-effort: a `Response` with an immutable header guard (redirects,
- * `Response.error()`) keeps its headers and still gets its span.
- */
 export function withErrorHandler<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse | Response>,
 ) {
@@ -197,9 +159,6 @@ export function withErrorHandler<T extends unknown[]>(
       spanId: newSpanId(),
       sampled: inbound?.sampled ?? true,
     };
-    // An inbound x-request-id is honoured so a caller's own id survives, but it
-    // is echoed on the response and written into log fields, so only a bounded
-    // token-safe value is accepted — anything else falls back to the trace id.
     const inboundRequestId = readHeader(args[0], 'x-request-id');
     const requestId =
       inboundRequestId && /^[A-Za-z0-9._~-]{1,128}$/u.test(inboundRequestId)
@@ -234,7 +193,6 @@ export function withErrorHandler<T extends unknown[]>(
           status,
           ...redactAttributes({
             'http.request.method': method,
-            // Path only — the query string routinely carries search terms and ids.
             'url.path': url ? safeUrlPath(url) : undefined,
             'http.response.status_code': response.status,
             'error.type': thrown instanceof Error ? thrown.name : undefined,
@@ -254,7 +212,6 @@ export function withErrorHandler<T extends unknown[]>(
   };
 }
 
-/** Path component of `raw`, or `undefined` when it does not parse. */
 function safeUrlPath(raw: string): string | undefined {
   try {
     return new URL(raw).pathname;

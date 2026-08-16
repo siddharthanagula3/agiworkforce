@@ -37,8 +37,6 @@ describe('resolveAnthropicModel', () => {
     });
   });
 
-  // The committed catalog is the only source of model ids in this repo, so a
-  // live run that can no longer name a model must stop rather than fall back.
   it('resolves against the committed model catalog', () => {
     const resolved = resolveAnthropicModel(readModelCatalog());
     expect(resolved.apiModelId.length).toBeGreaterThan(0);

@@ -1,20 +1,3 @@
-/**
- * Diagnostic + launch gate: what does the desktop app actually present on a
- * clean profile, and is its IPC bridge alive?
- *
- * Named aaa-* so it runs first in a shared-profile run. It deliberately asserts
- * as little product behaviour as possible, but it does assert the two things
- * every other spec silently depends on:
- *
- *   1. invoke() SETTLES. Under Tauri's isolation pattern a broken relay leaves
- *      every invoke() promise pending forever — no resolve, no reject — so the
- *      shell renders "Opening encrypted local data…" indefinitely. A spec that
- *      only checked for a non-empty document would pass against that screen, so
- *      the outcome of a real command is asserted directly.
- *   2. The shell reaches an INTERACTIVE control. Waiting for loading copy to
- *      disappear passes vacuously before React mounts; waiting for a positive
- *      signal does not.
- */
 import * as fs from 'node:fs';
 
 const OUT =
@@ -28,9 +11,6 @@ fs.mkdirSync(OUT, { recursive: true });
 
 describe('desktop first-screen diagnostic', () => {
   it('settles a real IPC command instead of hanging on the isolation relay', async () => {
-    // The injected bridge lands with the webview's first document, which can be
-    // a few hundred ms after the WebDriver session attaches. Wait for it so a
-    // race here cannot be mistaken for the deadlock this test exists to catch.
     await browser.waitUntil(
       async () =>
         await browser.execute(() => {
@@ -46,10 +26,6 @@ describe('desktop first-screen diagnostic', () => {
       },
     );
 
-    // `startup_get_recovery_state` is the command StartupRecoveryBootstrap
-    // itself gates on, so its outcome is the shell's actual unblock condition.
-    // Either settlement is a pass here: this asserts the bridge is alive, not
-    // what the backend decided.
     const probe = (await browser.executeAsync(
       (timeoutMs: number, done: (result: unknown) => void) => {
         const internals = (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'] as
@@ -125,9 +101,7 @@ describe('desktop first-screen diagnostic', () => {
     console.log('FIRST SCREEN:', JSON.stringify(snapshot, null, 2));
 
     expect(snapshot.rootChildCount).toBeGreaterThan(0);
-    // The startup gate must be gone, not merely overlaid by something else.
     expect(snapshot.visibleText).not.toContain('Opening encrypted local data');
-    // A real control the user can act on, with a label — not just any element.
     expect(snapshot.controls.length).toBeGreaterThan(0);
   });
 });

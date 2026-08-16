@@ -25,12 +25,6 @@ async function withSchedulesClient<T>(
   return result;
 }
 
-/**
- * Desktop adapter for account-owned, durable Managed Cloud schedules.
- *
- * This deliberately never calls the Tauri scheduler: Local schedules and
- * Cloud schedules are separate trust boundaries with separate persistence.
- */
 export const desktopCloudSchedules = {
   listSchedules(input: ManagedCloudSchedulesPageInput) {
     return withSchedulesClient('Managed Cloud schedule list', (client) =>

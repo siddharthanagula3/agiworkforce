@@ -10,17 +10,6 @@ import { normalizeShortcutStartUrl } from '../shortcuts/origin';
 const SHORTCUTS_STORAGE_KEY = 'agi_saved_shortcuts';
 const MAX_SHORTCUTS = 50;
 
-/**
- * Decide how a saved shortcut must be replayed.
- *
- * A shortcut recorded from page interactions carries `actions` and replays as a
- * `RUN_PAGE_ACTIONS` batch. A shortcut created from the "+ Create shortcut"
- * prompt modal carries a `prompt` and an empty `actions` array — it must run
- * through the chat path instead. Previously the replay handler only ever looked
- * at `actions`, so a prompt shortcut dispatched an empty action batch that
- * no-oped on the page yet still reported "completed" (fake success). A shortcut
- * with neither is not runnable.
- */
 export function planShortcutReplay(
   shortcut: Pick<SavedShortcut, 'actions' | 'prompt'>,
 ): { kind: 'actions' } | { kind: 'prompt'; prompt: string } | { kind: 'empty' } {

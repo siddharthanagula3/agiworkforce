@@ -150,9 +150,6 @@ describe('ImageGenerationCard revision panel', () => {
     return onRegenerate;
   }
 
-  // PP-18: the panel runs a fresh text-to-image generation — no client sends
-  // `source_image`/`mask_image` to /api/media/image/generate — so it must not
-  // present itself as editing the image the user is looking at.
   it('does not call a fresh generation an edit of the source image', () => {
     openPanel();
 
@@ -162,9 +159,6 @@ describe('ImageGenerationCard revision panel', () => {
     expect(screen.getByText(/the image above is not modified/i)).toBeVisible();
   });
 
-  // The panel used to carry a permanently disabled "Select region to edit —
-  // Coming soon" strip. Region/mask editing is unscheduled, so the promise is
-  // gone rather than parked on screen forever.
   it('advertises no region-selection control it cannot perform', () => {
     openPanel();
 

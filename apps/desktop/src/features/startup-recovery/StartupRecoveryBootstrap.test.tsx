@@ -35,13 +35,6 @@ describe('StartupRecoveryBootstrap', () => {
     expect(
       await screen.findByRole('heading', { name: 'AGI could not unlock local data' }),
     ).toBeInTheDocument();
-    // waitFor, not a bare expect: the heading commits to the DOM in render,
-    // but the title is set in a useEffect that has not necessarily flushed
-    // when findByRole resolves. Asserting immediately depends on effect
-    // ordering, which holds locally and loses on a loaded CI runner —
-    // "expected '' to be 'AGI — Local data recovery'" with 256 other files
-    // passing. Wait for the state the effect produces instead of assuming
-    // when it ran.
     await waitFor(() => expect(document.title).toBe('AGI — Local data recovery'));
     expect(screen.queryByText('Normal application')).not.toBeInTheDocument();
     expect(normalAppMounted).not.toHaveBeenCalled();
@@ -89,10 +82,6 @@ describe('StartupRecoveryBootstrap', () => {
   });
 
   it('escapes to recovery when the native startup check never answers', async () => {
-    // Regression: a `tauri dev` session sat on "Opening encrypted local data…"
-    // indefinitely while the backend was provably idle in its event loop. The
-    // invoke promise neither resolved nor rejected, so the existing catch-based
-    // fallback could not fire and the user had no retry, diagnostics, or quit.
     vi.useFakeTimers();
     try {
       const neverSettles = vi.fn(() => new Promise<never>(() => {})) as StartupRecoveryInvoke;
@@ -118,8 +107,6 @@ describe('StartupRecoveryBootstrap', () => {
       expect(
         screen.getByRole('heading', { name: 'AGI could not verify local data' }),
       ).toBeInTheDocument();
-      // The recovery screen is the escape hatch: it must never fall through to
-      // the normal app when local data could not be verified.
       expect(normalAppMounted).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -142,7 +129,6 @@ describe('StartupRecoveryBootstrap', () => {
       });
       expect(screen.getByText('Normal application')).toBeInTheDocument();
 
-      // Firing the (now cancelled) timer must not tear a healthy app down.
       await act(async () => {
         vi.advanceTimersByTime(60_000);
       });

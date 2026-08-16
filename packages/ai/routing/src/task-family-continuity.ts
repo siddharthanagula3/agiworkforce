@@ -46,46 +46,23 @@
 import { assessModelSwitchCache, type ModelSwitchCacheAssessment } from './model-switch-cache';
 import type { TaskFamily } from './task-family';
 
-/** The route a session is currently pinned to. */
 export interface TaskFamilySessionRoute {
-  /** The family that produced this pin. A different family releases it. */
   family: TaskFamily;
-  /** The pinned model key. */
   modelKey: string;
-  /**
-   * Assistant turns already served on this pin — the cached prefix that a
-   * switch would throw away. Feeds `assessModelSwitchCache` unchanged.
-   */
   priorTurnCount: number;
 }
 
-/** Inputs for one continuity decision. */
 export interface TaskFamilyContinuityInput {
-  /** The session's existing pin, or `null` for the first turn. */
   session: TaskFamilySessionRoute | null;
-  /** This turn's family, or `null` when the fast path declined. */
   nextFamily: TaskFamily | null;
-  /** The model this turn's router would pick on its own. */
   candidateModelKey: string;
-  /**
-   * The escalation ladder, LOWEST capability first — normally
-   * `TaskFamilyOrdering.escalationLadder`. Rungs are model keys.
-   */
   ladder: readonly string[];
-  /**
-   * The previous attempt's failure signal (the existing `fallbackReason`
-   * event, a provider error string, …). Absent/empty means no failure, and no
-   * failure means no switch.
-   */
   failureSignal?: string | null;
 }
 
-/** What the session should do this turn. */
 export type TaskFamilyContinuityAction = 'start' | 'pin' | 'escalate' | 'hold' | 'reclassify';
 
-/** Explainability vocabulary for continuity (Decision #10). */
 export type TaskFamilyContinuityReason =
-  /** No pin existed; this turn establishes one. */
   | 'session_started'
   /** Same family, no failure — the pin is kept. */
   | 'family_pinned'
@@ -104,19 +81,11 @@ export type TaskFamilyContinuityReason =
   /** The fast path declined this turn; continuity does not apply. */
   | 'family_unclassified';
 
-/** The continuity decision. `modelKey` is the model the caller must use. */
 export interface TaskFamilyContinuityDecision {
   action: TaskFamilyContinuityAction;
   reasonCode: TaskFamilyContinuityReason;
-  /** The model to execute with. Equal to the pin unless the action moves it. */
   modelKey: string;
-  /** Ladder index of `modelKey`, or `-1` when it is not on the ladder. */
   rung: number;
-  /**
-   * Cache consequence, present only when the decision actually changes the
-   * model on a session that had prior turns. Priced by the one cross-surface
-   * function that owns this judgement, so web/desktop/mobile agree.
-   */
   cache?: ModelSwitchCacheAssessment;
 }
 
@@ -128,14 +97,6 @@ function hasFailureSignal(signal: string | null | undefined): boolean {
   return typeof signal === 'string' && signal.trim().length > 0;
 }
 
-/**
- * Decide whether the session keeps its pinned model, escalates, or starts over.
- *
- * Never returns a model the caller did not already offer: the result is either
- * the existing pin or `candidateModelKey`. This function cannot widen
- * admission because it never picks a model — it only chooses between two the
- * caller already resolved through `evaluateEligibility`.
- */
 export function decideTaskFamilyContinuity(
   input: TaskFamilyContinuityInput,
 ): TaskFamilyContinuityDecision {
@@ -184,7 +145,6 @@ export function decideTaskFamilyContinuity(
     rung: pinnedRung,
   };
 
-  // Same family, no failure → the pin stands, whatever this turn preferred.
   if (!hasFailureSignal(input.failureSignal)) {
     return { ...held, action: 'pin', reasonCode: 'family_pinned' };
   }
@@ -217,11 +177,6 @@ export function decideTaskFamilyContinuity(
   };
 }
 
-/**
- * Fold a decision back into the session pin the caller should store for the
- * next turn. `hold` and `pin` keep the existing turn count; a move resets it,
- * because the new model starts with a cold prompt cache.
- */
 export function applyTaskFamilyContinuity(
   session: TaskFamilySessionRoute | null,
   family: TaskFamily | null,

@@ -1,15 +1,4 @@
-/**
- * Settings stores — unit tests (post mode-split)
- *
- * Covers:
- *   settingsStore (device-global): capabilities, autoApproveMode, haptics, isTemporaryChat
- *   localSettingsStore (mode-specific / local): personalization, themeMode, accentColor
- *   cloudSettingsStore (mode-specific / cloud): stamps settingsUpdatedAt on cloud-safe writes
- */
 
-// ---------------------------------------------------------------------------
-// Mocks — must be before store imports
-// ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -22,7 +11,6 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
-  // storage.getString used by localSettingsStore migration; return undefined = no legacy data
   storage: {
     getString: jest.fn().mockReturnValue(undefined),
     set: jest.fn(),
@@ -39,17 +27,9 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import { useSettingsStore, migratePersistedSettings } from '../stores/settingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const defaultPersonalization = {
   fullName: '',
@@ -118,10 +98,6 @@ function resetCloudStore() {
     settingsUpdatedAt: null,
   });
 }
-
-// ---------------------------------------------------------------------------
-// Tests: device-global settingsStore
-// ---------------------------------------------------------------------------
 
 describe('settingsStore (device-global)', () => {
   beforeEach(resetDeviceStore);
@@ -214,7 +190,6 @@ describe('settingsStore (device-global)', () => {
     it("migrates a persisted 'cloud' ttsProvider to 'system'", () => {
       const migrated = migratePersistedSettings({ ttsProvider: 'cloud', speechRate: 1.5 }, 0);
       expect(migrated.ttsProvider).toBe('system');
-      // Unrelated persisted fields are preserved.
       expect(migrated.speechRate).toBe(1.5);
     });
 
@@ -236,10 +211,6 @@ describe('settingsStore (device-global)', () => {
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// Tests: mode-specific localSettingsStore
-// ---------------------------------------------------------------------------
 
 describe('localSettingsStore (mode-specific — never synced)', () => {
   beforeEach(resetLocalStore);
@@ -329,10 +300,6 @@ describe('localSettingsStore (mode-specific — never synced)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: cloudSettingsStore — stamps settingsUpdatedAt on writes
-// ---------------------------------------------------------------------------
-
 describe('cloudSettingsStore (mode-specific — synced to cloud)', () => {
   beforeEach(resetCloudStore);
 
@@ -366,10 +333,6 @@ describe('cloudSettingsStore (mode-specific — synced to cloud)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: mode isolation (key requirement)
-// ---------------------------------------------------------------------------
-
 describe('settings mode isolation', () => {
   beforeEach(() => {
     resetLocalStore();
@@ -398,9 +361,7 @@ describe('settings mode isolation', () => {
   it('cloud-mode change stamps settingsUpdatedAt; local change does not', () => {
     useLocalSettingsStore.getState().setThemeMode('dark');
     useCloudSettingsStore.getState().setThemeMode('dark');
-    // Local store has no settingsUpdatedAt field
     expect('settingsUpdatedAt' in useLocalSettingsStore.getState()).toBe(false);
-    // Cloud store has settingsUpdatedAt stamped
     expect(useCloudSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
   });
 });

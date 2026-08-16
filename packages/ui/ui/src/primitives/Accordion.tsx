@@ -5,10 +5,8 @@ import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '../cn';
 
-// Identical across web/desktop (mechanical diffs only: 'use client' + import path).
 const Accordion = AccordionPrimitive.Root;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface AccordionItemProps extends React.ComponentPropsWithoutRef<
   typeof AccordionPrimitive.Item
 > {

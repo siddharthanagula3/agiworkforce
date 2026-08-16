@@ -16,13 +16,6 @@ export function parseManagedSkillsResponse(value: unknown): ManagedSkillSummary[
   return parsed.data.skills;
 }
 
-/**
- * Read the authenticated deployment's Managed Cloud Skill catalog.
- *
- * Mobile may select an included Skill for a Cloud turn. Installing or mutating
- * filesystem-backed Skills remains a host/admin operation and is not
- * represented as a Mobile action.
- */
 export async function fetchManagedSkills(signal?: AbortSignal): Promise<ManagedSkillSummary[]> {
   if (!FEATURES.skills) {
     throw new Error('Skills are not available on Mobile.');

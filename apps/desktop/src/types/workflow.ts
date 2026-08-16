@@ -5,7 +5,6 @@
  * contracts live in @agiworkforce/types.
  */
 
-// Re-export all shared workflow types
 export type {
   WorkflowDefinition,
   WorkflowNode,
@@ -41,8 +40,6 @@ export type {
   LogEventType,
   ScheduledWorkflow,
 } from '@agiworkforce/types';
-
-// ---- Desktop-specific React Flow types ----
 
 export interface ReactFlowNodeData {
   label: string;

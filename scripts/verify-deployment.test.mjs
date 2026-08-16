@@ -18,10 +18,6 @@ const UNAUTHORIZED_BODY = {
   requestId: 'test-request',
 };
 
-/**
- * `routes` maps a pathname to `[status, body]`. Anything unmapped answers the
- * signed-out contract, so each test only states the surface it is exercising.
- */
 async function startDeployment(t, routes) {
   const server = createServer((request, response) => {
     const [status, body] = routes[request.url ?? ''] ?? [401, UNAUTHORIZED_BODY];
@@ -47,8 +43,6 @@ test('a deployment whose health and authenticated routes both answer passes', as
 });
 
 test('healthy /api/health does not excuse a 500 from an authenticated route', async (t) => {
-  // The argon2 tracing outage exactly: /api/health imports no auth code and
-  // kept answering 200 while every route importing lib/api-auth failed to load.
   const baseUrl = await startDeployment(t, {
     '/api/health': [200, HEALTHY_BODY],
     '/api/me': [500, { error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } }],
@@ -79,8 +73,6 @@ test('an authenticated route that answers without credentials fails the gate', a
 });
 
 test('a 200 from something that is not this app does not pass as health', async (t) => {
-  // The identity case the assertion exists for: a URL that answers 200 JSON
-  // but is not our health route (edge interstitial, rewrite, wrong host).
   const baseUrl = await startDeployment(t, { '/api/health': [200, { ok: true }] });
 
   await assert.rejects(
@@ -90,7 +82,6 @@ test('a 200 from something that is not this app does not pass as health', async 
 });
 
 test('a deployment URL that is not http or https is rejected', async () => {
-  // Reachable from the CLI entry point, whose argument is arbitrary argv.
   await assert.rejects(
     verifyDeployment('ftp://example.com', { attempts: 1 }),
     /must use http or https/,

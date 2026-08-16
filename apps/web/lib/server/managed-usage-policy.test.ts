@@ -54,17 +54,12 @@ describe('managed usage policy', () => {
     expect(getPlanUsageBudgetCents('max')).toBe(5_000);
     expect(getPlanUsageBudgetCents('max_15x')).toBe(15_000);
     expect(getPlanUsageBudgetCents('team')).toBe(1_000);
-    // GOV-2 (CHANGED): Enterprise previously resolved to 0, which skipped
-    // credit-account creation and hard-blocked the tier with a 402. It now
-    // resolves to explicit uncapped ledger headroom.
     expect(getPlanUsageBudgetCents('enterprise')).toBe(
       MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS,
     );
     expect(getPlanUsageBudgetCents('free')).toBe(0);
   });
 
-  // GOV-1: "no cap configured" and "cap of zero" must be distinguishable, and
-  // anything that is not an explicit declaration of uncapped must DENY.
   it('separates a declared-uncapped tier from a zero ceiling', () => {
     expect(isPlanUsageUncapped('enterprise')).toBe(true);
     expect(getPlanSessionUsageCapCents('enterprise')).toBeNull();

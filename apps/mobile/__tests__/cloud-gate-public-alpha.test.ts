@@ -1,19 +1,4 @@
-/**
- * PA-2 regression — Managed Cloud is PUBLIC ALPHA (open by default).
- *
- * Locks two invariants the public-alpha cutover must never regress:
- *   (a) The Mobile cloud-gate copy is the public-alpha SIGN-IN message — not
- *       "invite-only / join the waitlist / private beta". Signing in is the
- *       entitlement; there is no invite or waitlist gate.
- *   (b) Local Mode stays FAIL-CLOSED: when Cloud chat is disabled (kill-switch /
- *       local-only build) the gate blocks remote chat and assertRemoteChatAllowed
- *       throws — Local never auto-routes off the device.
- *
- * Also proves the entitlement wiring: `setCloudAccess(true)` (driven by the Clerk
- * sign-in bridge) flips `cloudUnlocked`, and signing out re-locks it.
- */
 
-// MMKV shim so the persisted waitlist store can hydrate in the test runtime.
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -62,15 +47,12 @@ describe('PA-2 cloud gate — public-alpha copy', () => {
     expect(FEATURES.cloudChat).toBe(true);
     expect(FEATURES.schedules).toBe(true);
     expect(FEATURES.v1LocalOnly).toBe(false);
-    // BYOK is not a Mobile v1 path — Mobile is Local + Cloud only.
     expect(FEATURES.byokKeys).toBe(false);
   });
 });
 
 describe('PA-2 cloud gate — entitlement, not invite', () => {
   it('allows a signed-in user (open by default — invite flag is a no-op)', () => {
-    // Real flags: cloudChat on, not local-only. A signed-in user reaches cloud
-    // chat with NO invite (cloudUnlocked irrelevant once v1LocalOnly is false).
     expect(getRemoteChatDisabledReason(FEATURES, { cloudUnlocked: false })).toBeNull();
     expect(getRemoteChatDisabledReason(FEATURES, { cloudUnlocked: true })).toBeNull();
     expect(() => assertRemoteChatAllowed(FEATURES, { cloudUnlocked: true })).not.toThrow();
@@ -104,12 +86,10 @@ describe('PA-2 entitlement wiring — sign-in unlocks cloud access', () => {
   it('setCloudAccess(true) unlocks cloud; signing out re-locks it', () => {
     expect(useWaitlistStore.getState().cloudUnlocked).toBe(false);
 
-    // ClerkTokenBridge calls this when a Clerk session becomes active.
     useWaitlistStore.getState().setCloudAccess(true);
     expect(useWaitlistStore.getState().cloudUnlocked).toBe(true);
     expect(useWaitlistStore.getState().cloudUnlockedAt).toBeTruthy();
 
-    // Signing out closes the unlock — no stale cloud access persists.
     useWaitlistStore.getState().setCloudAccess(false);
     expect(useWaitlistStore.getState().cloudUnlocked).toBe(false);
     expect(useWaitlistStore.getState().cloudUnlockedAt).toBeUndefined();

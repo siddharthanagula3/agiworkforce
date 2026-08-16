@@ -28,19 +28,15 @@ import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 const ContentReportSchema = z.object({
-  /** Mobile-generated report id — used as the idempotency key. */
   reportId: z.string().trim().min(1).max(128),
   messageId: z.string().trim().min(1).max(200),
   conversationId: z.string().trim().min(1).max(200),
   category: z.enum(['harmful', 'inaccurate', 'offensive', 'misinformation', 'privacy', 'other']),
-  /** Abbreviated content excerpt — capped to match the on-device 500-char cap. */
   contentExcerpt: z.string().max(500).default(''),
   userNote: z.string().max(2000).default(''),
 });
 
 async function handleSubmitContentReport(request: NextRequest) {
-  // Bearer-authenticated requests (the mobile app) are bypassed inside
-  // requireCsrfToken; cookie-auth callers still need a valid token.
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
@@ -54,14 +50,10 @@ async function handleSubmitContentReport(request: NextRequest) {
   }
   const { reportId, messageId, conversationId, category, contentExcerpt, userNote } = parsed.data;
 
-  // Soft auth — attribute the report when signed in, accept it anonymously
-  // otherwise (Local-only users have no Cloud account to require here).
   const { userId } = await auth();
 
   const db = getNeonDb();
   try {
-    // On a client retry the unique client_report_id makes the insert a no-op
-    // rather than a duplicate row.
     await db.query(
       `insert into public.content_reports
          (user_id, client_report_id, message_id, conversation_id, category, content_excerpt, user_note, metadata)

@@ -1,10 +1,3 @@
-/**
- * Ollama HTTP API wire types.
- *
- * Source of truth: https://github.com/ollama/ollama/blob/main/docs/api.md
- *
- * We hand-type the subset we use — no Ollama npm package dependency required.
- */
 
 export interface OllamaTagsResponse {
   models: Array<{
@@ -46,7 +39,7 @@ export interface OllamaShowResponse {
 export interface OllamaChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
-  images?: string[]; // base64 strings
+  images?: string[];
   thinking?: string;
   tool_calls?: Array<{
     function: {

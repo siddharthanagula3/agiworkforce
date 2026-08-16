@@ -1,10 +1,3 @@
-/**
- * DELETE /api/artifacts/publish/[token] (CAP-015 slice 1).
- *
- * Published artifacts have no TTL, so this route is the ONLY way a public page
- * ever comes down. It has to be right: owner-scoped, CSRF-guarded, and unable
- * to double as a probe for which tokens are live.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -66,8 +59,6 @@ describe('DELETE /api/artifacts/publish/[token]', () => {
   });
 
   it("answers 404 for someone else's live token, not 403", async () => {
-    // A 403 would confirm the token exists, turning this endpoint into an
-    // oracle for guessing which published pages are live.
     mocks.query.mockResolvedValue([]);
     expect((await call(TOKEN)).status).toBe(404);
   });

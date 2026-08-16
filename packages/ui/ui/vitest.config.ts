@@ -1,9 +1,3 @@
-/**
- * Vitest configuration for @agiworkforce/ui
- *
- * Render smoke tests for the shared primitive library. Uses jsdom since
- * these are all DOM-rendering React components.
- */
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({

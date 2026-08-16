@@ -64,7 +64,6 @@ describe('SSOPanel entitlement', () => {
     const { container } = render(<SSOPanel organizationId={ORG_ID} isOwner />);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    // No heading, no form, no upsell — an unentitled org is told nothing here.
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByText(/Single sign-on/i)).toBeNull();
   });
@@ -75,8 +74,6 @@ describe('SSOPanel entitlement', () => {
     render(<SSOPanel organizationId={ORG_ID} isOwner />);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    // Hiding the panel is reserved for the entitlement answer above. An outage
-    // must not read to an enterprise admin as "SSO was removed from my plan".
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not be loaded/i);
   });
 

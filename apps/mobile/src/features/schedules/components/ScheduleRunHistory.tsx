@@ -1,10 +1,3 @@
-/**
- * Schedule Run History
- *
- * Shows the last 5 runs for a schedule with success/failure status,
- * timestamps, and optional error message. Fetches runs on mount if not
- * already loaded.
- */
 import { useEffect, useCallback } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -12,10 +5,6 @@ import { CheckCircle2, XCircle, Clock, RefreshCw, Loader } from 'lucide-react-na
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { useScheduleStore, type ScheduleRun } from '../store';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function formatRunTime(isoDate: string): string {
   try {
@@ -51,10 +40,6 @@ function formatDuration(start: string, end: string | null): string {
     return '';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Single run row
-// ---------------------------------------------------------------------------
 
 interface RunRowProps {
   run: ScheduleRun;
@@ -128,13 +113,8 @@ function RunRow({ run }: RunRowProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 interface ScheduleRunHistoryProps {
   scheduleId: string;
-  /** Max runs to display (default: 5) */
   maxRuns?: number;
 }
 
@@ -149,7 +129,6 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
   const runs = allRuns.slice(0, maxRuns);
 
   useEffect(() => {
-    // Always refresh on mount to get latest run status
     fetchRuns(scheduleId);
   }, [scheduleId, fetchRuns]);
 

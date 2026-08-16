@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock logger
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -11,18 +10,15 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock rate limiting to allow requests through
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
   rateLimitConfigs: {},
 }));
 
-// Mock error handler
 vi.mock('@/lib/error-handler', () => ({
   withErrorHandler: (fn: (...args: unknown[]) => Promise<Response>) => fn,
 }));
 
-// Mock CORS utilities
 vi.mock('@/lib/cors', () => ({
   getSecurityHeaders: () => ({ 'X-Content-Type-Options': 'nosniff' }),
   getCorsHeaders: () => ({ 'Access-Control-Allow-Origin': '*' }),
@@ -30,7 +26,6 @@ vi.mock('@/lib/cors', () => ({
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
-// Mock errors
 vi.mock('@/lib/errors', () => ({
   createError: {
     unauthorized: (message?: string) => {
@@ -46,7 +41,6 @@ vi.mock('@/lib/errors', () => ({
   },
 }));
 
-// Mock cookies
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({
     get: vi.fn().mockReturnValue({ value: 'mock_session_cookie' }),
@@ -54,7 +48,6 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-// ── Clerk auth mock ───────────────────────────────────────────────────────────
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
@@ -70,7 +63,6 @@ vi.mock('@/lib/services/billing-invoice-service', () => ({
   listUserBillingInvoices: (...args: unknown[]) => mockListUserBillingInvoices(...args),
 }));
 
-// ── Neon DB mock ──────────────────────────────────────────────────────────────
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
 
@@ -83,8 +75,6 @@ vi.mock('@/lib/server/neon-db', () => ({
     dispose: vi.fn(),
   })),
 }));
-
-// ── Test fixtures ─────────────────────────────────────────────────────────────
 
 const mockUser = {
   id: 'user_test_123',
@@ -112,16 +102,12 @@ const mockSubscription = {
   current_period_end: '2024-02-01T00:00:00Z',
 };
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user via Clerk
     mockGetClerkAuthUser.mockResolvedValue({ userId: mockUser.id, email: mockUser.email });
 
-    // Default: RPC succeeds
     mockNeonQuery.mockResolvedValue([{ success: true }]);
     mockNeonExecute.mockResolvedValue(1);
   });
@@ -227,7 +213,6 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
 
       await DELETE(request);
 
-      // Route calls: db.query('select * from delete_user_data($1)', [userId])
       expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('delete_user_data'), [
         mockUser.id,
       ]);
@@ -253,11 +238,9 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
     });
 
     it('should handle RPC function not found and use fallback deletion', async () => {
-      // RPC throws "function not found" error — route falls back to manual deletion
       mockNeonQuery.mockRejectedValueOnce(
         Object.assign(new Error('function delete_user_data does not exist'), { code: '42883' }),
       );
-      // Fallback execute calls succeed
       mockNeonExecute.mockResolvedValue(1);
 
       const { DELETE } = await import('@/app/api/user/data/route');
@@ -278,7 +261,6 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      // RPC throws a non-missing-function error
       mockNeonQuery.mockRejectedValueOnce(
         Object.assign(new Error('Database error'), { code: 'DB001' }),
       );
@@ -392,7 +374,6 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user via Clerk
     mockGetClerkAuthUser.mockResolvedValue({ userId: mockUser.id, email: mockUser.email });
 
     mockNeonQuery.mockResolvedValue([]);
@@ -927,10 +908,8 @@ describe('GDPR Compliance Requirements', () => {
 
     const response = await GET(request);
 
-    // Verify JSON format
     expect(response.headers.get('Content-Type')).toContain('application/json');
 
-    // Verify data is parseable
     const data = await response.json();
     expect(() => JSON.stringify(data)).not.toThrow();
   });
@@ -958,7 +937,6 @@ describe('GDPR Compliance Requirements', () => {
     const data = await response.json();
 
     expect(data.success).toBe(true);
-    // Route calls delete_user_data via Neon query
     expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('delete_user_data'), [
       mockUser.id,
     ]);

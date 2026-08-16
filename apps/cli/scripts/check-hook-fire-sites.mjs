@@ -1,12 +1,4 @@
 #!/usr/bin/env node
-/**
- * CI gate: every HookEvent variant must have ≥1 fire site in apps/cli/src/.
- *
- * Strategy (static, no cargo build):
- *  1. Parse apps/cli/src/features/hooks/hooks.rs to extract all HookEvent enum variants.
- *  2. Grep apps/cli/src/**\/*.rs for `HookEvent::X` patterns (fire sites).
- *  3. Fail with exit 1 if any variant has 0 fire sites.
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,15 +8,9 @@ const ROOT = path.resolve(process.cwd());
 const HOOKS_RS = path.join(ROOT, 'apps/cli/src/features/hooks/hooks.rs');
 const CLI_SRC = path.join(ROOT, 'apps/cli/src');
 
-// ---------------------------------------------------------------------------
-// Step 1: Parse enum variants from hooks.rs
-// ---------------------------------------------------------------------------
-
 function parseHookEventVariants(hooksSrc) {
   const source = fs.readFileSync(hooksSrc, 'utf8');
 
-  // Find the HookEvent enum block. Locate `pub enum HookEvent {` and extract
-  // everything up to the matching closing `}`.
   const enumStart = source.indexOf('pub enum HookEvent {');
   if (enumStart === -1) {
     throw new Error(`Could not find 'pub enum HookEvent {' in ${hooksSrc}`);
@@ -52,16 +38,12 @@ function parseHookEventVariants(hooksSrc) {
     throw new Error(`Could not extract HookEvent enum body from ${hooksSrc}`);
   }
 
-  // Extract bare variant names: lines like `    VariantName,` or `    VariantName`
-  // Skip doc-comment lines (`///`) and attribute lines (`#[`).
   const variants = [];
   for (const line of enumBody.split('\n')) {
     const trimmed = line.trim();
-    // Skip comments, attributes, and the enum declaration line itself.
     if (trimmed.startsWith('///') || trimmed.startsWith('#[') || trimmed.startsWith('pub enum')) {
       continue;
     }
-    // Match a PascalCase identifier optionally followed by a comma.
     const m = trimmed.match(/^([A-Z][A-Za-z0-9]*),?$/);
     if (m) {
       variants.push(m[1]);
@@ -70,10 +52,6 @@ function parseHookEventVariants(hooksSrc) {
 
   return variants;
 }
-
-// ---------------------------------------------------------------------------
-// Step 2: Collect all .rs files under apps/cli/src
-// ---------------------------------------------------------------------------
 
 function collectRsFiles(dir) {
   const results = [];
@@ -88,19 +66,9 @@ function collectRsFiles(dir) {
   return results;
 }
 
-// ---------------------------------------------------------------------------
-// Step 3: Count fire sites per variant
-//
-// A fire site is any occurrence of `HookEvent::VariantName` in a .rs file
-// that is NOT the definition file (hooks.rs).  We exclude the definition file
-// so that the match/display impl blocks don't count as fire sites — only
-// actual `run_hooks(…, HookEvent::X, …)` call-sites count.
-// ---------------------------------------------------------------------------
-
 function countFireSites(variants, rsFiles) {
   const defFile = path.resolve(HOOKS_RS);
 
-  // Build per-variant counters and a list of (file, line) for reporting.
   const counts = {};
   const sites = {};
   for (const v of variants) {
@@ -108,9 +76,6 @@ function countFireSites(variants, rsFiles) {
     sites[v] = [];
   }
 
-  // Build a combined regex that matches any variant in one pass per file.
-  // Pattern: `HookEvent::(Variant1|Variant2|…)` with a word-boundary after
-  // the variant name so `HookEvent::Stop` doesn't also match `HookEvent::StopFailure`.
   const altPattern = variants.map((v) => v).join('|');
   const re = new RegExp(`HookEvent::(${altPattern})\\b`, 'g');
 
@@ -124,9 +89,6 @@ function countFireSites(variants, rsFiles) {
       const line = lines[lineIdx];
       const trimmed = line.trim();
 
-      // Skip pure comment lines and cfg-attribute lines — these carry
-      // references to variant names in documentation strings or conditionals,
-      // not actual fire sites.
       if (trimmed.startsWith('//') || trimmed.startsWith('#[')) continue;
 
       re.lastIndex = 0;
@@ -142,10 +104,6 @@ function countFireSites(variants, rsFiles) {
 
   return { counts, sites };
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 function main() {
   if (!fs.existsSync(HOOKS_RS)) {
@@ -171,7 +129,6 @@ function main() {
 
   const missing = variants.filter((v) => counts[v] === 0);
 
-  // Print summary table.
   const colWidth = Math.max(...variants.map((v) => v.length));
   console.log(
     `\nHookEvent fire-site coverage (${variants.length} variants, ${rsFiles.length} .rs files scanned):\n`,

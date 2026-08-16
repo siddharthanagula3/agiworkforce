@@ -1,26 +1,4 @@
 #!/usr/bin/env node
-// check-availability-invariant.mjs
-//
-// GUARDRAIL for the `availability` axis (reasoning-effort-capability wave,
-// 2026-07-10, Addendum A). A model whose `availability` is NOT "live"
-// (i.e. "coming_soon" or "unavailable") must NEVER appear in any routable /
-// selectable / tier set — otherwise the request path could send an announced-
-// but-unprovisioned model to a provider and 404 live (fake availability).
-//
-// Invariant enforced:
-//   ∀ model where availability !== "live"  ⇒  id ∉ (
-//       tierAllowedModels ∪ SLOT_REGISTRY ∪ taskRouting ∪ defaultModel ∪ modelPresets
-//   )
-//
-// Sources of truth:
-//   - packages/contracts/types/src/models.json  → availability, tierAllowedModels,
-//     providers[*].taskRouting, providers[*].defaultModel, modelPresets.
-//   - packages/ai/model-registry/catalog/routing-policies.json → canonical slot
-//     assignments consumed by both generated routing and compatibility APIs.
-//
-// This makes "announced but non-routable" a CHECKED property, not a convention.
-// When a coming_soon model is provisioned, flip its availability to "live" (or
-// drop the field) after a real 200 probe — then it may join the routable sets.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,7 +14,6 @@ const ROUTING_POLICIES = path.join(
 const catalog = JSON.parse(fs.readFileSync(CATALOG, 'utf8'));
 const models = catalog.models ?? {};
 
-// id + apiModelId → availability ("live" when absent).
 const availabilityById = new Map();
 for (const [id, m] of Object.entries(models)) {
   const availability = m.availability ?? 'live';
@@ -50,16 +27,13 @@ const nonLiveIds = new Set(
     .map(([id]) => id),
 );
 
-// ---- Collect every routable/selectable reference, with a source label. ----
 /** @type {{ id: string, where: string }[]} */
 const refs = [];
 
-// tierAllowedModels.{economy,pro_additions,flagship_additions}
 for (const [bucket, ids] of Object.entries(catalog.tierAllowedModels ?? {})) {
   for (const id of ids ?? []) refs.push({ id, where: `tierAllowedModels.${bucket}` });
 }
 
-// providers[*].taskRouting.* and providers[*].defaultModel
 for (const [provider, cfg] of Object.entries(catalog.providers ?? {})) {
   for (const [task, id] of Object.entries(cfg.taskRouting ?? {})) {
     if (id) refs.push({ id, where: `providers.${provider}.taskRouting.${task}` });
@@ -69,14 +43,12 @@ for (const [provider, cfg] of Object.entries(catalog.providers ?? {})) {
   }
 }
 
-// modelPresets[*][].value
 for (const [provider, entries] of Object.entries(catalog.modelPresets ?? {})) {
   for (const entry of entries ?? []) {
     if (entry?.value) refs.push({ id: entry.value, where: `modelPresets.${provider}` });
   }
 }
 
-// Canonical routing slot model keys.
 const routingPolicies = JSON.parse(fs.readFileSync(ROUTING_POLICIES, 'utf8'));
 for (const [slot, definition] of Object.entries(routingPolicies.auto?.slots ?? {})) {
   if (definition?.modelKey) {
@@ -94,12 +66,9 @@ for (const [slot, definition] of Object.entries(routingPolicies.auto?.slots ?? {
   }
 }
 
-// ---- Enforce the invariant. ----
 const violations = [];
 for (const { id, where } of refs) {
   const availability = availabilityById.get(id);
-  // Auto modes ("auto-*") and legacy/alias ids not in the catalog are out of
-  // scope for THIS check (SLOT_REGISTRY drift + phantom-id checks cover those).
   if (availability === undefined) continue;
   if (availability !== 'live') {
     violations.push(`  ${where} → "${id}" is availability:"${availability}" (must be "live")`);

@@ -1,16 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Snapshot tests for the Settings screen — inset-grouped card layout (round 18).
- * Locks the rendered section card structure to catch visual regressions.
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import { SYNTHETIC_LOCAL_MODEL_ID } from '@/test-utils/modelFixtures';
 
 const mockSelectedModelId = SYNTHETIC_LOCAL_MODEL_ID;
-
-// ── Module mocks ──────────────────────────────────────────────────────────────
 
 jest.mock('@/src/ui/theme', () => ({
   colors: {
@@ -212,11 +206,7 @@ jest.mock('@/src/features/voice/components/VoiceSelector', () => {
   return { VoiceSelector };
 });
 
-// ── Imports ───────────────────────────────────────────────────────────────────
-
 import SettingsTabScreen from '@/src/features/settings';
-
-// ── Tests ──────────────────────────────────────────────────────────────────────
 
 describe('SettingsScreen — inset-grouped card layout', () => {
   it('locks the full settings screen tree (system mode, local demo)', () => {

@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 import { applyTheme, clearAppliedTheme, getThemeById } from '../themes';
 
-/** Base modes. Any other string is interpreted as a named theme ID. */
 type BaseTheme = 'dark' | 'light' | 'system';
 type Theme = BaseTheme | string;
 
@@ -37,7 +36,6 @@ export function ThemeProvider({
   useEffect(() => {
     const root = window.document.documentElement;
 
-    // Named theme: delegate to the theme registry
     if (theme !== 'dark' && theme !== 'light' && theme !== 'system') {
       const themeDefinition = getThemeById(theme);
       if (themeDefinition) {
@@ -47,7 +45,6 @@ export function ThemeProvider({
       // Unknown ID — fall through to default dark
     }
 
-    // Base mode: clear any previously applied inline theme properties
     clearAppliedTheme();
     root.classList.remove('light', 'dark');
 

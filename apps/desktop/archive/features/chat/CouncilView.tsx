@@ -16,9 +16,7 @@ import { useCouncilStore, selectIsCouncilQuerying } from '../../stores/councilSt
 
 interface CouncilViewProps {
   onClose?: () => void;
-  /** Optional initial prompt to pre-fill (e.g. from chat composer) */
   initialPrompt?: string;
-  /** Callback when consensus is ready — used to insert into chat */
   onConsensusReady?: (consensus: string, result: CouncilResult) => void;
 }
 
@@ -34,7 +32,6 @@ export function CouncilView({ onClose, initialPrompt, onConsensusReady }: Counci
   const startCouncil = useCouncilStore((s) => s.startCouncil);
   const clearCouncil = useCouncilStore((s) => s.clearCouncil);
 
-  // Sync initial prompt when it changes externally
   useEffect(() => {
     if (initialPrompt) {
       setPrompt(initialPrompt);
@@ -61,7 +58,6 @@ export function CouncilView({ onClose, initialPrompt, onConsensusReady }: Counci
     setPrompt('');
   };
 
-  // View a historical result without re-querying
   const viewHistoryItem = (item: CouncilResult) => {
     useCouncilStore.setState({ result: item, status: 'done' });
     setShowHistory(false);

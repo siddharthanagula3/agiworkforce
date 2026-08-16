@@ -106,10 +106,6 @@ const initialState = {
 export const useTeamStore = create<TeamState>((set, get) => ({
   ...initialState,
 
-  // --------------------------------------------------------------------------
-  // Team CRUD
-  // --------------------------------------------------------------------------
-
   createTeam: async (name, description, ownerId) => {
     set({ isLoading: true, error: null });
     try {
@@ -203,10 +199,6 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     set({ currentTeam: team });
   },
 
-  // --------------------------------------------------------------------------
-  // Members
-  // --------------------------------------------------------------------------
-
   inviteMember: async (teamId, email, role, invitedBy) => {
     set({ isLoadingMembers: true, error: null });
     try {
@@ -283,10 +275,6 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     }
   },
 
-  // --------------------------------------------------------------------------
-  // Resources
-  // --------------------------------------------------------------------------
-
   shareResource: async (
     teamId,
     resourceType,
@@ -349,10 +337,6 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     }
   },
 
-  // --------------------------------------------------------------------------
-  // Activity
-  // --------------------------------------------------------------------------
-
   getTeamActivity: async (teamId, limit, offset) => {
     set({ isLoadingActivities: true, error: null });
     try {
@@ -376,10 +360,6 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       throw error;
     }
   },
-
-  // --------------------------------------------------------------------------
-  // Ownership
-  // --------------------------------------------------------------------------
 
   transferTeamOwnership: async (teamId, newOwnerId, transferredBy) => {
     set({ isLoadingMembers: true, error: null });

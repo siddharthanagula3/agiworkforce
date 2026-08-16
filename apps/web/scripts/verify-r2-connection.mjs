@@ -1,24 +1,3 @@
-/**
- * Cloudflare R2 live binding verification (throwaway / re-runnable).
- *
- * Mirrors the EXACT SDK calls in apps/web/lib/server/object-storage.ts so a green
- * run confirms the live round-trip: PutObjectCommand -> public URL fetch ->
- * DeleteObjectCommand -> confirm the object is gone. Reads the CLOUDFLARE_R2_*
- * vars from the environment; NEVER prints the secret access key. One tiny
- * object, uploaded and deleted immediately — negligible cost.
- *
- * Usage (operator, with the keys in env — do NOT paste them in chat or commit them):
- *   node apps/web/scripts/verify-r2-connection.mjs
- * or put the CLOUDFLARE_R2_* vars in apps/web/.env.local (gitignored) and run
- * with `node --env-file=.env.local scripts/verify-r2-connection.mjs`.
- *
- * Required env vars (same names as lib/server/object-storage.ts):
- *   CLOUDFLARE_R2_ACCOUNT_ID
- *   CLOUDFLARE_R2_ACCESS_KEY_ID
- *   CLOUDFLARE_R2_SECRET_ACCESS_KEY
- *   CLOUDFLARE_R2_BUCKET_NAME
- *   CLOUDFLARE_R2_PUBLIC_BASE_URL
- */
 import {
   S3Client,
   PutObjectCommand,

@@ -1,15 +1,3 @@
-/**
- * voiceInputStore – Zustand store for web voice input state.
- *
- * Manages recording lifecycle (idle → listening → transcribing → idle),
- * accumulates transcript text, and provides a transcribe() action that
- * first tries the Web Speech API (SpeechRecognition) and falls back to
- * the /api/voice/transcribe server endpoint when unavailable.
- *
- * Non-persisted runtime state (mediaStream, recorder chunks) lives only
- * in refs inside the actions; only user preferences (language, fallback
- * preference) are persisted via localStorage.
- */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -17,54 +5,33 @@ import { getRoutingSlotModel } from '@agiworkforce/types';
 
 const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 export type VoiceInputMode = 'idle' | 'listening' | 'transcribing' | 'error';
 
 export interface VoiceInputState {
-  /** Current recording / transcription lifecycle mode */
   mode: VoiceInputMode;
-  /** The most recently completed transcript (cleared when consumed) */
   transcript: string;
-  /** Human-readable error message; null when there is no error */
   error: string | null;
-  /** BCP-47 language tag used for recognition (e.g. "en-US") */
   language: string;
-  /**
-   * When true, skip the Web Speech API even if available and go straight
-   * to the /api/voice/transcribe server endpoint.
-   */
   preferServerTranscription: boolean;
 }
 
 interface VoiceInputActions {
-  /** Begin recording audio from the microphone */
   startListening: () => Promise<void>;
-  /**
-   * Stop recording, run transcription (Web Speech or server fallback),
-   * and store the result in `transcript`.
-   */
   stopListening: () => Promise<void>;
-  /** Clear the transcript field once the caller has consumed it */
   clearTranscript: () => void;
   setLanguage: (lang: string) => void;
   setPreferServerTranscription: (prefer: boolean) => void;
-  /** Reset error state */
   clearError: () => void;
 }
-
-// ─── Internal runtime refs (not stored in Zustand to keep serialisation clean)
 
 interface RuntimeRefs {
   mediaStream: MediaStream | null;
   mediaRecorder: MediaRecorder | null;
   audioChunks: Blob[];
   recognition: SpeechRecognitionLike | null;
-  /** resolves when the MediaRecorder's onstop fires */
   stopResolve: (() => void) | null;
 }
 
-// SpeechRecognition shim types
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
   results: SpeechRecognitionResultList;
@@ -84,7 +51,6 @@ interface SpeechRecognitionLike extends EventTarget {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
-// Module-level runtime refs (one instance, reset on each start)
 const rt: RuntimeRefs = {
   mediaStream: null,
   mediaRecorder: null,
@@ -107,8 +73,6 @@ export function _resetRuntimeRefs(): void {
   rt.stopResolve = null;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function getSpeechRecognitionCtor(): SpeechRecognitionConstructor | null {
   if (typeof window === 'undefined') return null;
   const w = window as unknown as Record<string, SpeechRecognitionConstructor | undefined>;
@@ -130,7 +94,6 @@ function getBestMimeType(): string {
   return '';
 }
 
-/** POST audio blob to /api/voice/transcribe and return the transcript text. */
 async function transcribeViaServer(blob: Blob, language: string): Promise<string> {
   const form = new FormData();
   const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
@@ -152,19 +115,14 @@ async function transcribeViaServer(blob: Blob, language: string): Promise<string
   return data?.text?.trim() ?? '';
 }
 
-// ─── Store ────────────────────────────────────────────────────────────────────
-
 export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
   persist(
     (set, get) => ({
-      // ── Initial state ─────────────────────────────────────────────────────
       mode: 'idle',
       transcript: '',
       error: null,
       language: typeof navigator !== 'undefined' ? (navigator.language ?? 'en-US') : 'en-US',
       preferServerTranscription: false,
-
-      // ── Actions ───────────────────────────────────────────────────────────
 
       startListening: async () => {
         if (get().mode !== 'idle') return;
@@ -174,7 +132,6 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         const { language, preferServerTranscription } = get();
         const SpeechRecognitionCtor = getSpeechRecognitionCtor();
 
-        // Path A: Web Speech API (click-to-start, result on onresult/onend)
         if (SpeechRecognitionCtor && !preferServerTranscription) {
           try {
             const recognition = new SpeechRecognitionCtor();
@@ -200,7 +157,6 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
             };
 
             recognition.onend = () => {
-              // If we're still in 'listening', recognition stopped naturally
               if (get().mode === 'listening') {
                 set({ mode: 'idle' });
               }
@@ -217,7 +173,6 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           return;
         }
 
-        // Path B: MediaRecorder → server transcription
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
@@ -256,17 +211,14 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         const { mode, language } = get();
         if (mode !== 'listening') return;
 
-        // Path A: Stop Web Speech recognition
         if (rt.recognition) {
           set({ mode: 'transcribing' });
           rt.recognition.stop();
-          // onresult fires before onend; transcript already set
           set({ mode: 'idle' });
           rt.recognition = null;
           return;
         }
 
-        // Path B: Stop MediaRecorder and send to server
         if (!rt.mediaRecorder) {
           set({ mode: 'idle' });
           return;
@@ -274,7 +226,6 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
 
         set({ mode: 'transcribing' });
 
-        // Wait for onstop to fire so all ondataavailable chunks are flushed
         await new Promise<void>((resolve) => {
           rt.stopResolve = resolve;
           rt.mediaRecorder!.stop();
@@ -311,7 +262,6 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
     {
       name: 'agi-web-voice-input',
       version: 1,
-      // Only persist user preferences, never runtime blobs / mode
       partialize: (state) => ({
         language: state.language,
         preferServerTranscription: state.preferServerTranscription,
@@ -319,8 +269,6 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
     },
   ),
 );
-
-// ─── Error helpers ────────────────────────────────────────────────────────────
 
 function buildErrorMessage(errorCode: string): string {
   switch (errorCode) {

@@ -1,19 +1,3 @@
-/**
- * InlineToolCall — shared inline tool-call UI tests.
- *
- * Covers the locked design-spec §4 anatomy and §4.4 states:
- *   1. Collapsed → expanded toggle (click)
- *   2. Status states map to the right indicator / label suffix / color
- *   3. Per-tool icon mapping via `kind` prop and `inferKindFromLabel`
- *   4. Arg summary renders with ellipsis truncation classes + title attr
- *   5. Multi-step stack renders the 1px left guideline + children
- *   6. Keyboard activation (Enter + Space) toggles open state
- *   7. Controlled-mode `open` + `onOpenChange` round-trip
- *
- * Uses @testing-library/react against jsdom (vitest env). jest-dom matchers
- * are NOT auto-loaded by the package's vitest config, so this file sticks to
- * chai-native matchers (`toBe`, `toBeNull`, `toMatch`, etc.).
- */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { Box } from 'lucide-react';
@@ -29,10 +13,6 @@ import {
 afterEach(() => {
   cleanup();
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. Collapsed / expanded toggle
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('InlineToolCall — collapsed/expanded toggle', () => {
   it('starts collapsed by default and reveals body on click', () => {
@@ -71,14 +51,9 @@ describe('InlineToolCall — collapsed/expanded toggle', () => {
   it('renders no chevron and no role=button when body is omitted', () => {
     render(<InlineToolCall id="t3" label="thinking" status="running" />);
     expect(screen.queryByRole('button')).toBeNull();
-    // label still visible
     expect(screen.queryByText('thinking')).not.toBeNull();
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. Status states
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('InlineToolCall — status states', () => {
   it('pending renders ellipsis suffix and muted color', () => {
@@ -117,7 +92,6 @@ describe('InlineToolCall — status states', () => {
       />,
     );
     expect(within(container).queryByText('Error: timeout')).not.toBeNull();
-    // The state-danger color token is applied to suffix
     const suffix = container.querySelector('.inline-tool-call__suffix');
     expect(suffix?.className).toMatch(/state-danger/);
   });
@@ -129,10 +103,6 @@ describe('InlineToolCall — status states', () => {
     expect(within(container).queryByText(/Partial — see body/)).not.toBeNull();
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 3. Icon mapping
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('InlineToolCall — icon mapping', () => {
   it('inferKindFromLabel maps common tool names to canonical kinds', () => {
@@ -154,7 +124,6 @@ describe('InlineToolCall — icon mapping', () => {
     const { container } = render(
       <InlineToolCall id="i1" label="bash" status="success" body={<span />} />,
     );
-    // Lucide stamps an SVG; presence asserts the icon-resolver fired
     expect(container.querySelector('svg.inline-tool-call__icon')).not.toBeNull();
   });
 
@@ -162,7 +131,6 @@ describe('InlineToolCall — icon mapping', () => {
     const { container } = render(
       <InlineToolCall id="i2" label="bash" kind="thinking" status="success" body={<span />} />,
     );
-    // Just assert it still renders an icon — class is stable
     expect(container.querySelector('svg.inline-tool-call__icon')).not.toBeNull();
   });
 
@@ -174,10 +142,6 @@ describe('InlineToolCall — icon mapping', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 4. Arg summary ellipsis truncation
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('InlineToolCall — arg summary', () => {
   it('renders arg summary text with truncation classes + title for tooltip', () => {
     const arg = '/Users/foo/bar/baz/extremely/long/path/that/should/truncate.json';
@@ -187,12 +151,10 @@ describe('InlineToolCall — arg summary', () => {
     const summary = container.querySelector('.inline-tool-call__summary');
     expect(summary).not.toBeNull();
     expect(summary?.textContent).toBe(arg);
-    // Tailwind ellipsis utilities — design spec locks these
     expect(summary?.className).toMatch(/text-ellipsis/);
     expect(summary?.className).toMatch(/whitespace-nowrap/);
     expect(summary?.className).toMatch(/overflow-hidden/);
     expect(summary?.className).toMatch(/max-w-\[360px\]/);
-    // Native browser tooltip exposes full value when truncated
     expect(summary?.getAttribute('title')).toBe(arg);
   });
 
@@ -203,10 +165,6 @@ describe('InlineToolCall — arg summary', () => {
     expect(container.querySelector('.inline-tool-call__summary')).toBeNull();
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 5. Multi-step stack
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('InlineToolCallStack', () => {
   it('renders children inside a stack with the 1px left guideline', () => {
@@ -220,15 +178,10 @@ describe('InlineToolCallStack', () => {
     const stack = container.querySelector('[data-tool-stack]');
     expect(stack).not.toBeNull();
     expect(stack?.className).toMatch(/border-l/);
-    // Three child tool-call rows
     const children = container.querySelectorAll('[data-tool-id]');
     expect(children).toHaveLength(3);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 6. Keyboard activation
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('InlineToolCall — keyboard activation', () => {
   it('toggles open state on Enter', () => {
@@ -264,10 +217,6 @@ describe('InlineToolCall — keyboard activation', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 7. Controlled mode
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('InlineToolCall — controlled mode', () => {
   it('respects controlled `open` and fires `onOpenChange` on click', () => {
     const onOpenChange = vi.fn();
@@ -286,7 +235,6 @@ describe('InlineToolCall — controlled mode', () => {
 
     fireEvent.click(bar);
     expect(onOpenChange).toHaveBeenCalledWith(true);
-    // Still collapsed because controlled prop hasn't flipped
     expect(bar.getAttribute('aria-expanded')).toBe('false');
 
     rerender(
@@ -304,10 +252,6 @@ describe('InlineToolCall — controlled mode', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 8. Badge icon mode (iconStyle='badge')
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('InlineToolCall — badge icon mode', () => {
   it('renders data-icon-style="badge" on the root when iconStyle is badge', () => {
     const { container } = render(
@@ -317,7 +261,6 @@ describe('InlineToolCall — badge icon mode', () => {
   });
 
   it('renders a badge element with the correct letter for filesystem kinds', () => {
-    // read / write / edit / fs-list → letter F
     const kinds: Array<{ kind: InlineToolKind; label: string }> = [
       { kind: 'read', label: 'Read' },
       { kind: 'write', label: 'Write' },
@@ -420,10 +363,6 @@ describe('InlineToolCall — badge icon mode', () => {
     expect(bar?.className).toMatch(/h-8/);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 9. KIND_TO_BADGE map coverage
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('KIND_TO_BADGE map', () => {
   const kinds: Array<Exclude<InlineToolKind, 'auto'>> = [

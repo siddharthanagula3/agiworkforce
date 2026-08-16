@@ -1,15 +1,3 @@
-/**
- * Zero-leak guard tests for lib/egressGuard.ts (Agent Beta-4).
- *
- * Invariant under test: in Local mode the app must NEVER reach our managed
- * cloud (AGI API / gateway / Neon / Clerk / signaling). BYOK direct-to-provider
- * traffic is allowed. In Cloud mode our-cloud is allowed. Mode resolution is
- * fail-closed: an unknown/unreadable mode is treated as Local.
- *
- * `guardedFetch` delegates allowed requests to `secureFetch` (the TLS-pinning
- * chokepoint), so we mock secureFetch and assert (a) it is NOT called when the
- * guard blocks, and (b) it IS called (with the original args) when allowed.
- */
 
 const mockSecureFetch = jest.fn();
 jest.mock('@/services/secureFetch', () => ({
@@ -22,7 +10,6 @@ jest.mock('@react-native-community/netinfo', () => ({
   default: { refresh: (...args: unknown[]) => mockNetInfoRefresh(...args) },
 }));
 
-// Mode source: the persisted app-mode store. We control getState() per test.
 let mockAppMode: unknown = 'local';
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: {
@@ -66,7 +53,6 @@ describe('isOurCloudHost — host classification', () => {
   });
 
   it('does not treat a lookalike suffix as ours (no substring bypass)', () => {
-    // Attacker domain that merely ends with our brand string must NOT match.
     expect(isOurCloudHost('agiworkforce.com.evil.example')).toBe(false);
     expect(isOurCloudHost('notneon.tech')).toBe(false);
     expect(isOurCloudHost('neon.tech.attacker.example')).toBe(false);
@@ -83,21 +69,14 @@ describe('isOurCloudHost — host classification', () => {
   });
 
   it('DRIFT REGRESSION: classifies vercel.app (mobile used to miss it) as ours', () => {
-    // vercel.app was on desktop's denylist but NOT mobile's, so mobile Local
-    // mode wouldn't have blocked a *.vercel.app host. After reconciling to the
-    // shared union it must classify as ours here too.
     expect(OUR_CLOUD_HOSTS).toContain('vercel.app');
     expect(isOurCloudHost('vercel.app')).toBe(true);
     expect(isOurCloudHost('my-app.vercel.app')).toBe(true);
-    // Look-alike must still NOT match (boundary-safe suffix preserved).
     expect(isOurCloudHost('evilvercel.app')).toBe(false);
   });
 });
 
 describe('guardedFetch — DRIFT REGRESSION (vercel.app mobile missed is now blocked in Local mode)', () => {
-  // Before the shared-policy reconcile, mobile's denylist omitted vercel.app, so
-  // Local mode would have LEAKED to a *.vercel.app deploy. Assert the guard now
-  // throws BEFORE any network I/O (secureFetch not called) for that host.
   it('BLOCKS a *.vercel.app host in Local mode before any network I/O', async () => {
     mockAppMode = 'local';
     await expect(
@@ -172,12 +151,6 @@ describe('guardedFetch — fail-closed mode resolution', () => {
 });
 
 describe('guardedFetch — NetInfo self-correction on a successful round-trip', () => {
-  // Regression guard: NetInfo's own passive reachability probe only re-checks
-  // on OS connectivity-change events and can report a stale "offline" state
-  // for minutes while real API/chat traffic keeps succeeding (observed on the
-  // iOS Simulator). A resolved response — any HTTP status, since even a 4xx/5xx
-  // proves the round-trip completed — is stronger evidence of connectivity, so
-  // guardedFetch forces NetInfo to refresh instead of waiting for its own timer.
   it('force-refreshes NetInfo after a successful (2xx) response', async () => {
     mockAppMode = 'cloud';
     mockSecureFetch.mockResolvedValue(new Response('ok', { status: 200 }));

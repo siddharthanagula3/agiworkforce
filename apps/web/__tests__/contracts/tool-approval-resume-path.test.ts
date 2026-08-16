@@ -17,11 +17,6 @@ import { TOOL_APPROVAL_RESUME_PATH } from '@agiworkforce/cloud-contracts';
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 const WEB_APP_DIR = path.resolve(import.meta.dirname, '../../app');
 
-/**
- * Client call sites for the resume endpoint. Deliberately narrow: these are
- * the trees that hold surface HTTP clients, so a new literal here is a real
- * drift risk rather than prose in a doc or fixture.
- */
 const SCANNED_DIRS = [
   'apps/web/lib',
   'apps/web/components',
@@ -43,12 +38,6 @@ const SKIP_DIRS = new Set([
   '.next',
 ]);
 
-/**
- * Matches the path only where it can become a request: opening a string
- * literal, or following a template interpolation such as `${BASE}/api/...`.
- * The endpoint can still be named in comments and JSDoc, where it documents
- * and cannot drift a URL.
- */
 const QUOTED_LITERAL = new RegExp(`['"\`}]${TOOL_APPROVAL_RESUME_PATH.replace(/\//g, '\\/')}`);
 
 function collectSourceFiles(dir: string, found: string[] = []): string[] {
@@ -56,7 +45,6 @@ function collectSourceFiles(dir: string, found: string[] = []): string[] {
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
-    // A surface tree that does not exist cannot shadow the constant.
     return found;
   }
   for (const entry of entries) {

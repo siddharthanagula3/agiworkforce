@@ -24,8 +24,6 @@ async function handleAppleNotification(request: NextRequest): Promise<NextRespon
   const transaction = verified.transaction;
   const signedTransaction = verified.notification.data?.signedTransactionInfo;
   if (!transaction || !signedTransaction) {
-    // TEST and summary notifications are authentic but carry no billable
-    // transaction. Acknowledge them so Apple does not retry indefinitely.
     return NextResponse.json({ received: true, status: 'no_transaction' });
   }
   if (

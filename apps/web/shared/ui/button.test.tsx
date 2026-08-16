@@ -1,13 +1,3 @@
-/**
- * Button Component Tests
- *
- * Tests for the core Button UI component including:
- * - Rendering with different variants and sizes
- * - Accessibility attributes (aria-label, aria-busy, aria-disabled)
- * - User interactions (click, keyboard)
- * - Loading states
- * - asChild composition pattern
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -28,9 +18,6 @@ describe('Button Component', () => {
       render(<Button>Click me</Button>);
       const button = screen.getByRole('button', { name: /click me/i });
       expect(button).toBeInTheDocument();
-      // The canonical @agiworkforce/ui Button does not force a default `type`
-      // attribute (the old web fork defaulted to "button"); the browser default
-      // applies unless a `type` is passed explicitly.
       expect(button).not.toHaveAttribute('type');
     });
 
@@ -437,5 +424,4 @@ describe('Button Component', () => {
   });
 });
 
-// Import React for ref test
 import React from 'react';

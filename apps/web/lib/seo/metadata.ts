@@ -3,23 +3,14 @@ import type { Metadata } from 'next';
 import { OG_IMAGE, SITE_NAME, TWITTER_HANDLE, absoluteUrl } from './site';
 
 export interface BuildMetadataOptions {
-  /** Page `<title>`. The root layout appends the ` | AGI` template. */
   title: string;
-  /** Meta description, also used as the OG/Twitter description by default. */
   description: string;
-  /** Site-relative path, e.g. `/byok` or `/features/agents`. */
   path: string;
-  /** Optional per-page keywords. */
   keywords?: string[];
-  /** Override the Open Graph / Twitter title (defaults to `title`). */
   ogTitle?: string;
-  /** Override the Open Graph / Twitter description (defaults to `description`). */
   ogDescription?: string;
-  /** Open Graph object type. Defaults to `website`. */
   ogType?: 'website' | 'article';
-  /** Alt text for the share image. */
   imageAlt?: string;
-  /** Optional robots directives (e.g. noindex for gated pages). */
   robots?: Metadata['robots'];
 }
 

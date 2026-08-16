@@ -1,23 +1,3 @@
-/**
- * Comprehensive tests for the heuristic classifier, conversation-context
- * sticky pivot, token estimation, and Indic script detection.
- *
- * Test plan (200+ cases):
- *   §1 image_generation         - slash + phrase forms, edge cases.
- *   §2 computer-use              - screenshot + verb co-occurrence.
- *   §3 multimodal                - image/video MIME, screenshot fall-through.
- *   §4 long_context              - cumulative token guard.
- *   §5 coding                    - keywords, code fences, error markers.
- *   §6 reasoning                 - math/proof verbs, inline arithmetic.
- *   §7 research                  - recency keywords.
- *   §8 creative_writing          - draft / write phrases.
- *   §9 simple_chat               - length + word-count combo.
- *   §10 general                  - fallthrough.
- *   §11 priority                 - ensure higher-rank heuristics dominate.
- *   §12 applyConversationContext - mode boost, pivot threshold, token guard.
- *   §13 estimateTokens           - per-model multipliers.
- *   §14 detectIndicScript        - Unicode ranges + ratio gate.
- */
 
 import {
   getModelMetadataById,
@@ -37,10 +17,6 @@ import {
   type RoutingMessage,
   type RoutingTaskType,
 } from '../index';
-
-// ============================================================================
-// Helpers
-// ============================================================================
 
 const NO_HISTORY: RoutingMessage[] = [];
 const NO_ATTACHMENTS: RoutingAttachment[] = [];
@@ -71,10 +47,6 @@ function classify(
 ) {
   return classifyTaskLocally(msg, history, attachments);
 }
-
-// ============================================================================
-// §1 Image Generation
-// ============================================================================
 
 describe('classifyTaskLocally — image_generation', () => {
   it('matches /image slash command', () => {
@@ -130,13 +102,9 @@ describe('classifyTaskLocally — image_generation', () => {
   });
 
   it('does NOT match generate without an image-noun', () => {
-    // "generate the report" should NOT route to image_generation.
     expect(classify('generate the quarterly report').type).not.toBe('image_generation');
   });
 
-  // The original noun list stopped at seven words, so ordinary ways of asking
-  // for a picture ("draw a portrait of…") missed and were answered as prose by
-  // a text model. These pin the widened vocabulary.
   it.each([
     'draw a portrait of a fox',
     'generate some concept artwork',
@@ -153,9 +121,6 @@ describe('classifyTaskLocally — image_generation', () => {
     expect(classify(message).type).toBe('image_generation');
   });
 
-  // The verb list is shared with ordinary requests, so the medium noun is the
-  // only thing separating "make a drawing" from "make a decision". Widening the
-  // nouns must not start capturing these.
   it.each([
     'create a report about the logo',
     'make a function that returns null',
@@ -167,18 +132,14 @@ describe('classifyTaskLocally — image_generation', () => {
   });
 
   it('allows adjectives between the article and the medium noun', () => {
-    // Two-word gap is the documented ceiling: enough for "detailed anime
-    // portrait", short enough that "a report about the logo" cannot reach.
     expect(classify('create a detailed anime portrait').type).toBe('image_generation');
   });
 
   it('does NOT match standalone /imageinfo', () => {
-    // word-boundary in regex prevents false positive on prefix words.
     expect(classify('/imageinfo file.png').type).not.toBe('image_generation');
   });
 
   it('treats slash-prefixed at start of message only', () => {
-    // Body containing "/image" should NOT trigger.
     expect(classify('Tell me about /image commands').type).not.toBe('image_generation');
   });
 
@@ -190,10 +151,6 @@ describe('classifyTaskLocally — image_generation', () => {
     expect(classify('generate an image of x').confidence).toBe(0.95);
   });
 });
-
-// ============================================================================
-// §2 Computer-use
-// ============================================================================
 
 describe('classifyTaskLocally — computer-use', () => {
   const screenshot: RoutingAttachment = { mime: 'image/png', type: 'screenshot' };
@@ -243,10 +200,6 @@ describe('classifyTaskLocally — computer-use', () => {
     expect(classify('Submit it', NO_HISTORY, [screenshot]).type).toBe('computer-use');
   });
 });
-
-// ============================================================================
-// §3 Multimodal
-// ============================================================================
 
 describe('classifyTaskLocally — multimodal', () => {
   it('matches image/png MIME', () => {
@@ -315,19 +268,14 @@ describe('classifyTaskLocally — multimodal', () => {
   });
 });
 
-// ============================================================================
-// §4 Long context
-// ============================================================================
-
 describe('classifyTaskLocally — long_context', () => {
   it('triggers when a single huge message exceeds 50K tokens', () => {
-    // 200K characters at chars/3.5 ≈ 57K tokens.
     const huge = 'a'.repeat(200_000);
     expect(classify(huge).type).toBe('long_context');
   });
 
   it('triggers when history accumulates past 50K tokens', () => {
-    const filler = 'b'.repeat(60_000); // 60K chars / 3.5 ≈ 17K tokens
+    const filler = 'b'.repeat(60_000);
     const history: RoutingMessage[] = [
       { role: 'user', content: filler },
       { role: 'assistant', content: filler },
@@ -355,7 +303,6 @@ describe('classifyTaskLocally — long_context', () => {
   });
 
   it('long context wins over coding when both signals are present', () => {
-    // Big message containing code keyword should still go long_context.
     const huge = 'function ' + 'x'.repeat(200_000);
     expect(classify(huge).type).toBe('long_context');
   });
@@ -365,10 +312,6 @@ describe('classifyTaskLocally — long_context', () => {
     expect(classify(huge).type).toBe('long_context');
   });
 });
-
-// ============================================================================
-// §5 Coding
-// ============================================================================
 
 describe('classifyTaskLocally — coding', () => {
   it('matches markdown code fences', () => {
@@ -428,10 +371,6 @@ describe('classifyTaskLocally — coding', () => {
   });
 });
 
-// ============================================================================
-// §6 Reasoning
-// ============================================================================
-
 describe('classifyTaskLocally — reasoning', () => {
   it('matches "prove" verb', () => {
     expect(classify('prove that 2 plus 2 equals four').type).toBe('reasoning');
@@ -478,13 +417,10 @@ describe('classifyTaskLocally — reasoning', () => {
   });
 
   it('matches inline arithmetic with = and digit on both sides', () => {
-    // Regex requires digit-operator-digit. "5=3" → reasoning;
-    // "5 = x" → no match (right-hand side is a letter).
     expect(classify('what does 5 = 3 + 2 mean').type).toBe('reasoning');
   });
 
   it('does NOT match equality with non-digit operands', () => {
-    // "5 = x" is digit-equals-letter; falls through to simple_chat.
     expect(classify('5 = x what is x').type).not.toBe('reasoning');
   });
 
@@ -496,10 +432,6 @@ describe('classifyTaskLocally — reasoning', () => {
     expect(classify('the year 2025').type).not.toBe('reasoning');
   });
 });
-
-// ============================================================================
-// §7 Agentic
-// ============================================================================
 
 describe('classifyTaskLocally — agentic', () => {
   it('matches explicit autonomous-agent orchestration', () => {
@@ -520,10 +452,6 @@ describe('classifyTaskLocally — agentic', () => {
     expect(classify('orchestrate multiple agents').confidence).toBe(0.85);
   });
 });
-
-// ============================================================================
-// §8 Research
-// ============================================================================
 
 describe('classifyTaskLocally — research', () => {
   it('matches "latest" keyword', () => {
@@ -563,14 +491,9 @@ describe('classifyTaskLocally — research', () => {
   });
 
   it('does NOT match "current" inside word', () => {
-    // word-boundary required.
     expect(classify('concurrentMap implementation').type).not.toBe('research');
   });
 });
-
-// ============================================================================
-// §9 Creative writing
-// ============================================================================
 
 describe('classifyTaskLocally — creative_writing', () => {
   it('matches "write a story"', () => {
@@ -602,8 +525,6 @@ describe('classifyTaskLocally — creative_writing', () => {
   });
 
   it('"write code in python" is not creative_writing (no story/poem/email/etc. noun)', () => {
-    // Spec creative-writing regex requires (story|poem|email|essay|tweet|blog)
-    // immediately after the verb-and-article. "write code" has no such noun.
     expect(classify('write code in python').type).not.toBe('creative_writing');
   });
 
@@ -615,10 +536,6 @@ describe('classifyTaskLocally — creative_writing', () => {
     expect(classify('compose the email reply').type).toBe('creative_writing');
   });
 });
-
-// ============================================================================
-// §10 Simple chat
-// ============================================================================
 
 describe('classifyTaskLocally — simple_chat', () => {
   it('matches "hi"', () => {
@@ -642,7 +559,6 @@ describe('classifyTaskLocally — simple_chat', () => {
   });
 
   it('does NOT match a 79-char message with 15 words', () => {
-    // 15 words triggers `< 15` fail; message length is irrelevant.
     const msg = 'a a a a a a a a a a a a a a a';
     expect(classify(msg).type).not.toBe('simple_chat');
   });
@@ -664,24 +580,16 @@ describe('classifyTaskLocally — simple_chat', () => {
 
   it('boundary: 79 chars + 14 words passes', () => {
     const msg = 'x'.repeat(79);
-    // 1 word, 79 chars → both checks pass.
     expect(classify(msg).type).toBe('simple_chat');
   });
 
   it('empty string is short → simple_chat (split yields one empty token, <15)', () => {
-    // ''.split(/\s+/) yields [''] (length 1) and ''.length is 0 — both bounds
-    // satisfied, so the simple-chat heuristic claims it before fallthrough.
     expect(classify('').type).toBe('simple_chat');
   });
 });
 
-// ============================================================================
-// §10 General fallthrough
-// ============================================================================
-
 describe('classifyTaskLocally — general fallthrough', () => {
   it('falls through to general when no heuristics match', () => {
-    // 80+ chars (so not simple_chat), no keywords matching anything.
     const msg =
       'I would like to discuss something interesting that requires some neutral conversational handling without specific signals';
     expect(classify(msg).type).toBe('general');
@@ -694,26 +602,17 @@ describe('classifyTaskLocally — general fallthrough', () => {
   });
 
   it('empty input is captured by simple_chat (length=0, words=1)', () => {
-    // Documented surprise: empty input returns simple_chat, not general.
-    // This is an intentional consequence of the spec's length+wordcount rule
-    // and is harmless — Pool B simple_chat handling is identical to general.
     expect(classify('').type).toBe('simple_chat');
   });
 
   it('whitespace-only message → general (length passes simple_chat first)', () => {
-    // "   " has length 3 < 80, but split(/\s+/) gives ['','',''] → length 3 → < 15 → simple_chat.
     expect(classify('   ').type).toBe('simple_chat');
   });
 });
 
-// ============================================================================
-// §11 Priority order
-// ============================================================================
-
 describe('classifyTaskLocally — priority order', () => {
   it('image > computer-use', () => {
     const screenshot: RoutingAttachment = { mime: 'image/png', type: 'screenshot' };
-    // "/image click here" starts with /image, even with screenshot+verb → image_generation.
     expect(classify('/image click submit', NO_HISTORY, [screenshot]).type).toBe('image_generation');
   });
 
@@ -724,7 +623,6 @@ describe('classifyTaskLocally — priority order', () => {
 
   it('multimodal > long_context', () => {
     const att: RoutingAttachment = { mime: 'image/png' };
-    // Even a short message with image goes multimodal, not long_context.
     expect(classify('look', NO_HISTORY, [att]).type).toBe('multimodal');
   });
 
@@ -734,23 +632,18 @@ describe('classifyTaskLocally — priority order', () => {
   });
 
   it('coding > reasoning', () => {
-    // Contains both code and "solve" → coding wins.
     expect(classify('write a function to solve x').type).toBe('coding');
   });
 
   it('reasoning > research', () => {
-    // Contains both "solve" and "latest" — reasoning wins by priority.
     expect(classify('solve the latest puzzle').type).toBe('reasoning');
   });
 
   it('research > creative_writing', () => {
-    // "draft a story about latest news" → research wins.
     expect(classify('draft a story about the latest news').type).toBe('research');
   });
 
   it('creative_writing > simple_chat', () => {
-    // Short message that ALSO matches creative_writing — creative wins because
-    // it appears earlier in the priority chain (heuristic 8 vs 9).
     expect(classify('write a poem').type).toBe('creative_writing');
   });
 
@@ -773,10 +666,6 @@ describe('classifyTaskLocally — priority order', () => {
   });
 });
 
-// ============================================================================
-// §12 applyConversationContext
-// ============================================================================
-
 describe('applyConversationContext — long-context guard', () => {
   it('forces long_context when cumulative tokens > 50K', () => {
     const local = { type: 'coding' as const, confidence: 0.85 };
@@ -793,7 +682,6 @@ describe('applyConversationContext — long-context guard', () => {
   it('does NOT force long_context at exactly 50K', () => {
     const local = { type: 'coding' as const, confidence: 0.85 };
     const result = applyConversationContext(local, ctx(50_000));
-    // Not > 50K → no override.
     expect(result.type).toBe('coding');
   });
 
@@ -807,7 +695,6 @@ describe('applyConversationContext — sticky pivot mode boost', () => {
   it('boosts confidence when running mode matches new turn', () => {
     const local = { type: 'coding' as const, confidence: 0.85 };
     const result = applyConversationContext(local, ctx(1_000, ['coding', 'coding', 'coding']));
-    // Boost +0.1, clamped at 1.0 → 0.95.
     expect(result.type).toBe('coding');
     expect(result.confidence).toBeCloseTo(0.95, 5);
   });
@@ -829,20 +716,16 @@ describe('applyConversationContext — sticky pivot mode boost', () => {
 
   it('boost applies on plurality (2 of 3)', () => {
     const local = { type: 'coding' as const, confidence: 0.7 };
-    // Last 3 = ['coding', 'coding', 'general']; mode = coding.
     const result = applyConversationContext(
       local,
       ctx(1_000, ['general', 'coding', 'coding', 'general']),
     );
-    // Last 3 of ['general', 'coding', 'coding', 'general'] = ['coding', 'coding', 'general']
-    // mode = coding (2 of 3) → matches local.type → boost.
     expect(result.type).toBe('coding');
     expect(result.confidence).toBeCloseTo(0.8, 5);
   });
 
   it('does not boost when there is a tie (no clear mode)', () => {
     const local = { type: 'coding' as const, confidence: 0.7 };
-    // Last 3 = ['a', 'b', 'c'] → tie → no mode → unchanged.
     const result = applyConversationContext(local, ctx(1_000, ['coding', 'reasoning', 'general']));
     expect(result).toEqual(local);
   });
@@ -857,14 +740,12 @@ describe('applyConversationContext — pivot override threshold', () => {
   it('high-confidence (>=0.85) new turn overrides running mode', () => {
     const local = { type: 'image_generation' as const, confidence: 0.95 };
     const result = applyConversationContext(local, ctx(1_000, ['coding', 'coding', 'coding']));
-    // 0.95 >= 0.85 → pivot allowed.
     expect(result).toEqual(local);
   });
 
   it('low-confidence new turn snaps to running mode', () => {
     const local = { type: 'creative_writing' as const, confidence: 0.75 };
     const result = applyConversationContext(local, ctx(1_000, ['coding', 'coding', 'coding']));
-    // 0.75 < 0.85 → snap back to coding.
     expect(result.type).toBe('coding');
     expect(result.confidence).toBe(0.75);
   });
@@ -885,7 +766,6 @@ describe('applyConversationContext — pivot override threshold', () => {
 describe('applyConversationContext — window edge cases', () => {
   it('inspects only the last 3 entries', () => {
     const local = { type: 'general' as const, confidence: 0.5 };
-    // First 5 entries are coding, but last 3 are reasoning. Last 3 win.
     const result = applyConversationContext(
       local,
       ctx(1_000, [
@@ -905,14 +785,12 @@ describe('applyConversationContext — window edge cases', () => {
   it('handles single-entry history', () => {
     const local = { type: 'coding' as const, confidence: 0.7 };
     const result = applyConversationContext(local, ctx(1_000, ['coding']));
-    // mode = coding, matches → boost.
     expect(result.confidence).toBeCloseTo(0.8, 5);
   });
 
   it('handles two-entry tied history (no mode)', () => {
     const local = { type: 'coding' as const, confidence: 0.7 };
     const result = applyConversationContext(local, ctx(1_000, ['coding', 'reasoning']));
-    // 1 vs 1 → tie → no boost, no override.
     expect(result).toEqual(local);
   });
 
@@ -923,22 +801,16 @@ describe('applyConversationContext — window edge cases', () => {
   });
 });
 
-// ============================================================================
-// §13 estimateTokens
-// ============================================================================
-
 describe('estimateTokens — provider multipliers', () => {
   it('returns 0 for empty string', () => {
     expect(estimateTokens('')).toBe(0);
   });
 
   it('uses default tokenizer when model is omitted', () => {
-    // 35 chars / 3.5 = 10 tokens.
     expect(estimateTokens('a'.repeat(35))).toBe(10);
   });
 
   it('uses the OpenAI tokenizer for the canonical default', () => {
-    // 38 chars / 3.8 = 10 tokens.
     expect(estimateTokens('a'.repeat(38), OPENAI_MODEL_ID)).toBe(10);
   });
 
@@ -960,7 +832,6 @@ describe('estimateTokens — provider multipliers', () => {
   });
 
   it('uses the regular Anthropic tokenizer for another canonical model', () => {
-    // 35 chars / 3.5 = 10 tokens.
     expect(estimateTokens('a'.repeat(35), ANTHROPIC_COMPARISON_MODEL_ID)).toBe(10);
   });
 
@@ -971,17 +842,14 @@ describe('estimateTokens — provider multipliers', () => {
   });
 
   it('uses the Google tokenizer for the canonical default', () => {
-    // 40 chars / 4.0 = 10 tokens.
     expect(estimateTokens('a'.repeat(40), GOOGLE_MODEL_ID)).toBe(10);
   });
 
   it('uses the DeepSeek tokenizer for the canonical default', () => {
-    // 34 chars / 3.4 = 10 tokens.
     expect(estimateTokens('a'.repeat(34), DEEPSEEK_MODEL_ID)).toBe(10);
   });
 
   it('falls back to default for unknown model', () => {
-    // 35 chars / 3.5 = 10.
     expect(estimateTokens('a'.repeat(35), 'fixture-unknown-model')).toBe(10);
   });
 
@@ -991,7 +859,6 @@ describe('estimateTokens — provider multipliers', () => {
   });
 
   it('always returns at least 1 token for non-empty input', () => {
-    // Single char / 3.5 = 0.286, ceil = 1.
     expect(estimateTokens('a')).toBe(1);
   });
 
@@ -1025,15 +892,9 @@ describe('estimateTokens — provider multipliers', () => {
   });
 
   it('handles unicode content (counts code units, not codepoints)', () => {
-    // The token estimator deliberately uses `length` (UTF-16 code-unit count)
-    // because all major tokenizers we model do too.
     expect(estimateTokens('hello world')).toBeGreaterThan(0);
   });
 });
-
-// ============================================================================
-// §14 detectIndicScript
-// ============================================================================
 
 describe('detectIndicScript — basic detection', () => {
   it('returns isIndic=false for empty string', () => {
@@ -1103,14 +964,12 @@ describe('detectIndicScript — basic detection', () => {
 
 describe('detectIndicScript — ratio threshold', () => {
   it('mixed-script with >20% Indic flips isIndic', () => {
-    // 4 Devanagari out of 10 chars = 40% > 20% threshold.
     const r = detectIndicScript('hi नमस्ते abc');
     expect(r.isIndic).toBe(true);
     expect(r.indicRatio).toBeGreaterThan(0.2);
   });
 
   it('mixed-script with <20% Indic does not flip', () => {
-    // 1 char out of 50 = 2% < 20%.
     const text = 'a'.repeat(50) + 'न';
     const r = detectIndicScript(text);
     expect(r.isIndic).toBe(false);
@@ -1118,7 +977,6 @@ describe('detectIndicScript — ratio threshold', () => {
   });
 
   it('respects custom threshold', () => {
-    // 1 char out of 10 = 10%. Default 20% says no, threshold 0.05 says yes.
     const text = 'aaaaaaaaaन';
     expect(detectIndicScript(text, 0.05).isIndic).toBe(true);
     expect(detectIndicScript(text, 0.5).isIndic).toBe(false);
@@ -1137,13 +995,11 @@ describe('detectIndicScript — ratio threshold', () => {
 describe('detectIndicScript — counts and dominant script', () => {
   it('reports indicCharCount and totalCharCount', () => {
     const r = detectIndicScript('hi नम');
-    // 'h', 'i', ' ', 'न', 'म' = 5 codepoints, 2 indic.
     expect(r.totalCharCount).toBe(5);
     expect(r.indicCharCount).toBe(2);
   });
 
   it('picks dominant when multiple Indic scripts present', () => {
-    // 5 Devanagari + 2 Tamil → devanagari wins.
     const text = 'नमस्ते' + 'தம';
     const r = detectIndicScript(text);
     expect(r.dominantScript).toBe('devanagari');
@@ -1152,7 +1008,6 @@ describe('detectIndicScript — counts and dominant script', () => {
   });
 
   it('ties resolved by INDIC_RANGES order (devanagari ahead of tamil)', () => {
-    // 1 char from each → tie → first one in range list wins.
     const r = detectIndicScript('नத');
     expect(r.dominantScript).toBe('devanagari');
   });
@@ -1216,10 +1071,6 @@ describe('detectIndicScript — boundary codepoints', () => {
   });
 });
 
-// ============================================================================
-// Stress / sanity
-// ============================================================================
-
 describe('classifier — stability', () => {
   it('is deterministic across repeated calls', () => {
     const a = classify('write a function to solve x');
@@ -1276,9 +1127,6 @@ describe('classifier — attachments without other signals', () => {
 
   it('audio attachment alone falls through past multimodal', () => {
     const att: RoutingAttachment = { mime: 'audio/mp3' };
-    // Pick a message that is neither short-and-fewer-than-15-words nor
-    // matches any other heuristic so we land on `general`. The specific
-    // wording avoids triggering creative_writing or research keywords.
     const msg =
       'kindly handle the attached audio recording for downstream processing as part of the ongoing batch run';
     expect(classify(msg, NO_HISTORY, [att]).type).toBe('general');
@@ -1300,7 +1148,6 @@ describe('classifier — additional priority pairs', () => {
   });
 
   it('coding > research', () => {
-    // function keyword + "latest" → coding wins (priority 5 vs 7).
     expect(classify('latest function signature').type).toBe('coding');
   });
 
@@ -1313,21 +1160,13 @@ describe('classifier — additional priority pairs', () => {
   });
 });
 
-// ============================================================================
-// Cross-module: classifier + indic compose cleanly
-// ============================================================================
-
 describe('cross-module — Indic + classifier independence', () => {
   it('classifier is unaffected by Indic content', () => {
-    // Indic message without other signals → general (not simple_chat because
-    // ratio detection isn't part of classifier; that's a separate concern).
     const msg = 'नमस्ते कैसे हो';
-    // Word count is small and length is small → simple_chat.
     expect(classify(msg).type).toBe('simple_chat');
   });
 
   it('detectIndicScript does not look at attachments', () => {
-    // Sanity: function signature only takes text.
     expect(detectIndicScript('hello').isIndic).toBe(false);
   });
 });

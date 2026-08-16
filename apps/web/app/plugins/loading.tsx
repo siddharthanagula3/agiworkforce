@@ -1,9 +1,3 @@
-/**
- * Streaming fallback for /plugins.
- *
- * The catalogue is a live database read now, so the page really can be
- * in-flight; this is the loading state for that wait, not decoration.
- */
 export default function PluginsLoading() {
   return (
     <div data-design="agi">

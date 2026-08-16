@@ -1,14 +1,3 @@
-/**
- * The hero's availability claim must come from the catalogue READ, not from the
- * number of rows it happened to return.
- *
- * When `plugin_registry_entries` is missing (42P01 on a database that never got
- * `0096_plugin_registry.sql`) the loader reports `unavailable` and the page has
- * zero rows to count. The hero used to read that as "no pack is installable
- * yet — every entry is a declared pack", stating a fact about a catalogue it
- * had just failed to open, while the section directly below it said the
- * registry was unreachable.
- */
 
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,13 +16,6 @@ vi.mock('../byok/WaitlistForm', () => ({ WaitlistForm: () => <div /> }));
 
 import PluginsPage from './page';
 
-/**
- * The sentence `availabilityClaim` renders for a catalogue that READ fine but
- * has nothing installable. The assertions below used to spell the older wording
- * ("every entry is a declared pack") — which meant the two `not.toBeInTheDocument`
- * checks passed against a string production no longer emits anywhere, i.e.
- * vacuously. One constant so all three move together.
- */
 const DECLARED_ONLY_CLAIM = /no pack is installable in this environment yet/i;
 
 function entry(overrides: Partial<PluginRegistryEntry> = {}): PluginRegistryEntry {

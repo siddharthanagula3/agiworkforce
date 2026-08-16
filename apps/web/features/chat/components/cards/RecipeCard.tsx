@@ -1,12 +1,3 @@
-/**
- * RecipeCard - Structured recipe display
- *
- * Parses markdown-formatted recipe content and displays it as a rich card with:
- * - Title, prep/cook time, servings metadata badges
- * - Ingredient checklist with interactive checkboxes
- * - Numbered instruction steps
- * - Print-friendly layout via CSS media query
- */
 
 'use client';
 
@@ -25,12 +16,6 @@ interface ParsedRecipe {
   description: string;
   ingredients: string[];
   instructions: string[];
-  /**
-   * Trailing sections the recipe layout has no slot for — "Notes", "Tips",
-   * "Variations", "Storage". These were parsed into a dead `'other'` branch
-   * and dropped on the floor, so a recipe answer rendered as a card lost
-   * everything after its instructions with no indication anything was missing.
-   */
   extraSections: Array<{ heading: string; lines: string[] }>;
 }
 
@@ -55,13 +40,11 @@ function parseRecipe(content: string): ParsedRecipe {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    // Extract title from first H1/H2
     if (!title && /^#{1,2}\s+/.test(trimmed)) {
       title = trimmed.replace(/^#{1,2}\s+/, '').replace(/\*\*/g, '');
       continue;
     }
 
-    // Extract metadata from inline patterns
     const prepMatch = trimmed.match(/\*?\*?prep(?:\s+time)?\*?\*?\s*[:]\s*(.+)/i);
     if (prepMatch) {
       prepTime.push((prepMatch[1] ?? '').replace(/\*\*/g, '').trim());
@@ -88,7 +71,6 @@ function parseRecipe(content: string): ParsedRecipe {
       continue;
     }
 
-    // Section headers
     if (
       /^#{1,4}\s*\*?\*?ingredients\*?\*?/i.test(trimmed) ||
       /^\*\*ingredients\*\*/i.test(trimmed)
@@ -104,8 +86,6 @@ function parseRecipe(content: string): ParsedRecipe {
       continue;
     }
     if (/^#{1,4}\s/.test(trimmed) && currentSection !== 'preamble') {
-      // Some other header section (e.g. "Notes"). Stop parsing instructions,
-      // but KEEP the section — dropping it silently truncated the answer.
       currentSection = 'other';
       extraSections.push({
         heading: trimmed.replace(/^#{1,4}\s*/, '').replace(/\*\*/g, ''),
@@ -114,15 +94,12 @@ function parseRecipe(content: string): ParsedRecipe {
       continue;
     }
 
-    // Collect content per section
     if (currentSection === 'preamble') {
       descLines.push(trimmed);
     } else if (currentSection === 'ingredients') {
-      // Strip list markers: -, *, or numbered
       const cleaned = trimmed.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '');
       if (cleaned) ingredients.push(cleaned);
     } else if (currentSection === 'instructions') {
-      // Strip numbered prefixes and bold step labels
       const cleaned = trimmed
         .replace(/^\d+\.\s+/, '')
         .replace(/^\*\*step\s+\d+[:.]\*\*\s*/i, '')

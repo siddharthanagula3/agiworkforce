@@ -1,11 +1,3 @@
-/**
- * Shared links, rendered inline from Desktop's own Cloud session.
- *
- * Desktop can already publish a share (`DesktopShellV3` -> `createDesktopCloudShare`);
- * before this, the only way to list or revoke one was a child window gated on a
- * Clerk browser cookie Desktop never propagates. `GET`/`DELETE /api/share`
- * authenticate through `getClerkAuthUser`, which accepts the device bearer.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 

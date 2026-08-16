@@ -1,10 +1,5 @@
-/**
- * Scheduler & Triggers API — typed wrappers for trigger management commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface Trigger {
   id: string;
@@ -23,8 +18,6 @@ export interface TriggerExecution {
   completedAt?: string;
   error?: string;
 }
-
-// ---- Commands ----
 
 export async function listTriggers(): Promise<Trigger[]> {
   return command<Trigger[]>('list_triggers');

@@ -20,7 +20,6 @@ function Pagination({ className, ...props }: React.ComponentProps<'nav'>) {
 }
 Pagination.displayName = 'Pagination';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface PaginationContentProps extends React.ComponentProps<'ul'> {
   ref?: React.Ref<HTMLUListElement>;
 }

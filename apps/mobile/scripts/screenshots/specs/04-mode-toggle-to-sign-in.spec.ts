@@ -1,23 +1,3 @@
-/**
- * E2E spec — 04: mode-toggle-to-sign-in
- *
- * Critical path:
- *   Tap the Cloud half of ModeToggle while signed out
- *   Router pushes /(auth)/login (Clerk AuthView), not an invite/waitlist modal
- *   Capture the Cloud sign-in frame
- *
- * Precondition: onboarding is complete, a local model is installed on the
- * simulator, and no Clerk session is active. This visual spec does not
- * submit the sign-in form.
- *
- * Managed Cloud went to public alpha on 2026-06-27 (founder decision, PA-2):
- * there is no invite-code/waitlist gate anymore. Tapping the Cloud side of
- * ModeToggle routes a signed-out user straight to Clerk sign-in — see
- * handleTapCloudMode in app/(app)/(tabs)/chat.tsx.
- *
- * NOTE: Detox must be installed before running.
- *   pnpm add -D detox@20
- */
 
 import { device, element, by, waitFor } from 'detox';
 
@@ -49,8 +29,6 @@ describe('Mode toggle → cloud sign-in (public alpha)', () => {
 
   it('tapping the Cloud side routes to Clerk sign-in and captures the frame', async () => {
     await element(by.id('chat.mode-toggle.cloud')).tap();
-    // The app header sits outside Clerk's native SwiftUI/Compose view, so its
-    // close control remains both visible and interactive on every platform.
     await waitFor(element(by.id('cloud-sign-in-dismiss')))
       .toBeVisible()
       .withTimeout(15000);
@@ -63,7 +41,6 @@ describe('Mode toggle → cloud sign-in (public alpha)', () => {
       );
     }
     await device.takeScreenshot('04-cloud-sign-in');
-    // Detox writes to its own artifact dir; the pipeline copies to DETOX_CAPTURE_PATH
     console.log(`Captured to ${capturePath}`);
   });
 

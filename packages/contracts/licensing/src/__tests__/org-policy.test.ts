@@ -1,15 +1,3 @@
-/**
- * Org-policy verification tests.
- *
- * The primary suite REPLAYS the committed cross-language corpus: it reads each
- * signed policy file, the root-of-trust license claims, and the expected verdict
- * from `manifest.json` and asserts `verifyOrgPolicy` agrees. The future Rust
- * crate replays the same manifest.
- *
- * Secondary suites exercise `checkPolicyTightening` directly (accept + every
- * lattice-field reject) so the monotonic-tightening rule is pinned independently
- * of the fixtures.
- */
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

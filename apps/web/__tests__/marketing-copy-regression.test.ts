@@ -39,8 +39,6 @@ describe('public marketing copy regressions', () => {
       );
     }
 
-    // The install.sh script and brew tap have no repo backing; no public page
-    // may advertise them as install paths (flagship refactor, 2026-06).
     for (const file of ['app/get-started/page.tsx', 'app/download/page.tsx']) {
       const source = readWebFile(file);
 
@@ -54,16 +52,6 @@ describe('public marketing copy regressions', () => {
 
     const cliInstall = readWebFile('app/cli/page.tsx');
 
-    // The /cli page advertises NO install command: not cargo, not the brew tap,
-    // not the curl installer. The CLI is released (`v-cli-1.0.0`, five platform
-    // archives on the GitHub release), but none of those three channels serves
-    // it — `@agiworkforce/cli` is still absent from the npm registry — so any
-    // of them on this page would be a false install path.
-    //
-    // The page's RELEASE STATE is no longer asserted here. It used to require
-    // the literal "coming soon", which went stale the moment the CLI shipped
-    // and left this file enforcing the false claim. It now comes from
-    // `SURFACE_STATUS.cli`, and `distribution-state.test.ts` is the guard.
     expect(cliInstall, 'cli page must not advertise a cargo install').not.toContain(
       'cargo install',
     );
@@ -92,7 +80,6 @@ describe('public marketing copy regressions', () => {
     const normalizedWaitlist = waitlist.replace(/\s+/g, ' ');
 
     expect(waitlist).not.toContain('Cloud Managed is invite-only across Web, Mobile, Desktop, CLI');
-    // Managed cloud is public-alpha-open (not invite-only); the page reflects that.
     expect(normalizedWaitlist).toContain('public alpha');
     expect(normalizedWaitlist).toContain(
       'Use your provider accounts on supported Desktop, CLI, and VS Code releases',
@@ -121,18 +108,12 @@ describe('public marketing copy regressions', () => {
 
     expect(upgradeWelcome).not.toContain('Same account, same conversations');
 
-    // The claim is now made structurally by SURFACE_GROUPS rather than as one
-    // sentence: Web/Mobile/Desktop sit under "Same account, same chats", and
-    // CLI/VS Code sit in a SEPARATE group noted as workspace-scoped. Asserting
-    // the old sentence verbatim tested the wording, not the separation — and
-    // the separation is the thing that must not regress.
     expect(normalizedUpgradeWelcome).toContain(
       "label: 'Developer sessions', surfaces: ['CLI', 'VS Code'], note: 'Scoped to the workspace you run them in.',",
     );
     expect(normalizedUpgradeWelcome).toContain(
       "label: 'Same account, same chats', surfaces: ['Web', 'Mobile', 'Desktop'],",
     );
-    // CLI and VS Code must never appear in the continuity group.
     const continuityGroup =
       /surfaces: \[([^\]]*)\], note: 'Cloud conversations follow your signed-in account\.'/.exec(
         normalizedUpgradeWelcome,
@@ -238,57 +219,38 @@ describe('public marketing copy regressions', () => {
   });
 
   it('presents managed cloud as public-alpha-open, not waitlist-gated (WEB-12)', () => {
-    // Managed Cloud is public alpha and open by default (founder decision
-    // 2026-06-27, source-of-truth.md). The homepage must NOT claim it is
-    // waitlist/invite-only — that is an overclaim against shipped scope.
-    // The landing body moved out of `app/page.tsx` on 2026-08-08, when the root
-    // became auth-aware: signed-in visitors get the product, everyone else gets
-    // this component. The copy assertions belong wherever the copy lives.
     const home = readWebFile('features/marketing/components/MarketingLanding.tsx');
 
     expect(home).not.toContain('Join the Waitlist');
     expect(home).not.toContain('Private beta via waitlist');
     expect(home).not.toContain('Account & Cloud waitlist');
-    // The AGI Cloud mode card presents the public-alpha reality.
     expect(home).toContain('Public alpha — sign in and start, no waitlist');
   });
 
   it('does not claim managed cloud is waitlist/invite-only on the waitlist page (WEB-12)', () => {
-    // The /waitlist page is reframed for Team & Enterprise early access — managed
-    // cloud itself is public-alpha-open, so the page must not assert it is gated.
     const waitlist = readWebFile('app/waitlist/page.tsx');
 
     expect(waitlist).not.toContain('Managed cloud remains waitlist-only');
     expect(waitlist).not.toContain('rolling out by invite');
     expect(waitlist).not.toContain('private beta');
-    // Reframed truthfully: managed cloud open, list is for Team & Enterprise.
     expect(waitlist).toContain('open by default');
     expect(waitlist).toContain('Team');
   });
 
   it('chat upgrade dialog presents managed cloud as public-alpha-open, not waitlist-gated (WEB-12 / PA-1)', () => {
-    // The in-chat UpgradePlanDialog previously claimed cloud plans were
-    // "invite-only"/"open by waitlist invite" and rendered a DEAD disabled
-    // "Current plan" button for non-current upgrade tiers (pro/max could not be
-    // purchased). After PA-1 it must wire to real checkout with no waitlist copy.
     const dialog = readWebFile('features/chat/components/dialogs/UpgradePlanDialog.tsx');
 
-    // No invite/waitlist framing for managed cloud.
     expect(dialog).not.toContain('open by waitlist invite');
     expect(dialog).not.toContain('invite-only');
     expect(dialog).not.toContain('Join waitlist');
     expect(dialog).not.toContain('account-gated');
-    // No dead disabled "Current plan" CTA on a tier that is not the current one.
     expect(dialog).not.toContain('Current plan');
-    // Real upgrade CTA + public-alpha truth.
     expect(dialog).toContain('Upgrade to');
     expect(dialog).toContain('public alpha');
     expect(dialog).toContain('onUpgrade');
   });
 
   it('retires the cloud-upgrade waitlist email-capture dialog from the chat flow (PA-1)', () => {
-    // The email-capture "Request upgrade access" dialog implied managed cloud
-    // was invite/waitlist-gated. It is removed; the chat page no longer wires it.
     expect(() =>
       readWebFile('features/chat/components/dialogs/CloudUpgradeWaitlistDialog.tsx'),
     ).toThrow();
@@ -298,8 +260,6 @@ describe('public marketing copy regressions', () => {
   });
 
   it('does not claim managed cloud is invite-only/unavailable across product pages (WEB-12)', () => {
-    // Sweep the public pages that previously asserted managed cloud was
-    // waitlist/invite-gated. None may state it is unavailable or invite-only.
     const pages = [
       'app/faq/page.tsx',
       'app/chrome-extension/page.tsx',
@@ -320,19 +280,15 @@ describe('public marketing copy regressions', () => {
         'Managed compute opens by invite only',
       );
     }
-    // FAQ states the public-alpha reality.
     expect(readWebFile('app/faq/page.tsx')).toContain('public alpha and open by default');
   });
 
   it('reframes marketing-constants POSITIONING away from cloud-by-invite (PA-5)', () => {
-    // Managed cloud is public-alpha-open (founder decision 2026-06-27/28). The
-    // shared POSITIONING constants must not present it as invite-only/by-invite.
     const matrix = readWebFile('lib/marketing-constants.ts');
 
     expect(matrix).not.toContain('Cloud by invite');
     expect(matrix).not.toContain('Higher hosted cloud is invite-only');
     expect(matrix).not.toContain('Hosted web trial. Local and BYOK for serious work.');
-    // Trust boundary now states the public-alpha reality.
     expect(matrix).toContain('public alpha');
     expect(matrix).toContain('open by default, not invite-only');
   });
@@ -352,17 +308,14 @@ describe('public marketing copy regressions', () => {
     const es = readWebFile('../../packages/ui/i18n/locales/es/pricing.json');
     const layout = readWebFile('app/pricing/layout.tsx');
 
-    // EN: no private-beta or by-invite framing for managed cloud access.
     expect(en).not.toContain('AGI Cloud, private beta');
     expect(en).not.toContain('private beta');
     expect(en).not.toContain('Scale by invite');
     expect(en).not.toContain('open by waitlist invite');
     expect(en).toContain('public alpha');
-    // ES stays in parity and also drops the private-beta framing.
     expect(es).not.toContain('beta privada');
     expect(es).not.toContain('por invitación');
     expect(es).toContain('alfa pública');
-    // Pricing metadata no longer claims cloud plans open by waitlist invite.
     expect(layout).not.toContain('open by waitlist invite');
     expect(layout).toContain('public alpha');
   });

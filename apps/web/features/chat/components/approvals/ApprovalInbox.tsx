@@ -54,11 +54,6 @@ function formatApprovalInput(input: string | Record<string, unknown> | undefined
     : formatted;
 }
 
-/**
- * Build one deduplicated view of pending approvals from the safe persisted
- * cloud projection. Legacy tool metadata remains a compatibility fallback for
- * turns written before cloudApproval was introduced.
- */
 export function collectPendingApprovals(messages: Message[]): PendingApprovalItem[] {
   const approvals: PendingApprovalItem[] = [];
   const seen = new Set<string>();

@@ -3,11 +3,6 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
-/**
- * Fail-closed admission probe for the complete durable-video schema. Storage
- * and provider credentials alone are insufficient: admitting a generation
- * without its job table/functions would cross provider egress with no owner.
- */
 export async function isVideoJobStoreReady(db: DatabaseAdapter): Promise<boolean> {
   try {
     const rows = await db.query<{ ready: boolean }>(

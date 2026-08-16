@@ -13,7 +13,6 @@ import {
 } from '@agiworkforce/ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import { AlertTriangle, CheckCircle, Info, Eye, Download } from 'lucide-react';
-// Mock accessibility service and types since monitoring was archived
 interface AccessibilityIssue {
   type: 'error' | 'warning' | 'info';
   element: string;

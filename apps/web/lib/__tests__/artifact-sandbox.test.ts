@@ -131,8 +131,6 @@ describe('postRenderToSandbox', () => {
 
   it('does not throw when iframe contentWindow is null (gracefully skipped)', () => {
     const iframe = document.createElement('iframe');
-    // jsdom iframe with no src has a contentWindow that may exist but not target a doc.
-    // The helper should not throw on a null/missing contentWindow.
     expect(() =>
       postRenderToSandbox(iframe, { type: 'render', kind: 'html', html: 'x' }),
     ).not.toThrow();

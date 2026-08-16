@@ -1,13 +1,3 @@
-/**
- * task-notifications-toggle.test.ts
- *
- * Regression: the options "Task notifications" toggle (agi_task_notifications)
- * only gated the pre-run reminder — Task Completed / Task Failed fired
- * regardless, so turning it OFF still produced a notification on every scheduled
- * run. Both the pre-run reminder and the completion/failure notifications now
- * route through the single taskNotificationsEnabled() helper. Asserted at the
- * source level (background.ts is not unit-importable).
- */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -30,7 +20,6 @@ describe('agi_task_notifications gates all task notifications', () => {
     expect(background).toMatch(
       /publishAuthorizedScheduledTaskNotification\([\s\S]{0,700}isEnabled: taskNotificationsEnabled[\s\S]{0,700}'Task Failed'/,
     );
-    // No ungated call site for either notification.
     const completedCalls = background.match(/showNotification\(\s*'Task Completed'/g) ?? [];
     const failedCalls = background.match(/showNotification\(\s*'Task Failed'/g) ?? [];
     expect(completedCalls.length).toBe(1);
@@ -38,7 +27,6 @@ describe('agi_task_notifications gates all task notifications', () => {
   });
 
   it('no longer inlines the raw storage read for the pre-run reminder', () => {
-    // The pre-run alarm reminder was refactored onto the same helper.
     const inlineReads = background.match(/agi_task_notifications: notificationsEnabled/g) ?? [];
     expect(inlineReads.length).toBe(0);
   });

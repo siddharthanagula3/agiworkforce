@@ -1,14 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * MATCH-005 — the account settings route is owned by the cloud contract.
- *
- * Web retyped `/api/settings/preferences` at six call sites across the settings
- * `_lib` client and `settingsService`, while its sibling `/api/settings/sync`
- * already had `MANAGED_CLOUD_SETTINGS_SYNC_PATH`. Relocating the contract is the
- * only way to tell a real reference from a value-equal literal: a literal keeps
- * the old URL and silently splits Web from Desktop and Mobile on a route move.
- */
 const RELOCATED = '/api/relocated-preferences';
 
 vi.mock('@agiworkforce/cloud-contracts', async (importOriginal) => {

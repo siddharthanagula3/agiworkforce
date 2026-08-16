@@ -1,29 +1,13 @@
-/**
- * Auth Routes Tests
- *
- * Wave 1.5+ task #17 (2026-05-08): /register and /login routes were
- * retired (they targeted a `public.users` table that doesn't exist in
- * production; canonical login flow is the device-code path in
- * routes/deviceAuth.ts). The legacy mocks were removed alongside the
- * deleted `lib/db` singleton.
- *
- * Tests for /api/auth endpoints:
- * - POST /api/auth/register  → 501 retired stub
- * - POST /api/auth/login     → 501 retired stub
- * - GET  /api/auth/verify    → JWT verification path (still live)
- */
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from '../../src/routes/auth';
 import { errorHandler } from '../../src/middleware/errorHandler';
 
-// Create test app with error handler
 function createTestApp() {
   const app = express();
   app.use(express.json());
   app.use('/api/auth', authRouter);
-  // Add error handler to properly format AppError responses
   app.use(errorHandler);
   return app;
 }
@@ -41,8 +25,6 @@ describe('Auth Routes', () => {
         .post('/api/auth/register')
         .send({ email: 'someone@example.com', password: 'password123' });
 
-      // 501 retired stub OR 429 if the in-process rate-limiter from a sibling
-      // test bled across (this router shares `authRateLimiter` state).
       expect([501, 429]).toContain(response.status);
       if (response.status === 501) {
         expect(response.body.code).toBe('AUTH_RETIRED');
@@ -83,7 +65,6 @@ describe('Auth Routes', () => {
     });
 
     it('should verify a valid token', async () => {
-      // Generate a valid token using the test secret with required issuer/audience
       const jwt = await import('jsonwebtoken');
       const validToken = jwt.default.sign(
         { userId: 'user-123', email: 'test@example.com' },

@@ -4,53 +4,14 @@ import { cn } from '../lib/utils';
 import { useUIStore } from '../stores/uiStore';
 import { MemoryEditor } from './MemoryEditor';
 
-/**
- * SettingsShell — the canonical shared settings dialog for AGI Workforce
- * consumers that don't ship their own (web, extensions, mobile-web preview,
- * future light surfaces). Desktop has its own `settingsDialogStore` + dialog
- * and does NOT mount this component — see `apps/desktop/src/stores/settings`.
- *
- * Round-2 audit P0 #6 (2026-05-21): every host previously reimplemented its
- * own settings UI, leading to visual drift + double-spend on every change.
- * This shell centralizes the IA (left-nav sections + right pane) so all
- * future settings work flows through one component; hosts only customize
- * the content of individual sections.
- *
- * Design parity reference: Claude desktop's grouped settings modal
- * (`~/Desktop/reference/ui/desktop/claude/07_*` … `19_*` settings tour).
- *
- * v1 LOCAL-ONLY POSTURE — section defaults preserve our three trust modes:
- *  - **Local Mode** is the default surface: every section that lists
- *    providers/keys flags items as "local-only" until cloud unlocks.
- *  - **BYOK** sections show "Add your own key" affordances when relevant.
- *  - **Cloud Managed** sections render a waitlist callout (gated by
- *    `cloudManagedEnabled`) until the waitlist opens.
- *
- * Host apps can override or extend the default section list via the
- * `sections` prop; passing `sections={[]}` is a no-op (renders nothing).
- */
-
 export interface SettingsSection {
-  /** Stable id, also used as the `settingsTab` key in `uiStore`. */
   id: string;
-  /** Display label in the left nav. */
   label: string;
-  /** Optional icon node (typically a Lucide icon). */
   icon?: ReactNode;
-  /**
-   * Right-pane renderer for this section. When omitted, a placeholder is
-   * shown so the section is still navigable while content is being built.
-   */
   render?: () => ReactNode;
-  /** Hide from the left-nav (still routable via `settingsTab`). */
   hidden?: boolean;
 }
 
-/**
- * Built-in default sections. Host apps can override by passing their own
- * `sections` array; they can also append additional sections by spreading
- * `DEFAULT_SETTINGS_SECTIONS` plus their own.
- */
 export const DEFAULT_SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = [
   {
     id: 'profile',
@@ -120,23 +81,8 @@ export const DEFAULT_SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = [
 ];
 
 export interface SettingsShellProps {
-  /**
-   * Optional override of the section list. If omitted, the
-   * `DEFAULT_SETTINGS_SECTIONS` are used. To extend rather than replace,
-   * spread the defaults: `sections={[...DEFAULT_SETTINGS_SECTIONS, mySection]}`.
-   */
   sections?: ReadonlyArray<SettingsSection>;
-  /**
-   * Called whenever the user navigates between sections. Useful for analytics
-   * or for hosts that mirror the active section into their own URL.
-   */
   onSectionChange?: (sectionId: string) => void;
-  /**
-   * When true, dispatches a `chat:action { type: 'open-settings' }`
-   * CustomEvent and immediately closes the dialog — preserves the old
-   * SettingsModal behavior for hosts that haven't migrated yet.
-   * Default: false.
-   */
   legacyEventDispatch?: boolean;
 }
 
@@ -165,8 +111,6 @@ export function SettingsShell({
   const settingsTab = useUIStore((s) => s.settingsTab);
   const closeSettings = useUIStore((s) => s.closeSettings);
 
-  // Legacy escape hatch — for hosts that still rely on the old
-  // SettingsModal event-dispatch behavior. Off by default.
   useEffect(() => {
     if (!legacyEventDispatch || !settingsOpen) return;
     window.dispatchEvent(
@@ -177,9 +121,6 @@ export function SettingsShell({
     closeSettings();
   }, [legacyEventDispatch, settingsOpen, settingsTab, closeSettings]);
 
-  // Pick the active section. Falls back to the first visible section when the
-  // store carries an unknown tab id (e.g. a host opened a tab that has since
-  // been removed from the section list).
   const visible = useMemo(() => sections.filter((s) => !s.hidden), [sections]);
   const activeId = useMemo<string | null>(() => {
     if (visible.length === 0) return null;
@@ -188,8 +129,6 @@ export function SettingsShell({
   }, [visible, settingsTab]);
   const active = useMemo(() => visible.find((s) => s.id === activeId) ?? null, [visible, activeId]);
 
-  // Local mirror of the active section so the shell still renders even when
-  // the host hasn't wired `settingsTab` through openSettings(<id>).
   const [navId, setNavId] = useState<string | null>(activeId);
   useEffect(() => setNavId(activeId), [activeId]);
 
@@ -201,7 +140,6 @@ export function SettingsShell({
     [onSectionChange],
   );
 
-  // Escape closes the modal — matches Claude/ChatGPT settings UX.
   useEffect(() => {
     if (!settingsOpen) return;
     const onKey = (event: KeyboardEvent) => {

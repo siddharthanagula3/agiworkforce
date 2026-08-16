@@ -1,29 +1,13 @@
-/**
- * MCP Store — thin barrel
- *
- * The four domain sub-stores live in stores/mcp/:
- *   mcpServersStore  — server registry, lifecycle, config, connectors, runtime
- *   mcpToolsStore    — tool catalog, search, execution, history
- *   mcpHealthStore   — health-check loop, per-server health, stats
- *   mcpOAuthStore    — OAuth flow, extensions
- *
- * useMcpStore is a facade that merges all four domains into the original
- * flat interface so that existing consumers need no changes.
- */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { isTauri } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
 
-// Re-export everything from the sub-stores so that any import of a named
-// export from 'stores/mcpStore' continues to resolve.
 export * from './mcp/mcpServersStore';
 export * from './mcp/mcpToolsStore';
 export * from './mcp/mcpHealthStore';
 export * from './mcp/mcpOAuthStore';
 
-// Re-export the absorbed sub-stores so that any import of their named
-// exports from 'stores/mcpStore' resolves (task-w58 placed them here).
 export * from './mcpbStore';
 export * from './mcpServerStore';
 
@@ -1339,7 +1323,6 @@ export const useMcpStore = create<McpState>()(
 );
 
 // Legacy selectors (re-exported from sub-stores where possible; kept here for
-// consumers that import directly from 'stores/mcpStore').
 export const selectMcpIsInitialized = (state: McpState) => state.isInitialized;
 export const selectMcpIsLoading = (state: McpState) => state.isLoading;
 export const selectMcpError = (state: McpState) => state.error;

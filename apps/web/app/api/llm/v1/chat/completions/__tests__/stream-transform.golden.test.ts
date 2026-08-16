@@ -1,21 +1,3 @@
-/**
- * Golden fixtures for buildStreamResponse's CURRENT wire output.
- *
- * Wave 2 step 5 (migrate off lib/llm-providers onto packages/ai/providers
- * adapters) must keep the public SSE contract byte-stable. This suite
- * pins down exactly what today's implementation emits for representative
- * upstream event sequences -- Anthropic-native raw SSE (which stream-
- * transform.ts reshapes into OpenAI-compatible chunks, including the
- * x_tool_status/x_search_results/x_code_result server-tool extensions and
- * <thinking>/</thinking> content wrapping) and an OpenAI-shape passthrough
- * stream (which today's code barely touches beyond usage extraction and
- * rewriting `model`) -- so the eventual adapter-based rewrite has an
- * executable spec to match, not just a prose claim.
- *
- * Assertions were captured FROM the real implementation (run once, actual
- * output promoted into the expectation), not predicted from reading the
- * source -- that's the point of a golden fixture.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 
@@ -65,10 +47,6 @@ function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequ
   } as ProcessedRequest;
 }
 
-/** Build a raw upstream ReadableStream from literal SSE lines (caller
- *  supplies "event: x" / "data: {...}" framing verbatim, matching what
- *  anthropic.ts's streamRequest forwards -- it returns fetch's raw
- *  response.body unmodified, see lib/llm-providers/anthropic.ts:477). */
 function rawSseStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const text = lines.join('\n') + '\n\n';
@@ -87,7 +65,6 @@ function makeRequest(): Request {
   });
 }
 
-/** Collect the full decoded SSE body text. */
 async function collectBody(response: Response): Promise<string> {
   if (!response.body) return '';
   const reader = response.body.getReader();
@@ -101,11 +78,6 @@ async function collectBody(response: Response): Promise<string> {
   return out;
 }
 
-/** Split a collected SSE body into its `data: ...` payload lines (decoded
- *  JSON where possible, raw string for [DONE] / non-JSON passthrough
- *  lines), dropping blank lines. Mirrors how a real SSE client parses the
- *  wire, and keeps assertions readable (structured objects, not a giant
- *  raw-text blob). */
 function parseDataLines(body: string): unknown[] {
   return body
     .split('\n')
@@ -376,16 +348,6 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
 
     const body = await collectBody(response as any);
     const events = parseDataLines(body);
-    // No case in stream-transform.ts's Anthropic branch matches
-    // `delta.type === 'citations_delta'`, so `transformedEvent` stays the
-    // untouched original -- the RAW Anthropic-shaped event (no `choices`
-    // wrapper, no rewritten `model`) is serialized straight onto the wire.
-    // This is almost certainly an accidental gap rather than a deliberate
-    // feature, but the OpenAI-search-results lesson from this same
-    // migration was "accidental-looking behavior still needs verified
-    // evidence before it can change" -- so the canonical-adapter rewrite
-    // must reproduce this exact passthrough, not "clean it up", until
-    // team-lead confirms whether any client parses it.
     expect(events).toEqual([
       {
         type: 'content_block_delta',

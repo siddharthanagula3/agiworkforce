@@ -1,47 +1,12 @@
-/**
- * Windows Compatibility Tests
- *
- * Verifies that platform-sensitive logic in the frontend behaves correctly when
- * running on Windows. All tests are self-contained — no actual Tauri runtime is
- * required.
- *
- * Coverage:
- *  1. Platform detection — navigator.platform / navigator.userAgent mocked as Windows
- *  2. Download URL construction — invoke-based mocks return Windows installer paths
- *  3. SettingsStore defaults — temperature, provider, chat prefs are sane on Windows
- *  4. File path handling — Windows backslash paths are preserved/treated correctly
- *  5. UpdaterStore — update notification logic on Windows
- *  6. Keyboard shortcuts — Ctrl+ (not Cmd+) modifier behaviour on Windows
- *  7. Terminal — powershell / cmd shell types are first-class citizens
- *  8. Plugin mocks — plugin-dialog, plugin-fs, plugin-shell resolve Windows paths
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-
-// ---------------------------------------------------------------------------
-// The global test setup (src/test/setup.ts) already registers vi.mock() for:
-//   @tauri-apps/api/core        → { invoke: vi.fn() }
-//   @tauri-apps/api/event       → { listen: vi.fn(), emit: vi.fn() }
-//   ../lib/tauri-mock           → { invoke, isTauri: false, listen, … }
-//   @tauri-apps/plugin-dialog   → { open, save, message, ask, confirm }
-//   @tauri-apps/plugin-fs       → { readTextFile, writeTextFile, … }
-//   @tauri-apps/plugin-shell    → { Command, open }
-//
-// Individual test suites below layer additional per-test mock configurations on
-// top of those stubs using vi.mocked() and mockReturnValue / mockResolvedValue.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// 1. Platform detection
-// ---------------------------------------------------------------------------
 
 describe('Platform detection — Windows navigator mocks', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
   const originalUserAgent = Object.getOwnPropertyDescriptor(navigator, 'userAgent');
 
   afterEach(() => {
-    // Restore originals after each test so we don't bleed into other suites
     if (originalPlatform) {
       Object.defineProperty(navigator, 'platform', originalPlatform);
     }
@@ -113,7 +78,6 @@ describe('Platform detection — Windows navigator mocks', () => {
       configurable: true,
     });
 
-    // Mirrors the logic used in useKeyboardShortcuts.ts and KeyboardShortcutsDialog.tsx
     const isMac =
       typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     expect(isMac).toBe(false);
@@ -126,14 +90,9 @@ describe('Platform detection — Windows navigator mocks', () => {
       configurable: true,
     });
 
-    // Mirrors the logic used in EditableMessage.tsx and CodeCanvas.tsx
     expect(navigator.platform.includes('Mac')).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 2. Download URL construction (Tauri invoke mock)
-// ---------------------------------------------------------------------------
 
 describe('Download URL construction — Windows installer', () => {
   beforeEach(() => {
@@ -203,10 +162,6 @@ describe('Download URL construction — Windows installer', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. SettingsStore defaults — Windows-relevant defaults are sane
-// ---------------------------------------------------------------------------
-
 describe('SettingsStore — Windows-relevant defaults', () => {
   it('has sensible default LLM provider and temperature', async () => {
     const { useSettingsStore } = await import('../stores/settingsStore');
@@ -242,7 +197,6 @@ describe('SettingsStore — Windows-relevant defaults', () => {
     const { useSettingsStore } = await import('../stores/settingsStore');
     const state = useSettingsStore.getState();
 
-    // Should be a non-empty string — on Windows this typically uses Ctrl/Alt
     expect(typeof state.globalHotkeyPreferences.combo).toBe('string');
     expect(state.globalHotkeyPreferences.combo.length).toBeGreaterThan(0);
   });
@@ -253,7 +207,6 @@ describe('SettingsStore — Windows-relevant defaults', () => {
     useSettingsStore.getState().setFeature('windows-native-notifications', true);
     expect(useSettingsStore.getState().features['windows-native-notifications']).toBe(true);
 
-    // Cleanup
     useSettingsStore.getState().setFeature('windows-native-notifications', false);
   });
 
@@ -268,14 +221,9 @@ describe('SettingsStore — Windows-relevant defaults', () => {
     const dirs = useSettingsStore.getState().allowedDirectories;
     expect(dirs).toContain(windowsPath);
 
-    // Cleanup
     useSettingsStore.getState().setAllowedDirectories([]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 4. File path handling — Windows backslash separators
-// ---------------------------------------------------------------------------
 
 describe('File path handling — Windows backslash paths', () => {
   it('Windows absolute path with drive letter is a valid string', () => {
@@ -315,7 +263,6 @@ describe('File path handling — Windows backslash paths', () => {
   });
 
   it('APPDATA-style path string is correctly formatted for Windows', () => {
-    // Mirrors the logic in SettingsPanel.tsx line 1321-1322
     Object.defineProperty(navigator, 'platform', {
       value: 'Win32',
       writable: true,
@@ -330,7 +277,6 @@ describe('File path handling — Windows backslash paths', () => {
     expect(dataPath).toBe('%APPDATA%\\AGI Workforce\\');
     expect(dataPath).toContain('APPDATA');
 
-    // Restore platform
     Object.defineProperty(navigator, 'platform', {
       value: 'vitest',
       writable: true,
@@ -362,10 +308,6 @@ describe('File path handling — Windows backslash paths', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 5. UpdaterStore — update notification logic
-// ---------------------------------------------------------------------------
-
 describe('UpdaterStore — update notification on Windows', () => {
   it('starts in idle status', async () => {
     const { useUpdaterStore } = await import('../stores/updaterStore');
@@ -379,7 +321,6 @@ describe('UpdaterStore — update notification on Windows', () => {
     useUpdaterStore.getState().setStatus('available');
     expect(useUpdaterStore.getState().status).toBe('available');
 
-    // Cleanup
     useUpdaterStore.getState().reset();
   });
 
@@ -398,7 +339,6 @@ describe('UpdaterStore — update notification on Windows', () => {
     expect(info?.currentVersion).toBe('2.0.0');
     expect(info?.releaseNotes).toBe('Windows performance improvements');
 
-    // Cleanup
     useUpdaterStore.getState().reset();
   });
 
@@ -411,11 +351,9 @@ describe('UpdaterStore — update notification on Windows', () => {
 
     const { dismissedVersion, dismissedAt } = useUpdaterStore.getState();
 
-    // Just dismissed — should NOT show notification (not expired yet)
     const shouldShow = shouldShowUpdateNotification(version, dismissedVersion, dismissedAt);
     expect(shouldShow).toBe(false);
 
-    // Cleanup
     useUpdaterStore.getState().clearDismissal();
   });
 
@@ -426,11 +364,9 @@ describe('UpdaterStore — update notification on Windows', () => {
     useUpdaterStore.getState().dismissUpdate('2.0.0');
     const { dismissedVersion, dismissedAt } = useUpdaterStore.getState();
 
-    // Different version → should show
     const shouldShow = shouldShowUpdateNotification('2.1.0', dismissedVersion, dismissedAt);
     expect(shouldShow).toBe(true);
 
-    // Cleanup
     useUpdaterStore.getState().clearDismissal();
   });
 
@@ -454,7 +390,6 @@ describe('UpdaterStore — update notification on Windows', () => {
     expect(state.downloadProgress?.percent).toBe(10);
     expect(state.downloadProgress?.downloaded).toBe(5_000_000);
 
-    // Cleanup
     useUpdaterStore.getState().reset();
   });
 
@@ -475,13 +410,8 @@ describe('UpdaterStore — update notification on Windows', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 6. Keyboard shortcuts — Ctrl+ modifiers on Windows (not Cmd+)
-// ---------------------------------------------------------------------------
-
 describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
   beforeEach(() => {
-    // Ensure navigator.platform reads as Win32 for all tests in this suite
     Object.defineProperty(navigator, 'platform', {
       value: 'Win32',
       writable: true,
@@ -498,7 +428,6 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
   });
 
   it('isMac is false when platform is Win32', async () => {
-    // Replicate the exact expression from useKeyboardShortcuts.ts
     const isMac =
       typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     expect(isMac).toBe(false);
@@ -507,11 +436,7 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
   it('platformModifiers returns ctrl:true on Windows', async () => {
     const { platformModifiers } = await import('../hooks/useKeyboardShortcuts');
 
-    // After module load the isMac constant is already evaluated, but
-    // platformModifiers itself reads the module-level isMac constant.
-    // Because we mocked the platform BEFORE this import the module sees Win32.
     const mods = platformModifiers({});
-    // On Windows, ctrl should be true and meta should be falsy
     expect(mods.ctrl).toBe(true);
     expect(mods.meta).toBeFalsy();
   });
@@ -536,26 +461,18 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
   });
 
   it('normalizeKey maps Esc → Escape correctly', async () => {
-    // normalizeKey is not exported, but we can test it indirectly through
-    // the useKeyboardShortcuts hook matching a keyboard event.
     const action = vi.fn();
     const { useKeyboardShortcuts } = await import('../hooks/useKeyboardShortcuts');
 
     const { result } = renderHook(() =>
       useKeyboardShortcuts([{ key: 'Escape', modifiers: {}, action }]),
     );
-    expect(result.current).toBeUndefined(); // hook returns void
+    expect(result.current).toBeUndefined();
 
-    // Simulate keyboard event — window.addEventListener is mocked in setup.ts
-    // so we cannot fire real events; just confirm the hook mounted without error.
     expect(action).not.toHaveBeenCalled();
   });
 
   it('Ctrl+S shortcut fires action on ctrlKey keydown event', async () => {
-    // We wire up a shortcut manually and dispatch a synthetic event to the
-    // document so useKeyboardShortcuts (which listens on `window`) can handle it.
-    // setup.ts uses vi.spyOn(window, 'addEventListener') which calls through to
-    // the real implementation, so no manual replacement is needed.
     const action = vi.fn();
     const { useKeyboardShortcuts } = await import('../hooks/useKeyboardShortcuts');
 
@@ -571,7 +488,6 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
     });
     window.dispatchEvent(event);
 
-    // Allow microtasks to flush
     await act(async () => {
       await Promise.resolve();
     });
@@ -589,7 +505,6 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
       useKeyboardShortcuts([{ key: 'z', modifiers: { ctrl: true }, action }]),
     );
 
-    // Dispatch with metaKey=true but ctrlKey=false — should NOT match { ctrl: true }
     const event = new KeyboardEvent('keydown', {
       key: 'z',
       ctrlKey: false,
@@ -607,10 +522,6 @@ describe('Keyboard shortcuts — Ctrl+ modifier on Windows', () => {
     unmount();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 7. Terminal — Windows shell types (powershell, cmd)
-// ---------------------------------------------------------------------------
 
 describe('Terminal — Windows shell types via useTerminal', () => {
   beforeEach(() => {
@@ -802,10 +713,6 @@ describe('Terminal — Windows shell types via useTerminal', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 8. Plugin mocks — plugin-dialog, plugin-fs, plugin-shell for Windows paths
-// ---------------------------------------------------------------------------
-
 describe('Plugin mocks — Windows path integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -921,7 +828,6 @@ describe('Plugin mocks — Windows path integration', () => {
     const mockOpen = vi.mocked(open);
     mockOpen.mockResolvedValueOnce(undefined);
 
-    // Windows file:// URI
     await open('file:///C:/Users/nagul/Documents');
     expect(mockOpen).toHaveBeenCalledWith('file:///C:/Users/nagul/Documents');
   });

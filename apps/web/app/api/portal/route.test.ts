@@ -100,13 +100,6 @@ describe('POST /api/portal', () => {
   it.each([
     ['apple', { apple_original_transaction_id: 'apple-tx-1' }],
     ['google', { google_purchase_token: 'play-token-1' }],
-    // Genuinely manual: no store identifier AND no Stripe customer id. A paid
-    // row that carries a Stripe CUSTOMER but no subscription id now resolves to
-    // 'stripe', not 'manual' — it is Stripe-billed with the id not yet
-    // recorded, and classifying it as manual told those users their
-    // subscription was "managed by your organization", which was both false and
-    // unactionable (subscription-billing-owner.ts). Keeping
-    // `stripe_customer_id` here would assert that old, wrong behaviour.
     ['manual', { stripe_customer_id: null }],
     [
       'unverified',
@@ -148,7 +141,6 @@ describe('POST /api/portal', () => {
 
   describe('email fallback (BIZ-015: no cross-customer portal sessions)', () => {
     function unlinkedAccount() {
-      // 1st query: no subscription row. 2nd query: profile with no customer id.
       mocks.query.mockResolvedValueOnce([]);
       mocks.query.mockResolvedValueOnce([{ stripe_customer_id: null }]);
     }
@@ -163,7 +155,6 @@ describe('POST /api/portal', () => {
 
       expect(response.status).toBe(403);
       expect(mocks.createPortalSession).not.toHaveBeenCalled();
-      // The unproven customer must not be persisted onto the profile either.
       expect(mocks.execute).not.toHaveBeenCalled();
     });
 

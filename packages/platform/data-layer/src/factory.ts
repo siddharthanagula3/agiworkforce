@@ -47,9 +47,6 @@ import {
 import { ClerkAuthAdapter } from './adapters/clerk';
 import { NeonDatabaseAdapter, type NeonDatabaseAdapterConfig } from './adapters/neon';
 
-// Browser-safe env getter — falls back to `undefined` if `process.env`
-// isn't defined (we're not in Node). This lets the factory be imported
-// from edge runtimes / mobile builds that bundle differently.
 function readEnv(name: string): string | undefined {
   if (typeof process === 'undefined' || !process.env) return undefined;
   return process.env[name];
@@ -78,26 +75,13 @@ function readRequiredEnvProvider<T extends string>(name: string, allowed: readon
   throw new DataLayerConfigError(`Env var ${name}="${raw}" is not one of: ${allowed.join(', ')}`);
 }
 
-// ============================================================================
-// Database
-// ============================================================================
-
 const DATABASE_PROVIDERS = ['neon'] as const;
 
 export interface CreateDatabaseClientOptions {
-  /** Explicit provider; if omitted, reads `AGI_DATABASE_PROVIDER`. */
   provider?: DatabaseProvider;
-  /** Postgres-compatible Neon connection string. */
   connectionString?: string;
   poolSize?: number;
   applicationName?: string;
-  /**
-   * Opt into the verified-JWT-only `withUser()` path (sets the Neon adapter's
-   * `unsafeAllowUnverifiedJwtSubject`). ONLY pass `true` from a caller that
-   * signature-verifies the token UPSTREAM (Clerk `verifyToken` / a signed Clerk
-   * session token) before binding its `sub` as the RLS subject. The default-deny
-   * `getNeonDb()` path leaves this unset.
-   */
   unsafeAllowUnverifiedJwtSubject?: boolean;
 }
 
@@ -149,10 +133,6 @@ function selectDatabaseProvider(raw: string | undefined): DatabaseProvider {
   );
 }
 
-// ============================================================================
-// Auth
-// ============================================================================
-
 const AUTH_PROVIDERS = ['auth0', 'clerk', 'cognito'] as const;
 
 export interface CreateAuthClientOptions {
@@ -162,9 +142,6 @@ export interface CreateAuthClientOptions {
   clerkAuthorizedParties?: string[];
 }
 
-/**
- * Build an `AuthAdapter`. Clerk is the product default.
- */
 export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapter {
   const provider =
     opts.provider ?? readEnvProvider<AuthProvider>('AGI_AUTH_PROVIDER', 'clerk', AUTH_PROVIDERS);
@@ -190,10 +167,6 @@ export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapte
   }
 }
 
-// ============================================================================
-// Storage
-// ============================================================================
-
 const STORAGE_PROVIDERS = ['s3', 'r2', 'b2'] as const;
 
 export interface CreateStorageClientOptions {
@@ -215,10 +188,6 @@ export function createStorageClient(opts: CreateStorageClientOptions = {}): Stor
       );
   }
 }
-
-// ============================================================================
-// Realtime
-// ============================================================================
 
 const REALTIME_PROVIDERS = ['pusher', 'ably', 'self-hosted'] as const;
 

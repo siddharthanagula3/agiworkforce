@@ -1,18 +1,8 @@
-/**
- * Integration tests for the singleton appStateStore.
- *
- * Tests that:
- *  - appStateStore is a valid Store<AppState>
- *  - setState mutations flow through onChangeAppState
- *  - Registered side-effect channels receive changes
- *  - Render-storm integration test: single flag toggle → <5 re-renders
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { appStateStore, registerModelSwitchListener, registerTelemetryHandler } from '../index';
 import { initialAppState } from '../AppStateStore';
 
-// Reset store state before each test to avoid cross-test pollution
 beforeEach(() => {
   appStateStore.setState(() => initialAppState);
 });
@@ -22,7 +12,7 @@ describe('appStateStore — singleton integration', () => {
     const state = appStateStore.getState();
     expect(state.auth.isAuthenticated).toBe(false);
     expect(state.auth.userId).toBeNull();
-    expect(state.chat.activeModelId).toBeNull(); // never hardcoded
+    expect(state.chat.activeModelId).toBeNull();
     expect(state.settings.theme).toBe('system');
   });
 
@@ -54,7 +44,6 @@ describe('appStateStore — singleton integration', () => {
     const listener = vi.fn();
     const unsub = appStateStore.subscribe(listener);
 
-    // Same reference (identity updater)
     appStateStore.setState((s) => s);
 
     expect(listener).not.toHaveBeenCalled();
@@ -65,7 +54,6 @@ describe('appStateStore — singleton integration', () => {
     const listener = vi.fn();
     const unsub = registerModelSwitchListener(listener);
 
-    // Set model from null to a runtime value (from models.json, not hardcoded)
     appStateStore.setState((prev) => ({
       ...prev,
       chat: { ...prev.chat, activeModelId: 'runtime-model-id-from-json' },
@@ -114,7 +102,7 @@ describe('appStateStore — singleton integration', () => {
     }));
 
     expect(renderCount).toBe(1);
-    expect(renderCount).toBeLessThan(5); // acceptance criterion
+    expect(renderCount).toBeLessThan(5);
     unsub();
   });
 

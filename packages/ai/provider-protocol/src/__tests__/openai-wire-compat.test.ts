@@ -263,10 +263,6 @@ describe('OpenAIWireAssembler streaming', () => {
   });
 
   it('streams reasoning as inline <thinking> tags in openai-passthrough mode, same shape as legacy-web', () => {
-    // Regression: only legacy-web (anthropic/google) got the inline tag pair,
-    // so every openai/deepseek/xai/qwen/moonshot/... managed-cloud turn
-    // discarded its reasoning text outright -- web's ThinkingBlock and
-    // mobile's ThinkingChip both read that ONE shape out of delta.content.
     const contents = (events: Record<string, unknown>[]): unknown[] =>
       events.map(
         (e) =>
@@ -278,10 +274,8 @@ describe('OpenAIWireAssembler streaming', () => {
       const opened = assembler.sseChunks({ type: 'thinking-delta', delta: 'weighing options' });
       const answered = assembler.sseChunks({ type: 'text-delta', delta: 'Answer.' });
 
-      // openai-passthrough leads with its synthetic role announcement.
       expect(contents(opened).slice(-2)).toEqual(['<thinking>', 'weighing options']);
       expect(contents(answered)).toEqual(['</thinking>', 'Answer.']);
-      // Reasoning must never reach the persisted assistant body.
       expect(assembler.canonicalText()).toBe('Answer.');
     }
   });
@@ -359,11 +353,6 @@ describe('assembleOpenAIWireResponse (non-streaming)', () => {
 });
 
 describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () => {
-  /** The provider adapters always yield this exact pair on a caught
-   *  mid-stream exception (see e.g. packages/ai/providers/anthropic/src/
-   *  index.ts) -- the 'error' chunk carries the message/code/retryable, the
-   *  paired 'stop' chunk (reason: 'error') is what actually terminates the
-   *  turn. */
   const midStreamFailure: StreamChunk[] = [
     { type: 'text-delta', delta: 'partial answer' },
     { type: 'error', message: 'Anthropic API overloaded', code: '529', retryable: true },
@@ -391,17 +380,11 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
 
     expect(assembler.lastError).toBe('Anthropic API overloaded');
 
-    // x_stream_error rides on the chunk derived from the canonical 'error'
-    // chunk -- present exactly once, carrying the full classified payload.
     const errorMarkers = extractErrorMarkers(wire);
     expect(errorMarkers).toEqual([
       { message: 'Anthropic API overloaded', code: '529', retryable: true },
     ]);
 
-    // Last finish_reason seen across the emitted chunks (client "keep the
-    // last reason" semantics) is the literal string 'error' -- legacy-web's
-    // finish_reason is a passthrough of the vendor stop reason, not the
-    // closed OpenAIWireFinishReason union, so this is safe here.
     const finishReasons = wire
       .map(
         (e) => (e as { choices?: Array<{ finish_reason?: unknown }> }).choices?.[0]?.finish_reason,
@@ -443,10 +426,6 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
       { message: 'Anthropic API overloaded', code: '529', retryable: true },
     ]);
 
-    // OpenAIWireFinishReason is a closed union matching real OpenAI's actual
-    // values -- 'error' must NEVER appear here, only 'stop'/'length'/
-    // 'tool_calls'/'content_filter'. This is the guardrail for the byte-
-    // parity contract external OpenAI-SDK-typed consumers of this mode rely on.
     const finishReasons = wire
       .map(
         (e) => (e as { choices?: Array<{ finish_reason?: unknown }> }).choices?.[0]?.finish_reason,
@@ -495,14 +474,7 @@ describe('OpenAIWireAssembler safety refusal (first-class StreamChunkStop refusa
   });
 });
 
-// ---------------------------------------------------------------------------
-// TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01: signed thinking continuity across
-// a server-side tool-loop step.
-// ---------------------------------------------------------------------------
-
 describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
-  /** Anthropic streams a thinking block as text-carrying thinking-deltas then
-   *  one signature-carrying delta with empty text, then the tool_use. */
   const thinkingThenToolUse: StreamChunk[] = [
     { type: 'thinking-delta', delta: 'Let me ' },
     { type: 'thinking-delta', delta: 'check the time.' },
@@ -523,16 +495,11 @@ describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
     const wire: Record<string, unknown>[] = [];
     for (const chunk of thinkingThenToolUse) wire.push(...assembler.sseChunks(chunk));
 
-    // Side-channel: one closed block, text + signature intact.
     expect(assembler.canonicalThinkingBlocks()).toEqual([
       { type: 'thinking', thinking: 'Let me check the time.', signature: 'sig-abc123' },
     ]);
-    // Tag-free assistant text (NO <thinking> markers — those are wire-only).
     expect(assembler.canonicalText()).toBe('Checking now.');
 
-    // The CLIENT-facing wire is unchanged: it still renders the thinking as
-    // inline <thinking>/</thinking> content deltas and never leaks the
-    // signature. This is the locked public contract.
     const contents = wire
       .map(
         (e) =>

@@ -1,28 +1,3 @@
-// Live-interaction, real-native-WebDriver verification for
-// DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01 (see
-// docs/agent-context/known-flaws.md).
-//
-// Before the fix: the frontend catalog (connectorDefinitions.ts) advertised
-// connectors (atlassian, google_sheets, context7, canva, hubspot) in the
-// live Settings -> Connectors "Available to connect" grid that had no entry
-// in the backend's `get_connector_mcp_mapping` (mcp_oauth.rs). Clicking
-// Connect on those either silently no-opped while still emitting
-// `connector:connected` (atlassian, google_sheets, context7 — a permanent or
-// transient fake "Connected" badge with zero backing MCP server) or failed
-// immediately with "Unknown provider" (canva, hubspot). Separately, Linear's
-// catalog entry declared `authType: 'oauth'` even though its real backend
-// mapping is API-key-credentialed, routing every Connect click to a broken
-// OAuth flow and making a fully-working integration unreachable.
-//
-// This spec drives the real Settings -> Connectors panel and asserts, via
-// the app's own live Tauri IPC bridge, that:
-//  1. `mcp_get_supported_connector_ids` (the new single source of truth)
-//     returns exactly the backend-mapped ids and excludes the drifted ones.
-//  2. The live "Available to connect" grid no longer renders Context7,
-//     Canva, or HubSpot cards.
-//  3. Linear's card now advertises "API key" (not OAuth) and clicking
-//     Connect opens the API-key dialog instead of erupting into an
-//     "Unknown provider: linear" OAuth error.
 
 import { waitForSettingsReady } from '../support/close-settings';
 import { resolveScreenDir } from '../support/dom';
@@ -31,11 +6,6 @@ const SCREEN_DIR = resolveScreenDir('connector-mapping-drift');
 
 type InvokeOutcome<T> = { ok: true; value: T } | { ok: false; error: string };
 
-/**
- * Calls a real Tauri command via the app's own IPC bridge
- * (`window.__TAURI_INTERNALS__.invoke`), same pattern as
- * mcp-dotfile-config.spec.ts.
- */
 async function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const resultKey = `__wdio_invoke_${cmd}_${Math.random().toString(36).slice(2)}`;
 
@@ -153,8 +123,6 @@ describe('Connector mapping drift no longer fake-badges unsupported connectors (
     await gear.waitForDisplayed({ timeout: 30000 });
     await gear.click();
 
-    // Nav buttons are disabled while Settings loads; wait for interactivity
-    // before clicking or the click is a silent no-op.
     await waitForSettingsReady();
 
     const clickedConnectors = await clickButtonWithText(
@@ -165,7 +133,6 @@ describe('Connector mapping drift no longer fake-badges unsupported connectors (
     expect(clickedConnectors).toBe(true);
     await browser.pause(1500);
 
-    // Let the async fetchSupportedConnectorIds() / fetchConnected() resolve.
     await browser.pause(2500);
 
     await browser.saveScreenshot(`${SCREEN_DIR}/00-connectors-panel.png`);
@@ -187,9 +154,6 @@ describe('Connector mapping drift no longer fake-badges unsupported connectors (
     expect(hasHubSpot).toBe(false);
     expect(hasLinear).toBe(true);
 
-    // Find Linear's card via its "Connect Linear" button (unambiguous,
-    // unlike text search which can match a large ancestor wrapping the
-    // entire grid) and confirm it now advertises "API key", not "OAuth".
     const linearCardText = await browser.execute(() => {
       const button = document.querySelector<HTMLButtonElement>(
         'button[aria-label="Connect Linear"]',
@@ -204,8 +168,6 @@ describe('Connector mapping drift no longer fake-badges unsupported connectors (
 
     await browser.saveScreenshot(`${SCREEN_DIR}/01-linear-card-api-key.png`);
 
-    // Click Linear's Connect button and confirm the API-key dialog opens
-    // instead of an "Unknown provider: linear" OAuth error.
     const clickedConnect = await browser.execute(() => {
       const button = document.querySelector<HTMLButtonElement>(
         'button[aria-label="Connect Linear"]',
@@ -230,7 +192,6 @@ describe('Connector mapping drift no longer fake-badges unsupported connectors (
 
     await browser.saveScreenshot(`${SCREEN_DIR}/02-linear-api-key-dialog.png`);
 
-    // Close the dialog without submitting a real key.
     await clickButtonWithText('body', 'Cancel');
   });
 });

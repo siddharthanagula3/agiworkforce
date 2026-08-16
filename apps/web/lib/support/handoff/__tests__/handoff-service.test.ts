@@ -1,11 +1,3 @@
-/**
- * The core promise: when no human is available the user gets an honest email
- * fallback with a reference id — and NEVER a connecting state.
- *
- * Only the database and `fetch` are mocked. config, presence-service,
- * transcript, escalation-email and resend-client all run for real, so deleting
- * any one of them fails these tests.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -52,7 +44,6 @@ import { REFERENCE_ID_PATTERN } from '../reference-id';
 
 const fetchMock = vi.fn();
 
-/** Echo the inserted values back as a row, the way Postgres RETURNING would. */
 function echoInsert() {
   storeMocks.insertHandoffSession.mockImplementation(async (input: Record<string, unknown>) => ({
     id: 'session-uuid-1',
@@ -157,8 +148,6 @@ describe('escalateToHuman · nobody available (the common case)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.resend.com/emails');
 
-    // The whole response is scanned: no connecting state, no waiting state, and
-    // no sessionId a client could poll into an unbounded spinner.
     const serialized = JSON.stringify(result).toLowerCase();
     expect(serialized).not.toContain('connecting');
     expect(serialized).not.toContain('"status":"waiting"');
@@ -204,22 +193,15 @@ describe('escalateToHuman · nobody available (the common case)', () => {
     const body = lastEmailBody();
     const text = String(body['text']);
 
-    // Every transcript turn.
     expect(text).toContain('Why did my invoice double?');
     expect(text).toContain("I won't guess about billing.");
-    // What the agent already tried, so the human does not retread it.
     expect(text).toContain('open_billing_portal → refused');
     expect(text).toContain('Billing is a hard-abstain category');
-    // The sources it used.
     expect(text).toContain('https://agiworkforce.com/refund-policy');
-    // Server-derived account context.
     expect(text).toContain('Plan: pro');
     expect(text).toContain('Subscription status: active');
     expect(text).toContain('Usage: 42%');
-    // The reference id.
     expect(text).toContain(result.referenceId);
-    // Reply-To, so a human hitting reply actually reaches the user. A signed-in
-    // caller's verified address wins over the client-supplied one.
     expect(body['reply_to']).toEqual(['verified@example.com']);
     expect(String(body['subject'])).toContain(result.referenceId);
   });
@@ -258,7 +240,6 @@ describe('escalateToHuman · nobody available (the common case)', () => {
     expect(result.referenceId).toMatch(REFERENCE_ID_PATTERN);
     expect(fetchMock).not.toHaveBeenCalled();
     if (result.mode !== 'unavailable') throw new Error('expected the degraded mode');
-    // It does not claim anything was sent.
     expect(result.detail).toContain('nothing');
     expect(result.mailtoHref).toContain('mailto:support@agiworkforce.com');
     expect(result.mailtoHref).toContain(encodeURIComponent(result.referenceId));
@@ -315,20 +296,16 @@ describe('escalateToHuman · a human IS available', () => {
     expect(result.mode).toBe('live');
     if (result.mode !== 'live') throw new Error('expected live');
     expect(result.sessionId).toBe('session-uuid-1');
-    // The property the whole feature turns on.
     expect(new Date(result.waitExpiresAt).getTime()).toBeGreaterThan(Date.now());
     expect(result.onTimeout).toBe('email_fallback');
     expect(result.nextStep.kind).toBe('wait');
-    // The row that backs it must carry the same deadline.
     expect(storeMocks.insertHandoffSession).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'waiting', waitExpiresAt: result.waitExpiresAt }),
     );
-    // No email yet — a human is genuinely there.
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('re-checks availability at write time, so a stale client read cannot manufacture a live wait', async () => {
-    // The client may have seen "live" a moment ago; the roster has since emptied.
     storeMocks.listFreshOnlineAgents.mockResolvedValue([]);
 
     const result = await escalateToHuman(baseInput());
@@ -403,7 +380,6 @@ describe('the waiting state cannot outlive its deadline', () => {
     storeMocks.getSessionForOwner
       .mockResolvedValueOnce(expiredRow)
       .mockResolvedValue({ ...expiredRow, status: 'timed_out_emailed' });
-    // The conditional UPDATE lost the race, so it returns no row.
     storeMocks.claimExpiredWaitingSession.mockResolvedValue(null);
 
     const status = await getHandoffStatusForOwner('session-uuid-1', 'anon-abc');

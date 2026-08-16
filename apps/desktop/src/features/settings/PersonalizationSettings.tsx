@@ -1,12 +1,3 @@
-/**
- * PersonalizationSettings
- *
- * AGI personalization controls: user identity, response style sliders
- * (formality, warmth, detail), emoji usage, and custom instructions passthrough.
- *
- * Changes update the Settings draft immediately and are persisted only by the
- * parent Settings panel's explicit Save action.
- */
 import { MessageSquare, Sliders, User } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -17,8 +8,6 @@ import {
   type PersonalizationPreferences,
 } from '../../stores/settingsStore';
 import { Label } from '@/ui/Label';
-
-// ── Slider meta ───────────────────────────────────────────────────────────────
 
 interface SliderMeta {
   id: keyof Pick<PersonalizationPreferences, 'formality' | 'warmth' | 'detail'>;
@@ -57,8 +46,6 @@ const EMOJI_OPTIONS: { value: EmojiUsage; label: string; description: string }[]
   { value: 'sometimes', label: 'Sometimes', description: 'Emoji for emphasis only' },
   { value: 'often', label: 'Often', description: 'Emoji throughout responses' },
 ];
-
-// ── Sub-components ────────────────────────────────────────────────────────────
 
 interface StyleSliderProps {
   meta: SliderMeta;
@@ -132,18 +119,12 @@ function StyleSlider({ meta, value, onChange }: StyleSliderProps) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export function PersonalizationSettings() {
   const stored = useSettingsStore(selectPersonalization);
   const setPersonalization = useSettingsStore((s) => s.setPersonalization);
 
-  // Keep an input-local draft for responsive controls, while updating the
-  // Settings draft synchronously. A delayed commit used to be cancelled when
-  // the user changed tabs within 400 ms, losing the visible edit entirely.
   const [draft, setDraft] = useState<PersonalizationPreferences>(stored);
 
-  // Sync draft when store updates externally (e.g., settings load from disk)
   const hasUserEdited = useRef(false);
   useEffect(() => {
     if (!hasUserEdited.current) {
@@ -296,12 +277,7 @@ export function PersonalizationSettings() {
   );
 }
 
-// ── Inline custom instructions textarea ──────────────────────────────────────
-// Duplicates just the "how would you like responses?" field without the full
-// CustomInstructionsSettings card, to keep the section compact.
-
 function CustomInstructionsInline() {
-  // Lazy-import the store to avoid a heavy dep at module level
   const [instructions, setInstructions] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -310,13 +286,11 @@ function CustomInstructionsInline() {
   useEffect(() => {
     let cancelled = false;
 
-    // Dynamically import to avoid circular dependency issues
     import('../../stores/customInstructionsStore')
       .then(({ useCustomInstructionsStore }) => {
         if (cancelled) return;
         const val = useCustomInstructionsStore.getState().globalInstructions;
         setInstructions(val);
-        // Subscribe to external updates — capture the unsubscribe function
         unsubRef.current = useCustomInstructionsStore.subscribe((s) => {
           if (!cancelled) {
             setInstructions(s.globalInstructions);

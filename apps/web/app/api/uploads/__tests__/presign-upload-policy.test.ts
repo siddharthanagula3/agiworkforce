@@ -1,10 +1,3 @@
-/**
- * Upload type/size policy at the presign boundary.
- *
- * The presigned PUT stamps the object with the caller's declared Content-Type
- * and avatars still use the public R2 bucket. Chat attachments are private,
- * while every kind still needs a narrow type policy before a PUT is signed.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -76,7 +69,6 @@ const ALL_KINDS = ['avatar', 'knowledge-file', 'chat-attachment'] as const;
 beforeEach(() => {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
-  // Project ownership lookup for the knowledge-file kind.
   mockNeonQuery.mockResolvedValue([{ id: 'proj-1' }]);
   mockGetPresignedUploadUrl.mockResolvedValue({
     uploadUrl: 'https://r2.test/signed',

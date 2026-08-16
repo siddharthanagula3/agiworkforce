@@ -1,11 +1,3 @@
-/**
- * Shared Conversation View
- *
- * Public read-only page that renders a shared conversation fetched from Neon
- * via GET /api/shared?token=<id>.  No authentication is required.
- *
- * Route: /shared/[id]
- */
 
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -31,7 +23,6 @@ async function fetchSharedConversation(token: string): Promise<SharedData | null
 
   try {
     const res = await fetch(`${appUrl}/api/shared?token=${encodeURIComponent(token)}`, {
-      // Revalidate once per minute - conversation content never changes.
       next: { revalidate: 60 },
     });
 
@@ -55,7 +46,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-/** Format a role label for display. */
 function roleLabel(role: string): string {
   switch (role) {
     case 'user':
@@ -69,7 +59,6 @@ function roleLabel(role: string): string {
   }
 }
 
-/** Determine if a role is from the human side. */
 function isUserRole(role: string): boolean {
   return role === 'user';
 }
@@ -77,7 +66,6 @@ function isUserRole(role: string): boolean {
 export default async function SharedConversationPage({ params }: PageProps) {
   const { id } = await params;
 
-  // Basic UUID-v4 validation to avoid unnecessary DB lookups.
   const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!UUID_V4_RE.test(id)) {
     notFound();

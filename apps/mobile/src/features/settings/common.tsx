@@ -22,12 +22,6 @@ export function SettingsScreenShell({
   const router = useRouter();
   const { colors, statusBarStyle } = useTheme();
   const goBack = useCallback(() => {
-    // Prefer popping the real stack so this screen returns callers to wherever
-    // they came from (Settings tab, a chat tab, or an open chat/[id]) instead
-    // of always landing on `backHref` — this shell is reused by routes reached
-    // from more than one entry point (e.g. Connectors from Settings and from
-    // the chat "Add to Chat" sheet). `backHref` remains the fallback for
-    // deep-linked/no-history entries.
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -40,9 +34,6 @@ export function SettingsScreenShell({
       <StatusBar style={statusBarStyle} />
       <View
         style={{
-          // minHeight, not height: the title below scales with Dynamic Type while
-          // a fixed box does not, and RN Views default to overflow:visible — so
-          // the text overlapped the content beneath instead of clipping cleanly.
           minHeight: 50,
           paddingVertical: 4,
           flexDirection: 'row',
@@ -116,11 +107,6 @@ export function SettingsInfo({
   );
 }
 
-/**
- * Shared fail-closed state for account-backed Cloud settings. Callers still
- * gate their effects on the same auth booleans so this view can never sit on
- * top of an accidental 401 or stale account fetch.
- */
 export function CloudAccountRequired({
   isLoading,
   onSignIn,
@@ -184,22 +170,6 @@ export function CloudAccountRequired({
   );
 }
 
-/**
- * Shown on Cloud-only settings screens (Billing, Usage, etc.) when the
- * chat's Local/Cloud egress toggle is set to Local. `guardedFetch`
- * (lib/egressGuard.ts) blocks EVERY our-cloud API call — including this
- * screen's own data fetch — before any network I/O while that toggle is
- * Local, by design (a zero-leak privacy guarantee for chat content). But
- * these settings screens are reached only while already signed in and have
- * nothing to do with chat privacy, so silently showing stale/cached data
- * with no explanation reads as "stuck loading" or "wrong plan" rather than
- * "blocked by an unrelated toggle" — this banner makes that visible and
- * actionable instead of silent.
- *
- * `message` lets a non-settings Cloud-only surface (e.g. the Compare screen)
- * reuse the same shape and switch affordance while stating what IS blocked
- * there; it defaults to the plan/usage copy the settings screens rely on.
- */
 export function CloudSyncBlockedBanner({
   onSwitchToCloud,
   message,

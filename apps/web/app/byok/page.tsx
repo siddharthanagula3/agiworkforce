@@ -19,8 +19,6 @@ export const metadata = buildMetadata({
   path: '/byok',
 });
 
-// Resolved from the canonical model catalog, not typed by hand — see
-// ./byok-providers.ts for why the hand-typed list was wrong.
 const BYOK_PROVIDERS = byokProviderLabels();
 
 export default function ByokPage() {

@@ -1,19 +1,11 @@
-/**
- * Feedback API — typed wrappers for submit_feedback, record_message_feedback,
- * and get_filtered_logs Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface FeedbackMetadata {
   platform: string;
   version: string;
   userAgent: string;
 }
-
-// ---- Commands ----
 
 export async function submitFeedback(
   subject: string,
@@ -41,11 +33,6 @@ export async function recordMessageFeedback(
   });
 }
 
-/**
- * Warning/error log records redacted for a support bundle by the desktop
- * `sys::support_bundle` module: structured fields are allowlisted, credentials
- * are scrubbed, and account/billing records are dropped.
- */
 export async function getFilteredLogs(): Promise<string[]> {
   return command<string[]>('get_filtered_logs');
 }

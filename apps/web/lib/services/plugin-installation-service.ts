@@ -112,7 +112,6 @@ export async function listEnabledPluginIds(
   return new Set(rows.map((row) => row.plugin_id));
 }
 
-/** Runtime convenience for chat/skill admission call sites. */
 export function listEnabledPluginIdsForUser(userId: string): Promise<Set<string>> {
   return listEnabledPluginIds(getNeonDb(), userId);
 }

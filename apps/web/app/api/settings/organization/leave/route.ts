@@ -18,17 +18,7 @@ const LeaveSchema = z.object({
   successorUserId: z.string().trim().min(1).max(255).optional(),
 });
 
-/**
- * DELETE /api/settings/organization/leave
- *
- * The organization is resolved exclusively from the authenticated account's
- * membership. No organization id is accepted from the client, so this route
- * cannot be aimed at another tenant. An owner can name an existing member as
- * successor; transfer and leave then commit atomically.
- */
 async function handleLeave(request: NextRequest) {
-  // Self-leave is a membership deletion and shares the canonical destructive
-  // team-membership policy with admin-initiated removal.
   const rateLimitResponse = await withRateLimit(request, 'settings-team-delete');
   if (rateLimitResponse) return rateLimitResponse;
 

@@ -1,27 +1,7 @@
-/**
- * Cloud Connectors API Client
- *
- * HTTP client for web's real connectors API (GET/POST/DELETE /api/connectors —
- * see apps/web/app/api/connectors/route.ts), used by DesktopCloudSettingsModal
- * so the CLOUD-mode connectors panel reflects server truth instead of driving
- * local Tauri MCP connector state.
- *
- * Auth/CSRF plumbing comes through the shared Managed Cloud request context,
- * which pins each operation to one account/session while resolving the live
- * same-account Bearer token. A valid Bearer JWT is enough on its own: the web
- * route's `requireCsrfToken` bypasses CSRF for any request whose Bearer token
- * verifies against Clerk (apps/web/lib/csrf.ts, `isBearerTokenValid`), which is
- * the case for every authenticated desktop cloud-mode request.
- */
 
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-/** Mirrors the `ConnectorEntry` shape returned by GET /api/connectors. */
 export interface CloudConnectorEntry {
   id: string;
   connectorId: string;
@@ -33,9 +13,7 @@ export interface CloudConnectorEntry {
 }
 
 export interface ListConnectorsResult {
-  /** Connectors this user currently has connected server-side. */
   connectors: CloudConnectorEntry[];
-  /** Connector ids that can actually be connected in this deployment. */
   available: string[];
 }
 
@@ -49,7 +27,6 @@ export type ConnectConnectorResult =
 export interface CreateCustomConnectorInput {
   name: string;
   url: string;
-  /** Optional bearer credential. The server encrypts it before persistence. */
   authToken?: string;
 }
 
@@ -92,15 +69,6 @@ function parseConnectorEntry(value: unknown): CloudConnectorEntry | null {
   };
 }
 
-// ============================================================================
-// API
-// ============================================================================
-
-/**
- * Lists this user's connected services plus the ids connectable in this
- * deployment (`available`), so callers can gate "Connect" on real capability
- * instead of static catalog data.
- */
 export async function listConnectors(): Promise<ListConnectorsResult> {
   const request = createManagedCloudRequestContext('Cloud connectors');
   const headers = await request.getHeaders();
@@ -129,12 +97,6 @@ export async function listConnectors(): Promise<ListConnectorsResult> {
   return { connectors, available };
 }
 
-/**
- * Connects a connector server-side. Returns a discriminated result rather than
- * throwing for the two well-known non-error outcomes (github's install-flow
- * redirect, and connectors the server does not support yet) so callers can
- * react appropriately instead of treating them as failures.
- */
 export async function connectConnector(
   connectorId: string,
   authType?: string,
@@ -194,7 +156,6 @@ export async function connectConnector(
   throw new Error(readApiError(body, `Failed to connect connector: HTTP ${res.status}`));
 }
 
-/** Disconnects a connector server-side (soft-delete / unlink). */
 export async function disconnectConnector(connectorId: string): Promise<void> {
   const request = createManagedCloudRequestContext('Cloud connector disconnection');
   const headers = await request.getHeaders();

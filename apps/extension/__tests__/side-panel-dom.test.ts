@@ -10,8 +10,6 @@ describe('side-panel dom.el', () => {
   });
 
   it('routes style through the CSSOM (cssText), not a style attribute (CSP-safe)', () => {
-    // The whole reason el() exists: style-src-attr blocks setAttribute('style'),
-    // so style must go through element.style.cssText.
     const node = el('span', { style: 'color: red' });
     expect(node.style.color).toBe('red');
     expect(node.getAttribute('style')).toContain('color: red');
@@ -21,7 +19,7 @@ describe('side-panel dom.el', () => {
     const child = el('b', {}, 'bold');
     const node = el('p', {}, 'hello ', child);
     expect(node.childNodes).toHaveLength(2);
-    expect(node.childNodes[0].nodeType).toBe(3); // text node
+    expect(node.childNodes[0].nodeType).toBe(3);
     expect(node.textContent).toBe('hello bold');
     expect(node.querySelector('b')?.textContent).toBe('bold');
   });
@@ -29,7 +27,6 @@ describe('side-panel dom.el', () => {
 
 describe('side-panel dom.formatTime', () => {
   it('formats a timestamp as a short hour:minute local time', () => {
-    // Format only (locale-dependent value); assert it is a non-empty h:mm-ish string.
     const out = formatTime(new Date(2024, 0, 1, 14, 5).getTime());
     expect(out).toMatch(/\d{1,2}:\d{2}/);
   });

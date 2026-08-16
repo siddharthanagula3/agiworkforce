@@ -1,10 +1,5 @@
-/** Theme mode for the chat package UI. */
 export type ThemeMode = 'light' | 'dark' | 'system';
 
-/**
- * Design tokens for the chat package.
- * Uses CSS custom properties so the host app can override them.
- */
 export const tokens = {
   colors: {
     bg: 'var(--chat-bg, #0a0a0a)',
@@ -21,7 +16,6 @@ export const tokens = {
     artifactPanelWidth: 420,
   },
   sidebar: {
-    /** Milliseconds for the sidebar expand/collapse CSS transition. */
     animationMs: 200,
   },
 } as const;

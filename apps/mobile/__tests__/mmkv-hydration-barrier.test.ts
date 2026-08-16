@@ -43,8 +43,6 @@ describe('encrypted MMKV hydration barrier', () => {
       await hydrationGate;
       accountScopedCache.conversations = ['account-a-conversation'];
     });
-    // This models the owner-mismatch teardown registered after Cloud stores
-    // were imported. It must not run until their delayed rehydration settles.
     whenMmkvReady(() => {
       accountScopedCache.conversations = [];
     });

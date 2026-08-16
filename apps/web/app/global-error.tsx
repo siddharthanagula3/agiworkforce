@@ -3,9 +3,6 @@
 import { type CSSProperties, useEffect } from 'react';
 import { Bot, RefreshCw, Home } from 'lucide-react';
 
-// global-error.tsx replaces the root layout entirely, so it must render
-// its own <html> and <body> tags. It cannot import from @shared/lib/logger
-// because the logger may itself be broken when this boundary fires.
 export default function GlobalError({
   error,
   reset,
@@ -14,7 +11,6 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Use console directly - the shared logger may not be available at this level
     console.error('[GlobalError] Root layout error caught:', error.digest ?? error.message);
   }, [error]);
 

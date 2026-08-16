@@ -1,23 +1,3 @@
-/**
- * OpenAI Responses API payload policy resolver.
- *
- * Cross-vendor normalization for the `openai-responses` family of APIs
- * (api.openai.com, Codex, plus compatible proxies). Decides:
- *   - whether to send `service_tier`
- *   - whether to send / strip `store`
- *   - whether to strip `prompt_cache_key` / `prompt_cache_retention`
- *   - whether to enable server-side compaction
- *   - the right compaction threshold for the model's context window
- *   - whether to strip a disabled `reasoning.effort: "none"` payload
- *
- * Pure function — no runtime / IO / plugin-sdk dependencies. Hostname
- * classification is inlined; if you need the full provider catalog (with
- * plugin-manifest-sourced endpoint patterns), extend
- * `resolveBundledOpenAIResponsesEndpointClass` below.
- *
- * Ported from OpenClaw src/agents/openai-responses-payload-policy.ts (MIT, Peter Steinberger).
- * See THIRD_PARTY_LICENSES.md at repo root for full attribution.
- */
 
 import { readStringValue } from './lib/string-utils';
 import { supportsOpenAIReasoningEffort } from './openai-reasoning-effort';
@@ -316,8 +296,6 @@ function stripDisabledOpenAIReasoningPayload(payloadObj: Record<string, unknown>
     return;
   }
 
-  // Some Responses models and OpenAI-compatible proxies reject
-  // `reasoning.effort: "none"`. Treat unsupported disabled effort as omitted.
   const reasoningObj = reasoning as Record<string, unknown>;
   if (reasoningObj['effort'] === 'none') {
     delete payloadObj['reasoning'];

@@ -1,14 +1,3 @@
-/**
- * Every command name registered in the `tauri::generate_handler![...]` block of
- * `apps/desktop/src-tauri/src/lib.rs`, which is the sole registry the Rust side
- * will answer.
- *
- * This is an exact list rather than a prefix rule because a prefix rule drifts
- * silently in both directions — it accepts names the backend never registered
- * and it cannot tell you which registered commands it rejects.
- * `src/utils/__tests__/ipc.test.ts` fails whenever this set and the Rust
- * registry disagree, so adding a command means adding it here too.
- */
 export const REGISTERED_COMMANDS: ReadonlySet<string> = new Set([
   'accept_invitation',
   'account_approve_device_authorization',

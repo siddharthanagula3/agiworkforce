@@ -1,8 +1,3 @@
-/**
- * Type shim for expo-sqlite ~15.2.x (Expo SDK 55).
- * Active until the package is installed and provides its own types.
- * When expo-sqlite is installed, delete this file — the real types take over.
- */
 
 declare module 'expo-sqlite' {
   export interface RunResult {

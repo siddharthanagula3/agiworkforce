@@ -16,21 +16,9 @@ interface GoogleAnalyticsProps {
   nonce?: string;
 }
 
-/**
- * GoogleAnalytics - wires GA4 into the Next.js App Router.
- *
- * - Loads the gtag.js script with strategy="afterInteractive" so it never
- *   blocks page rendering.
- * - Fires a page_view event on every client-side route change via usePathname.
- * - Accepts the per-request CSP nonce so inline scripts pass the nonce-based
- *   Content-Security-Policy set by proxy.ts.
- *
- * Only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set (checked in layout.tsx).
- */
 export function GoogleAnalytics({ trackingId, nonce }: GoogleAnalyticsProps) {
   const pathname = usePathname();
 
-  // Send page_view on every client-side navigation
   useEffect(() => {
     if (typeof window === 'undefined' || !window.gtag) return;
     window.gtag('config', trackingId, {

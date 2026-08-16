@@ -1,15 +1,6 @@
-/**
- * Tests for lib/validate-env.ts
- *
- * Focuses on the DB URL either-or check:
- *   - Only AGI_DATABASE_URL set -> no DATABASE_URL error (the bug this fixes)
- *   - Only DATABASE_URL set -> no DATABASE_URL error (legacy path still works)
- *   - Neither set -> error includes "DATABASE_URL or AGI_DATABASE_URL"
- */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Suppress side-effect imports that would pull in server-only modules
 vi.mock('../price-tier-mapping', () => ({
   getAllRegisteredPriceIds: vi.fn(() => []),
 }));
@@ -18,19 +9,16 @@ vi.mock('../pricing', () => ({
   STRIPE_PRICE_IDS: {},
 }));
 
-// Import after mocks are registered
 import { validateRequiredEnvVars } from '../validate-env';
 
 describe('validateRequiredEnvVars · database URL either-or check', () => {
   let savedEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
-    // Snapshot the full env so we can restore it after each test
     savedEnv = { ...process.env };
   });
 
   afterEach(() => {
-    // Restore env to pre-test state
     for (const key of Object.keys(process.env)) {
       if (!(key in savedEnv)) {
         delete process.env[key];
@@ -45,7 +33,6 @@ describe('validateRequiredEnvVars · database URL either-or check', () => {
 
     const result = validateRequiredEnvVars();
 
-    // The specific DB-missing error must not appear
     const dbError = result.errors.find((e) => e.includes('DATABASE_URL'));
     expect(dbError).toBeUndefined();
   });
@@ -86,12 +73,10 @@ describe('validateRequiredEnvVars · database URL either-or check', () => {
   });
 });
 
-// Import after mocks are registered (see top of file).
 import { validateProductionKeyTypes, validateStripeKeyModeConsistency } from '../validate-env';
 
 describe('validateProductionKeyTypes · test keys in production', () => {
   let savedEnv: NodeJS.ProcessEnv;
-  // Isolate the check from ambient .env keys the runner loads (which are test-mode).
   const CHECKED = [
     'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
     'CLERK_SECRET_KEY',
@@ -116,7 +101,6 @@ describe('validateProductionKeyTypes · test keys in production', () => {
     const w = result.warnings.find((x) => x.includes('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'));
     expect(w).toBeDefined();
     expect(w).toContain('pk_test_');
-    // A warning must never fail startup (a misconfigured deploy still serves the site).
     expect(result.valid).toBe(true);
   });
 

@@ -54,7 +54,6 @@ describe('readFolderFiles', () => {
       candidate({ relativePath: '.env', mimeType: 'text/plain' }),
     ]);
 
-    // The scanner must see the real content, or a secret cannot be flagged.
     expect(approved?.content).toBe('AWS_SECRET=abc123');
     expect(approved?.secretScanStatus).toBe('scanned');
   });
@@ -82,7 +81,6 @@ describe('readFolderFiles', () => {
 
     expect(approved?.content).toBe('[image/png · 4 bytes]');
     expect(approved?.secretScanStatus).toBe('unscanned-binary');
-    // The File still carries the real bytes — only the scan input is bounded.
     expect(approved?.file.type).toBe('image/png');
   });
 

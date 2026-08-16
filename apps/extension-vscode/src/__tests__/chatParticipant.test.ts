@@ -70,10 +70,6 @@ function mockConfiguredModel(model: string): void {
         ),
         update: vi.fn().mockResolvedValue(undefined),
         has: vi.fn().mockReturnValue(false),
-        // `Config.model()` reads the user/global scope via `inspect()`, not
-        // `get()`, so that a checked-out .vscode/settings.json cannot move the
-        // Local/BYOK/Cloud trust boundary. A mock that stubs only `get()`
-        // silently yields DEFAULTS.model for every test that configures one.
         inspect: vi.fn((key: string) =>
           key === 'model' ? { key, globalValue: model } : undefined,
         ),
@@ -643,11 +639,6 @@ describe('chat participant approval lifecycle', () => {
       HOST_CUSTOM_INSTRUCTIONS_KEY,
       'Prefer narrowly scoped changes.',
     );
-    // The two boundaries this test is named for are stored in different
-    // scopes: host custom instructions are global, curated memory facts are
-    // workspace-scoped (both production callers of buildMemoryContextInput
-    // read workspaceState). Seeding memory into globalState left the memory
-    // block absent and asserted only the instructions half.
     await context.workspaceState.update(MEMORY_STORE_KEY, [
       {
         id: 'memory-1',

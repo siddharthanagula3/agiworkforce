@@ -1,14 +1,5 @@
 'use client';
 
-/**
- * The question input.
- *
- * Enter submits a QUESTION and nothing else. It can never reach an action
- * confirm button: confirmation lives in a separate card with its own click
- * handler, outside this form, and `SupportActionConfirm` renders no submit-type
- * button.
- */
-
 import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { SUPPORT_MAX_QUESTION_LENGTH } from '../lib/contract';
 import styles from './SupportWidget.module.css';

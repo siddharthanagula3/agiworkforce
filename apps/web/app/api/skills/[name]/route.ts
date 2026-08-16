@@ -1,10 +1,3 @@
-/**
- * Skills body endpoint · fetches the markdown body for one named skill.
- * Companion to `/api/skills` (which returns metadata only).
- *
- * Progressive disclosure: this is the lazy-load step. The consumer UI
- * shows "Loading skill body…" while this request is in flight.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 

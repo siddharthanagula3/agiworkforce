@@ -56,31 +56,17 @@ import {
 
 registerBuiltinSlashCommands();
 
-/** Composer work mode — mirrors web ChatComposerNew's ComposerWorkMode. */
 export type ChatWorkMode = CloudWorkMode;
 
-/** Scope stamped into the send callback when the host feeds `projectPicker`. */
 export interface ChatWorkScope {
   workMode: ChatWorkMode;
-  /** Project scoping the send (threads into conversation creation). */
   projectId: string | null;
 }
 
-/**
- * "Project or folder" picker (web ChatComposerNew parity). Provided only by
- * hosts with real project data (desktop feeds projectStore). Selecting a
- * project scopes the conversation — the host owns the selection state and the
- * scoping side effects. The folder half of the picker reuses the existing
- * `onSelectFolder`/`currentFolderLabel` seam and renders only when the host
- * feeds it (desktop-only, privacy-gated by the host). A chat is scoped to a
- * project OR a folder, never both. Absent prop = no toggle, no picker.
- */
 export interface ChatInputProjectPicker {
-  /** Real projects from the host's project store (id + display name). */
   projects: Array<{ id: string; name: string }>;
   activeProjectId: string | null;
   onSelectProject: (projectId: string | null) => void;
-  /** Opens the host-owned project creation flow; absent when creation is unsupported. */
   onCreateProject?: () => void;
 }
 
@@ -95,11 +81,6 @@ export type ComposerVoiceState =
   | 'error'
   | 'unsupported';
 
-/**
- * Host-owned replacement for the composer's browser speech-recognition mic.
- * Desktop Cloud supplies this controller so capture, managed transcription,
- * rewrite, and action approval stay inside the host's explicit trust boundary.
- */
 export interface ComposerVoiceController {
   state: ComposerVoiceState;
   onToggle: () => void | Promise<void>;
@@ -107,19 +88,11 @@ export interface ComposerVoiceController {
 }
 
 export interface ChatInputSlashCommandHost {
-  /** Toggle the real AgentMode sent to the runtime. */
   togglePlanMode: () => void;
-  /** Present only when the host has a live checkpoint transport. */
   openRewindTimeline?: (checkpointId?: string) => void;
 }
 
 export interface ChatInputProps {
-  /**
-   * `attachments` carries the raw `File` objects the user attached in the
-   * composer (DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01) — previously dropped
-   * here entirely. Host runtimes are responsible for encoding them onto the
-   * wire (e.g. `TauriRuntime` reads them into base64 for IPC).
-   */
   onSend: (
     content: string,
     agentMode?: string,
@@ -127,126 +100,39 @@ export interface ChatInputProps {
     attachments?: File[],
     research?: boolean,
     writingStyle?: WritingStyle,
-    /** Present only when the host feeds `projectPicker` (workMode + projectId). */
     workScope?: ChatWorkScope,
-    /** Exact managed catalog name selected through the Skill mention picker. */
     skillName?: string,
-    /** One-turn Local/native tool scope selected explicitly in the composer. */
     localToolScope?: LocalToolScope,
   ) => void;
   onStop: () => void;
-  /**
-   * AUDIT-FIX CMP-29: `onPlusClick` (REQUIRED) and `onVoiceClick` used to be
-   * declared here, destructured to `_`-prefixed aliases, and never referenced —
-   * so every host was forced to wire a handler that could not run. This
-   * component owns both behaviours itself: the "+" button is the trigger for
-   * the shared `AttachmentMenu`, and the mic runs `useVoiceInput`. Both props
-   * are removed rather than fired alongside the internal handlers, which would
-   * have double-driven the desktop host's legacy `toggle-voice-input` event.
-   */
   onModelSelectorClick?: () => void;
   allowModelFallbackModels?: boolean;
-  /** Show Ask/Auto/Plan/Bypass only when the active runtime enforces it. */
   supportsAgentControl?: boolean;
   supportsReasoningEffort?: boolean;
-  /** Keyboard gesture that submits the composer. */
   sendShortcut?: 'enter' | 'mod-enter';
-  /**
-   * Host-owned controls rendered in the composer's left control row.
-   *
-   * This is intentionally presentation-only: the shared package cannot infer
-   * native filesystem/sandbox policy, a desktop working directory, or a live
-   * git branch. Hosts must render only state their runtime actually enforces.
-   */
   hostControls?: ReactNode;
-  /**
-   * Called when the user picks "Select folder" from the attachment menu.
-   * Host apps that expose `canUseWorkingDirectory` (desktop) should provide
-   * this to open a native folder dialog and sync it to the backend; the menu
-   * item is capability-gated so this is only reachable on desktop.
-   */
   onSelectFolder?: () => void;
-  /** Host-owned desktop workflow recorder; absent on unsupported surfaces. */
   onRecordSkill?: () => void;
-  /** Display label for the currently scoped project folder, if any. */
   currentFolderLabel?: string | null;
-  /**
-   * Clears the host's scoped local folder. Hosts that feed both
-   * `onSelectFolder` and `projectPicker` must provide this so a project pick
-   * can displace the folder (project/folder mutual exclusion) and the scope
-   * chip can be cleared.
-   */
   onClearFolder?: () => void;
-  /** Chat | AGI Work toggle + "Project or folder" picker. See the type doc. */
   projectPicker?: ChatInputProjectPicker;
-  /**
-   * Account entitlement for the managed AGI Work mode. False preserves
-   * ordinary project-scoped chat while withholding the mode the server would
-   * reject. Defaults true for Local/BYOK hosts that already own their runtime.
-   */
   canUseAgiWork?: boolean;
-  /**
-   * Host-owned explanation for withholding AGI Work. This keeps capability
-   * discovery at the runtime boundary while still giving the shared composer
-   * an honest, readable unavailable state.
-   */
   agiWorkUnavailableReason?: string;
-  /** Active-conversation generation state supplied by a concurrent-capable host. */
   isStreamingOverride?: boolean;
   hasMessages: boolean;
   className?: string;
-  /**
-   * When true the textarea and send path are disabled.
-   * `disabledMessage` is shown as the placeholder text.
-   */
   disabled?: boolean;
   disabledMessage?: string;
-  /**
-   * The active conversation ID — used to look up agent control state.
-   * If omitted the AgentControl row is not rendered.
-   */
   conversationId?: string | null;
-  /**
-   * The project this conversation belongs to.
-   * Used by AgentControl to read/write project-level defaults.
-   */
   projectId?: string | null;
-  /**
-   * Whether the active runtime forwards `SendMessageOptions.codeExecution`
-   * at all (`ChatRuntime.supportsCodeExecution`). Local/native runtimes
-   * (Tauri) don't, so the "Run code" toggle is omitted entirely rather than
-   * rendered as a control the runtime would silently ignore. Defaults false.
-   */
   supportsCodeExecution?: boolean;
-  /** Whether the active runtime can transport managed Research requests. */
   supportsResearch?: boolean;
-  /** Show an explicit, one-shot native Web-search control in the plus menu. */
   supportsExplicitLocalWebSearch?: boolean;
-  /** Runtime-specific limits layered over the suite-wide local attachment policy. */
   attachmentPolicy?: ChatAttachmentPolicy;
-  /**
-   * One-shot attachment injection from outside the composer, keyed by `id` so a
-   * re-render cannot double-append. Used by the desktop cloud folder sheet,
-   * which has already run its own consent ceremony and hands over the approved
-   * files.
-   *
-   * Deliberately routed through `appendFiles` rather than exposing
-   * `setAttachedFiles`: an injected file must clear exactly the same validation
-   * and the same count/byte caps as one the user dragged in, or the composer
-   * would have two different definitions of an acceptable attachment.
-   */
   pendingAttachments?: { id: string; files: File[] } | null;
-  /**
-   * Host-defined destination identity for unsent file bytes. Change this when
-   * an account, tenant, or other trust boundary changes; the composer purges
-   * its local File state before the new destination can send it.
-   */
   attachmentContextKey?: string;
-  /** Replaces the browser speech mic when a host owns a richer voice workflow. */
   voiceInputController?: ComposerVoiceController;
-  /** Host actions exposed through the package-owned slash-command registry. */
   slashCommandHost?: ChatInputSlashCommandHost;
-  /** Included skills the active runtime can execute. Draft skills must not be supplied. */
   skills?: MentionSkill[];
 }
 
@@ -311,34 +197,20 @@ export function ChatInput({
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [selectedSkill, setSelectedSkill] = useState<MentionSkill | null>(null);
 
-  // Work-mode segmented toggle (Chat | AGI Work) — web ChatComposerNew parity.
-  // 'agiwork' reveals the "Project or folder" chip row below the composer and
-  // stamps workMode + projectId into the send callback. Rendered only when the
-  // host passes projectPicker (real project data) — hosts that don't feed it
-  // (mobile) see no toggle and an unchanged send signature.
   const [workMode, setWorkMode] = useState<ChatWorkMode>('chat');
   const [scopePickerOpen, setScopePickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
   const scopePickerRef = useRef<HTMLDivElement>(null);
   const activeProjectId = projectPicker?.activeProjectId ?? null;
 
-  // A persisted/reloaded project conversation is an AGI Work conversation.
-  // Keep the visible mode and the next request aligned with that durable
-  // membership; otherwise reopening a project chat silently sends
-  // `work_mode: "chat"` until the user toggles AGI Work again.
   useEffect(() => {
     setWorkMode(canUseAgiWork && activeProjectId ? 'agiwork' : 'chat');
   }, [activeProjectId, canUseAgiWork, conversationId]);
 
-  // Entering with a preselected project (sidebar "New chat in project") lands
-  // the composer in AGI Work mode so the scoping is visible, never silent.
   useEffect(() => {
     if (canUseAgiWork && activeProjectId) setWorkMode('agiwork');
   }, [activeProjectId, canUseAgiWork]);
 
-  // Mutual exclusion, folder side: a NEWLY chosen folder (host dialog resolves
-  // asynchronously → currentFolderLabel transitions) displaces the project.
-  // The project side is handled synchronously in handlePickProject below.
   const prevFolderLabelRef = useRef(currentFolderLabel);
   useEffect(() => {
     const prev = prevFolderLabelRef.current;
@@ -348,7 +220,6 @@ export function ChatInput({
     }
   }, [currentFolderLabel, activeProjectId, projectPicker]);
 
-  // Close the scope popover on outside click.
   useEffect(() => {
     if (!scopePickerOpen) return undefined;
     const onPointerDown = (e: MouseEvent) => {
@@ -386,7 +257,6 @@ export function ChatInput({
   const handlePickProject = useCallback(
     (id: string) => {
       projectPicker?.onSelectProject(id);
-      // A chat is scoped to a project OR a local folder, never both.
       onClearFolder?.();
       closeScopePicker();
     },
@@ -400,14 +270,9 @@ export function ChatInput({
 
   const handlePickFolderFromScope = useCallback(() => {
     closeScopePicker();
-    // The host's native dialog resolves async; the folder-transition effect
-    // above displaces the project once a folder was actually chosen.
     onSelectFolder?.();
   }, [closeScopePicker, onSelectFolder]);
 
-  // Switching back to Chat clears the scope selection: what the chip shows is
-  // exactly what the next send carries — no hidden project sticking to a
-  // "Chat"-labeled composer.
   const handleWorkModeChange = useCallback(
     (mode: ChatWorkMode) => {
       setWorkMode(mode);
@@ -420,43 +285,22 @@ export function ChatInput({
     [projectPicker, onClearFolder, closeScopePicker],
   );
 
-  // Read the currently selected model's provider to determine effort visibility
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const models = useModelStore((s) => s.models);
   const modelCatalogStatus = useModelStore((s) => s.modelCatalogStatus);
   const selectedModel = models.find((m) => m.id === selectedModelId);
   const modelProviderId = (selectedModel?.provider as string) ?? '';
-  // No usable model is selected — e.g. Local mode with no Ollama/BYOK model, where
-  // the selection is reconciled to the empty sentinel. Auto modes ('auto-*') and
-  // concrete IDs are non-empty, so cloud auto-routing stays enabled; only '' means
-  // there is nothing to send to. Block send so a message can't silently no-op.
   const noModelSelected = selectedModelId.trim() === '';
   const modelCatalogLoadingWithoutModels = modelCatalogStatus === 'loading' && models.length === 0;
 
-  // A mode/runtime switch must not leave a hidden Research selection armed.
-  // The send path also gates on `supportsResearch`, but clearing here prevents
-  // the old choice from silently reappearing if the user later returns to a
-  // managed runtime.
   useEffect(() => {
     if (!supportsResearch) setResearchEnabled(false);
   }, [supportsResearch]);
 
-  // Local Web search is a one-turn network permission, not a sticky global
-  // preference. Clear it whenever the destination conversation or runtime
-  // capability changes.
   useEffect(() => {
     setExplicitWebSearchEnabled(false);
   }, [conversationId, supportsExplicitLocalWebSearch]);
 
-  // "Run code" toggle: persisted preference lives in settingsStore (not
-  // chatStore, unlike webSearch) — see settingsStore's field doc comment.
-  // `codeExecutionEnabled` reflects the user's stated intent even when
-  // currently unavailable (the row disables instead of silently unchecking,
-  // matching web's ChatComposerNew). `codeExecutionDeploymentEnabled` is the
-  // per-deployment E2B cut-over flag hosts write via
-  // `setCodeExecutionDeploymentEnabled` — see useChat's `sendMessage`, which
-  // recomputes this SAME formula at send time rather than trusting the
-  // toggle's rendered state.
   const codeExecutionEnabled = useSettingsStore((s) => s.codeExecutionEnabled);
   const toggleCodeExecution = useSettingsStore((s) => s.toggleCodeExecution);
   const codeExecutionDeploymentEnabled = useSettingsStore((s) => s.codeExecutionDeploymentEnabled);
@@ -469,10 +313,7 @@ export function ChatInput({
       codeExecutionDeploymentEnabled,
     );
 
-  // Resolve agent control state for the active conversation
   const resolveAgentControl = useAgentControlStore((s) => s.resolve);
-  // Rendered when EITHER capability is on: desktop enables effort only, and
-  // gating the whole row on supportsAgentControl is what hid effort there.
   const showAgentControl = Boolean(
     conversationId && (supportsAgentControl || supportsReasoningEffort),
   );
@@ -518,12 +359,10 @@ export function ChatInput({
                   ? t('composer.voiceUnsupported', 'Voice input unavailable')
                   : (voiceInputController?.idleLabel ?? t('composer.voiceIdle', 'Voice input'));
 
-  // Auto-focus on mount
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
-  // Auto-expand textarea height — grows to 240px then scrolls internally
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -531,9 +370,6 @@ export function ChatInput({
     el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
   }, []);
 
-  // The store owns the live textarea value. External prefills/context updates,
-  // direct typing, voice input, and send/reset therefore share one source of
-  // truth instead of using Zustand as a one-shot command bus.
   useEffect(() => {
     adjustHeight();
     if (draftContent) textareaRef.current?.focus();
@@ -631,17 +467,9 @@ export function ChatInput({
     [clearDraftContent, conversationId, slashCommandHost],
   );
 
-  // Validate + append candidate files through the shared @agiworkforce/types
-  // contract (MIME prefix + extension allowlist + MAX_ATTACHMENT_BYTES). Any
-  // rejection surfaces the first failure message under the textarea so the
-  // user knows why nothing attached. Round-2 audit P0 #4 (2026-05-21).
   const appendFiles = useCallback(
     (candidates: File[]) => {
       if (candidates.length === 0) return;
-      // Async producers (notably screenshot capture) retain the callback from
-      // the destination where they started. If account/conversation changed
-      // before they completed, discard those bytes instead of attaching them
-      // to the new destination or replacing its files.
       if (liveAttachmentDestinationRef.current !== attachmentDestinationKey) return;
       const existingAttachedFiles =
         attachedFilesDestinationRef.current === attachmentDestinationKey
@@ -691,7 +519,6 @@ export function ChatInput({
     [attachmentDestinationKey, attachmentPolicy],
   );
 
-  // Consume an external one-shot injection exactly once per id.
   const consumedAttachmentIdRef = useRef<string | null>(null);
   useEffect(() => {
     attachedFilesDestinationRef.current = null;
@@ -706,10 +533,6 @@ export function ChatInput({
     appendFiles(pendingAttachments.files);
   }, [pendingAttachments, appendFiles]);
 
-  // Drag-drop + paste-image — parity-gap round-2 P0 #3 (2026-05-21). Mirrors
-  // Claude / ChatGPT: dropping files anywhere on the composer or pasting an
-  // image from the clipboard attaches them to the message, with a visual
-  // border highlight while dragging.
   const handleDragOver = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       if (disabled || isStreaming) return;
@@ -720,8 +543,6 @@ export function ChatInput({
   );
 
   const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
-    // Only clear when the cursor actually exits the bounding box, not when
-    // crossing a child element.
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
     setIsDragOver(false);
   }, []);
@@ -752,8 +573,6 @@ export function ChatInput({
         }
       }
       if (pasted.length > 0) {
-        // Prevent the binary blob from being inserted into the textarea as
-        // garbage text — but only when we actually captured a file paste.
         e.preventDefault();
         appendFiles(pasted);
       }
@@ -761,8 +580,6 @@ export function ChatInput({
     [disabled, isStreaming, appendFiles],
   );
 
-  // Object URLs for image thumbnails. Re-built whenever the attached file
-  // set changes and revoked on unmount / change so we don't leak blob URLs.
   const thumbnailUrls = useMemo(() => {
     const urls: Array<{ key: string; url: string | null }> = [];
     for (let i = 0; i < attachedFiles.length; i++) {
@@ -792,18 +609,12 @@ export function ChatInput({
       attachedFilesDestinationRef.current === attachmentDestinationKey ? attachedFiles : [];
     if ((!typedContent && destinationAttachedFiles.length === 0) || isStreaming) return;
 
-    // Attachment-only turns are intentionally enabled by SendButton. Previously
-    // the button became active as soon as a file was attached, but this handler
-    // still rejected the click when the textarea was empty, creating a silent
-    // no-op. Give the model an explicit, visible request without interpolating
-    // the untrusted file name into the instruction channel.
     const content =
       typedContent ||
       (destinationAttachedFiles.length === 1
         ? t('composer.analyzeAttachedFile', 'Please analyze the attached file.')
         : t('composer.analyzeAttachedFiles', 'Please analyze the attached files.'));
 
-    // Read current agent control state and forward to onSend
     let agentMode: string | undefined;
     let effort: string | undefined;
     if (conversationId) {
@@ -921,8 +732,6 @@ export function ChatInput({
         }
       }
 
-      // The host chooses plain Enter or Cmd/Ctrl+Enter. IME composition (e.g.
-      // CJK) must never submit mid-candidate.
       const shortcutMatches =
         sendShortcut === 'mod-enter' ? (e.metaKey || e.ctrlKey) && !e.shiftKey : !e.shiftKey;
       if (e.key === 'Enter' && shortcutMatches && !e.nativeEvent.isComposing) {
@@ -1130,8 +939,6 @@ export function ChatInput({
                     aria-label={t('composer.addAttachment', 'Add attachment')}
                     aria-expanded={attachmentMenuOpen}
                     className={cn(
-                      // Round "+" trigger matching web's composer (h-9 rounded-full,
-                      // accent tint when files are attached or the menu is open).
                       'relative flex h-9 w-9 items-center justify-center rounded-full',
                       'transition-colors duration-150',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',

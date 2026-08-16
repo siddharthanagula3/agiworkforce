@@ -1,12 +1,7 @@
-// apps/desktop/src/features/chat/TaskPhaseSection.tsx
 import { useState } from 'react';
 import { Loader2, CheckCircle2, XCircle, ChevronRight, ChevronDown, Wrench } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { ToolLabelEntry } from './ToolLabel';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface TaskPhase {
   name: string;
@@ -21,10 +16,6 @@ interface TaskPhaseSectionProps {
   phase: TaskPhase;
   defaultExpanded?: boolean;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -53,10 +44,6 @@ function statusIconColor(status: TaskPhase['status']): string {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StatusIcon
-// ─────────────────────────────────────────────────────────────────────────────
-
 function StatusIcon({ status }: { status: TaskPhase['status'] }) {
   const colorClass = statusIconColor(status);
   switch (status) {
@@ -68,10 +55,6 @@ function StatusIcon({ status }: { status: TaskPhase['status'] }) {
       return <XCircle className={cn('w-3.5 h-3.5 shrink-0', colorClass)} />;
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ToolPill — compact inline pill for a single tool entry
-// ─────────────────────────────────────────────────────────────────────────────
 
 function toolStatusDot(status: ToolLabelEntry['status']): string {
   switch (status) {
@@ -101,12 +84,7 @@ function ToolPill({ entry }: { entry: ToolLabelEntry }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TaskPhaseSection
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionProps) {
-  // Running phases expand by default; completed/failed collapse by default unless overridden
   const initialExpanded = defaultExpanded ?? phase.status === 'running';
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
 

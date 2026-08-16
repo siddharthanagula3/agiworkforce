@@ -1,11 +1,3 @@
-/**
- * TokenCounter — visual context-window usage bar with optional input/output
- * split + budget marker + compact mode.
- *
- * Pure props-driven. Hosts pass currentTokens / maxTokens / budgetLimit and
- * render anywhere (chat header, sidecar, settings). The compact variant fits
- * in a sidebar pill; the full variant is a card with breakdown + warnings.
- */
 import { Activity, AlertTriangle, Scissors, TrendingUp } from 'lucide-react';
 import { useMemo } from 'react';
 import { Tooltip } from './ui/Tooltip';
@@ -21,7 +13,6 @@ export interface TokenCounterProps {
   showDetails?: boolean;
   compact?: boolean;
   className?: string;
-  /** Shown as a "Compact" button when usage > 95% (compact mode) or > 80% (full mode). */
   onCompact?: () => void;
 }
 

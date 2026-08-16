@@ -1,27 +1,12 @@
-/**
- * GenerativeWidget Component
- *
- * Renders inline interactive HTML/chart/visualization content inside a sandboxed
- * iframe. The AI outputs a ```widget fenced code block; MessageContent extracts
- * the HTML and passes it here. Like Claude.ai's inline generative UI.
- */
 
 import React, { memo, useEffect, useRef, useState, useCallback } from 'react';
 import { Code, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-// ============================================================================
-// Constants
-// ============================================================================
-
 const NORMAL_MAX_HEIGHT = 600;
 const EXPANDED_MAX_HEIGHT = 2000;
 const DEFAULT_INITIAL_HEIGHT = 200;
 
-/**
- * Allowed CDN origins for script-src in the iframe CSP.
- * Only well-known, read-only CDNs are permitted.
- */
 const ALLOWED_SCRIPT_ORIGINS = [
   'https://cdnjs.cloudflare.com',
   'https://cdn.jsdelivr.net',
@@ -29,16 +14,6 @@ const ALLOWED_SCRIPT_ORIGINS = [
   'https://esm.sh',
 ].join(' ');
 
-// ============================================================================
-// HTML template
-// ============================================================================
-
-/**
- * Wraps user-supplied HTML in a full document that:
- * - Applies a CSP meta tag (restricts scripts to known CDNs)
- * - Resets box-sizing and sets transparent / dark-theme-friendly base styles
- * - Injects an auto-resize script that posts the document height to the parent
- */
 function buildDocument(html: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -84,24 +59,12 @@ ${html}
 </html>`;
 }
 
-// ============================================================================
-// Props
-// ============================================================================
-
 export interface GenerativeWidgetProps {
-  /** Raw HTML content to render inside the sandboxed iframe */
   html: string;
-  /** Optional title shown in the title bar */
   title?: string;
-  /** Initial iframe height in pixels before auto-resize kicks in */
   initialHeight?: number;
-  /** Additional CSS class names for the outer container */
   className?: string;
 }
-
-// ============================================================================
-// Component
-// ============================================================================
 
 const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
   html,
@@ -116,7 +79,6 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSource, setShowSource] = useState(false);
 
-  // Build blob URL from HTML content
   const [blobUrl, setBlobUrl] = useState<string>('');
 
   useEffect(() => {
@@ -132,7 +94,6 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
     };
   }, [html]);
 
-  // Listen for height messages from the iframe
   const handleMessage = useCallback(
     (event: MessageEvent) => {
       if (
@@ -141,7 +102,6 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
         event.data.type === 'widget-resize' &&
         typeof event.data.height === 'number'
       ) {
-        // Only accept messages from our own blob URL origin
         const maxH = isExpanded ? EXPANDED_MAX_HEIGHT : NORMAL_MAX_HEIGHT;
         setIframeHeight(Math.min(event.data.height + 4, maxH));
       }
@@ -202,7 +162,7 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
         <pre className="overflow-auto p-3 text-xs font-mono text-foreground bg-background leading-relaxed whitespace-pre-wrap break-all max-h-[400px]">
           {html}
         </pre>
-      ) : /* Sandboxed iframe */
+      ) :
       blobUrl ? (
         <iframe
           ref={iframeRef}

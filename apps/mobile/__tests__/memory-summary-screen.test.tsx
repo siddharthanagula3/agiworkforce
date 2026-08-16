@@ -1,9 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M41 — the Memory summary screen is read-only and must always say what it
- * was generated from. These tests pin the provenance line, the honest empty
- * state, and that stored facts are rendered verbatim.
- */
 import React from 'react';
 import { render } from '@testing-library/react-native';
 

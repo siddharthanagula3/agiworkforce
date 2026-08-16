@@ -1,16 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Execution Sidecar Store
- *
- * Manages the persistent right-panel execution sidecar state:
- * panel visibility, active context view, filmstrip screenshots,
- * and tool-to-chat highlight linking.
- *
- * Zustand v5 best practices:
- * - Middleware composition: devtools(persist(immer(...)))
- * - Export selectors for all state slices
- * - Persist only user preferences (width, isCollapsed), not transient state
- */
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -37,10 +25,8 @@ export interface ExecutionSidecarState {
   filmstripScreenshots: FilmstripScreenshot[];
   highlightedToolId: string | null;
 
-  // Whether user manually closed during the current agentic session
   userClosedThisSession: boolean;
 
-  // Actions
   open: () => void;
   close: () => void;
   collapse: () => void;
@@ -186,7 +172,6 @@ export const useExecutionSidecarStore = create<ExecutionSidecarState>()(
   ),
 );
 
-// Selectors
 export const selectIsOpen = (state: ExecutionSidecarState) => state.isOpen;
 export const selectIsCollapsed = (state: ExecutionSidecarState) => state.isCollapsed;
 export const selectWidth = (state: ExecutionSidecarState) => state.width;

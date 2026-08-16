@@ -1,12 +1,3 @@
-/**
- * File Creation & Export Service
- *
- * Handles exporting chat message content to PDF and text files,
- * and sharing them via the system share sheet.
- *
- * Uses expo-print for PDF generation, expo-file-system for file I/O,
- * and expo-sharing for the native share dialog.
- */
 
 import {
   documentDirectory,
@@ -19,17 +10,10 @@ import {
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-// Cloud generated-file downloads: guardedFetch keeps the Local-mode zero-leak
-// chokepoint in front of the request; the Bearer token is only attached to
-// our-cloud hosts (never leaked to arbitrary URLs).
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 
-/**
- * All user-initiated chat exports are written here (not the documentDirectory
- * root) so "Delete everything" (wipeAllLocalData) can remove them in one shot.
- */
 export const EXPORTS_DIR = `${documentDirectory}exports/`;
 
 async function ensureExportsDir(): Promise<void> {
@@ -39,10 +23,6 @@ async function ensureExportsDir(): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export type ExportFormat = 'pdf' | 'text' | 'markdown';
 
 export interface ExportResult {
@@ -51,15 +31,6 @@ export interface ExportResult {
   fileName: string;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Sanitize a title string for use as a file name.
- * Strips non-alphanumeric characters (except hyphens/underscores/spaces),
- * collapses whitespace, and truncates to 64 characters.
- */
 function sanitizeFileName(title: string): string {
   return (
     title
@@ -70,58 +41,43 @@ function sanitizeFileName(title: string): string {
   );
 }
 
-/**
- * Convert basic markdown content to styled HTML suitable for PDF rendering.
- * Handles headings, bold, italic, inline code, code blocks, lists, and paragraphs.
- */
 function markdownToHtml(content: string, title: string): string {
   let html = content;
 
-  // Escape HTML entities first (but preserve markdown syntax)
   html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-  // Code blocks (``` ... ```) — must be processed before inline formatting
   html = html.replace(
     /```(?:\w+)?\n?([\s\S]*?)```/g,
     '<pre style="background:#1a1a2e;color:#e0e0e0;padding:12px;border-radius:8px;font-size:13px;line-height:1.5;overflow-x:auto;font-family:Menlo,monospace;">$1</pre>',
   );
 
-  // Headings (### → h3, ## → h2, # → h1)
   html = html.replace(/^### (.+)$/gm, '<h3 style="color:#1a1a1a;margin:16px 0 8px;">$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2 style="color:#1a1a1a;margin:20px 0 10px;">$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1 style="color:#1a1a1a;margin:24px 0 12px;">$1</h1>');
 
-  // Bold (**text**)
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-  // Italic (*text*)
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-  // Inline code (`code`)
   html = html.replace(
     /`([^`]+)`/g,
     '<code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:13px;font-family:Menlo,monospace;">$1</code>',
   );
 
-  // Unordered list items (- item or * item)
   html = html.replace(/^[-*] (.+)$/gm, '<li style="margin:4px 0;">$1</li>');
 
-  // Ordered list items (1. item)
   html = html.replace(/^\d+\. (.+)$/gm, '<li style="margin:4px 0;">$1</li>');
 
-  // Wrap consecutive <li> elements in <ul>
   html = html.replace(
     /(<li[^>]*>.*?<\/li>\n?)+/g,
     '<ul style="padding-left:20px;margin:8px 0;">$&</ul>',
   );
 
-  // Paragraphs: convert double newlines to paragraph breaks
   html = html
     .split(/\n{2,}/)
     .map((block) => {
       const trimmed = block.trim();
       if (!trimmed) return '';
-      // Don't wrap blocks that are already HTML elements
       if (
         trimmed.startsWith('<h') ||
         trimmed.startsWith('<pre') ||
@@ -205,10 +161,6 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-// ---------------------------------------------------------------------------
-// Export Functions
-// ---------------------------------------------------------------------------
-
 /**
  * Export chat content as a PDF file.
  * Converts markdown to styled HTML, then uses expo-print to generate PDF.
@@ -226,12 +178,10 @@ export async function exportToPDF(content: string, title: string): Promise<Expor
   const html = markdownToHtml(content, title);
   const { uri } = await Print.printToFileAsync({ html });
 
-  // Move from tmp to the exports dir with a meaningful name
   await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.pdf`;
   const destUri = `${EXPORTS_DIR}${fileName}`;
 
-  // Remove existing file if present (overwrite)
   const info = await getInfoAsync(destUri);
   if (info.exists) {
     await deleteAsync(destUri, { idempotent: true });
@@ -318,18 +268,12 @@ export async function shareFile(uri: string): Promise<void> {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Cloud generated-file download (x_generated_files → local bytes)
-// ---------------------------------------------------------------------------
-
-/** Strip the `data:<mime>;base64,` prefix a FileReader data URL carries. */
 function dataUrlToBase64(dataUrl: string): string {
   const commaIdx = dataUrl.indexOf(',');
   if (commaIdx < 0) throw new Error('Malformed data URL from file reader');
   return dataUrl.slice(commaIdx + 1);
 }
 
-/** Blob → base64 via FileReader (RN's fetch lacks a usable arrayBuffer path). */
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -388,7 +332,6 @@ async function fetchGeneratedFileBytes(
 
 async function writeGeneratedFileBytes(fileName: string, base64: string): Promise<string> {
   await ensureExportsDir();
-  // Preserve the real extension so the share sheet picks a sensible UTI/mime.
   const dotIdx = fileName.lastIndexOf('.');
   const baseName = dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName;
   const ext = dotIdx > 0 ? `.${fileName.slice(dotIdx + 1).replace(/[^a-zA-Z0-9]/g, '')}` : '';
@@ -408,11 +351,6 @@ const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeTy
   'image/webp': { extension: 'webp', mimeType: 'image/webp' },
 };
 
-/**
- * Share a durable generated image as local bytes, never as an authenticated
- * cloud URL. Other apps cannot use the Clerk bearer token and must not receive
- * an owner-scoped `/api/files` identity that looks public but returns 401.
- */
 export async function shareGeneratedImage(
   imagePath: string,
   fileName = 'generated-image',
@@ -441,10 +379,6 @@ export async function shareGeneratedImage(
   });
 }
 
-// ---------------------------------------------------------------------------
-// Markdown Export
-// ---------------------------------------------------------------------------
-
 export async function exportToMarkdown(content: string, title: string): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
   const header = `# ${title}\n\n_Exported: ${new Date().toISOString()}_\n\n---\n\n`;
@@ -454,10 +388,6 @@ export async function exportToMarkdown(content: string, title: string): Promise<
   await writeAsStringAsync(destUri, header + content, { encoding: EncodingType.UTF8 });
   return { uri: destUri, format: 'markdown', fileName };
 }
-
-// ---------------------------------------------------------------------------
-// Conversation-level exports
-// ---------------------------------------------------------------------------
 
 import type { ChatMessage } from '@/types/chat';
 

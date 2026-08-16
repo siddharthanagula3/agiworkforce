@@ -8,15 +8,6 @@
  * @packageDocumentation
  */
 
-// ---------------------------------------------------------------------------
-// Time source — uses performance.now() when available, falls back to Date.now()
-// ---------------------------------------------------------------------------
-
-/**
- * High-resolution timer that works across all JS runtimes.
- * Uses `performance.now()` when available (sub-millisecond precision),
- * otherwise falls back to `Date.now()`.
- */
 function now(): number {
   if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
     return performance.now();
@@ -24,11 +15,6 @@ function now(): number {
   return Date.now();
 }
 
-// ---------------------------------------------------------------------------
-// Measurement functions
-// ---------------------------------------------------------------------------
-
-/** Result of a measured operation. */
 export interface MeasureResult<T> {
   result: T;
   durationMs: number;
@@ -81,11 +67,6 @@ export function measureSync<T>(_label: string, fn: () => T): MeasureResult<T> {
   return { result, durationMs };
 }
 
-// ---------------------------------------------------------------------------
-// PerformanceTracker class
-// ---------------------------------------------------------------------------
-
-/** Aggregated metrics for a single label. */
 export interface PerformanceMetrics {
   count: number;
   avgMs: number;
@@ -114,10 +95,8 @@ export interface PerformanceMetrics {
  * ```
  */
 export class PerformanceTracker {
-  /** Active timers: label -> start timestamp. */
   private timers = new Map<string, number>();
 
-  /** Recorded durations per label. */
   private durations = new Map<string, number[]>();
 
   /**
@@ -216,9 +195,6 @@ export class PerformanceTracker {
     };
   }
 
-  /**
-   * Reset all timers and recorded data.
-   */
   reset(): void {
     this.timers.clear();
     this.durations.clear();
@@ -235,14 +211,6 @@ export class PerformanceTracker {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Compute a percentile value from a sorted array.
- * Uses the nearest-rank method.
- */
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   if (sorted.length === 1) return sorted[0]!;

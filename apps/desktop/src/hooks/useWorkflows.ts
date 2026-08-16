@@ -28,18 +28,14 @@ export interface WorkflowExecutionState {
 }
 
 export interface UseWorkflowsResult {
-  // Data
   workflows: WorkflowDefinition[];
   activeExecutions: Map<string, WorkflowExecutionState>;
 
-  // Loading states
   isLoading: boolean;
   isExecuting: boolean;
 
-  // Error state
   error: string | null;
 
-  // Actions
   list: (userId: string) => Promise<WorkflowDefinition[]>;
   get: (id: string) => Promise<WorkflowDefinition>;
   create: (definition: WorkflowDefinition) => Promise<string>;
@@ -53,14 +49,10 @@ export interface UseWorkflowsResult {
   getLogs: (executionId: string) => Promise<WorkflowExecutionLog[]>;
   schedule: (workflowId: string, cronExpr: string, timezone?: string) => Promise<void>;
 
-  // Helpers
   refresh: (userId: string) => Promise<void>;
   clearError: () => void;
 }
 
-/**
- * Hook for managing workflows with real-time execution tracking
- */
 export function useWorkflows(): UseWorkflowsResult {
   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
   const [activeExecutions, setActiveExecutions] = useState<Map<string, WorkflowExecutionState>>(
@@ -70,7 +62,6 @@ export function useWorkflows(): UseWorkflowsResult {
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Track mounted state to prevent setState after unmount
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -80,7 +71,6 @@ export function useWorkflows(): UseWorkflowsResult {
     };
   }, []);
 
-  // Listen for workflow execution events
   useEffect(() => {
     const unlistenPromises = [
       listen<{ execution_id: string; status: WorkflowStatus; node_id?: string }>(
@@ -105,7 +95,6 @@ export function useWorkflows(): UseWorkflowsResult {
             return updated;
           });
 
-          // Clear executing state when workflow completes
           if (['completed', 'failed', 'cancelled'].includes(status)) {
             setIsExecuting(false);
             if (status === 'completed') {
@@ -286,7 +275,6 @@ export function useWorkflows(): UseWorkflowsResult {
       try {
         const executionId = await apiExecuteWorkflow(workflowId, inputs);
 
-        // Initialize execution state
         if (isMountedRef.current) {
           setActiveExecutions((prev) => {
             const updated = new Map(prev);

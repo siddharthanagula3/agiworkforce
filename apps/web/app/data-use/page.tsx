@@ -11,38 +11,8 @@ export const metadata = buildMetadata({
   path: '/data-use',
 });
 
-/*
- * HOW WE USE YOUR DATA — plain-language companion to /privacy
- *
- * WHY THIS PAGE EXISTS
- * /privacy is a legal instrument: it has to be complete, and completeness makes
- * it long. Most people arrive with about eight questions and give up before
- * finding them. This page answers those eight, in the order people ask them.
- *
- * THE ONE RULE THAT KEEPS IT HONEST — read before editing:
- *
- *   THIS PAGE MUST NOT BECOME A SECOND SOURCE OF TRUTH.
- *
- * Do not restate a retention window, a recipient name, a legal basis or a
- * commitment here. LINK to the section of /privacy that states it. The failure
- * mode for a page like this is not that it lies on the day it ships — it is
- * that /privacy gets corrected six months later and this page quietly keeps the
- * old number, at which point the company is publishing two answers and the
- * friendlier one is wrong.
- *
- * So: every concrete fact below is either (a) a link into /privacy, or (b) a
- * statement that is true by construction and does not carry a number. Where a
- * question genuinely needs a number, the answer is "see section N of the
- * privacy policy", not the number.
- *
- * The tone is allowed to be plain. The scope is not allowed to be generous —
- * this page says LESS than /privacy, never more, and never anything /privacy
- * does not already support.
- */
-
 interface Question {
   q: string;
-  /** Short answer. Must be true without qualification, or it is not short enough. */
   a: React.ReactNode;
 }
 

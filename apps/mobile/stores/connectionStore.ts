@@ -12,11 +12,8 @@ import {
   verifyMessage,
   type HmacSessionState,
 } from '@/lib/dispatchHmac';
-// MED-MOB-05 fix: per-field Agent payload validator. Lives in its own
-// file so it can be unit-tested without pulling in react-native-webrtc.
 import { parseAgent, MAX_AGENTS_PER_UPDATE } from '@/lib/dispatchAgentValidator';
 
-/** RTCConfiguration is defined internally in react-native-webrtc but not re-exported. */
 interface RTCConfiguration {
   iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }>;
   iceTransportPolicy?: 'all' | 'relay';
@@ -25,7 +22,6 @@ interface RTCConfiguration {
   iceCandidatePoolSize?: number;
 }
 
-/** RTCIceCandidateInit is defined internally in react-native-webrtc but not re-exported. */
 interface RTCIceCandidateInit {
   candidate?: string;
   sdpMid?: string | null;
@@ -51,7 +47,6 @@ export type ConnectionStatus =
   | 'reconnecting'
   | 'session_expired';
 
-/** Qualitative indicator of connection health based on heartbeat latency */
 export type ConnectionQuality = 'strong' | 'weak' | 'disconnected';
 
 export interface DesktopMetadata {
@@ -63,67 +58,37 @@ export interface DesktopMetadata {
 }
 
 interface ConnectionState {
-  /** Current connection status */
   status: ConnectionStatus;
-  /** Active pairing code extracted from QR */
   pairingCode: string | null;
-  /** Role token required by the signaling server for mobile registration */
   pairToken: string | null;
-  /** Desktop device name from peer metadata */
   desktopName: string | null;
-  /** Full desktop metadata (version, platform, etc.) */
   desktopMetadata: DesktopMetadata | null;
-  /** Human-readable error message when status is 'error' */
   error: string | null;
-  /** Session expiry timestamp (ms since epoch) */
   sessionExpiresAt: number | null;
-  /** Timestamp of last successful heartbeat pong from desktop (ms) */
   lastHeartbeatAt: number | null;
-  /** Latency of the last heartbeat round-trip in ms (null if no pong received) */
   lastHeartbeatLatencyMs: number | null;
-  /** How many consecutive heartbeats have been missed */
   missedHeartbeats: number;
-  /** Countdown (seconds) until next reconnect attempt when reconnecting */
   reconnectCountdown: number;
-  /** Qualitative connection quality derived from heartbeat latency */
   connectionQuality: ConnectionQuality;
-  /** Telemetry: total reconnect attempts in this session */
   reconnectAttempts: number;
-  /** Telemetry: number of successful reconnects */
   reconnectSuccesses: number;
-  /** Telemetry: ms from reconnect start to connected (most recent) */
   lastReconnectDurationMs: number | null;
-  /** Timestamp when the current reconnect attempt started (ms) */
   reconnectStartedAt: number | null;
 
-  // --- Actions ---
   connect: (code: string) => void;
   disconnect: () => void;
-  /**
-   * Resolve true once the signed frame is accepted by an open local transport.
-   * This is transport acceptance, not a Desktop acknowledgement; workflows
-   * must still wait for their domain status event.
-   */
   sendControl: (action: string, payload?: unknown) => Promise<boolean>;
-  /** Queue a control message to send once reconnected */
   queueControl: (action: string, payload?: unknown) => void;
   clearError: () => void;
-  /** Record a heartbeat pong received from the desktop */
   recordHeartbeat: (latencyMs?: number) => void;
-  /** Mark the status as stale after a missed heartbeat */
   markStale: () => void;
-  /** Begin reconnecting countdown */
   beginReconnecting: (countdownSeconds: number) => void;
-  /** Decrement reconnect countdown by 1 */
   tickReconnectCountdown: () => void;
-  /** Mark session as expired */
   markSessionExpired: () => void;
 }
 
-/** Signaling client instance — kept outside state to avoid serialization */
 let signalingClient: SignalingClient | null = null;
 
-/** Monotonic guard so stale async connect() work cannot mutate a newer session. */
 let connectionAttemptId = 0;
 
 function invalidateConnectionAttempt(): void {
@@ -134,17 +99,6 @@ function isCurrentConnectionAttempt(attemptId: number): boolean {
   return attemptId === connectionAttemptId;
 }
 
-/**
- * PAR-M14: bounded connect watchdog.
- *
- * Nothing else moves the status off `'connecting'` when the desktop peer never
- * shows up — a structurally valid code paired against a closed desktop app left
- * "Connecting to Desktop..." on screen forever. The timer is deliberately NOT
- * cleared on `registered`: registration only proves the signaling server
- * accepted us, and `registered` with `peerConnected: false` is exactly the hang
- * this guards. It clears when the session actually settles (peer_ready) or is
- * torn down (error/close/terminated/expiry/disconnect).
- */
 const CONNECT_WATCHDOG_MS = 25_000;
 let connectWatchdogTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -162,9 +116,6 @@ function startConnectWatchdog(attemptId: number): void {
     if (!isCurrentConnectionAttempt(attemptId)) return;
     if (useConnectionStore.getState().status !== 'connecting') return;
 
-    // Make the failure terminal: a half-open socket must not flip the screen
-    // back to connected behind the recovery UI. `error: null` keeps transport
-    // text out of the view — ErrorView renders the pairing checklist instead.
     invalidateConnectionAttempt();
     if (signalingClient) {
       signalingClient.close();
@@ -182,20 +133,11 @@ function startConnectWatchdog(attemptId: number): void {
   }, CONNECT_WATCHDOG_MS);
 }
 
-/**
- * HIGH-MOB-05 fix (2026-05-04, v2 nonce scheme 2026-05-05): per-session
- * HMAC state. Initialised when a pairing code is resolved to a shared secret.
- * Outgoing messages are signed; incoming messages are verified before dispatch.
- * The nonceCache (Map<nonce, receivedAt>) is pruned by verifyMessage() on
- * each inbound message — no separate GC timer needed.
- */
 let hmacState: HmacSessionState | null = null;
 
-/** Queue of control messages to flush once reconnected. Capped to prevent unbounded growth. */
 const pendingControlQueue: Array<{ action: string; payload: unknown }> = [];
 const MAX_PENDING_QUEUE = 200;
 
-/** Drain queued controls in order, retaining the first frame a transport rejects. */
 async function flushPendingControlQueue(): Promise<void> {
   if (pendingControlQueue.length === 0) return;
   const store = useConnectionStore.getState();
@@ -211,19 +153,15 @@ async function flushPendingControlQueue(): Promise<void> {
   }
 }
 
-/** WebRTC peer connection for low-latency data channel */
 let peerConnection: RTCPeerConnection | null = null;
 
-/** RTCDataChannel type extracted from createDataChannel return type */
 type RTCDataChannelType = ReturnType<RTCPeerConnection['createDataChannel']>;
 
-/** SDP init dict for RTCSessionDescription constructor */
 interface RTCSessionDescriptionInit {
   sdp: string;
   type: string;
 }
 
-/** WebRTC data channel for control messages */
 let dataChannel: RTCDataChannelType | null = null;
 
 /**
@@ -251,10 +189,6 @@ function parsePairingPayload(raw: string): { code: string; pairToken: string | n
 function isDispatchCompanionEnabled(): boolean {
   return FEATURES.dispatch && FEATURES.companion;
 }
-
-// ---------------------------------------------------------------------------
-// Runtime type guards for incoming control messages (no Zod dependency)
-// ---------------------------------------------------------------------------
 
 function isString(v: unknown): v is string {
   return typeof v === 'string';
@@ -559,19 +493,6 @@ export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEve
   };
 }
 
-/**
- * Handle incoming control messages from the desktop via signaling or data channel.
- * All fields are validated at runtime before use — no unsafe `as` casts.
- *
- * HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): messages are expected to be
- * signed envelopes { hmac, nonce, payload, ts, type }. When hmacState is
- * initialised the envelope is verified before the inner payload is processed.
- * Messages that fail verification are silently dropped (no error state —
- * avoids providing an oracle to an active attacker).
- *
- * Unsigned messages are rejected. When hmacState is null, control messages are
- * dropped because the receiver cannot authenticate them.
- */
 async function handleControlMessageAsync(envelope: unknown): Promise<void> {
   if (!isDispatchCompanionEnabled()) return;
   if (!hmacState) {
@@ -601,7 +522,6 @@ async function handleControlMessageAsync(envelope: unknown): Promise<void> {
   handleControlMessageInner(payload);
 }
 
-/** Synchronous caller for data-channel messages (wraps async handler). */
 function handleControlMessage(payload: unknown): void {
   handleControlMessageAsync(payload).catch((err) => {
     console.warn('[dispatch] handleControlMessageAsync error:', err);
@@ -618,9 +538,6 @@ function handleControlMessageInner(payload: unknown): void {
     case 'agents_update': {
       const agents = normalizedPayload['agents'];
       if (Array.isArray(agents)) {
-        // MED-MOB-05 fix (red-team 2026-05): per-field validation via
-        // parseAgent. Cap to MAX_AGENTS_PER_UPDATE so a malicious relay
-        // cannot flood the UI with thousands of fake entries.
         const capped = agents.slice(0, MAX_AGENTS_PER_UPDATE);
         const valid: Agent[] = [];
         for (const raw of capped) {
@@ -637,10 +554,6 @@ function handleControlMessageInner(payload: unknown): void {
         : undefined;
       const patch = isObject(normalizedPayload['patch']) ? normalizedPayload['patch'] : undefined;
       if (agentId && patch) {
-        // Validate the patch through parseAgent (same per-field length caps and
-        // coercion as the agents_update path) by merging it onto the existing
-        // agent. Drops updates for unknown agents or patches that fail validation,
-        // so a remote peer can't inject oversized/malformed fields via a patch.
         const existing = useAgentStore.getState().agents.find((a) => a.id === agentId);
         if (existing) {
           const candidate = parseAgent({ ...existing, ...patch, id: agentId });
@@ -711,10 +624,6 @@ function handleControlMessageInner(payload: unknown): void {
   }
 }
 
-/**
- * Set up WebRTC peer connection for low-latency data channel communication.
- * Falls back to signaling relay if WebRTC fails.
- */
 function setupPeerConnection(): void {
   cleanupPeerConnection();
 
@@ -728,8 +637,6 @@ function setupPeerConnection(): void {
   const pc = new RTCPeerConnection(config);
   peerConnection = pc;
 
-  // Handle ICE candidates — send to peer via signaling
-  // react-native-webrtc uses on* callback style
   (pc as unknown as Record<string, unknown>).onicecandidate = (event: {
     candidate: RTCIceCandidate | null;
   }) => {
@@ -740,7 +647,6 @@ function setupPeerConnection(): void {
     }
   };
 
-  // Handle incoming data channels from the desktop
   (pc as unknown as Record<string, unknown>).ondatachannel = (event: {
     channel: RTCDataChannelType;
   }) => {
@@ -750,22 +656,15 @@ function setupPeerConnection(): void {
     }
   };
 
-  // Handle connection state changes
   (pc as unknown as Record<string, unknown>).onconnectionstatechange = () => {
     // Connection state change handled silently — reconnection logic in signaling layer
   };
 }
 
-/**
- * Configure data channel event handlers.
- */
-
 function setupDataChannel(channel: RTCDataChannelType): void {
   const ch = channel as unknown as Record<string, unknown>;
 
   ch.onopen = () => {
-    // Retry anything the signaling fallback could not accept while WebRTC was
-    // negotiating. The ordered drain retains the first rejected frame.
     void flushPendingControlQueue();
   };
 
@@ -779,14 +678,10 @@ function setupDataChannel(channel: RTCDataChannelType): void {
   };
 
   ch.onclose = () => {
-    // DataChannel closed
     dataChannel = null;
   };
 }
 
-/**
- * Handle WebRTC signaling messages (offer/answer/ice).
- */
 async function handleSignalingMessage(kind: SignalKind, payload: unknown): Promise<void> {
   if (!peerConnection) return;
   const data = payload as Record<string, unknown>;
@@ -827,9 +722,6 @@ async function handleSignalingMessage(kind: SignalKind, payload: unknown): Promi
   }
 }
 
-/**
- * Clean up WebRTC resources.
- */
 function cleanupPeerConnection(): void {
   if (dataChannel) {
     try {
@@ -849,7 +741,6 @@ function cleanupPeerConnection(): void {
   }
 }
 
-/** Derive connection quality from heartbeat latency and missed heartbeats */
 function deriveConnectionQuality(
   latencyMs: number | null,
   missedHeartbeats: number,
@@ -859,7 +750,7 @@ function deriveConnectionQuality(
     return 'disconnected';
   }
   if (missedHeartbeats >= 2 || status === 'stale') return 'disconnected';
-  if (latencyMs === null) return 'weak'; // connected but no pong yet
+  if (latencyMs === null) return 'weak';
   if (latencyMs < 200) return 'strong';
   if (latencyMs < 800) return 'weak';
   return 'disconnected';
@@ -892,7 +783,6 @@ export const useConnectionStore = create<ConnectionState>()(
           return;
         }
 
-        // Clean up any existing connection
         const currentState = get();
         const isReconnect =
           currentState.status === 'stale' || currentState.status === 'reconnecting';
@@ -920,23 +810,6 @@ export const useConnectionStore = create<ConnectionState>()(
 
         startConnectWatchdog(attemptId);
 
-        // HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): derive the per-session
-        // HMAC key from the pairing code + a random session salt via HKDF-SHA-256.
-        // The salt is generated here so it is unique per connect() call (even on
-        // reconnect with the same pairing code). The desktop derives the same key
-        // when it receives the salt via the `registered` / `peer_ready` event
-        // metadata field `dispatchSalt`. The salt is NOT secret — only the derived
-        // key is. A fresh nonceCache is allocated for each session so replays from
-        // a previous connection cannot be injected into the new session.
-        //
-        // Audit fix F4 (2026-05-05): replaced Math.random() with CSPRNG
-        // (expo-crypto getRandomBytesAsync). Same 16-byte/32 hex-char pattern as
-        // lib/mmkv.ts generateMmkvEncryptionKey(). Math.random() had ~36 bits of
-        // entropy; this gives 128 bits.
-        // MOB-DISPATCH-SALT-RACE (P0) + MOB-DISPATCH-VERSION-HARDCODED (P1):
-        // Await salt+HMAC derivation BEFORE constructing SignalingClient so
-        // dispatchSalt is never sent as ''. Version read from expo config
-        // (same pattern as apps/mobile/app/(app)/about.tsx).
         void (async () => {
           let pairToken = suppliedPairToken;
           let signalingWsUrl = WS_URL;
@@ -1011,10 +884,8 @@ export const useConnectionStore = create<ConnectionState>()(
 
           if (!isCurrentConnectionAttempt(attemptId)) return;
 
-          // Set up WebRTC
           setupPeerConnection();
 
-          // Create signaling client (auto-connects on construction)
           signalingClient = new SignalingClient({
             wsUrl: signalingWsUrl,
             code: parsed.code,
@@ -1026,13 +897,11 @@ export const useConnectionStore = create<ConnectionState>()(
               if (!isCurrentConnectionAttempt(attemptId)) return;
               switch (event.type) {
                 case 'open':
-                  // WebSocket opened, waiting for registration confirmation
                   break;
 
                 case 'registered':
                   set({ sessionExpiresAt: event.expiresAt });
                   if (event.peerConnected) {
-                    // Desktop is already connected — wait for peer_ready with metadata
                     set({ status: 'connecting' });
                   }
                   break;
@@ -1065,19 +934,15 @@ export const useConnectionStore = create<ConnectionState>()(
                     reconnectStartedAt: null,
                   }));
 
-                  // Flush any queued control messages now that we're reconnected
                   void flushPendingControlQueue();
-                  // Request a fresh agent state from desktop (don't assume stale state is current)
                   useAgentStore.getState().setAgents([]);
                   break;
                 }
 
                 case 'signal':
                   if (event.kind === 'control') {
-                    // Control message via signaling relay
                     handleControlMessage(event.payload);
                   } else {
-                    // WebRTC signaling (offer/answer/ice)
                     handleSignalingMessage(event.kind, event.payload).catch(() => {
                       // Signaling message handling failed — ignore
                     });
@@ -1091,7 +956,6 @@ export const useConnectionStore = create<ConnectionState>()(
                     desktopMetadata: null,
                   });
                   cleanupPeerConnection();
-                  // Clear agents when desktop disconnects
                   useAgentStore.getState().setAgents([]);
                   break;
 
@@ -1122,7 +986,6 @@ export const useConnectionStore = create<ConnectionState>()(
 
                 case 'close':
                   clearConnectWatchdog();
-                  // Only set disconnected if not already in error state
                   if (get().status !== 'error') {
                     set({ status: 'disconnected' });
                   }
@@ -1151,12 +1014,9 @@ export const useConnectionStore = create<ConnectionState>()(
           lastHeartbeatLatencyMs: latencyMs ?? get().lastHeartbeatLatencyMs,
           connectionQuality: quality,
         });
-        // If we were stale/reconnecting but got a heartbeat, restore connected
         if (currentStatus === 'stale' || currentStatus === 'reconnecting') {
           set({ status: 'connected' });
-          // Flush queued control messages that piled up during disconnect
           void flushPendingControlQueue();
-          // Re-sync agent state from desktop
           useAgentStore.getState().setAgents([]);
         }
       },
@@ -1177,7 +1037,7 @@ export const useConnectionStore = create<ConnectionState>()(
       queueControl: (action: string, payload?: unknown) => {
         if (!isDispatchCompanionEnabled()) return;
         if (pendingControlQueue.length >= MAX_PENDING_QUEUE) {
-          pendingControlQueue.shift(); // Drop oldest to stay under cap
+          pendingControlQueue.shift();
         }
         pendingControlQueue.push({ action, payload: payload ?? {} });
       },
@@ -1203,7 +1063,6 @@ export const useConnectionStore = create<ConnectionState>()(
       markSessionExpired: () => {
         invalidateConnectionAttempt();
         clearConnectWatchdog();
-        // Clear any queued messages — session is gone
         pendingControlQueue.length = 0;
         set({
           status: 'session_expired',
@@ -1225,9 +1084,7 @@ export const useConnectionStore = create<ConnectionState>()(
           signalingClient = null;
         }
         cleanupPeerConnection();
-        // HIGH-MOB-05: clear HMAC session state on disconnect
         hmacState = null;
-        // Clear pending queue on intentional disconnect
         pendingControlQueue.length = 0;
         set({
           status: 'disconnected',
@@ -1244,7 +1101,6 @@ export const useConnectionStore = create<ConnectionState>()(
           connectionQuality: 'disconnected',
           reconnectStartedAt: null,
         });
-        // Clear agents on disconnect
         useAgentStore.getState().setAgents([]);
         useDispatchTaskStore.getState().reset();
       },
@@ -1255,21 +1111,15 @@ export const useConnectionStore = create<ConnectionState>()(
         const { status } = get();
         const controlMessage = buildRelayControlMessage(action, payload);
 
-        // During a transient stale/reconnecting state, retain the control for
-        // ordered delivery instead of dropping it.
         if (status === 'reconnecting' || status === 'stale') {
           get().queueControl(action, payload);
           return true;
         }
 
-        // There is no transport to accept the frame in terminal states.
         if (status === 'disconnected' || status === 'error' || status === 'session_expired') {
           return false;
         }
 
-        // HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): sign the outgoing
-        // control message. Do not send unsigned control data when HMAC state is
-        // missing; Dispatch must fail closed.
         if (!hmacState) {
           console.warn('[dispatch] Refusing to send unsigned control message');
           return false;
@@ -1289,7 +1139,6 @@ export const useConnectionStore = create<ConnectionState>()(
             return false;
           }
           const serialised = JSON.stringify(envelope);
-          // Prefer data channel for low latency
           if (
             sessionDataChannel &&
             dataChannel === sessionDataChannel &&
@@ -1335,14 +1184,11 @@ export const useConnectionStore = create<ConnectionState>()(
     {
       name: 'connection-store',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[connectionStore] Hydration failed:', error);
       },
       partialize: (state) => ({
-        // Do NOT persist pairingCode — it's ephemeral and sensitive
-        // Do NOT persist connection status or metadata
         desktopName: state.desktopName,
       }),
     },
@@ -1351,9 +1197,6 @@ export const useConnectionStore = create<ConnectionState>()(
 
 rehydrateWhenMmkvReady(useConnectionStore, 'connection-store');
 
-/**
- * Convert raw signaling error strings to user-friendly messages.
- */
 function friendlyErrorMessage(raw: string): string {
   switch (raw) {
     case 'connection_error':

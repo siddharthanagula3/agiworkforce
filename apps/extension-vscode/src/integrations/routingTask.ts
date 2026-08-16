@@ -2,7 +2,6 @@ import { classifyTaskLocally } from '@agiworkforce/routing';
 import type { RoutingAttachment, RoutingTaskType } from '@agiworkforce/routing';
 import type { UserInput } from '@agiworkforce/types';
 
-/** True for the shared Auto route and its explicit routing-mode aliases. */
 export function isAutoRoutingModel(modelId: string): boolean {
   const normalized = modelId.trim().toLowerCase();
   return normalized === 'auto' || normalized.startsWith('auto-');
@@ -17,11 +16,6 @@ function attachmentFromInput(input: UserInput): RoutingAttachment | undefined {
   return undefined;
 }
 
-/**
- * Classify only the current presentation input. Conversation continuity and
- * route selection stay in the Rust app-server, which owns the persisted
- * developer session shared by CLI and VS Code.
- */
 export function classifyDeveloperTurn(
   text: string,
   inputs: readonly UserInput[] = [],

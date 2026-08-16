@@ -1,11 +1,3 @@
-/**
- * Behaviour tests for the native sign-in form.
- *
- * These cover every state the form can render and the exact sentence the user
- * reads in each failure — including the regression this rewrite exists for: a
- * 5xx must be presented as a service fault, never as the account being
- * rejected.
- */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -143,7 +135,6 @@ describe('NativeSignInCard', () => {
     expect(screen.getByRole('button', { name: /^sign in$/i })).toBeInTheDocument();
     expect(screen.queryByText(/checking/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/device code/i)).not.toBeInTheDocument();
-    // The browser path stays reachable as an explicit fallback.
     expect(
       screen.getByRole('button', { name: /sign in through your browser instead/i }),
     ).toBeInTheDocument();
@@ -192,10 +183,6 @@ describe('NativeSignInCard', () => {
     expect(completeNativeSignIn).not.toHaveBeenCalled();
   });
 
-  /**
-   * The reported bug, asserted at the surface the user actually reads: a 500
-   * must never be rendered as "AGI Cloud rejected …".
-   */
   it('presents a Clerk 5xx as a service fault, never as an account rejection', async () => {
     clerk.createPasswordSignIn.mockRejectedValue(
       new ClerkAuthError(

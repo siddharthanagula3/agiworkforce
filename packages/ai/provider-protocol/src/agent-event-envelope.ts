@@ -1,24 +1,3 @@
-/**
- * Web-dialect edge translation for the one versioned agent event envelope
- * (`crates/agiworkforce-protocol/src/agent_events.rs`, execution program
- * §W5 item 4). Pure functions both ways — no IO, no provider SDKs, matching
- * this package's existing translation-edge contract (see
- * `openai-wire-compat.ts`'s module doc).
- *
- * This is the web/`StreamChunk` <-> `AgentEvent` edge specifically. The
- * app-server (`turn/*` JSON-RPC notifications) and desktop (`sse_parser.rs`
- * `StreamChunk`) edges are their own surfaces' work — "converging the three
- * surfaces' emitters is follow-on work" (execution program §W5 item 4) —
- * this file does not attempt them.
- *
- * `StreamChunkCitation`, `StreamChunkVendorRaw`, and `StreamChunkResponseMeta`
- * map to `null`: `agent_events.rs`'s module doc documents why they are not
- * modeled in the shared envelope (legacy-wire-reconstruction concerns with
- * no app-server/desktop equivalent). User-surface run activity (`lifecycle`,
- * progress, execution, approvals, sources, artifacts, and compaction) maps to
- * `null` in the reverse direction because provider `StreamChunk` is only the
- * model-streaming sub-dialect of the broader agent-run envelope.
- */
 
 import type { StreamChunk } from '@agiworkforce/types';
 import type { AgentEvent, AgentEventStopReason, JsonValue } from '@agiworkforce/types/protocol';
@@ -36,16 +15,6 @@ const STOP_REASON_TO_AGENT_EVENT: Record<
   error: 'error',
 };
 
-/**
- * Every member round-trips losslessly now that `StreamChunkStop['reason']`
- * carries the first-class `'refusal'` member and both live emitters produce
- * it (Anthropic `stop_reason: 'refusal'` and OpenAI wire
- * `finish_reason: 'content_filter'` — see
- * `packages/ai/providers/{anthropic,openai}/src/stream*.ts`). The historical
- * asymmetry (envelope `Refusal` collapsing down to `'error'`) is closed —
- * see the `stopReasonRoundTrip` describe block in the test file, which pins
- * the symmetric behavior.
- */
 const AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK: Record<
   AgentEventStopReason,
   Extract<StreamChunk, { type: 'stop' }>['reason']
@@ -59,8 +28,6 @@ const AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK: Record<
   error: 'error',
 };
 
-/** Web `StreamChunk` -> the shared envelope's `AgentEvent`. Returns `null`
- * for the three deliberately-unmodeled variants (see module doc). */
 export function streamChunkToAgentEvent(chunk: StreamChunk): AgentEvent | null {
   switch (chunk.type) {
     case 'text-delta':
@@ -79,10 +46,6 @@ export function streamChunkToAgentEvent(chunk: StreamChunk): AgentEvent | null {
       return {
         type: 'server-tool-result',
         toolUseId: chunk.toolUseId,
-        // `StreamChunkServerToolResult.payload` is deliberately `unknown`
-        // (its own docstring: "no cross-vendor consumer interprets its
-        // contents"), but every real producer assigns it a vendor JSON
-        // object — safe to assert into the envelope's stricter `JsonValue`.
         payload: chunk.payload as JsonValue,
         isError: chunk.isError,
       };
@@ -113,8 +76,6 @@ export function streamChunkToAgentEvent(chunk: StreamChunk): AgentEvent | null {
   }
 }
 
-/** The shared envelope's `AgentEvent` -> web `StreamChunk`. Returns `null`
- * for user-surface run activity with no provider `StreamChunk` analog. */
 export function agentEventToStreamChunk(event: AgentEvent): StreamChunk | null {
   switch (event.type) {
     case 'text-delta':

@@ -1,7 +1,6 @@
 import * as Sentry from '@shared/lib/sentry';
 import { logger } from '@shared/lib/logger';
 
-// Performance monitoring interface
 interface PerformanceMetrics {
   pageLoadTime: number;
   firstContentfulPaint: number;
@@ -21,17 +20,12 @@ class MonitoringService {
     this.sessionId = this.generateSessionId();
   }
 
-  /**
-   * Initialize monitoring service
-   */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
     try {
-      // Set up performance monitoring
       this.setupPerformanceMonitoring();
 
-      // Set up error boundary
       this.setupErrorBoundary();
 
       this.isInitialized = true;
@@ -41,45 +35,27 @@ class MonitoringService {
     }
   }
 
-  /**
-   * Set user context for error tracking
-   */
   setUserContext(user: { id: string; email: string; name?: string }): void {
     Sentry.setUser({ id: user.id, email: user.email, username: user.name });
   }
 
-  /**
-   * Clear user context
-   */
   clearUserContext(): void {
     Sentry.clearUser();
   }
 
-  /**
-   * Track custom events
-   */
   trackEvent(eventName: string, _properties?: Record<string, unknown>): void {
     Sentry.addBreadcrumb(eventName, 'ui.click');
     Sentry.captureMessage(eventName, 'info');
   }
 
-  /**
-   * Track performance metrics
-   */
   trackPerformance(_metrics: Partial<PerformanceMetrics>): void {
     Sentry.addBreadcrumb('Performance metrics', 'api');
   }
 
-  /**
-   * Track API calls
-   */
   trackApiCall(endpoint: string, method: string, _statusCode: number, _duration: number): void {
     Sentry.addBreadcrumb(`API ${method} ${endpoint}`, 'api');
   }
 
-  /**
-   * Track user interactions
-   */
   trackUserInteraction(action: string, target: string, properties?: Record<string, unknown>): void {
     this.trackEvent('user_interaction', {
       action,
@@ -88,9 +64,6 @@ class MonitoringService {
     });
   }
 
-  /**
-   * Track business metrics
-   */
   trackBusinessMetric(metric: string, value: number, properties?: Record<string, unknown>): void {
     this.trackEvent('business_metric', {
       metric,
@@ -99,14 +72,9 @@ class MonitoringService {
     });
   }
 
-  /**
-   * Set up performance monitoring
-   */
   private setupPerformanceMonitoring(): void {
-    // Monitor Core Web Vitals
     if ('PerformanceObserver' in window) {
       try {
-        // Largest Contentful Paint
         const lcpObserver = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
             if (entry.entryType === 'largest-contentful-paint') {
@@ -121,7 +89,6 @@ class MonitoringService {
         });
         this.performanceObservers.push(lcpObserver);
 
-        // First Input Delay
         const fidObserver = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
             if (entry.entryType === 'first-input') {
@@ -140,7 +107,6 @@ class MonitoringService {
         fidObserver.observe({ entryTypes: ['first-input'] });
         this.performanceObservers.push(fidObserver);
 
-        // Cumulative Layout Shift
         const clsObserver = new PerformanceObserver((list) => {
           let cumulativeScore = 0;
           for (const entry of list.getEntries()) {
@@ -164,7 +130,6 @@ class MonitoringService {
       }
     }
 
-    // Track page load time
     const handleLoad = () => {
       setTimeout(() => {
         const navigation = performance.getEntriesByType(
@@ -182,11 +147,7 @@ class MonitoringService {
     this.cleanupFns.push(() => window.removeEventListener('load', handleLoad));
   }
 
-  /**
-   * Set up error boundary
-   */
   private setupErrorBoundary(): void {
-    // Global error handler
     const handleError = (event: ErrorEvent) => {
       this.captureError(event.error, {
         type: 'javascript_error',
@@ -198,7 +159,6 @@ class MonitoringService {
     window.addEventListener('error', handleError);
     this.cleanupFns.push(() => window.removeEventListener('error', handleError));
 
-    // Unhandled promise rejection handler
     const handleRejection = (event: PromiseRejectionEvent) => {
       this.captureError(event.reason, {
         type: 'unhandled_promise_rejection',
@@ -208,39 +168,23 @@ class MonitoringService {
     this.cleanupFns.push(() => window.removeEventListener('unhandledrejection', handleRejection));
   }
 
-  /**
-   * Capture error with context
-   */
   captureError(error: Error, _context?: Record<string, unknown>): void {
     Sentry.captureError(error);
   }
 
-  /**
-   * Generate unique session ID
-   */
   private generateSessionId(): string {
     return `session_${Date.now()}_${crypto.randomUUID().slice(0, 9)}`;
   }
 
-  /**
-   * Get current session ID
-   */
   getSessionId(): string {
     return this.sessionId;
   }
 
-  /**
-   * Flush pending events
-   */
   async flush(): Promise<void> {
     await Sentry.flush();
   }
 
-  /**
-   * Destroy monitoring service and clean up all resources
-   */
   destroy(): void {
-    // Disconnect all PerformanceObservers
     this.performanceObservers.forEach((observer) => {
       try {
         observer.disconnect();
@@ -250,7 +194,6 @@ class MonitoringService {
     });
     this.performanceObservers = [];
 
-    // Run all cleanup functions (remove event listeners)
     this.cleanupFns.forEach((fn) => {
       try {
         fn();
@@ -260,12 +203,10 @@ class MonitoringService {
     });
     this.cleanupFns = [];
 
-    // Reset initialization state
     this.isInitialized = false;
 
     logger.info('[MonitoringService] Destroyed and resources cleaned up');
   }
 }
 
-// Export singleton instance
 export const monitoringService = new MonitoringService();

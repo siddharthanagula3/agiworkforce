@@ -1,13 +1,5 @@
-/**
- * vscode.ts — Full mock of the VS Code API for unit testing
- *
- * This file is aliased as 'vscode' by vitest.config.ts so that source files
- * that import from 'vscode' can be tested without the VS Code host process.
- */
 
 import { vi } from 'vitest';
-
-// ─── SecretStorage ────────────────────────────────────────────────────────────
 
 class MockSecretStorage {
   private _store = new Map<string, string>();
@@ -26,8 +18,6 @@ class MockSecretStorage {
 
   onDidChange = vi.fn();
 }
-
-// ─── EventEmitter ─────────────────────────────────────────────────────────────
 
 class EventEmitter<T> {
   private _listeners: Array<(e: T) => void> = [];
@@ -50,8 +40,6 @@ class EventEmitter<T> {
   }
 }
 
-// ─── Disposable ───────────────────────────────────────────────────────────────
-
 class Disposable {
   constructor(private readonly _fn: () => void = () => {}) {}
 
@@ -67,8 +55,6 @@ class Disposable {
     });
   }
 }
-
-// ─── Uri ──────────────────────────────────────────────────────────────────────
 
 class Uri {
   static file(path: string): Uri {
@@ -119,8 +105,6 @@ class Uri {
   }
 }
 
-// ─── Position / Range / Selection ────────────────────────────────────────────
-
 class Position {
   constructor(
     public readonly line: number,
@@ -155,8 +139,6 @@ class Selection extends Range {
   }
 }
 
-// ─── TreeItem ─────────────────────────────────────────────────────────────────
-
 class TreeItem {
   description?: string;
   tooltip?: string;
@@ -170,19 +152,13 @@ class TreeItem {
   ) {}
 }
 
-// ─── ThemeIcon ────────────────────────────────────────────────────────────────
-
 class ThemeIcon {
   constructor(public readonly id: string) {}
 }
 
-// ─── ThemeColor ───────────────────────────────────────────────────────────────
-
 class ThemeColor {
   constructor(public readonly id: string) {}
 }
-
-// ─── CancellationTokenSource ─────────────────────────────────────────────────
 
 class CancellationTokenSource {
   private _cancelled = false;
@@ -205,8 +181,6 @@ class CancellationTokenSource {
     this._emitter.dispose();
   }
 }
-
-// ─── WorkspaceEdit ────────────────────────────────────────────────────────────
 
 class WorkspaceEdit {
   private _edits: Array<{
@@ -234,8 +208,6 @@ class WorkspaceEdit {
   }
 }
 
-// ─── StatusBarItem ────────────────────────────────────────────────────────────
-
 class MockStatusBarItem {
   text = '';
   tooltip = '';
@@ -246,8 +218,6 @@ class MockStatusBarItem {
   hide = vi.fn();
   dispose = vi.fn();
 }
-
-// ─── ExtensionContext mock ────────────────────────────────────────────────────
 
 class MockExtensionContext {
   subscriptions: Disposable[] = [];
@@ -274,15 +244,11 @@ class MockExtensionContext {
   };
 }
 
-// ─── TelemetrySender / TelemetryLogger ────────────────────────────────────────
-
 class MockTelemetryLogger {
   logUsage = vi.fn();
   logError = vi.fn();
   dispose = vi.fn();
 }
-
-// ─── TextDocument / TextEditor mocks ─────────────────────────────────────────
 
 class MockTextDocument {
   constructor(
@@ -327,8 +293,6 @@ class MockTextDocument {
   }
 }
 
-// ─── Webview mock ─────────────────────────────────────────────────────────────
-
 class MockWebview {
   html = '';
   options: unknown = {};
@@ -342,8 +306,6 @@ class MockWebview {
     return uri;
   }
 }
-
-// ─── MarkdownString ───────────────────────────────────────────────────────────
 
 class MarkdownString {
   isTrusted?: boolean;
@@ -367,8 +329,6 @@ class MarkdownString {
   }
 }
 
-// ─── ChatRequestTurn / ChatResponseTurn ───────────────────────────────────────
-
 class ChatRequestTurn {
   constructor(
     public readonly prompt: string,
@@ -386,8 +346,6 @@ class ChatResponseTurn {
 class ChatResponseMarkdownPart {
   constructor(public readonly value: string | { value: string }) {}
 }
-
-// ─── LanguageModelChatMessage ─────────────────────────────────────────────────
 
 class LanguageModelChatMessage {
   static User(content: string): LanguageModelChatMessage {
@@ -446,8 +404,6 @@ export const window = {
   onDidCloseTerminal: vi.fn(() => new Disposable()),
   onDidOpenTerminal: vi.fn(() => new Disposable()),
   onDidChangeActiveTerminal: vi.fn(() => new Disposable()),
-  // Shell Integration API (stable since 1.93; `engines.vscode` is ^1.100.0).
-  // Tests capture the registered listener from `mock.calls` and fire it.
   onDidChangeTerminalShellIntegration: vi.fn(() => new Disposable()),
   onDidStartTerminalShellExecution: vi.fn(() => new Disposable()),
   onDidEndTerminalShellExecution: vi.fn(() => new Disposable()),
@@ -532,7 +488,6 @@ export const extensions = {
 };
 
 export const env = {
-  /** VS Code's display language. Tests that exercise l10n reassign it. */
   language: 'en',
   isTelemetryEnabled: true,
   createTelemetryLogger: vi.fn((_sender: unknown, _options?: unknown) => new MockTelemetryLogger()),
@@ -550,8 +505,6 @@ export const chat = {
     dispose: vi.fn(),
   })),
 };
-
-// ─── Enums / Constants ────────────────────────────────────────────────────────
 
 export const StatusBarAlignment = {
   Left: 1,
@@ -634,8 +587,6 @@ export const TerminalShellExecutionCommandLineConfidence = {
 } as const;
 
 export const version = '1.95.0';
-
-// ─── Class exports ────────────────────────────────────────────────────────────
 
 export {
   CancellationTokenSource,

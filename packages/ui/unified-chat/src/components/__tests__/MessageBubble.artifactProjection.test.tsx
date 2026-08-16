@@ -78,7 +78,6 @@ describe('MessageBubble artifact projection', () => {
     render(<MessageBubble message={assistantMessage()} />);
 
     expect(screen.queryByTestId('message-artifacts')).toBeNull();
-    // The fenced block still renders as an ordinary code block.
     expect(screen.getByText(HTML)).toBeTruthy();
   });
 

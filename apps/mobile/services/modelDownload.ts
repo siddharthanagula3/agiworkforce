@@ -1,17 +1,3 @@
-/**
- * Model file download service — resumable, integrity-checked, Wi-Fi-aware.
- *
- * Downloads model files from a URL into the app documents directory under
- * `models/<modelId>/`. Supports HTTP Range-based resume on network drop.
- * SHA-256 checksum is verified after download completes. On success the
- * record is written to the `installed_models` SQLCipher table.
- *
- * Wi-Fi-only enforcement uses @react-native-community/netinfo. The default
- * is wifiOnly=true because model files are large (1–10 GB+).
- *
- * No network calls happen outside this service. All file I/O uses
- * expo-file-system/legacy. No plaintext user content is stored here.
- */
 
 import {
   documentDirectory,
@@ -28,7 +14,6 @@ import {
   type DownloadProgressData,
 } from 'expo-file-system/legacy';
 import NetInfo from '@react-native-community/netinfo';
-// It hashes raw bytes correctly; expo-crypto's digestStringAsync hashes the string representation.
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 import {
   ensureMultimodalArtifacts,
@@ -37,10 +22,6 @@ import {
 } from '@agiworkforce/local-llm';
 import { insertInstalledModel, getInstalledModel } from '@/storage/installedModels';
 import type { InstalledModel, ModelRuntime, ModelFormat } from '@/storage/types';
-
-// ---------------------------------------------------------------------------
-// Error types
-// ---------------------------------------------------------------------------
 
 export type ModelDownloadErrorKind =
   | 'wifi_required'
@@ -59,39 +40,21 @@ export class ModelDownloadError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface ModelDownloadOpts {
   modelId: string;
   displayName: string;
   downloadUrl: string;
-  /** SHA-256 hex string from the catalog */
   checksum: string;
   fileSizeBytes: number;
   runtime: ModelRuntime;
   format: ModelFormat;
   capabilities?: string;
-  /** Abort download on non-Wi-Fi connection. Defaults to true. */
   wifiOnly?: boolean;
-  /** Called during download: bytes downloaded so far, total bytes, speed in bytes/s */
   onProgress?: (downloaded: number, total: number, speedBps: number) => void;
-  /**
-   * Vision projector (mmproj) second artifact for multimodal GGUF models.
-   * When all three fields are present, the mmproj is downloaded side-by-side
-   * as `<modelPath>.mmproj.gguf` (the convention the vision routing service
-   * reads) and both files are checksum-verified before the install record is
-   * written. Values come straight from the OnDeviceModel catalog entry.
-   */
   mmprojUrl?: string;
   mmprojChecksum?: string;
   mmprojSizeBytes?: number;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const MODELS_DIR = `${documentDirectory}models/`;
 const MAX_MODEL_ID_CHARS = 96;
@@ -166,12 +129,6 @@ function modelFilePath(modelId: string, format: ModelFormat): string {
   return `${modelDir(modelId)}model.${ext}`;
 }
 
-/**
- * Side-by-side vision projector path. MUST stay `<basePath>.mmproj.gguf` — the
- * vision routing service (features/image/services/vision.ts) derives this same
- * sibling path from InstalledModel.local_path to decide whether the on-device
- * VL route is runnable.
- */
 function mmprojFilePath(modelId: string, format: ModelFormat): string {
   return `${modelFilePath(modelId, format)}.mmproj.gguf`;
 }
@@ -188,18 +145,11 @@ async function checkWifi(): Promise<boolean> {
   return state.type === 'wifi' && state.isConnected === true;
 }
 
-// Base64 alphabet for the decoder below.
 const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const B64_LOOKUP = new Uint8Array(256).fill(255);
 for (let i = 0; i < B64_CHARS.length; i++) B64_LOOKUP[B64_CHARS.charCodeAt(i)] = i;
 
-/**
- * Decode a base64 string chunk to raw bytes without using `atob`.
- * `atob` is not safe for large strings on Hermes (OOM risk) and also
- * returns a Latin-1 string rather than a Uint8Array.
- */
 function base64ChunkToBytes(b64: string): Uint8Array {
-  // Strip padding
   const stripped = b64.replace(/=+$/, '');
   const outLen = Math.floor((stripped.length * 3) / 4);
   const out = new Uint8Array(outLen);
@@ -216,17 +166,6 @@ function base64ChunkToBytes(b64: string): Uint8Array {
   return out.subarray(0, outIdx);
 }
 
-/**
- * Compute SHA-256 of a file on disk over raw bytes.
- *
- * Reads the file in 4 MB base64 chunks (each 4 MB of base64 ≈ 3 MB raw),
- * decodes each chunk to Uint8Array, and feeds to @noble/hashes streaming
- * SHA-256. This keeps peak JS heap well below model file size even for
- * multi-GB downloads.
- *
- * expo-file-system/legacy `readAsStringAsync` with `position` + `length`
- * (Base64 encoding mode) reads a slice of the file in bytes.
- */
 async function sha256OfFile(fileUri: string): Promise<string> {
   const info = await getInfoAsync(fileUri);
   if (!info.exists) throw new Error(`File not found: ${fileUri}`);
@@ -234,7 +173,6 @@ async function sha256OfFile(fileUri: string): Promise<string> {
 
   const hasher = nobleSha256.create();
 
-  // Read in 3 MB raw chunks (= 4 MB base64 chars).
   const CHUNK_BYTES = 3 * 1024 * 1024;
   let offset = 0;
 
@@ -257,10 +195,6 @@ async function sha256OfFile(fileUri: string): Promise<string> {
   return hex;
 }
 
-// ---------------------------------------------------------------------------
-// Active download map (allows cancellation)
-// ---------------------------------------------------------------------------
-
 const _activeDownloads = new Map<string, DownloadResumable>();
 
 function hasActiveDownload(modelId: string): boolean {
@@ -279,16 +213,6 @@ export function cancelDownload(modelId: string): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Single-file resumable download (shared by the base model and mmproj paths)
-// ---------------------------------------------------------------------------
-
-/**
- * Download one file with HTTP-Range resume support. Persists the opaque
- * resumeData token to `<destPath>.partial` on failure and restores it on the
- * next attempt. Throws ModelDownloadError with the same kind mapping the
- * single-file path always used. Deletes the partial marker on success.
- */
 async function downloadFileWithResume(params: {
   activeKey: string;
   url: string;
@@ -322,10 +246,6 @@ async function downloadFileWithResume(params: {
   try {
     result = await downloadResumable.downloadAsync();
   } catch (err) {
-    // Save resume state for next attempt. createDownloadResumable expects the
-    // OPAQUE resumeData token string (used to set the HTTP Range header), not the
-    // whole serialized DownloadPauseState object — storing the full JSON broke
-    // HTTP Range resume (download restarted from 0).
     try {
       const snapshot = await downloadResumable.savable();
       if (snapshot && snapshot.resumeData) {
@@ -360,15 +280,9 @@ async function downloadFileWithResume(params: {
     );
   }
 
-  // Clean up the partial file on success
   await deleteAsync(resumePath, { idempotent: true });
 }
 
-/**
- * FileSystemDeps adapter over expo-file-system for the shared
- * `ensureMultimodalArtifacts` orchestration in @agiworkforce/local-llm
- * (exists-skip, corrupt-file re-download, delete-on-mismatch semantics).
- */
 function expoFileSystemDeps(modelId: string): FileSystemDeps {
   return {
     fileExists: async (path) => (await getInfoAsync(path)).exists === true,
@@ -386,10 +300,6 @@ function expoFileSystemDeps(modelId: string): FileSystemDeps {
     },
   };
 }
-
-// ---------------------------------------------------------------------------
-// Main download function
-// ---------------------------------------------------------------------------
 
 export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledModel> {
   assertValidDownloadOptions(opts);
@@ -411,7 +321,6 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     throw new ModelDownloadError('already_installed', `Model ${modelId} is already downloading`);
   }
 
-  // Idempotency — if already fully installed return the record
   const existing = await getInstalledModel(modelId);
   if (existing?.local_path) {
     const info = await getInfoAsync(existing.local_path);
@@ -420,7 +329,6 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     }
   }
 
-  // Wi-Fi gate
   if (wifiOnly) {
     const isWifi = await checkWifi();
     if (!isWifi) {
@@ -435,7 +343,6 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
 
   const destPath = modelFilePath(modelId, format);
 
-  // Speed-tracking progress wrapper shared by both branches.
   let startTime = Date.now();
   let lastBytes = 0;
   const reportBytes = (written: number, total: number): void => {
@@ -449,9 +356,6 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   };
 
   if (opts.mmprojUrl && opts.mmprojChecksum && opts.mmprojSizeBytes) {
-    // Multimodal path: base GGUF + side-by-side mmproj vision projector, both
-    // checksum-verified via the shared local-llm orchestration (idempotent
-    // exists-skip, corrupt re-download, delete-on-mismatch).
     const mmprojPath = mmprojFilePath(modelId, format);
     const totalBytes = fileSizeBytes + opts.mmprojSizeBytes;
     try {
@@ -476,7 +380,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
           `Integrity check failed for ${displayName}. The downloaded file is corrupt. Please try again.`,
         );
       }
-      throw err; // ModelDownloadError kinds from downloadFileWithResume pass through.
+      throw err;
     }
   } else {
     await downloadFileWithResume({
@@ -486,7 +390,6 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
       onBytes: (written, total) => reportBytes(written, total > 0 ? total : fileSizeBytes),
     });
 
-    // Checksum verification
     const actualChecksum = await sha256OfFile(destPath);
     if (actualChecksum.toLowerCase() !== checksum.toLowerCase()) {
       await deleteAsync(destPath, { idempotent: true });
@@ -497,7 +400,6 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     }
   }
 
-  // Record in SQLCipher
   const record: InstalledModel = {
     id: modelId,
     display_name: displayName,
@@ -516,18 +418,10 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   return record;
 }
 
-// ---------------------------------------------------------------------------
-// Delete a downloaded model from disk
-// ---------------------------------------------------------------------------
-
 export async function deleteDownloadedModel(modelId: string, _format: ModelFormat): Promise<void> {
   await deleteAsync(modelDir(modelId), { idempotent: true });
   // DB row removed by caller via storage/installedModels.deleteInstalledModel
 }
-
-// ---------------------------------------------------------------------------
-// Storage usage estimate for installed models directory
-// ---------------------------------------------------------------------------
 
 export async function getModelStorageBytes(): Promise<number> {
   const info = await getInfoAsync(MODELS_DIR);

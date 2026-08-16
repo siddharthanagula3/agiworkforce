@@ -1,7 +1,3 @@
-/**
- * On-device competitor memory/history import parsers.
- * All parsing happens locally — no data leaves the device.
- */
 
 export type ImportSource = 'chatgpt' | 'claude' | 'gemini' | 'text';
 
@@ -16,9 +12,7 @@ export interface ImportResult {
   source: ImportSource;
 }
 
-// Maximum characters for a single imported fact before it gets truncated.
 const MAX_FACT_CHARS = 2000;
-// Maximum facts we'll import from a single file.
 const MAX_FACTS = 500;
 
 function truncate(text: string): string {
@@ -28,13 +22,6 @@ function truncate(text: string): string {
 function isNonEmpty(s: string): boolean {
   return s.trim().length > 2;
 }
-
-// ---------------------------------------------------------------------------
-// ChatGPT export.json parser
-// The export contains an array of conversations; each has a mapping of
-// messages keyed by UUID. We extract all user + assistant content snippets
-// that look like stated preferences or facts ("I prefer …", "I use …", etc.)
-// ---------------------------------------------------------------------------
 
 interface ChatGPTMessage {
   author?: { role?: string };
@@ -85,7 +72,6 @@ export function parseChatGPTExport(jsonText: string): ImportResult {
     : [];
 
   for (const conv of conversations) {
-    // Extract top-level memory field (ChatGPT memory feature)
     const memFacts = parseChatGPTMemoryField(conv.memory, source);
     for (const f of memFacts) {
       if (facts.length >= MAX_FACTS) {
@@ -98,13 +84,6 @@ export function parseChatGPTExport(jsonText: string): ImportResult {
 
   return { facts, skipped, source };
 }
-
-// ---------------------------------------------------------------------------
-// Claude export parser
-// Claude exports a JSON with { account, conversations }. Each conversation
-// has an array of messages with { role, content }. We surface pinned/starred
-// messages or system-level custom instructions if present.
-// ---------------------------------------------------------------------------
 
 interface ClaudeMessage {
   role?: string;
@@ -139,7 +118,6 @@ export function parseClaudeExport(jsonText: string): ImportResult {
   const conversations = data.conversations ?? [];
 
   for (const conv of conversations) {
-    // System prompts / custom instructions are high-value facts
     if (conv.system_prompt && isNonEmpty(conv.system_prompt)) {
       if (facts.length < MAX_FACTS) {
         facts.push({ fact: truncate(conv.system_prompt.trim()), source });
@@ -162,12 +140,6 @@ export function parseClaudeExport(jsonText: string): ImportResult {
 
   return { facts, skipped, source };
 }
-
-// ---------------------------------------------------------------------------
-// Gemini export parser
-// Gemini Takeout produces a JSON with { conversations: [{ messages: [] }] }.
-// We grab user turns that state preferences / facts.
-// ---------------------------------------------------------------------------
 
 interface GeminiMessage {
   author?: string;
@@ -219,22 +191,14 @@ export function parseGeminiExport(jsonText: string): ImportResult {
   return { facts, skipped, source };
 }
 
-// ---------------------------------------------------------------------------
-// Plain text / Notes app parser
-// Lines or blank-line-separated paragraphs become individual facts.
-// Very short lines (< 10 chars) are skipped.
-// ---------------------------------------------------------------------------
-
 export function parsePlainText(text: string): ImportResult {
   const source: ImportSource = 'text';
   const facts: ImportedFact[] = [];
   let skipped = 0;
 
-  // Split on blank lines first; fall back to newlines
   const blocks = text.split(/\n{2,}/).flatMap((b) => {
     const trimmed = b.trim();
     if (!trimmed) return [];
-    // If block is short (single line), keep as-is; otherwise split by newline
     if (!trimmed.includes('\n')) return [trimmed];
     return trimmed
       .split('\n')
@@ -261,10 +225,6 @@ export function parsePlainText(text: string): ImportResult {
   return { facts, skipped, source };
 }
 
-// ---------------------------------------------------------------------------
-// Unified entry point — detect format from file content
-// ---------------------------------------------------------------------------
-
 export function detectSourceFromFilename(filename: string): ImportSource {
   const lower = filename.toLowerCase();
   if (lower.includes('chatgpt') || lower === 'conversations.json') return 'chatgpt';
@@ -285,7 +245,6 @@ export async function parseImportFile(content: string, filename: string): Promis
       case 'gemini':
         return parseGeminiExport(content);
       default: {
-        // Try each JSON parser; return whichever yields the most facts
         const results = [
           parseChatGPTExport(content),
           parseClaudeExport(content),

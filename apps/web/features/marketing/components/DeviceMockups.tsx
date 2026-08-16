@@ -1,40 +1,15 @@
-/**
- * DeviceMockups · the one exact-size device system for marketing pages.
- *
- * Every illustrated device on the site renders from this file. Each device
- * type has ONE canonical design-space geometry (below, in design px) and
- * scales ONLY proportionally with its container — it never reflows,
- * stretches, or changes shape. Wide slots render the device at exactly its
- * design size; narrow slots render a smaller but identically-shaped copy.
- *
- * Shared chrome DNA across all window types: 44u title bar, 10u traffic
- * lights, mono title, uppercase amber badge pill. The scale unit `--u`
- * (one design pixel) is derived in CSS from the container width; geometry
- * numbers live only in DEVICE_GEOMETRY and flow to CSS via custom props.
- *
- * Strings mirror the shipped product UI (product screenshots 2026-06-11;
- * live web composer). Update them only to match the app.
- */
 import Image from 'next/image';
 import type { CSSProperties } from 'react';
 
 export type DeviceType = 'desktop' | 'web' | 'chrome' | 'editor' | 'terminal' | 'panel' | 'phone';
 
-/** Canonical design-space size per device type, in design px. */
 export const DEVICE_GEOMETRY: Record<DeviceType, { width: number; height: number }> = {
-  /** macOS-style app window, 3:2. */
   desktop: { width: 720, height: 480 },
-  /** Browser window with the AGI Web chat, 16:10. */
   web: { width: 720, height: 450 },
-  /** Full Chrome window (tabs + address bar) with the AGI side panel, 3:2. */
   chrome: { width: 720, height: 480 },
-  /** VS Code window with the @agi panel, 16:10. */
   editor: { width: 720, height: 450 },
-  /** macOS-style terminal window, 16:10. */
   terminal: { width: 640, height: 400 },
-  /** Standalone browser side panel, portrait 10:13. */
   panel: { width: 400, height: 520 },
-  /** Phone, 19.5:9. */
   phone: { width: 270, height: 585 },
 };
 
@@ -42,7 +17,6 @@ export interface DeviceWindowProps {
   title?: string;
   badge?: string;
   className?: string;
-  /** Trust route shown inside mock chat surfaces. Defaults to Local. */
   routeMode?: 'local' | 'byok' | 'managed';
 }
 
@@ -90,7 +64,6 @@ function WindowBar({ title, badge }: { title: string; badge?: string }) {
   );
 }
 
-/** Page-context strip shared by the Chrome side panel and the panel card. */
 function PageContextStrip() {
   return (
     <div className="agi-dev-pagestrip">
@@ -104,7 +77,6 @@ function PageContextStrip() {
   );
 }
 
-/** Side-panel composer shared by the Chrome side panel and the panel card. */
 function PanelComposer() {
   return (
     <div className="agi-dev-panelcomposer">
@@ -122,8 +94,6 @@ function PanelComposer() {
     </div>
   );
 }
-
-/* ─────────────────────── Desktop app window ─────────────────────── */
 
 export function DesktopWindow({
   title = 'AGI Workforce',
@@ -185,8 +155,6 @@ export function DesktopWindow({
   );
 }
 
-/* ──────────────────── Browser window · AGI Web ──────────────────── */
-
 export function WebWindow({
   title = 'agiworkforce.com/chat',
   badge = 'Web',
@@ -237,8 +205,6 @@ export function WebWindow({
     </DeviceRoot>
   );
 }
-
-/* ─────────────── Full Chrome window with side panel ─────────────── */
 
 export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps) {
   return (
@@ -324,8 +290,6 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
   );
 }
 
-/* ──────────────── Standalone side-panel card ─────────────── */
-
 export function SidePanelCard({
   title = 'AGI · side panel',
   badge = 'Scoped',
@@ -353,8 +317,6 @@ export function SidePanelCard({
     </DeviceRoot>
   );
 }
-
-/* ─────────────── VS Code window with @agi panel ─────────────── */
 
 export function EditorWindow({
   title = 'workspace.ts · AGI in VS Code',
@@ -450,8 +412,6 @@ export function EditorWindow({
   );
 }
 
-/* ──────────────────── Terminal window ─────────────────── */
-
 export function TerminalWindow({
   title = 'agi · zsh',
   badge = 'sandboxed',
@@ -501,8 +461,6 @@ export function TerminalWindow({
     </DeviceRoot>
   );
 }
-
-/* ───────────────────────── Phone ───────────────────────── */
 
 export function PhoneDevice({
   label = 'AGI Mobile interface',
@@ -584,8 +542,6 @@ export function PhoneDevice({
     </DeviceRoot>
   );
 }
-
-/* ─────────────── Real-screenshot window (image mode) ─────────────── */
 
 export interface DeviceImage {
   src: string;

@@ -85,7 +85,6 @@ export function getManagedSkillLayers(): SkillLayer[] {
   ];
 }
 
-/** All discoverable entries, including catalog-only drafts. */
 export async function getManagedSkillDirectory(): Promise<Skill[]> {
   const now = Date.now();
   if (skillCache && now < skillCache.expiresAt) return skillCache.value;
@@ -100,12 +99,9 @@ export async function getManagedSkillDirectory(): Promise<Skill[]> {
   }
 }
 
-/** Executable entries only. Drafts remain visible in the directory but cannot be loaded. */
 export async function getManagedSkillCatalog(): Promise<Skill[]> {
   const directory = await getManagedSkillDirectory();
   if (executableSkillCache?.directory === directory) return executableSkillCache.value;
-  // Plugin-owned skills are not globally included. They enter a user's catalog
-  // only through the durable installation filter below.
   const value = directory.filter((skill) => isExecutableSkill(skill) && !skillPluginOwner(skill));
   executableSkillCache = { directory, value };
   return value;
@@ -161,19 +157,10 @@ async function readBundledSkillDownload(skill: Skill | null): Promise<BundledSki
   };
 }
 
-/**
- * Read one included first-party SKILL.md without accepting a path from the
- * caller. Overlay and draft entries are deliberately not downloadable here.
- */
 export async function getBundledSkillDownload(name: string): Promise<BundledSkillDownload | null> {
   return readBundledSkillDownload(await findManagedSkillByName(name));
 }
 
-/**
- * Download a bundled skill from the exact catalog visible to this user's
- * enabled plugins. This keeps plugin-owned entries tenant-gated while making
- * every Included portable bundle in Settings genuinely downloadable.
- */
 export async function getBundledSkillDownloadForPlugins(
   enabledPluginIds: ReadonlySet<string>,
   name: string,
@@ -192,10 +179,6 @@ export interface ExecuteManagedSkillToolOptions extends Pick<
   platform?: string;
 }
 
-/**
- * Execute the shared read-only Skill tool against the server-owned deployment
- * catalog. Environment values never leave this process; only presence is used.
- */
 export async function executeManagedSkillTool(
   args: Record<string, unknown>,
   options: ExecuteManagedSkillToolOptions = {},
@@ -233,7 +216,6 @@ export async function executeManagedSkillToolForPlugins(
   });
 }
 
-/** Test-only cache reset; production invalidation remains TTL-based. */
 export function resetManagedSkillCatalogCacheForTests(): void {
   skillCache = null;
   executableSkillCache = null;

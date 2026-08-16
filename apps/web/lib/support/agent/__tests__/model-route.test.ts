@@ -1,17 +1,3 @@
-/**
- * The model-access assumption, asserted against the REAL router.
- *
- * The design inferred that `resolveAutoRoute` would resolve for
- * `{ taskType: 'simple_chat', trustMode: 'managed_cloud',
- *    runtimeProfileId: 'web/cloud-chat' }` on a free tier. Inference is not
- * evidence, so this pins it — with `resolveAutoRoute` UNMOCKED. If the routing
- * policy stops resolving for a support turn, this fails here rather than
- * silently turning every production answer into a `model_unavailable`
- * abstention.
- *
- * It deliberately asserts no model id: ids come from the registry, never from a
- * literal.
- */
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveAutoRoute } from '@agiworkforce/routing';

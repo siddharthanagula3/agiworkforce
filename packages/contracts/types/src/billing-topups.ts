@@ -1,7 +1,5 @@
-/** Public denomination for separately purchased managed-usage top-ups. */
 export const TOP_UP_UNITS_PER_USD = 50;
 
-/** Founder-set floor: the smallest top-up is $10, which grants 500 units. */
 export const MIN_TOP_UP_AMOUNT_USD = 10;
 
 /** Default self-serve safety cap from the current billing decision. */

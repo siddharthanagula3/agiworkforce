@@ -1,6 +1,3 @@
-/**
- * Utility functions for safe environment variable access
- */
 
 /**
  * Get an environment variable with a fallback value

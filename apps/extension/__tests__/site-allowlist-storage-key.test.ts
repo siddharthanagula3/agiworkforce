@@ -27,11 +27,6 @@ import { SITE_ALLOWLIST_STORAGE_KEY } from '../src/background/policy';
 const SRC_ROOT = resolve(process.cwd(), 'src');
 const DEFINITION_FILE = 'background/policy.ts';
 
-/**
- * Surfaces that still quote the literal. Their migration belongs to changes
- * already in flight against those files, so this set records the remaining
- * work rather than hiding it — it may only ever shrink.
- */
 const PENDING_MIGRATION = new Set(['side_panel.ts', 'inPagePanel/setup.ts']);
 
 function sourceFiles(dir: string): string[] {
@@ -47,7 +42,6 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** Files quoting the literal exactly, as paths relative to `src/`. */
 function filesQuotingTheKey(): string[] {
   const quoted = new RegExp(`['"]${SITE_ALLOWLIST_STORAGE_KEY}['"]`);
   return sourceFiles(SRC_ROOT)
@@ -55,7 +49,6 @@ function filesQuotingTheKey(): string[] {
     .map((file) => relative(SRC_ROOT, file));
 }
 
-/** Lowercased, separator-stripped form, so `agi_site_allowlist` === `agiSiteAllowlist`. */
 function normalizeKey(raw: string): string {
   return raw.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -77,12 +70,9 @@ function editDistance(a: string, b: string): number {
 }
 
 const NORMALIZED_KEY = normalizeKey(SITE_ALLOWLIST_STORAGE_KEY);
-/** Identifier-shaped string literals — storage keys never contain spaces. */
 const STRING_LITERAL = /['"`]([A-Za-z0-9_$.:-]{8,64})['"`]/g;
-/** Two edits covers a dropped/doubled/transposed character and a wrong separator word. */
 const NEAR_MISS_DISTANCE = 2;
 
-/** `{ file, literal }` for every string that is *almost* the key but isn't. */
 function nearMisses(): string[] {
   const found: string[] = [];
   for (const file of sourceFiles(SRC_ROOT)) {
@@ -103,7 +93,6 @@ function nearMisses(): string[] {
 
 describe('agi_site_allowlist storage key', () => {
   it('is exported with the value the stored data already uses', () => {
-    // Renaming this constant's VALUE orphans every installed user's allowlist.
     expect(SITE_ALLOWLIST_STORAGE_KEY).toBe('agi_site_allowlist');
   });
 
@@ -121,15 +110,10 @@ describe('agi_site_allowlist storage key', () => {
   });
 
   it('detects a near-miss spelling, which reads as an empty allowlist at runtime', () => {
-    // The failure this contract exists for: `chrome.storage.local.get` answers
-    // `undefined` for a misspelled key, so the gate silently trusts nothing (or,
-    // on the write side, persists trust nothing will ever read back).
     expect(nearMisses()).toEqual([]);
   });
 
   it('the near-miss detector actually fires on a plausible typo', () => {
-    // Guards the guard: without this, a broken matcher passes the test above by
-    // finding nothing at all.
     for (const typo of ['agi_site_allow_list', 'agi_site_allowlst', 'agi_sites_allowlist']) {
       expect(editDistance(normalizeKey(typo), NORMALIZED_KEY)).toBeLessThanOrEqual(
         NEAR_MISS_DISTANCE,

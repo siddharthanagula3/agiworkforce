@@ -63,12 +63,6 @@ describe('public Desktop download surfaces', () => {
   });
 
   it('offers only the verified Linux AppImage from the shared download API', async () => {
-    // Two DIFFERENT endpoints are queried: the Tauri channel manifest and
-    // /api/releases/desktop-cloud/latest. A single mockResolvedValue handed the
-    // Linux manifest to BOTH, so the cloud lookup received a payload that is not
-    // a valid cloud-desktop manifest and the macOS card rendered its red error
-    // state — the component behaving correctly on a bad fixture. Answer per URL:
-    // Linux publishes, macOS cloud does not (404 = not published).
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (url.includes('desktop-cloud')) {
@@ -88,11 +82,6 @@ describe('public Desktop download surfaces', () => {
     expect(
       within(region).getByRole('link', { name: 'Download Linux x64 AppImage' }),
     ).toHaveAttribute('href', '/api/download?platform=linux');
-    // macOS is state-driven from the release manifest (loading / available /
-    // empty / error), not a static line like Windows. This mock ships a
-    // Linux-only manifest, so macOS must resolve to its empty state. The
-    // previous assertion looked for 'macOS installer not published', a string
-    // that exists nowhere in the component — the test failed on a clean tree.
     expect(
       within(region).getByText('No signed macOS installer is available right now.'),
     ).toBeInTheDocument();

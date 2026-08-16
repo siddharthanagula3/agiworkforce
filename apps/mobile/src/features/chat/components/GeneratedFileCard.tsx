@@ -1,12 +1,3 @@
-/**
- * GeneratedFileCard (Mobile) — RN-native mirror of the shared
- * web GeneratedFileCard in `packages/ui/unified-chat`. Both consume the
- * same `GeneratedFilePresentation` type from `@agiworkforce/types`,
- * so the visual treatment, chips, and status semantics stay aligned
- * across Web/Mobile without sharing JSX (React DOM vs React Native).
- *
- * Round-7 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import { Image, Pressable, View } from 'react-native';
 import type { ReactElement } from 'react';
@@ -30,7 +21,6 @@ import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
 export interface GeneratedFileCardProps {
   presentation: GeneratedFilePresentation;
-  /** Optional jump-to-source-session affordance. */
   onOpenSourceSession?: () => void;
 }
 

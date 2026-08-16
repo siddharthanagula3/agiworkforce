@@ -1,15 +1,3 @@
-/**
- * Canonical managed-cloud agent-run activity stream.
- *
- * Every Web, Desktop Cloud, and Mobile Cloud turn carries these envelopes in
- * `delta.x_agent_event`. The Rust source of truth is
- * `crates/agiworkforce-protocol/src/agent_events.rs`; generated TypeScript
- * types provide compile-time parity while this module provides the mandatory
- * runtime validation for untrusted SSE payloads.
- *
- * `progress-update` is deliberately a safe, user-displayable work summary.
- * It must never contain private chain-of-thought or a raw provider scratchpad.
- */
 
 import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
@@ -236,7 +224,6 @@ export const AgentEventEnvelopeSchema: z.ZodType<AgentEventEnvelope> = z.object(
   event: AgentEventSchema,
 });
 
-/** Parse `delta.x_agent_event` without ever throwing on an untrusted stream. */
 export function parseAgentEventDelta(payload: unknown): AgentEventEnvelope | null {
   const parsed = AgentEventEnvelopeSchema.safeParse(payload);
   return parsed.success ? parsed.data : null;

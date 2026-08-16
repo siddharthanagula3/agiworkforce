@@ -1,40 +1,4 @@
 #!/usr/bin/env node
-/**
- * check-no-hardcoded-endpoints.mjs — recurrence guard for HARD-005.
- *
- * Model-provider API hosts must be declared in ONE place per deployable and
- * resolved from there, so that a regional host, an on-prem proxy, or an AI
- * gateway configured through `*_BASE_URL` applies to every outbound provider
- * call — not just the ones that happen to go through a provider adapter.
- *
- * The guard implements the classification HARD-005 asks for. Every provider
- * host literal in first-party source is one of:
- *
- *   documentation      — the literal sits on a comment line. Allowed.
- *   test fixture       — the file is a test/fixture/mock/generated artifact, or
- *                        (in Rust) the literal sits in the file's inline
- *                        `#[cfg(test)]` module. Allowed.
- *   canonical decl.    — the file's job IS to declare endpoints: a provider
- *                        adapter declaring its own provider's default and host
- *                        allowlist, an SSRF allowlist, a pinning table, or a
- *                        deployable's endpoint module. Allowed by path rule or
- *                        by an explicit BUDGETS entry.
- *   defect             — anything else. Fails.
- *
- * BUDGETS is a per-file BUDGET, not a boolean allowlist: each entry records how
- * many literals that file may contain today, so a new call site in an unlisted
- * file fails, an extra literal in a listed file fails, and the residue can only
- * shrink. `residue: true` marks entries that are NOT approved — they are
- * un-migrated call sites owed to another ledger task, named in `why`.
- *
- * Scope, honestly stated: this covers model/LLM provider hosts (the
- * HARD-001..005 family) only. Internal cloud hosts, OAuth callback URLs,
- * localhost ports, and public asset origins are NOT covered; those parts of
- * HARD-005 remain open.
- *
- * Usage: node scripts/check-no-hardcoded-endpoints.mjs
- * Exit 0 when clean, 1 with a per-file report otherwise.
- */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -62,12 +26,9 @@ const SKIP_DIR_NAMES = new Set([
   'test',
   'fixtures',
   'e2e',
-  // Developer probe/maintenance scripts inside a package (e.g.
-  // apps/web/scripts/test-llm-keys.ts) are tooling, not shipped request paths.
   'scripts',
 ]);
 
-/** A file whose name marks it as a test/fixture/generated artifact. */
 function isNonProductionFile(fileName) {
   return (
     /\.(test|spec|bench)\.[cm]?tsx?$/.test(fileName) ||
@@ -76,26 +37,13 @@ function isNonProductionFile(fileName) {
   );
 }
 
-/**
- * Files whose declared purpose is endpoint declaration, matched by path.
- * Keeping these as rules rather than a hand-listed file set means a NEW
- * provider adapter is covered the day it lands, instead of tripping the guard
- * and being waved through with a budget entry.
- */
 const DECLARATION_PATH_RULES = [
   {
-    // Each adapter declares its own provider's default base URL and narrow
-    // host allowlist — that IS the canonical per-provider declaration the
-    // HARD-001..004 fixes point at.
     test: (rel) => /^packages\/ai\/providers\/[^/]+\/src\//.test(rel),
     why: 'provider adapter package — owns its provider default base URL and host allowlist',
   },
 ];
 
-/**
- * Model-provider API hosts. Matched as bare hostnames so `https://`, `http://`,
- * a bare string in a config table, and a Rust `&str` all trip the same rule.
- */
 const PROVIDER_HOSTS = [
   'api.openai.com',
   'api.anthropic.com',
@@ -118,19 +66,10 @@ const PROVIDER_HOSTS = [
   'api.stability.ai',
 ];
 
-/**
- * Escape every regex metacharacter, not just `.`. The previous form escaped
- * dots alone, which left backslash unescaped (js/incomplete-sanitization) and
- * was too partial for CodeQL to recognise as escaping at all — so each host
- * literal above was additionally reported as an unescaped-dot hostname regexp
- * (js/incomplete-hostname-regexp). Today's host list contains only dots, so
- * this changes no current match; it makes the escaping complete and evident.
- */
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const HOST_PATTERN = new RegExp(PROVIDER_HOSTS.map(escapeRegExp).join('|'), 'g');
 
-/** Line is entirely a comment — the literal is documentation, not a call. */
 function isCommentLine(line) {
   const trimmed = line.trim();
   return (
@@ -141,12 +80,6 @@ function isCommentLine(line) {
   );
 }
 
-/**
- * Line index (0-based) at which a Rust file's inline unit tests begin, or
- * `lines.length` when it has none. Rust convention puts `#[cfg(test)] mod
- * tests` at the bottom of the file, so everything from the first `#[cfg(test)]`
- * attribute onward is test code living in a production file.
- */
 function rustTestModuleStart(lines) {
   for (let i = 0; i < lines.length; i += 1) {
     if (lines[i].trim().startsWith('#[cfg(test)]')) return i;
@@ -154,12 +87,7 @@ function rustTestModuleStart(lines) {
   return lines.length;
 }
 
-/**
- * Approved declarations and un-migrated residue. Every entry needs a reason; an
- * entry without one is how a budget quietly becomes a permanent exemption.
- */
 const BUDGETS = [
-  // ---- Approved declarations -------------------------------------------
   {
     file: 'packages/ai/provider-runtime/src/base-url.ts',
     max: 13,
@@ -216,7 +144,6 @@ const BUDGETS = [
     why: 'Wire-shape detection: the vendor host selects the OpenAI request dialect.',
   },
 
-  // ---- Residue: un-migrated call sites owed to other ledger tasks -------
   {
     file: 'apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs',
     max: 2,
@@ -343,7 +270,6 @@ function* walk(dir) {
   }
 }
 
-/** Provider host literals that are neither documentation nor inline test code. */
 function scanFile(absPath, rel) {
   const lines = readFileSync(absPath, 'utf8').split('\n');
   const testStart = rel.endsWith('.rs') ? rustTestModuleStart(lines) : lines.length;

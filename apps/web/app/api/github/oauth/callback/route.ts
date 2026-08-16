@@ -56,8 +56,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL('/connectors?github=invalid_state', request.url));
   }
 
-  // Consume both one-time values immediately after a valid state match. This
-  // makes success, denial, and downstream failure callbacks non-replayable.
   for (const name of ['github_oauth_state', 'github_pending_installation_id']) {
     cookieStore.set({
       name,
@@ -83,8 +81,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const callbackUrl = new URL('/api/github/oauth/callback', request.url).toString();
 
   try {
-    // The user token lives only in this stack frame. It is used once for the
-    // ownership check and is never persisted, returned, or written to logs.
     const userAccessToken = await exchangeGitHubOAuthCode(code, callbackUrl);
     const verifiedInstallation = await findGitHubInstallationForUser(
       userAccessToken,

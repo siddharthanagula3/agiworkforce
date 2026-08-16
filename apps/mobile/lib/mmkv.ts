@@ -1,16 +1,3 @@
-/**
- * MMKV storage with at-rest encryption.
- *
- * The encryption key is generated once (using expo-crypto), stored in the OS
- * keychain via expo-secure-store, and reused on every subsequent app launch.
- * Call `initMmkvEncryption()` at app startup (before any store access) to
- * populate the key; until that completes the storage operates in a safe
- * "not yet initialised" state where reads return null.
- *
- * Key storage characteristics:
- *   iOS  — Keychain, kSecAttrAccessibleWhenUnlockedThisDeviceOnly
- *   Android — EncryptedSharedPreferences (Keystore-backed)
- */
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { MMKV } from 'react-native-mmkv';
@@ -19,12 +6,8 @@ import type { StateStorage } from 'zustand/middleware';
 const MMKV_KEY_STORAGE_ID = 'agi_mmkv_encryption_key_v1';
 const MMKV_INSTANCE_ID = 'agiworkforce-mobile';
 
-/** Module-level singleton — replaced with an encrypted instance by initMmkvEncryption(). */
 let _storage: MMKV | null = null;
 
-// AUDIT-FIX: MMKV-RACE — drain queue once encrypted storage is ready so
-// stores using `skipHydration` can rehydrate from real persisted state
-// rather than racing default values against the first post-init setItem.
 type MmkvReadyCallback = () => void | Promise<void>;
 let readyCallbacks: MmkvReadyCallback[] = [];
 
@@ -36,19 +19,9 @@ function observeReadyCallback(result: void | Promise<void>): void {
   }
 }
 
-/**
- * Register a callback to fire as soon as encrypted MMKV is open. Fires
- * synchronously if storage is already initialised. Used by Zustand stores
- * that opted into `skipHydration: true` to trigger `useStore.persist.rehydrate()`
- * at the right moment.
- */
 export function whenMmkvReady(cb: MmkvReadyCallback): void {
   if (_storage) {
     try {
-      // Preserve the existing synchronous-callback contract for callers that
-      // only need to read/write the now-open MMKV instance. Async callbacks
-      // registered after initialization are still observed so a rejected
-      // rehydrate cannot become an unhandled promise rejection.
       observeReadyCallback(cb());
     } catch (err) {
       console.warn('[mmkv] whenMmkvReady callback threw:', err);
@@ -58,12 +31,6 @@ export function whenMmkvReady(cb: MmkvReadyCallback): void {
   readyCallbacks.push(cb);
 }
 
-/**
- * Lazily get the MMKV instance.
- * If encryption has not been initialised yet (first JS frame before the async
- * init completes) a no-op proxy is returned so callers degrade gracefully
- * rather than crashing the app at startup.
- */
 function getStorage(): MMKV {
   if (!_storage) {
     return new Proxy({} as MMKV, {
@@ -99,8 +66,7 @@ function getStorage(): MMKV {
  * up a real `SecureStore`.
  */
 export async function generateMmkvEncryptionKey(): Promise<string> {
-  const bytes = await Crypto.getRandomBytesAsync(32); // 256 bits, raw
-  // Manual hex encoding — Buffer is not available in Hermes / RN runtimes.
+  const bytes = await Crypto.getRandomBytesAsync(32);
   let out = '';
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i] as number;
@@ -109,19 +75,9 @@ export async function generateMmkvEncryptionKey(): Promise<string> {
   return out;
 }
 
-/**
- * Initialise (or re-use) the encrypted MMKV instance.
- *
- * Must be called once, early in app startup (e.g. the very first `useEffect`
- * in the root `_layout.tsx`), before any Zustand store that uses `mmkvStorage`
- * is accessed.
- *
- * Idempotent — safe to call multiple times; subsequent calls are no-ops.
- */
 export async function initMmkvEncryption(): Promise<void> {
-  if (_storage) return; // already initialised
+  if (_storage) return;
 
-  // Retrieve or create the per-device encryption key.
   let key = await SecureStore.getItemAsync(MMKV_KEY_STORAGE_ID);
 
   if (!key) {
@@ -134,16 +90,6 @@ export async function initMmkvEncryption(): Promise<void> {
 
   _storage = new MMKV({ id: MMKV_INSTANCE_ID, encryptionKey: key });
 
-  // AUDIT-FIX: MMKV-RACE — drain pending readiness callbacks so stores
-  // configured with `skipHydration: true` can now call rehydrate().
-  //
-  // Await each callback in registration order. Zustand rehydration can be
-  // asynchronous even with a synchronous storage adapter (middleware hooks
-  // may return promises). Reporting MMKV ready before those promises settle
-  // allowed Clerk's account-owner check and teardown to run first, after which
-  // a late account-A rehydrate could repopulate data under account B.
-  // Sequential draining also guarantees a teardown callback registered after
-  // the stores runs after every earlier store has finished rehydrating.
   const queued = readyCallbacks;
   readyCallbacks = [];
   for (const cb of queued) {
@@ -166,10 +112,6 @@ export const storage = new Proxy({} as MMKV, {
   },
 });
 
-/**
- * Zustand-compatible StateStorage adapter for MMKV.
- * ~30x faster than AsyncStorage; data is encrypted at rest on disk.
- */
 export const mmkvStorage: StateStorage = {
   getItem: (name: string) => {
     const value = getStorage().getString(name);

@@ -3,19 +3,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SETTINGS_NAV, SETTINGS_NAV_GROUPS, type SettingsNavKey } from '@agiworkforce/ui';
 
-/**
- * DESK-1 / DESK-2 settings IA contract: the settings navigation and its renderer
- * must stay consistent — every nav entry MUST resolve to a rendered panel (no
- * orphaned/dead settings mode), and every grouped key MUST exist in the flat nav.
- * Pure source/data assertions; no app runtime required.
- */
 const panelSrc = readFileSync(join(__dirname, '..', 'SettingsPanel.tsx'), 'utf8');
 
 describe('desktop settings IA · nav ↔ render consistency', () => {
   it('renders a panel for every SETTINGS_NAV entry (no orphaned settings mode)', () => {
     expect(SETTINGS_NAV.length).toBeGreaterThan(0);
     for (const entry of SETTINGS_NAV) {
-      // SettingsPanel.renderTabContent must have an explicit `case '<key>':`.
       expect(
         panelSrc,
         `SETTINGS_NAV key "${entry.key}" has no render case → orphaned mode`,
@@ -25,9 +18,6 @@ describe('desktop settings IA · nav ↔ render consistency', () => {
   });
 
   it('includes all 11 locked source-of-truth sections (DESK-1 "settings IA to spec")', () => {
-    // docs/current/source-of-truth.md §"Settings must converge on these sections".
-    // Each must be a real, reachable top-level nav entry (render case enforced by
-    // the test above) — so this pins the IA AT SPEC and fails if any regresses.
     const byLabel = new Map(SETTINGS_NAV.map((e) => [e.label, e.key]));
     const SPEC_SECTIONS = [
       'General',
@@ -68,10 +58,6 @@ describe('desktop settings IA · nav ↔ render consistency', () => {
 });
 
 describe('desktop settings IA · legacy tab aliases', () => {
-  // Callers all over the app still open settings with pre-IA tab ids
-  // (openSettingsDialog('mcp'), deep links, stored preferences). resolveTab in
-  // SettingsPanel.tsx maps them through LEGACY_TAB_MAP, so every alias target
-  // must be a live SETTINGS_NAV entry or the panel silently renders nothing.
   const canonical = new Set(SETTINGS_NAV.map((e) => e.key));
 
   it('every legacy alias lands on a canonical, rendered nav entry', async () => {

@@ -226,18 +226,6 @@ for (const file of [
   }
 }
 
-// A bare readdirSync here THREW on any clean checkout and took the whole
-// `check:llm-operability` chain with it. That chain is 41 guards joined by
-// `&&`, and this is the first command in it, so the ENOENT meant none of the
-// other 40 ever ran in CI — while the same command passed on a developer
-// machine, where an untracked local `.agents/skills/` happened to exist.
-//
-// The directory is legitimately absent: `5b14585dd` removed the vendored
-// third-party skill bundles on purpose, and `.agents/skills/README.md` says the
-// folder "is intentionally empty except for this policy file". So the only
-// thing that kept the path present in git was that README — which the doc
-// retirement sweep then deleted, converting a deliberate empty directory into a
-// crash. Missing is a valid state and must read as zero skills, not as a throw.
 const skillsRoot = path.join(root, '.agents/skills');
 const skillEntries = fs.existsSync(skillsRoot)
   ? fs.readdirSync(skillsRoot, { withFileTypes: true })
@@ -296,24 +284,10 @@ if (repoMap) {
     }
   }
 
-  // workspaceUnits[].evidence — the same existence guard already applied to
-  // surfaces, platform areas, and doc-status.json's currentEvidence.
-  //
-  // Without it these citations drift silently: the model-registry unit cited
-  // `apps/desktop/src/api/googleBatch.test.ts` for weeks after that file was
-  // deleted, and nothing failed. An agent reading the map then goes looking for
-  // evidence that does not exist.
   for (const unit of repoMap.workspaceUnits ?? []) {
     if (unit.path && !exists(unit.path)) {
       errors.push(`repo-map.json workspaceUnit path does not exist: ${unit.path}`);
     }
-    // `evidence` legitimately mixes three kinds of entry: concrete repo paths,
-    // shell commands ("cargo metadata --format-version 1 --no-deps"), and
-    // globs ("packages/ai/providers/*/package.json"). Only the first kind can
-    // be existence-checked, so match conservatively: a slash-bearing token with
-    // no spaces and no glob characters. Anything else is left alone rather than
-    // failed, because a false positive here would push authors to delete real
-    // evidence to get the gate green.
     for (const evidencePath of unit.evidence ?? []) {
       if (typeof evidencePath !== 'string') continue;
       const looksLikeConcretePath = evidencePath.includes('/') && !/[\s*?{}[\]]/.test(evidencePath);
@@ -325,10 +299,6 @@ if (repoMap) {
     }
   }
 
-  // Surface completeness — prevents the missing-surface drift class. apps/sandbox
-  // was absent from this map for ~1 month, leaving the machine-readable map a
-  // coding agent loads first structurally incomplete (the "AI agent in 5 min: NO"
-  // blocker). Every apps/<dir> must be mapped as a surface.
   const mappedSurfacePaths = new Set((repoMap.surfaces ?? []).map((surface) => surface.path));
   const appsRoot = path.join(root, 'apps');
   if (fs.existsSync(appsRoot)) {
@@ -343,9 +313,6 @@ if (repoMap) {
     }
   }
 
-  // Provenance — a well-formed lastUpdated keeps map staleness visible. (Deterministic
-  // format check only; staleness vs git history is reviewed in PR, not gated here, to
-  // avoid CI flake on shallow clones.)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(repoMap.lastUpdated ?? '')) {
     errors.push(
       `repo-map.json must carry a lastUpdated date in YYYY-MM-DD form (found ${JSON.stringify(repoMap.lastUpdated)}).`,

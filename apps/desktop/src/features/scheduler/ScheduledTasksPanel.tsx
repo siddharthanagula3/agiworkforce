@@ -50,7 +50,6 @@ export function ScheduledTasksPanel() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
 
-  // Fetch tasks on mount
   useEffect(() => {
     void fetchTasks();
   }, [fetchTasks]);
@@ -187,8 +186,6 @@ export function ScheduledTasksPanel() {
     </div>
   );
 }
-
-// ─── Empty State ───────────────────────────────────────────────────────────────
 
 interface EmptyStateProps {
   onCreate: () => void;

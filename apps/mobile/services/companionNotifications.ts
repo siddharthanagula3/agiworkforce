@@ -1,24 +1,8 @@
-/**
- * Companion Notification Bridge
- *
- * Listens to companion control messages (approval_request, agent_failed,
- * task_completed, etc.) and fires local push notifications through the
- * Wave 3 notification infrastructure.
- *
- * Call `setupCompanionNotifications()` once, after the connection store
- * is initialised (typically in the companion screen's useEffect).
- * Call the returned cleanup to unsubscribe.
- */
 import { scheduleLocalNotification } from './notifications';
 import { useNotificationPrefsStore } from '@/stores/notificationPrefsStore';
 import type { NotificationEventType, NotificationPriority } from './notifications';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Shape of an inbound control message action payload */
 interface ControlPayload {
   action: string;
   requestId?: string;
@@ -28,10 +12,6 @@ interface ControlPayload {
   errorMessage?: string;
   [key: string]: unknown;
 }
-
-// ---------------------------------------------------------------------------
-// Action → notification mapping
-// ---------------------------------------------------------------------------
 
 interface NotificationSpec {
   type: NotificationEventType;
@@ -59,7 +39,6 @@ const ACTION_MAP: Record<string, NotificationSpec> = {
     title: (p) => 'Agent Failed',
     body: (p) => {
       const name = p.agentName ?? 'An agent';
-      // Sanitize: only show first line, max 100 chars — don't expose stack traces in notifications
       const rawMsg =
         typeof p.errorMessage === 'string' ? p.errorMessage.split('\n')[0]!.slice(0, 100) : '';
       const msg = rawMsg ? `: ${rawMsg}` : '';
@@ -100,14 +79,6 @@ const ACTION_MAP: Record<string, NotificationSpec> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Core dispatch
-// ---------------------------------------------------------------------------
-
-/**
- * Given an inbound control message payload, fire a local notification
- * if the user's preferences allow it.
- */
 export async function dispatchCompanionNotification(payload: ControlPayload): Promise<void> {
   const spec = ACTION_MAP[payload.action];
   if (!spec) return;
@@ -125,46 +96,24 @@ export async function dispatchCompanionNotification(payload: ControlPayload): Pr
   });
 }
 
-// ---------------------------------------------------------------------------
-// Listener setup
-// ---------------------------------------------------------------------------
-
-/** Subscribers registered via addCompanionMessageListener */
 type CompanionMessageListener = (payload: ControlPayload) => void;
 const listeners = new Set<CompanionMessageListener>();
 
-/**
- * Register a listener that will be called for every inbound companion
- * control message. Returns an unsubscribe function.
- *
- * This is an internal pub-sub bus. The connectionStore should call
- * `notifyCompanionMessage()` whenever a control message arrives.
- */
 export function addCompanionMessageListener(listener: CompanionMessageListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-/**
- * Notify all registered listeners of an inbound control message.
- * Call this from connectionStore.handleControlMessage() for non-agent actions.
- */
 export function notifyCompanionMessage(payload: ControlPayload): void {
   for (const listener of listeners) {
     listener(payload);
   }
 }
 
-/**
- * Set up the companion→notification bridge.
- * Registers a listener that fires local notifications for companion events.
- * Returns a cleanup function.
- */
 export function setupCompanionNotifications(): () => void {
   if (!FEATURES.companion) return () => {};
   return addCompanionMessageListener((payload) => {
     dispatchCompanionNotification(payload).catch((err) => {
-      // Notification dispatch failure is non-critical — don't crash
       console.warn('[CompanionNotifications] Dispatch failed:', err);
     });
   });

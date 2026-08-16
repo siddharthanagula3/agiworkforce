@@ -1,26 +1,3 @@
-/**
- * POST /api/agents/tool-executions — retirement guard.
- *
- * ⚠️ REPLACED TEST (STB-20). This file used to be an SSRF suite: the route
- * accepted a `toolId`, looked up a user-configured `config.webhookUrl`, and
- * fetched it server-side, so the tests proved that IMDS (169.254.169.254),
- * loopback, RFC-1918, and non-http schemes were rejected before `fetch` ran.
- *
- * The route had zero in-repo callers — the live `/api/agents` surface is the
- * Express api-gateway's own agents router — so the whole Next.js subtree was
- * retired rather than left authenticating, querying private rows, and making
- * user-directed outbound requests for nobody.
- *
- * That deletes the SSRF surface instead of guarding it, which is strictly
- * stronger, but it also means the old assertions can no longer be made: there is
- * no webhook fetch left to block. These tests assert the property that replaced
- * them — the route returns 410 and performs NO database read and NO outbound
- * fetch, for internal hosts and public hosts alike.
- *
- * If this endpoint is ever revived, revive the original SSRF suite with it. The
- * guard it exercised (`assertResolvedPublicHostname` in `@/lib/egress-policy`)
- * still exists and is covered directly by `lib/egress-policy.test.ts`.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 

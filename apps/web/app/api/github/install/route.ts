@@ -27,7 +27,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const cookieStore = await cookies();
 
-  // Validate state parameter to prevent installation fixation attacks
   const storedState = cookieStore.get('github_install_state')?.value;
   if (
     !state ||
@@ -51,8 +50,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Consume the installation state before starting the independent OAuth
-  // authorization turn. A captured setup callback cannot be replayed.
   cookieStore.set({
     name: 'github_install_state',
     value: '',
@@ -60,9 +57,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     path: '/',
   });
 
-  // GitHub warns that setup URLs can be called with a spoofed installation id.
-  // Treat it only as a short-lived pending candidate until the OAuth callback
-  // proves it appears in this user's `GET /user/installations` response.
   if (!isGitHubInstallationLinkingAvailable()) {
     logger.warn(
       { installationId },

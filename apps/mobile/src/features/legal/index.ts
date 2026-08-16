@@ -1,12 +1,3 @@
-/**
- * legal — in-app legal notices.
- *
- * Today this is the open-source attribution list shown by
- * `app/(app)/legal/licenses.tsx`. The data comes from
- * `licenses.generated.ts`, which is produced by
- * `scripts/generate-oss-licenses.mjs` from the installed dependency graph, so
- * the screen can never drift into claiming a package set we do not ship.
- */
 import { OSS_LICENSES_GENERATED_AT, OSS_LICENSE_BODIES, OSS_PACKAGES } from './licenses.generated';
 import type { OssLicenseAttribution, OssLicenseGroup } from './types';
 

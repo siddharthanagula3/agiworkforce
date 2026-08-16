@@ -78,8 +78,6 @@ export function createApp(options: GatewayAppOptions = {}): Express {
     app.set('trust proxy', 1);
   }
 
-  // Correlation begins before security or parsing middleware so every response,
-  // including rejected requests, receives a traceable identifier.
   app.use(requestContext);
   app.use(helmet());
   app.use(
@@ -89,8 +87,6 @@ export function createApp(options: GatewayAppOptions = {}): Express {
     }),
   );
 
-  // These endpoints intentionally precede parsers, request validation, and
-  // public rate limiting. Orchestrator probes must remain cheap and reliable.
   app.get('/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
@@ -155,9 +151,6 @@ export function createApp(options: GatewayAppOptions = {}): Express {
   app.use('/api/agents', agentsRouter);
   app.use('/api/mcp', mcpRouter);
 
-  // Retained for clients that use the existing status route. Readiness is the
-  // canonical orchestrator contract; this endpoint remains rate-limit free so
-  // monitoring cannot evict itself.
   app.get('/api/v1/status', async (_req: Request, res: Response) => {
     const requestId = getRequestId(res);
     try {

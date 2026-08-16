@@ -31,9 +31,6 @@ if (chromeManifest.manifest_version !== 3) {
 }
 validateReleaseManifest(chromeManifest, buildConfiguration);
 
-// `zip -r` updates an existing archive and otherwise leaves removed/renamed
-// bundles inside it. Delete the old package before rebuilding so the upload is
-// an exact snapshot of the current Vite output.
 fs.rmSync(path.join(extensionRoot, 'extension.zip'), { force: true });
 
 console.log(`Preparing clean Chrome Web Store package v${chromeManifest.version}.`);

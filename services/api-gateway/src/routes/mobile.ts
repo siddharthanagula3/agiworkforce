@@ -1,20 +1,3 @@
-/**
- * @file Mobile Device API Routes
- * @security
- * - Rate limiting: Applied per-endpoint based on operation type
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Authentication: JWT required for all endpoints
- * - Enumeration prevention: Returns 404 for both "not found" and "not owned" on delete
- *
- * Rate limit rationale (OWASP compliant):
- * - POST /register: 10/min - prevents fake device creation
- * - POST /push-token: 30/min - token updates are infrequent
- * - POST /pairing-code: 10/min - strict to prevent enumeration
- * - GET /: 30/min - list operation
- * - GET /agent-status: 60/min - read-only polling for agent dashboard
- * - POST /feedback: 10/min - prevents feedback spam
- * - DELETE /:deviceId: 10/min - destructive operation
- */
 
 import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'crypto';
@@ -29,23 +12,12 @@ import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 const router: Router = Router();
 
-// GW-1 (audit 2026-05-03): authenticate FIRST, then rate-limit. The
-// previous order (rate-limit at line 31 before authenticateToken at
-// line 44) was inconsistent with desktop.ts and meant any future route
-// inserted between them would silently bypass auth. Putting auth at
-// the top of the chain makes it impossible to forget.
 router.use(authenticateToken);
 
-// SECURITY: Baseline rate limit for all mobile endpoints (100/min fallback)
-// — applied AFTER auth so the per-IP bucket reflects authenticated traffic.
 router.use(createRateLimiter('default'));
 
 const SIGNALING_HTTP_URL = process.env['SIGNALING_HTTP_URL'] ?? 'http://localhost:4000';
 const SIGNALING_INTERNAL_SECRET = process.env['SIGNALING_INTERNAL_SECRET'];
-
-// =============================================================================
-// DATABASE TYPES
-// =============================================================================
 
 interface MobileDevice {
   id: string;
@@ -64,12 +36,6 @@ interface AgentApprovalRequestRow {
   created_at: string;
 }
 
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
-
-// SECURITY: .strict() rejects unexpected fields to prevent mass assignment
-// Zod v4: Use top-level format validators for better performance
 const registerSchema = z
   .object({
     clientId: z.uuid().optional(),
@@ -79,8 +45,6 @@ const registerSchema = z
   })
   .strict();
 
-// SECURITY: .strict() rejects unexpected fields
-// Zod v4: Use top-level format validators for better performance
 const pushTokenSchema = z
   .object({
     deviceId: z.uuid(),
@@ -88,7 +52,6 @@ const pushTokenSchema = z
   })
   .strict();
 
-// SECURITY: .strict() rejects unexpected fields
 const pairingCodeRequestSchema = z
   .object({
     ttlSeconds: z.number().int().min(30).max(900).optional(),
@@ -102,16 +65,12 @@ const pairingCodeResponseSchema = z.object({
   httpUrl: z.string(),
   wsUrl: z.string(),
   qrData: z.string(),
-  // SECURITY (C2, redteam-services 2026-05-04): per-role pair tokens issued by
-  // the signaling server. Pairing is unusable without these because the
-  // signaling server requires the role token on WebSocket registration.
   pairTokens: z.object({
     desktop: z.string(),
     mobile: z.string(),
   }),
 });
 
-// SECURITY: .strict() rejects unexpected fields
 const feedbackSchema = z
   .object({
     type: z.enum(['bug', 'feature', 'general']),
@@ -123,16 +82,6 @@ function buildPairingQrData(code: string, pairToken: string): string {
   return `agiw:${code}:${pairToken}`;
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
-/**
- * Register a new mobile device
- * POST /mobile/register
- *
- * SECURITY: Rate limited to 10/min to prevent fake device creation
- */
 router.post(
   '/register',
   createRateLimiter('device-register'),
@@ -147,9 +96,6 @@ router.post(
 
     const db = getUserScopedClient(user);
 
-    // SECURITY: Verify ownership before upsert to prevent device registration hijack.
-    // Without this check, an attacker who knows another user's device ID could
-    // overwrite their registration by supplying it as clientId.
     if (clientId) {
       const { data: existing } = await db
         .from('mobile_devices')
@@ -184,12 +130,6 @@ router.post(
   },
 );
 
-/**
- * Update push token for a device
- * POST /mobile/push-token
- *
- * SECURITY: Rate limited to 30/min - token updates are infrequent
- */
 router.post(
   '/push-token',
   createRateLimiter('mobile-push-token'),
@@ -201,7 +141,6 @@ router.post(
     }
 
     const db = getUserScopedClient(user);
-    // First verify the device exists and belongs to the user
     const { data: device, error: fetchError } = await db
       .from('mobile_devices')
       .select('id, user_id')
@@ -212,12 +151,10 @@ router.post(
       throw new AppError('Device not found', 404);
     }
 
-    // Check ownership - return 403 for not owned
     if (device.user_id !== user.userId) {
       throw new AppError('Forbidden', 403);
     }
 
-    // Update the push token
     const { error: updateError } = await db
       .from('mobile_devices')
       .update({ push_token: pushToken })
@@ -232,12 +169,6 @@ router.post(
   },
 );
 
-/**
- * Request a pairing code from the signaling server
- * POST /mobile/pairing-code
- *
- * SECURITY: Rate limited to 10/min - strict to prevent enumeration attacks
- */
 router.post(
   '/pairing-code',
   createRateLimiter('pairing-code'),
@@ -300,9 +231,6 @@ router.post(
 
     const payload = pairingCodeResponseSchema.parse(jsonBody);
 
-    // SECURITY (C2): forward the signaling-issued role tokens to the
-    // authenticated caller so the desktop/mobile clients can register with the
-    // signaling server. Do not log these tokens.
     res.json({
       code: payload.code,
       expiresAt: payload.expiresAt,
@@ -317,12 +245,6 @@ router.post(
   },
 );
 
-/**
- * List all mobile devices for the current user
- * GET /mobile/
- *
- * SECURITY: Rate limited to 30/min for list operations
- */
 router.get('/', createRateLimiter('device-list'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -352,16 +274,6 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
   res.json({ devices: result });
 });
 
-/**
- * Get status of running agents for the authenticated user
- * GET /mobile/agent-status
- *
- * Returns pending approval summaries for background notification polling.
- * Live running-agent state is still delivered over the paired desktop
- * realtime channel and is not inferred from this polling endpoint.
- *
- * SECURITY: Rate limited to 60/min for read-only polling
- */
 router.get(
   '/agent-status',
   createRateLimiter('mobile-agent-status'),
@@ -402,12 +314,6 @@ router.get(
   },
 );
 
-/**
- * Submit user feedback (bug report, feature request, or general)
- * POST /mobile/feedback
- *
- * SECURITY: Rate limited to 10/min to prevent feedback spam
- */
 router.post(
   '/feedback',
   createRateLimiter('mobile-feedback'),
@@ -448,12 +354,6 @@ router.post(
   },
 );
 
-/**
- * Delete a mobile device
- * DELETE /mobile/:deviceId
- *
- * SECURITY: Rate limited to 10/min for destructive operations
- */
 router.delete(
   '/:deviceId',
   createRateLimiter('device-delete'),
@@ -465,13 +365,11 @@ router.delete(
 
     const { deviceId } = req.params;
 
-    // SECURITY: Validate UUID format to prevent injection
     if (!isValidUuid(deviceId)) {
       throw new AppError('Invalid device ID format', 400);
     }
 
     const db = getUserScopedClient(user);
-    // First verify ownership
     const { data: device, error: fetchError } = await db
       .from('mobile_devices')
       .select('id, user_id')

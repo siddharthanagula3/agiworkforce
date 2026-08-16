@@ -1,9 +1,3 @@
-/**
- * BrandedGreeting Component — Phase A Slice 5 (ported from UAC)
- *
- * Personalized, time-aware greeting shown in the empty chat state.
- * User name injected via optional prop (host provides from its auth store).
- */
 
 import React, { useMemo } from 'react';
 import { Sparkles } from 'lucide-react';
@@ -59,7 +53,6 @@ function getGreeting(name: string | null): { headline: string; subline: string }
     pool = EVENING_GREETINGS;
   }
 
-  // Use the minute hand to pick a stable-but-rotated entry within a session.
   const index = new Date().getMinutes() % pool.length;
   const template = pool[index] ?? pool[0]!;
 
@@ -70,7 +63,6 @@ function getGreeting(name: string | null): { headline: string; subline: string }
 }
 
 export interface BrandedGreetingProps {
-  /** User's first name (optional — host provides from its auth store). */
   userName?: string | null;
   className?: string;
 }
@@ -78,7 +70,6 @@ export interface BrandedGreetingProps {
 export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ userName = null, className }) => {
   const firstName = useMemo(() => {
     if (!userName) return null;
-    // Take only the first word of the display name for a friendlier greeting
     return userName.split(' ')[0] ?? null;
   }, [userName]);
 

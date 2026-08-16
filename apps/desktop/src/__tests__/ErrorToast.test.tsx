@@ -31,11 +31,9 @@ describe('ErrorToast', () => {
       });
 
       await waitFor(() => {
-        // The toast shows the pre-defined title from errorMessages.ts, not the raw message
         expect(screen.getByText('Connection Issue')).toBeInTheDocument();
       });
 
-      // The component shows the pre-defined message (not the raw error.message)
       expect(screen.getByText(/Unable to connect to the server/i)).toBeInTheDocument();
     });
 
@@ -86,7 +84,6 @@ describe('ErrorToast', () => {
     });
 
     it('should show details when details section is expanded', async () => {
-      // The details section is only rendered in DEV mode
       vi.stubEnv('DEV', true);
 
       render(<ErrorToastContainer />);
@@ -104,7 +101,6 @@ describe('ErrorToast', () => {
         expect(screen.getByText('Connection Issue')).toBeInTheDocument();
       });
 
-      // The summary label includes "(development only)"
       const detailsToggle = screen.getByText(/show details/i);
       fireEvent.click(detailsToggle);
 

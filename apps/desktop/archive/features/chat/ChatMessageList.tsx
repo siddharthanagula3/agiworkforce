@@ -28,11 +28,10 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   const [autoScroll, setAutoScroll] = useState(true);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
-  // Debounce search to prevent performance issues during rapid typing
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
-    }, 300); // 300ms debounce
+    }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
@@ -41,29 +40,23 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
     if (!debouncedSearchQuery.trim()) return messages;
 
-    // Limit search to last 1000 messages for performance with large histories
     const recentMessages = messages.slice(-1000);
     const query = debouncedSearchQuery.toLowerCase();
 
     return recentMessages.filter((msg) => {
-      // Allow streaming messages even if content is empty (fixes hidden streaming messages)
       if (msg.metadata?.streaming) return true;
 
-      // Filter non-streaming messages by content
       if (!msg.content || typeof msg.content !== 'string') return false;
       return msg.content.toLowerCase().includes(query);
     });
   }, [messages, debouncedSearchQuery]);
 
-  // Compute a fingerprint of the last message content to detect streaming updates
   const lastMessageFingerprint = React.useMemo(() => {
     const lastMessage = filteredMessages[filteredMessages.length - 1];
     if (!lastMessage) return '';
-    // Use content length as a lightweight fingerprint - changes during streaming
     return `${lastMessage.id}-${lastMessage.content?.length ?? 0}`;
   }, [filteredMessages]);
 
-  // Auto-scroll to bottom when new messages arrive or content changes during streaming
   useEffect(() => {
     if (autoScroll && listRef.current && filteredMessages.length > 0) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -93,12 +86,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     }
   }, [clearHistory]);
 
-  /**
-   * PERFORMANCE OPTIMIZATION: Memoized callback factories
-   * These return stable callback functions for each message ID,
-   * preventing unnecessary re-renders of MessageBubble components.
-   * Without this, new function references would be created on every render.
-   */
   const handleMessageEdit = useCallback(
     (messageId: string) => (content: string) => {
       onMessageEdit?.(messageId, content);
@@ -120,7 +107,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     [onMessageRegenerate],
   );
 
-  // Show loading indicator while messages are being loaded
   if (isLoadingMessages) {
     return (
       <div className={`flex flex-col items-center justify-center h-full text-center ${className}`}>
@@ -130,7 +116,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     );
   }
 
-  // Only show empty/welcome state if not loading AND messages are empty
   if (filteredMessages.length === 0 && !searchQuery) {
     return (
       <div className={`flex flex-col items-center justify-center h-full text-center ${className}`}>

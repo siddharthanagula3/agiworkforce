@@ -88,11 +88,6 @@ const managedModel: ModelInfo = {
 
 type TauriWindow = Window & { __TAURI_INTERNALS__?: unknown };
 
-/**
- * zustand `persist` lazy-writes, so a desktop session that never touched a
- * mode setter leaves no `app-mode-store` entry — the state the selector must
- * still read as Local.
- */
 function seedDesktopShellWithoutPersistedMode() {
   window.localStorage.removeItem('app-mode-store');
   (window as TauriWindow).__TAURI_INTERNALS__ = {};
@@ -390,10 +385,6 @@ describe('ModelSelector execution-boundary admission', () => {
 
     expect(onEffortChange).toHaveBeenCalledWith('high');
   });
-
-  // The current catalog has no model without an effort ladder, so there is no
-  // entry that can demonstrate the hidden-control state. Restore the test when
-  // that capability shape exists again.
 
   it('represents mandatory catalog reasoning without an off toggle', async () => {
     const onEffortChange = vi.fn();

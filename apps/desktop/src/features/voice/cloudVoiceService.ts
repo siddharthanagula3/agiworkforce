@@ -91,10 +91,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-/**
- * Rewrites a managed transcript without ever auto-executing it. Invalid or
- * unavailable model output degrades to deterministic dictation cleanup.
- */
 export async function rewriteCloudVoiceTranscript(
   transcript: string,
   dependencies: CloudVoiceRewriteDependencies,
@@ -126,8 +122,6 @@ export async function rewriteCloudVoiceTranscript(
       VOICE_REWRITE_TIMEOUT_MS,
     );
   } catch {
-    // A provider failure may degrade to local cleanup, but only while the
-    // original authenticated Managed boundary is still active.
     dependencies.assertBoundary();
     return fallbackDictation(normalizedTranscript);
   }

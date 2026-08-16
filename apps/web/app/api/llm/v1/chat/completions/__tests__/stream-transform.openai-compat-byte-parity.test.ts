@@ -1,29 +1,3 @@
-/**
- * Byte-parity for the 8 openai-compat providers (task #34's compat batch),
- * riding on the SAME `wireMode: 'openai-passthrough'` machinery proven for
- * OpenAI itself in stream-transform.openai-byte-parity.test.ts.
- *
- * Each `packages/ai/providers/{minimax,moonshot,zhipu,qwen,openrouter,
- * deepseek,xai,perplexity}` package is a thin config wrapper around
- * `@agiworkforce/providers-openai`'s translate/stream layer with ZERO internal
- * reshaping -- identical to `openai.ts`'s own pattern, which is what makes
- * `wireMode: 'openai-passthrough'` the correct mode for all of them (not just
- * OpenAI). Each `packages/ai/providers/{provider}` package is a thin config
- * wrapper around `@agiworkforce/providers-openai`'s translate/stream layer
- * (see adapter-factory.ts's `buildCompatAdapter` docstring), so this suite
- * verifies the SHARED wire-shape machinery serves every provider string
- * correctly (per-provider `model` rewrite, per-provider billing/TTFT
- * plumbing in `buildAdapterStreamResponse`) -- it does not re-derive the
- * MUST-FIX/SHOULD-PRESERVE/BEST-EFFORT wire-shape proof per provider (that
- * proof is provider-independent, already established for OpenAI, and these
- * providers share the exact same `translateOpenAIStream`/`OpenAIWireAssembler`
- * code path). Package-internal quirks (moonshot's flat->nested cache-usage
- * rewrite, openrouter's Anthropic cache_control injection, qwen's base-url
- * selection) are each package's OWN concern, verified by their own
- * package-level tests built when these packages were created -- out of
- * scope here, which is about ROUTE-LEVEL wiring, not re-auditing packages
- * this migration didn't touch.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 

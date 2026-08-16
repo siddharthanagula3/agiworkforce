@@ -31,59 +31,25 @@
 import { v5 as uuidv5 } from 'uuid';
 import type { SharedArtifact, SharedArtifactType } from '@agiworkforce/types';
 
-/**
- * Fixed namespace for deterministic derived-artifact ids. NEVER change this —
- * changing it re-keys every derived artifact and breaks cross-device de-dup.
- */
 export const DERIVED_ARTIFACT_NAMESPACE = '5f6c1e8a-2b3d-4c5e-8f9a-0b1c2d3e4f50';
 
-/** A fenced code block located in message markdown. */
 export interface DerivedCodeBlock {
-  /** Fence language tag (e.g. `html`, `python`) or `''` when absent. */
   language: string;
-  /** Block body, trimmed. */
   content: string;
-  /** Character offset of the block start in the source markdown. */
   startIndex: number;
-  /** Character offset just past the block end. */
   endIndex: number;
-  /** 0-based position of this block within the message (the de-dup ordinal). */
   ordinal: number;
-  /** Count of non-empty lines in `content`. */
   lineCount: number;
 }
 
-/**
- * Matches a fenced code block: ```info\n...\n```. The info string is optional.
- *
- * AUDIT-FIX ART-2: the info string is `[^\n`]*` (not `\w*`) and BOTH fences are
- * anchored to a line start via the `m` flag. The old `\w*\n` form matched no
- * opening fence that carried attributes (```html title="x"), a hyphen or dot in
- * the tag (```objective-c) or a CRLF line ending. The scan then resumed at that
- * block's CLOSING fence and paired it AS AN OPENING one, so every later
- * `ordinal`, `startIndex` and `endIndex` in the message was wrong — which
- * spliced the wrong ranges out of the transcript, reported phantom open fences
- * to the streaming parser, and broke the streaming -> persisted id handoff.
- */
 const FENCED_CODE_RE = /^```([^\n`]*)\r?\n([\s\S]*?)^```/gm;
 
-/**
- * The fence info string is not just a language: it can carry attributes
- * (```html title="x"). AUDIT-FIX ART-2: take only the leading whitespace-
- * delimited token and lowercase it, so downstream language comparisons
- * (`isRenderableArtifact`, `detectArtifactType`) still match.
- */
 function parseFenceLanguage(info: string | undefined): string {
   return (info ?? '').trim().split(/\s+/)[0]?.toLowerCase() || 'text';
 }
 
-/**
- * Extract every fenced code block from markdown, in document order, each tagged
- * with its `ordinal` (used for the deterministic id) and `lineCount`.
- */
 export function extractCodeBlocks(markdown: string): DerivedCodeBlock[] {
   const blocks: DerivedCodeBlock[] = [];
-  // Local regex instance — never share lastIndex across calls.
   const re = new RegExp(FENCED_CODE_RE.source, FENCED_CODE_RE.flags);
   let match: RegExpExecArray | null;
   let ordinal = 0;
@@ -102,10 +68,6 @@ export function extractCodeBlocks(markdown: string): DerivedCodeBlock[] {
   return blocks;
 }
 
-/**
- * Whether a block should render as a live/interactive artifact (web policy):
- * html/react/svg/mermaid, HTML-like content, or an explicit `@artifact` marker.
- */
 export function isRenderableArtifact(language: string, content: string): boolean {
   const lang = language.toLowerCase();
   if (lang === 'html' || lang === 'htm') return true;
@@ -126,7 +88,6 @@ export function isRenderableArtifact(language: string, content: string): boolean
   );
 }
 
-/** Detect the artifact category from a block's language + content. */
 export function detectArtifactType(language: string, content: string): SharedArtifactType {
   const lang = language.toLowerCase();
   if (lang === 'mermaid') return 'mermaid';
@@ -145,13 +106,6 @@ export function detectArtifactType(language: string, content: string): SharedArt
 
 const MAX_TITLE_CHARS = 60;
 
-/**
- * `@title:` marker in a leading comment, terminated by a newline or `-->`.
- *
- * Replaces `/(?:\/\/|<!--|#)\s*@title:?\s*(.+?)(?:\n|-->)/i`, whose `(.+?)`
- * before an alternation of terminators is the same quadratic shape as the tag
- * spans above when NEITHER terminator appears.
- */
 function extractTitleComment(content: string): string | undefined {
   const marker = /(?:\/\/|<!--|#)\s*@title:?\s*/i.exec(content);
   if (!marker) return undefined;
@@ -164,43 +118,15 @@ function extractTitleComment(content: string): string | undefined {
   return value || undefined;
 }
 
-/**
- * Derive a human-readable title: an explicit `<title>`/`@title`, an `<h1>`, or
- * the first meaningful line (comment/heading stripped); else undefined.
- */
-/**
- * Text between an opening tag and its closing tag, found by scanning rather
- * than by a lazy quantifier.
- *
- * `/<title>(.*?)<\/title>/` and friends are quadratic when the CLOSING tag is
- * absent: the engine advances `.*?` one character at a time and retries the
- * whole tail at each position (js/polynomial-redos). Artifact content is
- * model-generated and can be large, and an unterminated tag is exactly what a
- * truncated stream produces — so the pathological input is the ordinary
- * failure case here, not a crafted attack.
- *
- * `indexOf` does the same job in one forward pass and returns undefined when
- * the closer is missing, which is the behaviour the callers already expected.
- */
 function betweenTags(content: string, openTag: string, closeTag: string): string | undefined {
   const lower = content.toLowerCase();
 
-  // The open tag is located by scanning too, not by a regex.
-  //
-  // The first version of this used `/<h1[^>]*>/i.exec(content)`, and CodeQL
-  // was right to keep flagging it. A negated class before a required literal
-  // does not backtrack WITHIN one match attempt — but `exec` also advances the
-  // start position, and every `<h1` in a document with no `>` re-scans to the
-  // end. That is still O(n*m); the rewrite had only moved the constant.
-  //
-  // Here each character is visited at most twice: once by indexOf looking for
-  // the tag name, once by the bounded scan for `>`.
   const nameAt = lower.indexOf(openTag);
   if (nameAt === -1) return undefined;
 
   let cursor = nameAt + openTag.length;
   while (cursor < content.length && content[cursor] !== '>') cursor += 1;
-  if (cursor >= content.length) return undefined; // open tag never closed
+  if (cursor >= content.length) return undefined;
 
   const start = cursor + 1;
   const end = lower.indexOf(closeTag, start);
@@ -226,7 +152,6 @@ export function extractArtifactTitle(content: string): string | undefined {
     if (trimmed) return trimmed;
   }
 
-  // First meaningful line, comment/heading markers stripped (mobile policy).
   const first = content.split('\n').find((l) => l.trim().length > 0) ?? '';
   const cleaned = first
     .replace(/^#+\s+/, '')
@@ -237,13 +162,6 @@ export function extractArtifactTitle(content: string): string | undefined {
   return undefined;
 }
 
-/**
- * The deterministic, cross-surface-stable id for a derived artifact.
- *
- * Keyed on `conversationId:messageId:ordinal` so every surface (and a re-render)
- * computes the SAME id, and an edited artifact (which keeps this id) overlays the
- * exact derived artifact it came from. This is the de-dup / cloud-sync key.
- */
 export function computeDerivedArtifactId(
   conversationId: string | undefined,
   messageId: string | undefined,
@@ -255,14 +173,8 @@ export function computeDerivedArtifactId(
   );
 }
 
-/**
- * A trailing, still-open fenced code block found at the end of a streaming
- * message buffer (opening ``` fence seen, closing fence not yet arrived).
- */
 export interface TrailingUnclosedBlock {
-  /** Fence language tag (e.g. `html`) or `'text'` when absent. */
   language: string;
-  /** Partial block body streamed so far (NOT trimmed — it is still growing). */
   content: string;
   /**
    * The ordinal this block WILL have once the fence closes (= count of
@@ -271,35 +183,11 @@ export interface TrailingUnclosedBlock {
    * artifact will get, enabling a seamless streaming → persisted handoff.
    */
   ordinal: number;
-  /** Character offset of the opening ``` in the source markdown. */
   startIndex: number;
 }
 
-/**
- * Matches the opening fence of a code block whose language-tag line is
- * COMPLETE (terminated by a newline). While streaming, a partial "```ht"
- * without its newline must NOT match — the language tag may still be growing.
- */
-// AUDIT-FIX ART-2: mirrors FENCED_CODE_RE — line-anchored, permissive info
-// string, CRLF tolerant. Anything narrower would miss the same opening fences
-// the canonical extractor now sees, desynchronising the streamed ordinal from
-// the one the completed artifact gets.
 const OPEN_FENCE_RE = /^```([^\n`]*)\r?\n/m;
 
-/**
- * Incremental-parse helper for live streaming: find the trailing UNCLOSED
- * fenced code block at the end of a partial markdown buffer, if any.
- *
- * Only the text AFTER the last complete fenced block is scanned, so
- * fence-like text inside earlier (closed) code blocks can never be
- * misdetected as an opening fence. Returns null when:
- *  - there is no open fence in the tail;
- *  - an open fence exists but its language-tag line is not yet complete
- *    (no newline after ```lang — the tag may still be streaming in).
- *
- * Pure string/regex slicing — safe for pathological inputs (giant single
- * lines, repeated backticks) with linear cost.
- */
 export function extractTrailingUnclosedBlock(markdown: string): TrailingUnclosedBlock | null {
   const blocks = extractCodeBlocks(markdown);
   const tailStart = blocks.length > 0 ? blocks[blocks.length - 1]!.endIndex : 0;
@@ -316,24 +204,13 @@ export function extractTrailingUnclosedBlock(markdown: string): TrailingUnclosed
   };
 }
 
-/** How a markdown message is turned into artifacts. */
 export type ArtifactInclusion = 'renderable' | 'code' | ((block: DerivedCodeBlock) => boolean);
 
 export interface DeriveArtifactsOptions {
-  /** Owning conversation id — part of the deterministic id. */
   conversationId?: string;
-  /** Owning message id — part of the deterministic id. */
   messageId?: string;
-  /**
-   * Which blocks become artifacts:
-   *  - `'renderable'` (default, web): only live-renderable artifacts.
-   *  - `'code'` (mobile gallery): every code block with >= `minCodeLines` lines.
-   *  - a predicate for custom policies.
-   */
   include?: ArtifactInclusion;
-  /** Minimum non-empty lines for `include: 'code'`. Default 4 (mobile). */
   minCodeLines?: number;
-  /** ISO timestamp stamped as `createdAt`/`updatedAt`. Defaults to now. */
   now?: string;
 }
 
@@ -344,14 +221,9 @@ function blockIncluded(
 ): boolean {
   if (typeof include === 'function') return include(block);
   if (include === 'code') return block.lineCount >= minCodeLines;
-  // 'renderable'
   return isRenderableArtifact(block.language, block.content);
 }
 
-/**
- * Derive `SharedArtifact`s from a markdown message. Deterministic ids; pure
- * except for the `now` timestamp (pass `now` for fully reproducible output).
- */
 export function deriveArtifacts(
   markdown: string,
   options: DeriveArtifactsOptions = {},
@@ -385,34 +257,20 @@ function defaultTitle(block: DerivedCodeBlock): string {
   return block.ordinal === 0 ? lang : `${lang} ${block.ordinal + 1}`;
 }
 
-/** True when the message contains at least one block matching the policy. */
 export function hasArtifacts(markdown: string, options: DeriveArtifactsOptions = {}): boolean {
   const { include = 'renderable', minCodeLines = 4 } = options;
   return extractCodeBlocks(markdown).some((b) => blockIncluded(b, include, minCodeLines));
 }
 
-/**
- * Strip the derived artifacts' code blocks from markdown so the chat body does
- * not duplicate what the artifact panel shows.
- */
 export function removeArtifactBlocks(
   markdown: string,
   artifacts: ReadonlyArray<Pick<SharedArtifact, 'content' | 'language'>>,
 ): string {
   if (artifacts.length === 0) return markdown.trim();
-  // Strip the message's own fenced blocks that were surfaced as artifact cards, matching on
-  // the CURRENT markdown's block RANGES (extractCodeBlocks gives exact start/end) — NOT a
-  // regex built from the passed artifact `content`. The passed content can drift from the
-  // final markdown (e.g. an artifact captured mid-stream and cached in the store, or trimmed
-  // differently), which made the old exact-content regex miss and left a DUPLICATE raw code
-  // block sitting next to the rendered card. Position-based removal cannot drift. A block is
-  // stripped when its whitespace-normalized content matches a passed artifact's, OR when it
-  // is itself a renderable artifact (the web inclusion policy that produced the card).
   const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
   const wanted = new Set(artifacts.map((a) => norm(a.content)));
   const blocks = extractCodeBlocks(markdown);
   let cleaned = markdown;
-  // Remove right-to-left so earlier startIndex offsets stay valid as we splice.
   for (let i = blocks.length - 1; i >= 0; i -= 1) {
     const block = blocks[i]!;
     if (wanted.has(norm(block.content)) || isRenderableArtifact(block.language, block.content)) {

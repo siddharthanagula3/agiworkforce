@@ -1,17 +1,4 @@
-/**
- * Shared Types Index
- * Central export point for all shared type definitions
- *
- * Import pattern: import { TypeName } from '@shared/types';
- *
- * NOTE: The canonical cross-surface ChatMessage is in `@agiworkforce/types`.
- * The web surface extends it with multi-agent / delivery-status fields.
- * Use `CanonicalChatMessage` when you need the base cross-surface contract.
- */
 
-// ============================================================================
-// CANONICAL TYPES (cross-surface, from @agiworkforce/types)
-// ============================================================================
 
 export {
   type ChatMessage as CanonicalChatMessage,
@@ -19,25 +6,18 @@ export {
   type ChatAttachment as CanonicalChatAttachment,
 } from '@agiworkforce/types';
 
-// ============================================================================
-// COMMON TYPES (Primary source for frequently-used types)
-// ============================================================================
-
 export {
-  // Status and primitives
   type Status,
   type MessageRole,
   type MessageDeliveryStatus,
   type ToolCallStatus,
   type ParticipantType,
 
-  // API response types
   type ApiResponse,
   type APIResponse, // Alias for backward compatibility
   type PaginatedResponse,
   type ApiError,
 
-  // Chat message types
   type MessageMetadata,
   type BaseChatMessage,
   type SimpleChatMessage,
@@ -51,38 +31,28 @@ export {
   type ThinkingStep,
   type Citation,
 
-  // Chat session types
   type ChatSession,
   type ChatSettings,
   type TypingIndicator,
 
-  // AI Employee types
   type AIProvider,
   type AIEmployeeStatus,
   type AIEmployeeBasic,
   type MarketplaceEmployee,
   type AIEmployeePerformance,
 
-  // Tool types
   type Tool,
   type ToolResult,
 
-  // Streaming types
   type StreamingUpdate,
 
-  // Base entity
   type BaseEntity,
 
-  // Orchestration types
   type CollaborationAgentCapability,
   type SelectionAgentCapability,
   type AgentStatus,
   type AgentCommunication,
 } from './common';
-
-// ============================================================================
-// STORE TYPES
-// ============================================================================
 
 export {
   type UserRole,
@@ -128,10 +98,6 @@ export {
   type SearchResult,
 } from './store-types';
 
-// ============================================================================
-// MULTI-AGENT CHAT TYPES
-// ============================================================================
-
 export {
   type ConversationType,
   type ConversationStatus,
@@ -173,11 +139,6 @@ export {
   MultiAgentChatError,
 } from './multi-agent-chat';
 
-// ============================================================================
-// LEGACY TYPES (Domain-specific, kept for compatibility)
-// ============================================================================
-
-// User types
 export interface User {
   id: string;
   email: string;
@@ -188,7 +149,6 @@ export interface User {
   updated_at: string;
 }
 
-// Extended AI Employee (full definition with all fields)
 export interface AIEmployee {
   id: string;
   name: string;
@@ -222,7 +182,6 @@ export interface AIEmployeeCapabilities {
   communicationChannels: Channel[];
 }
 
-// Legacy Tool definition (extended)
 export interface LegacyTool {
   id: string;
   name: string;
@@ -392,7 +351,6 @@ export interface InterAgentMessage {
   metadata: Record<string, unknown>;
 }
 
-// Legacy ChatSession (database schema version)
 export interface LegacyChatSession {
   id: string;
   user_id: string;
@@ -404,7 +362,6 @@ export interface LegacyChatSession {
   status: 'active' | 'ended' | 'archived';
 }
 
-// Legacy ChatMessage (database schema version)
 export interface LegacyChatMessage {
   id: string;
   session_id: string;
@@ -555,7 +512,6 @@ export interface AnalyticsEvent {
   created_at: string;
 }
 
-// WebSocket Event Types
 export interface ClientEvents {
   'chat:message': { sessionId: string; message: string };
   'job:subscribe': { jobId: string };
@@ -572,7 +528,6 @@ export interface ServerEvents {
   'employee:update': { employeeId: string; status: string };
 }
 
-// Error Types
 export class APIError extends Error {
   constructor(
     message: string,

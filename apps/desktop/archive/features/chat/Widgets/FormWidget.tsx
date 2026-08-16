@@ -22,10 +22,6 @@ import {
   SelectValue,
 } from '@/components/ui/Select';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export type FormFieldType = 'text' | 'number' | 'select' | 'checkbox' | 'date' | 'file';
 
 export interface FormFieldOption {
@@ -39,7 +35,7 @@ export interface FormFieldValidation {
   pattern?: string;
   minLength?: number;
   maxLength?: number;
-  accept?: string; // For file inputs
+  accept?: string;
 }
 
 export interface FormField {
@@ -49,7 +45,7 @@ export interface FormField {
   required?: boolean;
   placeholder?: string;
   defaultValue?: string | number | boolean;
-  options?: FormFieldOption[]; // For select fields
+  options?: FormFieldOption[];
   validation?: FormFieldValidation;
   description?: string;
   disabled?: boolean;
@@ -66,33 +62,21 @@ export interface FormWidgetConfig {
 export type FormData = Record<string, string | number | boolean | File | null>;
 
 export interface FormWidgetProps {
-  /** Form configuration */
   config: FormWidgetConfig;
-  /** Called when form is submitted with valid data */
   onSubmit: (data: FormData) => void | Promise<void>;
-  /** Called when form is cancelled */
   onCancel?: () => void;
-  /** Initial form values */
   initialValues?: Partial<FormData>;
-  /** Additional CSS class names */
   className?: string;
-  /** Whether the form is read-only (already submitted) */
   readOnly?: boolean;
-  /** Submitted values to display in read-only mode */
   submittedValues?: FormData;
 }
 
 type FormStatus = 'idle' | 'submitting' | 'success' | 'error';
 
-// ============================================================================
-// Validation Helpers
-// ============================================================================
-
 function validateField(
   field: FormField,
   value: string | number | boolean | File | null | undefined,
 ): string | null {
-  // Required check
   if (field.required) {
     if (value === null || value === undefined || value === '') {
       return `${field.label} is required`;
@@ -102,7 +86,6 @@ function validateField(
     }
   }
 
-  // Skip further validation if empty and not required
   if (value === null || value === undefined || value === '') {
     return null;
   }
@@ -110,7 +93,6 @@ function validateField(
   const validation = field.validation;
   if (!validation) return null;
 
-  // Number validation
   if (field.type === 'number' && typeof value === 'number') {
     if (validation.min !== undefined && value < validation.min) {
       return `${field.label} must be at least ${validation.min}`;
@@ -120,7 +102,6 @@ function validateField(
     }
   }
 
-  // String validation
   if (typeof value === 'string') {
     if (validation.minLength !== undefined && value.length < validation.minLength) {
       return `${field.label} must be at least ${validation.minLength} characters`;
@@ -155,10 +136,6 @@ function getInitialValue(field: FormField): string | number | boolean | File | n
       return '';
   }
 }
-
-// ============================================================================
-// Field Components
-// ============================================================================
 
 interface FieldWrapperProps {
   field: FormField;
@@ -505,10 +482,6 @@ function FileField({ field, value, onChange, error, disabled, id }: FileFieldPro
   );
 }
 
-// ============================================================================
-// Read-Only Display
-// ============================================================================
-
 interface ReadOnlyFormProps {
   config: FormWidgetConfig;
   values: FormData;
@@ -577,10 +550,6 @@ function ReadOnlyForm({ config, values, className }: ReadOnlyFormProps) {
   );
 }
 
-// ============================================================================
-// Main Component
-// ============================================================================
-
 export const FormWidget: React.FC<FormWidgetProps> = ({
   config,
   onSubmit,
@@ -592,7 +561,6 @@ export const FormWidget: React.FC<FormWidgetProps> = ({
 }) => {
   const formId = useId();
 
-  // Initialize form state
   const [formData, setFormData] = useState<FormData>(() => {
     const initial: FormData = {};
     for (const field of config.fields) {
@@ -605,11 +573,9 @@ export const FormWidget: React.FC<FormWidgetProps> = ({
   const [status, setStatus] = useState<FormStatus>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Update field value
   const updateField = useCallback(
     (name: string, value: string | number | boolean | File | null) => {
       setFormData((prev) => ({ ...prev, [name]: value }));
-      // Clear error when field is modified
       setErrors((prev) => {
         if (prev[name]) {
           const next = { ...prev };
@@ -622,7 +588,6 @@ export const FormWidget: React.FC<FormWidgetProps> = ({
     [],
   );
 
-  // Validate all fields
   const validateForm = useCallback((): boolean => {
     const newErrors: Record<string, string> = {};
     let isValid = true;
@@ -639,7 +604,6 @@ export const FormWidget: React.FC<FormWidgetProps> = ({
     return isValid;
   }, [config.fields, formData]);
 
-  // Handle form submission
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -664,7 +628,6 @@ export const FormWidget: React.FC<FormWidgetProps> = ({
     [formData, onSubmit, validateForm],
   );
 
-  // Render field based on type
   const renderField = (field: FormField) => {
     const id = `${formId}-${field.name}`;
     const error = errors[field.name];
@@ -754,12 +717,10 @@ export const FormWidget: React.FC<FormWidgetProps> = ({
     }
   };
 
-  // If read-only with submitted values, show read-only display
   if (readOnly && submittedValues) {
     return <ReadOnlyForm config={config} values={submittedValues} className={className} />;
   }
 
-  // Success state
   if (status === 'success') {
     return <ReadOnlyForm config={config} values={formData} className={className} />;
   }

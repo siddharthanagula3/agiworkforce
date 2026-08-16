@@ -1,9 +1,3 @@
-/**
- * codeLensProvider.ts -- CodeLens provider showing "Ask AI" on functions/classes
- *
- * Adds a clickable "Ask AI" lens above every function and class declaration.
- * Clicking opens the chat with the function/class pre-selected as context.
- */
 
 import * as vscode from 'vscode';
 
@@ -18,15 +12,6 @@ export class AgiCodeLensProvider implements vscode.CodeLensProvider {
   private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
 
-  /**
-   * Cache lens results per document. VS Code calls `provideCodeLenses` on every
-   * editor change; without a cache a 5,000-line file pays ~45,000 regex
-   * evaluations per refresh. Invalidated automatically when the document's
-   * version increments (any edit) and explicitly by `refresh()`.
-   *
-   * Map key: document.uri.toString(). Bounded — older entries evicted via
-   * editor close (no listener here; relies on natural turnover).
-   */
   private readonly _cache = new Map<string, CachedLensesEntry>();
 
   provideCodeLenses(
@@ -58,10 +43,6 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (isFunctionOrClassLine(line, document.languageId)) {
-      // The lens sits on the declaration line, but the command needs the whole
-      // declaration. This range used to be computed and then dropped — the
-      // commands took no arguments, so they fell back to the editor selection,
-      // and an empty selection means "the entire document".
       const lensRange = new vscode.Range(i, 0, i, line.length);
       const span = declarationSpan(lines, i);
       const targetRange = new vscode.Range(span.startLine, 0, span.endLine, span.endCharacter);
@@ -107,14 +88,9 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
   return lenses;
 }
 
-/**
- * Detects whether a line is a function/class/method declaration
- * for common languages. Uses simple heuristics, not full parsing.
- */
 function isFunctionOrClassLine(line: string, languageId: string): boolean {
   const trimmed = line.trimStart();
 
-  // Skip empty lines, comments, imports
   if (
     trimmed === '' ||
     trimmed.startsWith('//') ||
@@ -192,7 +168,6 @@ function isFunctionOrClassLine(line: string, languageId: string): boolean {
       );
 
     default:
-      // Generic fallback: function/class/def keywords
       return (
         /^(export\s+)?(async\s+)?function\s+\w/.test(trimmed) ||
         /^(export\s+)?class\s+\w/.test(trimmed) ||

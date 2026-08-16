@@ -1,13 +1,3 @@
-/**
- * AgentProgressFooter
- *
- * A persistent 40px bar that appears above the chat input during agent execution.
- * Displays task name, step counter, progress bar, live elapsed timer, and an
- * expand button that opens the ExecutionSidecar.
- *
- * Ported from apps/desktop/src/components/UnifiedAgenticChat/AgentProgressFooter.tsx
- * Store dependency changed: reads from agentLoopStore.activeGoal (no Tauri).
- */
 import { useEffect, useRef, useState } from 'react';
 import { ChevronUp, Loader2, Timer } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -17,10 +7,6 @@ interface AgentProgressFooterProps {
   onExpandSidecar?: () => void;
 }
 
-/**
- * Formats elapsed milliseconds into a compact human-readable string.
- * Examples: 5000 → "5s", 130000 → "2m 10s"
- */
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   if (totalSeconds < 60) {

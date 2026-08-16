@@ -1,10 +1,5 @@
-/**
- * Cloud Storage API — typed wrappers for cloud_* Tauri commands (Google Drive, Dropbox, OneDrive).
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface CloudOAuthConfig {
   provider: string;
@@ -66,8 +61,6 @@ export interface ShareLink {
   url: string;
   expiresAt?: string;
 }
-
-// ---- Commands ----
 
 export async function cloudConnect(config: CloudOAuthConfig): Promise<CloudAuthorizationResponse> {
   return command<CloudAuthorizationResponse>('cloud_connect', { config });

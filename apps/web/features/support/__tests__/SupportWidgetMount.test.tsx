@@ -26,7 +26,6 @@ function jsonResponse(body: unknown, status = 200): Response {
   } as unknown as Response;
 }
 
-/** Signed-out world: account context 401, no handoff routes, no answer route. */
 function installSignedOutFetch() {
   vi.stubGlobal(
     'fetch',
@@ -116,7 +115,6 @@ describe('SupportWidgetMount', () => {
       '/byok',
     );
 
-    // A 401 account context is a supported mode, not an error.
     expect(screen.queryByText(/what I can see about your account/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/I can do this for you/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -137,14 +135,6 @@ describe('SupportWidgetMount', () => {
   });
 
   it('pairs data-design="agi" with the agi-modal-scope opt-out', () => {
-    // vitest runs with `css: false`, so this cannot assert computed layout. It
-    // asserts the INVARIANT instead, which is what actually regressed:
-    // app/globals.css targets `[data-design='agi']:not(.agi-chrome-band):not(.agi-modal-scope)`
-    // with `min-height: 100vh` (:1872) and `overflow-x: clip` (:7579). Those are
-    // page-level rules. A fixed launcher that opts into the agi palette without
-    // opting out of them becomes a full-viewport-height invisible box that eats
-    // clicks down the right edge of every marketing page and displaces the
-    // button to the top of the screen. The two must travel together.
     const { container } = render(<SupportWidgetMount />);
     const root = container.querySelector('[data-support-widget]');
     expect(root).toHaveAttribute('data-design', 'agi');
@@ -152,8 +142,6 @@ describe('SupportWidgetMount', () => {
   });
 
   it('does not apply the marketing opt-out class on the product surface', () => {
-    // No `data-design="agi"`, so the globals.css page rules never match and the
-    // marker would be meaningless noise.
     mockPathname.mockReturnValue('/settings/billing');
     const { container } = render(<SupportWidgetMount />);
     const root = container.querySelector('[data-support-widget]');
@@ -185,7 +173,6 @@ describe('route visibility rules', () => {
   });
 
   it('does not treat a prefix collision as a match', () => {
-    // `/sharedspace` is not `/shared`.
     expect(isSupportWidgetVisible('/sharedspace')).toBe(true);
     expect(isSupportWidgetVisible('/statuses')).toBe(true);
   });

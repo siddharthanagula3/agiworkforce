@@ -1,28 +1,3 @@
-/**
- * Cross-surface contract test: chrome ext pairing flow against the desktop
- * bridge POST /pair endpoint at 127.0.0.1:8787.
- *
- * Pins the joint between `apps/extension/src/features/native-bridge/pairing.ts` (the IDLE→REQUESTING
- * →PAIRED state machine) and `apps/desktop/.../websocket_server.rs`
- * `handle_http_pair` (the E2 desktop responder, closed at desktop commit
- * 948ceeb7f) by simulating the desktop responder in jsdom.
- *
- * Distinct from `pairing.test.ts` (which unit-tests each function in
- * isolation): this file walks the state machine end-to-end and asserts the
- * three integration invariants that the contract depends on:
- *
- *   1. State transitions  : idle → requesting (observable mid-flight) → paired
- *   2. Fingerprint match  : the value the ext stores equals the value the
- *                            desktop returns (no truncation, no derivation
- *                            divergence vs `requestPairing` fallback)
- *   3. Authorized manifest: the extension first bootstraps a token, then uses
- *                            it to authorize its ID and stores the rotated token.
- *   4. Idempotent re-pair : concurrent UI requests do not start a second
- *                            two-request handshake.
- *
- * The desktop responder is mocked via fetch so this test ships in the
- * extension's vitest suite and runs without spawning a Tauri sidecar.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
@@ -32,8 +7,6 @@ import {
   unpair,
   _resetStateForTesting,
 } from '../src/features/native-bridge/pairing';
-
-// ── Chrome storage shim (matches pairing.test.ts) ─────────────────────────────
 
 type StorageCallback = (items: Record<string, unknown>) => void;
 type RemoveCallback = () => void;
@@ -75,12 +48,6 @@ const chromeMock = {
   },
 };
 
-// ── Desktop /pair responder simulation ────────────────────────────────────────
-
-/**
- * Mimics `handle_http_pair` in websocket_server.rs: the first POST bootstraps a
- * token and the second presents it while authorizing the extension ID.
- */
 function makeDesktopPairResponder() {
   let callCount = 0;
   let lastIssuedToken: string | null = null;
@@ -107,7 +74,6 @@ function makeDesktopPairResponder() {
     }
 
     callCount++;
-    // Deterministic 32-byte token so tests can pin equality across the joint
     const seed = `desktop-token-${callCount.toString().padStart(2, '0')}-${'x'.repeat(40)}`;
     const token = seed.slice(0, 64).padEnd(64, '0');
     const fingerprint = token.slice(0, 8);
@@ -153,12 +119,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 describe('e2e pairing flow — IDLE → REQUESTING → PAIRED', () => {
   it('walks the full state machine: idle → requesting → paired', async () => {
     const desktop = makeDesktopPairResponder();
-    // Wrap fetchMock with a deferred resolver so we can observe REQUESTING.
     let releaseFetch: (() => void) | null = null;
     const gated = new Promise<void>((r) => (releaseFetch = r));
     const gatedFetch = vi.fn(async (url: string, init?: RequestInit) => {
@@ -167,23 +130,17 @@ describe('e2e pairing flow — IDLE → REQUESTING → PAIRED', () => {
     });
     vi.stubGlobal('fetch', gatedFetch);
 
-    // Initial state: idle
     expect(getPairingState().phase).toBe('idle');
 
-    // Kick off pairing (do NOT await)
     const inFlight = requestPairing();
 
-    // Mid-flight observation: REQUESTING (the state was set synchronously
-    // before the first await in requestPairing)
     await Promise.resolve();
     expect(getPairingState().phase).toBe('requesting');
     expect(getPairingState().fingerprint).toBeNull();
 
-    // Release the desktop responder
     releaseFetch!();
     const finalState = await inFlight;
 
-    // Terminal state: PAIRED
     expect(finalState.phase).toBe('paired');
     expect(finalState.error).toBeNull();
   });
@@ -208,12 +165,8 @@ describe('e2e pairing flow — fingerprint match across the joint', () => {
     const state = await requestPairing();
 
     expect(state.phase).toBe('paired');
-    // Contract: ext does NOT mutate the fingerprint when desktop provides one.
     expect(state.fingerprint).toBe(desktop.lastIssuedFingerprint);
     expect(sessionStore['agi_pairing_fingerprint']).toBe(desktop.lastIssuedFingerprint);
-    // Desktop responder issues 8-char fingerprints (first 8 hex chars of the
-    // 64-char token). Confirm we didn't fall through to the `token.slice(0,4)`
-    // fallback path in pairing.ts:133.
     expect(state.fingerprint).toHaveLength(8);
   });
 
@@ -224,7 +177,6 @@ describe('e2e pairing flow — fingerprint match across the joint', () => {
     await requestPairing();
     const issuedFp = desktop.lastIssuedFingerprint;
 
-    // Simulate ext popup reopen: in-memory state cleared, storage persists
     _resetStateForTesting();
     const reloaded = await loadPairingState();
 
@@ -244,17 +196,14 @@ describe('e2e pairing flow — idempotent re-requests', () => {
     });
     vi.stubGlobal('fetch', gatedFetch);
 
-    // Fire two concurrent requestPairing calls without awaiting either
     const first = requestPairing();
     await Promise.resolve();
     expect(getPairingState().phase).toBe('requesting');
     const second = requestPairing();
 
-    // Second call must return immediately with REQUESTING (no second fetch)
     expect((await second).phase).toBe('requesting');
     expect(gatedFetch).toHaveBeenCalledTimes(1);
 
-    // Release and complete the first
     releaseFetch!();
     expect((await first).phase).toBe('paired');
     expect(desktop.callCount).toBe(2);
@@ -268,10 +217,8 @@ describe('e2e pairing flow — idempotent re-requests', () => {
     expect(getPairingState().phase).toBe('paired');
     const firstCount = desktop.callCount;
 
-    // A second requestPairing while already paired returns the existing state
     const again = await requestPairing();
     expect(again.phase).toBe('paired');
-    // Idempotent re-request counter: no additional desktop POST issued
     expect(desktop.callCount).toBe(firstCount);
   });
 
@@ -279,20 +226,17 @@ describe('e2e pairing flow — idempotent re-requests', () => {
     const desktop = makeDesktopPairResponder();
     vi.stubGlobal('fetch', desktop.fetchMock);
 
-    // First pairing
     await requestPairing();
     const firstToken = sessionStore['agi_bridge_token'] as string;
     expect(firstToken).toBe(desktop.lastIssuedToken);
     expect(desktop.callCount).toBe(2);
 
-    // Unpair and re-pair
     await unpair();
     expect(getPairingState().phase).toBe('idle');
 
     await requestPairing();
     const secondToken = sessionStore['agi_bridge_token'] as string;
 
-    // Desktop ROTATES the token on each /pair (matches handle_http_pair).
     expect(desktop.callCount).toBe(4);
     expect(secondToken).not.toBe(firstToken);
     expect(secondToken).toBe(desktop.lastIssuedToken);

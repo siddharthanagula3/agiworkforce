@@ -1,9 +1,3 @@
-/**
- * DatabaseInlinePanel Component
- *
- * Displays database query results with table view, pagination,
- * and query metadata.
- */
 
 import React, { memo, useState } from 'react';
 import { Copy, ChevronLeft, ChevronRight } from 'lucide-react';

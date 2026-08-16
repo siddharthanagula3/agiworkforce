@@ -1,13 +1,3 @@
-/**
- * System prompt cache boundary marker.
- *
- * Splits system prompts into a stable prefix (long-cacheable) and a dynamic
- * suffix (short-cacheable) using a sentinel comment. Used by Anthropic-style
- * cache_control to maximize cache hit rates across turns.
- *
- * Ported from OpenClaw src/agents/system-prompt-cache-boundary.ts (MIT, Peter Steinberger).
- * See THIRD_PARTY_LICENSES.md at repo root for full attribution.
- */
 
 import { normalizeStructuredPromptSection } from './lib/prompt-cache-stability';
 

@@ -75,7 +75,6 @@ describe('secureFilenameSegment', () => {
   it('1000 calls produce overwhelmingly unique values', () => {
     const set = new Set<string>();
     for (let i = 0; i < 1000; i++) set.add(secureFilenameSegment());
-    // Birthday-paradox tolerance: 13 chars × 36 alphabet ≈ 4.7e20 space
     expect(set.size).toBeGreaterThan(995);
   });
 
@@ -124,7 +123,6 @@ describe('secureRandomInt', () => {
   it('distribution across 10k samples is reasonably uniform for n=10', () => {
     const counts = new Array(10).fill(0);
     for (let i = 0; i < 10_000; i++) counts[secureRandomInt(10)]++;
-    // Each bucket should be ~1000 ± 250 · generous tolerance for CI flake margin
     for (const c of counts) {
       expect(c).toBeGreaterThan(700);
       expect(c).toBeLessThan(1300);

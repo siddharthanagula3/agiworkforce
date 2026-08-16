@@ -74,12 +74,6 @@ interface FetchDesktopReleaseOptions {
   owner?: string;
   repo?: string;
   revalidateSeconds?: number;
-  /**
-   * Release tag prefix to match. Defaults to the Tauri shell's `v-desktop-`.
-   * The Electron cloud shell releases under `v-cloud-desktop-` (see
-   * .github/workflows/release-desktop-cloud.yml); passing that prefix here
-   * keeps the two release streams strictly separated.
-   */
   tagPrefix?: string;
 }
 

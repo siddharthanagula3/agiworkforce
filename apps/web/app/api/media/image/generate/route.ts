@@ -60,24 +60,11 @@ import {
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
 
-/**
- * Image Generation API
- * Endpoint: POST /api/media/image/generate
- *
- * This provides a unified interface for catalog-selected image generation
- * models across configured providers.
- *
- * Users authenticate with Clerk and must have an active subscription.
- */
-
-// Next.js route configuration - image generation takes 10–30s, so we extend to 60s.
-// Without this the serverless function would time out at the default (10s on Vercel).
 export const maxDuration = 60;
 export const runtime = 'nodejs';
 
 type ImageProvider = ManagedMediaImageProvider;
 
-// Response types
 interface GeneratedImage {
   url?: string;
   b64_json?: string;
@@ -89,26 +76,11 @@ interface ImageGenerationResponse {
   images: GeneratedImage[];
   provider: ImageProvider;
   model: string;
-  /** Canonical catalog identity used for billing, persistence, and retries. */
   catalog_model?: string;
   latency_ms: number;
   error?: string;
-  /** Bounded provider/gateway Retry-After projected for an explicit user retry. */
   retry_after_seconds?: number;
-  /**
-   * PER-4: true when every returned image is backed by durable storage and
-   * addressed by an authenticated `/api/files/{id}` URL. False is permitted
-   * only in non-production test harnesses that deliberately disable storage;
-   * those `images` carry inline `b64_json` that must never be persisted into a
-   * chat message.
-   */
   persisted?: boolean;
-  /**
-   * EU AI Act Article 50(2) marker — one claim per entry of `images`, same
-   * order. Present on every successful generation; the response header
-   * `x-agi-ai-generated` carries the same fact for consumers that never parse
-   * the body.
-   */
   provenance?: AiGeneratedProvenance[];
 }
 
@@ -120,8 +92,6 @@ const OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY = {
 const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> = {
   openai: OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY.high,
   google: 3,
-  // Kept only for backward-compatible request parsing. There is no wired
-  // Stability image adapter or selectable catalog model.
   stability: 0,
 };
 
@@ -158,11 +128,6 @@ async function throwImageProviderHttpError(response: Response, fallback: string)
   );
 }
 
-/**
- * Provider-published exact ratios for each wired adapter. This is the server
- * authority: the client picker is only presentation and every request is
- * checked again after catalog resolution but before usage reservation.
- */
 const IMAGE_ASPECT_RATIOS_BY_API: Record<ImageApi, ReadonlySet<ManagedMediaImageAspectRatio>> = {
   gemini: new Set([
     '1:1',
@@ -181,9 +146,6 @@ const IMAGE_ASPECT_RATIOS_BY_API: Record<ImageApi, ReadonlySet<ManagedMediaImage
     '21:9',
   ]),
   imagen: new Set(['1:1', '3:4', '4:3', '9:16', '16:9']),
-  // This adapter currently sends the enumerated Images API dimensions only.
-  // Fail closed on arbitrary ratios until their exact dimension mapping is
-  // verified and represented rather than pretending 3:4 is 2:3.
   openai: new Set(['1:1', '2:3', '3:2']),
   stability: new Set(['1:1', '2:3', '3:2', '4:5', '5:4', '9:16', '16:9', '21:9', '9:21']),
 };
@@ -238,13 +200,9 @@ function resolveGoogleImageModel(requestedModelId?: string): ExecutableImageMode
     modelTypes: ['image'],
   }).filter(isExecutableImageModel);
 
-  // Honour the user's explicit model choice when it's a valid Google image model.
   const requested = resolveRequestedCatalogModel(googleImageModels, requestedModelId);
   if (requested) return requested;
 
-  // Default: prefer the Gemini backend (fast, low-cost) via the declarative
-  // `imageApi` catalog field, else the first catalog Google image model. No id
-  // pattern, no hardcoded id — selection is driven entirely by catalog data.
   return (
     googleImageModels.find((model) => model.imageApi === 'gemini') ?? googleImageModels[0] ?? null
   );
@@ -256,15 +214,9 @@ function resolveOpenAIImageModel(requestedModelId?: string): ExecutableImageMode
     modelTypes: ['image'],
   }).filter(isExecutableImageModel);
 
-  // Honour the user's explicit model choice when it's a valid OpenAI image model.
   const requested = resolveRequestedCatalogModel(openaiImageModels, requestedModelId);
   if (requested) return requested;
 
-  // Default: prefer the model tagged for the OpenAI Images API via the
-  // declarative `imageApi` catalog field, else the first catalog OpenAI image
-  // model. No id pattern, no hardcoded id — selection is driven entirely by
-  // catalog data (previously this fell through to the shared `image_generation`
-  // routing slot, which is Google-only, sending a Gemini model id to OpenAI).
   return (
     openaiImageModels.find((model) => model.imageApi === 'openai') ?? openaiImageModels[0] ?? null
   );
@@ -285,11 +237,6 @@ function resolveImageCatalogModel(
   return getModelMetadataById(requestedModelId)?.id === selected.id ? selected : null;
 }
 
-/**
- * Translate the catalog's image adapter metadata to this route's provider
- * vocabulary. Only adapters implemented by this route are admitted; merely
- * adding a future catalog record cannot reactivate a removed provider path.
- */
 function resolveImageProviderFromCatalogModel(modelId: string): ImageProvider | null {
   const model = getModelMetadataById(modelId);
   if (!isExecutableImageModel(model)) return null;
@@ -342,20 +289,6 @@ function estimateImageCostCents(
   return FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER[provider] * imageCount;
 }
 
-/**
- * Google credential names, in priority order.
- *
- * This route previously read `GOOGLE_API_KEY` alone, while the rest of the
- * stack resolves Google through the chain in
- * `lib/services/provider-adapter-service.ts` (`PROVIDER_API_KEY_ENV_KEYS.google`).
- * A deployment that sets only `GEMINI_API_KEY` — which is the common case, and
- * this one — therefore had working Gemini CHAT but a silently unavailable
- * Gemini IMAGE path: `getDefaultProvider` skipped Google and fell through to
- * another provider, so the catalog's image-generation routing-slot model never
- * actually served a request.
- *
- * Keep this list in sync with `PROVIDER_API_KEY_ENV_KEYS.google`.
- */
 const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
 
 function getGoogleApiKey(): string | undefined {
@@ -366,9 +299,6 @@ function getGoogleApiKey(): string | undefined {
   return undefined;
 }
 
-/**
- * Determine the default provider based on available API keys
- */
 function getDefaultProvider(): ImageProvider {
   if (getGoogleApiKey()) {
     return 'google';
@@ -379,9 +309,6 @@ function getDefaultProvider(): ImageProvider {
   throw new Error('No image generation API keys configured');
 }
 
-/**
- * Get API key for provider
- */
 function getApiKey(provider: ImageProvider): string {
   switch (provider) {
     case 'openai':
@@ -400,9 +327,6 @@ function getApiKey(provider: ImageProvider): string {
   }
 }
 
-/**
- * Check if provider is available
- */
 function isProviderAvailable(provider: ImageProvider): boolean {
   switch (provider) {
     case 'openai':
@@ -414,23 +338,6 @@ function isProviderAvailable(provider: ImageProvider): boolean {
   }
 }
 
-/**
- * Generate images using the catalog-selected OpenAI image slot.
- * Endpoint: POST {OPENAI_BASE_URL or the vendor default}/images/generations
- */
-
-/**
- * Resolve a `source_image` / `mask_image` reference to raw bytes.
- *
- * OWNER + ACTIVE-WORKSPACE scoped on purpose: an `asset_id` is re-read under
- * the caller's current tenant boundary, so a caller cannot pass somebody
- * else's or another workspace's asset id and have the server read that image
- * on their behalf. Inline `b64_json` bytes are the caller's own upload and need
- * no lookup.
- *
- * There is deliberately no URL branch — accepting one would turn this endpoint
- * into a server-side fetcher for attacker-supplied hosts.
- */
 async function resolveImageRefBytes(
   ref: { asset_id: string } | { b64_json: string },
   userId: string,
@@ -480,10 +387,6 @@ async function generateWithOpenAIImage(
   const imageSize = openAIImageSizeForAspectRatio(aspectRatio);
   const imageQuality = quality === 'hd' ? 'high' : 'medium';
 
-  // An edit sends the ORIGINAL PIXELS to the provider's edits endpoint. The
-  // previous behavior — a fresh text-to-image call built from a modified
-  // prompt — could not preserve anything about the source image, which is why
-  // "edit" never actually edited.
   if (edit) {
     const form = new FormData();
     form.append('model', model);
@@ -564,10 +467,6 @@ async function generateWithOpenAIImage(
   };
 }
 
-/**
- * Generate images using the catalog-selected Google image model.
- * Endpoint: POST https://generativelanguage.googleapis.com/v1beta/models/{model}:predict
- */
 async function generateWithImagen(
   prompt: string,
   aspectRatio: ManagedMediaImageAspectRatio,
@@ -579,12 +478,6 @@ async function generateWithImagen(
   const apiKey = getApiKey('google');
   const model = catalogModel.apiModelId ?? catalogModel.id;
 
-  // Google has two distinct image APIs with different request/response shapes:
-  //   - imageApi 'gemini' → the Interactions API; bytes in output_image.data.
-  //   - imageApi 'imagen' → `:predict`; bytes in predictions[].bytesBase64Encoded.
-  // Dispatch on the catalog's declarative imageApi field (no id pattern), so a new
-  // Google image model only needs its imageApi set in
-  // packages/ai/model-registry/catalog/models.curation.json.
   if (catalogModel.imageApi === 'gemini') {
     const outputMimeType = catalogModel.imageOutputMimeType;
     if (!outputMimeType) {
@@ -641,14 +534,6 @@ async function generateWithImagen(
   };
 }
 
-/**
- * Generate an image with a Gemini image model through Google's current
- * Interactions API. The raw REST response carries image blocks inside
- * `steps[].content[]`; `output_image` is an SDK convenience field and is not
- * guaranteed on REST responses. Accept both representations, but only accept
- * inline bytes with the MIME type promised by the canonical model catalog.
- * See https://ai.google.dev/gemini-api/docs/image-generation
- */
 async function generateWithGeminiImage(
   apiKey: string,
   model: string,
@@ -669,10 +554,6 @@ async function generateWithGeminiImage(
       response_format: {
         type: 'image',
         mime_type: outputMimeType,
-        // Google's current v1beta image guide omits the optional delivery
-        // field, and a live request proved this model rejects an explicit
-        // `inline` value. Omission still returns inline bytes; the response
-        // parser below fails closed if a provider ever returns only a URI.
         aspect_ratio: aspectRatio,
         image_size: '1K',
       },
@@ -724,10 +605,6 @@ async function generateWithGeminiImage(
     if (typeof image.uri === 'string' && image.uri.length > 0) sawUriImage = true;
     if (typeof image.data !== 'string' || image.data.length === 0) continue;
 
-    // Node's Buffer decoder silently discards malformed base64 characters.
-    // Require canonical RFC 4648 bytes and verify the declared image magic
-    // before storage/billing so arbitrary provider text can never become an
-    // authenticated image asset.
     if (
       image.data.length % 4 !== 0 ||
       !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(image.data)
@@ -797,7 +674,6 @@ function hasValidJpegStructure(bytes: Buffer): boolean {
     }
 
     if (marker === 0xda) {
-      // Entropy-coded bytes follow the SOS segment and finish at the final EOI.
       return sawFrame && offset + segmentLength < bytes.length - 2;
     }
     offset += segmentLength;
@@ -859,39 +735,27 @@ function hasValidGeneratedImageStructure(
   return hasValidWebpStructure(bytes);
 }
 
-/**
- * SHA-256 of the artefact bytes, for the Article 50(2) claim. Hashing the
- * base64 rather than decoding it first would bind the claim to a transport
- * encoding, not to the image.
- */
 function sha256HexFromBase64(b64: string): string {
   const payload = b64.includes(',') ? (b64.split(',').pop() ?? '') : b64;
   return createHash('sha256').update(Buffer.from(payload, 'base64')).digest('hex');
 }
 
-/**
- * Main handler for image generation
- */
 async function handleImageGeneration(request: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
 
-  // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
     return preflightResponse;
   }
 
-  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
   }
 
-  // Rate limiting - use image-generation config (10 req/min, fail-closed)
   const rateLimitResponse = await withRateLimit(request, 'image-generation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Authentication
   const { userId } = await getClerkAuthUser(request);
 
   const managedGateResponse = buildManagedComputeGateResponse(
@@ -908,7 +772,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   );
   if (managedGateResponse) return managedGateResponse;
 
-  // Check subscription
   const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
@@ -973,7 +836,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Parse request body
   let body: unknown;
   try {
     body = await request.json();
@@ -995,7 +857,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Validate request
   const validationResult = ManagedMediaImageGenerationRequestSchema.safeParse(body);
   if (!validationResult.success) {
     return NextResponse.json(
@@ -1033,9 +894,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     transparent_background,
   } = validationResult.data;
 
-  // Mobile sends a catalog model without duplicating provider state. Resolve
-  // that model's actual media adapter before considering the deployment
-  // default, and reject an explicit provider that contradicts the catalog.
   const catalogProvider = requestedModel
     ? resolveImageProviderFromCatalogModel(requestedModel)
     : null;
@@ -1077,7 +935,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Determine provider
   let provider: ImageProvider;
   try {
     const selectedProvider = requestedProvider ?? catalogProvider;
@@ -1143,9 +1000,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Google's Interactions image endpoint returns one output_image per
-  // interaction. Do not pretend that its provider supports the shared n=2..4
-  // contract: reject before reserving credits or starting provider work.
   if (catalogModel.imageApi === 'gemini' && n !== 1) {
     return NextResponse.json(
       {
@@ -1216,11 +1070,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // A production generation is only successful when its bytes can survive a
-  // reload behind the authenticated media route. Fail before reserving usage
-  // or contacting the provider when that durable delivery path is absent.
-  // Local development remains usable through media-storage's owner-scoped
-  // filesystem fallback, which makes this check return true without R2.
   const storageConfigured = isImageStorageConfigured();
   let mediaCatalogConfigured = false;
   try {
@@ -1333,7 +1182,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     return managedUsageErrorResponse(request, managedError);
   }
 
-  // Generate images
   let result: { images: GeneratedImage[]; model: string };
   try {
     logger.info(
@@ -1350,8 +1198,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
     await markManagedUsageProviderStarted(reservation);
 
-    // Resolve edit inputs before dispatch so a bad reference fails BEFORE the
-    // provider is called and before any provider-side cost is incurred.
     let editContext:
       | {
           operation: ManagedMediaImageOperation;
@@ -1372,9 +1218,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     }
 
     if (editContext && provider !== 'openai') {
-      // Only the OpenAI adapter has a real edits endpoint wired. Refuse rather
-      // than silently falling back to text-to-image, which is exactly the
-      // behavior that made "edit" a lie in the first place.
       throw new Error(
         `Image ${operation} is not supported by the ${provider} provider yet. Use the OpenAI image model for edits.`,
       );
@@ -1457,7 +1300,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     const providerHttpError = error instanceof ImageProviderHttpError ? error : null;
     const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
 
-    // Provide user-friendly messages for common failure patterns
     let friendlyMessage = `Provider ${provider} failed: ${errorMessage}`;
     if (providerHttpError?.status === 429) {
       friendlyMessage =
@@ -1505,15 +1347,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // EU AI Act Article 50(2): mark the artefacts as artificially generated
-  // BEFORE the persistence branch, because that branch replaces the inline
-  // bytes with a URL, after which nothing downstream can hash them. One claim
-  // per image, index-aligned with `result.images`.
-  //
-  // A provider that returns `url` instead of `b64_json` has no bytes here yet;
-  // that claim starts with an empty hash and is REPLACED inside the persistence
-  // branch once the bytes are fetched (see `hashClaim` below), so the only
-  // claims that ship unhashed are ones whose bytes never reach this process.
   const generatedAt = new Date().toISOString();
   const provenance: AiGeneratedProvenance[] = result.images.map((img) => {
     const hash = img.b64_json ? sha256HexFromBase64(img.b64_json) : undefined;
@@ -1526,26 +1359,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     });
   });
 
-  // -------------------------------------------------------------------------
-  // PER-4 / PER-6 / PER-26 — persist BEFORE settling the charge.
-  //
-  // This block used to run AFTER `finalizeManagedUsageRequest({outcome:
-  // 'completed'})` and swallowed every failure into a `logger.warn` while still
-  // returning `success: true`. Three failures were invisible:
-  //   1. an R2 object written with no `media_assets` row — an orphan that never
-  //      reaches the Library and can never be deleted, yet stays fetchable;
-  //   2. `insertMediaAsset` returning null (table not migrated) — same orphan;
-  //   3. the base64 fallthrough — the route handed back `b64_json`, the client
-  //      turned it into a 1.4-4 MB `data:image/png;base64,...` URL, that string
-  //      went into `metadata.imageUrl`, the write blew the body cap and the
-  //      message was never saved: the reported "Couldn't save this response".
-  //
-  // Now: persistence is mandatory whenever storage is configured. Every
-  // object is staged first, then ALL media rows commit in one transaction. A
-  // partial storage or catalog failure removes every staged object before the
-  // reservation is refunded, so the Library can never expose an uncharged
-  // sibling from a failed multi-image request.
-  // -------------------------------------------------------------------------
   const persistenceFailures: string[] = [];
 
   if (storageConfigured) {
@@ -1573,10 +1386,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
               return { idx, error: 'provider returned neither image bytes nor a URL' };
             }
 
-            // The url-returning provider shape only materialises its bytes
-            // here, so this is the first point the Article 50(2) claim can be
-            // bound to the artefact. Replace the placeholder rather than ship a
-            // claim whose content hash is empty.
             const existingClaim = provenance[idx];
             if (existingClaim && !existingClaim.content_hash_sha256) {
               provenance[idx] = buildAiGeneratedProvenance({
@@ -1620,10 +1429,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
     if (persistenceFailures.length === 0) {
       try {
-        // PER-26: store object KEYS, not permanent public URLs. The
-        // authenticated `/api/files/{id}` route enforces ownership and
-        // deletion. `insertMediaAssetsAtomically` makes the whole requested
-        // batch visible together or not at all.
         const assetIds = await insertMediaAssetsAtomically(
           stagedImages.map((staged) => ({
             userId,
@@ -1638,8 +1443,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
             model: catalogModel.id,
             sourceSurface,
             conversationId,
-            // The Article 50(2) claim travels with each asset row so it
-            // survives chat reload, Library access, and authenticated download.
             metadata: { aiAct: provenance[staged.idx] },
           })),
         );
@@ -1682,8 +1485,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       { userId, provider, model: result.model, failures: persistenceFailures },
       'Generated image persistence failed; refunding the reservation',
     );
-    // Nothing was charged: the reservation is finalized as failed (which
-    // settles at 0 cents) rather than completed.
     await finalizeManagedUsageRequest({
       ...reservation,
       outcome: 'failed',
@@ -1719,7 +1520,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Settle the exact number of billable images returned by the provider.
   const costEstimate = estimateImageCostCents(
     provider,
     result.images.length,
@@ -1754,9 +1554,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     model: result.model,
     catalog_model: catalogModel.id,
     latency_ms: Date.now() - startTime,
-    // A non-production test harness may deliberately disable every storage
-    // backend. Its inline base64 response CANNOT be persisted into chat. Local
-    // development itself uses the owner-scoped filesystem backend above.
     persisted: storageConfigured,
     provenance,
   };
@@ -1774,8 +1571,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     headers: {
       ...getCorsHeaders(request),
       ...getSecurityHeaders(),
-      // Several images share one response, so the claims stay in the body and
-      // the header carries only the detectable-as-synthetic fact.
       ...aiGeneratedHeaders(),
     },
   });

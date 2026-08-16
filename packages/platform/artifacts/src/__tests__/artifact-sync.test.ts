@@ -78,7 +78,7 @@ describe('selectArtifactsToPush', () => {
   });
 
   it('never pushes derived artifacts (re-derivable everywhere)', () => {
-    const items = [art({ id: 'd1' }), art({ id: 'd2' })]; // both metadata.derived = true
+    const items = [art({ id: 'd1' }), art({ id: 'd2' })];
     expect(selectArtifactsToPush(items)).toEqual([]);
   });
 });

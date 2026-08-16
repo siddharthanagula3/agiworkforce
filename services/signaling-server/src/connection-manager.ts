@@ -1,12 +1,3 @@
-/**
- * Connection management for WebSocket server
- *
- * Features:
- * - Track active connections count
- * - Per-IP connection limits
- * - Idle connection timeout
- * - Periodic stale session cleanup
- */
 
 import type { WebSocket } from 'ws';
 import { logger } from './logger.js';
@@ -36,9 +27,6 @@ class ConnectionManager {
   private closeReasonCounts = new Map<string, number>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
-  /**
-   * Start the connection manager cleanup interval
-   */
   start(): void {
     if (this.cleanupInterval) {
       return;
@@ -51,9 +39,6 @@ class ConnectionManager {
     logger.info('Connection manager started');
   }
 
-  /**
-   * Stop the connection manager cleanup interval
-   */
   stop(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
@@ -62,17 +47,11 @@ class ConnectionManager {
     logger.info('Connection manager stopped');
   }
 
-  /**
-   * Check if a new connection from this IP is allowed
-   */
   canConnect(ip: string): boolean {
     const currentCount = this.ipConnectionCounts.get(ip) ?? 0;
     return currentCount < MAX_CONNECTIONS_PER_IP;
   }
 
-  /**
-   * Register a new connection
-   */
   addConnection(socket: WebSocket, ip: string, correlationId: string): void {
     const now = Date.now();
     const info: ConnectionInfo = {
@@ -99,9 +78,6 @@ class ConnectionManager {
     );
   }
 
-  /**
-   * Remove a connection
-   */
   removeConnection(socket: WebSocket, metadata: RemoveConnectionMetadata = {}): void {
     const info = this.connections.get(socket);
     if (!info) {
@@ -137,9 +113,6 @@ class ConnectionManager {
     );
   }
 
-  /**
-   * Update last activity timestamp for a connection
-   */
   updateActivity(socket: WebSocket): void {
     const info = this.connections.get(socket);
     if (info) {
@@ -147,23 +120,14 @@ class ConnectionManager {
     }
   }
 
-  /**
-   * Get the correlation ID for a connection
-   */
   getCorrelationId(socket: WebSocket): string | undefined {
     return this.connections.get(socket)?.correlationId;
   }
 
-  /**
-   * Get the IP address for a connection
-   */
   getIp(socket: WebSocket): string | undefined {
     return this.connections.get(socket)?.ip;
   }
 
-  /**
-   * Get current connection statistics
-   */
   getStats(): {
     totalConnections: number;
     uniqueIps: number;
@@ -178,16 +142,10 @@ class ConnectionManager {
     };
   }
 
-  /**
-   * Get total active connections
-   */
   getConnectionCount(): number {
     return this.connections.size;
   }
 
-  /**
-   * Close all connections gracefully
-   */
   closeAllConnections(reason: string = 'server_shutdown'): Promise<void> {
     return new Promise((resolve) => {
       const sockets = Array.from(this.connections.keys());
@@ -209,9 +167,7 @@ class ConnectionManager {
 
       for (const socket of sockets) {
         try {
-          // Send shutdown message before closing
           if (socket.readyState === 1) {
-            // WebSocket.OPEN
             socket.send(JSON.stringify({ type: 'server_shutdown', reason }));
           }
           socket.close(1001, reason);
@@ -226,9 +182,6 @@ class ConnectionManager {
     });
   }
 
-  /**
-   * Clean up idle connections
-   */
   private cleanupIdleConnections(): void {
     const now = Date.now();
     let closedCount = 0;
@@ -247,7 +200,6 @@ class ConnectionManager {
 
         try {
           if (socket.readyState === 1) {
-            // WebSocket.OPEN
             socket.send(JSON.stringify({ type: 'connection_timeout', reason: 'idle' }));
           }
           socket.close(1000, 'idle_timeout');
@@ -264,5 +216,4 @@ class ConnectionManager {
   }
 }
 
-// Export singleton instance
 export const connectionManager = new ConnectionManager();

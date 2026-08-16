@@ -57,12 +57,6 @@ export function AgiMark({ size = 24, mono = false, spinning = false, accentColor
   }));
 
   const baseColor = colors.textPrimary;
-  // The mark has twelve-fold rotational symmetry, so rotation is only VISIBLE
-  // through the one accent spoke. `colors.teal` resolves to #f4f4f4 in the dark
-  // palette — the same value as textPrimary — which made all twelve spokes
-  // identical and left the spinner looking like a static image while a response
-  // was streaming. Fall back to the brand amber whenever the accent would be
-  // indistinguishable from the base, matching the shared web mark.
   const requestedAccent = accentColor ?? colors.teal;
   const accent =
     requestedAccent.toLowerCase() === baseColor.toLowerCase() ? colors.brandAmber : requestedAccent;
@@ -91,10 +85,6 @@ export function AgiMark({ size = 24, mono = false, spinning = false, accentColor
     return (
       <Animated.View
         style={[
-          // An explicit square box centred on the SVG. Without fixed dimensions
-          // the wrapper takes its size from layout, which can leave it
-          // non-square or offset — and a rotate transform pivots about the
-          // VIEW's centre, so the mark orbited instead of spinning in place.
           { width: size, height: size, alignItems: 'center', justifyContent: 'center' },
           animatedStyle,
         ]}

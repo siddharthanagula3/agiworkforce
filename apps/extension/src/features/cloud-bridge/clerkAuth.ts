@@ -7,8 +7,6 @@ import {
   type ManagedCloudOwner,
 } from './managedCloudAuthority';
 
-// Bracket access: these come from an index signature on ProcessEnv, and the
-// package builds with noPropertyAccessFromIndexSignature.
 const publishableKey = process.env['CLERK_PUBLISHABLE_KEY']?.trim() ?? '';
 const configuredSyncHost = process.env['CLERK_SYNC_HOST']?.trim() ?? '';
 const WEB_SIGN_IN_URL = 'https://agiworkforce.com/sign-in?redirectTo=%2Fauth%2Fchrome-extension';
@@ -164,17 +162,6 @@ async function requestBackgroundAuthContext(
 
 type ClerkSessionLike = ClerkClient['session'];
 
-/**
- * Resolve the owner of a live Clerk session.
- *
- * Hydrated Clerk resources are preferred, but the MV3 background client
- * (`standardBrowser: false`) does not reliably populate `clerk.user` /
- * `session.user`, so a valid token-bearing session would otherwise be rejected
- * as unowned. The session token's own `sub`/`sid` claims are the fallback.
- * The two sources are never mixed: normalizeManagedCloudOwner returns null
- * unless BOTH resource fields are present, so a partial resource read falls
- * through to a wholly token-derived owner rather than pairing mismatched ids.
- */
 function resolveSessionOwner(
   clerk: ClerkClient,
   session: ClerkSessionLike,
@@ -188,10 +175,6 @@ function resolveSessionOwner(
   );
 }
 
-/**
- * Capture a token together with the exact Clerk account/session that minted it.
- * Consumers must keep these values together for the full operation lifetime.
- */
 export async function getFreshClerkAuthContext(
   forceRefresh = false,
 ): Promise<ClerkAuthContext | null> {
@@ -208,13 +191,6 @@ export async function getFreshClerkAuthContext(
   return { token, owner };
 }
 
-/**
- * Retrieve a fresh Clerk token.
- *
- * Visible extension pages delegate token loading to the MV3 background client:
- * @clerk/chrome-extension's Sync Host support is background-owned, while its
- * foreground vanilla client does not refresh a side panel after web sign-in.
- */
 export async function getFreshClerkToken(forceRefresh = false): Promise<string | null> {
   return (await getFreshClerkAuthContext(forceRefresh))?.token ?? null;
 }
@@ -228,7 +204,6 @@ function compactInitials(displayName: string | null, email: string | null): stri
   return initials.toUpperCase();
 }
 
-/** Hydrate the visible account identity from the same foreground Clerk session. */
 export async function getClerkAccountProfile(): Promise<ClerkAccountProfile | null> {
   if (!isClerkExtensionAuthConfigured()) return null;
   const clerk = await getForegroundClient();
@@ -265,11 +240,6 @@ export async function signOutClerk(): Promise<void> {
   await clerk.signOut({ redirectUrl: getExtensionPageUrl() });
 }
 
-/**
- * Sign out only the exact account/session and bearer that a rejected request
- * used. Passing Clerk's session id keeps an A request from signing out an
- * ambient B session even if auth changes between the comparison and signOut().
- */
 export async function signOutClerkIfCurrent(expected: ClerkAuthContext): Promise<boolean> {
   if (!isClerkExtensionAuthConfigured()) return false;
   const clerk = isBackgroundServiceWorker()
@@ -278,9 +248,6 @@ export async function signOutClerkIfCurrent(expected: ClerkAuthContext): Promise
   const session = clerk.session;
   if (!session) return false;
 
-  // Cheap pre-check: when Clerk resources ARE hydrated, reject a foreign
-  // session before minting a token for it. When they are not (background
-  // client), fall through — the credential comparison below is authoritative.
   const resourceOwner = normalizeManagedCloudOwner({
     accountId: clerk.user?.id ?? session.user?.id,
     authIncarnation: session.id,

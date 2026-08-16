@@ -7,7 +7,6 @@ import { Search } from 'lucide-react';
 import { cn } from '../cn';
 import { Dialog, DialogContent } from './Dialog';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface CommandProps extends React.ComponentPropsWithoutRef<typeof CommandPrimitive> {
   ref?: React.Ref<React.ElementRef<typeof CommandPrimitive>>;
 }

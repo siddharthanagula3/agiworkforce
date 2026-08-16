@@ -1,11 +1,3 @@
-/**
- * BrowserReplayViewer
- *
- * Shows a chronological replay of browser automation actions with:
- * - Timestamp, action type, target element, screenshot thumbnail
- * - Status indicators: success (green), failed (red), skipped (yellow)
- * - Export replay as JSON for debugging
- */
 import { useCallback, useState } from 'react';
 import {
   Camera,
@@ -33,8 +25,6 @@ import {
   type ActionType,
 } from '../../stores/browserStore';
 
-// ── Action type icons ─────────────────────────────────────────────────────────
-
 const ACTION_ICONS: Record<ActionType, React.ElementType> = {
   navigate: Globe,
   click: MousePointer2,
@@ -57,8 +47,6 @@ const ACTION_LABELS: Record<ActionType, string> = {
   execute: 'Execute',
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function formatTimestamp(ts: number): string {
   return new Date(ts).toLocaleTimeString([], {
     hour: '2-digit',
@@ -77,8 +65,6 @@ function getStatusConfig(success: boolean) {
     ? { icon: CheckCircle2, color: 'text-green-400', bgColor: 'bg-green-400/10', label: 'Success' }
     : { icon: XCircle, color: 'text-red-400', bgColor: 'bg-red-400/10', label: 'Failed' };
 }
-
-// ── Screenshot thumbnail modal ────────────────────────────────────────────────
 
 interface ScreenshotModalProps {
   src: string;
@@ -113,8 +99,6 @@ function ScreenshotModal({ src, onClose }: ScreenshotModalProps) {
     </div>
   );
 }
-
-// ── Action row ────────────────────────────────────────────────────────────────
 
 interface ActionRowProps {
   action: BrowserAction;
@@ -262,8 +246,6 @@ function ActionRow({ action, index, screenshotData, onViewScreenshot }: ActionRo
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 interface BrowserReplayViewerProps {
   className?: string;
 }
@@ -275,7 +257,6 @@ export function BrowserReplayViewer({ className }: BrowserReplayViewerProps) {
 
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
 
-  // Map screenshotId -> screenshot data for O(1) lookup
   const screenshotMap = new Map(screenshots.map((s) => [s.id, s.data]));
 
   const handleExport = useCallback(() => {
@@ -397,7 +378,6 @@ export function BrowserReplayViewer({ className }: BrowserReplayViewerProps) {
   );
 }
 
-// Skeleton loader used while browser session initializes
 export function BrowserReplayViewerSkeleton() {
   return (
     <div className="flex flex-col gap-1 p-3">
@@ -416,7 +396,6 @@ export function BrowserReplayViewerSkeleton() {
   );
 }
 
-// Loading state
 export function BrowserReplayViewerLoading() {
   return (
     <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">

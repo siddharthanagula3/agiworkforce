@@ -1,31 +1,11 @@
-/**
- * Cloud Chat Stream Emitter
- *
- * Bridges SSE streaming from the cloud API gateway into synthetic Tauri events
- * so that `useTauriStreamListeners` works identically in web mode.
- *
- * Event flow:
- *   cloudApi.sendCloudMessage(onChunk, onDone, onError)
- *     → dispatchCloudEvent('chat:stream-start', ...)
- *     → dispatchCloudEvent('chat:stream-chunk', ...) × N
- *     → dispatchCloudEvent('chat:stream-end', ...)
- */
 
 import { sendCloudMessage } from '../api/cloudApi';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
-
-// ---------------------------------------------------------------------------
-// Event Dispatcher — mirrors Tauri emit() for cloud web mode
-// ---------------------------------------------------------------------------
 
 function dispatchCloudEvent(event: string, payload: unknown): void {
   const eventKey = `__cloud_web_${event}`;
   window.dispatchEvent(new CustomEvent(eventKey, { detail: payload }));
 }
-
-// ---------------------------------------------------------------------------
-// Stream Types — match what useTauriStreamListeners expects
-// ---------------------------------------------------------------------------
 
 interface StreamStartPayload {
   conversation_id: string;
@@ -58,10 +38,6 @@ interface StartCloudChatStreamOptions {
   messageId?: string;
   signal?: AbortSignal;
 }
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 /**
  * Initiates a cloud chat message send and bridges the SSE stream into
@@ -96,7 +72,6 @@ export async function startCloudChatStream(options: StartCloudChatStreamOptions)
       conversationId,
       options.content,
       options.model,
-      // onChunk — called for each text delta
       (text: string) => {
         emitStart();
         fullContent += text;
@@ -107,7 +82,6 @@ export async function startCloudChatStream(options: StartCloudChatStreamOptions)
           content: fullContent,
         } satisfies StreamChunkPayload);
       },
-      // onDone — called when the stream ends successfully
       () => {
         emitStart();
         dispatchCloudEvent('chat:stream-end', {
@@ -116,7 +90,6 @@ export async function startCloudChatStream(options: StartCloudChatStreamOptions)
         } satisfies StreamEndPayload);
         resolve();
       },
-      // onError — called if the stream encounters an error
       (err: Error) => {
         emitStart();
         dispatchCloudEvent('chat:stream-error', {
@@ -144,7 +117,6 @@ export async function startCloudChatStream(options: StartCloudChatStreamOptions)
         operationId: messageId.replace(/^cloud_/, ''),
       }),
     ).catch((err) => {
-      // Catch any unhandled errors from sendCloudMessage itself
       const error = err instanceof Error ? err : new Error(String(err));
       emitStart();
       dispatchCloudEvent('chat:stream-error', {

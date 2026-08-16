@@ -1,15 +1,3 @@
-/**
- * WorkflowBuilder — minimal visual workflow editor
- *
- * Canvas-based node editor with:
- *  - Drag-to-position nodes
- *  - Click output port → click input port to connect
- *  - Sidebar palette of node types (trigger, action, condition, output)
- *  - Properties panel on node selection
- *  - Save/load from workflowStore
- *
- * Uses only built-in browser APIs + React — no additional deps.
- */
 import {
   useCallback,
   useEffect,
@@ -34,8 +22,6 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useWorkflowStore, type WorkflowNode, type WorkflowEdge } from '../../stores/workflowStore';
 import { useAuthStore } from '../../stores/auth';
-
-// ── Security constants ────────────────────────────────────────────────────────
 
 const MAX_LABEL_LENGTH = 200;
 const MAX_COMMAND_LENGTH = 1000;
@@ -65,10 +51,6 @@ const DANGEROUS_COMMAND_PATTERNS: RegExp[] = [
   /\bnohup\b.*&\s*$/, // detached background processes
 ];
 
-/**
- * Returns the first dangerous pattern found in a command string, or null
- * if the command appears safe.
- */
 function detectDangerousPattern(command: string): RegExp | null {
   for (const pattern of DANGEROUS_COMMAND_PATTERNS) {
     if (pattern.test(command)) return pattern;
@@ -76,10 +58,6 @@ function detectDangerousPattern(command: string): RegExp | null {
   return null;
 }
 
-/**
- * Validate all action node commands in the workflow against the blocklist.
- * Returns an array of warning messages (empty = safe to save).
- */
 function validateWorkflowCommands(nodes: WorkflowNode[]): string[] {
   const warnings: string[] = [];
   for (const node of nodes) {
@@ -94,8 +72,6 @@ function validateWorkflowCommands(nodes: WorkflowNode[]): string[] {
   }
   return warnings;
 }
-
-// ── Node palette definitions ──────────────────────────────────────────────────
 
 interface NodeTypeDef {
   type: string;
@@ -155,21 +131,15 @@ function getNodeTypeDef(type: string): NodeTypeDef {
   return NODE_TYPES.find((n) => n.type === type) ?? NODE_TYPES[1]!;
 }
 
-// ── Port types ────────────────────────────────────────────────────────────────
-
 interface PortRef {
   nodeId: string;
   portType: 'output' | 'input';
 }
 
-// ── SVG edge path helper ──────────────────────────────────────────────────────
-
 function edgePath(x1: number, y1: number, x2: number, y2: number): string {
   const dx = Math.abs(x2 - x1) / 2;
   return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
 }
-
-// ── Node dimensions (must match rendered size) ────────────────────────────────
 
 const NODE_W = 160;
 const NODE_H = 60;
@@ -182,8 +152,6 @@ function inputPortPos(node: WorkflowNode) {
   return { x: node.position.x, y: node.position.y + NODE_H / 2 };
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 interface WorkflowBuilderProps {
   workflowId?: string;
   className?: string;
@@ -191,7 +159,6 @@ interface WorkflowBuilderProps {
 }
 
 export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuilderProps) {
-  // ── Store ──────────────────────────────────────────────────────────────────
   const { getWorkflow, createWorkflow, updateWorkflow, isLoading } = useWorkflowStore(
     useShallow((s) => ({
       getWorkflow: s.getWorkflow,
@@ -202,7 +169,6 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
   );
   const userId = useAuthStore((s) => s.getCurrentUserId()) ?? 'local';
 
-  // ── Local state ────────────────────────────────────────────────────────────
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [edges, setEdges] = useState<WorkflowEdge[]>([]);
   const [workflowName, setWorkflowName] = useState('New Workflow');
@@ -211,11 +177,9 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Drag state (pointer-based, canvas-relative)
   const canvasRef = useRef<SVGSVGElement>(null);
   const dragNodeRef = useRef<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
 
-  // ── Load existing workflow ─────────────────────────────────────────────────
   useEffect(() => {
     if (!workflowId) return;
 
@@ -235,8 +199,6 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
     void load();
   }, [workflowId, getWorkflow]);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
   const canvasPos = useCallback((clientX: number, clientY: number) => {
     if (!canvasRef.current) return { x: clientX, y: clientY };
     const rect = canvasRef.current.getBoundingClientRect();
@@ -245,7 +207,6 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
 
   const addNode = useCallback((typeDef: NodeTypeDef) => {
     const id = `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    // Place new nodes in a cascading fashion
     setNodes((prev) => {
       const offset = prev.length * 30;
       return [
@@ -274,21 +235,18 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
   const handlePortClick = useCallback(
     (port: PortRef) => {
       if (!pendingPort) {
-        // First click: record output port
         if (port.portType === 'output') {
           setPendingPort(port);
         }
         return;
       }
 
-      // Second click: must be input port on a different node
       if (port.portType === 'input' && port.nodeId !== pendingPort.nodeId) {
         const newEdge: WorkflowEdge = {
           id: `edge_${Date.now()}`,
           source: pendingPort.nodeId,
           target: port.nodeId,
         };
-        // Avoid duplicate edges
         setEdges((prev) => {
           const dup = prev.some((e) => e.source === newEdge.source && e.target === newEdge.target);
           if (dup) return prev;
@@ -307,8 +265,6 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
       setPendingPort(null);
     }
   }, []);
-
-  // ── Pointer-based drag for nodes ───────────────────────────────────────────
 
   const handleNodePointerDown = useCallback(
     (e: ReactPointerEvent<SVGGElement>, nodeId: string) => {
@@ -345,10 +301,7 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
     dragNodeRef.current = null;
   }, []);
 
-  // ── Node property update ───────────────────────────────────────────────────
-
   const updateNodeData = useCallback((nodeId: string, key: string, value: string) => {
-    // Enforce length limits per field type
     const maxLen = key === 'command' ? MAX_COMMAND_LENGTH : MAX_LABEL_LENGTH;
     const clamped = value.slice(0, maxLen);
     setNodes((prev) =>
@@ -356,10 +309,7 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
     );
   }, []);
 
-  // ── Save ───────────────────────────────────────────────────────────────────
-
   const handleSave = useCallback(async () => {
-    // Validate commands before saving
     const commandWarnings = validateWorkflowCommands(nodes);
     if (commandWarnings.length > 0) {
       for (const warning of commandWarnings) {
@@ -401,8 +351,6 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
       setSaving(false);
     }
   }, [workflowId, userId, workflowName, nodes, edges, updateWorkflow, createWorkflow, onSaved]);
-
-  // ── Loading / error states ─────────────────────────────────────────────────
 
   if (isLoading && workflowId) {
     return (
@@ -717,8 +665,6 @@ export function WorkflowBuilder({ workflowId, className, onSaved }: WorkflowBuil
   );
 }
 
-// ── Node Properties Panel ─────────────────────────────────────────────────────
-
 interface NodePropertiesPanelProps {
   node: WorkflowNode;
   onUpdateData: (nodeId: string, key: string, value: string) => void;
@@ -729,7 +675,6 @@ function NodePropertiesPanel({ node, onUpdateData, onDelete }: NodePropertiesPan
   const def = getNodeTypeDef(node.type);
   const Icon = def.icon;
 
-  // Build editable fields based on node type
   const fields: { key: string; label: string; placeholder: string; multiline?: boolean }[] = [
     { key: 'label', label: 'Label', placeholder: def.label },
   ];

@@ -85,14 +85,9 @@ function exportedSubpaths(exportsField) {
   );
 }
 
-// Blank out comment bodies (keeping newlines) without touching string/template
-// contents, so a comment that documents an import path — e.g. `import ... from
-// "../assets/*.js"` in a code-splitting note — is not mistaken for a real import.
-// Only comments are removed, never code or string literals, so this can never
-// hide a genuine cross-boundary import (no false negatives).
 function stripComments(source) {
   let out = '';
-  let state = 'code'; // code | line | block | sq | dq | tpl
+  let state = 'code';
   for (let i = 0; i < source.length; i++) {
     const c = source[i];
     const next = source[i + 1];
@@ -133,7 +128,6 @@ function stripComments(source) {
         out += c === '\n' ? '\n' : ' ';
       }
     } else {
-      // inside a string/template literal
       if (c === '\\') {
         out += c + (next ?? '');
         i++;
@@ -152,10 +146,6 @@ function stripComments(source) {
   return out;
 }
 
-// Self-check: guards the comment-stripper this whole check now depends on. Runs on
-// every `pnpm check:boundaries` (hence every push), so a regression that lets comment
-// text leak back in — or corrupts real imports/strings — fails loudly here instead of
-// silently letting cross-app imports through (false negative) or re-flagging prose.
 {
   const s = stripComments;
   assert(!/from ['"]x['"]/.test(s('// import a from "x"')), 'line-comment import leaked');

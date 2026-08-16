@@ -162,7 +162,6 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
   it('renders an embedded tool call (parses the [TOOL:...] fence into a tool element)', () => {
     const content = 'before\n[TOOL:bash:success] ran ls\ntotal 0\n[/TOOL]\nafter';
     const node = buildBubbleWithTools(msg({ role: 'assistant', content }));
-    // The tool fence must surface the tool name/summary as visible UI, not raw text.
     expect(node.textContent).toContain('bash');
     expect(node.textContent).not.toContain('[TOOL:bash:success]');
   });

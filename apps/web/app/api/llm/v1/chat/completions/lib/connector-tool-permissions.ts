@@ -1,24 +1,3 @@
-/**
- * @file Server-side reader for the user's persisted connector tool verdicts
- * (findings CON-1 and CON-2).
- *
- * `connector_tool_permissions` has been written by `/api/connectors/permissions`
- * since it shipped, but NOTHING on the server ever read it: the 3-state verdict
- * (allow / ask / deny) was enforced only in the browser, in
- * `useChatStream.ts`'s `autoResolvePendingApprovals`. A POST straight to
- * `/api/llm/v1/chat/completions/approve` with `{decision:"approved"}` therefore
- * executed a tool the user had explicitly Blocked, and a blocked tool was still
- * advertised to the model on every turn so its approval card kept reappearing.
- *
- * This module loads those verdicts once per turn so the tool loop can enforce
- * them BEFORE any side effect, on both the initial loop and the `/approve`
- * resume path.
- *
- * VOCABULARY: the table stores the canonical values
- * (`always-allow` | `needs-approval` | `blocked`); the wire and this module use
- * the composer's (`allow` | `ask` | `deny`), matching
- * `/api/connectors/permissions`.
- */
 
 import 'server-only';
 
@@ -35,20 +14,13 @@ const DB_TO_WIRE: Readonly<Record<string, ConnectorToolPermissionLevel>> = Objec
 });
 
 export interface ConnectorToolPermissions {
-  /**
-   * The user's saved verdict for a connector tool, or `undefined` when they
-   * never expressed one (the loop then falls back to the turn's approval mode).
-   */
   levelFor(qualifiedName: string): ConnectorToolPermissionLevel | undefined;
   levelForConnectorTool(
     connectorId: string,
     toolName: string,
   ): ConnectorToolPermissionLevel | undefined;
-  /** True when the user Blocked this tool. Never execute, never advertise. */
   isDenied(qualifiedName: string): boolean;
-  /** Catalog-filter predicate shape used by `loadUserConnectorToolDefs` (CON-2). */
   isConnectorToolDenied(connectorId: string, toolName: string): boolean;
-  /** Number of saved verdicts (0 for the empty set). */
   readonly size: number;
 }
 
@@ -77,7 +49,6 @@ function buildPermissions(
   };
 }
 
-/** No saved verdicts — every tool falls back to the turn's approval mode. */
 export const EMPTY_CONNECTOR_TOOL_PERMISSIONS: ConnectorToolPermissions = buildPermissions(
   new Map(),
 );
@@ -99,20 +70,6 @@ interface PermissionRow {
   level: string;
 }
 
-/**
- * Load every saved verdict for `userId`.
- *
- * FAIL-OPEN IS DELIBERATE AND BOUNDED: if the table is missing or the query
- * fails we return the empty set, which means "no saved verdicts" — every tool
- * then falls back to the turn's approval mode, which for connector tools is
- * `manual` (fail-closed: the user is asked). It does NOT mean "everything is
- * allowed". The one verdict that would be lost is `deny`, and losing it
- * degrades to an approval prompt, never to a silent execution.
- *
- * `db` must be the caller's user-scoped (RLS) adapter; migration 0069 adds the
- * `current_app_user_id()` policy that makes the scoping enforceable in the
- * database rather than only in this WHERE clause.
- */
 export async function loadConnectorToolPermissions(
   db: DatabaseAdapter,
   userId: string,
@@ -139,8 +96,6 @@ export async function loadConnectorToolPermissions(
   const levels = new Map<string, ConnectorToolPermissionLevel>();
   for (const row of rows) {
     const level = DB_TO_WIRE[row.level];
-    // An unrecognized stored level is treated as "no verdict" rather than as
-    // allow — an unknown value must never widen access.
     if (!level) continue;
     levels.set(row.connector_id + ' ' + row.tool_name, level);
   }

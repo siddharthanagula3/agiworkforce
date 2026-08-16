@@ -65,7 +65,6 @@ describe('FormField', () => {
         <FormField id="test" label="Test Label" success="Looking good!" value="valid value" />,
       );
 
-      // Trigger blur to mark as touched
       const input = screen.getByLabelText('Test Label');
       fireEvent.blur(input);
 
@@ -117,13 +116,10 @@ describe('FormField', () => {
 
       const input = screen.getByLabelText('Test Label');
 
-      // Trigger blur to mark as touched
       fireEvent.blur(input);
 
-      // Type quickly
       await userEvent.type(input, 'abc');
 
-      // Wait for debounce
       await waitFor(
         () => {
           expect(validate).toHaveBeenCalled();
@@ -153,7 +149,6 @@ describe('FormField', () => {
     it('should have aria-required when required', () => {
       render(<FormField id="test" label="Test Label" required />);
 
-      // Use the input role since the label text includes the asterisk
       const input = screen.getByRole('textbox');
       expect(input).toHaveAttribute('aria-required', 'true');
     });

@@ -1,10 +1,3 @@
-/**
- * GET /api/support/account/context
- *
- * The endpoint has no way to be asked about anyone but the session holder, and
- * the `facts` field it returns — the only thing a caller may put in a prompt —
- * must stay the projection, not the raw context.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -90,7 +83,6 @@ describe('GET /api/support/account/context', () => {
       citations: { href: string }[];
     };
 
-    // The projection, not a copy of the context.
     expect(body.facts).not.toHaveProperty('connectors');
     expect(body.facts['connector_ids']).toEqual(['slack']);
     expect(body.facts['plan_tier']).toBe('pro');

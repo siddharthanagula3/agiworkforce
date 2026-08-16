@@ -23,7 +23,6 @@ const DeviceApproveRequestSchema = z.object({
   action: z.enum(['approve', 'deny']).optional(),
 });
 
-// Row shape from device_authorization_codes (approve fields)
 interface DeviceAuthRecord {
   device_id: string;
   status: string;
@@ -31,18 +30,15 @@ interface DeviceAuthRecord {
 }
 
 async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> {
-  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
   }
 
-  // Reuse the device-link limiter; this endpoint is also security-sensitive.
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    // Authenticate via Clerk (browser session or Bearer token)
     const { userId, getToken } = await auth();
 
     if (!userId) {
@@ -66,7 +62,6 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
 
     const db = getNeonDb();
 
-    // Ensure the code exists and hasn't expired
     const records = await db.query<DeviceAuthRecord>(
       `SELECT device_id, status, expires_at
          FROM device_authorization_codes
@@ -91,7 +86,6 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     }
 
     if (record.status !== 'pending') {
-      // Already processed (approved/denied/consumed/revoked/expired)
       throw createError.conflict('This device code has already been processed');
     }
 
@@ -124,20 +118,12 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       );
     }
 
-    // Approve: obtain the Clerk session token for the device to authenticate with.
-    // WEB-18 (audit 2026-05-19): verify we can retrieve a valid token before
-    // writing it to the database so an expired/invalid session cannot produce
-    // a stale device-auth payload.
     const clerkToken = await getToken();
 
     if (!clerkToken) {
       throw createError.internal('Missing session token - please sign in again');
     }
 
-    // Encrypt token at rest - the poll endpoint will decrypt on retrieval.
-    // refresh_token is stored as null for Clerk sessions (token rotation is
-    // handled by the Clerk SDK; the desktop app re-authenticates via the
-    // web flow when the token expires).
     const encryptedAccessToken = encryptToken(clerkToken);
 
     const updated = await db.query<{ status: string }>(

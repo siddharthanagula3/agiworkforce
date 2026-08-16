@@ -7,11 +7,6 @@ export function isLocalChatModel(model: ModelInfo): boolean {
   return model.isLocal || LOCAL_PROVIDER_IDS.has(model.provider.toLowerCase());
 }
 
-/**
- * Product trust admission for a model already discovered by the active host.
- * Registry routing still performs provider/harness/capability admission; this
- * guard prevents a stale UI selection from crossing conversation trust planes.
- */
 export function isModelAdmittedForExecutionMode(
   model: ModelInfo,
   executionMode: ChatExecutionMode,

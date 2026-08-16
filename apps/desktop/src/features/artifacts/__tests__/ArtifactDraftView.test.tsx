@@ -1,7 +1,3 @@
-/**
- * The progressive artifact view is display-only: it must show the partial
- * source text as it streams and must never claim the artifact is finished.
- */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ArtifactDraftView } from '../ArtifactDraftView';
@@ -33,7 +29,6 @@ describe('ArtifactDraftView', () => {
     render(<ArtifactDraftView draft={draft({ content: '<div>half writ' })} />);
     const pre = screen.getByTestId('artifact-draft-content');
     expect(pre.textContent).toBe('<div>half writ');
-    // Raw text, not an interpreted DOM node.
     expect(pre.querySelector('div')).toBeNull();
   });
 

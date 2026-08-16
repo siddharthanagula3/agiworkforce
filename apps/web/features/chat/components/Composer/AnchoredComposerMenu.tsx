@@ -39,38 +39,22 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom';
 import { cn } from '@shared/lib/utils';
 
-/** Gap between the trigger and the menu edge. */
 const ANCHOR_OFFSET_PX = 8;
-/** Minimum breathing room between the menu and the viewport edge. */
 const VIEWPORT_PADDING_PX = 8;
-/** Below this much free space above the trigger, prefer flipping downward. */
 const MIN_USABLE_SPACE_PX = 160;
 
 export interface AnchoredComposerMenuProps {
-  /** The element the menu is positioned against — usually the trigger button. */
   anchorRef: React.RefObject<HTMLElement | null>;
-  /** Render nothing when false. */
   open: boolean;
-  /**
-   * Which trigger edge the menu's horizontal edge lines up with.
-   * `start` = left edges align, `end` = right edges align.
-   */
   align?: 'start' | 'end';
-  /**
-   * Receives the positioned content element. Callers use it so their
-   * outside-click handler can treat the portaled menu as "inside".
-   */
   contentRef?: React.RefObject<HTMLDivElement | null>;
-  /** Applied to the positioned element — pass the width and padding here. */
   className?: string;
   children: React.ReactNode;
 }
 
 interface Position {
   left: number;
-  /** Set for the above-placement; the menu grows upward from this bottom edge. */
   bottom?: number;
-  /** Set for the flipped (below) placement. */
   top?: number;
   maxHeight: number;
 }
@@ -85,8 +69,6 @@ export function AnchoredComposerMenu({
 }: AnchoredComposerMenuProps) {
   const internalRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<Position | null>(null);
-  // Portals need a DOM target, which does not exist during SSR or the first
-  // client render. Gate on mount so the markup matches on hydration.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -110,12 +92,8 @@ export function AnchoredComposerMenu({
     const spaceAbove = anchorRect.top - ANCHOR_OFFSET_PX - VIEWPORT_PADDING_PX;
     const spaceBelow = viewportHeight - anchorRect.bottom - ANCHOR_OFFSET_PX - VIEWPORT_PADDING_PX;
 
-    // Measure the natural height with any previous clamp lifted, otherwise the
-    // menu would ratchet smaller every time it is repositioned.
     const naturalHeight = content.scrollHeight;
 
-    // Above is the composer's idiom, so keep it unless it genuinely cannot
-    // work: the menu does not fit above AND below is roomier.
     const placeAbove =
       naturalHeight <= spaceAbove || spaceAbove >= spaceBelow || spaceAbove >= MIN_USABLE_SPACE_PX;
 
@@ -141,7 +119,6 @@ export function AnchoredComposerMenu({
     );
   }, [align, anchorRef]);
 
-  // Position before paint so the menu never renders at the wrong spot first.
   useLayoutEffect(() => {
     if (!open || !mounted) {
       setPosition(null);
@@ -150,16 +127,12 @@ export function AnchoredComposerMenu({
     reposition();
   }, [open, mounted, reposition]);
 
-  // Keep it anchored while the page moves under it. `scroll` is captured so
-  // inner scrollers count, not just the window.
   useEffect(() => {
     if (!open || !mounted) return undefined;
     const onChange = () => reposition();
     window.addEventListener('resize', onChange);
     window.addEventListener('scroll', onChange, true);
 
-    // Menu content is dynamic (submenus expand in place), so react to its own
-    // size changes rather than only to the window's.
     const observer =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onChange) : undefined;
     if (observer && internalRef.current) observer.observe(internalRef.current);
@@ -182,8 +155,6 @@ export function AnchoredComposerMenu({
         ...(position?.bottom !== undefined ? { bottom: position.bottom } : {}),
         ...(position?.top !== undefined ? { top: position.top } : {}),
         maxHeight: position?.maxHeight,
-        // Until the first measurement lands the menu would flash at (0,0);
-        // it is laid out but not painted for that one frame.
         visibility: position ? 'visible' : 'hidden',
       }}
       className={cn(

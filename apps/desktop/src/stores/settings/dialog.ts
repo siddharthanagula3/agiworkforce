@@ -43,9 +43,6 @@ export const LEGACY_TAB_MAP: Partial<Record<SettingsTab, SettingsTab>> = {
   'api-keys': 'models-keys',
   'task-routing': 'models-keys',
   'agent-execution': 'agents',
-  // `capabilities` and `extensions` are now canonical settings sections
-  // (source-of-truth IA) — they are NOT remapped. Legacy `skills`/`customize`
-  // fold into Capabilities (which houses Skills + computer-use/tool-access).
   skills: 'capabilities',
   mcp: 'connectors',
   'mcp-server': 'connectors',

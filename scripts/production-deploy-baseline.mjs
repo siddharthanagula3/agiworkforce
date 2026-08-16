@@ -1,24 +1,4 @@
 #!/usr/bin/env node
-/**
- * Decide which production surfaces need deploying, measured from what each
- * surface last actually SHIPPED rather than from the previous commit.
- *
- * The old scope step ran `git diff HEAD^ HEAD`. That assumes every commit gets
- * deployed, and this workflow is gated on CI success, so it does not hold: a
- * commit landing while CI is red is never deployed, and no later run ever looks
- * at it again. See `selectSurfaceBaseline` in production-deploy-scope.mjs for
- * the outage that fact prolonged.
- *
- * Here the baseline is the commit each surface was last deployed FROM, taken
- * from the newest run whose deploy job for that surface succeeded. Everything
- * between there and HEAD is unshipped by definition, so classifying that range
- * cannot strand a change.
- *
- * Fails OPEN. Any uncertainty — no prior successful deploy, an API error, a
- * baseline commit that is no longer reachable — deploys the surface. Deploying
- * something already current costs a build; skipping something that was never
- * shipped is how the outage above stayed live for two days.
- */
 import { execFileSync } from 'node:child_process';
 import process from 'node:process';
 import { classifyDeployScope, selectSurfaceBaseline } from './production-deploy-scope.mjs';
@@ -49,7 +29,6 @@ async function api(pathAndQuery, token) {
   return response.json();
 }
 
-/** Newest-first eligible runs, each with its jobs attached. */
 async function loadRuns(repository, token, headSha) {
   const query = new URLSearchParams({
     branch: 'main',
@@ -64,7 +43,6 @@ async function loadRuns(repository, token, headSha) {
 
   const runs = [];
   for (const run of listed.workflow_runs ?? []) {
-    // The run for THIS commit cannot be its own baseline.
     if (run.head_sha === headSha) continue;
     const jobs = await api(`/repos/${repository}/actions/runs/${run.id}/jobs?per_page=100`, token);
     runs.push({ ...run, jobs: jobs.jobs ?? [] });
@@ -145,8 +123,6 @@ function print(scope) {
 }
 
 main().catch((error) => {
-  // Never let a crash here mean "deploy nothing" — that is the failure mode
-  // this script exists to remove.
   log(`Baseline selection failed (${error.message}); deploying every surface.`);
   console.log('web=true');
   console.log('gateway=true');

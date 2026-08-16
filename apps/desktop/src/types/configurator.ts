@@ -1,9 +1,5 @@
 export type CapabilityCategory = 'data' | 'logic' | 'actions' | 'ai';
 
-/**
- * Basic node type for workflow definitions.
- * Replaces @xyflow/react Node type.
- */
 export interface WorkflowNode {
   id: string;
   type?: string;
@@ -11,10 +7,6 @@ export interface WorkflowNode {
   data: Record<string, unknown>;
 }
 
-/**
- * Basic edge type for workflow definitions.
- * Replaces @xyflow/react Edge type.
- */
 export interface WorkflowEdge {
   id: string;
   source: string;
@@ -40,9 +32,6 @@ export interface ConfigSchema {
   fields: ConfigField[];
 }
 
-/**
- * Default value type for configuration fields.
- */
 export type ConfigFieldDefaultValue =
   | string
   | number

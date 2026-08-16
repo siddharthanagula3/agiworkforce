@@ -1,11 +1,3 @@
-/**
- * The public viewer's kind branch is the security boundary (CAP-015 slice 2).
- *
- * A published page is served to anonymous viewers with no session of their own
- * to protect them, so the claim this file defends is narrow and absolute:
- * script-executing artifacts reach the sandboxed frame and NEVER the app
- * origin's DOM, while inert kinds never gain a frame at all.
- */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PublishedArtifactView } from './PublishedArtifactView';
@@ -16,8 +8,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-// Stand in for the real sandbox frame so the assertion is about WHICH renderer
-// was chosen and what it was handed, not about iframe mechanics.
 vi.mock('@/features/chat/components/SandboxedIframe', () => ({
   SandboxedIframe: (props: {
     payload: { kind: string };
@@ -55,7 +45,6 @@ describe('PublishedArtifactView', () => {
     );
     const frame = screen.getByTestId('sandboxed-frame');
     expect(frame).toHaveAttribute('data-kind', 'html');
-    // The artifact markup must not exist in the host document at all.
     expect(document.getElementById('marker')).toBeNull();
     expect(document.querySelector('main script')).toBeNull();
   });
@@ -103,7 +92,6 @@ describe('PublishedArtifactView', () => {
       />,
     );
     expect(screen.queryByTestId('sandboxed-frame')).not.toBeInTheDocument();
-    // React text nodes: present as characters, absent as an element.
     expect(screen.getByText('<img src=x onerror="alert(1)">')).toBeInTheDocument();
     expect(document.querySelector('main img')).toBeNull();
   });

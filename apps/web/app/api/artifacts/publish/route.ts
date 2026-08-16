@@ -18,25 +18,6 @@ import {
   requiresSandboxedRender,
 } from '@/lib/services/published-artifact-service';
 
-/**
- * Artifact publishing (CAP-015 slice 1).
- *
- *   POST /api/artifacts/publish - publish (or re-publish) one artifact
- *   GET  /api/artifacts/publish - the caller's own published artifacts
- *
- * Revocation lives at DELETE /api/artifacts/publish/[token].
- *
- * This directory existed and was EMPTY, which is why
- * `packages/platform/artifacts` could truthfully say no surface ships a
- * `CloudPublisher`. Both handlers require auth and run every statement through
- * `getUserScopedDb`, so migration 0095's owner-only policies enforce isolation
- * in the database and not merely in a WHERE clause.
- *
- * Publishing makes content readable by anyone holding the 144-bit token, so the
- * write path is CSRF-guarded and rate limited: a cross-site POST must never be
- * able to make a signed-in user's artifact public behind their back.
- */
-
 export const runtime = 'nodejs';
 
 const PublishSchema = z.object({
@@ -72,8 +53,6 @@ async function handlePublish(request: NextRequest): Promise<Response> {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
-  // 'share-create' is the existing publish-a-public-URL budget (5/min); this
-  // endpoint mints exactly the same class of public link.
   const rateLimitResponse = await withRateLimit(request, 'share-create');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -86,8 +65,6 @@ async function handlePublish(request: NextRequest): Promise<Response> {
 
   const parsed = PublishSchema.safeParse(rawBody);
   if (!parsed.success) {
-    // Zod rejects unpublishable kinds here (pdf/docx/image/spreadsheet/...) —
-    // there is no safe public renderer for them, so they never reach the DB.
     throw createError.validation('Invalid publish request', parsed.error.flatten());
   }
 
@@ -115,13 +92,10 @@ async function handlePublish(request: NextRequest): Promise<Response> {
   return NextResponse.json(
     {
       token: published.token,
-      // The name @agiworkforce/artifacts' CloudPublisher contract expects.
       shareUrl: buildPublishedArtifactUrl(published.token),
       publishedAt: published.updatedAt,
       kind: published.kind,
       title: published.title,
-      // Stated so the client can be honest about HOW the page will render:
-      // scripted kinds are served only inside the cross-origin sandbox frame.
       sandboxed: requiresSandboxedRender(published.kind),
     },
     { status: 201 },

@@ -1,63 +1,27 @@
-/**
- * Cloud memory store — PHYSICAL SEPARATION from local SQLite memory.
- *
- * HARD RULE: Local mode memories live in SQLite (storage/memory.ts) and are
- * managed by `useMemoryStore`. Cloud mode memories live here, in their own
- * MMKV namespace ('memory-store-cloud'), and are synced via
- * services/cloudSyncEngine. These two stores MUST NEVER co-mingle.
- *
- * Cloud memories arrive exclusively from the AGI Cloud API delta-sync endpoint
- * (`GET /api/memory/sync?since=<cursor>`). They are identified by UUIDv7 IDs
- * generated client-side and reconciled with server-version compare-and-swap.
- *
- * Shape maps to the versioned Managed Cloud wire contract (camelCase client
- * side, snake_case on pull — handled by the sync engine).
- */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 
-// ── Cloud memory entry (client-side shape) ─────────────────────────────────
-
 export interface CloudMemoryEntry {
-  /** UUIDv7 — client-generated, time-ordered, collision-free. */
   id: string;
   content: string;
   category: string | null;
-  /** Always 'mobile' for locally-created entries; may be 'web'/'desktop'/'auto' for pulled entries. */
   source: 'mobile' | 'desktop' | 'web' | 'auto';
-  /** Pinned facts are surfaced first and always injected into chat context. */
   pinned: boolean;
-  /** Local display/audit timestamps; never used to resolve sync conflicts. */
   createdAt: string;
   updatedAt: string;
-  /** Last server-owned Managed Cloud sync revision. Missing legacy state means `0`. */
   serverVersion?: string;
-  /**
-   * Tombstone flag. A deleted entry stays in the store with isDeleted:true
-   * until its delete has been pushed and acked by the server. Only then is it
-   * hard-deleted from the local store.
-   */
   isDeleted: boolean;
 }
 
-// ── Store interface ────────────────────────────────────────────────────────
-
 interface CloudMemoryState {
-  /** All cloud memory entries for the current user (including un-pushed tombstones). */
   entries: CloudMemoryEntry[];
 
-  /** Upsert a cloud memory entry (add or replace by id). */
   upsertCloudMemory: (entry: CloudMemoryEntry) => void;
-  /** Hard-delete an entry by id (called only after the server acks the tombstone). */
   hardDeleteCloudMemory: (id: string) => void;
-  /** Apply a batch of pulled deltas (from /api/memory/sync). */
   applyCloudMemoryDeltas: (deltas: CloudMemoryEntry[]) => void;
-  /** Clear all cloud memory data (e.g. on sign-out / account switch). */
   clearCloudMemoryData: () => void;
 }
-
-// ── Store ──────────────────────────────────────────────────────────────────
 
 export const useCloudMemoryStore = create<CloudMemoryState>()(
   persist(
@@ -83,9 +47,6 @@ export const useCloudMemoryStore = create<CloudMemoryState>()(
           const byId = new Map(state.entries.map((e) => [e.id, e]));
           for (const delta of deltas) {
             if (delta.isDeleted) {
-              // Tombstone from the server — hard-delete locally (we already
-              // applied the delete on our side; the server confirming it means
-              // we can remove the row entirely).
               byId.delete(delta.id);
             } else {
               byId.set(delta.id, delta);
@@ -100,7 +61,6 @@ export const useCloudMemoryStore = create<CloudMemoryState>()(
       },
     }),
     {
-      // SEPARATION: dedicated MMKV key — never shared with local SQLite memory.
       name: 'memory-store-cloud',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
@@ -108,8 +68,6 @@ export const useCloudMemoryStore = create<CloudMemoryState>()(
         if (error) console.warn('[cloudMemoryStore] Hydration failed:', error);
       },
       partialize: (state) => ({
-        // Persist unpushed tombstones alongside the separate dirty queue so a
-        // relaunch cannot lose the payload needed to finish the delete.
         entries: state.entries,
       }),
     },

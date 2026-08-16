@@ -167,7 +167,6 @@ async function handleCloudWebCommand<T>(
   args?: Record<string, unknown>,
 ): Promise<T | typeof CLOUD_WEB_FALLTHROUGH> {
   switch (command) {
-    // Chat CRUD — delegate to cloudApi
     case 'chat_get_conversations': {
       return (await listCloudConversations()) as T;
     }
@@ -223,7 +222,6 @@ async function handleCloudWebCommand<T>(
       } as T;
     }
 
-    // LLM model listing — delegate to cloudApi
     case 'llm_get_available_models': {
       try {
         const models = await getCloudModels();
@@ -234,9 +232,6 @@ async function handleCloudWebCommand<T>(
     }
 
     case 'llm_get_usage_stats': {
-      // The managed-cloud usage API intentionally exposes percentages and reset
-      // windows only. `llm_get_usage_stats` is a local/BYOK telemetry command,
-      // so never fabricate token or cost operands from the public cloud summary.
       return {
         totalTokens: 0,
         totalCost: 0,
@@ -247,27 +242,14 @@ async function handleCloudWebCommand<T>(
     }
 
     default:
-      // Not a cloud command — fall through to mock values
       return CLOUD_WEB_FALLTHROUGH as typeof CLOUD_WEB_FALLTHROUGH;
   }
 }
 
 export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri) {
-    // This module — not utils/ipc — is where 178 renderer modules get their
-    // invoke, so the registry check has to run here or it covers almost
-    // nothing. It is not total: StartupRecoveryBootstrap.tsx,
-    // services/analyticsQueries.ts, lib/newChatReset.ts and
-    // lib/browserAutomation.ts import @tauri-apps/api/core directly and still
-    // reach Rust unchecked.
     assertRegisteredCommand(command);
 
-    // @wdio/tauri-plugin 1.2 registers browser.tauri.mock() handlers here, but
-    // its window.__TAURI__.core wrapper does not intercept the official Tauri
-    // 2 API's non-writable window.__TAURI_INTERNALS__.invoke primitive. Route
-    // through the registry at this existing shared command boundary only in
-    // the isolated WDIO build. Release bundles never set VITE_WDIO_E2E and
-    // always call the official API directly.
     if (import.meta.env.VITE_WDIO_E2E === '1' && typeof window !== 'undefined') {
       const mocks = (window as unknown as { __wdio_mocks__?: Record<string, unknown> })
         .__wdio_mocks__;
@@ -279,11 +261,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     return tauriInvoke<T>(command, args);
   }
 
-  // The bundled Electron cloud renderer is browser-class for every Local/BYOK
-  // command, but it owns a deliberately tiny native bridge for Cloud account
-  // sign-in and encrypted credential storage. Route only that audited allowlist
-  // through the Electron core shim; letting every command through here would
-  // accidentally give the Managed-Cloud-only shell a local execution plane.
   if (isElectronHost && isElectronBridgeCommand(command)) {
     const electronHost = getElectronHostBridge();
     if (!electronHost?.handles(command)) {
@@ -292,7 +269,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     return tauriInvoke<T>(command, args);
   }
 
-  // Cloud web mode: route chat commands to cloud API, mock desktop-only commands
   if (isCloudWeb) {
     const cloudResult = await handleCloudWebCommand<T>(command, args);
     if (cloudResult !== CLOUD_WEB_FALLTHROUGH) {
@@ -311,14 +287,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     throw new Error('Agent execution requires the AGI Workforce desktop application');
   }
 
-  // Test environment / cloud web fallthrough / explicit desktop UI QA: return mock values.
   if (!isTestEnvironment && !isCloudWeb && !isDesktopUiDevLocal) {
     const errorMessage = `This feature requires the AGI Workforce desktop application. Please download it from https://agiworkforce.com/download`;
     console.error(`[Tauri] ${errorMessage}`, { command, args });
     throw new Error(errorMessage);
   }
 
-  // Test environment: Return empty arrays/objects to avoid breaking tests
   switch (command) {
     case 'get_onboarding_status':
       return { completed: false } as T;
@@ -349,7 +323,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'check_capability':
       return true as T;
 
-    // Master password commands
     case 'master_password_get_status':
       return {
         is_configured: false,
@@ -381,7 +354,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'chat_get_messages':
     case 'orchestrator_list_agents':
     case 'project_list':
-    case 'app_permissions_list': // Stream 1: array of AppPermission entries
+    case 'app_permissions_list':
     case 'app_permissions_always_blocked': // Stream 1: array of bundle id strings
       return [] as T;
 
@@ -412,7 +385,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'document_create_powerpoint_simple_manifest':
       return mockDocumentCreationResult(args, 'pptx') as T;
 
-    // Sandboxed code execution
     case 'execute_code':
       return {
         success: true,
@@ -434,20 +406,16 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'chat_send_message':
       throw new Error('Chat functionality requires the desktop application');
 
-    // Simple synchronous LLM call used by voice post-processing and other lightweight tasks
     case 'llm_send_message': {
-      // In test/web mode return the first user message unchanged so callers still get a string
       const msgs =
         (args?.['messages'] as Array<{ role: string; content: string }> | undefined) ?? [];
       const lastUserMsg = [...msgs].reverse().find((m) => m.role === 'user')?.content ?? '';
       return { content: lastUserMsg, model: args?.['model'] ?? 'mock', cached: false } as T;
     }
 
-    // Voice dictation commands (Whisper / Deepgram — requires Rust backend)
     case 'speech_start_recording':
       return undefined as T;
     case 'speech_stop_and_transcribe':
-      // Return a mock transcript so the post-processing path can be exercised in tests
       return { text: '(mock transcript)', confidence: 0.95 } as T;
     case 'voice_transcribe_blob':
       return { text: '(mock transcript)', language: 'en', duration: 1.0, confidence: 0.95 } as T;
@@ -462,7 +430,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'orchestrator_spawn_agent':
       throw new Error('Agent orchestration requires the desktop application');
 
-    // Research commands
     case 'research_start':
       return `session_mock_${Date.now()}` as T;
     case 'research_cancel':
@@ -505,7 +472,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         default_mode: 'standard',
       } as T;
 
-    // AGI goal commands
     case 'agi_submit_goal':
       return { goalId: `goal_mock_${Date.now()}` } as T;
     case 'agi_submit_goal_parallel':
@@ -532,7 +498,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'agi_get_reflection_insights':
       return null as T;
 
-    // Realtime presence commands
     case 'connect_websocket':
       return {
         url: 'ws://127.0.0.1:8787',
@@ -547,12 +512,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'update_user_activity':
       return undefined as T;
 
-    // MCP Connector/OAuth commands
     case 'mcp_list_connected_providers':
       return [] as T;
-    // Mirrors the backend `get_connector_mcp_mapping` table in
-    // mcp_oauth.rs — keep in sync when a connector's real backend support
-    // lands (see DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01).
     case 'mcp_get_supported_connector_ids':
       return [
         'github',
@@ -632,9 +593,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'mcp_delete_credential':
       return 'Credential deleted' as T;
 
-    // MCP bundle registry. These deterministic fixtures make the explicitly
-    // enabled Desktop UI development mode useful without running npm or
-    // mutating the host's real MCP configuration.
     case 'mcpb_fetch_registry':
       return mockMcpBundles() as T;
     case 'mcpb_search_bundles': {
@@ -675,7 +633,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'mcpb_check_updates':
       return [] as T;
 
-    // Core MCP management commands
     case 'mcp_initialize':
       return 'MCP initialized' as T;
     case 'mcp_list_servers':
@@ -712,7 +669,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'mcp_store_credential':
       return 'Credential stored' as T;
 
-    // MCP OAuth additional commands
     case 'mcp_oauth_status':
       return {
         connected: false,
@@ -726,9 +682,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         expires_at: null,
       } as T;
 
-    // MCP connector manifests
-
-    // Model capabilities command
     case 'get_model_capabilities':
       return {
         supports_tools: true,
@@ -739,7 +692,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         tool_mode: 'none',
       } as T;
 
-    // MCP Extension commands
     case 'extension_list':
       return [] as T;
 
@@ -777,7 +729,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         permissions: [],
       } as T;
 
-    // Scheduler commands (job-based naming to match Rust backend)
     case 'scheduler_list_jobs':
       return [] as T;
 
@@ -797,7 +748,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'scheduler_get_next_runs':
       return [] as T;
 
-    // Analytics — telemetry write commands (fire-and-forget)
     case 'analytics_track_event':
     case 'analytics_flush_events':
     case 'analytics_set_user_property':
@@ -805,11 +755,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'analytics_delete_all_data':
       return undefined as T;
 
-    // Analytics — session ID
     case 'analytics_get_session_id':
       return 'mock-session-id' as T;
 
-    // Analytics — system metrics
     case 'metrics_get_system':
       return {
         cpu_usage: 0,
@@ -822,7 +770,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         uptime_seconds: 0,
       } as T;
 
-    // Analytics — app metrics
     case 'metrics_get_app':
       return {
         automations_count: 0,
@@ -835,7 +782,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         failed_operations: 0,
       } as T;
 
-    // Analytics — usage stats
     case 'analytics_get_usage_stats':
       return {
         dau: 0,
@@ -850,11 +796,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         retention_rate: 0,
       } as T;
 
-    // Analytics — feature usage
     case 'analytics_get_feature_usage':
       return [] as T;
 
-    // Analytics — ROI
     case 'analytics_calculate_roi':
       return {
         time_saved_hours: 0,
@@ -871,22 +815,18 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         report_end_date: 0,
       } as T;
 
-    // Analytics — aggregations
     case 'analytics_get_process_metrics':
     case 'analytics_get_user_metrics':
     case 'analytics_get_tool_metrics':
       return [] as T;
 
-    // Analytics — metric trends
     case 'analytics_get_metric_trends':
       return [] as T;
 
-    // Analytics trend commands
     case 'analytics_get_cost_saved_trend':
     case 'analytics_get_time_saved_trend':
       return [] as T;
 
-    // Background task commands
     case 'background_task_list':
       return [] as T;
 
@@ -896,11 +836,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'background_task_cancel':
       return undefined as T;
 
-    // Workflow execution
     case 'execute_workflow':
       return undefined as T;
 
-    // Automation script commands
     case 'automation_record_start':
       return {
         session_id: 'mock-recorder-session',
@@ -975,7 +913,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'inspect_element_at':
       return null as T;
 
-    // ROI/Metrics commands
     case 'get_today_stats':
     case 'get_week_stats':
     case 'get_month_stats':
@@ -1010,7 +947,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'submit_feedback':
       return undefined as T;
 
-    // Conversation branching commands
     case 'conversation_fork':
       return {
         branch: {
@@ -1043,7 +979,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'conversation_export_pdf':
       return (args?.['outputPath'] ?? '/tmp/mock-conversation.pdf') as T;
 
-    // Backend-wired chat commands
     case 'chat_get_conversation':
       return {
         id: (args?.['id'] as number) ?? 1,
@@ -1153,14 +1088,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         latencyMs: 100,
       } as T;
 
-    // PTT (Push-to-Talk) commands and TTS speak — all return undefined
     case 'voice_start_global_ptt':
     case 'voice_stop_global_ptt':
     case 'voice_inject_text':
     case 'voice_tts_speak':
       return undefined as T;
 
-    // LLM provider/model commands
     case 'llm_check_provider_status':
       return {
         provider: (args?.['provider'] as string | undefined) ?? 'anthropic',
@@ -1184,12 +1117,10 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'llm_configure_provider':
       return undefined as T;
 
-    // File picker commands
     case 'glob_search':
     case 'dir_list':
       return [] as T;
 
-    // Formatter detection
     case 'format_detect':
       return {
         language: '',
@@ -1198,11 +1129,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         available: false,
       } as T;
 
-    // LSP server listing
     case 'lsp_list_servers':
       return [] as T;
 
-    // Extension status
     case 'extension_status':
       return {
         status: 'degraded',
@@ -1231,7 +1160,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         },
       } as T;
 
-    // ── Vision commands ─────────────────────────────────────────────
     case 'vision_send_message':
     case 'vision_extract_text':
       return {
@@ -1253,7 +1181,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         cost: 0,
       } as T;
 
-    // ── Swarm commands ──────────────────────────────────────────────
     case 'swarm_init':
     case 'swarm_stop':
       return undefined as T;
@@ -1276,7 +1203,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         averageTaskDurationMs: 0,
       } as T;
 
-    // ── Workflow orchestration commands ──────────────────────────────
     case 'create_workflow':
       return `wf_mock_${Date.now()}` as T;
 
@@ -1315,7 +1241,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_next_execution_time':
       return (Date.now() + 3600000) as T;
 
-    // ── Background agent commands ───────────────────────────────────
     case 'background_agent_push': {
       const input = args?.['input'] as Record<string, unknown> | undefined;
       if (
@@ -1369,7 +1294,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'background_agent_should_push':
       return [false, (args?.['goal'] as string | undefined) ?? ''] as T;
 
-    // ── Skill commands (newly wired) ────────────────────────────────
     case 'skill_list':
       return [] as T;
 
@@ -1414,7 +1338,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'skill_set_workspace':
       return undefined as T;
 
-    // ── Voice commands (newly wired) ────────────────────────────────
     case 'voice_configure':
     case 'voice_wake_enable':
     case 'voice_wake_disable':
@@ -1492,7 +1415,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'voice_transcribe_local':
       return { text: '(mock transcript)', confidence: 0.95 } as T;
 
-    // ── Agent/AGI commands ──────────────────────────────────────────
     case 'agent_init':
     case 'agi_init':
     case 'agi_stop':
@@ -1527,7 +1449,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         summary: 'Swarm work is ready for review.',
       } as T;
 
-    // ── Orchestration commands ──────────────────────────────────────
     case 'orchestrator_spawn_parallel':
       return [] as T;
 
@@ -1541,7 +1462,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'orchestrator_get_agent_status':
       return null as T;
 
-    // ── Notification commands ───────────────────────────────────────
     case 'notification_check_permission':
     case 'notification_request_permission':
       return true as T;
@@ -1614,7 +1534,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         expiresAt: null,
       } as T;
 
-    // ── Tutorial commands ───────────────────────────────────────────
     case 'get_tutorials':
     case 'get_user_tutorial_progress':
       return [] as T;
@@ -1641,7 +1560,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'run_instant_demo':
       return { success: true } as T;
 
-    // ── Settings V2 commands ────────────────────────────────────────
     case 'settings_v2_get_batch':
     case 'settings_v2_get_category':
     case 'settings_v2_list_all':
@@ -1773,7 +1691,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'intent_create_routing_plan':
       return undefined as T;
 
-    // ── Background tasks commands ───────────────────────────────────
     case 'bg_submit_task':
       return `bgtask_mock_${Date.now()}` as T;
 
@@ -1789,7 +1706,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'bg_resume_task':
       return undefined as T;
 
-    // ── Onboarding commands ─────────────────────────────────────────
     case 'complete_first_run':
     case 'complete_onboarding_step':
     case 'skip_first_run':
@@ -1819,22 +1735,16 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'track_workflow_view':
       return undefined as T;
 
-    // Analytics — report generation (returns string content)
     case 'analytics_generate_weekly_report':
     case 'analytics_generate_monthly_report':
       return '# Mock Report\n\nNo data available in development mode.' as T;
 
-    // Analytics — top processes (returns array of ProcessMetrics)
     case 'analytics_get_top_processes':
       return [] as T;
 
-    // Analytics — save snapshot (returns snapshot ID string)
     case 'analytics_save_snapshot':
       return `snapshot_mock_${Date.now()}` as T;
 
-    // ── Artifact commands ────────────────────────────────────────────
-    // All artifact invoke() calls return ArtifactResponse<T> wrappers.
-    // The api/artifacts.ts layer calls unwrap() which reads { success, data }.
     case 'artifact_create':
     case 'artifact_create_streaming':
     case 'artifact_finalize_streaming':
@@ -1941,7 +1851,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'artifact_import_all':
       return { success: true, data: 0 } as T;
 
-    // ── Core memory commands (memory_*) ────────────────────────────
     case 'memory_remember':
     case 'memory_store':
       return 1 as T;
@@ -2041,7 +1950,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         trend: 'stable',
       } as T;
 
-    // ── Chat memory integration commands (chat_*) ───────────────────
     case 'chat_load_project_memories':
       return {
         injection_result: {
@@ -2095,7 +2003,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'chat_search_memories':
       return [] as T;
 
-    // ── Project memory commands (project_memory.rs) ─────────────────
     case 'save_project_context':
     case 'save_coding_style':
     case 'save_architectural_decision':
@@ -2128,7 +2035,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         decisions_count: 0,
       } as T;
 
-    // ── Privacy / data export / cache commands ─────────────────────
     case 'export_user_data':
       return '{}' as T;
 
@@ -2137,12 +2043,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'settings_v2_clear_cache':
       return undefined as T;
 
-    // ── User preference commands ─────────────────────────────────
-    // Back these with localStorage so a preference survives a page reload the
-    // way the real native preference store (SQLite) does. Without this the mock
-    // was stateless (set = no-op, get = null), so no DOM-local preference could
-    // persist across a reload — which made the cross-session e2e assertions
-    // (e.g. GDPR privacy toggles) fail against a working feature.
     case 'set_user_preference': {
       const prefKey = args?.['key'];
       if (typeof prefKey === 'string') {
@@ -2169,10 +2069,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     }
 
     case 'computer_use_cancel_opa_task':
-      // The browser mock never owns a native OPA executor.
       return false as T;
 
-    // ── Misc/catch-all for remaining newly registered commands ──────
     case 'auth_store_session':
     case 'auth_retrieve_session':
     case 'auth_remove_session':
@@ -2290,7 +2188,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'task_list_by_status':
       return [] as T;
 
-    // ── Batch: 51 missing commands (write, account, settings, etc.) ───
     case 'file_write':
     case 'account_disconnect_device':
     case 'settings_save':
@@ -2357,7 +2254,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return { valid: true } as T;
 
     default:
-      // AUDIT-MOCK-088 fix: Throw error for unregistered commands to surface wiring issues
       console.error(`[Tauri] Unregistered command in test mode: ${command}`);
       throw new Error(
         `Command not registered in tauri-mock: ${command}. This indicates a frontend-backend wiring issue.`,
@@ -2391,13 +2287,10 @@ export type UnlistenFn = () => void;
 
 export async function listen<T>(event: string, handler: EventCallback<T>): Promise<UnlistenFn> {
   if (isTauri) {
-    // Dynamically import Tauri API to avoid issues in non-Tauri environments
     const { listen: tauriListen } = await import('@tauri-apps/api/event');
     return tauriListen<T>(event, handler);
   }
 
-  // In cloud web mode, register the handler in a global event bus so cloudChatStream
-  // can dispatch synthetic events.
   if (isCloudWeb) {
     const eventKey = `__cloud_web_${event}`;
     const wrappedHandler = (e: CustomEvent) => {
@@ -2409,7 +2302,6 @@ export async function listen<T>(event: string, handler: EventCallback<T>): Promi
     };
   }
 
-  // Browser compatibility path for web builds.
   console.debug(`[Tauri Web Bridge] Registered listener for event: ${event}`);
 
   return () => {
@@ -2423,7 +2315,6 @@ export async function emit(event: string, payload?: unknown): Promise<void> {
     return tauriEmit(event, payload);
   }
 
-  // In cloud web mode, dispatch to the global event bus
   if (isCloudWeb) {
     const eventKey = `__cloud_web_${event}`;
     window.dispatchEvent(new CustomEvent(eventKey, { detail: payload }));
@@ -2445,18 +2336,15 @@ export async function once<T>(event: string, handler: EventCallback<T>): Promise
   };
 }
 
-// Shell plugin - open URL in default browser
 export async function openUrl(url: string): Promise<void> {
   if (isTauri) {
     const { open } = await import('@tauri-apps/plugin-shell');
     return open(url);
   }
 
-  // Fallback for web: open in new tab
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-// Update check result interface
 interface UpdateCheckResult {
   available: boolean;
   currentVersion?: string;
@@ -2465,25 +2353,21 @@ interface UpdateCheckResult {
   downloadAndInstall?: () => Promise<void>;
 }
 
-// Updater plugin - check for updates
 export async function checkForUpdates(): Promise<UpdateCheckResult | null> {
   if (isTauri || isElectronHost) {
     const { check } = await import('@tauri-apps/plugin-updater');
     return check();
   }
 
-  // Web mode: no updates available
   console.debug('[Tauri Mock] Update check not available in web mode');
   return null;
 }
 
-// Process plugin - relaunch app
 export async function relaunchApp(): Promise<void> {
   if (isTauri) {
     const { relaunch } = await import('@tauri-apps/plugin-process');
     return relaunch();
   }
 
-  // Fallback for web: reload page
   window.location.reload();
 }

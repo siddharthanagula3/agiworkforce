@@ -1,74 +1,38 @@
-/**
- * Connectors service — thin client over the web app's /api/connectors route.
- *
- * GET    /api/connectors                          → active rows + deployment availability
- * POST   /api/connectors {connectorId}            → enable an operator-mapped provider
- * DELETE /api/connectors?connectorId=<id>         → soft-disconnect
- * GET    /api/connectors/oauth/start?mode=json    → begin a per-user OAuth grant
- *
- * Auth is the standard Bearer JWT from services/api.ts (Bearer requests bypass
- * the web CSRF check by design — see apps/web/lib/csrf.ts).
- */
 
 import { CONNECTOR_OAUTH_START_PATH } from '@agiworkforce/cloud-contracts';
 
 import { api } from './api';
 import { API_URL } from '@/lib/constants';
 
-/**
- * URL of the web GitHub-App install flow. GitHub connection uses a GitHub App
- * installation (not user_connectors), and the server flow is Clerk-cookie based;
- * rather than reimplement OAuth state/CSRF on the client, mobile opens this vetted
- * web flow in a browser and refreshes its connector list on return.
- */
 export function getGitHubInstallWebUrl(): string {
   return `${API_URL}/api/github/install/start`;
 }
 
-/**
- * Where the server derived this connected row from. Mirrors the `source` union
- * in apps/web/app/api/connectors/route.ts — `oauth` is a per-user grant written
- * by the connector OAuth broker (db/neon/0097), which has no `user_connectors`
- * row at all. Before `oauth` was accepted here the whole directory response
- * failed to parse the moment an account held a single OAuth grant.
- */
 export type ConnectorSource = 'user' | 'github-app' | 'custom' | 'oauth';
 
 const CONNECTOR_SOURCES: readonly ConnectorSource[] = ['user', 'github-app', 'custom', 'oauth'];
 
 export interface ConnectedConnector {
-  /** Row id. */
   id: string;
-  /** Catalog connector id (e.g. 'github'). */
   connectorId: string;
   authType: string;
   connectedAt: string;
   updatedAt: string;
   source: ConnectorSource;
-  /** Server-owned display name for custom MCP rows. */
   name?: string;
-  /** OAuth grants only: the scopes the provider actually granted. */
   scopes?: string[];
-  /**
-   * OAuth grants only: the stored access token has expired and no refresh token
-   * exists, so the grant can no longer be renewed without the user
-   * reauthorizing. Never inferred on the client — the server owns this.
-   */
   needsReauthorization?: boolean;
 }
 
 export interface ConnectorDirectory {
   connectors: ConnectedConnector[];
-  /** Providers this deployment can connect right now. */
   available: string[];
 }
 
 export type ConnectorToolPermissionLevel = 'allow' | 'ask' | 'deny';
 
 export interface ConnectorToolPermission {
-  /** Runtime connector/server id used by the Cloud tool loop. */
   connectorId: string;
-  /** Exact wire tool name observed by the approval flow. */
   toolName: string;
   level: ConnectorToolPermissionLevel;
 }
@@ -134,32 +98,19 @@ export async function fetchConnectorDirectory(): Promise<ConnectorDirectory> {
   };
 }
 
-/** Compatibility helper for callers that only need the connected rows. */
 export async function listConnectedConnectors(): Promise<ConnectedConnector[]> {
   return (await fetchConnectorDirectory()).connectors;
 }
 
-// ---------------------------------------------------------------------------
-// Per-user connector OAuth (apps/web/app/api/connectors/oauth/start/route.ts)
-// ---------------------------------------------------------------------------
-
 export interface ConnectorOAuthStart {
   connectorId: string;
-  /** The provider's authorization URL, carrying this flow's single-use state. */
   authorizeUrl: string;
 }
 
-/**
- * `mode=json` is the native branch of the start route: a browser gets a 302 to
- * the provider, but a mobile client cannot follow that chain itself (the sheet
- * it would open has no Bearer token), so it asks for `{ connectorId,
- * authorizeUrl }` and opens the authorize URL itself.
- */
 function buildConnectorOAuthStartRequestPath(connectorId: string): string {
   return `${CONNECTOR_OAUTH_START_PATH}?connectorId=${encodeURIComponent(connectorId)}&mode=json`;
 }
 
-/** True only for a credential-free https URL — never `http:` for an OAuth handoff. */
 function isHttpsAuthorizeUrl(value: unknown): value is string {
   if (typeof value !== 'string' || value.length === 0) return false;
   try {
@@ -170,15 +121,6 @@ function isHttpsAuthorizeUrl(value: unknown): value is string {
   }
 }
 
-/**
- * Ask the broker to open a pending authorization and hand back the provider's
- * authorization URL.
- *
- * Throws the server's own message when this deployment has no OAuth app for the
- * connector (501) or the broker tables are missing (503) — mobile must never
- * synthesize an authorize URL of its own, because a wrong endpoint would send an
- * authorization code to the wrong host.
- */
 export async function startConnectorOAuth(connectorId: string): Promise<ConnectorOAuthStart> {
   const response = await api.get<unknown>(buildConnectorOAuthStartRequestPath(connectorId));
   if (!isRecord(response) || response['connectorId'] !== connectorId) {
@@ -191,25 +133,10 @@ export async function startConnectorOAuth(connectorId: string): Promise<Connecto
   return { connectorId, authorizeUrl };
 }
 
-/**
- * Result of asking to connect a provider.
- *
- * `connected` is returned ONLY when the server actually wrote the enablement
- * row (201). `oauth-required` means the connector connects through the
- * authorization-code flow instead, and nothing is connected until the user
- * completes it and the server writes a grant.
- */
 export type ConnectConnectorResult =
   | { kind: 'connected' }
   | { kind: 'oauth-required'; connectorId: string; authorizeUrl: string };
 
-/**
- * HTTP status of a failed api.* call.
- *
- * Read structurally rather than with `instanceof ApiHttpError`: several suites
- * mock `services/api` with a bare object, so the class would be undefined at
- * runtime there and `instanceof` would throw.
- */
 function httpStatusOf(error: unknown): number | null {
   if (error && typeof error === 'object') {
     const status = (error as { status?: unknown }).status;
@@ -218,20 +145,6 @@ function httpStatusOf(error: unknown): number | null {
   return null;
 }
 
-/**
- * Connect a provider the server advertised in `available`. The native directory
- * never calls this for an unavailable catalog row; GitHub uses its separately
- * verified installation flow.
- *
- * A provider with a registered platform OAuth app answers this POST with 409
- * ("connects through OAuth authorization, not a directory toggle" — see
- * apps/web/app/api/connectors/route.ts), which is the server telling the client
- * to run the authorization-code flow instead. The 409 body carries
- * `oauthStartPath`, but the shared HTTP client keeps only the status and the
- * human-readable message, so the start request is rebuilt from the same
- * contract path rather than from an invented one. The POST has no side effects
- * on that branch, so trying it first keeps the operator-mapped path untouched.
- */
 export async function connectConnector(connectorId: string): Promise<ConnectConnectorResult> {
   try {
     await api.post('/api/connectors', { connectorId });
@@ -268,11 +181,6 @@ function parseConnectorToolPermission(value: unknown): ConnectorToolPermission {
   return { connectorId, toolName, level };
 }
 
-/**
- * Returns only server-persisted decisions for tools the account has actually
- * encountered. The connector API does not expose a trustworthy complete tool
- * catalog, so Mobile must never synthesize one from marketing labels.
- */
 export async function fetchConnectorToolPermissions(): Promise<ConnectorToolPermission[]> {
   const response = await api.get<unknown>('/api/connectors/permissions');
   if (!isRecord(response) || !Array.isArray(response['permissions'])) {
@@ -302,10 +210,8 @@ export async function resetConnectorToolPermission(
 
 export interface AddCustomConnectorInput {
   name: string;
-  /** Public HTTPS remote-MCP endpoint (validated server-side; no embedded creds). */
   url: string;
   transport?: 'sse' | 'streamable-http';
-  /** Optional bearer token stored encrypted server-side; never echoed back. */
   authToken?: string;
 }
 
@@ -316,13 +222,6 @@ export interface CustomConnectorResult {
   url: string;
 }
 
-/**
- * Add a user-owned custom remote-MCP connector, reusing the same server route
- * the web app uses (`POST /api/connectors/custom`). The server validates the URL
- * (https, public DNS-resolved host, no embedded credentials) and enforces the
- * per-tier custom-connector limit — so this needs no OAuth app registration and
- * works today. Its tools appear to models as `mcp__custom-<shortId>__<tool>`.
- */
 export async function addCustomConnector(
   input: AddCustomConnectorInput,
 ): Promise<CustomConnectorResult> {

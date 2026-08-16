@@ -285,11 +285,6 @@ export function SelectedContextReview({ onAccept }: SelectedContextReviewProps) 
   if (!current) return null;
 
   return (
-    // `fixed`, not `absolute`. inset-0 on an absolutely-positioned scrim covers
-    // only its positioned ancestor — here the content pane — so the sidebar
-    // stayed lit and fully clickable behind a dialog declaring aria-modal="true".
-    // That is a false promise to assistive tech and a real one to the mouse. The
-    // schedules editor in this same app already uses `fixed inset-0 z-50`.
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
       <section
         role="dialog"

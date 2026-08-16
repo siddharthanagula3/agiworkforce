@@ -1,7 +1,3 @@
-/**
- * Toast Hook - shadcn/ui compatible toast system
- * Provides useToast hook and toast function for notifications
- */
 
 import * as React from 'react';
 
@@ -90,8 +86,6 @@ export const reducer = (state: State, action: Action): State => {
     case 'DISMISS_TOAST': {
       const { toastId } = action;
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId);
       } else {
@@ -179,7 +173,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, []); // Empty deps - only run on mount/unmount
+  }, []);
 
   return {
     ...state,

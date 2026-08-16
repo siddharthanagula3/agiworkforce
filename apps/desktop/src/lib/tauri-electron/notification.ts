@@ -1,4 +1,3 @@
-/** Electron replacement for `@tauri-apps/plugin-notification`. */
 import { getElectronHostBridge } from './bridgeContract';
 
 export async function sendNotification(

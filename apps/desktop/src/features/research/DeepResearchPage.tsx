@@ -1,12 +1,3 @@
-/**
- * DeepResearchPage Component
- *
- * Dedicated deep research page with:
- * - Large query input with research topic suggestions
- * - Research depth selector (Quick / Standard / Deep)
- * - Live progress visualization while a session is active
- * - Recent research history
- */
 import { useState, useCallback, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Telescope, Search, X, Zap, BarChart2, Layers } from 'lucide-react';
@@ -28,10 +19,6 @@ import { ResearchProgress } from './ResearchProgress';
 import { ResearchReport } from './ResearchReport';
 import { ResearchHistory } from './ResearchHistory';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const SUGGESTED_TOPICS = [
   'AI adoption trends in the enterprise',
   'Climate technology investment landscape',
@@ -50,10 +37,6 @@ interface DepthOption {
   estimatedTime: string;
 }
 
-// Source ceilings and durations mirror the native engine so the cards cannot
-// promise something the orchestrator will not do: `ResearchMode::
-// max_sources_per_agent` and the `research_get_modes` estimates in
-// src-tauri/src/core/research/types.rs and sys/commands/research.rs.
 const DEPTH_OPTIONS: DepthOption[] = [
   {
     id: 'quick',
@@ -80,10 +63,6 @@ const DEPTH_OPTIONS: DepthOption[] = [
     estimatedTime: '5 - 30m',
   },
 ];
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 interface DepthCardProps {
   option: DepthOption;
@@ -118,10 +97,6 @@ function DepthCard({ option, selected, onSelect }: DepthCardProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 export interface DeepResearchPageProps {
   className?: string;
 }
@@ -143,16 +118,11 @@ export function DeepResearchPage({ className }: DeepResearchPageProps) {
     })),
   );
 
-  // Initialize research store on mount
   useEffect(() => {
     initialize().catch((err: unknown) => {
       console.error('Failed to initialize research store:', err);
     });
   }, [initialize]);
-
-  // ---------------------------------------------------------------------------
-  // Handlers
-  // ---------------------------------------------------------------------------
 
   const handleSuggestedTopic = useCallback((topic: string) => {
     setQuery(topic);
@@ -190,10 +160,6 @@ export function DeepResearchPage({ className }: DeepResearchPageProps) {
     resetSession();
     setQuery('');
   }, [resetSession]);
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
 
   const showProgress = isResearching && activeSession.progress !== null;
   const showResult = activeSession.status === 'complete' && activeSession.result !== null;

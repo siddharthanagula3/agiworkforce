@@ -1,4 +1,3 @@
-// Updated for subscription-only model: Simplified defaultModels structure
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   createDefaultLLMConfig,
@@ -9,12 +8,10 @@ import {
 
 const FIXTURE_MODEL_ID = 'fixture-model';
 
-// Mock Tauri invoke
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-// Mock localStorage
 const localStorageMock = {
   getItem: vi.fn(),
   setItem: vi.fn(),
@@ -41,19 +38,16 @@ describe('settingsStore', () => {
   let invokeMock: InvokeMock;
 
   beforeEach(async () => {
-    // Reset localStorage mock
     localStorageMock.getItem.mockReturnValue(null);
     localStorageMock.setItem.mockClear();
     localStorageMock.removeItem.mockClear();
 
-    // Reset Tauri invoke mock
     invokeMock = await getInvokeMock();
     invokeMock.mockReset();
     invokeMock.mockImplementation(async () => {
       return undefined;
     });
 
-    // Reset store to defaults
     useSettingsStore.setState({
       llmConfig: createDefaultLLMConfig(),
       windowPreferences: createDefaultWindowPreferences(),
@@ -86,9 +80,6 @@ describe('settingsStore', () => {
   });
 
   it('syncs max-timeout and timeout-warnings into the live TimeoutConfig on save', async () => {
-    // settings_save only persists ExecutionPreferences to disk (unread by the
-    // executor); the live TimeoutConfig (timeout_set_config) is what governs task
-    // timeouts. saveSettings must bridge them, preserving enable_checkpoint_on_timeout.
     invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === 'timeout_get_config') {
         return {
@@ -127,7 +118,6 @@ describe('settingsStore', () => {
   it('should have simplified default models for subscription-only', () => {
     const state = useSettingsStore.getState();
 
-    // Only managed_cloud and ollama should be present
     expect(state.llmConfig.defaultModels.managed_cloud).toBe('auto');
     expect(state.llmConfig.defaultModels.ollama).toBe('');
     expect(new Set(Object.keys(state.llmConfig.defaultModels))).toEqual(
@@ -177,7 +167,6 @@ describe('settingsStore', () => {
   });
 
   it('should handle provider setting errors', async () => {
-    // Suppress expected console.error from the store's error handler
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const errorMessage = 'Failed to set provider';
@@ -370,7 +359,6 @@ describe('settingsStore', () => {
   });
 
   it('should handle save errors', async () => {
-    // Suppress expected console.error from the store's error handler
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const errorMessage = 'Database error';
@@ -410,10 +398,6 @@ describe('settingsStore', () => {
     expect(taskRouting.video.provider).toBe('managed_cloud');
   });
 
-  // M34 — factory function cross-checks
-  // Ensures store default values exactly match the factory function output,
-  // not hardcoded literals.  When factory defaults change, these tests catch
-  // any drift between what the factory produces and what the store initialises.
   describe('factory function parity (M34)', () => {
     it('initial llmConfig matches createDefaultLLMConfig() output exactly', () => {
       const state = useSettingsStore.getState();
@@ -478,12 +462,6 @@ describe('settingsStore', () => {
     });
   });
 });
-
-// ── H16 — migrate() boundary tests ────────────────────────────────────────
-// The migrate function inside useSettingsStore's persist config is not exported
-// directly.  We test it by replicating the same migration logic as a pure
-// function that mirrors the source exactly.  This validates each version
-// boundary in isolation.
 
 type MigrateState = {
   llmConfig?: {
@@ -551,11 +529,9 @@ const DEFAULT_FEATURES = {
   multiModelConsensus: false,
 };
 
-/** Mirrors the migrate() function from settingsStore.ts verbatim. */
 function migrateSettings(persistedState: unknown, version: number): MigrateState {
   const state = persistedState as MigrateState;
 
-  // v1 → v2
   if (version < 2) {
     if (state?.llmConfig) {
       state.llmConfig.defaultProvider = 'managed_cloud';
@@ -572,7 +548,6 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     }
   }
 
-  // v2 → v3
   if (version < 3) {
     if (!state.chatPreferences) {
       state.chatPreferences = {
@@ -586,7 +561,6 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     }
   }
 
-  // v3 → v4
   if (version < 4) {
     if (!state.executionPreferences) {
       state.executionPreferences = {
@@ -600,14 +574,12 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     }
   }
 
-  // v4 → v5
   if (version < 5) {
     if (state.chatPreferences && state.chatPreferences.compactMode === undefined) {
       state.chatPreferences.compactMode = true;
     }
   }
 
-  // v5 → v6
   if (version < 6) {
     if (state?.llmConfig?.defaultModels) {
       state.llmConfig.defaultModels = {
@@ -617,7 +589,6 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     }
   }
 
-  // v6 → v7
   if (version < 7) {
     if (!state.windowPreferences) {
       state.windowPreferences = {};
@@ -627,14 +598,12 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     }
   }
 
-  // v7 → v8
   if (version < 8) {
     if (state.chatPreferences && state.chatPreferences.autoApproveTools === undefined) {
       state.chatPreferences.autoApproveTools = false;
     }
   }
 
-  // v8 → v9
   if (version < 9) {
     const stateWithHotkey = state as MigrateState;
     if (!stateWithHotkey.globalHotkeyPreferences) {
@@ -645,14 +614,12 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     }
   }
 
-  // v9 → v10
   if (version < 10) {
     if (!Array.isArray(state.customModels)) {
       state.customModels = [];
     }
   }
 
-  // v10 → v11
   if (version < 11) {
     if (!state.features || typeof state.features !== 'object') {
       state.features = { ...DEFAULT_FEATURES };
@@ -733,9 +700,6 @@ describe('settingsStore migrate() boundaries (H16)', () => {
     });
 
     it('preserves alwaysUseAgentMode=true if already set', () => {
-      // Migration only sets the field when undefined — truthy value must survive
-      // Note: the migrate function only fires when version < 3, so a stored v2
-      // state that already has alwaysUseAgentMode=true should keep it.
       const old = { chatPreferences: { promptCompletionEnabled: true, alwaysUseAgentMode: true } };
       const result = migrateSettings(old, 2);
       expect(result.chatPreferences?.alwaysUseAgentMode).toBe(true);
@@ -760,7 +724,6 @@ describe('settingsStore migrate() boundaries (H16)', () => {
     it('does not overwrite existing executionPreferences', () => {
       const old = { executionPreferences: { maxTimeoutMinutes: 60 } };
       const result = migrateSettings(old, 3);
-      // Already present — migrate skips the block
       expect(result.executionPreferences?.maxTimeoutMinutes).toBe(60);
     });
   });

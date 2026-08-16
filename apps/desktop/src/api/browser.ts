@@ -1,21 +1,5 @@
-/**
- * Browser Automation API
- *
- * TypeScript wrappers for all 56 browser automation Rust commands.
- * Categories: Lifecycle, Navigation, DOM Interaction, Forms, Screenshots,
- * JavaScript Execution, Cookies, Frames, Semantic Selectors, Accessibility.
- *
- * Rules:
- * - invoke() params: camelCase (Tauri auto-converts to snake_case on Rust side)
- * - Command names: snake_case in both languages
- * - Every invoke() wrapped in try/catch
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// =============================================================================
-// Interfaces
-// =============================================================================
 
 export interface BrowserStatusResult {
   available: boolean;
@@ -102,11 +86,6 @@ export interface SemanticResult {
   error: string | null;
 }
 
-// =============================================================================
-// 1. Lifecycle Commands
-// =============================================================================
-
-/** Initialize browser automation subsystem. */
 export async function browserInit(): Promise<void> {
   try {
     await invoke('browser_init');
@@ -115,7 +94,6 @@ export async function browserInit(): Promise<void> {
   }
 }
 
-/** Check if browser automation is available. */
 export async function browserCheckStatus(): Promise<BrowserStatusResult> {
   try {
     return await invoke<BrowserStatusResult>('browser_check_status');
@@ -124,7 +102,6 @@ export async function browserCheckStatus(): Promise<BrowserStatusResult> {
   }
 }
 
-/** Launch a new browser instance. Returns the browser handle ID. */
 export async function browserLaunch(options?: BrowserLaunchOptions): Promise<string> {
   try {
     return await invoke<string>('browser_launch', {
@@ -145,7 +122,6 @@ export async function browserLaunch(options?: BrowserLaunchOptions): Promise<str
   }
 }
 
-/** Close a browser instance by its handle ID. */
 export async function browserClose(browserId: string): Promise<void> {
   try {
     await invoke('browser_close', { browserId });
@@ -154,11 +130,6 @@ export async function browserClose(browserId: string): Promise<void> {
   }
 }
 
-// =============================================================================
-// 2. Tab Management Commands
-// =============================================================================
-
-/** Open a new tab. Returns the tab ID. */
 export async function browserOpenTab(url?: string): Promise<string> {
   try {
     return await invoke<string>('browser_open_tab', { url });
@@ -167,7 +138,6 @@ export async function browserOpenTab(url?: string): Promise<string> {
   }
 }
 
-/** Close a tab. If no tabId provided, closes the active tab. */
 export async function browserCloseTab(tabId?: string): Promise<void> {
   try {
     await invoke('browser_close_tab', { tabId });
@@ -176,7 +146,6 @@ export async function browserCloseTab(tabId?: string): Promise<void> {
   }
 }
 
-/** Switch the active tab. */
 export async function browserSwitchTab(tabId: string): Promise<void> {
   try {
     await invoke('browser_switch_tab', { tabId });
@@ -185,7 +154,6 @@ export async function browserSwitchTab(tabId: string): Promise<void> {
   }
 }
 
-/** List all open tabs. */
 export async function browserListTabs(): Promise<TabInfo[]> {
   try {
     return await invoke<TabInfo[]>('browser_list_tabs');
@@ -194,11 +162,6 @@ export async function browserListTabs(): Promise<TabInfo[]> {
   }
 }
 
-// =============================================================================
-// 3. Navigation Commands
-// =============================================================================
-
-/** Navigate to a URL. Creates a tab if none exists when tabId is omitted. */
 export async function browserNavigate(url: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_navigate', { url, tabId });
@@ -207,7 +170,6 @@ export async function browserNavigate(url: string, tabId?: string): Promise<void
   }
 }
 
-/** Navigate back in history. */
 export async function browserGoBack(tabId?: string): Promise<void> {
   try {
     await invoke('browser_go_back', { tabId });
@@ -216,7 +178,6 @@ export async function browserGoBack(tabId?: string): Promise<void> {
   }
 }
 
-/** Navigate forward in history. */
 export async function browserGoForward(tabId?: string): Promise<void> {
   try {
     await invoke('browser_go_forward', { tabId });
@@ -225,7 +186,6 @@ export async function browserGoForward(tabId?: string): Promise<void> {
   }
 }
 
-/** Reload the current page. */
 export async function browserReload(tabId?: string): Promise<void> {
   try {
     await invoke('browser_reload', { tabId });
@@ -234,7 +194,6 @@ export async function browserReload(tabId?: string): Promise<void> {
   }
 }
 
-/** Get the current URL of a tab. */
 export async function browserGetUrl(tabId?: string): Promise<string> {
   try {
     return await invoke<string>('browser_get_url', { tabId });
@@ -243,7 +202,6 @@ export async function browserGetUrl(tabId?: string): Promise<string> {
   }
 }
 
-/** Get the title of a tab. */
 export async function browserGetTitle(tabId?: string): Promise<string> {
   try {
     return await invoke<string>('browser_get_title', { tabId });
@@ -252,7 +210,6 @@ export async function browserGetTitle(tabId?: string): Promise<string> {
   }
 }
 
-/** Wait for navigation to complete. */
 export async function browserWaitForNavigation(timeoutMs?: number, tabId?: string): Promise<void> {
   try {
     await invoke('browser_wait_for_navigation', { timeoutMs, tabId });
@@ -261,11 +218,6 @@ export async function browserWaitForNavigation(timeoutMs?: number, tabId?: strin
   }
 }
 
-// =============================================================================
-// 4. DOM Interaction Commands
-// =============================================================================
-
-/** Click an element by CSS selector. */
 export async function browserClick(selector: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_click', { selector, tabId });
@@ -274,7 +226,6 @@ export async function browserClick(selector: string, tabId?: string): Promise<vo
   }
 }
 
-/** Type text into an element by CSS selector. */
 export async function browserType(selector: string, text: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_type', { selector, text, tabId });
@@ -283,7 +234,6 @@ export async function browserType(selector: string, text: string, tabId?: string
   }
 }
 
-/** Get text content of an element by CSS selector. */
 export async function browserGetText(selector: string, tabId?: string): Promise<string> {
   try {
     return await invoke<string>('browser_get_text', { selector, tabId });
@@ -292,7 +242,6 @@ export async function browserGetText(selector: string, tabId?: string): Promise<
   }
 }
 
-/** Get an attribute value of an element. */
 export async function browserGetAttribute(
   selector: string,
   attribute: string,
@@ -309,7 +258,6 @@ export async function browserGetAttribute(
   }
 }
 
-/** Wait for an element matching selector to appear. */
 export async function browserWaitForSelector(
   selector: string,
   timeout?: number,
@@ -322,7 +270,6 @@ export async function browserWaitForSelector(
   }
 }
 
-/** Select a dropdown option by value. */
 export async function browserSelectOption(
   selector: string,
   value: string,
@@ -335,7 +282,6 @@ export async function browserSelectOption(
   }
 }
 
-/** Check a checkbox element. */
 export async function browserCheck(selector: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_check', { selector, tabId });
@@ -344,7 +290,6 @@ export async function browserCheck(selector: string, tabId?: string): Promise<vo
   }
 }
 
-/** Uncheck a checkbox element. */
 export async function browserUncheck(selector: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_uncheck', { selector, tabId });
@@ -353,7 +298,6 @@ export async function browserUncheck(selector: string, tabId?: string): Promise<
   }
 }
 
-/** Hover over an element. */
 export async function browserHover(selector: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_hover', { selector, tabId });
@@ -362,7 +306,6 @@ export async function browserHover(selector: string, tabId?: string): Promise<vo
   }
 }
 
-/** Focus an element. */
 export async function browserFocus(selector: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_focus', { selector, tabId });
@@ -371,7 +314,6 @@ export async function browserFocus(selector: string, tabId?: string): Promise<vo
   }
 }
 
-/** Query all elements matching selector. Returns their text content. */
 export async function browserQueryAll(selector: string, tabId?: string): Promise<string[]> {
   try {
     return await invoke<string[]>('browser_query_all', { selector, tabId });
@@ -380,7 +322,6 @@ export async function browserQueryAll(selector: string, tabId?: string): Promise
   }
 }
 
-/** Scroll an element into view. */
 export async function browserScrollIntoView(selector: string, tabId?: string): Promise<void> {
   try {
     await invoke('browser_scroll_into_view', { selector, tabId });
@@ -389,7 +330,6 @@ export async function browserScrollIntoView(selector: string, tabId?: string): P
   }
 }
 
-/** Get the state of an element (visible, enabled, checked, etc.). */
 export async function browserGetElementState(
   selector: string,
   tabId?: string,
@@ -404,7 +344,6 @@ export async function browserGetElementState(
   }
 }
 
-/** Wait for an element to become visible and enabled. */
 export async function browserWaitForInteractive(
   selector: string,
   timeoutMs?: number,
@@ -417,7 +356,6 @@ export async function browserWaitForInteractive(
   }
 }
 
-/** Highlight an element and return its bounding rect. */
 export async function browserHighlightElement(
   selector: string,
   tabId?: string,
@@ -432,11 +370,6 @@ export async function browserHighlightElement(
   }
 }
 
-// =============================================================================
-// 5. Form Commands
-// =============================================================================
-
-/** Fill a form by providing a map of field selectors to values. */
 export async function browserFillForm(
   selector: string,
   data: Record<string, string | number | boolean>,
@@ -449,7 +382,6 @@ export async function browserFillForm(
   }
 }
 
-/** Drag an element from source to target selector. */
 export async function browserDragAndDrop(
   source: string,
   target: string,
@@ -462,7 +394,6 @@ export async function browserDragAndDrop(
   }
 }
 
-/** Upload files to a file input element. */
 export async function browserUploadFile(
   selector: string,
   paths: string[],
@@ -475,11 +406,6 @@ export async function browserUploadFile(
   }
 }
 
-// =============================================================================
-// 6. Screenshot & Content Commands
-// =============================================================================
-
-/** Take a screenshot. Returns base64-encoded PNG data. */
 export async function browserScreenshot(selector?: string, tabId?: string): Promise<string> {
   try {
     return await invoke<string>('browser_screenshot', { selector, tabId });
@@ -488,7 +414,6 @@ export async function browserScreenshot(selector?: string, tabId?: string): Prom
   }
 }
 
-/** Get a screenshot from the live stream. Returns base64-encoded PNG. */
 export async function browserGetScreenshotStream(tabId?: string): Promise<string> {
   try {
     return await invoke<string>('browser_get_screenshot_stream', { tabId });
@@ -497,7 +422,6 @@ export async function browserGetScreenshotStream(tabId?: string): Promise<string
   }
 }
 
-/** Get the full HTML content of a page. */
 export async function browserGetContent(tabId?: string): Promise<string> {
   try {
     return await invoke<string>('browser_get_content', { tabId });
@@ -506,7 +430,6 @@ export async function browserGetContent(tabId?: string): Promise<string> {
   }
 }
 
-/** Get a DOM snapshot (full HTML content). */
 export async function browserGetDomSnapshot(tabId?: string): Promise<string> {
   try {
     return await invoke<string>('browser_get_dom_snapshot', { tabId });
@@ -515,11 +438,6 @@ export async function browserGetDomSnapshot(tabId?: string): Promise<string> {
   }
 }
 
-// =============================================================================
-// 7. JavaScript Execution Commands
-// =============================================================================
-
-/** Evaluate JavaScript in the page. Requires user confirmation. */
 export async function browserEvaluate(script: string, tabId?: string): Promise<unknown> {
   try {
     return await invoke('browser_evaluate', { script, tabId });
@@ -528,7 +446,6 @@ export async function browserEvaluate(script: string, tabId?: string): Promise<u
   }
 }
 
-/** Execute async JavaScript in the page. Requires user confirmation. */
 export async function browserExecuteAsyncJs(script: string, tabId?: string): Promise<unknown> {
   try {
     return await invoke('browser_execute_async_js', { script, tabId });
@@ -537,7 +454,6 @@ export async function browserExecuteAsyncJs(script: string, tabId?: string): Pro
   }
 }
 
-/** Call a named JavaScript function with arguments. */
 export async function browserCallFunction(
   functionName: string,
   args: unknown,
@@ -550,11 +466,6 @@ export async function browserCallFunction(
   }
 }
 
-// =============================================================================
-// 8. Cookie Commands
-// =============================================================================
-
-/** Get all cookies for the current page. */
 export async function browserGetCookies(tabId?: string): Promise<BrowserCookie[]> {
   try {
     return await invoke<BrowserCookie[]>('browser_get_cookies', { tabId });
@@ -563,7 +474,6 @@ export async function browserGetCookies(tabId?: string): Promise<BrowserCookie[]
   }
 }
 
-/** Set a cookie. */
 export async function browserSetCookie(cookie: BrowserCookie, tabId?: string): Promise<void> {
   try {
     await invoke('browser_set_cookie', { cookie, tabId });
@@ -572,7 +482,6 @@ export async function browserSetCookie(cookie: BrowserCookie, tabId?: string): P
   }
 }
 
-/** Clear all cookies. */
 export async function browserClearCookies(tabId?: string): Promise<void> {
   try {
     await invoke('browser_clear_cookies', { tabId });
@@ -581,11 +490,6 @@ export async function browserClearCookies(tabId?: string): Promise<void> {
   }
 }
 
-// =============================================================================
-// 9. Frame & Performance Commands
-// =============================================================================
-
-/** Get performance metrics for a page. */
 export async function browserGetPerformanceMetrics(tabId?: string): Promise<PerformanceMetrics> {
   try {
     return await invoke<PerformanceMetrics>('browser_get_performance_metrics', {
@@ -596,7 +500,6 @@ export async function browserGetPerformanceMetrics(tabId?: string): Promise<Perf
   }
 }
 
-/** List all frames in a page. */
 export async function browserGetFrames(tabId?: string): Promise<FrameContext[]> {
   try {
     return await invoke<FrameContext[]>('browser_get_frames', { tabId });
@@ -605,7 +508,6 @@ export async function browserGetFrames(tabId?: string): Promise<FrameContext[]> 
   }
 }
 
-/** Execute JavaScript in a specific frame. Requires user confirmation. */
 export async function browserExecuteInFrame(
   frameId: string,
   script: string,
@@ -618,7 +520,6 @@ export async function browserExecuteInFrame(
   }
 }
 
-/** Enable or disable network request interception (stub). */
 export async function browserEnableRequestInterception(enabled: boolean): Promise<void> {
   try {
     await invoke('browser_enable_request_interception', { enabled });
@@ -627,11 +528,6 @@ export async function browserEnableRequestInterception(enabled: boolean): Promis
   }
 }
 
-// =============================================================================
-// 10. Semantic Selector Commands
-// =============================================================================
-
-/** Find an element using natural language query. Returns a CSS selector. */
 export async function findElementSemantic(query: string, tabId?: string): Promise<string> {
   try {
     return await invoke<string>('find_element_semantic', { query, tabId });
@@ -640,7 +536,6 @@ export async function findElementSemantic(query: string, tabId?: string): Promis
   }
 }
 
-/** Find all elements matching a natural language query. Returns CSS selectors. */
 export async function findAllElementsSemantic(query: string, tabId?: string): Promise<string[]> {
   try {
     return await invoke<string[]>('find_all_elements_semantic', { query, tabId });
@@ -649,7 +544,6 @@ export async function findAllElementsSemantic(query: string, tabId?: string): Pr
   }
 }
 
-/** Click an element found by natural language query. */
 export async function clickSemantic(query: string, tabId?: string): Promise<void> {
   try {
     await invoke('click_semantic', { query, tabId });
@@ -658,7 +552,6 @@ export async function clickSemantic(query: string, tabId?: string): Promise<void
   }
 }
 
-/** Type text into an element found by natural language query. */
 export async function typeSemantic(query: string, text: string, tabId?: string): Promise<void> {
   try {
     await invoke('type_semantic', { query, text, tabId });
@@ -667,7 +560,6 @@ export async function typeSemantic(query: string, text: string, tabId?: string):
   }
 }
 
-/** Test all selector strategies for a query. Returns strategy results. */
 export async function testSelectorStrategies(
   query: string,
   tabId?: string,
@@ -679,11 +571,6 @@ export async function testSelectorStrategies(
   }
 }
 
-// =============================================================================
-// 11. Accessibility Commands
-// =============================================================================
-
-/** Get the full accessibility tree of the page. */
 export async function getAccessibilityTree(tabId?: string): Promise<unknown> {
   try {
     return await invoke('get_accessibility_tree', { tabId });
@@ -692,7 +579,6 @@ export async function getAccessibilityTree(tabId?: string): Promise<unknown> {
   }
 }
 
-/** Get a semantic graph of the DOM structure. */
 export async function getDomSemanticGraph(tabId?: string): Promise<unknown> {
   try {
     return await invoke('get_dom_semantic_graph', { tabId });
@@ -701,7 +587,6 @@ export async function getDomSemanticGraph(tabId?: string): Promise<unknown> {
   }
 }
 
-/** Get all interactive elements on the page. Returns selectors. */
 export async function getInteractiveElements(tabId?: string): Promise<string[]> {
   try {
     return await invoke<string[]>('get_interactive_elements', { tabId });
@@ -710,7 +595,6 @@ export async function getInteractiveElements(tabId?: string): Promise<string[]> 
   }
 }
 
-/** Find an element by ARIA role, optionally filtering by name. */
 export async function findByRole(role: string, name?: string, tabId?: string): Promise<string> {
   try {
     return await invoke<string>('find_by_role', { role, name, tabId });
@@ -719,24 +603,17 @@ export async function findByRole(role: string, name?: string, tabId?: string): P
   }
 }
 
-// =============================================================================
-// Client class for convenient grouped access
-// =============================================================================
-
 export const BrowserClient = {
-  // Lifecycle
   init: browserInit,
   checkStatus: browserCheckStatus,
   launch: browserLaunch,
   close: browserClose,
 
-  // Tabs
   openTab: browserOpenTab,
   closeTab: browserCloseTab,
   switchTab: browserSwitchTab,
   listTabs: browserListTabs,
 
-  // Navigation
   navigate: browserNavigate,
   goBack: browserGoBack,
   goForward: browserGoForward,
@@ -745,7 +622,6 @@ export const BrowserClient = {
   getTitle: browserGetTitle,
   waitForNavigation: browserWaitForNavigation,
 
-  // DOM Interaction
   click: browserClick,
   type: browserType,
   getText: browserGetText,
@@ -762,41 +638,34 @@ export const BrowserClient = {
   waitForInteractive: browserWaitForInteractive,
   highlightElement: browserHighlightElement,
 
-  // Forms
   fillForm: browserFillForm,
   dragAndDrop: browserDragAndDrop,
   uploadFile: browserUploadFile,
 
-  // Screenshots & Content
   screenshot: browserScreenshot,
   getScreenshotStream: browserGetScreenshotStream,
   getContent: browserGetContent,
   getDomSnapshot: browserGetDomSnapshot,
 
-  // JavaScript
   evaluate: browserEvaluate,
   executeAsyncJs: browserExecuteAsyncJs,
   callFunction: browserCallFunction,
 
-  // Cookies
   getCookies: browserGetCookies,
   setCookie: browserSetCookie,
   clearCookies: browserClearCookies,
 
-  // Frames & Performance
   getPerformanceMetrics: browserGetPerformanceMetrics,
   getFrames: browserGetFrames,
   executeInFrame: browserExecuteInFrame,
   enableRequestInterception: browserEnableRequestInterception,
 
-  // Semantic Selectors
   findElementSemantic,
   findAllElementsSemantic,
   clickSemantic,
   typeSemantic,
   testSelectorStrategies,
 
-  // Accessibility
   getAccessibilityTree,
   getDomSemanticGraph,
   getInteractiveElements,

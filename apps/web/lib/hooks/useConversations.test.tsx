@@ -76,11 +76,6 @@ function conversationDetailResponse() {
   );
 }
 
-/**
- * Route the hook's two fetch shapes: the mount-time GET list and the
- * createConversation POST. The POST echoes the request's projectId back as
- * project_id, exactly like the real route's `returning project_id`.
- */
 function mockFetchRoutes() {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     if (init?.method === 'POST' && String(input) === '/api/chat/conversations') {

@@ -1,12 +1,3 @@
-/**
- * OperatorDrillDown
- *
- * A rich operator view for a single agent task run:
- * - Summary card: total duration, tokens used, tools called, approvals, success/fail ratio
- * - Expandable sections: tool calls, approvals, errors, artifacts produced
- * - Cost breakdown: estimated cost per tool call and total run cost
- * - Operator Notes: free-text annotation field persisted in local state
- */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -27,8 +18,6 @@ import {
 import { cn } from '../../lib/utils';
 import { useToolStore, selectActionLog, type ActionLogEntry } from '../../stores/chat/toolStore';
 import type { AgentTask } from '../../stores/agentTaskStore';
-
-// ── Cost estimation ───────────────────────────────────────────────────────────
 
 const TOOL_COST_ESTIMATES: Record<string, number> = {
   plan: 0.002,
@@ -62,8 +51,6 @@ function formatDuration(startIso: string, endIso?: string): string {
   return `${minutes}m ${seconds}s`;
 }
 
-// ── Summary stat card ─────────────────────────────────────────────────────────
-
 interface StatCardProps {
   icon: React.ElementType;
   label: string;
@@ -84,8 +71,6 @@ function StatCard({ icon: Icon, label, value, color }: StatCardProps) {
     </div>
   );
 }
-
-// ── Expandable section ────────────────────────────────────────────────────────
 
 interface SectionProps {
   title: string;
@@ -133,8 +118,6 @@ function Section({
   );
 }
 
-// ── Tool call row ─────────────────────────────────────────────────────────────
-
 function ToolCallRow({ entry, cost }: { entry: ActionLogEntry; cost: number }) {
   const isSuccess = entry.status === 'success';
   const isFailed = entry.status === 'failed';
@@ -178,8 +161,6 @@ function ToolCallRow({ entry, cost }: { entry: ActionLogEntry; cost: number }) {
     </div>
   );
 }
-
-// ── Approval row ──────────────────────────────────────────────────────────────
 
 function ApprovalRow({ entry }: { entry: ActionLogEntry }) {
   const riskLevel = entry.metadata?.['riskLevel'] as string | undefined;
@@ -229,8 +210,6 @@ function ApprovalRow({ entry }: { entry: ActionLogEntry }) {
     </div>
   );
 }
-
-// ── Cost breakdown table ──────────────────────────────────────────────────────
 
 interface CostBreakdownProps {
   entries: ActionLogEntry[];
@@ -287,14 +266,12 @@ function CostBreakdown({ entries }: CostBreakdownProps) {
   );
 }
 
-// ── Operator Notes ────────────────────────────────────────────────────────────
-
 interface OperatorNotesProps {
   taskId: string;
 }
 
 const NOTES_MAX_LENGTH = 5000;
-const NOTES_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const NOTES_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function pruneStaleOperatorNotes(): void {
   try {
@@ -382,8 +359,6 @@ function OperatorNotes({ taskId }: OperatorNotesProps) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 interface OperatorDrillDownProps {
   task: AgentTask;
   className?: string;
@@ -392,8 +367,6 @@ interface OperatorDrillDownProps {
 export function OperatorDrillDown({ task, className }: OperatorDrillDownProps) {
   const actionLog = useToolStore(selectActionLog);
 
-  // In a production version, entries would be filtered by task ID via embedded taskId in log entries.
-  // For now we use all entries (same as ActionTimeline), consistent with the existing design.
   const allEntries = actionLog;
 
   const toolCallEntries = useMemo(

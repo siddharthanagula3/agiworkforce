@@ -19,10 +19,6 @@ function baseReq(overrides: Partial<ChatRequest>): ChatRequest {
 
 describe('translateChatRequest reasoning_effort · explicit effort bypass', () => {
   it('uses req.effort directly, bypassing the budgetTokens-derived heuristic', () => {
-    // thinkingBudgetToRequestedEffort would map a 16384-token budget (Anthropic's
-    // ANTHROPIC_THINKING_BUDGET.medium) to 'high' (>= 16000), not 'medium' -- the exact
-    // 3-of-4-tiers disagreement ChatRequest.effort exists to bypass. Setting BOTH here
-    // proves effort wins over thinking when both are present.
     const req = baseReq({
       effort: 'medium',
       thinking: { type: 'enabled', budgetTokens: 16384 },
@@ -46,8 +42,6 @@ describe('translateChatRequest reasoning_effort · explicit effort bypass', () =
 
 describe('translateChatRequest reasoning_effort · hasTools gate (provider "openai" only)', () => {
   it('omits reasoning_effort when function tools are present, for provider "openai"', () => {
-    // OpenAI's /v1/chat/completions returns HTTP 400 combining reasoning_effort with
-    // function tools (apps/web/lib/llm-providers/openai.ts's documented workaround).
     const req = baseReq({
       effort: 'high',
       tools: [{ name: 'lookup', description: 'find', inputSchema: { type: 'object' } }],
@@ -57,9 +51,6 @@ describe('translateChatRequest reasoning_effort · hasTools gate (provider "open
   });
 
   it('omits reasoning_effort when the only "tool" is a Responses-only type that gets stripped to zero', () => {
-    // hasTools is computed on the PRE-strip merged set, matching legacy's own order of
-    // operations -- a request whose only tool is web_search_preview (which vendorTools
-    // strips to nothing) still counts as "has tools" for this gate.
     const req = baseReq({
       effort: 'high',
       rawVendorTools: [{ type: 'web_search_preview' }],
@@ -70,9 +61,6 @@ describe('translateChatRequest reasoning_effort · hasTools gate (provider "open
   });
 
   it('does NOT omit reasoning_effort for a compat provider even with tools present', () => {
-    // None of the 9 compat providers' legacy files have this gate -- scoping it to
-    // 'openai' only means a Groq/Qwen/etc. request keeps sending reasoning_effort
-    // alongside tools exactly as it does today.
     const req = baseReq({
       model: 'some-groq-model',
       effort: 'high',

@@ -6,17 +6,10 @@ import { extractManagedAgentEventEnvelopes } from '@/app/api/llm/v1/chat/complet
 import { extractAssistantInteractiveCardDeltas } from '@/app/api/llm/v1/chat/completions/lib/interactive-card-stream';
 
 export interface ProjectedCloudAgentWorkflowEvent {
-  /** Only canonical activity is journalled; cards persist via tool receipts. */
   envelope?: AgentEventEnvelope;
   sse: string;
 }
 
-/**
- * Reduce a mixed legacy/canonical tool-loop chunk to replayable deltas consumed
- * by every Cloud client. Public text is projected beside its canonical envelope;
- * validated cards are forwarded while their durable tool receipt remains the
- * settlement-time persistence source.
- */
 export function projectCloudAgentWorkflowChunk(
   chunk: Uint8Array,
 ): ProjectedCloudAgentWorkflowEvent[] {

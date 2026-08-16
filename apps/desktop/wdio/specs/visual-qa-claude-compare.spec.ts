@@ -1,8 +1,3 @@
-// One-off visual QA pass: capture real native-app screenshots of the three
-// screens the founder wants compared against Claude Desktop reference
-// screenshots (see /Users/siddhartha/Desktop/reference/claude_reference/
-// 208/209/188). No structural changes are in scope -- this is purely for
-// side-by-side polish comparison. Safe to delete after the comparison lands.
 
 import * as fs from 'node:fs';
 

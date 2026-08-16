@@ -1,18 +1,9 @@
-/**
- * MemoryBadge Component
- *
- * Inline badge shown on assistant messages when their content has been
- * saved to persistent memory. Renders a small brain icon with "Saved to
- * memory" text to give the user visible confirmation that the AI captured
- * something important from the conversation.
- */
 
 import { memo } from 'react';
 import { Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface MemoryBadgeProps {
-  /** Additional class names */
   className?: string;
 }
 

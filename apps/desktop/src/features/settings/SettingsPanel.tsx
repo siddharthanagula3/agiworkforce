@@ -56,14 +56,11 @@ import { BillingTab } from './tabs/Billing';
 import { AgiInChromeTab } from './tabs/AgiInChrome';
 import { searchDesktopSettings, type DesktopSettingSearchEntry } from './settingsSearchIndex';
 
-// Canonical settings tab keys — single source of truth in @agiworkforce/ui.
 type CanonicalTab = SettingsNavKey;
 
 function resolveTab(tab: SettingsTab): CanonicalTab {
   return (LEGACY_TAB_MAP[tab] as CanonicalTab | undefined) ?? (tab as CanonicalTab);
 }
-
-// SETTINGS_NAV + NAV_GROUPS imported from @agiworkforce/ui (single source of truth).
 
 const LOCAL_NOTIFICATION_SETTINGS: NotificationSettings = {
   enabled: true,
@@ -149,10 +146,6 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: SettingsPanelProps) {
-  // Dialog chrome (title, search placeholder, footer buttons) reads the shared
-  // corpus. The nav labels it filters do not: they are hardcoded English in
-  // `SETTINGS_NAV` (packages/ui/ui/src/settings-nav.ts), so the search box
-  // matches English text whatever the locale says on the placeholder.
   const { t } = useTranslation();
   const hasInitializedOpenStateRef = useRef(false);
   const connectedConnectorCount = useConnectorsStore((state) => state.connectedIds.length);
@@ -200,9 +193,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const { confirm, dialog: discardChangesDialog } = useConfirm();
   const baselineSnapshotRef = useRef<string | null>(null);
   const settingsContentRef = useRef<HTMLDivElement | null>(null);
-  // Separate personalization baseline preserves correct Cancel behavior during
-  // migration from legacy settings files that do not yet contain the newly
-  // native-owned personalization field.
   const personalizationBaselineRef = useRef<PersonalizationPreferences | null>(null);
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
@@ -406,8 +396,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const buildCurrentSnapshot = useCallback((notifs: NotificationSettings | null) => {
     const state = useSettingsStore.getState();
     // These two safety fields are backend-authoritative and self-save at the
-    // moment of user confirmation. They must not make the global deferred
-    // Save/Cancel footer claim that the change can still be discarded.
     const {
       agentMode: _agentMode,
       autoApproveTools: _autoApproveTools,
@@ -437,14 +425,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             loadSettings(),
             loadNotificationSettings(),
           ]);
-          // Preserve a migration fallback for old native settings files that
-          // omit personalization until their first successful save.
           personalizationBaselineRef.current = useSettingsStore.getState().personalization;
           baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
-          // Initialization is complete once the persisted settings baseline is
-          // captured. The Ollama refresh below is informational and can finish
-          // after the user starts editing; clearing the dirty flag after that
-          // await would silently erase a legitimate pending-edit state.
           setHasUnsavedChanges(false);
         } catch (err) {
           console.error('Failed to load settings:', err);
@@ -465,10 +447,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<CanonicalTab>(() => resolveVisibleTab(initialTab));
 
-  // A dirty deferred edit stays global even when the user navigates to a tab
-  // whose own controls self-save. Keep Save/Cancel visible until that edit is
-  // saved or discarded; otherwise the self-saving footer's Close button can
-  // bypass the confirmation ceremony and silently lose the earlier change.
   const requiresDeferredSave = hasUnsavedChanges || !SELF_SAVING_TABS.has(activeTab);
 
   useEffect(() => {
@@ -614,9 +592,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         loadSettings(),
         loadNotificationSettings(),
       ]);
-      // Legacy native files can omit personalization; in that migration case
-      // loadSettings intentionally preserves the hydrated renderer value, so
-      // restore the open-time baseline explicitly for an honest Cancel.
       if (personalizationBaselineRef.current) {
         setPersonalization(personalizationBaselineRef.current);
       }
@@ -639,14 +614,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     setPersonalization,
   ]);
 
-  // Any close path (X button, Escape, click-outside, footer "Cancel") ends up
-  // here via handleDialogOpenChange/requestClose. Previously all of these
-  // unconditionally called handleCancel(), which re-fetches settings from disk
-  // and overwrites the live store — silently discarding any edit that wasn't
-  // explicitly committed via "Save Changes", with zero warning to the user.
-  // confirmDiscardIfNeeded() gates that: if there's nothing unsaved it's a
-  // no-op passthrough; otherwise it blocks the close behind an explicit
-  // "Discard changes?" confirmation.
   const confirmDiscardIfNeeded = useCallback(async (): Promise<boolean> => {
     if (!hasUnsavedChanges) return true;
     return confirm({

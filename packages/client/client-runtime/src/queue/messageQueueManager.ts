@@ -1,19 +1,3 @@
-/**
- * `messageQueueManager` — per-surface priority send pipeline.
- *
- * Three priority lanes (`now` > `next` > `later`), FIFO within a lane, frozen
- * snapshots stable across mutations (compatible with React's
- * `useSyncExternalStore`). Backed by `createStore` from `state/` so the
- * Object.is short-circuit prevents render storms when a no-op enqueue races.
- *
- * **Per-surface, NOT shared.** Cross-surface state-sharing is an explicit
- * non-goal (per Task 1.4 §"Cross-surface state"). Each surface calls
- * `createMessageQueue()` once at boot and routes its own send pipeline through
- * the resulting instance.
- *
- * Reference: tasks/research/deep/u2-utils-direct-h-n.md §2.5 + §5 plus local
- * reference research on priority message queues.
- */
 
 import { createStore } from '../state/createStore';
 import {
@@ -32,21 +16,12 @@ import {
   type QueuedCommand,
 } from './types';
 
-/**
- * Modes that must NOT round-trip into the editable input buffer. System
- * notifications and channel messages contain raw structured data the user
- * never typed.
- */
 const NON_EDITABLE_MODES = new Set<PromptInputMode>(['task-notification', 'channel-message']);
 
 function isCommandEditable(cmd: QueuedCommand): boolean {
   return !NON_EDITABLE_MODES.has(cmd.mode) && !cmd.isMeta;
 }
 
-/**
- * Extract plain text from a `value` (string or `ContentBlock[]`).
- * Used by `popAllEditable` to reconstruct the input buffer.
- */
 function extractText(value: string | ContentBlock[]): string {
   if (typeof value === 'string') return value;
   return value
@@ -55,10 +30,6 @@ function extractText(value: string | ContentBlock[]): string {
     .join('\n');
 }
 
-/**
- * Extract images from a `ContentBlock[]` and assign them sequential `PastedContent`
- * IDs starting at `startId`. Insertion order is preserved.
- */
 function extractImages(value: string | ContentBlock[], startId: number): PastedContent[] {
   if (typeof value === 'string') return [];
   const images: PastedContent[] = [];
@@ -78,12 +49,6 @@ function extractImages(value: string | ContentBlock[], startId: number): PastedC
   return images;
 }
 
-/**
- * Crypto-safe random ID. Uses `crypto.randomUUID()` when available (Node 19+,
- * all modern browsers, React Native 0.83+ with polyfill). Falls back to a
- * timestamp+counter token in degraded environments — IDs only need to be
- * unique within the local queue lifetime, not globally cryptographic.
- */
 let fallbackCounter = 0;
 function genId(): string {
   const cryptoLike = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
@@ -92,40 +57,15 @@ function genId(): string {
   return `q_${Date.now().toString(36)}_${fallbackCounter.toString(36)}`;
 }
 
-/**
- * Options for `createMessageQueue`. All optional — a queue with no options is
- * volatile (no persistence) and uses default lane caps.
- */
 export interface CreateMessageQueueOptions {
-  /**
-   * Storage adapter for persisting `next` and `later` lanes. `now` lane is
-   * always volatile (urgent messages don't survive process death).
-   *
-   * The adapter is invoked synchronously after every mutation that touches
-   * a persistent lane. Implementations should debounce I/O internally.
-   */
   storage?: QueueStorageAdapter;
-  /**
-   * Per-lane cap override. Default 100 per lane. Caps below 1 are coerced to 1.
-   */
   laneCap?: number;
-  /**
-   * Optional logger — called for every enqueue / dequeue / pop / remove. The
-   * reference implementation routes these into `recordQueueOperation` for
-   * session replay; we keep the hook generic so each surface can wire its
-   * own analytics.
-   */
   logger?: (event: {
     op: 'enqueue' | 'dequeue' | 'pop' | 'remove' | 'clear';
     cmd?: QueuedCommand;
   }) => void;
 }
 
-/**
- * Build a per-surface message queue. Each surface should call this exactly
- * once at boot — the returned object is the shared send pipeline for that
- * surface's chat UI.
- */
 export function createMessageQueue(options: CreateMessageQueueOptions = {}): MessageQueue {
   const laneCap = Math.max(1, options.laneCap ?? LANE_CAP);
   const storage = options.storage;
@@ -137,14 +77,12 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
     if (!storage) return Object.freeze<QueuedCommand[]>([]);
     const persisted = storage.read();
     if (!persisted) return Object.freeze<QueuedCommand[]>([]);
-    // Restore only `next` and `later` lanes — `now` is volatile by spec.
     const filtered = persisted.filter((cmd) => (cmd.priority ?? 'next') !== 'now');
     return Object.freeze([...filtered]);
   })();
 
   const store = createStore<Snapshot>(initial);
 
-  // Track AbortSignal listeners per command so we can detach on dequeue.
   const abortHandlers = new Map<string, () => void>();
 
   function detachAbort(commandId: string): void {
@@ -157,7 +95,6 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
 
   function persist(snapshot: Snapshot): void {
     if (!storage) return;
-    // Drop `now` lane from persistence — `now` is by-design volatile.
     const persistable = snapshot.filter((cmd) => (cmd.priority ?? 'next') !== 'now');
     storage.write(persistable);
   }
@@ -170,10 +107,6 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
     return count;
   }
 
-  /**
-   * Apply a mutation transactionally — Object.is short-circuit in createStore
-   * means we only fire listeners + persist when the snapshot changed.
-   */
   function mutate(updater: (prev: Snapshot) => Snapshot): Snapshot {
     let nextSnapshot: Snapshot = store.getState();
     store.setState((prev) => {
@@ -182,17 +115,11 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
       return next;
     });
     if (nextSnapshot !== initial) {
-      // Only persist post-mutation — but createStore's Object.is guard means
-      // no-op mutates won't have called the updater path here.
       persist(nextSnapshot);
     }
     return nextSnapshot;
   }
 
-  /**
-   * Find the highest-priority command index. Returns -1 if no candidate.
-   * Within a lane, the lowest index (oldest) wins → FIFO.
-   */
   function findBestIdx(snapshot: Snapshot, filter?: (cmd: QueuedCommand) => boolean): number {
     let bestIdx = -1;
     let bestPriority = Infinity;
@@ -231,15 +158,12 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
       priority,
     }) as QueuedCommand;
 
-    // Wire AbortSignal — cancellation removes the command from the queue.
     const signal = options?.signal;
     if (signal) {
       if (signal.aborted) {
-        // Don't enqueue an already-canceled command.
         return stored;
       }
       const handler = () => {
-        // removeById is internal — implemented via mutate below.
         mutate((prev) => {
           const idx = prev.findIndex((c) => c.id === id);
           if (idx === -1) return prev;
@@ -283,17 +207,11 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
     dequeue: (filter) => {
       const snapshot = store.getState();
       const idx = findBestIdx(snapshot, filter);
-      // FIX (audit 2026-05-20, §14): bounds-check idx against the snapshot
-      // before the non-null assertion. findBestIdx returning a valid index
-      // is the contract today, but concurrent splice/replace via mutate()
-      // could shorten the array between the find and the indexed read.
       if (idx === -1 || idx < 0 || idx >= snapshot.length) return undefined;
       const cmdAt = snapshot[idx];
       if (cmdAt === undefined) return undefined;
       const cmd = cmdAt;
       mutate((prev) => {
-        // Re-find under the latest snapshot — defends against concurrent
-        // mutations by ID match. If the command moved or was removed, no-op.
         const realIdx = prev.findIndex((c) => c.id === cmd.id);
         if (realIdx === -1) return prev;
         const next = [...prev];
@@ -308,9 +226,6 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
     dequeueIf: (expectedId: string) => {
       const snapshot = store.getState();
       const idx = findBestIdx(snapshot);
-      // FIX (audit 2026-05-20, §14): explicit bounds check before the
-      // non-null assertion below (snapshot can shrink under concurrent
-      // mutate(); the dequeueIf race path was the most likely site).
       if (idx === -1 || idx < 0 || idx >= snapshot.length) {
         throw new QueueDequeueRaceError(expectedId);
       }
@@ -374,20 +289,11 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
       }
       if (editable.length === 0) return undefined;
 
-      // Reconstruct text buffer — preserves insertion order across the
-      // queued commands, then appends current input.
       const queuedTexts = editable.map((cmd) => extractText(cmd.value));
       const newInput = [...queuedTexts, currentInput].filter((s) => s.length > 0).join('\n');
 
-      // Cursor offset = length of joined queued texts + 1 (the joining \n) +
-      // the user's current cursor offset. Matches reference algorithm at
-      // Local reference research showed this edge case can happen when editable
-      // messages are drained while non-editable system events are still queued.
       const cursorOffset = queuedTexts.join('\n').length + 1 + currentCursorOffset;
 
-      // Reconstruct PastedContent — preserve original IDs (so imageStore
-      // lookups still resolve). For ContentBlock[] embedded images, allocate
-      // fresh sequential IDs starting from `Date.now()` (insertion order).
       const pastedContents: PastedContent[] = [];
       let nextImageId = Date.now();
       for (const cmd of editable) {
@@ -421,26 +327,12 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
     },
 
     flush: () => {
-      // Adapters that debounce should expose their own flush; we route the
-      // current state through them so the adapter has a chance to commit.
       if (storage)
         storage.write(store.getState().filter((cmd) => (cmd.priority ?? 'next') !== 'now'));
     },
   };
 }
 
-// ---------------------------------------------------------------------------
-// Storage adapter helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Build a `QueueStorageAdapter` backed by Web Storage (`localStorage` or any
- * compatible API). Used by `apps/desktop` and `apps/web`.
- *
- * Returns `null` if `storage` is unavailable (SSR, disabled cookies, locked
- * Storage), allowing callers to fall back to a volatile queue without
- * branching.
- */
 export function createWebStorageAdapter(
   key: string,
   storage: Storage | null | undefined,
@@ -453,7 +345,6 @@ export function createWebStorageAdapter(
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return null;
-        // Defensive: trust shape only after a minimal validation pass.
         const valid = parsed.filter(
           (cmd: unknown): cmd is QueuedCommand =>
             typeof cmd === 'object' &&
@@ -477,12 +368,6 @@ export function createWebStorageAdapter(
   };
 }
 
-/**
- * Build a `QueueStorageAdapter` backed by an arbitrary key/value store with
- * synchronous get/set (e.g. MMKV in React Native, `chrome.storage.local`
- * wrapped synchronously). The adapter merely shapes the JSON encode/decode
- * pass — the caller is responsible for the underlying I/O policy.
- */
 export interface SyncKvStore {
   get(key: string): string | null;
   set(key: string, value: string): void;

@@ -33,8 +33,6 @@ import { useChatModelStore } from '@agiworkforce/unified-chat';
 
 const mockInvoke = vi.mocked(invoke);
 
-// Short enough to stay under the swarm-recommendation debounce threshold, so a
-// launch is the only command the component sends.
 const GOAL = 'Ship the report';
 
 function describeGoal() {

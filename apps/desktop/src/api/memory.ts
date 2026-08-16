@@ -1,16 +1,5 @@
-/**
- * Memory System API Client
- *
- * TypeScript wrappers for the Rust memory commands used by Desktop.
- * invoke() params: camelCase. Command names: snake_case.
- * All functions have try/catch error handling.
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// ============================================================================
-// TYPE DEFINITIONS — match Rust structs in sys/commands/memory.rs
-// ============================================================================
 
 export type MemoryCategory = 'preference' | 'fact' | 'decision' | 'context';
 
@@ -78,7 +67,6 @@ export interface MemoryExport {
   daily_logs: DailyLogEntry[];
 }
 
-// Chat integration types (used by chat_* commands)
 export interface MemorySummary {
   decisions: number;
   preferences: number;
@@ -120,14 +108,6 @@ export interface DecisionDetectionResult {
   importance: number;
 }
 
-// ============================================================================
-// CORE MEMORY COMMANDS (memory_*)
-// ============================================================================
-
-/**
- * Store or update a memory (memory_remember).
- * If a memory with the same category+topic already exists, it will be updated.
- */
 export async function remember(
   category: string,
   topic: string,
@@ -150,9 +130,6 @@ export async function remember(
   }
 }
 
-/**
- * Recall a specific memory by category and topic (memory_recall).
- */
 export async function recall(category: string, topic: string): Promise<MemoryEntry | null> {
   try {
     return await invoke<MemoryEntry | null>('memory_recall', {
@@ -166,9 +143,6 @@ export async function recall(category: string, topic: string): Promise<MemoryEnt
   }
 }
 
-/**
- * Search memories by query text (memory_search).
- */
 export async function search(query: string, limit: number = 20): Promise<MemoryEntry[]> {
   try {
     return await invoke<MemoryEntry[]>('memory_search', { query, limit });
@@ -179,9 +153,6 @@ export async function search(query: string, limit: number = 20): Promise<MemoryE
   }
 }
 
-/**
- * Get all memories in a category (memory_get_by_category).
- */
 export async function getByCategory(category: string, limit?: number): Promise<MemoryEntry[]> {
   try {
     return await invoke<MemoryEntry[]>('memory_get_by_category', {
@@ -195,9 +166,6 @@ export async function getByCategory(category: string, limit?: number): Promise<M
   }
 }
 
-/**
- * Get high-importance memories for session initialization (memory_get_important).
- */
 export async function getImportant(minImportance: number = 7): Promise<MemoryEntry[]> {
   try {
     return await invoke<MemoryEntry[]>('memory_get_important', {
@@ -210,9 +178,6 @@ export async function getImportant(minImportance: number = 7): Promise<MemoryEnt
   }
 }
 
-/**
- * Delete a memory by ID (memory_forget).
- */
 export async function forget(memoryId: number): Promise<boolean> {
   try {
     return await invoke<boolean>('memory_forget', { memoryId });
@@ -223,9 +188,6 @@ export async function forget(memoryId: number): Promise<boolean> {
   }
 }
 
-/**
- * Delete a memory by category and topic (memory_forget_topic).
- */
 export async function forgetTopic(category: string, topic: string): Promise<boolean> {
   try {
     return await invoke<boolean>('memory_forget_topic', { category, topic });
@@ -236,9 +198,6 @@ export async function forgetTopic(category: string, topic: string): Promise<bool
   }
 }
 
-/**
- * Store or update a memory — alias for remember (memory_store).
- */
 export async function storeMemory(
   category: string,
   topic: string,
@@ -261,9 +220,6 @@ export async function storeMemory(
   }
 }
 
-/**
- * Delete a memory by ID — alias for forget (memory_delete).
- */
 export async function deleteMemory(memoryId: number): Promise<boolean> {
   try {
     return await invoke<boolean>('memory_delete', { memoryId });
@@ -274,9 +230,6 @@ export async function deleteMemory(memoryId: number): Promise<boolean> {
   }
 }
 
-/**
- * List all memories (memory_list_all).
- */
 export async function listAll(): Promise<MemoryEntry[]> {
   try {
     return await invoke<MemoryEntry[]>('memory_list_all');
@@ -287,9 +240,6 @@ export async function listAll(): Promise<MemoryEntry[]> {
   }
 }
 
-/**
- * Export all memories for backup (memory_export_all).
- */
 export async function exportAll(): Promise<MemoryEntry[]> {
   try {
     return await invoke<MemoryEntry[]>('memory_export_all');
@@ -300,9 +250,6 @@ export async function exportAll(): Promise<MemoryEntry[]> {
   }
 }
 
-/**
- * List all memory categories (memory_list_categories).
- */
 export async function listCategories(): Promise<string[]> {
   try {
     return await invoke<string[]>('memory_list_categories');
@@ -313,13 +260,6 @@ export async function listCategories(): Promise<string[]> {
   }
 }
 
-// ============================================================================
-// DAILY LOG COMMANDS
-// ============================================================================
-
-/**
- * Log an entry to today's daily log (memory_log_context).
- */
 export async function logContext(
   content: string,
   entryType?: string,
@@ -338,9 +278,6 @@ export async function logContext(
   }
 }
 
-/**
- * Get daily logs for a specific date in YYYY-MM-DD format (memory_get_daily_logs).
- */
 export async function getDailyLogs(date: string): Promise<DailyLogEntry[]> {
   try {
     return await invoke<DailyLogEntry[]>('memory_get_daily_logs', { date });
@@ -351,9 +288,6 @@ export async function getDailyLogs(date: string): Promise<DailyLogEntry[]> {
   }
 }
 
-/**
- * Get session context — recent logs + important memories (memory_get_session_context).
- */
 export async function getSessionContext(): Promise<string> {
   try {
     return await invoke<string>('memory_get_session_context');
@@ -364,10 +298,6 @@ export async function getSessionContext(): Promise<string> {
   }
 }
 
-/**
- * Cleanup old daily logs, keeping last N days (memory_cleanup_logs).
- * Returns the number of log entries removed.
- */
 export async function cleanupLogs(keepDays?: number): Promise<number> {
   try {
     return await invoke<number>('memory_cleanup_logs', { keepDays });
@@ -378,13 +308,6 @@ export async function cleanupLogs(keepDays?: number): Promise<number> {
   }
 }
 
-// ============================================================================
-// MEMORY IMPORTANCE DECAY COMMANDS
-// ============================================================================
-
-/**
- * Run memory importance decay (memory_run_decay).
- */
 export async function runDecay(): Promise<DecayResult> {
   try {
     return await invoke<DecayResult>('memory_run_decay');
@@ -395,9 +318,6 @@ export async function runDecay(): Promise<DecayResult> {
   }
 }
 
-/**
- * Get the current decay configuration (memory_get_decay_config).
- */
 export async function getDecayConfig(): Promise<DecayConfig> {
   try {
     return await invoke<DecayConfig>('memory_get_decay_config');
@@ -408,9 +328,6 @@ export async function getDecayConfig(): Promise<DecayConfig> {
   }
 }
 
-/**
- * Set the decay configuration (memory_set_decay_config).
- */
 export async function setDecayConfig(
   enabled: boolean,
   decayRate: number,
@@ -433,9 +350,6 @@ export async function setDecayConfig(
   }
 }
 
-/**
- * Get memories that are candidates for decay (memory_get_decay_candidates).
- */
 export async function getDecayCandidates(): Promise<DecayCandidate[]> {
   try {
     return await invoke<DecayCandidate[]>('memory_get_decay_candidates');
@@ -446,10 +360,6 @@ export async function getDecayCandidates(): Promise<DecayCandidate[]> {
   }
 }
 
-/**
- * Boost the importance of a memory on access (memory_boost_on_access).
- * Returns the new importance value.
- */
 export async function boostOnAccess(memoryId: number): Promise<number> {
   try {
     return await invoke<number>('memory_boost_on_access', { memoryId });
@@ -460,9 +370,6 @@ export async function boostOnAccess(memoryId: number): Promise<number> {
   }
 }
 
-/**
- * Recall a memory with importance boost (memory_recall_with_boost).
- */
 export async function recallWithBoost(
   category: string,
   topic: string,
@@ -476,10 +383,6 @@ export async function recallWithBoost(
   }
 }
 
-/**
- * Manually decay a single memory's importance (memory_decay_single).
- * Returns the new importance value.
- */
 export async function decaySingle(memoryId: number, decayAmount: number): Promise<number> {
   try {
     return await invoke<number>('memory_decay_single', { memoryId, decayAmount });
@@ -490,9 +393,6 @@ export async function decaySingle(memoryId: number, decayAmount: number): Promis
   }
 }
 
-/**
- * Get statistics about memory importance distribution (memory_get_stats).
- */
 export async function getStats(): Promise<MemoryStats> {
   try {
     return await invoke<MemoryStats>('memory_get_stats');
@@ -503,15 +403,6 @@ export async function getStats(): Promise<MemoryStats> {
   }
 }
 
-// ============================================================================
-// MEMORY EXPORT COMMANDS
-// ============================================================================
-
-/**
- * Export all memories and logs to JSON (memory_export_json).
- * If a path is provided, exports to that file and returns metadata.
- * If no path, returns the full JSON export data.
- */
 export async function exportToJson(path?: string): Promise<Record<string, unknown>> {
   try {
     return await invoke<Record<string, unknown>>('memory_export_json', { path });
@@ -522,11 +413,6 @@ export async function exportToJson(path?: string): Promise<Record<string, unknow
   }
 }
 
-/**
- * Export all memories to Markdown format (memory_export_markdown).
- * If a path is provided, exports to that file and returns metadata as JSON string.
- * If no path, returns the Markdown string.
- */
 export async function exportToMarkdown(path?: string): Promise<string> {
   try {
     return await invoke<string>('memory_export_markdown', { path });
@@ -537,14 +423,6 @@ export async function exportToMarkdown(path?: string): Promise<string> {
   }
 }
 
-// ============================================================================
-// MEMORY IMPORT COMMANDS
-// ============================================================================
-
-/**
- * Import memories from a JSON backup file (memory_import_json).
- * Strategy: "skip" (default), "replace", or "merge".
- */
 export async function importFromJson(
   path: string,
   strategy: string = 'skip',
@@ -561,10 +439,6 @@ export async function importFromJson(
   }
 }
 
-/**
- * Import memories from a JSON string (memory_import_json_string).
- * Useful for programmatic imports without a file.
- */
 export async function importFromJsonString(
   json: string,
   strategy: string = 'skip',
@@ -578,14 +452,6 @@ export async function importFromJsonString(
   }
 }
 
-// ============================================================================
-// MEMORY DASHBOARD COMMANDS
-// ============================================================================
-
-/**
- * Get memory dashboard statistics (memory_get_dashboard_stats).
- * Returns memory statistics.
- */
 export async function getDashboardStats(): Promise<Record<string, unknown>> {
   try {
     return await invoke<Record<string, unknown>>('memory_get_dashboard_stats');
@@ -596,9 +462,6 @@ export async function getDashboardStats(): Promise<Record<string, unknown>> {
   }
 }
 
-/**
- * Get project-specific memories for injection into LLM context (memory_get_project_memories).
- */
 export async function getProjectMemories(
   projectName?: string,
   limit: number = 10,
@@ -615,9 +478,6 @@ export async function getProjectMemories(
   }
 }
 
-/**
- * Get memory usage trends (memory_get_usage_trends).
- */
 export async function getUsageTrends(): Promise<Record<string, unknown>> {
   try {
     return await invoke<Record<string, unknown>>('memory_get_usage_trends');
@@ -628,10 +488,6 @@ export async function getUsageTrends(): Promise<Record<string, unknown>> {
   }
 }
 
-/**
- * Suggest important memories for user review (memory_suggest_important).
- * Returns critical memories (importance >= 9).
- */
 export async function suggestImportantMemories(): Promise<MemoryEntry[]> {
   try {
     return await invoke<MemoryEntry[]>('memory_suggest_important');
@@ -642,13 +498,6 @@ export async function suggestImportantMemories(): Promise<MemoryEntry[]> {
   }
 }
 
-// ============================================================================
-// CHAT MEMORY INTEGRATION API (chat_* commands)
-// ============================================================================
-
-/**
- * Load project memories and prepare context for chat (chat_load_project_memories).
- */
 export async function loadProjectMemories(): Promise<LoadProjectMemoriesResponse> {
   try {
     return await invoke<LoadProjectMemoriesResponse>('chat_load_project_memories');
@@ -659,9 +508,6 @@ export async function loadProjectMemories(): Promise<LoadProjectMemoriesResponse
   }
 }
 
-/**
- * Detect if a message contains a decision and auto-save it (chat_detect_and_save_decision).
- */
 export async function detectAndSaveDecision(message: string): Promise<SaveDecisionResponse | null> {
   try {
     return await invoke<SaveDecisionResponse | null>('chat_detect_and_save_decision', { message });
@@ -672,9 +518,6 @@ export async function detectAndSaveDecision(message: string): Promise<SaveDecisi
   }
 }
 
-/**
- * Manually save a decision to memory (chat_save_decision).
- */
 export async function saveDecision(message: string): Promise<SaveDecisionResponse> {
   try {
     return await invoke<SaveDecisionResponse>('chat_save_decision', { message });
@@ -685,10 +528,6 @@ export async function saveDecision(message: string): Promise<SaveDecisionRespons
   }
 }
 
-/**
- * Configure the native memory master, selection limits, and tool-assisted scope
- * (chat_configure_memory_injection).
- */
 export async function configureMemoryInjection(
   enabled: boolean,
   maxMemories: number,
@@ -709,9 +548,6 @@ export async function configureMemoryInjection(
   }
 }
 
-/**
- * Get memory dashboard via chat integration (chat_get_memory_dashboard).
- */
 export async function getMemoryDashboard(): Promise<MemoryDashboard> {
   try {
     return await invoke<MemoryDashboard>('chat_get_memory_dashboard');
@@ -722,9 +558,6 @@ export async function getMemoryDashboard(): Promise<MemoryDashboard> {
   }
 }
 
-/**
- * Get critical memories suggested for review (chat_suggest_memories_for_review).
- */
 export async function suggestMemoriesForReview(): Promise<{
   critical_memories: MemoryEntry[];
   high_importance: MemoryEntry[];
@@ -741,9 +574,6 @@ export async function suggestMemoriesForReview(): Promise<{
   }
 }
 
-/**
- * Prefetch all memories for new chat session (chat_prefetch_session_memories).
- */
 export async function prefetchSessionMemories(): Promise<string> {
   try {
     return await invoke<string>('chat_prefetch_session_memories');
@@ -754,9 +584,6 @@ export async function prefetchSessionMemories(): Promise<string> {
   }
 }
 
-/**
- * Log a milestone to memory (chat_log_milestone).
- */
 export async function logMilestone(
   description: string,
   metadata?: Record<string, unknown>,
@@ -773,9 +600,6 @@ export async function logMilestone(
   }
 }
 
-/**
- * Log an action to memory (chat_log_action).
- */
 export async function logAction(
   action: string,
   metadata?: Record<string, unknown>,
@@ -792,9 +616,6 @@ export async function logAction(
   }
 }
 
-/**
- * Recall a specific memory via chat integration (chat_recall_memory).
- */
 export async function recallMemory(
   category: string,
   topic: string,
@@ -813,9 +634,6 @@ export async function recallMemory(
   }
 }
 
-/**
- * Search memories via chat integration (chat_search_memories).
- */
 export async function searchMemories(query: string, limit: number = 10): Promise<MemoryEntry[]> {
   try {
     return await invoke<MemoryEntry[]>('chat_search_memories', { query, limit });
@@ -826,13 +644,6 @@ export async function searchMemories(query: string, limit: number = 10): Promise
   }
 }
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Get importance label for display.
- */
 export function getImportanceLabel(importance: number): string {
   if (importance >= 9) return 'Critical';
   if (importance >= 7) return 'High';
@@ -840,17 +651,11 @@ export function getImportanceLabel(importance: number): string {
   return 'Low';
 }
 
-/**
- * Format memory entry for display.
- */
 export function formatMemory(memory: MemoryEntry): string {
   const label = getImportanceLabel(memory.importance);
   return `**${memory.topic}** (${label}): ${memory.content}`;
 }
 
-/**
- * Format memories collection organized by category.
- */
 export function formatMemories(memories: MemoryEntry[]): string {
   const byCategory: Record<string, MemoryEntry[]> = {};
 
@@ -873,9 +678,6 @@ export function formatMemories(memories: MemoryEntry[]): string {
   return output;
 }
 
-/**
- * Check if memory needs review (high importance, not recently accessed).
- */
 export function needsReview(memory: MemoryEntry): boolean {
   if (memory.importance < 7) return false;
 

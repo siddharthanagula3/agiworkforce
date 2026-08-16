@@ -85,9 +85,6 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     throw createError.notFound('Code has expired. Please run the login command again.');
   }
 
-  // Non-reversible reference to the device. `device_id` is the polling secret
-  // for the CLI/desktop flow and must never be persisted into an audit row.
-  // Same domain as the token route so the two rows still correlate.
   const deviceRef = pseudonymizeIdentifier(record.device_id, 'device-id', 12);
 
   if (action === 'deny') {

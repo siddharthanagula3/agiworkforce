@@ -53,9 +53,6 @@ function isUpdateAvailable(currentVersion: string, latestVersion: string): boole
   return compareSemanticVersions(latestVersion, currentVersion) === 1;
 }
 
-/**
- * Get latest release from database
- */
 async function getLatestRelease(
   platform: Platform,
   channel: DesktopReleaseChannel = 'stable',
@@ -89,9 +86,6 @@ async function getLatestRelease(
   }
 }
 
-/**
- * Fallback: Get latest version from GitHub
- */
 async function getLatestReleaseFromGitHub(
   platform: Platform,
   channel: DesktopReleaseChannel,
@@ -111,26 +105,12 @@ async function getLatestReleaseFromGitHub(
   };
 }
 
-/**
- * POST /api/releases/check
- *
- * Check if an update is available for the given version and platform.
- *
- * Request body:
- * {
- *   "current_version": "1.0.3",
- *   "platform": "darwin-aarch64",
- *   "channel": "stable" // optional, defaults to "stable"
- * }
- */
 async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
-  // Rate limiting - generous for update checks
   const rateLimitResponse = await withRateLimit(request, 'release-check');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
 
-  // Parse request body
   let body: UpdateCheckRequest;
   try {
     body = await request.json();
@@ -144,7 +124,6 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid channel. Expected stable, beta, or nightly.');
   }
 
-  // Validate required fields
   if (typeof current_version !== 'string' || !current_version) {
     throw createError.validation('current_version is required');
   }
@@ -163,20 +142,16 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Validate version format
   if (!parseSemanticVersion(current_version)) {
     throw createError.validation('Invalid version format. Expected semantic version (e.g., 1.0.0)');
   }
 
-  // Get latest release
   let latest = await getLatestRelease(platform, channel);
 
-  // Fall back to GitHub if database is empty
   if (!latest) {
     latest = await getLatestReleaseFromGitHub(platform, channel);
   }
 
-  // Build response
   const response: UpdateCheckResponse = {
     update_available: false,
     current_version,
@@ -203,26 +178,14 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Add cache headers - short cache for update checks
   const headers = new Headers();
-  headers.set('Cache-Control', 'public, max-age=60, s-maxage=60'); // 1 minute cache
+  headers.set('Cache-Control', 'public, max-age=60, s-maxage=60');
   headers.set('Content-Type', 'application/json');
 
   return NextResponse.json(response, { headers });
 }
 
-/**
- * GET /api/releases/check
- *
- * Alternative GET endpoint for update checks using query parameters.
- *
- * Query params:
- * - version: Current version (required)
- * - platform: Target platform (required)
- * - channel: Release channel (optional, defaults to "stable")
- */
 async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse> {
-  // Rate limiting - generous for update checks
   const rateLimitResponse = await withRateLimit(request, 'release-check');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -238,7 +201,6 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
   }
   const channel = rawChannel;
 
-  // Validate required params
   if (!current_version) {
     throw createError.validation('version query parameter is required');
   }
@@ -253,20 +215,16 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
     );
   }
 
-  // Validate version format
   if (!parseSemanticVersion(current_version)) {
     throw createError.validation('Invalid version format. Expected semantic version (e.g., 1.0.0)');
   }
 
-  // Get latest release
   let latest = await getLatestRelease(platform, channel);
 
-  // Fall back to GitHub
   if (!latest) {
     latest = await getLatestReleaseFromGitHub(platform, channel);
   }
 
-  // Build response
   const response: UpdateCheckResponse = {
     update_available: false,
     current_version,
@@ -293,7 +251,6 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
     }
   }
 
-  // Cache headers
   const headers = new Headers();
   headers.set('Cache-Control', 'public, max-age=60, s-maxage=60');
   headers.set('Content-Type', 'application/json');

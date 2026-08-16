@@ -41,7 +41,6 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
   const statusCode = rawData.statusCode || rawData.status || 0;
   const success = rawData.success ?? (statusCode >= 200 && statusCode < 400);
 
-  // Parse body if it's a string
   const parsedBody = useMemo(() => {
     if (!body) return null;
     if (typeof body === 'object') return body;
@@ -62,7 +61,6 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
     }
   }, [parsedBody]);
 
-  // Truncate URL for display
   const displayUrl = useMemo(() => {
     if (!url) return '';
     try {
@@ -83,7 +81,6 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
     }
   }, [url]);
 
-  // Show running state
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -93,7 +90,6 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
     );
   }
 
-  // Show error state if status indicates failure
   if (status === 'failed' || status === 'error') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -110,7 +106,6 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
 
   if (!data) return null;
 
-  // Status color
   const statusColor =
     statusCode >= 200 && statusCode < 300
       ? 'text-emerald-400'
@@ -127,7 +122,6 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
         ? 'destructive'
         : 'warning';
 
-  // Method color
   const methodColor =
     method === 'GET'
       ? 'text-blue-400'
@@ -139,7 +133,6 @@ export const InlineAPIResponse: React.FC<ToolResultProps> = ({ result, status })
             ? 'text-red-400'
             : 'text-muted-foreground';
 
-  // Error state
   if (!success && error) {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">

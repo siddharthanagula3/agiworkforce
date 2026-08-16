@@ -1,37 +1,7 @@
-/**
- * @file Signaling Server for WebRTC Pairing
- * @security
- * - Rate limiting: Applied to HTTP endpoints and WebSocket messages to prevent abuse
- * - Input validation: Zod schemas validate all WebSocket messages with strict patterns
- * - Message size limits: MAX_MESSAGE_SIZE_BYTES prevents DoS
- * - Session expiry: Automatic cleanup of expired sessions
- * - Connection limits: Per-IP connection limits prevent resource exhaustion
- * - Security headers: OWASP-compliant headers on all HTTP responses
- * - Admin authentication: API key validation for admin/metrics endpoints
- * - Pairing authentication: SIGNALING_INTERNAL_SECRET required for POST /pairings (constant-time comparison)
- * - DDoS protection: Automatic blacklisting of repeat offenders
- *
- * Rate limit rationale (OWASP compliant):
- * - POST /pairings: 10/min - strict to prevent enumeration attacks
- * - GET /pairings/:code: 60/min - lookups are read-only
- * - DELETE /pairings/:code: 10/min - destructive operation
- * - WebSocket messages: 100/min per IP - prevents message floods
- *
- * Health endpoints:
- * - GET /health: Detailed health status with uptime, connections, memory
- * - GET /ready: Returns 200 when server is ready to accept connections
- * - GET /live: Returns 200 if process is alive (liveness probe)
- * - GET /metrics: Prometheus-compatible metrics endpoint (requires admin auth)
- *
- * Admin endpoints (require ADMIN_API_KEY):
- * - GET /admin/status: Server configuration and status
- * - POST /admin/blacklist: Manually blacklist an IP address
- */
 
 import 'dotenv/config';
 
 if (!process.env['NODE_ENV']) {
-  // Logger isn't available yet (depends on NODE_ENV), use stderr directly
   process.stderr.write(
     '[signaling-server] WARN: NODE_ENV is not set — defaulting to "development"\n',
   );
@@ -101,10 +71,6 @@ import {
   PENDING_APPROVAL_TTL_MS,
 } from './constants.js';
 
-// =============================================================================
-// Types
-// =============================================================================
-
 type Role = 'desktop' | 'mobile';
 
 interface Participant {
@@ -120,14 +86,9 @@ interface Session {
   expiresAt: number;
   participants: Partial<Record<Role, Participant>>;
   metadata: Record<string, unknown> | null;
-  /** Timestamp of the last heartbeat from any participant. Used for stale-session cleanup. */
   lastHeartbeatAt: number;
 }
 
-/**
- * A queued approval that was sent while the mobile client was disconnected.
- * Stored per-session and delivered when the mobile client reconnects.
- */
 interface PendingApproval {
   id: string;
   payload: Record<string, unknown>;
@@ -139,56 +100,25 @@ interface ConnectedClient {
   role: Role;
 }
 
-// =============================================================================
-// Server State
-// =============================================================================
-
 let isShuttingDown = false;
 let isReady = false;
 
-// SECURITY: Internal secret for authenticating pairing creation requests
 const SIGNALING_SECRET = process.env['SIGNALING_INTERNAL_SECRET'];
 
-/**
- * Constant-time string comparison to prevent timing attacks on secret validation.
- * Returns false if either input is empty/undefined.
- */
 const COMPARE_KEY = randomBytes(32);
 
 function constantTimeCompare(a: string, b: string): boolean {
   if (!a || !b) return false;
-  // HMAC normalizes lengths — both digests are always 32 bytes
   const ha = createHmac('sha256', COMPARE_KEY).update(a).digest();
   const hb = createHmac('sha256', COMPARE_KEY).update(b).digest();
   return timingSafeEqual(ha, hb);
 }
-
-// =============================================================================
-// SECURITY (C2, redteam-services 2026-05-04): per-pair authentication tokens
-// =============================================================================
-//
-// WebSocket registration always requires a short-lived, role-bound HMAC token.
-// QR clients receive it inside the QR payload. Manual Mobile pairing may
-// exchange the displayed 12-character, five-minute bearer code at the
-// rate-limited `/pairings/:code/claim` endpoint. The token remains mandatory on
-// the WebSocket wire and cannot be forged or reused for the Desktop role.
-//
-// HMAC payload: `${code}|${role}|${expiresAt}` keyed by SIGNALING_INTERNAL_SECRET.
-// (We bind to expiresAt so tokens for an old expired pairing cannot be replayed
-// against a newly-issued pairing that happens to recycle the same code.)
-//
-// When SIGNALING_REQUIRE_PAIR_TOKEN=0 the verifier short-circuits to true so a
-// staged rollout can land server-side first. Production MUST set =1.
 
 const REQUIRE_PAIR_TOKEN =
   (process.env['SIGNALING_REQUIRE_PAIR_TOKEN'] ?? '1').toLowerCase() === '1' ||
   process.env['NODE_ENV'] === 'production';
 
 function buildPairTokenSecret(): string {
-  // Falls back to a process-local secret if SIGNALING_INTERNAL_SECRET is not
-  // set (dev only). In production SIGNALING_INTERNAL_SECRET MUST be set or the
-  // token verification will fall back to the random per-process secret and the
-  // tokens will not survive a restart — that's acceptable for dev.
   return SIGNALING_SECRET ?? COMPARE_KEY.toString('hex');
 }
 
@@ -197,11 +127,6 @@ function issuePairToken(code: string, role: Role, expiresAt: number): string {
   return createHmac('sha256', buildPairTokenSecret()).update(payload).digest('hex');
 }
 
-/**
- * Verify a pairToken issued by issuePairToken(). Returns true only when the
- * HMAC matches in constant time. When pair-token enforcement is disabled,
- * always returns true.
- */
 function verifyPairToken(
   presented: string | undefined,
   code: string,
@@ -232,36 +157,23 @@ const publicWsUrl =
   process.env['SIGNALING_WS_URL'] ??
   `${publicHttpUrl.startsWith('https') ? 'wss' : 'ws'}://${host}:${port}${wsPath}`;
 
-// =============================================================================
-// Express App Setup
-// =============================================================================
-
 const app = express();
 
-// SIG-3 (audit 2026-05-05): only honour x-forwarded-for / x-real-ip when an
-// operator has explicitly opted in via TRUST_PROXY=true. Without this, the
-// X-Forwarded-For header is spoofable by any client and IP-based rate limits,
-// blacklists, and audit logs become trivially bypassable. Mirrors the pattern
-// in services/api-gateway/src/index.ts:58-60.
 const trustProxy = process.env['TRUST_PROXY'] === 'true' || process.env['TRUST_PROXY'] === '1';
 if (trustProxy) {
   app.set('trust proxy', true);
 }
 
-// SECURITY: Disable X-Powered-By header to reduce information leakage
 disablePoweredBy(app);
 
-// SECURITY: Apply security headers to all responses (OWASP compliant)
 app.use(securityHeadersMiddleware);
 
-// Add correlation ID to requests for distributed tracing
 app.use((req: Request, _res: Response, next: NextFunction) => {
   (req as Request & { correlationId?: string }).correlationId =
     (req.headers['x-correlation-id'] as string) ?? generateCorrelationId();
   next();
 });
 
-// Configure CORS with allowed origins
 const allowedOrigins = (() => {
   const configured = process.env['ALLOWED_ORIGINS'];
   if (configured) {
@@ -271,23 +183,6 @@ const allowedOrigins = (() => {
       .filter(Boolean);
   }
 
-  // No ALLOWED_ORIGINS. Falling back to the localhost defaults is only correct
-  // OUTSIDE production, and the gate was missing.
-  //
-  // This server sends `credentials: true`, so the fallback previously let a
-  // page on http://localhost:3000/3001/4000 make CREDENTIALED cross-origin
-  // requests to a deployed signaling server — and it is a developer product,
-  // so a local server on :3000 is the normal state of a user's machine. It
-  // simultaneously allowed NO production origin, so real traffic was blocked
-  // while localhost was not.
-  //
-  // The variable is easy to miss: railway.toml only names it in a comment,
-  // docker-compose.yml defaults it to an EMPTY string (falsy, so it lands
-  // here), and no deploy workflow sets it.
-  //
-  // apps/web/lib/cors.ts already gates its identical localhost list behind
-  // NODE_ENV === 'development'. This is the same rule, applied to the surface
-  // that was missing it.
   if (process.env['NODE_ENV'] === 'production') {
     logger.error(
       'ALLOWED_ORIGINS is not set. Refusing to fall back to localhost origins in production; ' +
@@ -309,14 +204,8 @@ app.use(
   }),
 );
 
-// SECURITY: Limit JSON body size to prevent large payload attacks
 app.use(express.json({ limit: '16kb' }));
 
-// =============================================================================
-// Rate Limiters
-// =============================================================================
-
-// Pairing creation - strict to prevent enumeration attacks
 const pairingCreateLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_PAIRING_CREATE,
@@ -329,7 +218,6 @@ const pairingCreateLimiter = rateLimit({
   },
 });
 
-// Pairing lookup - read-only operations
 const pairingLookupLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_PAIRING_LOOKUP,
@@ -342,7 +230,6 @@ const pairingLookupLimiter = rateLimit({
   },
 });
 
-// Pairing deletion - destructive operation
 const pairingDeleteLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_PAIRING_DELETE,
@@ -355,7 +242,6 @@ const pairingDeleteLimiter = rateLimit({
   },
 });
 
-// Health check - lenient for monitoring
 const healthLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_HEALTH_CHECK,
@@ -363,7 +249,6 @@ const healthLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Metrics endpoint - moderate limit
 const metricsLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_METRICS,
@@ -376,7 +261,6 @@ const metricsLimiter = rateLimit({
   },
 });
 
-// Admin endpoints - stricter limit
 const adminLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_ADMIN,
@@ -389,44 +273,22 @@ const adminLimiter = rateLimit({
   },
 });
 
-// =============================================================================
-// HTTP Server and WebSocket Setup
-// =============================================================================
-
 const server: Server = createServer(app);
 const wss = new WebSocketServer({ server, path: wsPath });
 
-// =============================================================================
-// Session Storage
-// =============================================================================
-
-// In-memory session storage for active connections
-// Sessions are persisted in DB, but socket routing is in-memory
 const activeSessions = new Map<string, Session>();
 const clients = new WeakMap<WebSocket, ConnectedClient>();
 
-/**
- * Pending approvals per session code.
- * When the mobile client disconnects while an approval is queued from desktop,
- * the approval is stored here and delivered when mobile reconnects.
- */
 const pendingApprovals = new Map<string, PendingApproval[]>();
 
-// Pending session rehydrations to prevent race conditions
 const pendingRehydrations = new Map<
   string,
   { promise: Promise<Session | null>; createdAt: number }
 >();
 
-// Configure metrics callbacks
 metrics.setConnectionCountCallback(() => connectionManager.getConnectionCount());
 metrics.setSessionCountCallback(() => activeSessions.size);
 
-// =============================================================================
-// Validation Schemas with Enhanced Security
-// =============================================================================
-
-// SECURITY: Validate metadata size and structure to prevent DoS
 const metadataSchema = z
   .record(z.string().max(100), z.unknown())
   .refine((obj) => Object.keys(obj).length <= MAX_METADATA_KEYS, {
@@ -448,7 +310,6 @@ const manualPairingClaimSchema = z
   })
   .strict();
 
-// SECURITY: Enhanced pairing code validation with pattern check
 const pairingCodeSchema = z
   .string()
   .length(PAIRING_CODE_LENGTH)
@@ -461,26 +322,14 @@ const registerMessageSchema = z.object({
   code: pairingCodeSchema,
   role: z.union([z.literal('desktop'), z.literal('mobile')]),
   metadata: metadataSchema,
-  // SECURITY (C2, redteam-services 2026-05-04): per-pair authentication token.
-  // The signaling-server returns this as part of POST /pairings; the legitimate
-  // peer presents it on register. QR clients receive the Mobile token directly;
-  // manual clients may exchange the displayed bearer code through the tightly
-  // rate-limited claim route. The token is an HMAC over (code, role, expiresAt),
-  // binding registration to the intended role and session lifetime.
-  //
-  // OPTIONAL during the rollout window: when SIGNALING_REQUIRE_PAIR_TOKEN=0 the
-  // server still accepts un-tokenized registers (legacy clients). Default in
-  // production is "1" — see verifyPairToken() below.
   pairToken: z.string().min(1).max(512).optional(),
 });
 
-// WebRTC SDP payload validation (offer/answer)
 const sdpPayloadSchema = z.object({
   type: z.enum(['offer', 'answer']),
   sdp: z.string().max(MAX_SDP_SIZE),
 });
 
-// WebRTC ICE candidate payload validation
 const icePayloadSchema = z.object({
   candidate: z.string().max(MAX_ICE_CANDIDATE_SIZE).nullable().optional(),
   sdpMid: z.string().max(MAX_SDP_MID_SIZE).nullable().optional(),
@@ -488,20 +337,6 @@ const icePayloadSchema = z.object({
   usernameFragment: z.string().max(MAX_USERNAME_FRAGMENT_SIZE).nullable().optional(),
 });
 
-// Control message payload
-//
-// SECURITY (H4, redteam-services 2026-05-04): the `action` field was previously
-// `z.string().max(MAX_ACTION_NAME_SIZE)` which let any registered peer forward
-// arbitrary action strings. We now restrict to a strict allowlist that mirrors
-// the action types the desktop and mobile clients actually handle. New action
-// types MUST be added here AND in the mobile/desktop dispatch handlers.
-//
-// Allowlist (mirror of apps/mobile + apps/desktop dispatch protocol):
-//   - approval_request / approval_response — desktop ↔ mobile approval flow
-//   - sync_request / sync_response         — state sync after reconnect
-//   - dispatch_request / dispatch_response — natural-language task dispatch
-//   - heartbeat / heartbeat_ack            — application-level liveness
-//   - cancel                               — cancel an in-flight task
 const ALLOWED_CONTROL_ACTIONS = [
   'approval_request',
   'approval_response',
@@ -536,22 +371,10 @@ const heartbeatMessageSchema = z.object({
 type RegisterMessage = z.infer<typeof registerMessageSchema>;
 type SignalMessage = z.infer<typeof signalMessageSchema>;
 
-// =============================================================================
-// Health & Monitoring Endpoints
-// =============================================================================
-
-/**
- * Liveness probe - returns 200 if process is alive
- * Used by Kubernetes/Docker to check if container should be restarted
- */
 app.get('/live', (_req, res) => {
   res.status(200).json({ status: 'alive', timestamp: Date.now() });
 });
 
-/**
- * Readiness probe - returns 200 when server is ready to accept connections
- * Used by load balancers to know when to route traffic
- */
 app.get('/ready', (_req, res) => {
   if (isShuttingDown) {
     return res.status(503).json({ status: 'shutting_down', timestamp: Date.now() });
@@ -562,10 +385,6 @@ app.get('/ready', (_req, res) => {
   return res.status(200).json({ status: 'ready', timestamp: Date.now() });
 });
 
-/**
- * Health check endpoint - detailed health status
- * Returns comprehensive server health information
- */
 app.get('/health', healthLimiter, (_req, res) => {
   const memUsage = process.memoryUsage();
   const stats = connectionManager.getStats();
@@ -598,16 +417,10 @@ app.get('/health', healthLimiter, (_req, res) => {
   return res.status(httpStatus).json(healthStatus);
 });
 
-/**
- * Prometheus metrics endpoint
- * Returns metrics in Prometheus text format for scraping
- * SECURITY: Requires admin authentication when ADMIN_API_KEY is configured
- */
 app.get(
   '/metrics',
   metricsLimiter,
   (req, res, next) => {
-    // If admin API key is configured, require authentication
     if (isAdminEnabled()) {
       adminAuthMiddleware(req, res, next);
     } else {
@@ -620,14 +433,6 @@ app.get(
   },
 );
 
-// =============================================================================
-// Admin Endpoints (Require ADMIN_API_KEY)
-// =============================================================================
-
-/**
- * Admin status endpoint
- * Returns server configuration and status
- */
 app.get('/admin/status', adminLimiter, adminAuthMiddleware, (_req, res) => {
   const wsStats = wsRateLimiter.getStats();
 
@@ -653,10 +458,6 @@ app.get('/admin/status', adminLimiter, adminAuthMiddleware, (_req, res) => {
   });
 });
 
-/**
- * Admin blacklist endpoint
- * Manually blacklist an IP address
- */
 const adminBlacklistSchema = z.object({
   ip: z.string().min(1, 'IP address required'),
   reason: z.string().min(1, 'Reason required'),
@@ -679,14 +480,7 @@ app.post('/admin/blacklist', adminLimiter, adminAuthMiddleware, (req, res) => {
   return res.json({ success: true, message: `IP ${ip} blacklisted` });
 });
 
-// =============================================================================
-// Pairing Endpoints
-// =============================================================================
-
-// SECURITY: Rate limited to 10/min to prevent enumeration attacks
-// SECURITY: Requires Bearer token matching SIGNALING_INTERNAL_SECRET
 app.post('/pairings', pairingCreateLimiter, async (req, res) => {
-  // SECURITY: Authenticate pairing creation with internal secret
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace('Bearer ', '');
 
@@ -723,13 +517,6 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   logger.info({ correlationId, code, expiresAt }, 'Pairing session created');
   metrics.recordPairingRequest(true);
 
-  // SECURITY (C2): mint per-role auth tokens. The gateway is responsible for
-  // delivering these to the right device — `desktopPairToken` to the desktop
-  // (which already trusts the gateway via the signed JWT it presented to
-  // /api/mobile/pairing-code) and `mobilePairToken` to the mobile client (via
-  // the QR encoding produced by buildQrPayload + a side-channel for the
-  // token). The signaling-server itself has no notion of which device is
-  // which user — that binding lives in the gateway.
   const desktopPairToken = issuePairToken(code, 'desktop', expiresAt);
   const mobilePairToken = issuePairToken(code, 'mobile', expiresAt);
 
@@ -740,14 +527,10 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
     httpUrl: publicHttpUrl,
     wsUrl: publicWsUrl,
     qrData: buildQrPayload(code),
-    // Nested shape expected by desktop client (connectionStore PairingResponse)
     signaling: {
       httpUrl: publicHttpUrl,
       wsUrl: publicWsUrl,
     },
-    // SECURITY (C2): per-role auth tokens. Gateway MUST forward these to the
-    // appropriate peers and MUST NOT log them at info level. See
-    // services/api-gateway/src/routes/mobile.ts.
     pairTokens: {
       desktop: desktopPairToken,
       mobile: mobilePairToken,
@@ -755,13 +538,6 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   });
 });
 
-// SECURITY: Rate limited to 60/min - read-only operations
-//
-// SECURITY (M5, redteam-services 2026-05-04): all failure responses return
-// 404 with the same body so an attacker scanning the 36^8 pairing-code
-// keyspace cannot use status code differentiation as an existence oracle.
-// Only the WS `register` handler authoritatively determines whether a code
-// is valid — and that path requires a per-pair HMAC token (C2).
 app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
   const generic404 = { error: 'pairing_not_found' };
   const rawCode = req.params['code'];
@@ -769,15 +545,11 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
     return res.status(404).json(generic404);
   }
 
-  // SECURITY: Validate pairing code format before database lookup. Even
-  // malformed codes return 404 (not 400) to avoid leaking the validator
-  // pattern as a probing oracle.
   const codeValidation = pairingCodeSchema.safeParse(rawCode);
   if (!codeValidation.success) {
     return res.status(404).json(generic404);
   }
 
-  // Use validated code (guaranteed to be string)
   const code = codeValidation.data;
 
   const { data: sessionData } = await getSessionByCode(code);
@@ -802,17 +574,6 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
   });
 });
 
-/**
- * Exchange the high-entropy, five-minute code displayed by Desktop for the
- * mobile role token required by WebSocket registration.
- *
- * QR pairing does not call this endpoint because its payload already carries
- * the role token. Manual pairing deliberately treats the 12-character code as
- * a short-lived bearer secret. A strict 10/min/IP limiter, uniform invalid/
- * expired response, TLS, approximately 62 bits of code entropy, and the
- * existing one-role-per-session WebSocket gate keep this from becoming a
- * practical enumeration path.
- */
 app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
   const generic404 = { error: 'pairing_not_found' };
   const parsedBody = manualPairingClaimSchema.safeParse(req.body ?? {});
@@ -841,10 +602,7 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
   });
 });
 
-// SECURITY: Rate limited to 10/min - destructive operation
-// SECURITY: Requires Bearer token matching SIGNALING_INTERNAL_SECRET
 app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
-  // SECURITY: Authenticate pairing deletion with internal secret
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace('Bearer ', '');
 
@@ -857,13 +615,11 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
     return res.status(400).json({ error: 'missing_code' });
   }
 
-  // SECURITY: Validate pairing code format before database operation
   const codeValidation = pairingCodeSchema.safeParse(rawCode);
   if (!codeValidation.success) {
     return res.status(400).json({ error: 'invalid_code_format' });
   }
 
-  // Use validated code (guaranteed to be string)
   const code = codeValidation.data;
 
   const active = activeSessions.get(code);
@@ -883,18 +639,11 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
   return res.json({ success: true });
 });
 
-// =============================================================================
-// 404 and Error Handlers (MUST be after all route handlers)
-// =============================================================================
-
-// 404 handler for undefined routes
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'NOT_FOUND', message: 'Route not found' });
 });
 
-// Global error handler (must be last middleware)
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
-  // Handle Zod validation errors
   if (err instanceof z.ZodError) {
     logger.warn({ path: req.path, method: req.method }, 'Request validation failed');
     res.status(400).json({
@@ -909,26 +658,7 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Internal server error' });
 });
 
-// =============================================================================
-// WebSocket Connection Handling
-// =============================================================================
-
 wss.on('connection', (socket, request) => {
-  // SECURITY: Validate WebSocket Origin header to prevent cross-site WebSocket hijacking.
-  //
-  // SIG-1 (audit 2026-05-03): the previous implementation allowed
-  // connections with no Origin header unconditionally, on the
-  // assumption that "non-browser clients (desktop app) don't send
-  // one." That assumption is too generous — any SSRF vector or
-  // misconfigured mobile HTTP library can omit Origin to skip the
-  // check. We now require either:
-  //   1. A valid (allowlisted) Origin header, OR
-  //   2. A no-Origin connection that presents the server-side
-  //      `x-signaling-internal-secret` header equal to
-  //      SIGNALING_INTERNAL_SECRET. The desktop and mobile native
-  //      clients can send this; arbitrary attackers cannot.
-  // If allowedOrigins is empty (dev), Origin checking is skipped
-  // entirely as before.
   const origin = request.headers['origin'];
   if (allowedOrigins.length > 0) {
     if (origin) {
@@ -954,24 +684,18 @@ wss.on('connection', (socket, request) => {
     }
   }
 
-  // Reject connections during shutdown
   if (isShuttingDown) {
     socket.send(JSON.stringify({ type: 'error', error: 'server_shutting_down' }));
     socket.close(1001, 'server_shutting_down');
     return;
   }
 
-  // Extract client IP.
-  // SIG-3 (audit 2026-05-05): only consult x-forwarded-for when TRUST_PROXY is
-  // set — otherwise the header is attacker-controlled and any IP-keyed limit
-  // (rate-limit, blacklist) becomes spoofable. See trust-proxy block above.
   const forwardedFor = trustProxy ? request.headers['x-forwarded-for'] : undefined;
   const ip =
     (typeof forwardedFor === 'string' ? forwardedFor.split(',')[0]?.trim() : undefined) ??
     request.socket.remoteAddress ??
     'unknown';
 
-  // SECURITY: Check if IP is blacklisted
   const blacklistStatus = wsRateLimiter.isBlacklisted(ip);
   if (blacklistStatus.blacklisted) {
     logger.warn({ ip, reason: blacklistStatus.reason }, 'Blacklisted IP attempted connection');
@@ -987,7 +711,6 @@ wss.on('connection', (socket, request) => {
     return;
   }
 
-  // SECURITY: Check WebSocket connection rate limit
   const connectionResult = wsRateLimiter.checkConnection(ip);
   if (!connectionResult.allowed) {
     logger.warn({ ip, reason: connectionResult.reason }, 'Connection rate limit exceeded');
@@ -1003,7 +726,6 @@ wss.on('connection', (socket, request) => {
     return;
   }
 
-  // Check connection limit per IP (existing per-connection limit)
   if (!connectionManager.canConnect(ip)) {
     logger.warn({ ip }, 'Connection limit exceeded for IP');
     metrics.recordError('connection_limit_exceeded');
@@ -1018,7 +740,6 @@ wss.on('connection', (socket, request) => {
   logger.debug({ ip, correlationId }, 'WebSocket connection established');
   metrics.recordMessage('connection');
 
-  // Handle WebSocket errors
   socket.on('error', (error) => {
     logger.error({ correlationId, error: error.message }, 'WebSocket error');
     metrics.recordError('websocket_error');
@@ -1042,7 +763,6 @@ wss.on('connection', (socket, request) => {
   socket.on('message', (raw) => {
     connectionManager.updateActivity(socket);
 
-    // SECURITY: Check message rate limit before processing
     const messageResult = wsRateLimiter.checkMessage(ip);
     if (!messageResult.allowed) {
       logger.warn(
@@ -1062,7 +782,6 @@ wss.on('connection', (socket, request) => {
 
     const rawStr = raw.toString();
 
-    // Check message size before parsing
     if (rawStr.length > MAX_MESSAGE_SIZE_BYTES) {
       logger.warn({ correlationId, size: rawStr.length }, 'Message too large');
       metrics.recordError('message_too_large');
@@ -1103,7 +822,6 @@ wss.on('connection', (socket, request) => {
 
     if (heartbeatMessageSchema.safeParse(data).success) {
       metrics.recordMessage('heartbeat');
-      // Update session-level heartbeat for stale-session cleanup
       const heartbeatClient = clients.get(socket);
       if (heartbeatClient) {
         const heartbeatSession = activeSessions.get(heartbeatClient.code);
@@ -1145,7 +863,6 @@ wss.on('connection', (socket, request) => {
       notifyPeer(session, client.role, { type: 'peer_left', role: client.role });
     }
 
-    // Clean up session if no participants and expired
     if (
       !session.participants.desktop &&
       !session.participants.mobile &&
@@ -1156,17 +873,12 @@ wss.on('connection', (socket, request) => {
   });
 });
 
-// =============================================================================
-// Session Cleanup
-// =============================================================================
-
 const cleanupInterval = setInterval(() => {
   const now = Date.now();
   let expiredCount = 0;
   let staleCount = 0;
 
   for (const session of activeSessions.values()) {
-    // 1. Expired session cleanup (TTL elapsed)
     if (session.expiresAt <= now) {
       disconnectParticipants(session, 'session_expired');
       activeSessions.delete(session.code);
@@ -1175,7 +887,6 @@ const cleanupInterval = setInterval(() => {
       continue;
     }
 
-    // 2. Stale session cleanup: no heartbeat for >5 minutes AND no connected participants
     const hasParticipants =
       Boolean(session.participants.desktop) || Boolean(session.participants.mobile);
     const heartbeatAge = now - session.lastHeartbeatAt;
@@ -1190,7 +901,6 @@ const cleanupInterval = setInterval(() => {
     }
   }
 
-  // 3. Expire old pending approvals to prevent memory leaks
   for (const [code, approvals] of pendingApprovals.entries()) {
     const filtered = approvals.filter((a) => now - a.queuedAt < PENDING_APPROVAL_TTL_MS);
     if (filtered.length === 0) {
@@ -1200,17 +910,12 @@ const cleanupInterval = setInterval(() => {
     }
   }
 
-  // SECURITY: Cleanup auth failure entries to prevent memory leaks
   cleanupAuthFailures();
 
   if (expiredCount > 0 || staleCount > 0) {
     logger.info({ expiredCount, staleCount }, 'Cleaned up expired/stale sessions');
   }
 }, SESSION_CLEANUP_INTERVAL_MS);
-
-// =============================================================================
-// Graceful Shutdown
-// =============================================================================
 
 async function gracefulShutdown(signal: string): Promise<void> {
   if (isShuttingDown) {
@@ -1223,29 +928,23 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
   logger.info({ signal }, 'Starting graceful shutdown');
 
-  // Set a hard deadline for shutdown
   const shutdownTimeout = setTimeout(() => {
     logger.error('Graceful shutdown timeout exceeded, forcing exit');
     process.exit(1);
   }, GRACEFUL_SHUTDOWN_TIMEOUT_MS);
 
   try {
-    // Stop accepting new connections
     clearInterval(cleanupInterval);
     connectionManager.stop();
 
-    // SECURITY: Shutdown rate limiter cleanup intervals
     wsRateLimiter.shutdown();
 
-    // Close all WebSocket connections gracefully
     logger.info('Closing WebSocket connections');
     await connectionManager.closeAllConnections('server_shutdown');
 
-    // Wait for pending operations to drain
     logger.info('Waiting for pending operations to complete');
     await new Promise((resolve) => setTimeout(resolve, SHUTDOWN_DRAIN_TIMEOUT_MS));
 
-    // Close WebSocket server
     await new Promise<void>((resolve, reject) => {
       wss.close((err) => {
         if (err) reject(err);
@@ -1253,7 +952,6 @@ async function gracefulShutdown(signal: string): Promise<void> {
       });
     });
 
-    // Close HTTP server
     await new Promise<void>((resolve, reject) => {
       server.close((err) => {
         if (err) reject(err);
@@ -1271,25 +969,18 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
 }
 
-// Register signal handlers
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   logger.fatal({ error: error.message, stack: error.stack }, 'Uncaught exception');
   gracefulShutdown('uncaughtException');
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   logger.fatal({ reason, promise }, 'Unhandled promise rejection');
   gracefulShutdown('unhandledRejection');
 });
-
-// =============================================================================
-// Server Startup
-// =============================================================================
 
 server.listen(port, host, () => {
   connectionManager.start();
@@ -1315,10 +1006,6 @@ server.listen(port, host, () => {
   );
 });
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
 function validateSignalPayload(kind: string, payload: unknown): boolean {
   switch (kind) {
     case 'offer':
@@ -1343,10 +1030,8 @@ async function handleRegister(
   let session = activeSessions.get(message.code);
 
   if (!session) {
-    // Check for pending rehydration (race condition prevention)
     let pendingEntry = pendingRehydrations.get(message.code);
 
-    // Clean up stale pending entries
     if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
       const now = Date.now();
       for (const [code, entry] of pendingRehydrations.entries()) {
@@ -1369,7 +1054,6 @@ async function handleRegister(
           return existingSession;
         }
 
-        // Wrap DB query with timeout to prevent indefinite hangs if the DB is slow/unresponsive
         const DB_QUERY_TIMEOUT_MS = 10_000;
         const dbQuery = getSessionByCode(message.code);
         const timeout = new Promise<never>((_, reject) =>
@@ -1432,10 +1116,6 @@ async function handleRegister(
     return;
   }
 
-  // SECURITY (C2, redteam-services 2026-05-04): verify per-pair auth token
-  // BEFORE any state-changing checks. We do this BEFORE the
-  // "role_already_connected" check so an attacker without the token cannot
-  // probe which roles are taken — both failures look the same to them.
   if (!verifyPairToken(message.pairToken, message.code, message.role, session.expiresAt)) {
     logger.warn(
       {
@@ -1447,9 +1127,6 @@ async function handleRegister(
       'Pair token verification failed',
     );
     metrics.recordError('pair_token_invalid');
-    // Use a generic error so an attacker cannot distinguish "wrong token" from
-    // "wrong code" or "wrong role". Mirrors the H1/H2 enumeration-prevention
-    // pattern used in HTTP 404s elsewhere.
     socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
     socket.close();
     return;
@@ -1480,7 +1157,6 @@ async function handleRegister(
     'Client registered to session',
   );
 
-  // Update session heartbeat on registration (reconnect counts as activity)
   session.lastHeartbeatAt = Date.now();
 
   socket.send(
@@ -1495,7 +1171,6 @@ async function handleRegister(
 
   const peer = getPeer(session, message.role);
   if (peer) {
-    // Both peers connected — extend session TTL to long-lived (24h)
     const longExpiry = Date.now() + SESSION_LONG_TTL_MS;
     if (session.expiresAt < longExpiry) {
       session.expiresAt = longExpiry;
@@ -1517,12 +1192,10 @@ async function handleRegister(
     });
   }
 
-  // Reconnect handling: deliver queued approvals to mobile on reconnect
   if (message.role === 'mobile') {
     deliverPendingApprovals(session.code, participant);
   }
 
-  // Reconnect handling: request state sync from desktop when mobile reconnects
   if (message.role === 'mobile' && peer) {
     notifyParticipant(peer, {
       type: 'sync_request',
@@ -1549,8 +1222,6 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
 
   const peer = getPeer(session, client.role);
 
-  // Approval delivery resilience: if desktop sends a control signal with an
-  // approval action while mobile is disconnected, queue it for delivery on reconnect.
   if (!peer && message.kind === 'control' && client.role === 'desktop') {
     const controlPayload = message.payload as
       | { action?: string; data?: Record<string, unknown> }
@@ -1570,15 +1241,6 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
 
   logger.debug({ correlationId, kind: message.kind, from: client.role }, 'Forwarding signal');
 
-  // SIG-2 (audit 2026-05-03): for `control` signals we re-parse the
-  // payload through the strict zod schema before forwarding so the
-  // peer only ever sees a payload of the schema-permitted shape.
-  // SDP / ICE payloads are forwarded through `validateSignalPayload`
-  // earlier in the message-handling pipeline (which only checks
-  // structural validity, not the exact field set), so the
-  // additional re-parse here closes the gap where a structurally
-  // valid but semantically dangerous control object could pass
-  // through to the peer.
   let payloadToForward: unknown = message.payload;
   if (message.kind === 'control') {
     const reparsed = controlPayloadSchema.safeParse(message.payload);
@@ -1628,10 +1290,8 @@ function isSessionExpired(session: Session): boolean {
 
 function generateCode(): string {
   const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const len = charset.length; // 36
-  // Rejection sampling: discard byte values that cause modulo bias.
-  // The largest multiple of 36 that fits in a byte is 252 (36*7).
-  const limit = 256 - (256 % len); // 252
+  const len = charset.length;
+  const limit = 256 - (256 % len);
   let code = '';
   while (code.length < PAIRING_CODE_LENGTH) {
     const bytes = randomBytes(PAIRING_CODE_LENGTH - code.length + 4);
@@ -1693,10 +1353,6 @@ function disconnectParticipants(
   }
 }
 
-/**
- * Queue a pending approval for delivery when the mobile client reconnects.
- * Bounded by MAX_PENDING_APPROVALS_PER_SESSION to prevent memory exhaustion.
- */
 function queuePendingApproval(code: string, payload: Record<string, unknown>): void {
   let queue = pendingApprovals.get(code);
   if (!queue) {
@@ -1704,7 +1360,6 @@ function queuePendingApproval(code: string, payload: Record<string, unknown>): v
     pendingApprovals.set(code, queue);
   }
 
-  // Evict oldest if at capacity
   if (queue.length >= MAX_PENDING_APPROVALS_PER_SESSION) {
     queue.shift();
   }
@@ -1716,10 +1371,6 @@ function queuePendingApproval(code: string, payload: Record<string, unknown>): v
   });
 }
 
-/**
- * Deliver any pending approvals to a mobile participant that just reconnected.
- * Removes delivered approvals from the queue.
- */
 function deliverPendingApprovals(code: string, mobileParticipant: Participant): void {
   const queue = pendingApprovals.get(code);
   if (!queue || queue.length === 0) {
@@ -1748,7 +1399,6 @@ function deliverPendingApprovals(code: string, mobileParticipant: Participant): 
     });
   }
 
-  // Clear the queue after delivery
   pendingApprovals.delete(code);
 }
 

@@ -8,7 +8,6 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { clearTermsGateMarker } from '../TermsGate';
 
-/** Finish a login whose current durable acceptance was already verified server-side. */
 export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
 
@@ -20,22 +19,6 @@ export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string })
   return <p role="status">Finishing signing in…</p>;
 }
 
-/**
- * The durable half of the login and signup clickwrap.
- *
- * It only mounts behind `<TermsGate>` on an authenticated completion page, so
- * it runs after a fresh post-auth click for an account whose durable record is
- * missing or outdated. It writes that fact against the account, which is only
- * possible once Clerk has a session.
- *
- * What this does NOT guarantee, so nobody reads a promise into it later: the
- * server takes the client's word for it. /api/terms/accept writes for any
- *   signed-in caller; there is no signed proof from the gate that the box was
- *   rendered and ticked.
- *
- * A failure is shown rather than swallowed, and there is no continue-without-
- * recording path: the destination is reached only after the write succeeds.
- */
 export function RecordTermsAcceptance({
   redirectTo,
   surface = 'web-signup',
@@ -72,8 +55,6 @@ export function RecordTermsAcceptance({
   useEffect(() => {
     if (!isLoaded || attempted.current) return;
     attempted.current = true;
-    // No session means no account to attribute the acceptance to — the
-    // destination's own auth gate decides what happens next.
     if (!isSignedIn) {
       clearTermsGateMarker();
       router.replace(redirectTo);

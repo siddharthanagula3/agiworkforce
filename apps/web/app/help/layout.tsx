@@ -1,13 +1,5 @@
 import type { Metadata } from 'next';
 
-/**
- * These descriptions are the copy search engines and link previews quote, so
- * they must not promise a support channel that does not exist. `/community`
- * (apps/web/app/community/page.tsx) states plainly that there is no Discord,
- * forum, or Slack workspace — the real channels are the changelog and the
- * contact mailbox — so "community support" was removed here rather than left
- * to contradict it.
- */
 export const metadata: Metadata = {
   title: 'Help Center',
   description:

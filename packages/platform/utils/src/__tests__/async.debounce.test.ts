@@ -25,10 +25,6 @@ describe('debounce', () => {
   });
 
   it('cancel() drops the pending call so it can never fire', () => {
-    // This is the unmount contract. Without it a debounced state setter fires
-    // against a torn-down React tree — in jsdom that surfaces as an uncaught
-    // `window is not defined` from resolveUpdatePriority, attributed to
-    // whichever test file happened to be running when the timer expired.
     const spy = vi.fn();
     const debounced = debounce(spy, 300);
 

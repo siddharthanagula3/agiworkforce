@@ -1,16 +1,6 @@
-/**
- * Chat Store Types
- *
- * Shared type definitions for chat-related stores.
- * Extracted from unifiedChatStore for better modularity.
- */
 
 import type { Artifact } from '@shared/types/chat';
 
-/**
- * Widget data type for embedded widgets (INT-001)
- * Widgets can be forms, data tables, charts, confirmations, etc.
- */
 export interface ChatWidgetData {
   id: string;
   type: string;
@@ -30,15 +20,10 @@ export interface MessageMetadata {
   streaming?: boolean;
   artifacts?: Artifact[];
   type?: 'reasoning' | 'response' | 'deep-research-task';
-  /** Task ID for deep research messages */
   taskId?: string;
-  /** Indicates this message was edited by the user */
   edited?: boolean;
-  /** Timestamp of when the message was last edited */
   editedAt?: Date;
-  /** Original content before editing (for history) */
   originalContent?: string;
-  /** Embedded widgets in this message (INT-001) */
   widgets?: ChatWidgetData[];
 
   tool?: string;
@@ -77,9 +62,7 @@ export interface Attachment {
   size?: number;
   mimeType?: string;
   content?: string;
-  /** Duration in seconds for audio files */
   duration?: number;
-  /** Transcription text for audio files */
   transcription?: string;
 }
 
@@ -174,13 +157,10 @@ export interface ConversationSummary {
   archived?: boolean;
   lastMessage?: string;
   updatedAt: Date;
-  /** Per-conversation custom instructions */
   customInstructions?: string;
-  /** Project ID this conversation belongs to */
   projectId?: string;
 }
 
-// Pending user message - for mid-task input while AI is processing
 export interface PendingUserMessage {
   id: string;
   content: string;
@@ -211,9 +191,4 @@ export type FocusMode = 'web' | 'code' | 'academic' | 'reasoning' | 'deep-resear
 
 export type ActiveView = 'chat' | 'projects' | 'artifacts';
 
-/**
- * Conversation Mode controls AI autonomy level
- * - 'auto': Agent acts autonomously without prompts (default)
- * - 'manual': Agent asks for permission before dangerous actions
- */
 export type ConversationMode = 'auto' | 'manual';

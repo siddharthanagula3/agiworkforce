@@ -35,17 +35,6 @@ import { parseGeminiStream, translateGeminiStream } from './stream';
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 
-// FIX (audit 2026-05-20, §8): the Vertex AI / gcp-adc auth method was
-// advertised in the catalog but the adapter has no implementation behind
-// it. Importers that picked gcp-adc thinking it was functional would
-// silently fall through the `!config.apiKey` branch in stream() and
-// surface a misleading "requires apiKey" error. Until the Vertex adapter
-// lands, only the api-key path is advertised here. The full method list
-// (kept for documentation) is in the comment below.
-//
-// const FUTURE_AUTH_METHODS: readonly AuthMethod[] = [
-//   { kind: 'gcp-adc', label: 'Google Cloud ADC (Vertex AI)' },
-// ];
 const GOOGLE_AUTH_METHODS: readonly AuthMethod[] = [
   {
     kind: 'api-key',
@@ -56,16 +45,11 @@ const GOOGLE_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface GoogleAdapterConfig extends ProviderAdapterConfig {
-  /** Optional base URL override (e.g., a regional Generative Language endpoint). */
   baseUrl?: string;
-  /** Skip dynamic /listModels discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
 }
 
 export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderAdapter {
-  // FIX (audit 2026-05-20, §8): fail-fast on Vertex/gcp-adc requests until
-  // that path has a real adapter. Catches the case where a future caller
-  // surfaces gcp-adc selection via authMethod or vertex-style config.
   if (
     (config as { authMethod?: string }).authMethod === 'gcp-adc' ||
     (config as { useVertex?: boolean }).useVertex === true
@@ -108,11 +92,6 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
       }
 
       const body = translateChatRequest(req);
-      // API key is sent via the `x-goog-api-key` header — never as a `?key=`
-      // query string. Keys in URLs leak via server access logs, browser
-      // history, and proxy logs even over HTTPS. The Generative Language
-      // API documents the header path as the recommended secure transport.
-      // AUDIT-FIX: alert-404 — bound trailing-slash strip to avoid polynomial-redos.
       const url = `${baseUrl.replace(
         /\/{1,32}$/,
         '',
@@ -120,10 +99,6 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
 
       let res: Response;
       try {
-        // Bound the connect/headers wait: the chat route awaits these response
-        // headers before it can start streaming to the client, so a hung upstream
-        // (no first byte) would otherwise stall the whole turn ("stuck" composer).
-        // On timeout the fetch aborts and the catch below yields a classified error.
         const HEADERS_TIMEOUT_MS = 30_000;
         const combinedSignal = AbortSignal.any([signal, AbortSignal.timeout(HEADERS_TIMEOUT_MS)]);
         res = await fetchFn(url, {
@@ -152,8 +127,6 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        // Build a synthetic error to feed the classifier; res.headers is a
-        // real Headers instance so retry-after parsing works without extra glue.
         const synthetic = {
           status: res.status,
           message: `Google responded ${res.status}: ${text || res.statusText}`,

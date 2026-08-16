@@ -1,20 +1,5 @@
 'use client';
 
-/**
- * SourcesPanel - ChatGPT-style Sources tab for a project page.
- *
- * Replaces the raw <KnowledgeFilesPanel> usage in the Sources tab with:
- *   - Empty state: centered card with source-type icons, heading, subtext,
- *     and a primary "Add sources" button (ChatGPT match).
- *   - Sort control: "Newest" / "Oldest" (sorts the rendered file list).
- *   - Filter control: "All" (placeholder; type filter can be extended).
- *   - AddSourcesModal: opened by the "Add sources" button.
- *   - File list: reuses the same rendering logic as KnowledgeFilesPanel.
- *
- * Upload mechanics are shared with KnowledgeFilesPanel through the canonical
- * project-knowledge upload service; this component owns only presentation.
- */
-
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { HardDrive, MessageSquare, Upload, Trash2 } from 'lucide-react';
@@ -36,11 +21,6 @@ type UploadState =
   | { status: 'uploading'; fileName: string; progress: number }
   | { status: 'error'; message: string };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Return a file-type icon character based on MIME type. */
 function fileIcon(mimeType: string): string {
   if (mimeType.startsWith('image/')) return '🖼';
   if (mimeType === 'application/pdf') return '📄';
@@ -49,17 +29,9 @@ function fileIcon(mimeType: string): string {
   return '📁';
 }
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface Props {
   projectId: string;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function SourcesPanel({ projectId }: Props) {
   const [files, setFiles] = useState<ProjectKnowledgeFile[]>([]);
@@ -72,7 +44,6 @@ export function SourcesPanel({ projectId }: Props) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load files on mount / projectId change
   useEffect(() => {
     let cancelled = false;
     setLoadState('loading');
@@ -89,10 +60,6 @@ export function SourcesPanel({ projectId }: Props) {
       cancelled = true;
     };
   }, [projectId]);
-
-  // ---------------------------------------------------------------------------
-  // Upload
-  // ---------------------------------------------------------------------------
 
   async function handleDelete(file: ProjectKnowledgeFile) {
     const previous = files;
@@ -126,7 +93,6 @@ export function SourcesPanel({ projectId }: Props) {
     }
   }
 
-  /** Convert pasted/typed text into a .txt blob and upload via the same path. */
   async function handleUploadText(text: string, title: string) {
     const safeTitle = title.replace(/[^\w\s-]/g, '').trim() || 'text-note';
     const fileName = `${safeTitle}.txt`;
@@ -135,14 +101,9 @@ export function SourcesPanel({ projectId }: Props) {
     await handleUpload(file);
   }
 
-  // ---------------------------------------------------------------------------
-  // Sorting + filtering
-  // ---------------------------------------------------------------------------
-
   const displayedFiles = useMemo(() => {
     let result = [...files];
 
-    // Type filter
     if (typeFilter !== 'all') {
       result = result.filter((f) => {
         if (typeFilter === 'image') return f.mimeType.startsWith('image/');
@@ -154,7 +115,6 @@ export function SourcesPanel({ projectId }: Props) {
       });
     }
 
-    // Sort by addedAt (the canonical timestamp on ProjectKnowledgeFile)
     result.sort((a, b) => {
       const ta = new Date(a.addedAt).getTime();
       const tb = new Date(b.addedAt).getTime();
@@ -165,10 +125,6 @@ export function SourcesPanel({ projectId }: Props) {
   }, [files, sortOrder, typeFilter]);
 
   const isUploading = uploadState.status === 'uploading';
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
 
   return (
     <div data-testid="sources-panel">
@@ -544,10 +500,6 @@ export function SourcesPanel({ projectId }: Props) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// SourceTypeIcon - small rounded icon cell used in the empty state
-// ---------------------------------------------------------------------------
-
 function SourceTypeIcon({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -567,10 +519,6 @@ function SourceTypeIcon({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// DropOverlay - drop target shown below the file list
-// ---------------------------------------------------------------------------
 
 function DropOverlay({ onDrop }: { onDrop: (file: File) => void }) {
   const [isDragging, setIsDragging] = useState(false);

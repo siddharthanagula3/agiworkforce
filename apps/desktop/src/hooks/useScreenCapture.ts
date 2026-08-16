@@ -32,7 +32,6 @@ export interface UseScreenCaptureReturn {
 export function useScreenCapture(): UseScreenCaptureReturn {
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // AUDIT-007-005 fix: Track mounted state to prevent setState after unmount
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -63,7 +62,6 @@ export function useScreenCapture(): UseScreenCaptureReturn {
 
   const captureFullScreen = useCallback(
     async (conversationId?: number): Promise<CaptureResult> => {
-      // AUDIT-007-005 fix: Check isMounted before setState calls
       if (isMountedRef.current) {
         setIsCapturing(true);
         setError(null);
@@ -97,7 +95,6 @@ export function useScreenCapture(): UseScreenCaptureReturn {
 
   const captureRegion = useCallback(
     async (region: Region, conversationId?: number): Promise<CaptureResult> => {
-      // AUDIT-007-005 fix: Check isMounted before setState calls
       if (isMountedRef.current) {
         setIsCapturing(true);
         setError(null);
@@ -179,7 +176,6 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       return windows;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      // AUDIT-007-005 fix: Check isMounted before setState
       if (isMountedRef.current) {
         setError(errorMessage);
       }
@@ -201,7 +197,6 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         return history.map((entry) => normalizeCaptureRecord(entry));
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        // AUDIT-007-005 fix: Check isMounted before setState
         if (isMountedRef.current) {
           setError(errorMessage);
         }
@@ -216,7 +211,6 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       await invoke('capture_delete', { captureId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      // AUDIT-007-005 fix: Check isMounted before setState
       if (isMountedRef.current) {
         setError(errorMessage);
       }
@@ -229,7 +223,6 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       await invoke('capture_save_to_clipboard', { captureId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      // AUDIT-007-005 fix: Check isMounted before setState
       if (isMountedRef.current) {
         setError(errorMessage);
       }

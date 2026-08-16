@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-// Mock zustand stores before importing components that use them
 vi.mock('@/stores/artifactStore', () => ({
   useArtifactStore: (selector: (s: Record<string, unknown>) => unknown) => {
     const state = {
@@ -99,11 +98,8 @@ describe('ArtifactPanel parity snapshots', () => {
       </Wrapper>,
     );
 
-    // Header should be present with Artifacts title
     expect(screen.getByText('Artifacts')).toBeInTheDocument();
-    // Empty-state description visible
     expect(screen.getByText(/Artifacts will appear here/)).toBeInTheDocument();
-    // The header bar renders (at minimum the title + two icon buttons)
     expect(container.querySelectorAll('button').length).toBeGreaterThanOrEqual(2);
     expect(container).toMatchSnapshot();
   });

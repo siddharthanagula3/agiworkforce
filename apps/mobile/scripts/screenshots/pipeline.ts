@@ -1,22 +1,5 @@
 #!/usr/bin/env tsx
 /* eslint-disable no-console -- CLI tool; stdout/log is the intended output channel */
-/**
- * AGI screenshot pipeline.
- *
- * Iterates the device matrix in
- * apps/mobile/store-listing/screenshots/specs/README.md, runs the
- * Detox spec for each screenshot, captures the raw frame, and
- * composites the locked tagline overlay.
- *
- * Usage:
- *   pnpm screenshots:ios       — iOS simulator captures (4 classes × 5 = 20)
- *   pnpm screenshots:android   — Android emulator captures (1 class × 5 = 5)
- *   pnpm screenshots:composite — re-composite existing raw frames only
- *
- * Outputs:
- *   apps/mobile/store-listing/screenshots/captures/{class}/raw/NN-name.png
- *   apps/mobile/store-listing/screenshots/captures/{class}/final/NN-name.png
- */
 
 import { execSync, execFileSync } from 'node:child_process';
 import { mkdirSync, existsSync, readdirSync, statSync, copyFileSync, rmSync } from 'node:fs';
@@ -33,7 +16,6 @@ interface DeviceClass {
 }
 
 const DEVICES: DeviceClass[] = [
-  // Local demo QA matrix. Keep this aligned with installed simulators.
   {
     platform: 'ios',
     className: 'iphone-17-pro',
@@ -62,7 +44,6 @@ const DEVICES: DeviceClass[] = [
     width: 1668,
     height: 2388,
   },
-  // Android requires the local AVD to exist before running screenshots:android.
   {
     platform: 'android',
     className: 'phone',
@@ -80,11 +61,6 @@ interface Screenshot {
   subhead: string;
 }
 
-/**
- * Current demo screenshot slots. These map to real specs in
- * scripts/screenshots/specs and are used for local visual QA. Store-release
- * multi-device captures require a separate installed device matrix.
- */
 const SCREENSHOTS: Screenshot[] = [
   {
     id: '01',
@@ -148,21 +124,11 @@ function bootSimulator(device: DeviceClass) {
   }
 }
 
-/**
- * Resolve the Detox spec file for a given screenshot slot and device.
- */
 function resolveSpec(s: Screenshot, d: DeviceClass): string {
   void d;
   return s.spec;
 }
 
-/**
- * Recursively find the first .png Detox wrote under an artifacts run dir.
- * Detox nests screenshots under a per-test directory it names itself
- * (e.g. "✓ describe name/artifactName.png"), so the exact path can't be
- * predicted up front — only the run-level root we pass via
- * --artifacts-location.
- */
 function findScreenshotPng(dir: string): string | null {
   if (!existsSync(dir)) return null;
   for (const entry of readdirSync(dir)) {
@@ -184,10 +150,6 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
   if (!existsSync(specPath)) {
     throw new Error(`Screenshot spec not found: ${specPath}`);
   }
-  // Detox's own artifact naming is per-test and unpredictable, so we point
-  // --artifacts-location at a throwaway dir (trailing slash pins the exact
-  // path — no timestamp suffix) and copy the one PNG it produces to the
-  // path pipeline.ts's caller expects.
   const artifactsDir = join(
     ROOT,
     'store-listing',
@@ -199,11 +161,6 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
   rmSync(artifactsDir, { recursive: true, force: true });
   mkdirSync(artifactsDir, { recursive: true });
   const env = { ...process.env, DETOX_CAPTURE_PATH: rawOut };
-  // execFileSync with an argv array, not execSync with an interpolated string:
-  // no shell is spawned, so no argument can be reinterpreted as shell syntax.
-  // Every value here is already a literal from the const tables above, so this
-  // fixes no live injection — it removes the possibility, and stops the next
-  // edit that makes one of these dynamic from quietly opening one.
   execFileSync(
     'pnpm',
     [
@@ -229,10 +186,6 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
 }
 
 function composite(rawPath: string, finalPath: string, s: Screenshot, device: DeviceClass) {
-  // Compositor is a separate module — see compositor.ts — which uses
-  // sharp + node-canvas to render the locked teal gradient overlay
-  // and Inter-700 headings per the design tokens table in
-  // store-listing/screenshots/specs/README.md.
   execSync(
     `pnpm tsx apps/mobile/scripts/screenshots/compositor.ts ` +
       `--raw "${rawPath}" --out "${finalPath}" ` +

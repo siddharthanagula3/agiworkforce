@@ -1,26 +1,5 @@
 'use client';
 
-/**
- * MessageFormatCard — the safe wiring for the heuristic format cards.
- *
- * The four cards in this directory (recipe / comparison / steps / calculation)
- * parse the assistant's markdown into a structured layout. Every one of them
- * is a heuristic parser that `continue`s past anything it does not recognise,
- * so any of them CAN drop content — `RecipeCard` provably does: once a section
- * other than ingredients/instructions starts, it sets `currentSection='other'`
- * and nothing collects it, so a trailing "Notes" or "Variations" disappears.
- *
- * That is why this wrapper exists, and why it is the only sanctioned way to
- * render these cards. Swapping a card in FOR the prose would make an answer
- * silently lossy — the failure mode that is worse than having no card at all,
- * because the user cannot tell that anything is missing.
- *
- * The guarantee here is structural rather than parser-by-parser: the exact
- * model output is always one click away, so a parser gap costs a toggle, never
- * the content. Improving an individual parser then becomes an enhancement
- * instead of a correctness prerequisite.
- */
-
 import { useState } from 'react';
 import { FileText, LayoutGrid } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
@@ -29,7 +8,6 @@ import { MessageCardRenderer, type CardType } from './index';
 interface MessageFormatCardProps {
   content: string;
   cardType: Exclude<CardType, null>;
-  /** Rendered when the reader switches to the original markdown. */
   children: React.ReactNode;
 }
 

@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
-// navigation package, so the raw hook can land on a different context
-// instance than the one expo-router's navigator provides.
 import { useNavigation } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -75,9 +71,6 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const cloudArtifacts = useArtifactStore((s) => s.cloudArtifacts);
   const cloudArtifactsOwnerId = useArtifactStore((s) => s.cloudArtifactsOwnerId);
 
-  // ImageFullScreen keeps its own image object after the backing message cache
-  // is cleared. Bind that object to the account epoch captured at open time so
-  // account A's generated image cannot remain visible for account B.
   useLayoutEffect(() => {
     if (!previewImage) return;
     if (isAccountScopedUiStateOwned(previewImageScopeRef.current)) return;
@@ -251,9 +244,6 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         testID="library-filter-row"
         horizontal
         showsHorizontalScrollIndicator={false}
-        // ScrollView's base style is flexGrow: 1, so without this the chip row
-        // would claim every remaining pixel of this column and push the grid
-        // off the screen.
         style={{ flexGrow: 0, paddingBottom: 16 }}
         contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
       >
@@ -286,8 +276,6 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         contentContainerStyle={{
           paddingHorizontal: HORIZONTAL_PADDING,
           paddingTop: 4,
-          // The search pill below is in normal flow, so the grid already ends
-          // above it; this is breathing room under the last row, not clearance.
           paddingBottom: 24,
           alignSelf: 'center',
           width: Math.min(contentWidth, MAX_GRID_CONTENT_WIDTH),
@@ -335,9 +323,6 @@ function FilterChip({
     <Pressable
       onPress={onPress}
       className="px-3 rounded-full"
-      // 44pt is the iOS minimum tap target; these chips were ~30pt, and the same
-      // control is full height elsewhere in the app. hitSlop alone would fix the
-      // touch area but leave them visually undersized next to their siblings.
       hitSlop={6}
       style={{
         minHeight: 40,

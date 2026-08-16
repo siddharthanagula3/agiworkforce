@@ -1,17 +1,5 @@
 'use client';
 
-/**
- * Web adapter for the shared Library surface.
- *
- * The view itself lives in `@agiworkforce/unified-chat` so Desktop renders the
- * same Library rather than a second implementation of it. This file supplies
- * only what differs on web: Clerk's session state, same-origin cookie fetches,
- * the CSRF header state-changing endpoints require, and "open in a new tab".
- *
- * Downloads and previews still go through the authed same-origin
- * `/api/files/{id}` route — no public URLs.
- */
-
 import { useMemo } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import {
@@ -32,9 +20,6 @@ export function LibraryView() {
       listPage: (params) =>
         fetch(`/api/library?${params.toString()}`, { credentials: 'same-origin' }),
       fetchAsset: (uri) => fetch(uri, { credentials: 'same-origin' }),
-      // Same-origin browser requests carry the Clerk session cookie. Desktop
-      // deliberately omits this capability because its bearer cannot be
-      // attached to an <img> request.
       inlinePreviewUri: (uri) => uri,
       deleteItem: async (id) => {
         const csrf = await getCsrfToken();
@@ -53,7 +38,6 @@ export function LibraryView() {
         });
       },
       restoreItem: async (id) => {
-        // The restore endpoint is state-changing, so it carries the CSRF token.
         const csrf = await getCsrfToken();
         return fetch(`/api/media?id=${encodeURIComponent(id)}`, {
           method: 'POST',
@@ -61,8 +45,6 @@ export function LibraryView() {
           headers: { 'x-csrf-token': csrf },
         });
       },
-      // The serve route responds with Content-Disposition: inline, so the
-      // browser renders it rather than downloading a second copy.
       openPreview: (uri) => {
         window.open(uri, '_blank', 'noopener,noreferrer');
       },

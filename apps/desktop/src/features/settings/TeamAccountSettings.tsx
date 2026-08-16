@@ -1,14 +1,3 @@
-/**
- * TeamAccountSettings
- *
- * Enhanced account/team/device visibility panel.
- * Renders inside SettingsPanel at the 'account' tab alongside AccountSettings.
- *
- * Sections:
- *  - Team Panel: members with roles + online status
- *  - Device Management: connected devices with last-seen + disconnect
- *  - Project Switcher: quick switch with name, description, member count
- */
 import {
   CheckCircle2,
   Globe,
@@ -35,10 +24,6 @@ import { useProjectStore } from '../../stores/projectStore';
 import { toast } from 'sonner';
 import { TeamRole } from '../../types/teams';
 
-// =============================================================================
-// Types
-// =============================================================================
-
 interface ConnectedDevice {
   id: string;
   name: string;
@@ -47,10 +32,6 @@ interface ConnectedDevice {
   lastSeen: string;
   current: boolean;
 }
-
-// =============================================================================
-// Helpers
-// =============================================================================
 
 function formatLastSeen(iso: string): string {
   const date = new Date(iso);
@@ -94,10 +75,6 @@ function deviceIcon(type: ConnectedDevice['type']): React.ElementType {
       return Globe;
   }
 }
-
-// =============================================================================
-// Team Panel
-// =============================================================================
 
 function TeamPanel() {
   const currentTeam = useTeamStore((s) => s.currentTeam);
@@ -143,7 +120,6 @@ function TeamPanel() {
         {members.map((member) => {
           const role = roleLabel(member.role);
           const RoleIcon = role.icon;
-          // Derive initials from userId since we don't have display names in TeamMember
           const initials = member.userId.slice(0, 2).toUpperCase();
 
           return (
@@ -179,10 +155,6 @@ function TeamPanel() {
   );
 }
 
-// =============================================================================
-// Device Management
-// =============================================================================
-
 function DeviceManagement() {
   const [devices, setDevices] = useState<ConnectedDevice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -192,7 +164,6 @@ function DeviceManagement() {
     setLoading(true);
     try {
       const result = await auth.accountListDevices().catch(() => {
-        // Fallback: show current device only
         const current: ConnectedDevice = {
           id: 'current',
           name: 'This Desktop',
@@ -301,10 +272,6 @@ function DeviceManagement() {
   );
 }
 
-// =============================================================================
-// Project Switcher
-// =============================================================================
-
 function ProjectSwitcher() {
   const projects = useProjectStore((s) => s.projects);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
@@ -367,10 +334,6 @@ function ProjectSwitcher() {
     </div>
   );
 }
-
-// =============================================================================
-// Main export
-// =============================================================================
 
 export function TeamAccountSettings() {
   return (

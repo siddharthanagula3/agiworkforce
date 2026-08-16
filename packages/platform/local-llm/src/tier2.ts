@@ -2,11 +2,6 @@ import type { ExecutorchPreset } from '@agiworkforce/types';
 import { getLocalModelCatalog } from './catalog';
 import type { GenerateOptions, GenerateResult } from './types';
 
-// react-native-executorch 0.8.4 exports LLMModule (not ETLLMModule).
-// LLMModule wraps LLMController and provides generate(), configure(), interrupt().
-// Multimodal (VLM) presets load with `capabilities:['vision']` and take the
-// image as `mediaPath` on a user message (the controller extracts it and calls
-// the native `generateMultimodal`).
 interface LLMModuleInstance {
   generate: (
     messages: Array<{ role: string; content: string; mediaPath?: string }>,
@@ -43,11 +38,6 @@ interface LLMModuleStatic {
   ) => Promise<LLMModuleInstance>;
 }
 
-/**
- * Resolve catalog-owned runtime metadata for an ExecuTorch VLM preset.
- * Capability flags and model-card sampling settings live beside the preset's
- * artifact identity so a model replacement never requires a runtime edit.
- */
 export function executorchVlmPresetInfo(
   modelName: string,
 ):
@@ -65,7 +55,6 @@ export function executorchVlmPresetInfo(
 
 let _llmModuleOverride: LLMModuleStatic | null = null;
 
-/** Inject a mock LLMModule in tests — only call from test files. */
 export function _setLLMModuleForTesting(mod: LLMModuleStatic | null): void {
   _llmModuleOverride = mod;
 }
@@ -87,12 +76,6 @@ let _loadedPresetVision = false;
 let _loadPromise: Promise<void> | null = null;
 let _loadGeneration = 0;
 
-/**
- * True when the CURRENTLY LOADED tier-2 model was loaded with the vision
- * capability — the tier-2 analog of `tier3IsMultimodalReady`. False before any
- * load and for text-only presets, so image routing can never claim a vision
- * path that is not actually live.
- */
 export function tier2IsVisionReady(): boolean {
   return _instance !== null && _loadedPresetVision;
 }
@@ -119,8 +102,6 @@ export async function tier2LoadModel(
       _loadedPresetVision = false;
     }
 
-    // VLM presets load with their vision capability and the model card's
-    // sampling settings; text-only presets are byte-for-byte unchanged.
     const vlmInfo = executorchVlmPresetInfo(preset.modelName);
     const nextInstance = await LLMModule.fromModelName(
       {
@@ -163,7 +144,6 @@ export async function tier2Generate(
   }
   const instance = _instance!;
 
-  // Always update token callback for this call so streaming goes to the right handler.
   instance.setTokenCallback({ tokenCallback: opts.onToken ?? (() => undefined) });
 
   const abortHandler = () => {
@@ -189,11 +169,6 @@ export async function tier2Generate(
       messages.push({ role: m.role, content: m.content });
     }
 
-    // Attach the current turn's image only when the loaded model actually has
-    // the vision capability (capability honesty — images are silently ignored
-    // by text-only presets, matching the GenerateOptions contract). The
-    // ExecuTorch controller accepts `file://` or absolute paths, NOT `data:`
-    // URLs (unlike llama.rn), and takes one mediaPath per message.
     const mediaPath = _loadedPresetVision
       ? opts.images?.find((uri) => uri.startsWith('file://') || uri.startsWith('/'))
       : undefined;

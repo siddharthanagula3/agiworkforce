@@ -7,31 +7,9 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { CONNECTOR_OAUTH_START_PATH as SHARED_UI_START_PATH } from '@agiworkforce/unified-chat';
 
-/**
- * The per-user connector OAuth broker has exactly two addresses, declared once
- * in `@agiworkforce/cloud-contracts` and used by three surfaces. Nothing in a
- * build catches a drifted copy, and each surface fails differently:
- *
- *   - Web links the user at the start path from `buildConnectorOAuthStartPath`;
- *     a stale copy sends them to a 404 instead of the provider.
- *   - Mobile appends `&mode=json` to the same path to fetch the authorize URL;
- *     a stale copy makes "Connect" fail with a parse error.
- *   - The shared chat UI ACCEPTS a Connect card only when the server's
- *     `connectUrl` is exactly the start path, so a stale copy there silently
- *     rejects genuine cards — the button simply disappears. That package has no
- *     dependency on the cloud contracts, so its literal is restated and pinned
- *     by the first test below rather than imported.
- *
- * The callback path is the redirect URI registered with every provider, so it
- * cannot move without re-registering: the route-handler check is the guard.
- */
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 const WEB_APP_DIR = path.resolve(import.meta.dirname, '../../app');
 
-/**
- * Trees that hold surface HTTP clients and chat UI. A literal here can become a
- * request or a rejected Connect card; prose in docs and fixtures cannot.
- */
 const SCANNED_DIRS = [
   'apps/web/lib',
   'apps/web/features',
@@ -42,11 +20,6 @@ const SCANNED_DIRS = [
   'packages/ui/unified-chat/src',
 ];
 
-/**
- * The one file allowed to restate the start path: the shared chat renderer,
- * which cannot import the contract package (see the file header). Its value is
- * asserted equal to the contract constant by the first test.
- */
 const ALLOWED_RESTATEMENTS = new Set([
   'packages/ui/unified-chat/src/lib/connector-connect-required.ts',
 ]);
@@ -64,12 +37,6 @@ const SKIP_DIRS = new Set([
   '.next',
 ]);
 
-/**
- * Matches a path only where it can become a request: opening a string literal,
- * or following a template interpolation such as `${BASE}/api/...`. Comment
- * lines are dropped first, so JSDoc may still name the endpoints — the routes
- * are documented in several places and prose cannot drift a URL.
- */
 function buildLiteralMatcher(routePath: string): RegExp {
   return new RegExp(`['"\`}]${routePath.replace(/\//g, '\\/')}`);
 }
@@ -89,7 +56,6 @@ function collectSourceFiles(dir: string, found: string[] = []): string[] {
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
-    // A surface tree that does not exist cannot shadow the constant.
     return found;
   }
   for (const entry of entries) {

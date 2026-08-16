@@ -1,31 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * SIX-21 — a fresh install must always end up with a model it can actually use.
- *
- * On an Apple-Intelligence (tier-1) device the OS-resident row reported by
- * `readySystemModelIds` must also exist in `LOCAL_MODEL_LIST`; otherwise the
- * native runtime is detected but cannot be selected or auto-routed. These
- * tests lock the catalog, onboarding recommendation, and chat readiness to the
- * same capability result while keeping retired ids fail-closed.
- */
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -44,10 +25,6 @@ jest.mock('@react-navigation/native', () => ({
     ReactRuntime.useEffect(() => effect(), [effect]);
   },
 }));
-
-// react-native-reanimated is mocked globally in jest.setup.js; both screens
-// under test need the full hook surface (AgiMark uses useSharedValue), so do
-// not narrow it here.
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => {
@@ -116,8 +93,6 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
-// Tier-1 device: Apple Intelligence is available and the catalog ships the
-// system-runtime row alongside the downloadable default.
 jest.mock('@agiworkforce/local-llm', () => {
   const actual = jest.requireActual(
     '@agiworkforce/local-llm',
@@ -167,8 +142,6 @@ jest.mock('../storage/installedModels', () => ({
   listInstalledModels: jest.fn().mockResolvedValue([]),
   markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
 }));
-
-// --- chat-tab-only mocks ---------------------------------------------------
 
 jest.mock('@/stores/chatStore', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -240,10 +213,6 @@ jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import OnboardingScreen from '../app/(public)/onboarding';
 import ChatTabScreen from '../app/(app)/(tabs)/chat';
 import { getDefaultModel, getSystemModelForTier1Runtime } from '@agiworkforce/local-llm';
@@ -292,7 +261,6 @@ describe('onboarding on a tier-1 (Apple Intelligence) device', () => {
     expect(
       queryByText('Download one local model to start private chats on this device.'),
     ).toBeNull();
-    // Nothing was finished — the user still has to complete the download.
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });

@@ -1,26 +1,3 @@
-/**
- * Byte parity between the legacy `buildStreamResponse` (unmodified,
- * apps/web/lib/llm-providers raw-fetch passthrough + reshape) and the new
- * adapter-path `buildAdapterStreamResponse` (packages/ai/providers/anthropic +
- * OpenAIWireAssembler), for the SAME rich event scenario -- text, server-
- * managed web_search, thinking, and tool_use -- used in
- * stream-transform.golden.test.ts (structural `toEqual`, key-order-blind)
- * and packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts
- * (assembler-level only, no route/billing wiring).
- *
- * This suite closes the gap those two leave: an ACTUAL side-by-side byte
- * comparison of what the two REAL route functions produce for literally the
- * same input content, catching anything a hand-written `toEqual` expectation
- * could miss (key order already bit us once this way -- see
- * openai-wire-compat.ts's chunkEnvelope() history).
- *
- * Both legacy and adapter inputs are built from the SAME `richEvents` array
- * below so the two fixtures cannot silently drift apart.
- *
- * SCOPED TO THE `data:` CHANNEL ONLY -- see the module-level comment below
- * `stripToDataLines` for why `event: X` framing lines are excluded from this
- * comparison, and disclosed as a known divergence rather than reproduced.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -92,58 +69,6 @@ async function collectBody(response: Response): Promise<string> {
   return out;
 }
 
-/**
- * Legacy `buildStreamResponse` passes Anthropic's raw `event: X` SSE-framing
- * lines through verbatim (confirmed by stream-transform.golden.test.ts's
- * "passes non-data: SSE lines through verbatim" case) -- a side effect of
- * apps/web/lib/llm-providers/anthropic.ts's raw-fetch passthrough
- * (`response.body` forwarded unmodified) plus stream-transform.ts's
- * catch-all `else if (line.trim())` branch.
- *
- * `buildAdapterStreamResponse` cannot reproduce this: `translateAnthropicStream`
- * consumes the `@anthropic-ai/sdk` MessageStream helper's ALREADY-PARSED
- * `MessageStreamEvent` objects, which carry no raw `event:` line at all --
- * there is nothing to re-emit even if a mechanism existed to do so. This is
- * disclosed, not silently reproduced-away, per two independent checks:
- *
- * 1. Every real consumer pinned to this endpoint parses ONLY `data:` lines
- *    (verified by reading the actual source: apps/desktop/src-tauri/src/
- *    core/llm/sse_parser.rs's content-parsing path, apps/mobile/services/
- *    streaming.ts, apps/extension/.../cloudAgentClient.ts, apps/extension-
- *    vscode/src/utils/api.ts's httpsPostStream -- all four hand-roll a
- *    `line.startsWith('data:')` filter, none use EventSource or a named-
- *    event-dispatching SSE library). EventSource (the only SSE API that
- *    dispatches on `event:` names) is GET-only and cannot even be used
- *    against this POST endpoint, so no spec-compliant client could depend
- *    on `event:` dispatch here regardless.
- * 2. The legacy `event: X` passthrough is not well-formed to depend on
- *    anyway: `event: content_block_start` is immediately followed by a
- *    DROPPED data line for text/tool_use blocks (stream-transform.ts's
- *    `continue`), and `event: content_block_delta` precedes a RESHAPED
- *    `data: {choices:...}` OpenAI-shaped chunk it no longer describes --
- *    orphaned, incoherent names, not a reconstructable byte contract.
- *
- * ONE EXCEPTION FOUND, flagged separately in the task #34 handoff and
- * MITIGATED (not reproduced) by `../lib/sse-heartbeat.ts`: desktop's
- * sse_parser.rs also has an `event: ping` / `event:ping` keepalive-detection
- * branch (is_keepalive_event). Anthropic's real API sends `event: ping`
- * during long idle periods (e.g. extended thinking with no visible output)
- * to prevent proxy/load-balancer timeouts; the legacy raw-fetch passthrough
- * forwards these today. The `@anthropic-ai/sdk` MessageStream helper
- * swallows `ping` events internally and unconditionally (`core/
- * streaming.ts`: `if (sse.event === 'ping') { continue; }`) BEFORE they ever
- * reach `translateAnthropicStream` -- there is no code path, in this
- * package or any other, that could recover Anthropic's OWN ping frames from
- * the SDK. Per team-lead's direction, `buildAdapterStreamResponse` (and
- * `buildStreamResponse`, for every other provider too) now wraps its body
- * in `withSseHeartbeat`, which emits a provider-independent `: keepalive`
- * SSE comment during genuine idle periods -- this keeps the client-facing
- * connection warm without depending on any specific provider's own
- * keepalive convention, but it means desktop's `event:ping`-specific
- * detection branch will simply never match for Anthropic-routed traffic
- * (harmless: a `: keepalive` comment line is silently ignored by every
- * `data:`-only parser, same as any other non-`data:` line).
- */
 function stripToDataLines(body: string): string {
   return body
     .split('\n')
@@ -151,17 +76,10 @@ function stripToDataLines(body: string): string {
     .join('\n');
 }
 
-/** Anthropic's `sdk.messages.stream()` yields already-parsed
- *  `MessageStreamEvent` objects -- feed the SAME event objects used to
- *  build the legacy raw SSE text (below) into `translateAnthropicStream`
- *  directly, so both pipelines run off one shared fixture. */
 async function* asAnthropicEvents(events: unknown[]): AsyncIterable<Anthropic.MessageStreamEvent> {
   for (const event of events) yield event as Anthropic.MessageStreamEvent;
 }
 
-/** Build a raw upstream ReadableStream with `event: X` / `data: {...}`
- *  framing, matching what anthropic.ts's streamRequest forwards (fetch's
- *  raw response.body, unmodified -- see lib/llm-providers/anthropic.ts). */
 function rawSseStream(
   events: Array<{ eventName: string; data: unknown }>,
 ): ReadableStream<Uint8Array> {
@@ -178,11 +96,6 @@ function rawSseStream(
   });
 }
 
-// Shared fixture: text, server-managed web_search, thinking, tool_use --
-// identical content to stream-transform.golden.test.ts's first case and
-// web-wire-parity.test.ts's first case (reconciled here into one source of
-// truth so this comparison can't accidentally compare non-equivalent
-// scenarios).
 const richEvents: Array<{ eventName: string; data: unknown }> = [
   {
     eventName: 'message_start',
@@ -302,9 +215,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
     );
     const adapterBody = await collectBody(adapterResponse as any);
 
-    // Sanity: prove the comparison is non-trivial (both sides produced real
-    // content), so a future regression that empties both sides can't make
-    // this test pass vacuously.
     expect(legacyBody.length).toBeGreaterThan(100);
 
     expect(stripToDataLines(adapterBody)).toBe(stripToDataLines(legacyBody));

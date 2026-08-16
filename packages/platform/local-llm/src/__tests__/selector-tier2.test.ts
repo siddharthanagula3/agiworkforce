@@ -1,25 +1,7 @@
-/**
- * selector → tier2 dispatch: catalog model wiring test.
- *
- * Validates that the default catalog model has an
- * executorchPreset, and that tier2Generate produces a real streamed response
- * when LLMModule is injected via _setLLMModuleForTesting.
- *
- * NOTE: localGenerate() is NOT imported here because selector.ts transitively
- * imports capabilities.ts → react-native (Flow source), which rolldown cannot
- * parse in a Vitest/Node environment. The selector logic is covered by:
- *   - This test: catalog has preset → tier2Generate produces tokens
- *   - apps/mobile/__tests__/onboarding-tier2.test.tsx: full onboarding flow
- *     (Jest + Metro, which handles Flow/react-native correctly)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDefaultModel, getLiteModeModel } from '../catalog.js';
 import { tier2Generate, tier2LoadModel, tier2Release, _setLLMModuleForTesting } from '../tier2.js';
-
-// ---------------------------------------------------------------------------
-// Inject mock LLMModule via the test seam
-// ---------------------------------------------------------------------------
 
 const STREAMED_TOKENS = ['The', ' sky', ' is', ' blue', '.'];
 
@@ -55,10 +37,6 @@ beforeEach(() => {
   tier2Release();
 });
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('catalog model has executorchPreset (prerequisite for tier2 dispatch)', () => {
   it('the default model has a valid executorchPreset', () => {
     const model = getDefaultModel();
@@ -92,7 +70,6 @@ describe('tier2Generate with mocked LLMModule produces a real offline response',
       onToken: (tok) => receivedTokens.push(tok),
     });
 
-    // LLMModule.fromModelName was called with the correct preset fields
     expect(mockFromModelName).toHaveBeenCalledWith(
       expect.objectContaining({
         modelName: preset.modelName,
@@ -101,16 +78,13 @@ describe('tier2Generate with mocked LLMModule produces a real offline response',
       undefined,
     );
 
-    // generate was called with at least the user message
     expect(mockInstance.generate).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ role: 'user' })]),
       undefined,
     );
 
-    // Tokens streamed in order
     expect(receivedTokens).toEqual(STREAMED_TOKENS);
 
-    // Result is a real offline response (not the "download a model first" error)
     expect(result.text).toBe(STREAMED_TOKENS.join(''));
     expect(result.runtime).toBe('executorch');
     expect(result.aborted).toBe(false);

@@ -1,10 +1,3 @@
-/**
- * workspaceIndexer.ts — Lightweight workspace context gatherer
- *
- * Indexes source files and their top-level symbols to provide
- * relevant workspace context to AI requests.
- * Cap: 500 files, 5000 symbols. Incremental updates via file watcher.
- */
 
 import * as vscode from 'vscode';
 
@@ -18,8 +11,6 @@ export interface FileEntry {
 const CACHE_KEY = 'agiWorkforce.workspaceIndex';
 const MAX_FILES = 500;
 const MAX_SYMBOLS_TOTAL = 5000;
-/** Re-index when the cached index is older than this, so retrieval doesn't go
- *  permanently stale on long-lived windows (audit 217 L132). */
 const MAX_INDEX_AGE_MS = 24 * 60 * 60 * 1000;
 
 interface CacheEntry {
@@ -29,7 +20,6 @@ interface CacheEntry {
 
 export class WorkspaceIndexer {
   private _fileWatcher: vscode.FileSystemWatcher | undefined;
-  /** Serializes async index updates to prevent concurrent workspaceState writes. */
   private _updateQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -37,16 +27,10 @@ export class WorkspaceIndexer {
   isStale(): boolean {
     const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);
     if (cache === undefined) return true;
-    // Age out so a long-lived window periodically refreshes its index.
     return Date.now() - cache.timestamp > MAX_INDEX_AGE_MS;
   }
 
-  /**
-   * Register a file watcher for incremental index updates.
-   * Call once during extension activation.
-   */
   registerFileWatcher(): vscode.Disposable[] {
-    // Dispose previous watcher to prevent accumulation on re-registration
     if (this._fileWatcher !== undefined) {
       this._fileWatcher.dispose();
       this._fileWatcher = undefined;
@@ -86,12 +70,9 @@ export class WorkspaceIndexer {
     return disposables;
   }
 
-  /**
-   * Re-index a single file in the cache (incremental update).
-   */
   private async _reindexFile(uri: vscode.Uri): Promise<void> {
     const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);
-    if (cache === undefined) return; // No index yet — skip incremental, wait for full index.
+    if (cache === undefined) return;
 
     const relativePath = vscode.workspace.asRelativePath(uri);
 
@@ -99,7 +80,6 @@ export class WorkspaceIndexer {
       const stat = await vscode.workspace.fs.stat(uri);
       const symbols = await this._getSymbols(uri);
 
-      // Remove existing entry for this file.
       const files = cache.files.filter((f) => f.path !== relativePath);
 
       files.push({
@@ -118,9 +98,6 @@ export class WorkspaceIndexer {
     }
   }
 
-  /**
-   * Remove a file from the index cache.
-   */
   private async _removeFile(uri: vscode.Uri): Promise<void> {
     const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);
     if (cache === undefined) return;
@@ -169,10 +146,6 @@ export class WorkspaceIndexer {
     await this.context.workspaceState.update(CACHE_KEY, cache);
   }
 
-  /**
-   * Return workspace context relevant to the query, up to `maxChars`.
-   * When no maxChars is provided, uses a default of 2000.
-   */
   getRelevantContext(query: string, maxChars?: number): string {
     const budget = maxChars ?? 2000;
     const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);

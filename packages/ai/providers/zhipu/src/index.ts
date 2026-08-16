@@ -55,7 +55,6 @@ import { ZHIPU_MODEL_CATALOG } from './catalog';
 
 const ZHIPU_DEFAULT_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
 
-/** Hosts a `baseUrl` override is allowed to resolve to (SSRF allowlist). */
 const ZHIPU_ALLOWED_BASE_HOSTS: readonly string[] = [
   'open.bigmodel.cn',
   'api.z.ai',
@@ -73,19 +72,10 @@ const ZHIPU_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface ZhipuAdapterConfig extends ProviderAdapterConfig {
-  /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
-  /**
-   * Extra hostnames a `baseUrl` override may resolve to, beyond
-   * `open.bigmodel.cn` / `api.z.ai` / `localhost` / `127.0.0.1`. A `baseUrl`
-   * whose host isn't allowlisted falls back to the default base URL rather
-   * than being trusted unconditionally (SSRF guard implemented by
-   * `@agiworkforce/provider-runtime`).
-   */
   additionalAllowedBaseUrlHosts?: readonly string[];
 }
 
-/** GLM's request-level thinking-mode toggle — distinct from `reasoning_effort`. */
 export function applyZhipuThinkingMode(
   params: Record<string, unknown>,
   thinking: ChatRequest['thinking'],
@@ -143,12 +133,10 @@ export function createZhipuAdapter(config: ZhipuAdapterConfig = {}): ProviderAda
       });
 
       const params = translateChatRequest(req, {
-        // Quirk 1: force `max_tokens` — see module docstring.
         compat: { ...detected.defaults, maxTokensField: 'max_tokens' },
         provider: 'zhipu',
       });
 
-      // Quirk 2: GLM thinking mode — see module docstring.
       applyZhipuThinkingMode(params as unknown as Record<string, unknown>, req.thinking);
 
       try {

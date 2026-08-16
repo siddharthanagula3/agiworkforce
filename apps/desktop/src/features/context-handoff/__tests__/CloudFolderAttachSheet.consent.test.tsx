@@ -12,16 +12,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/**
- * The guarantee this sheet exists to provide: local bytes carrying a secret
- * cannot reach the composer, and therefore cannot reach
- * uploadDesktopCloudAttachments.
- *
- * Before this component there was no code path anywhere in apps/desktop that
- * blocked a secret-bearing file from being uploaded to Managed Cloud — the
- * upload's own boundary guards check the account and trust mode, and know
- * nothing about where the bytes came from.
- */
 const SECRET_CONTENT = 'OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456';
 
 function approved(
@@ -92,14 +82,11 @@ describe('CloudFolderAttachSheet consent guarantee', () => {
     }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
 
-    // Even if the button were somehow reachable, the handler re-checks.
     fireEvent.click(confirm);
     expect(onApprove).not.toHaveBeenCalled();
   });
 
   it('unblocks when the flagged file is unticked, rather than dead-ending', async () => {
-    // Any real repository has a .env. If a single finding killed the whole
-    // flow, the feature would be unusable on the machines it is built for.
     const { onApprove } = renderSheet([
       approved('notes.md', 'plain project notes'),
       approved('.env', SECRET_CONTENT),
@@ -107,7 +94,6 @@ describe('CloudFolderAttachSheet consent guarantee', () => {
 
     await screen.findByText(/Secret findings block/);
 
-    // Target the checkbox by its aria-label: '.env' also appears in the findings list.
     fireEvent.click(screen.getByLabelText('Include .env'));
 
     await waitFor(() => {
@@ -141,7 +127,6 @@ describe('CloudFolderAttachSheet consent guarantee', () => {
     const emitted = onApprove.mock.calls[0]?.[0] as File[];
     expect(emitted[0]?.name).toBe('src/index.ts');
     expect(emitted[0]?.name).not.toContain('/Users/');
-    // Approving closes the sheet so the consent cannot be replayed.
     expect(onClose).toHaveBeenCalled();
   });
 

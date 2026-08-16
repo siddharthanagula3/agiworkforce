@@ -1,9 +1,3 @@
-/**
- * RewindTimeline Panel
- *
- * Displays a vertical timeline of coding checkpoints and allows rewinding
- * to any saved checkpoint. Updates in real-time via the tool:event channel.
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import { History, RotateCcw, RefreshCw } from 'lucide-react';
@@ -61,19 +55,16 @@ export default function RewindTimeline() {
     }
   }, []);
 
-  // Fetch on mount
   useEffect(() => {
     void fetchCheckpoints();
   }, [fetchCheckpoints]);
 
-  // Subscribe to tool:event channel for real-time updates
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
 
     void (async () => {
       try {
         unlisten = await listen<{ type: string }>('tool:event', (event) => {
-          // Refresh checkpoint list whenever a tool completes (it may create a checkpoint)
           if (event.payload?.type === 'completed') {
             void fetchCheckpoints();
           }

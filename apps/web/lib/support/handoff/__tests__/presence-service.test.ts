@@ -1,10 +1,3 @@
-/**
- * Presence: four independent gates, all must pass, default UNAVAILABLE.
- *
- * Each gate is proven LOAD-BEARING by holding the other three open and closing
- * only that one. A test that just asserted "empty roster ⇒ unavailable" would
- * still pass if the env switch were deleted; these do not.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +10,6 @@ vi.mock('@/lib/logger', () => ({
 
 import { clearAvailabilityCache, resolveHumanAvailability } from '../presence-service';
 
-/** A perfectly healthy agent: online, fresh heartbeat, idle. */
 function healthyAgent(overrides: Record<string, unknown> = {}) {
   return {
     agent_user_id: 'user_agent_1',
@@ -38,7 +30,6 @@ describe('resolveHumanAvailability · gate 1: deployment switch', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it('is UNAVAILABLE when AGI_SUPPORT_LIVE_HANDOFF_ENABLED is unset, even with a healthy agent online', async () => {
-    // Gates 2-4 are wide open. Only gate 1 is closed.
     storeMocks.listFreshOnlineAgents.mockResolvedValue([healthyAgent()]);
     vi.stubEnv('AGI_SUPPORT_LIVE_HANDOFF_ENABLED', '');
 
@@ -47,8 +38,6 @@ describe('resolveHumanAvailability · gate 1: deployment switch', () => {
     expect(availability.live).toBe(false);
     expect(availability.reason).toBe('not_configured');
     expect(availability.headline).toBe('No one is available right now');
-    // Proves the switch short-circuits BEFORE any I/O: an unconfigured
-    // deployment cannot even be made to look for agents.
     expect(storeMocks.listFreshOnlineAgents).not.toHaveBeenCalled();
   });
 
@@ -79,9 +68,6 @@ describe('resolveHumanAvailability · gates 2-4', () => {
   });
 
   it('gate 3: a stale heartbeat is filtered in SQL, so a status=online row alone never makes a human available', async () => {
-    // The query itself excludes stale rows. Assert the TTL predicate is actually
-    // passed — if someone deleted the freshness filter, this argument would go
-    // with it and an agent who closed their laptop would stay "online" forever.
     storeMocks.listFreshOnlineAgents.mockResolvedValue([]);
     vi.stubEnv('AGI_SUPPORT_AGENT_HEARTBEAT_TTL_SECONDS', '90');
 
@@ -114,7 +100,6 @@ describe('resolveHumanAvailability · gates 2-4', () => {
     expect(availability.live).toBe(true);
     expect(availability.reason).toBe('live');
     expect(availability.headline).toBe('Someone is available now');
-    // Even the live copy commits to a bounded wait.
     expect(availability.waitTimeoutSeconds).toBeGreaterThan(0);
   });
 
@@ -134,7 +119,6 @@ describe('resolveHumanAvailability · gates 2-4', () => {
       expect(availability.live).toBe(false);
       expect(JSON.stringify(availability).toLowerCase()).not.toContain('connecting');
       expect(availability.headline).toBe('No one is available right now');
-      // Every unavailable state names a real next step.
       expect(availability.fallback.address.length).toBeGreaterThan(0);
     }
   });

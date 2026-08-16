@@ -6,16 +6,6 @@ import {
   resolveRequestEffort,
 } from './request-processor';
 
-/**
- * Reasoning-effort-capability wave (2026-07-10): the Anthropic thinking request
- * path is driven by per-model `reasoning.control`, NOT just capabilities.thinking.
- *   - Anthropic effort-level models → adaptive thinking; classic
- *     enabled+budget is not a valid request shape.
- *   - The classic `thinking_budget` path (enabled+budget, NOT adaptive) has no
- *     test here because the current catalog has no such model. The branch is
- *     retained for a future catalog entry that controls thinking by budget.
- * See docs/research/reasoning-effort-capability-matrix-2026-07-10.md flags 2 & 3.
- */
 function requireModel(
   description: string,
   predicate: (model: ModelMetadata) => boolean,

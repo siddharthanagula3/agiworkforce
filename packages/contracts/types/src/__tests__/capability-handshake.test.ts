@@ -1,14 +1,3 @@
-/**
- * Capability-handshake contract tests (`../capability-handshake`).
- *
- * The load-bearing test in this file is "partial-grant denial" — a
- * capability granted by SOME but not ALL four layers must be denied, with
- * `deniedBy`/`deniedByLayers` naming exactly the layers that withheld it.
- * A registry that only ever exercised all-four-agree or zero-layers cases
- * would pass even if the intersection logic were wrong (e.g. summing instead
- * of intersecting) — see `./registry.ts` module doc "single-vocabulary
- * decision" for why cross-layer omission must mean deny, not "no opinion."
- */
 import { describe, expect, it } from 'vitest';
 import {
   buildEffectiveCapabilityDocument,
@@ -156,7 +145,7 @@ describe('evaluateCapabilityAdmission', () => {
   });
 
   it('rejects with a typed result when a mandatory requirement is missing — never silently proceeds', () => {
-    const document = documentGranting('canUseImages'); // canUseWebSearch NOT granted
+    const document = documentGranting('canUseImages');
     const result = evaluateCapabilityAdmission(document, [
       { capabilityId: 'canUseImages', strength: 'mandatory' },
       {
@@ -200,7 +189,7 @@ describe('evaluateCapabilityAdmission', () => {
   });
 
   it('never lets an unmet OPTIONAL requirement block admission, and excludes it from grantedRequirementIds', () => {
-    const document = documentGranting('canUseImages'); // canUseDeepResearch NOT granted
+    const document = documentGranting('canUseImages');
     const result = evaluateCapabilityAdmission(document, [
       { capabilityId: 'canUseImages', strength: 'mandatory' },
       { capabilityId: 'canUseDeepResearch', strength: 'optional' },

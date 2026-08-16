@@ -60,11 +60,6 @@ describe('/signup terms clickwrap', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
 
-    // @clerk/shared RedirectUrls.#getRedirectUrl resolves signUpForceRedirectUrl
-    // above fromSearchParams.redirectUrl and signUpFallbackRedirectUrl below it,
-    // and Clerk preserves ?redirect_url= across its own SignIn/SignUp
-    // navigation. As a fallback, /signup/complete was skippable by an ordinary
-    // in-product link and no acceptance was ever written.
     const props = signUpProps.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(props['fallbackRedirectUrl']).toBeUndefined();
   });

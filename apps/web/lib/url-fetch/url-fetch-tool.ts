@@ -1,51 +1,18 @@
-/**
- * url_fetch — platform-executed URL fetch tool for the agentic chat loop.
- *
- * Closes the URL-fetch parity gap for providers without a native web-fetch
- * server tool (Anthropic keeps its native `web_fetch_20260209`; everyone else
- * gets this function tool, executed by the tool loop in tool-loop.ts).
- *
- * Security model (mirrors the Anthropic web_fetch tool's documented guards):
- *   - SSRF fail-closed: every hop (including each redirect target) must pass
- *     `assertResolvedPublicHostname` from lib/egress-policy.ts — lexical
- *     internal-host rejection (localhost, RFC1918, link-local/IMDS, CGNAT,
- *     IPv6 ULA/link-local) plus a DNS-resolution check so public-looking
- *     hostnames that resolve to private addresses are blocked.
- *   - Redirects are followed manually (fetch redirect:'manual') so a
- *     redirect-to-private hop cannot bypass validation.
- *   - http/https only; userinfo URLs rejected; 10s total deadline across all
- *     hops; ~1.5MB response byte cap enforced while streaming the body.
- *   - Content-type allowlist: text/html, text/plain, application/json,
- *     text/markdown (+ xhtml). Binaries are rejected honestly — never fake
- *     content.
- *
- * Errors are returned as structured tool results (`ok:false` + errorCode) the
- * model can react to — never thrown to the route, never a 500.
- *
- * Pure logic apart from egress-policy — unit tested with injected fetch/DNS.
- */
 
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 
 export const URL_FETCH_TOOL = 'url_fetch';
 
-/** True if `name` is the platform url_fetch tool. */
 export function isUrlFetchTool(name: string): boolean {
   return name === URL_FETCH_TOOL;
 }
 
-/** Total wall-clock budget for the fetch, shared across redirect hops. */
 export const URL_FETCH_TIMEOUT_MS = 10_000;
-/** Maximum raw response size read from the network (~1.5 MB). */
 export const URL_FETCH_MAX_RESPONSE_BYTES = 1_572_864;
-/** Extracted-text cap returned to the model (token-sane). */
 export const URL_FETCH_MAX_CONTENT_CHARS = 20_000;
-/** Maximum redirect hops before giving up. */
 export const URL_FETCH_MAX_REDIRECTS = 5;
-/** Maximum accepted URL length (matches Anthropic web_fetch's documented cap ballpark). */
 const MAX_URL_LENGTH = 2_048;
 
-/** Content types we can honestly turn into text for the model. */
 const ALLOWED_CONTENT_TYPES = new Set([
   'text/html',
   'application/xhtml+xml',
@@ -67,17 +34,13 @@ export type UrlFetchErrorCode =
 export type UrlFetchOutcome =
   | {
       ok: true;
-      /** Final URL after redirects. */
       url: string;
-      /** Page title (from <title> or derived from the URL). */
       title: string;
-      /** Extracted text content, truncated to URL_FETCH_MAX_CONTENT_CHARS. */
       content: string;
       truncated: boolean;
     }
   | { ok: false; errorCode: UrlFetchErrorCode; error: string };
 
-/** OpenAI-style function tool definition offered to tool-calling models. */
 export function urlFetchToolDef(): {
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };
@@ -105,8 +68,6 @@ export function urlFetchToolDef(): {
   };
 }
 
-// ─── HTML text extraction (dependency-free, readability-style) ────────────────
-
 const NAMED_ENTITIES: Record<string, string> = {
   amp: '&',
   lt: '<',
@@ -124,7 +85,6 @@ const NAMED_ENTITIES: Record<string, string> = {
   copy: '©',
 };
 
-/** Decode the common HTML entities (named subset + numeric). */
 export function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => {
@@ -145,7 +105,6 @@ export function decodeHtmlEntities(text: string): string {
     );
 }
 
-/** Extract the <title> text from an HTML document, if present. */
 export function extractHtmlTitle(html: string): string | undefined {
   const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
   if (!m?.[1]) return undefined;
@@ -153,22 +112,14 @@ export function extractHtmlTitle(html: string): string | undefined {
   return title || undefined;
 }
 
-/** Elements whose content is never prose — dropped wholesale. */
 const DROP_ELEMENTS = ['script', 'style', 'noscript', 'template', 'svg', 'iframe', 'canvas'];
-/** Chrome elements (navigation/boilerplate) — dropped for readability. */
 const CHROME_ELEMENTS = ['nav', 'header', 'footer', 'aside', 'form'];
 
 function stripElement(html: string, tag: string): string {
-  // Non-greedy paired strip; repeated to handle sequential occurrences.
   const re = new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}\\s*>`, 'gi');
   return html.replace(re, ' ');
 }
 
-/**
- * Lightweight readability-style extraction: prefer <article>/<main>, drop
- * scripts/styles/nav/header/footer/aside, convert block boundaries to
- * newlines, strip remaining tags, decode entities, collapse whitespace.
- */
 export function extractHtmlText(html: string): string {
   let doc = html
     // Comments and doctype first so nothing inside them survives.
@@ -177,8 +128,6 @@ export function extractHtmlText(html: string): string {
 
   for (const tag of DROP_ELEMENTS) doc = stripElement(doc, tag);
 
-  // Prefer the main content region when the page marks one up and it is
-  // substantial enough to be the article body (not an empty shell).
   const region = /<(article|main)\b[^>]*>([\s\S]*?)<\/\1\s*>/i.exec(doc);
   if (region?.[2] && region[2].replace(/<[^>]+>/g, '').trim().length >= 200) {
     doc = region[2];
@@ -206,16 +155,12 @@ export function extractHtmlText(html: string): string {
     .trim();
 }
 
-/** Derive a display title from the URL when the page has no usable <title>. */
 function titleFromUrl(url: URL): string {
   const segment = url.pathname.split('/').filter(Boolean).pop();
   return segment ? `${url.hostname}/${segment}` : url.hostname;
 }
 
-// ─── Fetch execution ──────────────────────────────────────────────────────────
-
 export interface UrlFetchOverrides {
-  /** Injected fetch (tests). Defaults to global fetch. */
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   maxResponseBytes?: number;
@@ -227,7 +172,6 @@ function err(errorCode: UrlFetchErrorCode, error: string): UrlFetchOutcome {
   return { ok: false, errorCode, error };
 }
 
-/** Read a response body up to `maxBytes`; returns null when the cap is exceeded. */
 async function readBodyCapped(response: Response, maxBytes: number): Promise<Uint8Array | null> {
   const body = response.body;
   if (!body) return new Uint8Array(0);
@@ -259,10 +203,6 @@ async function readBodyCapped(response: Response, maxBytes: number): Promise<Uin
   return out;
 }
 
-/**
- * Execute a url_fetch tool call. Never throws — every failure mode returns a
- * structured `ok:false` outcome the model can react to.
- */
 export async function executeUrlFetch(
   args: Record<string, unknown>,
   overrides: UrlFetchOverrides = {},
@@ -308,8 +248,6 @@ export async function executeUrlFetch(
         return err('url_not_allowed', 'URLs with embedded credentials are not allowed.');
       }
 
-      // SSRF guard — lexical internal-host rejection + DNS resolution check.
-      // Re-run on EVERY redirect hop so redirect-to-private cannot bypass it.
       try {
         await assertResolvedPublicHostname(current.href);
       } catch (guardErr) {
@@ -342,7 +280,6 @@ export async function executeUrlFetch(
 
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
-        // Discard the redirect body — we only follow the Location header.
         await response.body?.cancel().catch(() => undefined);
         if (!location) {
           return err(

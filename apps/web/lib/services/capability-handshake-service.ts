@@ -72,7 +72,6 @@ type CatalogModelCapabilityKey = Extract<
   'search' | 'research' | 'codeExecution'
 >;
 
-/** True when at least one model in the (static, already-loaded) catalog advertises `key`. */
 function catalogHasModelWithCapability(key: CatalogModelCapabilityKey): boolean {
   return Object.values(modelsCatalog.models).some((model) => model.capabilities[key] === true);
 }
@@ -81,7 +80,6 @@ function allCapabilities(): Set<PlatformCapability> {
   return new Set<PlatformCapability>(ALL_PLATFORM_CAPABILITIES);
 }
 
-/** Model layer: what's technically possible given the current model fleet + deployment config — independent of this user's plan. */
 function buildModelLayerGrant(cloudExecutionDeploymentEnabled: boolean): CapabilityLayerGrant {
   const granted = allCapabilities();
   if (!(cloudExecutionDeploymentEnabled && catalogHasModelWithCapability('codeExecution'))) {
@@ -92,7 +90,6 @@ function buildModelLayerGrant(cloudExecutionDeploymentEnabled: boolean): Capabil
   return { layer: 'model', sourceId: `models.json@${modelsCatalog.version}`, granted };
 }
 
-/** Tier layer: subtracts exactly the capabilities `TierPolicy` says this tier lacks. */
 function buildTierLayerGrant(tier: string | null | undefined): CapabilityLayerGrant {
   const policy = getTierPolicy(tier);
   const granted = allCapabilities();
@@ -103,7 +100,6 @@ function buildTierLayerGrant(tier: string | null | undefined): CapabilityLayerGr
   return { layer: 'tier', sourceId: `tier:${policy.tier}`, granted };
 }
 
-/** Surface layer: literally the existing platform capability matrix, not a fork of it. */
 function buildSurfaceLayerGrant(surface: SyncedAppSurface): CapabilityLayerGrant {
   const row = getPlatformCapabilities(surface);
   const granted = new Set<PlatformCapability>(
@@ -112,32 +108,18 @@ function buildSurfaceLayerGrant(surface: SyncedAppSurface): CapabilityLayerGrant
   return { layer: 'surface', sourceId: `surface:${surface}`, granted };
 }
 
-/** Settings layer: no restriction until a real per-capability settings store exists — see module doc. */
 function buildSettingsLayerGrant(): CapabilityLayerGrant {
   return { layer: 'settings', sourceId: 'settings:none-configured', granted: allCapabilities() };
 }
 
 export interface BuildMeCapabilityHandshakeInput {
-  /** No per-chat-session id exists at account-handshake time; the user id stands in for the account-level document. A real chat session gets its own document at session-bootstrap time (see `apps/web` chat session labeling). */
   userId: string;
   tier: string | null | undefined;
   surface: SyncedAppSurface;
-  /** The SAME value `route.ts` computes via `e2bCutoverEnabled()` for `feature_flags.code_execution` — passed in so the two fields can never disagree. */
   cloudExecutionDeploymentEnabled: boolean;
-  /** Injectable for deterministic tests; defaults to `new Date().toISOString()`. */
   computedAt?: string;
 }
 
-/**
- * `/api/me` capability-handshake SCHEMA version — the layer-composition
- * rules above (bump when those rules change, not per-request). Since the W5
- * versioning tail this is only the PREFIX of a document's `version`: the
- * full value is `<schema>#<content-hash>` from
- * `computeCapabilityDocumentVersion`, so any input-layer change (tier
- * change, catalog change, surface, deployment flag flip) produces a new
- * version and stale session snapshots become detectable — no more
- * one-constant placeholder versions.
- */
 export const ME_CAPABILITY_HANDSHAKE_VERSION = 'me-handshake-v1';
 
 export function buildMeCapabilityHandshake(
@@ -160,15 +142,6 @@ export function buildMeCapabilityHandshake(
   });
 }
 
-/**
- * True when a session's stored capability-document reference (its
- * `SessionPolicySnapshot.capabilityDocument`) no longer matches `current`
- * and the session must re-handshake before its next capability-gated
- * action. Thin, named re-export of the contract's staleness rule so web
- * consumers depend on this service, not on version-string internals; an
- * `unresolved` placeholder reference (sessions labeled before any handshake
- * existed) is always stale.
- */
 export function isMeCapabilityHandshakeStale(
   ref: Pick<CapabilityDocumentRef, 'version'>,
   current: Pick<EffectiveCapabilityDocument, 'version'>,
@@ -176,15 +149,6 @@ export function isMeCapabilityHandshakeStale(
   return isCapabilityDocumentStale(ref, current.version);
 }
 
-/**
- * Normalizes the in-process `EffectiveCapabilityDocument` (readonly arrays —
- * `@agiworkforce/types` `capability-handshake/` is frozen; this does not
- * change it) into the JSON-serializable shape `MeResponseSchema` validates
- * (`@agiworkforce/cloud-contracts` infers mutable arrays from the Zod
- * schema). `NextResponse.json()` would serialize either shape identically —
- * this exists purely to satisfy `tsc`'s readonly/mutable array variance at
- * the wire boundary, not to change any value.
- */
 export function toWireCapabilityHandshake(
   document: EffectiveCapabilityDocument,
 ): EffectiveCapabilityDocumentWire {

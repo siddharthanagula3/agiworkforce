@@ -1,14 +1,3 @@
-/**
- * POST /api/terms/accept — record that the signed-in user accepted /terms.
- *
- * The clickwrap itself is `app/signup/TermsGate.tsx`: the Clerk widget is not
- * mounted until the box is ticked, so no account can be created without the
- * terms on screen. Assent can only be written once the account exists, though,
- * and it has to be written from a path Clerk middleware runs on — `/signup/**`
- * is not in `isClerkSessionRoute` in proxy.ts, so `auth()` is unavailable
- * there. `/signup/complete` therefore hands off to this route, which is under
- * `/api/(.*)` and does have a session.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';

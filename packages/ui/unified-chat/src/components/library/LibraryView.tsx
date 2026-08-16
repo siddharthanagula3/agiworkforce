@@ -52,11 +52,6 @@ const KIND_FILTERS: Array<{ id: KindFilter; label: string }> = [
   { id: 'file', label: 'Files' },
 ];
 
-/**
- * Icon taxonomy for the card badge — display-only. Ownership classification
- * (`surface`) comes from the server; this only picks which icon/label the
- * shared card shows, mirroring the server's coarse kind buckets.
- */
 export function iconKindFor(fileName: string, mimeType: string): GeneratedFileKind {
   const mime = mimeType.toLowerCase();
   const ext = fileName.includes('.')
@@ -84,8 +79,6 @@ const KNOWN_SURFACES: ReadonlySet<string> = new Set([
   'chrome',
 ]);
 
-/** Map one Library item onto the suite-contract GeneratedFile the shared
- *  presentation helper consumes (mirrors MessageGeneratedFiles' mapping). */
 export function generatedFileFromLibraryItem(item: LibraryItem): GeneratedFile {
   const sourceSurface: SourceSurface =
     item.source_surface && KNOWN_SURFACES.has(item.source_surface)
@@ -109,41 +102,16 @@ export function generatedFileFromLibraryItem(item: LibraryItem): GeneratedFile {
   };
 }
 
-/**
- * Everything this view cannot do for itself.
- *
- * Auth differs per host (Clerk session cookies on web, a bearer token on
- * desktop) and so does "open a preview". Passing `Response` objects rather
- * than parsed data keeps the status/parse handling — and its error copy — in
- * one place here.
- */
 export interface LibraryTransport {
-  /** Whether the host has finished determining auth state. When false, the
-   *  Library renders a loading state instead of misreporting a signed-in
-   *  account as empty during session hydration. Hosts without an async auth
-   *  bootstrap may omit this (ready by default). */
   isAuthReady?: boolean;
-  /** Whether an authenticated session exists. Gates the first fetch so a
-   *  signed-out visit never fires an authenticated request. */
   isSignedIn: boolean;
-  /** GET the library page for the supplied query parameters. */
   listPage(params: URLSearchParams): Promise<Response>;
-  /** GET one asset's bytes, for the download blob. */
   fetchAsset(uri: string): Promise<Response>;
-  /** DELETE one live asset into the recoverable Recently-deleted bin. */
   deleteItem(id: string): Promise<Response>;
-  /** Permanently erase one soft-deleted asset and its stored bytes. */
   permanentlyDeleteItem(id: string): Promise<Response>;
-  /** POST a restore for a soft-deleted asset id. */
   restoreItem(id: string): Promise<Response>;
-  /** Show the asset to the user however this host does that. */
   openPreview(uri: string): void;
-  /** Resolve an image URI that the renderer may request directly. Cookie-based
-   *  hosts can opt in; explicit-bearer hosts must omit this and load bytes via
-   *  fetchAsset instead. */
   inlinePreviewUri?: (uri: string) => string;
-  /** Optional way out of the empty state: start a new chat. Hosts that have no
-   *  such action (or have a composer already on screen) omit it. */
   startChat?: () => void;
 }
 
@@ -161,7 +129,6 @@ async function requireSuccessfulMutation(response: Response): Promise<void> {
 
 export interface LibraryViewProps {
   transport: LibraryTransport;
-  /** Host-provided deep-link query, used by cross-surface global search. */
   initialQuery?: string;
 }
 
@@ -195,7 +162,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
     setQuery(initialQuery.trim());
   }, [initialQuery]);
 
-  // Debounce the search box into the effective query.
   useEffect(() => {
     const handle = setTimeout(() => setQuery(searchInput.trim()), 300);
     return () => clearTimeout(handle);
@@ -229,7 +195,7 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const parsed = LibraryListResponseSchema.safeParse(await res.json());
         if (!parsed.success) throw new Error('Unexpected response shape');
-        if (seq !== requestSeq.current) return; // superseded by a newer request
+        if (seq !== requestSeq.current) return;
         setPage((prev) => ({
           items: append ? [...prev.items, ...parsed.data.items] : parsed.data.items,
           hasMore: parsed.data.has_more,
@@ -249,9 +215,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
     [buildParams, transport],
   );
 
-  // (Re)load the first page whenever the filters change. Gated on settled
-  // auth so an auth-pending visit neither fires a request nor renders a fake
-  // empty account. Clear prior account data when the settled host signs out.
   useEffect(() => {
     if (!isAuthReady) return;
     if (!isSignedIn) {
@@ -302,9 +265,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
   const handleThumbnailError = useCallback(
     async (item: LibraryItem) => {
       try {
-        // The browser's image error event does not expose HTTP status. Probe
-        // through the host's authenticated transport only after an actual
-        // thumbnail failure so valid images pay no duplicate request cost.
         const response = await transport.fetchAsset(item.uri);
         if (response.status === 404 || response.status === 410) {
           setUnavailableIds((current) => new Set(current).add(item.id));
@@ -317,8 +277,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
     [transport],
   );
 
-  // Restore a soft-deleted asset from the Recently-deleted bin. On success the
-  // row leaves the bin view immediately (it is live again). CSRF-guarded POST.
   const handleRestore = useCallback(
     async (id: string) => {
       setRestoringId(id);
@@ -343,9 +301,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
     [transport],
   );
 
-  // Deletion is deliberately recoverable: the server only soft-deletes the
-  // owner-scoped row, and the Recently-deleted bin keeps it restorable for 30
-  // days. Confirmation stays inline so every host inherits the same flow.
   const handleDelete = useCallback(
     async (id: string) => {
       setDeletingId(id);
@@ -396,8 +351,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
     [transport],
   );
 
-  // Preview opens the authed same-origin serve route in a new tab — the route
-  // responds with Content-Disposition: inline, so browsers render it.
   const handlePreview = useCallback(
     (item: LibraryItem) => {
       transport.openPreview(item.uri);
@@ -414,8 +367,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
           isUnavailable,
           presentation: summarizeGeneratedFileBundle({
             generatedFile: generatedFileFromLibraryItem(item),
-            // Older development rows can outlive their former disposable
-            // local byte cache. A confirmed 404/410 must not remain Ready.
             fallbackStatus: isUnavailable ? 'failed' : 'completed',
           }),
         };
@@ -525,14 +476,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
           className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
           {cards.map(({ item, isUnavailable, presentation }) => (
-            // One card per file, with the row actions as an attached FOOTER.
-            //
-            // These were previously bare siblings under the card in a gap-1
-            // column, so "Delete" rendered as a loose red underlined link
-            // floating in the grid gutter between rows — it read as a
-            // misplaced element rather than an action belonging to the file
-            // above it. The wrapper now owns the card chrome and the inner
-            // card drops its own, so the whole cell is a single surface.
             <div
               key={item.id}
               className="flex h-full flex-col overflow-hidden rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]"
@@ -541,8 +484,6 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
                 className="h-auto flex-1 rounded-none border-0 bg-transparent"
                 presentation={{
                   ...presentation,
-                  // Inline thumbnail through the authed serve route for
-                  // previewable images; other kinds keep the icon tile.
                   previewUri:
                     !isUnavailable &&
                     item.previewable &&
@@ -750,9 +691,6 @@ function EmptyState({
   viewDeleted: boolean;
   startChat?: () => void;
 }) {
-  // Honest copy: search miss vs. genuinely empty buckets. Uploads are not
-  // cataloged into the Library today (chat uploads stay with their
-  // conversation), so the Uploaded bucket says exactly that.
   const title = viewDeleted ? 'Recently deleted is empty' : 'Nothing here yet';
   const copy = hasQuery
     ? viewDeleted

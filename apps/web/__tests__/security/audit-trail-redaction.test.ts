@@ -1,27 +1,3 @@
-/**
- * AUDIT-TRAIL-01 — no secret material ever reaches an audit row.
- *
- * The audit trail is written from handlers that hold live credentials at the
- * moment of the call:
- *   - app/api/settings/api-keys/route.ts        has `rawKey` (sk_live_…) in scope
- *   - app/api/connectors/custom/route.ts        has the plaintext MCP bearer in scope
- *   - app/api/auth/set-token/route.ts           has the raw Clerk JWT in scope
- *   - app/api/settings/2fa/route.ts             has the submitted TOTP/backup code
- *
- * An audit trail that leaks any of those is worse than none — it turns an
- * append-only, admin-readable table into a credential store. This suite proves
- * the two independent defences hold:
- *
- *   1. KEY ALLOWLIST — `sanitizeAuditDetail` keeps only the documented detail
- *      fields. A caller that bypasses the TypeScript shape (JS caller, `as`
- *      cast, spread of an untyped object) cannot add a new key.
- *   2. VALUE SCRUBBING — even under an allowlisted key, a value shaped like
- *      credential material is replaced with '[redacted]'.
- *
- * Plus the end-to-end check that matters most: drive the real API-key creation
- * handler and assert the generated secret appears nowhere in the parameters
- * sent to the database.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -67,11 +43,8 @@ vi.mock('@/lib/services/api-key-service', () => ({
 
 import { NextRequest } from 'next/server';
 import { recordAuditEvent, sanitizeAuditDetail, type AuditEventDetail } from '@/lib/security-audit';
-// Static import: vi.mock is hoisted above it, and keeping the module-graph
-// transform out of the test body stops a slow machine from timing it out.
 import { POST as createApiKey } from '@/app/api/settings/api-keys/route';
 
-/** Credential shapes that must never survive into a persisted audit row. */
 const SECRETS = {
   agiApiKey: 'sk_live_0123456789abcdef_thisisthesecretpart',
   stripeTestKey: 'sk_test_51NabcdEFGHijklMNOPqrstUVWX',
@@ -107,10 +80,6 @@ beforeEach(() => {
   mockQuery.mockResolvedValue([]);
 });
 
-// ───────────────────────────────────────────────────────────────────────────
-// 1. Key allowlist
-// ───────────────────────────────────────────────────────────────────────────
-
 describe('sanitizeAuditDetail — key allowlist', () => {
   it('drops every key that is not part of the documented detail shape', () => {
     const hostile = {
@@ -140,7 +109,6 @@ describe('sanitizeAuditDetail — key allowlist', () => {
   it('drops nested objects — the usual way message content leaks in', () => {
     const safe = sanitizeAuditDetail({
       resourceName: 'ok',
-      // A nested payload under an allowlisted key must not be persisted.
       source: { conversation: [PROMPT_CONTENT] },
     } as unknown as AuditEventDetail);
 
@@ -152,10 +120,6 @@ describe('sanitizeAuditDetail — key allowlist', () => {
     expect(sanitizeAuditDetail('sk_live_leak' as unknown as AuditEventDetail)).toEqual({});
   });
 });
-
-// ───────────────────────────────────────────────────────────────────────────
-// 2. Value scrubbing under an allowlisted key
-// ───────────────────────────────────────────────────────────────────────────
 
 describe('sanitizeAuditDetail — value scrubbing', () => {
   for (const [label, secret] of Object.entries(SECRETS)) {
@@ -198,10 +162,6 @@ describe('sanitizeAuditDetail — value scrubbing', () => {
     });
   });
 });
-
-// ───────────────────────────────────────────────────────────────────────────
-// 3. Nothing secret reaches the database
-// ───────────────────────────────────────────────────────────────────────────
 
 describe('recordAuditEvent — persisted parameters carry no secret material', () => {
   it('scrubs secrets before they reach db.execute', async () => {
@@ -250,12 +210,9 @@ describe('POST /api/settings/api-keys — the generated key never lands in the a
       }),
     );
 
-    // The caller still gets the key exactly once — this is not a regression of
-    // the feature, only of what is written to the audit trail.
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({ full_key: rawKey });
 
-    // ...but nothing sent to the database contains it.
     for (const [, params] of mockExecute.mock.calls as Array<[string, unknown[]]>) {
       expect(JSON.stringify(params)).not.toContain(rawKey);
     }

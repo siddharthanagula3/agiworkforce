@@ -1,8 +1,3 @@
-/**
- * SEO Head Component
- * Uses Next.js head for client-side meta tag injection.
- * For server-rendered pages, use generateMetadata in page.tsx instead.
- */
 
 'use client';
 
@@ -35,16 +30,12 @@ const SEOHead: React.FC<SEOHeadProps> = ({
     _description = 'Transform your business with AI employees. Hire, manage, and scale your AI workforce with our comprehensive automation platform.',
   structuredData,
 }) => {
-  // In Next.js App Router, metadata is best handled via generateMetadata
-  // in the page.tsx file. This component provides a client-side fallback
-  // for dynamically updating the document title.
   useEffect(() => {
     if (title && typeof document !== 'undefined') {
       document.title = title;
     }
   }, [title]);
 
-  // Inject structured data via a script tag if provided
   if (structuredData) {
     return (
       <script

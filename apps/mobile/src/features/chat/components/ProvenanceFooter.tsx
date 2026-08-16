@@ -3,16 +3,10 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
 interface ProvenanceFooterProps {
-  /** Provider label shown at base of each assistant message bubble */
   provider?: string;
   model?: string;
 }
 
-/**
- * Minimal one-line footer shown beneath each assistant message.
- * Displays the provider and model name used to generate the response.
- * Omitted entirely for user messages.
- */
 export function ProvenanceFooter({ provider, model }: ProvenanceFooterProps) {
   const c = useThemeColors();
   if (!provider && !model) return null;

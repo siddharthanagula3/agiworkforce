@@ -1,36 +1,9 @@
-/**
- * Canonical list of BYOK-capable providers and their env-var keys.
- *
- * Used by:
- *  - /api/byok/env-key-status  (server-side presence check)
- *  - /settings/byok            (Settings page)
- *  - /byok                     (marketing/waitlist page)
- *
- * Web is a cloud-only surface (see docs/current/source-of-truth.md's
- * per-surface trust matrix -- Local+BYOK+Cloud is Desktop/CLI/VSCode only);
- * this list and `env-key-status` only ever check whether AGI's OWN server
- * has a given provider's key configured (`process.env[envVar]`), never a
- * per-user BYOK key. There is no user-supplied-key provider construction
- * path in apps/web to keep separate from the server-key path.
- *
- * `pendingAdapter` no longer applies to any entry: every listed provider's
- * adapter (`packages/ai/providers/*`) has shipped and is wired into every
- * server-key adapter table (v1 chat-completions route's `ADAPTER_PROVIDERS`,
- * `apps/web/lib/services/provider-adapter-service.ts`). Field kept on the type
- * in case a future provider genuinely lands here before its adapter package
- * does.
- */
 
 export interface ByokProvider {
-  /** Canonical ID matching the provider adapter's key (or future key) */
   id: string;
-  /** Display name shown in UI */
   label: string;
-  /** Environment variable the server reads */
   envVar: string;
-  /** 2-3 char abbreviation for icon fallback */
   iconText: string;
-  /** True when this provider is listed before its adapter package exists. */
   pendingAdapter?: boolean;
 }
 

@@ -1,9 +1,3 @@
-/**
- * chatExecutionStore cloud tool-approval resume — server-owned checkpoint.
- *
- * Mobile sends only the durable run id and decisions. The server restores the
- * trusted transcript/tool results and may suspend the same run again.
- */
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => 'test-token'),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -92,7 +86,7 @@ const mockStreamResume = streamToolApprovalResume as jest.MockedFunction<
   typeof streamToolApprovalResume
 >;
 
-const CONV_ID = '0190a000-0000-7000-8000-000000000004'; // a valid UUIDv7 conversation id
+const CONV_ID = '0190a000-0000-7000-8000-000000000004';
 const RUN_ID = '0190a000-0000-7000-8000-000000000014';
 const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
 
@@ -104,7 +98,7 @@ beforeEach(() => {
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {} });
-  useChatAppModeStore.getState().setAppMode('local'); // onDone's auto-sync no-ops while asserting
+  useChatAppModeStore.getState().setAppMode('local');
   useChatCloudMessageStore.getState().addCloudConversation({
     id: CONV_ID,
     title: 'Cloud Chat',
@@ -209,9 +203,6 @@ describe('resolveToolApproval — durable server-owned checkpoint', () => {
 
     const REAL_RESULT = '# My Project\n\nThis project does X, Y, and Z.';
 
-    // First resume (approving call_1): the tool actually runs and reports
-    // its real output via x_tool_result, then the turn suspends AGAIN on a
-    // second tool.
     mockStreamResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onDelta({
         x_agent_event: {

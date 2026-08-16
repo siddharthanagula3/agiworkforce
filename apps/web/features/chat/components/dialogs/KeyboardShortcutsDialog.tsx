@@ -1,7 +1,3 @@
-/**
- * Keyboard Shortcuts Dialog
- * Displays all available keyboard shortcuts in a modal
- */
 
 import React from 'react';
 import {
@@ -20,7 +16,6 @@ import type { KeyboardShortcutDoc } from '../../hooks/use-keyboard-shortcuts';
 interface KeyboardShortcutsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Documented shortcuts. The dialog only formats and groups — it never invokes. */
   shortcuts: readonly KeyboardShortcutDoc[];
 }
 
@@ -29,7 +24,6 @@ export function KeyboardShortcutsDialog({
   onOpenChange,
   shortcuts,
 }: KeyboardShortcutsDialogProps) {
-  // Use modern platform detection instead of deprecated navigator.platform
   const isMac = safePlatform.isMac();
 
   const formatShortcut = (shortcut: KeyboardShortcutDoc) => {

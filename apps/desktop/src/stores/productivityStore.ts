@@ -24,7 +24,6 @@ import type {
   TrelloMoveCardRequest,
 } from '../types/productivity';
 
-// AUDIT-006-010/011: Array caps to prevent unbounded memory growth
 const PRODUCTIVITY_LIMITS = {
   tasks: 500,
   notionPages: 200,
@@ -189,7 +188,6 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
         provider: selectedProvider,
       });
 
-      // AUDIT-006-010: Cap tasks array to prevent unbounded memory growth
       const cappedTasks = tasks.slice(0, PRODUCTIVITY_LIMITS.tasks);
       set({ tasks: cappedTasks, loading: false });
     } catch (error) {
@@ -241,7 +239,6 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
 
       const pages = await invoke<NotionPage[]>('productivity_notion_list_pages');
 
-      // AUDIT-006-010: Cap notionPages array to prevent unbounded memory growth
       const cappedPages = pages.slice(0, PRODUCTIVITY_LIMITS.notionPages);
       set({ notionPages: cappedPages, loading: false });
     } catch (error) {
@@ -297,7 +294,6 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
 
       const boards = await invoke<TrelloBoard[]>('productivity_trello_list_boards');
 
-      // AUDIT-006-010: Cap trelloBoards array to prevent unbounded memory growth
       const cappedBoards = boards.slice(0, PRODUCTIVITY_LIMITS.trelloBoards);
       set({ trelloBoards: cappedBoards, loading: false });
     } catch (error) {
@@ -314,7 +310,6 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
         boardId,
       });
 
-      // AUDIT-006-010: Cap trelloCards array to prevent unbounded memory growth
       const cappedCards = cards.slice(0, PRODUCTIVITY_LIMITS.trelloCards);
       set({ trelloCards: cappedCards, loading: false });
     } catch (error) {
@@ -400,7 +395,6 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
         workspaceId,
       });
 
-      // AUDIT-006-010: Cap asanaProjects array to prevent unbounded memory growth
       const cappedProjects = projects.slice(0, PRODUCTIVITY_LIMITS.asanaProjects);
       set({ asanaProjects: cappedProjects, asanaWorkspaceId: workspaceId, loading: false });
     } catch (error) {
@@ -417,7 +411,6 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
         projectId,
       });
 
-      // AUDIT-006-010: Cap asanaTasks array to prevent unbounded memory growth
       const cappedTasks = tasks.slice(0, PRODUCTIVITY_LIMITS.asanaTasks);
       set({ asanaTasks: cappedTasks, loading: false });
     } catch (error) {
@@ -492,7 +485,6 @@ export const useProductivityStore = create<ProductivityState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  // AUDIT-006-011: Reset all arrays on logout to prevent memory leaks
   resetOnLogout: () => {
     set({
       connectedProviders: new Set(),

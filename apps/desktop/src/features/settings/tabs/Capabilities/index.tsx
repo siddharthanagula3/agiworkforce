@@ -22,13 +22,6 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-/**
- * Capabilities settings section (source-of-truth IA · DESK-1). Consolidates the
- * agent's capability controls per the locked spec: computer-use / tool-access
- * (the real `ComputerUseSettings` panel, which was orphaned — unreachable from
- * any nav) and Skills. Further capability controls (artifacts, code execution,
- * network egress, domain allow list) consolidate here in the app-verified pass.
- */
 export function CapabilitiesTab() {
   return (
     <Suspense fallback={<Fallback label="Loading capabilities..." />}>

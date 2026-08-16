@@ -51,10 +51,6 @@ import { RewindTimeline } from './RewindTimeline';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { cn } from '../lib/utils';
 
-// ---------------------------------------------------------------------------
-// ErrorBoundary — catches render errors in the chat content area
-// ---------------------------------------------------------------------------
-
 interface ErrorBoundaryState {
   hasError: boolean;
   error?: Error;
@@ -71,7 +67,6 @@ class ChatErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundary
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Log to console in development; in production this would go to an error service
     if (process.env['NODE_ENV'] !== 'production') {
       console.error('[ChatInterface] render error:', error, info.componentStack);
     }
@@ -101,16 +96,11 @@ class ChatErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundary
   }
 }
 
-// Runtime context — lets deeply nested components access the runtime without prop drilling
 const RuntimeContext = createContext<ChatRuntime | null>(null);
 
 export function useRuntime(): ChatRuntime | null {
   return useContext(RuntimeContext);
 }
-
-// ---------------------------------------------------------------------------
-// SearchOverlay — lightweight search modal triggered by Cmd+F / sidebar Search
-// ---------------------------------------------------------------------------
 
 interface SearchOverlayProps {
   open: boolean;
@@ -136,7 +126,6 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   useEffect(() => {
     if (open) {
       setQuery('');
-      // Focus after animation frame so the input is mounted
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -245,112 +234,35 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 export interface ChatInterfaceProps {
   runtime: ChatRuntime | null;
   className?: string;
-  /**
-   * Host-issued send request for global launchers such as Desktop Quick Query.
-   * The opaque id provides exactly-once consumption across React re-renders;
-   * requests wait for the current stream to settle and still pass through the
-   * same shared model admission, optimistic transcript, and runtime pipeline
-   * as composer submissions.
-   */
-  /**
-   * One-shot attachment injection forwarded to the composer, keyed by `id`.
-   * The desktop cloud folder sheet uses this to hand over files it has already
-   * put through the consent ceremony.
-   */
   pendingAttachments?: { id: string; files: File[] } | null;
-  /** Host destination identity used to purge unsent File bytes on boundary changes. */
   attachmentContextKey?: string;
-  /** Host-owned replacement for the default browser speech-recognition mic. */
   voiceInputController?: ComposerVoiceController;
   externalSendRequest?: {
     id: string;
     content: string;
   } | null;
-  /**
-   * When true the chat package manages theme on document.documentElement.
-   * Default false — host app is expected to set data-theme-managed on <html>
-   * or manage theme itself.
-   */
   manageTheme?: boolean;
-  /**
-   * When false global keyboard shortcuts (Cmd+K, Cmd+,, Cmd+[) are not registered.
-   * Default true.
-   */
   enableShortcuts?: boolean;
-  /**
-   * When false, the package does not mount its fallback search overlay.
-   * Desktop hosts use their own Cmd+K search modal to avoid duplicate dialogs.
-   */
   enableSearchOverlay?: boolean;
-  /**
-   * AUDIT-FIX CMP-29: `onPlusClick` and `onVoiceClick` are gone. `ChatInput`
-   * (this package) owns the "+" attachment menu and the mic itself, so the two
-   * callbacks were forwarded into props that were destructured and never
-   * referenced — dead in every host that wired them. Hosts that need to react
-   * to attachments should use the runtime/store, not a click ping.
-   */
-  /** Called when the user clicks the model selector */
   onModelSelectorClick?: () => void;
-  /** When false, the model selector does not fall back to cloud catalog rows if host models are empty. */
   allowModelFallbackModels?: boolean;
-  /**
-   * Called when the user picks "Select folder" from the composer's attachment
-   * menu. Only reachable when the host surface exposes `canUseWorkingDirectory`
-   * (desktop) — the native dialog + backend sync are the host's responsibility.
-   */
   onSelectFolder?: () => void;
-  /** Opens a host-owned desktop workflow recorder when the surface supports it. */
   onRecordSkill?: () => void;
-  /** Display label for the currently scoped project folder, if any. */
   currentFolderLabel?: string | null;
-  /** Clears the host's scoped local folder (project/folder mutual exclusion). */
   onClearFolder?: () => void;
-  /**
-   * Chat | AGI Work toggle + "Project or folder" picker for the composer.
-   * Forwarded to ChatInput; absent = no toggle rendered (mobile).
-   */
   projectPicker?: ChatInputProjectPicker;
-  /** Managed-account entitlement for AGI Work; ordinary project chat remains available when false. */
   canUseAgiWork?: boolean;
-  /** Host-owned capability/entitlement explanation shown when AGI Work is unavailable. */
   agiWorkUnavailableReason?: string;
-  /** Host/account overrides layered over runtime quick-action capabilities. */
-  /**
-   * Host-owned, enforcement-backed controls rendered in the shared composer.
-   * Desktop uses this for native sandbox/workspace context that the package
-   * cannot safely derive.
-   */
   composerHostControls?: ReactNode;
-  /**
-   * The one limit worth warning about right now, from `selectUsageWarning`.
-   * Absent or null renders nothing — the host decides whether it has usage data
-   * at all, and Local/BYOK chats have none by definition.
-   */
   usageWarning?: ManagedUsageWarning | null;
-  /** Omit and no upgrade affordance renders — correct for the top self-serve tier. */
   onUpgradeUsage?: () => void;
-  /** Omit and the warning is not dismissible. */
   onDismissUsageWarning?: () => void;
-  /** Host-persisted composer submission shortcut. */
   composerSendShortcut?: 'enter' | 'mod-enter';
-  /** Included skills the active runtime can execute through `skillName`. */
   skills?: MentionSkill[];
-  /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
   onNavigateView?: (view: string) => void;
-  /** Explicit host-owned bridge for conversation selection and persistence. */
   hostBridge?: ChatHostBridge | null;
-  /** Legacy fallback for mirroring messages into a host store. */
   onAddMessage?: (msg: { role: string; content: string; id?: string }) => void;
-  /**
-   * When provided, replaces the default `Sidebar` block. Host apps can use
-   * this to inject a surface-specific sidebar shell while keeping streaming
-   * and host-bridge wiring identical.
-   */
   sidebarSlot?: ReactNode;
-  /**
-   * When provided, replaces the default `EmptyState` block that
-   * renders when the conversation has no messages.
-   */
   emptyStateSlot?: ReactNode;
   /**
    * When provided, replaces the default `ChatInput + Disclaimer`
@@ -359,11 +271,6 @@ export interface ChatInterfaceProps {
    * the exported `useChat` hook).
    */
   composerSlot?: ReactNode;
-  /**
-   * Forwarded to `ArtifactPanel`. `'split'` keeps the artifact panel docked
-   * beside the chat (current behavior). `'fullscreen'` hides the chat column
-   * while the artifact is open. Default `'split'`.
-   */
   artifactMode?: 'split' | 'fullscreen';
   /**
    * Conversation-scoped header actions. Forwarded to {@link ConversationHeader};
@@ -387,11 +294,6 @@ export interface ChatInterfaceProps {
    * transcript.
    */
   deriveMessageArtifacts?: DeriveMessageArtifacts;
-  /**
-   * When true (default), assistant messages render a `ProvenanceFooter`
-   * below them showing model id + latency + token counts. Pass `false` to
-   * suppress on hosts that don't want the footer.
-   */
   showProvenanceFooter?: boolean;
 }
 
@@ -433,14 +335,9 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const { t } = useUiTranslation('chat');
 
-  // Side-effect hooks — theme management is opt-in; shortcuts are opt-out
   useTheme();
   useKeyboard({ enabled: enableShortcuts });
 
-  // Signal to useTheme that the host app manages the theme when manageTheme is false
-  // We do this by setting/removing the sentinel attribute on mount.
-  // Using a layout effect would flash; instead we rely on the attribute being set
-  // BEFORE the component mounts by the host app (the preferred contract), with this
   // block acting as a safety net that keeps things consistent across re-renders.
   if (typeof document !== 'undefined') {
     if (!manageTheme) {
@@ -450,7 +347,6 @@ export function ChatInterface({
     }
   }
 
-  // Chat logic
   useHostBridgeSync(hostBridge);
   const {
     sendMessage,
@@ -466,9 +362,6 @@ export function ChatInterface({
     externalAddMessage: onAddMessage,
   });
 
-  // Tool-approval round-trip: only wired when the runtime actually implements
-  // it (cloud SSE runtimes) — omitted entirely otherwise so awaiting_approval
-  // cards render read-only instead of a button that would silently no-op.
   const handleToolApprove = useCallback(
     (messageId: string, toolCallId: string) =>
       resolveToolApproval(messageId, toolCallId, 'approved'),
@@ -480,7 +373,6 @@ export function ChatInterface({
     [resolveToolApproval],
   );
 
-  // Artifact panel state (single source — must not be called in child components separately)
   const {
     isOpen: artifactOpen,
     panelWidth: artifactPanelWidth,
@@ -491,7 +383,6 @@ export function ChatInterface({
     setViewMode: setArtifactViewMode,
   } = useArtifact();
 
-  // Store state
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const emptyMessages = useRef<ChatMessage[]>([]).current;
   const messages = useChatStore((s) =>
@@ -581,7 +472,6 @@ export function ChatInterface({
     };
   }, [activeConversationId, runtime, isStreaming, messageLoadAttempt]);
 
-  // Determine disclaimer variant based on the most recent assistant message
   const disclaimerVariant = useMemo((): 'default' | 'citations' | 'code' => {
     if (!hasMessages) return 'default';
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
@@ -589,7 +479,6 @@ export function ChatInterface({
     return 'default';
   }, [messages, hasMessages]);
 
-  // Handlers — all stable via useCallback
   const handleSend = useCallback(
     (
       content: string,
@@ -645,13 +534,6 @@ export function ChatInterface({
     [openArtifact],
   );
 
-  // ---------------------------------------------------------------------------
-  // Artifact derivation (host capability) — DES-C05
-  // ---------------------------------------------------------------------------
-  // Computed ONCE here for the whole transcript rather than per bubble, then
-  // handed to MessageList by message id. The same pass feeds the conversation
-  // artifact store (which previously had no production writer at all) so the
-  // header toggle has a real count and the panel has something to open.
   const artifactProjections = useMemo(() => {
     if (!deriveMessageArtifacts || !activeConversationId) return null;
     const projections = new Map<string, MessageArtifactProjection>();
@@ -682,9 +564,6 @@ export function ChatInterface({
     useArtifactStore.getState().setArtifacts(activeConversationId, conversationArtifacts);
   }, [activeConversationId, conversationArtifacts]);
 
-  // Header artifacts toggle: opens the most recent artifact of the conversation
-  // (closing an already-open panel). Only synthesized when the conversation has
-  // an artifact, so the control never appears with nothing behind it.
   const handleToggleArtifacts = useCallback(() => {
     if (artifactOpen) {
       closeArtifact();
@@ -694,10 +573,6 @@ export function ChatInterface({
     if (latest) openArtifact(latest);
   }, [artifactOpen, closeArtifact, conversationArtifacts, openArtifact]);
 
-  // Version history for the panel's version stepper. Keyed on the real
-  // artifact id (stripping any `::v<n>` pseudo-suffix — see
-  // ChatRuntime.getArtifactVersions) so this only refetches when the user
-  // switches to a different artifact, not on every local content tweak.
   const [activeArtifactVersions, setActiveArtifactVersions] = useState<Artifact[]>([]);
   const activeArtifactRealId = activeArtifact ? activeArtifact.id.split('::v')[0] : null;
 
@@ -733,10 +608,6 @@ export function ChatInterface({
     [openArtifact, artifactViewMode],
   );
 
-  // Edit-in-place persistence for ArtifactPanel. Always resolves edits
-  // against the real artifact id (stripping any `::v<n>` version suffix),
-  // matching the backend's rollback() semantics: saving while viewing a
-  // historical version creates a new version with that content.
   const handleSaveArtifactEdit = useCallback(
     async (artifactId: string, content: string) => {
       const realId = artifactId.split('::v')[0] ?? artifactId;
@@ -781,7 +652,6 @@ export function ChatInterface({
     [runtime, activeConversationId, activeArtifact, artifactViewMode, openArtifact],
   );
 
-  // Notify host app when a non-chat view is selected so it can render the content
   const handleViewNavigation = useCallback(
     (view: string) => {
       if (onNavigateView) {
@@ -791,22 +661,16 @@ export function ChatInterface({
     [onNavigateView],
   );
 
-  // When a non-chat view is active and host app handles navigation, redirect
-  // then immediately reset to chat so the placeholder doesn't linger.
   useEffect(() => {
     if (activeView !== 'chat' && activeView !== 'project-detail' && onNavigateView) {
       handleViewNavigation(activeView);
-      // Reset back to chat — the host app is now showing its own UI (e.g. settings dialog)
       setActiveView('chat');
     }
     // Only run when activeView changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView]);
 
-  // Main content: either a placeholder view or the full chat layout
   const renderMainContent = () => {
-    // Non-chat views: if host handles them via onNavigateView, show a brief loading state
-    // while the host responds. If no host handler, show placeholder.
     if (
       activeView === 'customize' ||
       activeView === 'projects' ||
@@ -835,12 +699,7 @@ export function ChatInterface({
       );
     }
 
-    // Default: chat view
     return (
-      // Empty state: greeting + composer are ONE centered group. Left as two
-      // independent blocks (flex-1 content + bottom-pinned composer) they split
-      // into a centered greeting and a window-edge composer with ~350px of dead
-      // canvas between them.
       <div className={cn('relative flex h-full flex-col', !hasMessages && 'justify-center')}>
         {/* Header — only rendered when a conversation with messages is active */}
         {hasMessages && activeConversationId && (
@@ -890,15 +749,7 @@ export function ChatInterface({
               onContinueGeneration={
                 runtime?.supportsContinueGeneration ? continueGeneration : undefined
               }
-              // Regenerate needs to REPLACE the old exchange, which means the
-              // runtime must be able to drop the superseded durable rows.
-              // Without `deleteMessages` a retry would leave a duplicated user
-              // turn and a stale answer behind on reload, so the affordance is
-              // omitted rather than faked.
               onRegenerateMessage={runtime?.deleteMessages ? regenerate : undefined}
-              // Editing is edit-and-resend, so it needs the same durable
-              // delete Regenerate does — see `editAndResend`. Without it the
-              // Edit control is not rendered at all.
               onEditMessage={runtime?.deleteMessages ? editAndResend : undefined}
               onToolApprove={runtime?.resolveToolApproval ? handleToolApprove : undefined}
               onToolReject={runtime?.resolveToolApproval ? handleToolReject : undefined}

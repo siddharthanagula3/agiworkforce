@@ -1,17 +1,5 @@
 import type { Metadata } from 'next';
 
-/**
- * Audience copy here must match the pages that actually exist under
- * `app/use-cases/`: startups, consulting firms, IT service providers, and sales
- * teams.
- *
- * This metadata previously advertised healthcare, legal, finance, and education
- * verticals. None of them has a route, a domain policy, disclaimers, sourcing,
- * or an evaluation — AGI is generic chat for those users, and the terms page
- * explicitly tells people not to rely on output for legal, medical, or
- * financial decisions. `use-cases/__tests__/use-cases-metadata.test.ts` fails if
- * an industry term reappears here without a matching route.
- */
 export const metadata: Metadata = {
   title: 'Use Cases',
   description:

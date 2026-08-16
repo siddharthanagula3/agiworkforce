@@ -1,4 +1,3 @@
-/** Minimal declarations for the subset of installed Stripe.js used by Web. */
 
 declare module '@stripe/stripe-js' {
   export interface Stripe {

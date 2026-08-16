@@ -13,9 +13,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LibraryView, type LibraryTransport } from '../LibraryView';
 
-// Root CI executes many package suites concurrently. This mount-effect test is
-// fast when focused, but its jsdom worker can be scheduler-starved beyond the
-// 5 s default. Keep the extra budget on this test rather than the whole suite.
 const ROOT_GRAPH_TEST_TIMEOUT_MS = 15_000;
 const ACTIVE_FILTERS_TEST = 'passes the active filters to the host rather than filtering locally';
 
@@ -28,8 +25,6 @@ function jsonResponse(body: unknown, ok = true): Response {
   } as unknown as Response;
 }
 
-// Shaped to LibraryItemSchema — the view parses through the shared contract,
-// so a partial row is silently dropped rather than rendered.
 const ITEM = {
   id: 'asset-1',
   file_name: 'quarterly-report.pdf',
@@ -75,7 +70,6 @@ describe('shared LibraryView', () => {
     const transport = makeTransport({ isSignedIn: false });
     render(<LibraryView transport={transport} />);
 
-    // An authenticated request from a signed-out surface is the bug this guards.
     await new Promise((r) => setTimeout(r, 50));
     expect(transport.listPage).not.toHaveBeenCalled();
   });
@@ -113,8 +107,6 @@ describe('shared LibraryView', () => {
     const transport = makeTransport({ listPage: vi.fn(async () => jsonResponse({}, false)) });
     render(<LibraryView transport={transport} />);
 
-    // An empty state here would say "nothing here yet", which is a different
-    // and wrong statement from "we could not load it".
     expect(await screen.findByTestId('library-error')).toBeTruthy();
     expect(screen.queryByTestId('library-empty-state')).toBeNull();
   });

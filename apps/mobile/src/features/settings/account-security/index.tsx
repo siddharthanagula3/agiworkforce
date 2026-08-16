@@ -60,11 +60,6 @@ function formatAuditTime(value: string): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
 }
 
-/**
- * The value column is one short line, so an absolute timestamp truncates. A
- * coarse age is what "is this device still in use" actually needs; a missing or
- * unparseable timestamp says so rather than rendering a fabricated recency.
- */
 function formatLastActive(value: string | null): string {
   const time = value === null ? Number.NaN : Date.parse(value);
   if (Number.isNaN(time)) return 'Unknown';
@@ -115,9 +110,6 @@ export default function AccountSecurityScreen() {
       setLoading(true);
       setError(null);
       try {
-        // Session timeout and the activity log are separate account reads, and
-        // a failure in either must not blank the 2FA status that did load —
-        // they settle independently.
         const [nextStatus, timeout, entries] = await Promise.all([
           fetchAccountSecurityStatus(signal),
           fetchSessionTimeout().catch(() => DEFAULT_SESSION_TIMEOUT),
@@ -140,12 +132,6 @@ export default function AccountSecurityScreen() {
     [clerkUserId],
   );
 
-  /**
-   * The device list settles on its own read: it is the one section whose
-   * failure has to be named ("we could not list your devices") instead of being
-   * folded into the 2FA error, because an empty list and an unreachable list
-   * mean opposite things for a security decision.
-   */
   const loadSessions = useCallback(
     async (signal?: AbortSignal) => {
       const account = captureCloudAccountEpoch();
@@ -183,8 +169,6 @@ export default function AccountSecurityScreen() {
                 setRevokingSessionId(row.id);
                 try {
                   await revokeAccountSession(row.id);
-                  // Re-read instead of splicing the row out locally: the server
-                  // is the only thing that knows what is still active.
                   await loadSessions();
                 } catch (revokeError) {
                   Alert.alert(
@@ -207,8 +191,6 @@ export default function AccountSecurityScreen() {
     (url: string) => {
       const account = captureCloudAccountEpoch();
       if (!account || account.ownerId !== clerkUserId) return;
-      // In-app sheet (PAR-M39): the security handoff stays inside the app so
-      // dismissing it returns to the row the user tapped.
       void openInAppBrowser(url);
     },
     [clerkUserId],
@@ -228,8 +210,6 @@ export default function AccountSecurityScreen() {
       try {
         await saveSessionTimeout(next);
       } catch (saveError) {
-        // Put the old value back rather than leaving the row showing a timeout
-        // the account never accepted.
         setSessionTimeout(previous);
         Alert.alert(
           'Could not save session timeout',
@@ -242,8 +222,6 @@ export default function AccountSecurityScreen() {
   }, [sessionTimeout]);
 
   const handleChangePassword = useCallback(() => {
-    // Clerk owns the credential; this is the same updatePassword call web makes
-    // through the browser SDK, not a second password store.
     if (!clerkUser?.updatePassword) {
       Alert.alert(
         'Password change unavailable',
@@ -252,9 +230,6 @@ export default function AccountSecurityScreen() {
       return;
     }
 
-    // Alert.prompt is iOS-only. On Android it returns silently, which would
-    // make this row look broken, so send Android to the web form instead of
-    // rendering a control that does nothing.
     if (Platform.OS !== 'ios') {
       openOwnedWebPage(WEB_SECURITY_URL);
       return;
@@ -396,8 +371,6 @@ export default function AccountSecurityScreen() {
         {appMode !== 'cloud' ? (
           <SettingsRow label="Devices" icon={Laptop} value="Cloud mode required" />
         ) : sessionsError ? (
-          // Retryable, and never silently empty — an unreachable list must not
-          // read as "no other devices are signed in".
           <SettingsRow
             label="Devices"
             icon={Laptop}
@@ -418,8 +391,6 @@ export default function AccountSecurityScreen() {
                 value={
                   revokingSessionId === row.id ? 'Signing out…' : formatLastActive(row.lastActiveAt)
                 }
-                // Signing this device out belongs to the account sign-out flow,
-                // not to a device row, so only other devices are actionable.
                 onPress={
                   row.isCurrent || revokingSessionId !== null
                     ? undefined
@@ -453,9 +424,6 @@ export default function AccountSecurityScreen() {
         <SettingsRow
           label="App Lock"
           icon={Fingerprint}
-          // The flag defaults to enabled before hydration so the gate fails
-          // closed; reporting that default as "On" would be a claim about a
-          // setting nothing has read yet.
           value={appLockHydrated ? (appLockEnabled ? 'On' : 'Off') : 'Checking…'}
           onPress={() =>
             router.push('/(app)/settings/safety-security' as Parameters<typeof router.push>[0])

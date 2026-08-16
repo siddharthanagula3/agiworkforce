@@ -1,10 +1,3 @@
-/**
- * Shared chrome for the Desktop Cloud settings sections that render inline.
- *
- * Kept tiny and local: these sections are lazily loaded from
- * `DesktopCloudSettingsModal`, so importing its helpers back would pull the
- * whole modal into every section chunk.
- */
 
 export const SETTINGS_FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';

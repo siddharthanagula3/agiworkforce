@@ -2,12 +2,6 @@ import type { GenerateOptions, GenerateResult } from './types';
 import { getModelById } from './catalog';
 import { buildMultimodalMessages, type LlamaMessage } from './multimodal';
 
-// Tier 3 adapter: llama.rn (universal fallback, iOS 15+ / Android 10+).
-// Supports text-only GGUF models and multimodal (vision) GGUF models. A vision
-// model is loaded with `ctx_shift:false` and then attaches its mmproj projector
-// via `context.initMultimodal({ path })`; image input is only effective once
-// that returns true. Dynamic require for tree-shaking parity with tier2.
-
 interface LlamaContext {
   completion: (
     params: {
@@ -16,10 +10,6 @@ interface LlamaContext {
     },
     onToken?: (data: { token: string }) => void,
   ) => Promise<{ text?: string; content?: string }>;
-  /**
-   * Attach an mmproj vision projector. Returns true on success. llama.rn:
-   * `await context.initMultimodal({ path, use_gpu })`.
-   */
   initMultimodal?: (params: { path: string; use_gpu?: boolean }) => Promise<boolean>;
   stopCompletion?: () => Promise<void>;
   release: () => Promise<void>;
@@ -30,7 +20,6 @@ type InitLlamaFn = (opts: {
   n_ctx?: number;
   n_threads?: number;
   n_gpu_layers?: number;
-  /** MUST be false for multimodal models to keep media token positions valid. */
   ctx_shift?: boolean;
 }) => Promise<LlamaContext>;
 
@@ -68,12 +57,10 @@ const STOP_WORDS = [
   '<|endoftext|>',
 ];
 
-/** Inject a mock llama.rn module in tests — only call from test files. */
 export function _setLlamaModuleForTesting(initLlama: InitLlamaFn | null): void {
   _llamaModuleOverride = initLlama;
 }
 
-/** True when a model is loaded with a working mmproj projector (vision ready). */
 export function tier3IsMultimodalReady(): boolean {
   return Boolean(_llamaContext) && _multimodalReady;
 }
@@ -113,9 +100,6 @@ async function loadContext(
     const context = await initLlama({
       model: modelPath,
       n_ctx: contextTokens,
-      // Multimodal models require ctx_shift:false so media token positions stay
-      // valid; we only set it (and enable GPU layers) when an mmproj is
-      // requested, leaving llama.rn's defaults for the text-only path.
       ...(mmprojPath ? { ctx_shift: false, n_gpu_layers: 99 } : {}),
     });
 
@@ -165,11 +149,6 @@ export async function tier3LoadModel(modelPath: string, modelId?: string): Promi
   await loadContext(modelPath, contextTokens, null);
 }
 
-/**
- * Load a multimodal GGUF model plus its mmproj vision projector. After this
- * resolves, check `tier3IsMultimodalReady()` — if false, the mmproj failed to
- * attach and only text generation is available.
- */
 export async function tier3LoadMultimodalModel(
   modelPath: string,
   mmprojPath: string,
@@ -189,8 +168,6 @@ function buildMessages(opts: GenerateOptions): LlamaMessage[] {
     systemPrompt: opts.systemPrompt,
     messages: opts.messages,
     prompt: opts.prompt,
-    // Only pass images through once the projector is actually loaded, so we
-    // never hand image parts to a model that cannot consume them.
     images: _multimodalReady ? opts.images : undefined,
   });
 }

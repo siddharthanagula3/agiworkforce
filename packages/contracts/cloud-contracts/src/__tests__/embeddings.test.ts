@@ -9,16 +9,6 @@ import {
 
 const FIXTURE_MODEL_ID = 'fixture-embedding-model';
 
-/**
- * The embeddings request contract.
- *
- * The rule it encodes: every accepted field is a field the route honours.
- * `dimensions` and `encoding_format: 'base64'` exist in OpenAI's API and are
- * REJECTED here rather than ignored — silently returning full-length float
- * vectors to a caller who asked for 256 dimensions or base64 would only surface
- * much later as degraded retrieval or a broken decoder.
- */
-
 describe('ManagedEmbeddingsRequestSchema — accepts', () => {
   it('a single string', () => {
     const result = ManagedEmbeddingsRequestSchema.safeParse({ input: 'hello' });
@@ -69,8 +59,6 @@ describe('ManagedEmbeddingsRequestSchema — rejects', () => {
   });
 
   it('a dimensions parameter the route cannot honour', () => {
-    // `.strict()` is what makes this fail. Accepting and ignoring it would
-    // return vectors of a different length than requested.
     const result = ManagedEmbeddingsRequestSchema.safeParse({ input: 'hello', dimensions: 256 });
 
     expect(result.success).toBe(false);
@@ -96,8 +84,6 @@ describe('ManagedEmbeddingsRequestSchema — rejects', () => {
 
 describe('toEmbeddingInputs', () => {
   it('normalizes both request shapes to an array', () => {
-    // The response is always the indexed-array form, so a caller never has to
-    // branch on what they sent.
     expect(toEmbeddingInputs('one')).toEqual(['one']);
     expect(toEmbeddingInputs(['one', 'two'])).toEqual(['one', 'two']);
   });

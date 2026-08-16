@@ -4,19 +4,6 @@ import { requireProviderDefaultModel, type PricedModel } from '@agiworkforce/typ
 
 const CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
-/**
- * The embeddings route, focused on the two things that are expensive to get
- * wrong: money and vector/input alignment.
- *
- * BILLING — a reservation that is never finalized holds quota the caller cannot
- * use and cannot see, so every exit path must settle. The provider-failure case
- * is the one that regresses silently, because the happy path still works.
- *
- * ALIGNMENT — a short or ragged provider batch would associate embeddings with
- * the wrong input text. Nothing downstream can detect that; it surfaces only as
- * quietly bad retrieval, so it must fail loudly here.
- */
-
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(async () => 'user-1'),
   reserve: vi.fn(async () => ({ reservationId: 'reservation-1' })),
@@ -127,7 +114,6 @@ describe('POST /api/llm/v1/embeddings — success', () => {
 
     await POST(post({ input: 'hello' }));
 
-    // A caller at their limit must be stopped BEFORE spend, not after.
     expect(mocks.reserve).toHaveBeenCalled();
     expect(mocks.reserve.mock.invocationCallOrder[0]!).toBeLessThan(
       mocks.fetch.mock.invocationCallOrder[0]!,
@@ -158,11 +144,9 @@ describe('POST /api/llm/v1/embeddings — billing on failure', () => {
   it('releases the reservation when the provider fails', async () => {
     mocks.fetch.mockResolvedValue({ ok: false, status: 500, text: async () => 'boom' });
 
-    // `withErrorHandler` turns the throw into a 503 response.
     const response = await POST(post({ input: 'hello' }));
     expect(response.status).toBe(503);
 
-    // Leaving this unsettled would hold quota the caller cannot use or see.
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect((mocks.finalize.mock.calls[0] as unknown[])[0]).toMatchObject({
       outcome: 'failed',
@@ -188,8 +172,6 @@ describe('POST /api/llm/v1/embeddings — billing on failure', () => {
 
 describe('POST /api/llm/v1/embeddings — provider result integrity', () => {
   it('fails when the provider returns fewer vectors than inputs', async () => {
-    // Misaligned vectors would attach embeddings to the wrong text, and nothing
-    // downstream could detect it.
     googleReturns([[0.1]]);
 
     const response = await POST(post({ input: ['a', 'b'] }));
@@ -205,9 +187,6 @@ describe('POST /api/llm/v1/embeddings — provider result integrity', () => {
   });
 
   it('charges nothing on a deployment with no provider key', async () => {
-    // The 503 body is deliberately sanitized by `withErrorHandler` (deployment
-    // configuration is not the caller's business), so the guarantee worth
-    // pinning is the billing one: the reservation is released, not held.
     delete process.env['GOOGLE_API_KEY'];
 
     const response = await POST(post({ input: 'hello' }));

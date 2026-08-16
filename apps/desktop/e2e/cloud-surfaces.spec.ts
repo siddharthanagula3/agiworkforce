@@ -2,30 +2,6 @@ import { test, expect } from '@playwright/test';
 import { injectMockCloudAuth } from './utils/mock-cloud-auth';
 import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
 
-/**
- * Desktop Cloud surfaces (Library, Tasks) inside the real shell, behind the
- * repo's mock cloud session.
- *
- * Component-level tests and a rendering harness both passed while these two
- * surfaces were completely unreachable in the app. Only running the real shell
- * found it, twice:
- *
- *  1. Both panels were listed in the effect that evicts Local-only panels when
- *     the user is in Cloud mode. The nav click set the panel and the effect
- *     reset it to chat on the same tick, so the buttons rendered and did
- *     nothing.
- *  2. TasksPage's root is `h-full`, which collapses to zero height unless its
- *     parent has a resolved one. The panel mounted and drew nothing.
- *
- * Neither is visible to a unit test, so this spec exists to keep them fixed.
- * Assertions are scoped inside the panel by test id — the sidebar also contains
- * the words "Library" and "Tasks", and asserting page-wide passes while the
- * panel is empty.
- *
- * The route set this spec worked out in-repo now lives in
- * `utils/mock-cloud-api.ts` (DES-C14) so every Cloud spec gets it; the fixtures
- * below are passed in as data.
- */
 const LIBRARY_ITEMS = [
   {
     id: 'a1',
@@ -137,8 +113,6 @@ test('renders Library and Tasks in the real cloud shell', async ({ page }) => {
   await page.goto('/');
   await page.waitForTimeout(4000);
 
-  // The shell must mount past the auth gate for any of this to be meaningful,
-  // and the conversation boundary must not have failed behind it.
   await expectCloudShellReady(page);
   await expect(page.getByRole('button', { name: /Library/i }).first()).toBeVisible({
     timeout: 20000,
@@ -148,8 +122,6 @@ test('renders Library and Tasks in the real cloud shell', async ({ page }) => {
     .getByRole('button', { name: /Library/i })
     .first()
     .click();
-  // Assert the panel actually switched rather than screenshotting whatever was
-  // on screen — the click could no-op and a screenshot would still "pass".
   await expect(page.getByTestId('library-view')).toBeVisible({ timeout: 15000 });
   await expect(page.getByText('Q3-forecast.xlsx')).toBeVisible({ timeout: 10000 });
 
@@ -159,7 +131,6 @@ test('renders Library and Tasks in the real cloud shell', async ({ page }) => {
     .click();
   const tasksView = page.getByTestId('tasks-view');
   await expect(tasksView).toBeVisible({ timeout: 15000 });
-  // Assert inside the panel, not the page: the sidebar also contains "Tasks".
   await expect(tasksView.getByText('Running')).toBeVisible({ timeout: 10000 });
   await expect(tasksView.getByText('Completed')).toBeVisible();
 });

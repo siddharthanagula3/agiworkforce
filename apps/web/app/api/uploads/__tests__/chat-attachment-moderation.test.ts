@@ -1,13 +1,3 @@
-/**
- * Hash matching at the upload completion boundary.
- *
- * `upload-scan` asks whether a file can *do* something dangerous when served.
- * Nothing asked what it *depicts*, so a known-illegal image registered and was
- * served like any other attachment. These cases pin the denylist hit: the
- * object is deleted from the private bucket, the asset is never registered, a
- * moderation report is emitted with the digest and list provenance, and the
- * uploader is told nothing that identifies the check.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -55,7 +45,6 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 
 import { POST } from '@/app/api/uploads/chat-attachment/complete/route';
 
-/** A minimal but structurally valid PNG, so only the hash decides the verdict. */
 const PNG_BYTES = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
 ]);
@@ -135,7 +124,6 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
       }),
       expect.stringContaining('[moderation]'),
     );
-    // No oracle for the uploader: nothing names the denylist or the digest.
     expect(JSON.stringify(body)).not.toContain(PNG_DIGEST);
     expect(JSON.stringify(body)).not.toMatch(/hash|denylist|ncmec/i);
   });

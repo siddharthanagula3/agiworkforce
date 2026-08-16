@@ -1,9 +1,3 @@
-/**
- * TimeoutWarningDialog Component
- *
- * Displays a timeout warning when a background task is approaching its timeout limit.
- * Provides options to extend the timeout, continue, pause, or abort the task.
- */
 import { useState, useCallback, useMemo, type FC } from 'react';
 import { AlertTriangle, Clock, Zap, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,9 +24,6 @@ interface TimeoutWarningDialogProps {
   isOpen: boolean;
 }
 
-/**
- * Format remaining time in human-readable format
- */
 function formatRemainingTime(seconds: number): string {
   if (seconds <= 0) return 'Time expired';
 
@@ -52,18 +43,12 @@ function formatRemainingTime(seconds: number): string {
   return `${secs}s`;
 }
 
-/**
- * Get visual urgency level based on remaining time
- */
 function getUrgencyLevel(seconds: number): 'critical' | 'warning' | 'info' {
-  if (seconds <= 300) return 'critical'; // < 5 minutes
-  if (seconds <= 1800) return 'warning'; // < 30 minutes
+  if (seconds <= 300) return 'critical';
+  if (seconds <= 1800) return 'warning';
   return 'info';
 }
 
-/**
- * Get progress color based on urgency
- */
 function getProgressColor(urgency: 'critical' | 'warning' | 'info'): string {
   switch (urgency) {
     case 'critical':
@@ -75,9 +60,6 @@ function getProgressColor(urgency: 'critical' | 'warning' | 'info'): string {
   }
 }
 
-/**
- * Get badge variant based on urgency
- */
 function getBadgeVariant(
   urgency: 'critical' | 'warning' | 'info',
 ): 'default' | 'destructive' | 'secondary' {
@@ -99,7 +81,6 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedAction, setSelectedAction] = useState<'extend' | 'pause' | 'abort' | null>(null);
 
-  // Calculate urgency level and progress percentage
   const urgency = useMemo(
     () => (warning ? getUrgencyLevel(warning.remainingSeconds) : 'info'),
     [warning],
@@ -111,9 +92,6 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
     return Math.min(100, (warning.remainingSeconds / max) * 100);
   }, [warning]);
 
-  /**
-   * Handle extending timeout by 30 minutes
-   */
   const handleExtendTimeout = useCallback(async () => {
     if (!warning) return;
 
@@ -144,9 +122,6 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
     }
   }, [warning, onDismiss]);
 
-  /**
-   * Handle pausing the task
-   */
   const handlePauseTask = useCallback(async () => {
     if (!warning) return;
 
@@ -176,13 +151,9 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
     }
   }, [warning, onDismiss]);
 
-  /**
-   * Handle aborting the task
-   */
   const handleAbortTask = useCallback(async () => {
     if (!warning) return;
 
-    // Confirm abort
     const shouldAbort = confirm(
       `Are you sure you want to abort "${warning.taskName}"? This action cannot be undone.`,
     );
@@ -215,9 +186,6 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
     }
   }, [warning, onDismiss]);
 
-  /**
-   * Handle continuing without action (dismiss warning)
-   */
   const handleContinue = useCallback(() => {
     onDismiss();
   }, [onDismiss]);

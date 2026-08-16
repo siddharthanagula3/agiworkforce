@@ -1,9 +1,3 @@
-/**
- * AttachmentPreview Component
- *
- * Displays attachment previews with support for images, audio, and generic files.
- * Includes remove functionality and handles different attachment types appropriately.
- */
 
 import React from 'react';
 import { Lock, Paperclip, X } from 'lucide-react';
@@ -12,21 +6,11 @@ import { Attachment } from '../../stores/unifiedChatStore';
 import { AudioPreview } from './AudioPreview';
 
 export interface AttachmentPreviewProps {
-  /** List of attachments to display */
   attachments: Attachment[];
-  /** Callback when an attachment is removed */
   onRemove: (id: string) => void;
-  /** Optional className for the container */
   className?: string;
-  /** Whether the current model supports vision/images */
   visionSupported?: boolean;
-  /** Disable remove controls */
   disableRemove?: boolean;
-  /**
-   * Per-file privacy label (e.g. "Local", "BYOK", "Managed") rendered as a
-   * lock-icon chip on each attachment. Sourced from the host's
-   * SendPreviewPresentation. PLAN.md section 5: "Add per-file privacy labels".
-   */
   privacyShortLabel?: string;
 }
 
@@ -51,7 +35,6 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
           const imageUrl = attachment.content || attachment.path;
           const audioUrl = attachment.content || attachment.path;
 
-          // Render audio preview with playback controls
           if (isAudio && audioUrl) {
             return (
               <AudioPreview

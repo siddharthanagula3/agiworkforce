@@ -1,12 +1,3 @@
-/**
- * Golden tests for OpenAI reasoning-effort resolution.
- *
- * Pins catalog and endpoint compatibility effort lists and the fallback ladder
- * when an unsupported effort is
- * requested. Refactors that touch openai-reasoning-effort.ts MUST keep
- * these mappings stable — adapters depend on them to gate
- * `reasoning: { effort: ... }` payloads.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -105,7 +96,6 @@ describe('resolveOpenAIReasoningEffortForModel — fallback ladder', () => {
   });
 
   it('upgrades minimal -> low when the model lacks minimal', () => {
-    // The current routed reasoning model supports the full ladder except minimal.
     expect(
       resolveOpenAIReasoningEffortForModel({
         model: { id: openAIReasoningModelId },
@@ -124,8 +114,6 @@ describe('resolveOpenAIReasoningEffortForModel — fallback ladder', () => {
   });
 
   it('returns undefined for explicit none/off requests on a model without "none"', () => {
-    // This explicit compatibility profile has no "none". Asking for none =>
-    // disabled, return undefined so callers strip the field.
     expect(
       resolveOpenAIReasoningEffortForModel({
         model: {

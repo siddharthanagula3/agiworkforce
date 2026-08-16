@@ -5,8 +5,6 @@ import { getToolDisplayLabel } from '../tool-display';
 
 describe('stripTrailingSlashes', () => {
   it('matches what the nine hand-rolled regexes did', () => {
-    // Behavioural parity is the whole point: nine call sites changed, and none
-    // of them may change meaning.
     const cases: Array<[string, string]> = [
       ['https://api.example.com/', 'https://api.example.com'],
       ['https://api.example.com///', 'https://api.example.com'],
@@ -32,11 +30,6 @@ describe('stripTrailingSlashes', () => {
   });
 
   it('stays linear on the input that made the regex quadratic', () => {
-    // `/\/+$/` backtracks quadratically on a long run of slashes that never
-    // reaches an anchor. 100k characters through the old expression is
-    // measured in seconds; a single backward scan is immediate. The assertion
-    // is on correctness and completion — a wall-clock threshold would be a
-    // flaky test on shared CI runners.
     const pathological = `${'/'.repeat(100_000)}x${'/'.repeat(100_000)}`;
     expect(stripTrailingSlashes(pathological)).toBe(`${'/'.repeat(100_000)}x`);
   });
@@ -66,8 +59,6 @@ describe('getToolDisplayLabel — mcp name parsing parity', () => {
   });
 
   it('answers immediately on the input that made the old expression quadratic', () => {
-    // `_` sits inside the server-name class, so the engine could not tell
-    // which `__` was the separator and retried every split point.
     const pathological = `mcp__${'a_'.repeat(50_000)}`;
     expect(() => getToolDisplayLabel(pathological)).not.toThrow();
   });

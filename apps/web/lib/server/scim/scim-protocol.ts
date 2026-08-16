@@ -1,14 +1,5 @@
 import 'server-only';
 
-/**
- * SCIM 2.0 wire protocol helpers (RFC 7643 schemas, RFC 7644 API messages).
- *
- * Everything an IdP sends is hostile input: filters, PATCH operation arrays,
- * unbounded strings. Nothing in this module ever interpolates a caller value
- * into SQL — `parseScimFilter` returns a STRUCTURED result whose attribute is
- * drawn from a fixed allowlist, and the caller binds the value as a parameter.
- */
-
 export const SCIM_CONTENT_TYPE = 'application/scim+json';
 
 export const SCIM_SCHEMA = {
@@ -22,11 +13,6 @@ export const SCIM_SCHEMA = {
   patchOp: 'urn:ietf:params:scim:api:messages:2.0:PatchOp',
 } as const;
 
-/**
- * SCIM's own error discriminators (RFC 7644 §3.12). IdPs branch on these —
- * Okta retries `tooMany` and surfaces `uniqueness` to the operator as a
- * duplicate rather than a hard failure.
- */
 export type ScimErrorType =
   | 'invalidFilter'
   | 'tooMany'
@@ -59,12 +45,9 @@ export function scimErrorBody(
   };
 }
 
-/** A SCIM response always carries `application/scim+json`, never `application/json`. */
 export function scimResponse(body: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(extraHeaders);
   headers.set('content-type', SCIM_CONTENT_TYPE);
-  // SCIM state is tenant-scoped and credential-gated; it must never be cached
-  // by an intermediary.
   headers.set('cache-control', 'no-store');
   return new Response(JSON.stringify(body), { status, headers });
 }
@@ -72,16 +55,11 @@ export function scimResponse(body: unknown, status = 200, extraHeaders?: Headers
 export function scimError(status: number, detail: string, scimType?: ScimErrorType): Response {
   const headers = new Headers();
   if (status === 401) {
-    // RFC 7235: a 401 without a challenge is not a well-formed rejection.
     headers.set('www-authenticate', 'Bearer realm="scim"');
   }
   return scimResponse(scimErrorBody(status, detail, scimType), status, headers);
 }
 
-/**
- * `ScimError` lets the service layer refuse with a spec-shaped failure that a
- * route converts verbatim, instead of every service returning ad-hoc unions.
- */
 export class ScimError extends Error {
   readonly status: number;
   readonly scimType: ScimErrorType | undefined;
@@ -98,15 +76,6 @@ export class ScimError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Pagination (RFC 7644 §3.4.2.4)
-// ---------------------------------------------------------------------------
-
-/**
- * SCIM pagination is 1-BASED. `startIndex` below 1 is clamped to 1 by the
- * spec, not rejected. `count` is capped so an IdP cannot ask for the whole
- * directory in one response.
- */
 export const SCIM_MAX_PAGE_SIZE = 200;
 export const SCIM_DEFAULT_PAGE_SIZE = 100;
 
@@ -163,18 +132,6 @@ export function scimListResponse<T>(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Filters (RFC 7644 §3.4.2.2)
-// ---------------------------------------------------------------------------
-
-/**
- * The filter grammar is large; the subset IdPs actually use for provisioning
- * is one `eq` comparison on an identifier attribute. Okta and Entra both issue
- * `userName eq "x"` (and `displayName eq "x"` for groups) as the "does this
- * already exist" probe before every create — supporting that exactly, and
- * refusing everything else with `invalidFilter`, is honest and keeps the
- * parser from becoming an injection surface.
- */
 export const SCIM_USER_FILTER_ATTRIBUTES = ['userName', 'externalId', 'emails.value'] as const;
 export const SCIM_GROUP_FILTER_ATTRIBUTES = ['displayName', 'externalId'] as const;
 
@@ -194,7 +151,6 @@ const MAX_FILTER_LENGTH = 512;
 const MAX_FILTER_VALUE_LENGTH = 320;
 
 function unescapeFilterValue(raw: string): string {
-  // JSON string escaping is what RFC 7644 defers to for filter literals.
   return raw.replace(/\\(["\\/bfnrt])/gu, (_match, char: string) => {
     switch (char) {
       case 'b':
@@ -269,10 +225,6 @@ export function parseScimGroupFilter(
   return parseFilter(raw, SCIM_GROUP_FILTER_ATTRIBUTES);
 }
 
-// ---------------------------------------------------------------------------
-// PATCH (RFC 7644 §3.5.2)
-// ---------------------------------------------------------------------------
-
 export type ScimPatchOperationName = 'add' | 'remove' | 'replace';
 
 export interface ScimPatchOperation {
@@ -283,10 +235,6 @@ export interface ScimPatchOperation {
 
 const MAX_PATCH_OPERATIONS = 100;
 
-/**
- * `replace` on `active` is how Okta deprovisions, so PATCH is not optional.
- * The body is validated structurally before any of it reaches the service.
- */
 export function parseScimPatch(body: unknown): ScimPatchOperation[] {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     throw new ScimError(400, 'PATCH body must be a JSON object', 'invalidSyntax');
@@ -349,12 +297,6 @@ export function parseScimPatch(body: unknown): ScimPatchOperation[] {
   });
 }
 
-/**
- * Coerce a SCIM boolean. IdPs are inconsistent: Entra sends `"False"` as a
- * string in some PATCH shapes, Okta sends a real boolean. Anything else is a
- * client error rather than a silently-ignored value — silently ignoring it
- * would mean a deprovision that reports success and changes nothing.
- */
 export function coerceScimBoolean(value: unknown, field: string): boolean {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') {
@@ -365,17 +307,11 @@ export function coerceScimBoolean(value: unknown, field: string): boolean {
   throw new ScimError(400, `\`${field}\` must be a boolean`, 'invalidValue');
 }
 
-// ---------------------------------------------------------------------------
-// Discovery documents (RFC 7644 §4)
-// ---------------------------------------------------------------------------
-
 export function scimServiceProviderConfig(baseUrl: string) {
   return {
     schemas: [SCIM_SCHEMA.serviceProviderConfig],
     documentationUri: 'https://agiworkforce.com/docs/enterprise/directory-sync',
     patch: { supported: true },
-    // Bulk is genuinely not implemented. Advertising it as supported would
-    // make Okta send bulk requests this service provider would reject.
     bulk: { supported: false, maxOperations: 0, maxPayloadSize: 0 },
     filter: { supported: true, maxResults: SCIM_MAX_PAGE_SIZE },
     changePassword: { supported: false },
@@ -428,12 +364,6 @@ export function scimResourceTypes(baseUrl: string) {
   };
 }
 
-/**
- * The Schemas document advertises ONLY the attributes this service provider
- * actually persists and honours. Listing the full RFC 7643 attribute set would
- * tell an IdP that `entitlements`, `roles` and `x509Certificates` round-trip,
- * which they do not.
- */
 export function scimSchemas(baseUrl: string) {
   const resources = [
     {

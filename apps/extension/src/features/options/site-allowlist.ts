@@ -1,7 +1,3 @@
-/**
- * Normalize a candidate site URL/origin for the extension automation allowlist.
- * Only web origins are eligible; labels and extension/internal URLs fail closed.
- */
 export function normalizeApprovedSiteOrigin(value: unknown): string | null {
   if (typeof value !== 'string' || value.trim().length === 0) return null;
 
@@ -20,7 +16,6 @@ export interface SiteTabCandidate {
   lastAccessed?: number;
 }
 
-/** Pick the active eligible site, or the most recently accessed eligible site. */
 export function selectApprovedSiteOrigin(tabs: ReadonlyArray<SiteTabCandidate>): string | null {
   const candidates = tabs
     .map((tab) => ({ tab, origin: normalizeApprovedSiteOrigin(tab.url) }))

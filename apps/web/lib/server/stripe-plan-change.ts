@@ -5,11 +5,6 @@ import type Stripe from 'stripe';
 
 export type CheckoutBillingInterval = 'monthly' | 'yearly';
 
-/**
- * Resolve the only Stripe billing periods supported by the self-serve upgrade
- * flow. Multi-month/year prices are intentionally excluded: changing billing
- * periods resets Stripe's renewal anchor and is not a remaining-period upgrade.
- */
 export function checkoutBillingIntervalFromStripePrice(
   recurring: Stripe.Price.Recurring | null | undefined,
 ): CheckoutBillingInterval | null {
@@ -34,14 +29,6 @@ export function assertSameCheckoutBillingInterval(
   }
 }
 
-/**
- * Rank used by BOTH `/api/upgrade/preview` and `/api/upgrade` so a change the
- * preview priced can never be refused (or vice versa) by the apply step.
- *
- * Team sits between Pro and Max here because that is where its capability set
- * lands, but note that a Team change is normally a SEAT change, not a rank
- * change — see `classifyPlanChange`.
- */
 export const TIER_ORDER: Readonly<Record<string, number>> = Object.freeze({
   free: 0,
   basic: 0.5,
@@ -62,21 +49,6 @@ export type PlanChangeDecision =
   | { allowed: true; kind: PlanChangeKind }
   | { allowed: false; reason: string };
 
-/**
- * Decide whether a mid-cycle subscription change may proceed.
- *
- * Two shapes are allowed:
- *  - `tier_upgrade`: a strictly higher tier. Existing behaviour.
- *  - `seat_increase`: same per-seat tier, strictly more seats. This is the
- *    "add seats to my Team" path; a plain tier comparison calls it
- *    "team -> team" and refuses it, which is why it is classified separately.
- *
- * Seat REDUCTION is deliberately refused here rather than silently accepted.
- * The mid-cycle path runs `proration_behavior: 'always_invoice'`, so a
- * reduction would immediately issue a credit/refund — a money-out flow with no
- * scoped policy — and it would also let an org drop below the seats its members
- * already occupy. It is routed to billing management instead.
- */
 export function classifyPlanChange(input: {
   currentTier: string;
   targetPlan: string;
@@ -106,21 +78,6 @@ export function classifyPlanChange(input: {
     };
   }
 
-  // A per-seat ORGANIZATION plan may not be crossed into or out of on the
-  // individual upgrade path, in EITHER direction.
-  //
-  // Leaving it: TIER_ORDER ranks team at 1.5, so isUpgrade('team','max') is true
-  // and a Team owner could convert the organization's per-seat subscription into
-  // a personal Max plan — collapsing the seat quantity, silently stranding every
-  // other member of the org, and leaving `organizations.licensed_seats` pointing
-  // at a subscription that no longer sells seats.
-  //
-  // Entering it: isUpgrade('pro','team') is likewise true, which would mint a
-  // Team subscription with NO organization behind it and no seat count — a plan
-  // whose entire value proposition is seats, sold to a single user with none.
-  //
-  // Both are seat/organization lifecycle changes, not rank changes, so they
-  // belong to organization billing where the org and its members are in scope.
   if (isPerSeatBillingPlan(currentTier)) {
     return {
       allowed: false,
@@ -146,7 +103,6 @@ export function classifyPlanChange(input: {
   return { allowed: true, kind: 'tier_upgrade' };
 }
 
-/** Seat count currently billed on a Stripe subscription item (absent means 1). */
 export function currentSeatsFromStripeItem(quantity: number | null | undefined): number {
   return typeof quantity === 'number' && Number.isInteger(quantity) && quantity >= 1 ? quantity : 1;
 }

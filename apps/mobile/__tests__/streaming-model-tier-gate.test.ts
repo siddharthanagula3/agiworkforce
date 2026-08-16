@@ -1,16 +1,3 @@
-/**
- * Regression for a swallowed model-tier-gate rejection.
- *
- * When Auto-mode (or a direct pick) resolves to a model the user's tier can't
- * access, the server returns HTTP 403 with
- * `{ error: { code: 'model_not_available', requiredTier, message } }`. Before
- * this fix, `attemptStream` had no special handling for 403, so this fell
- * through to a generic `Error`, which `chatExecutionStore` intentionally
- * renders as a blank "Something went wrong. Please try again." bubble — an
- * actionable, user-fixable condition (pick another model / upgrade) with zero
- * actionable UI. This reclassifies it as `ApiPaywallError` so the existing
- * `PaywallBottomSheet` upgrade prompt renders instead.
- */
 
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 

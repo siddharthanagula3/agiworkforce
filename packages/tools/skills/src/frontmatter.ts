@@ -1,29 +1,7 @@
-/**
- * Tiny YAML frontmatter parser.
- *
- * Skills only need flat key:value frontmatter (plus the occasional list).
- * This avoids a heavy `yaml` runtime dep — we cover:
- *   - `key: value` — string scalar
- *   - `key: 'value'` / `key: "value"` — quoted string
- *   - `key: 12` / `key: 12.5` — number
- *   - `key: true` / `key: false` — boolean
- *   - `key: null` — null
- *   - `key:` followed by a `- value` block — string array
- *   - `key: [a, b, c]` — inline string array (very basic)
- *   - nested objects via two-space indent (one level deep, e.g. `requires.bins`)
- *
- * If a skill needs richer metadata, switch to a real YAML parser at the
- * caller site — but this covers OpenClaw's skill schema 100%.
- */
 
-// AUDIT-FIX: alert-399 — bound whitespace runs to avoid polynomial-redos.
-// `^---<spaces>\n` opens the fence, `\n---<spaces>\n<blank lines>` closes it.
-// Limiting each whitespace run to 64 keeps the regex linear-time on adversarial
-// input while preserving the historic permissive trailing-blank behavior.
 const FRONTMATTER_FENCE =
   /^---[ \t]{0,32}\r?\n([\s\S]{0,131072}?)\r?\n---[ \t]{0,32}(?:\r?\n[ \t]{0,256}){0,64}/;
 
-// AUDIT-FIX: H-1 — prototype pollution guard.
 const RESERVED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 export class FrontmatterError extends Error {
@@ -51,10 +29,8 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
 
 function parseYamlBlock(text: string): Record<string, unknown> {
   const lines = text.split(/\r?\n/);
-  // AUDIT-FIX: H-1 — null-prototype containers + defineProperty assignment block setter-based pollution.
   const root: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
 
-  // Stack of (object, indent) so we can nest one level (sufficient for `requires:`).
   const stack: Array<{ obj: Record<string, unknown>; indent: number }> = [
     { obj: root, indent: -1 },
   ];
@@ -71,7 +47,6 @@ function parseYamlBlock(text: string): Record<string, unknown> {
     });
   }
 
-  // We accumulate list values for the most recent `key:` (no value on the line).
   let pendingListKey: string | null = null;
   let pendingListTarget: Record<string, unknown> | null = null;
   const pendingList: string[] = [];
@@ -86,7 +61,6 @@ function parseYamlBlock(text: string): Record<string, unknown> {
   }
 
   for (const rawLine of lines) {
-    // AUDIT-FIX: alert-400 — bound trailing-whitespace strip.
     const stripped = rawLine.replace(/\s{1,4096}$/, '');
     if (!stripped.trim()) {
       flushList();
@@ -95,9 +69,6 @@ function parseYamlBlock(text: string): Record<string, unknown> {
     if (stripped.trim().startsWith('#')) continue;
     const indent = leadingSpaces(stripped);
 
-    // List entry?
-    // AUDIT-FIX: alert-401 — bound the leading-whitespace and post-dash
-    // whitespace runs so the regex is linear-time on adversarial input.
     const listMatch = /^[ \t]{0,256}-[ \t]{1,256}(.{0,4096})$/.exec(stripped);
     if (listMatch && pendingListKey) {
       pendingList.push(unquote(listMatch[1] ?? ''));
@@ -106,14 +77,11 @@ function parseYamlBlock(text: string): Record<string, unknown> {
 
     flushList();
 
-    // Pop the stack until indent fits.
     while (stack.length > 1 && indent <= stack[stack.length - 1]!.indent) {
       stack.pop();
     }
     const parent = stack[stack.length - 1]!.obj;
 
-    // AUDIT-FIX: alert-402 — bound whitespace runs and key/value lengths
-    // to defeat polynomial-redos on adversarial frontmatter.
     const keyValueMatch =
       /^[ \t]{0,256}([A-Za-z0-9_$-]{1,128})[ \t]{0,256}:(?:[ \t]{0,256}(.{0,8192}))?$/.exec(
         stripped,
@@ -123,11 +91,9 @@ function parseYamlBlock(text: string): Record<string, unknown> {
     const valueText = (keyValueMatch[2] ?? '').trim();
 
     if (valueText === '') {
-      // Either object or upcoming list. Probe next non-empty line context.
       const childObj: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
       assign(parent, key, childObj);
       stack.push({ obj: childObj, indent });
-      // Also possibly a list — if next non-empty line is `- ...`, listify here.
       pendingListKey = key;
       pendingListTarget = parent;
       continue;

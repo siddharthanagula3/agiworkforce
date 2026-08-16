@@ -7,9 +7,6 @@ const { resolveAgentApproval, respondToolConfirmation } = vi.hoisted(() => ({
   respondToolConfirmation: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock only the two native command wrappers. `services/approvalResolution`,
-// `hooks/useApprovalActions` and `stores/chat/toolStore` all run for real so
-// this exercises the actual routing the sidecar depends on.
 vi.mock('../../../api/agent', () => ({
   resolveApproval: resolveAgentApproval,
 }));

@@ -1,8 +1,3 @@
-/**
- * core/ — Extension activation lifecycle, command registry, telemetry, subsystem health.
- *
- * Phase 6 reorg: moved from lifecycle/, registry/, and services/ (telemetry + subsystemHealth).
- */
 export { validateAdvancedFeatureFlags, hasInlineCompletionCredential } from './advancedFeatures';
 export { buildExtensionStatusBarText } from './statusBar';
 export { setupChat, type ChatState } from './chatSetup';

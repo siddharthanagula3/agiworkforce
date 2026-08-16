@@ -1,15 +1,3 @@
-/**
- * Audit Event Schema — Unit Tests
- *
- * Tests the Wave 3 audit schema from packages/contracts/types/src/audit.ts:
- *  - createAuditEvent generates valid events with required fields
- *  - Auto-generated fields (eventId, timestamp) are correct
- *  - defaultSeverityForAction maps correctly for all actions
- *  - severity override is respected when explicitly provided
- *  - All AuditAction values are covered by defaultSeverityForAction
- *  - Metadata is optional and passed through correctly
- *  - userId may be null for system events
- */
 
 import { describe, it, expect } from 'vitest';
 import {
@@ -20,10 +8,6 @@ import {
   type AuditSurface,
   type AuditOutcome,
 } from '../audit';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const ISO_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -39,10 +23,6 @@ function makeMinimalParams(overrides: Partial<Parameters<typeof createAuditEvent
     ...overrides,
   };
 }
-
-// ---------------------------------------------------------------------------
-// 1. createAuditEvent generates valid events
-// ---------------------------------------------------------------------------
 
 describe('createAuditEvent — required fields', () => {
   it('creates an event with all required fields present', () => {
@@ -65,10 +45,6 @@ describe('createAuditEvent — required fields', () => {
     expect(e1.eventId).not.toBe(e2.eventId);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 2. Auto-generated fields — eventId and timestamp
-// ---------------------------------------------------------------------------
 
 describe('auto-generated fields', () => {
   it('eventId is a valid UUID v4 when not provided', () => {
@@ -101,10 +77,6 @@ describe('auto-generated fields', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. defaultSeverityForAction — correct mapping
-// ---------------------------------------------------------------------------
-
 describe('defaultSeverityForAction', () => {
   it.each([
     { action: 'tool_denied' as AuditAction, expected: 'warning' as AuditSeverity },
@@ -124,10 +96,6 @@ describe('defaultSeverityForAction', () => {
     expect(defaultSeverityForAction(action)).toBe(expected);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 4. All AuditAction values are covered
-// ---------------------------------------------------------------------------
 
 describe('all AuditAction values produce a severity', () => {
   const ALL_ACTIONS: AuditAction[] = [
@@ -152,20 +120,14 @@ describe('all AuditAction values produce a severity', () => {
   });
 
   it('covers all expected AuditAction literals', () => {
-    // This ensures we do not miss any newly added actions in the future
     for (const action of ALL_ACTIONS) {
       expect(() => defaultSeverityForAction(action)).not.toThrow();
     }
   });
 });
 
-// ---------------------------------------------------------------------------
-// 5. severity override
-// ---------------------------------------------------------------------------
-
 describe('severity override', () => {
   it('uses provided severity over the default', () => {
-    // tool_approved defaults to info, override to critical
     const event = createAuditEvent({
       ...makeMinimalParams({ action: 'tool_approved' }),
       severity: 'critical',
@@ -184,10 +146,6 @@ describe('severity override', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 6. userId may be null (system events)
-// ---------------------------------------------------------------------------
-
 describe('system events — null userId', () => {
   it('creates a valid event with null userId', () => {
     const event = createAuditEvent({
@@ -199,10 +157,6 @@ describe('system events — null userId', () => {
     expect(event.surface).toBe('desktop');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 7. Metadata is optional and passed through
-// ---------------------------------------------------------------------------
 
 describe('metadata field', () => {
   it('is undefined when not provided', () => {
@@ -240,10 +194,6 @@ describe('metadata field', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 8. All surfaces are valid
-// ---------------------------------------------------------------------------
-
 describe('surface field', () => {
   const ALL_SURFACES: AuditSurface[] = ['desktop', 'mobile', 'web', 'cli', 'vscode'];
 
@@ -252,10 +202,6 @@ describe('surface field', () => {
     expect(event.surface).toBe(surface);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 9. All outcomes are valid
-// ---------------------------------------------------------------------------
 
 describe('outcome field', () => {
   const ALL_OUTCOMES: AuditOutcome[] = ['success', 'failure', 'denied'];

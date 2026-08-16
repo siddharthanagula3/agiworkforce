@@ -1,11 +1,3 @@
-/**
- * The paywall sheet names the plan the server refused on. Its tier table used
- * to be a local copy of the billing vocabulary, and it had drifted: `max_15x`
- * was missing entirely, so `video_generation` — gated to Max 15x by
- * BILLING_PLAN_CAPABILITY_TIERS — rendered "Upgrade to a higher" and told the
- * user their feature "requires the a higher plan". `max` was also labelled
- * "Max" while checkout sells "Max 5x".
- */
 import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -13,10 +5,6 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-// @gorhom/bottom-sheet drives its layout through Reanimated shared values that
-// the repo-wide Reanimated mock does not implement, so the real sheet cannot
-// mount under Jest. The copy under test is plain <Text>, so render the children
-// directly rather than the animated container.
 jest.mock('@gorhom/bottom-sheet', () => {
   const { View } = jest.requireActual('react-native');
   const { forwardRef } = jest.requireActual('react');

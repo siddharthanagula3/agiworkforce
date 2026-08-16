@@ -31,17 +31,11 @@ if (!CONTEXTLESS_MEDIA_MODEL_ID) {
   throw new Error('Desktop context tests require a catalog media model without token context');
 }
 
-// Enable Immer MapSet plugin for stores that use Map/Set (e.g. toolStore.approvalTimeoutTimers)
 enableMapSet();
-
-// ============================================
-// Model Store Tests
-// ============================================
 
 describe('modelStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset the store state before each test
     useModelStore.setState({
       selectedModel: 'auto',
       selectedProvider: 'managed_cloud',
@@ -92,7 +86,6 @@ describe('modelStore', () => {
 
   describe('selectModel', () => {
     beforeEach(() => {
-      // Set plan to 'max' so model selection is not blocked by tier restrictions
       useUnifiedAuthStore.setState({ plan: 'max' });
     });
 
@@ -128,8 +121,6 @@ describe('modelStore', () => {
       const store = useModelStore.getState();
       await store.selectModel('invalid-model', 'openai');
 
-      // The model tier guard blocks unknown models and falls back to canonical Auto.
-      // This is the expected behavior — the store handles it gracefully without throwing
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
@@ -377,7 +368,6 @@ describe('modelStore', () => {
 
       const result = await store.getAvailableModels();
 
-      // Should return fallback models from getAllModels()
       expect(result.length).toBeGreaterThan(0);
     });
   });
@@ -406,10 +396,6 @@ describe('modelStore', () => {
     });
   });
 });
-
-// ============================================
-// Model Metadata and Constants Tests
-// ============================================
 
 describe('LLM Constants', () => {
   describe('getModelMetadata', () => {
@@ -473,8 +459,6 @@ describe('LLM Constants', () => {
     it('should be empty for subscription-only model', async () => {
       const { THINKING_MODEL_VARIANTS } = await import('../constants/llm');
 
-      // For subscription-only model, thinking variants are not used
-      // Managed cloud handles model selection automatically
       expect(Object.keys(THINKING_MODEL_VARIANTS).length).toBe(0);
     });
   });
@@ -496,9 +480,7 @@ describe('LLM Constants', () => {
     it('should return empty array for legacy providers', async () => {
       const { getProviderModels } = await import('../constants/llm');
 
-      // Legacy providers have no models in subscription-only mode
       const ollamaModels = getProviderModels('ollama');
-      // Ollama models are loaded dynamically, so static list may be empty
       expect(Array.isArray(ollamaModels)).toBe(true);
     });
   });
@@ -527,16 +509,11 @@ describe('LLM Constants', () => {
     it('should have getModelContextWindow fallback', async () => {
       const { getModelContextWindow } = await import('../constants/llm');
 
-      // Default context window is 128_000 for all models (including unknown)
       expect(getModelContextWindow('unknown-model')).toBe(128_000);
       expect(getModelContextWindow('auto')).toBe(128_000);
     });
   });
 });
-
-// ============================================
-// Media Generation Store Tests
-// ============================================
 
 describe('mediaGenerationStore', () => {
   beforeEach(async () => {
@@ -585,7 +562,6 @@ describe('mediaGenerationStore', () => {
         provider: 'openai',
       });
 
-      // Check loading state immediately
       let state = useMediaGenerationStore.getState();
       expect(state.loadingImage).toBe(true);
       expect(state.imageJobs.length).toBe(1);
@@ -666,7 +642,6 @@ describe('mediaGenerationStore', () => {
         durationSecs: 10,
       });
 
-      // Check loading state immediately
       let state = useMediaGenerationStore.getState();
       expect(state.loadingVideo).toBe(true);
       expect(state.videoJobs.length).toBe(1);
@@ -751,10 +726,6 @@ describe('mediaGenerationStore', () => {
     });
   });
 });
-
-// ============================================
-// Unified Chat Store Tests
-// ============================================
 
 describe('unifiedChatStore - Extended Tests', () => {
   beforeEach(async () => {
@@ -1111,7 +1082,6 @@ describe('unifiedChatStore - Extended Tests', () => {
       store.approveOperation('approval-1');
 
       const state = useUnifiedChatStore.getState();
-      // After approval, the request is removed from pending
       expect(state.pendingApprovals).toHaveLength(0);
     });
 
@@ -1135,7 +1105,6 @@ describe('unifiedChatStore - Extended Tests', () => {
       store.rejectOperation('approval-1', 'Too risky');
 
       const state = useUnifiedChatStore.getState();
-      // After rejection, the request is removed from pending
       expect(state.pendingApprovals).toHaveLength(0);
     });
 
@@ -1334,7 +1303,6 @@ describe('unifiedChatStore - Extended Tests', () => {
     it('should limit action log to 500 entries', async () => {
       const { useUnifiedChatStore } = await import('../stores/unifiedChatStore');
 
-      // Add 501 entries
       for (let i = 0; i < 501; i++) {
         useUnifiedChatStore.getState().addActionLogEntry({
           id: `action-${i}`,
@@ -1706,14 +1674,9 @@ describe('unifiedChatStore - Extended Tests', () => {
   });
 });
 
-// ============================================
-// Model Store Selector Tests
-// ============================================
-
 describe('modelStore selectors', () => {
   beforeEach(async () => {
     const { useModelStore } = await import('../stores/modelStore');
-    // For subscription-only model, use 'auto' with managed_cloud provider
     useModelStore.setState({
       selectedModel: 'auto',
       selectedProvider: 'managed_cloud',
@@ -1762,7 +1725,6 @@ describe('modelStore selectors', () => {
 
     const favoriteMetadata = selectFavoriteModelsMetadata(state);
 
-    // For subscription-only model, favorites are empty by default
     expect(favoriteMetadata).toHaveLength(0);
   });
 
@@ -1772,27 +1734,23 @@ describe('modelStore selectors', () => {
 
     const recentMetadata = selectRecentModelsMetadata(state);
 
-    // Initially empty, populated as user uses models
     expect(recentMetadata).toHaveLength(0);
   });
 
   it('selectSelectedModelMetadata should return null when model not in registry', async () => {
     const { useModelStore, selectSelectedModelMetadata } = await import('../stores/modelStore');
 
-    // Set a model that doesn't exist in registry
     useModelStore.setState({ selectedModel: 'non-existent-model' });
     const state = useModelStore.getState();
 
     const selectedMetadata = selectSelectedModelMetadata(state);
 
-    // Model not in registry returns null
     expect(selectedMetadata).toBeNull();
   });
 
   it('selectIsModelFavorite should check if model is favorited', async () => {
     const { useModelStore, selectIsModelFavorite } = await import('../stores/modelStore');
 
-    // Add a favorite using toggleFavorite
     useModelStore.getState().toggleFavorite('test-model');
     const state = useModelStore.getState();
 

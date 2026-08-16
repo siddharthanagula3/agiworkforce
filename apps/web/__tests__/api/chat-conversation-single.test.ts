@@ -1,8 +1,3 @@
-/**
- * Single Conversation API Tests
- *
- * Tests for /api/chat/conversations/[id] endpoints (GET, PUT, DELETE)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -10,7 +5,6 @@ import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 const CHAT_MODEL = requireProviderDefaultModel('openai');
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -31,7 +25,6 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// Mock Neon DB and Clerk auth — routes use these instead of Neon after Wave 3.
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();
@@ -51,7 +44,6 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 
-// Import after mocks
 import { GET, PUT, DELETE } from '@/app/api/chat/conversations/[id]/route';
 
 describe('Single Conversation API', () => {
@@ -96,10 +88,8 @@ describe('Single Conversation API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user
     mockRequireCurrentUserId.mockResolvedValue('user-123');
 
-    // Default: empty DB results
     mockQuery.mockResolvedValue([]);
     mockExecute.mockResolvedValue(undefined);
   });
@@ -119,9 +109,7 @@ describe('Single Conversation API', () => {
 
     describe('Fetching Conversation with Messages', () => {
       it('should return conversation with messages', async () => {
-        // First query: conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // Second query: messages
         mockQuery.mockResolvedValueOnce(mockMessages);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
@@ -137,7 +125,6 @@ describe('Single Conversation API', () => {
       });
 
       it('should return 404 if conversation not found', async () => {
-        // Empty result = not found
         mockQuery.mockResolvedValueOnce([]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/nonexistent', {
@@ -157,7 +144,6 @@ describe('Single Conversation API', () => {
         });
         await GET(request, mockContext);
 
-        // Verify user_id filter is applied in the SQL
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('user_id'),
           expect.arrayContaining(['user-123']),
@@ -236,7 +222,6 @@ describe('Single Conversation API', () => {
 
       it('should update conversation project association after verifying project ownership', async () => {
         const updated = { ...mockConversation, project_id: 'proj-1' };
-        // 1) destination-project ownership check succeeds, 2) the update runs.
         mockQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
         mockQuery.mockResolvedValueOnce([updated]);
 
@@ -264,7 +249,6 @@ describe('Single Conversation API', () => {
       });
 
       it('rejects moving a conversation into a project the user does not own', async () => {
-        // Ownership check returns no row → foreign/deleted/nonexistent project.
         mockQuery.mockResolvedValueOnce([]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
@@ -278,7 +262,6 @@ describe('Single Conversation API', () => {
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(404);
-        // The conversation update must NOT run when ownership fails.
         expect(mockQuery).toHaveBeenCalledTimes(1);
         expect(mockQuery).not.toHaveBeenCalledWith(
           expect.stringContaining('update web_conversations'),
@@ -301,7 +284,6 @@ describe('Single Conversation API', () => {
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(200);
-        // Only the update runs — no user_projects lookup for a null target.
         expect(mockQuery).toHaveBeenCalledTimes(1);
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('update web_conversations'),
@@ -310,7 +292,6 @@ describe('Single Conversation API', () => {
       });
 
       it('should return 404 if conversation not found', async () => {
-        // Empty result = no conversation matched (wrong user or not found)
         mockQuery.mockResolvedValueOnce([]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/nonexistent', {
@@ -344,13 +325,6 @@ describe('Single Conversation API', () => {
 
   describe('DELETE /api/chat/conversations/[id]', () => {
     describe('Soft Deleting Conversation', () => {
-      // The soft delete is `db.query(... returning id)`, NOT `db.execute`: the
-      // handler has to know whether a row actually matched, because unknown,
-      // foreign, wrong-workspace and already-deleted rows all have to answer
-      // 404 rather than report a success that clears a durable tombstone.
-      // Mocking `execute` therefore left `query` returning the default [], and
-      // every case below answered 404. Routed by SQL rather than by call order,
-      // since the handler resolves the active organization first.
       const deleteSql = /update web_conversations/i;
 
       it('should soft delete conversation by setting deleted_at', async () => {
@@ -368,7 +342,6 @@ describe('Single Conversation API', () => {
         const data = await response.json();
         expect(data.success).toBe(true);
 
-        // Verify soft delete uses deleted_at = now() (not hard delete)
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('deleted_at'),
           expect.any(Array),
@@ -425,7 +398,6 @@ describe('Single Conversation API', () => {
         });
         await DELETE(request, mockContext);
 
-        // Verify user_id filter is applied
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringMatching(/user_id = \$2[\s\S]*organization_id is not distinct from \$3/),
           ['conv-1', 'user-123', null],

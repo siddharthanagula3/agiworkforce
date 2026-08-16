@@ -55,10 +55,6 @@ class AnalyticsService {
     this.initializeService();
   }
 
-  /**
-   * Cleanup all event listeners and timers.
-   * Call this when the analytics service is no longer needed.
-   */
   public cleanup(): void {
     this.stopFlushTimer();
     this.unsubscribeModeChange?.();
@@ -96,8 +92,6 @@ class AnalyticsService {
         this.sessionId = backendSessionId;
       }
 
-      // TRUST-BOUNDARY: push current mode to Rust collector on startup, then
-      // keep it in sync whenever the user switches modes.
       const syncMode = (mode: string) => analyticsSetPrivacyMode(mode);
       void syncMode(useAppModeStore.getState().mode);
       this.unsubscribeModeChange = useAppModeStore.subscribe(
@@ -150,10 +144,6 @@ class AnalyticsService {
   }
 
   public track(eventName: EventName, properties: Record<string, unknown> = {}) {
-    // TRUST-BOUNDARY: never emit telemetry outside Managed Cloud. Local AND BYOK
-    // are private boundaries; delegate to the shared `isPrivateTrustBoundary`
-    // (fail-closed) so this predicate cannot drift — a `=== 'local'` check
-    // previously leaked analytics in BYOK. Consent only gates the managed opt-in.
     if (isPrivateTrustBoundary()) {
       return;
     }

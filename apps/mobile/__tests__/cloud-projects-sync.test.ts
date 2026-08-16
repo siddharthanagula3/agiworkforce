@@ -1,16 +1,3 @@
-/**
- * Cloud projects sync — unit tests.
- *
- * Verifies the managed-only project delta-sync loop:
- *  - Managed-cloud gate: zero network I/O in local mode.
- *  - Cursor: project cursor advances independently from chat AND memory cursors.
- *  - Store separation: a local-mode project write never touches the cloud store
- *    or the dirty queue (trust-boundary enforcement).
- *  - Tombstone: deleted_at non-null deltas hard-delete from the cloud store.
- *  - Push / ack: server-acked IDs are cleared from the dirty queue; tombstones
- *    that are acked are hard-deleted locally.
- *  - Pagination: follows hasMore until false.
- */
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
@@ -31,14 +18,12 @@ jest.mock('../services/api', () => ({
   api: { get: jest.fn(), post: jest.fn() },
 }));
 
-// Stub uuidv7 so the project store can import it without a runtime environment.
 jest.mock('@agiworkforce/utils', () => ({
   uuidv7: jest.fn(() => `00000000-0000-7000-8000-${Date.now().toString(16).padStart(12, '0')}`),
   isUuidV7: jest.fn(() => true),
   setUuidV7RandomSource: jest.fn(),
 }));
 
-// Stub SQLite memory storage (imported transitively through store.ts chain).
 jest.mock('../storage/memory', () => ({
   insertMemoryFact: jest.fn().mockResolvedValue(undefined),
   listMemoryFacts: jest.fn().mockResolvedValue([]),
@@ -70,8 +55,6 @@ const PROJECTS_SYNC_PATH = '/api/projects/sync';
 const PUSH_PROJECT_ID = '01986b80-0000-7000-8000-000000000001';
 const TOMBSTONE_PROJECT_ID = '01986b80-0000-7000-8000-000000000002';
 const UNACKED_PROJECT_ID = '01986b80-0000-7000-8000-000000000003';
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function emptyProjectPull(cursor = '0') {
   return { projects: [], cursor, hasMore: false };
@@ -122,8 +105,6 @@ function seedCloudProject(id: string, name = 'test project', deletedAt: string |
   });
 }
 
-// ── Setup ──────────────────────────────────────────────────────────────────────
-
 beforeEach(() => {
   jest.clearAllMocks();
   __resetCloudAccountSessionForTests();
@@ -134,7 +115,6 @@ beforeEach(() => {
   useMemorySyncStateStore.getState().resetMemorySync();
   useChatAppModeStore.getState().setAppMode('cloud');
 
-  // Default: all pulls return empty; all posts ack all.
   mockGet.mockImplementation(async (path: string) => {
     if ((path as string).startsWith('/api/projects/sync')) return emptyProjectPull() as never;
     if ((path as string).startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
@@ -157,7 +137,6 @@ beforeEach(() => {
         cursor: '1',
       } as never;
     }
-    // Chat sync ack
     const convs = (body?.conversations as Array<{ id: string }>) ?? [];
     const msgs = (body?.messages as Array<{ id: string }>) ?? [];
     return {
@@ -169,8 +148,6 @@ beforeEach(() => {
     } as never;
   });
 });
-
-// ── Gate tests ─────────────────────────────────────────────────────────────────
 
 describe('project sync — managed gate', () => {
   it('makes ZERO project network calls in local mode', async () => {
@@ -196,8 +173,6 @@ describe('project sync — managed gate', () => {
   });
 });
 
-// ── Cursor advance ─────────────────────────────────────────────────────────────
-
 describe('project sync — cursor', () => {
   it('starts at "0" and advances to the server cursor after a pull', async () => {
     expect(useProjectSyncStateStore.getState().projectCursor).toBe('0');
@@ -220,7 +195,6 @@ describe('project sync — cursor', () => {
   });
 
   it('uses the project cursor independently from both chat and memory cursors', async () => {
-    // Pre-set chat and memory cursors to non-zero values.
     useCloudSyncStateStore.getState().setCursor('42');
     useMemorySyncStateStore.getState().setMemoryCursor('15');
 
@@ -276,8 +250,6 @@ describe('project sync — cursor', () => {
   });
 });
 
-// ── Tombstone application ──────────────────────────────────────────────────────
-
 describe('project sync — tombstone application', () => {
   it('hard-deletes a project entry when deleted_at is non-null in pull', async () => {
     seedCloudProject('p-del', 'to be deleted');
@@ -316,8 +288,6 @@ describe('project sync — tombstone application', () => {
   });
 });
 
-// ── Push ───────────────────────────────────────────────────────────────────────
-
 describe('project sync — push', () => {
   it('pushes dirty cloud projects and clears the dirty queue on ack', async () => {
     seedCloudProject(PUSH_PROJECT_ID, 'push me');
@@ -345,7 +315,6 @@ describe('project sync — push', () => {
   });
 
   it('does NOT post to /api/projects/sync when dirty queue is empty', async () => {
-    // No projects marked dirty.
     await syncNow();
     const projectCalls = mockPost.mock.calls.filter((c) => c[0] === PROJECTS_SYNC_PATH);
     expect(projectCalls).toHaveLength(0);
@@ -362,11 +331,9 @@ describe('project sync — push', () => {
       projects: Array<{ id: string; deletedAt: string | null }>;
     };
     expect(body.projects[0]!.deletedAt).toBe(T);
-    // After ack, the entry should be hard-deleted from the cloud store.
     expect(
       useCloudProjectStore.getState().projects.find((p) => p.id === TOMBSTONE_PROJECT_ID),
     ).toBeUndefined();
-    // Dirty queue cleared.
     expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain(TOMBSTONE_PROJECT_ID);
   });
 
@@ -374,7 +341,6 @@ describe('project sync — push', () => {
     seedCloudProject(UNACKED_PROJECT_ID, 'retry me', T);
     markProjectForSync(UNACKED_PROJECT_ID);
 
-    // Server returns empty applied list (simulates server rejection).
     mockPost.mockImplementation(async (path: string) => {
       if ((path as string) === PROJECTS_SYNC_PATH)
         return { applied: [], conflicts: [], cursor: '0' } as never;
@@ -384,9 +350,7 @@ describe('project sync — push', () => {
 
     await syncNow();
 
-    // The dirty ref should persist so the next syncNow retries it.
     expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(UNACKED_PROJECT_ID);
-    // The tombstone row stays in the cloud store (not hard-deleted until acked).
     const entry = useCloudProjectStore.getState().projects.find((p) => p.id === UNACKED_PROJECT_ID);
     expect(entry).toBeDefined();
     expect(entry?.deletedAt).toBe(T);
@@ -569,20 +533,15 @@ describe('project sync — push', () => {
   });
 
   it('clears a dead ref (project absent from cloud store) without crashing', async () => {
-    // Mark an id dirty that does NOT exist in the cloud store.
     markProjectForSync('ghost-id');
 
     await syncNow();
 
-    // Dead ref should be cleared — nothing to push, no crash.
     expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain('ghost-id');
-    // Project POST is not called (nothing to send).
     const projectCalls = mockPost.mock.calls.filter((c) => c[0] === PROJECTS_SYNC_PATH);
     expect(projectCalls).toHaveLength(0);
   });
 });
-
-// ── Local / cloud store separation ────────────────────────────────────────────
 
 describe('project store — local/cloud separation', () => {
   it('a local-mode createProject NEVER writes to the cloud store or dirty queue', () => {
@@ -590,9 +549,7 @@ describe('project store — local/cloud separation', () => {
 
     useProjectStore.getState().createProject('local project', 'desc', 'instructions');
 
-    // Cloud store must be untouched.
     expect(useCloudProjectStore.getState().projects).toHaveLength(0);
-    // Dirty queue must be empty.
     expect(useProjectSyncStateStore.getState().dirtyProjectIds).toHaveLength(0);
   });
 
@@ -602,26 +559,21 @@ describe('project store — local/cloud separation', () => {
 
     useProjectStore.getState().createProject('cloud project', 'cloud desc', 'cloud instructions');
 
-    // Cloud store has the new entry.
     const cloudProjects = useCloudProjectStore.getState().projects;
     expect(cloudProjects).toHaveLength(1);
     expect(cloudProjects[0]!.name).toBe('cloud project');
     expect(cloudProjects[0]!.source).toBe('mobile');
     expect(cloudProjects[0]!.deletedAt).toBeNull();
 
-    // Local store must NOT have grown.
     expect(useProjectStore.getState().projects.length).toBe(localProjectsBefore);
 
-    // The new id must be in the dirty queue.
     expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(cloudProjects[0]!.id);
   });
 
   it('a local project id (proj_...) never appears in the cloud push queue', () => {
     useChatAppModeStore.getState().setAppMode('local');
     const id = useProjectStore.getState().createProject('local', '', '');
-    // Local ids use the proj_ prefix, not UUIDv7.
     expect(id).toMatch(/^proj_/);
-    // Confirm: not in cloud dirty queue.
     expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain(id);
   });
 });

@@ -82,12 +82,6 @@ function errorResult(error: unknown, signal?: AbortSignal): ChromeManagedRunCont
   };
 }
 
-/**
- * Resolve a server-owned Chrome run after the service worker restarted before
- * it persisted the response headers. The request id is the durable join key,
- * resolved by the server within the authenticated tenant rather than inferred
- * from a bounded scan of recent account activity.
- */
 export async function findChromeManagedRunByRequestId(
   requestId: string,
   dependencies: Partial<ChromeManagedRunDependencies> = {},
@@ -103,9 +97,6 @@ export async function findChromeManagedRunByRequestId(
   if (!token) throw new Error('Sign in to recover the scheduled AGI Cloud run.');
 
   const client = resolvedDependencies.createClient(token);
-  // The server intentionally defaults list requests to active states. An
-  // interrupted Chrome request may already be terminal by the time its MV3
-  // worker restarts, so recovery must opt into the complete lifecycle.
   const page = await client.listRuns({
     states: [...ALL_MANAGED_RUN_STATES],
     requestId,
@@ -130,11 +121,6 @@ export async function findChromeManagedRunByRequestId(
   return null;
 }
 
-/**
- * Rejoin a server-owned Chrome run without resubmitting the user's prompt.
- * Replay starts at the beginning so public text already rendered before a
- * service-worker/browser restart can be reconciled across arbitrary chunks.
- */
 export async function resumeChromeManagedRun(
   request: ResumeChromeManagedRunRequest,
   dependencies: Partial<ChromeManagedRunDependencies> = {},
@@ -213,7 +199,6 @@ export async function resumeChromeManagedRun(
   }
 }
 
-/** Request cancellation from the durable server run as well as the local reader. */
 export async function cancelChromeManagedRun(
   value: ManagedCloudAgentRunReference,
   dependencies: Partial<ChromeManagedRunDependencies> = {},

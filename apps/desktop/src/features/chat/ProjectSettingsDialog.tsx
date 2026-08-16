@@ -54,7 +54,6 @@ import { MemoryManager } from '@/features/memory/MemoryManager';
 import type { ManagedCloudProjectKnowledgeFile } from '@agiworkforce/cloud-contracts';
 import { desktopCloudProjectKnowledge } from '../../services/desktopCloudProjectKnowledge';
 
-// Supported knowledge base file extensions
 const SUPPORTED_KB_EXTENSIONS = [
   '.txt',
   '.md',
@@ -87,11 +86,9 @@ const PROJECT_COLORS = [
   { name: 'Red', value: '#ef4444' },
 ] as const;
 
-// Default values extracted for safe access
 const DEFAULT_COLOR: string = PROJECT_COLORS[0].value;
 const DEFAULT_ICON = 'folder';
 
-// Canonical accent color options (6 values from ProjectAccentColor)
 const ACCENT_COLORS: { label: string; value: ProjectAccentColor; bg: string }[] = [
   { label: 'Emerald', value: 'emerald', bg: 'bg-emerald-500' },
   { label: 'Sky', value: 'sky', bg: 'bg-sky-500' },
@@ -142,7 +139,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const prefersReducedMotion = useReducedMotion();
   const disableDialogAnimation = isTauri || prefersReducedMotion;
 
-  // Form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
@@ -170,13 +166,11 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const kbDropZoneRef = useRef<HTMLDivElement>(null);
   const cloudKnowledgeInputRef = useRef<HTMLInputElement>(null);
 
-  // Store actions
   const createProject = useProjectStore((state) => state.createProject);
   const updateProject = useProjectStore((state) => state.updateProject);
   const conversations = useChatStore((state) => state.conversations);
   const isManagedCloud = useAppModeStore(selectPrivacyMode) === 'managed';
 
-  // Reset form when dialog opens/closes or project identity changes (projectId only to avoid loop from new object refs)
   const projectId = project?.id ?? null;
   useEffect(() => {
     if (open) {
@@ -358,23 +352,15 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         addedAt: new Date().toISOString(),
       };
       setKnowledgeBaseFiles((prev) => {
-        // Prevent duplicate paths
         if (prev.some((f) => f.path === filePath)) return prev;
         return [...prev, newFile];
       });
-      // Store in project memory. `topic` is required (non-Option) by the Rust
-      // command and `category` must be a valid MemoryCategory
-      // ('preference'|'fact'|'decision'|'context'); the previous call passed no
-      // topic and category:'project', so it failed on both counts and the
-      // swallowing catch hid it — the file was never actually stored.
       if (typeof content === 'string' && content.length > 0) {
         await invoke('memory_remember', {
           category: 'context',
           topic: `knowledge_base:${fileName}`,
           content: `[Knowledge Base: ${fileName}]\n${content.slice(0, 8000)}`,
         }).catch((err) => {
-          // Non-fatal, but no longer silent — a failure here previously read as
-          // success while storing nothing.
           console.warn('[ProjectSettings] failed to store knowledge-base memory:', err);
         });
       }
@@ -420,7 +406,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         const items = Array.from(e.dataTransfer.files);
         await Promise.all(
           items.map((file) => {
-            // In Tauri webview, file.path gives the real FS path
             const fp = (file as File & { path?: string }).path ?? file.name;
             return processKbFile(fp, file.name);
           }),
@@ -861,7 +846,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       setIconEmoji('');
                       return;
                     }
-                    // Cap to one grapheme cluster
                     const seg = new Intl.Segmenter();
                     const [first] = seg.segment(raw);
                     setIconEmoji(first?.segment ?? '');

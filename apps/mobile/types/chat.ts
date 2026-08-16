@@ -1,9 +1,3 @@
-/**
- * Chat types for the mobile app.
- *
- * The base `ChatMessage` contract is imported from `@agiworkforce/types`.
- * Mobile-specific fields are added via `MobileChatMessage`.
- */
 
 import type { InteractiveCard } from '@agiworkforce/types';
 import type {
@@ -20,21 +14,10 @@ export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageType = 'text' | 'image' | 'video';
 
 export interface MessageAttachment {
-  /** Remote URL after upload */
   url: string;
-  /** MIME type */
   mimeType: string;
-  /** Original file name */
   fileName: string;
-  /** Server-confirmed or picker-reported size when known. */
   fileSize?: number;
-  /**
-   * Owner-scoped media asset id returned by the chat-attachment completion
-   * route. Present only for attachments that were uploaded to managed cloud;
-   * local-only attachments carry a device `file://` url and no asset id.
-   * The completions API hydrates provider content from this id — an
-   * authenticated `/api/files/{id}` URL is not fetchable by a provider.
-   */
   assetId?: string;
 }
 
@@ -65,24 +48,9 @@ export interface ToolCall {
   output?: string;
   status: 'running' | 'completed' | 'failed';
   duration?: number;
-  /** Structured web_search results (favicon/title/domain cards), when present. */
   searchResults?: ToolSearchResult[];
-  /**
-   * True while this MCP/connector tool call is suspended awaiting the user's
-   * approve/reject decision (manual-approval mode, `x_tool_approval_request`).
-   * Cleared once a further `x_tool_status`/`x_tool_result` event lands for the
-   * same call (approved calls resume executing; rejected calls get a denial
-   * result) or once `resolveToolApproval` records a local decision.
-   */
   requiresApproval?: boolean;
-  /** Persisted local choice while a multi-call approval waits for every decision. */
   approvalDecision?: 'approved' | 'rejected';
-  /**
-   * The server's `tool_call_id` for a call requiring approval — the id the
-   * resume request (`POST /api/llm/v1/chat/completions/approve`) references in
-   * `tool_approvals[].tool_call_id`. Only set when `requiresApproval` is/was
-   * true; other tool families key by `id` alone.
-   */
   toolCallId?: string;
 }
 
@@ -111,87 +79,36 @@ export interface StatusStep {
   status: 'running' | 'completed' | 'failed';
 }
 
-/**
- * Mobile-specific chat message.
- *
- * Extends the canonical `ChatMessage` with mobile-only fields: image generation
- * state, approval requests, agent status steps, and citations.
- *
- * NOTE: `attachments` is narrowed to `MessageAttachment[]` (the mobile-specific
- * shape with `url`, `mimeType`, `fileName`) instead of the canonical
- * `ChatAttachment[]` (which requires `id`, `name`, `size`). This override is
- * intentional: the mobile API response returns the lighter `MessageAttachment`
- * shape and the render layer depends on `fileName` and direct `url` access.
- */
 export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
-  /** Last managed-cloud message revision observed by the delta-sync client. */
   serverVersion?: string;
-  /** Mobile-specific file attachments (overrides canonical ChatAttachment[]) */
   attachments?: MessageAttachment[];
-  /** Inline artifacts (code, research, email, etc.) */
   artifacts?: Artifact[];
-  /** Tool calls executed during this message */
   toolCalls?: ToolCall[];
-  /** Pending approval requests */
   approvalRequests?: ApprovalRequest[];
-  /** Status steps for agent execution */
   steps?: StatusStep[];
-  /** Message type — 'image' when the assistant generated an image */
   type?: MessageType;
-  /** URL of a generated image */
   imageUrl?: string;
-  /** Whether imageUrl is backed by the durable owner-scoped Cloud media route. */
   imageGenPersisted?: boolean;
-  /** Revised prompt returned by the image generation model */
   revisedPrompt?: string;
-  /** Whether an image is currently being generated for this message */
   isGeneratingImage?: boolean;
-  /** Real server-reported image generation progress (0–100), when available. */
   imageGenProgress?: number;
-  /** Image generation status */
   imageGenStatus?: 'pending' | 'generating' | 'completed' | 'failed';
-  /** Estimated seconds remaining for image generation */
   imageGenEstimatedTime?: number;
-  /** Error message if image generation failed */
   imageGenError?: string;
-  /** Image generation prompt */
   imageGenPrompt?: string;
-  /** URL of a generated video */
   videoUrl?: string;
-  /** Poster frame for videoUrl, when the provider returned one */
   videoThumbnailUrl?: string;
-  /** Whether a video is currently being generated for this message */
   isGeneratingVideo?: boolean;
-  /**
-   * Video generation status. Video is a long-running provider task polled
-   * through `/api/media/video/status`, so unlike image it also carries the
-   * server's own `queued` state.
-   */
   videoGenStatus?: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
-  /** Real server-reported video generation progress (0–100), when available. */
   videoGenProgress?: number;
-  /** Error message if video generation failed */
   videoGenError?: string;
-  /** Video generation prompt */
   videoGenPrompt?: string;
-  /** Citations from RAG or web search */
   citations?: Array<{ url: string; title?: string; snippet?: string }>;
-  /**
-   * Server-produced interactive cards for this turn (map search today).
-   * Validated by `parseInteractiveCardDelta` before it lands here, so an
-   * unrecognised kind arrives as `recognized: false` carrying its authored
-   * fallback text rather than being dropped from the answer.
-   */
   interactiveCards?: InteractiveCard[];
-  /** True when the message is waiting in the offline queue to be sent */
   isQueued?: boolean;
-  /** ID of the corresponding offlineQueue entry (cleared after successful send) */
   offlineQueueId?: string;
-  /** On-device performance — tokens per second (populated after first token) */
   tokensPerSecond?: number;
-  /** On-device performance — first-token latency in milliseconds */
   firstTokenLatencyMs?: number;
-  /** Runtime tier: 'Tier 1' | 'Tier 2' | 'Tier 3' */
   runtimeTier?: import('@/src/features/chat/components/PerformanceChip').RuntimeTier;
 }
 
@@ -204,33 +121,14 @@ export interface ConversationSummary {
   pinned: boolean;
   lastMessage?: string;
   model?: string;
-  /** Provider used in this conversation. Local Mode uses "local"; AGI Cloud uses "cloud_managed". */
   provider?: string;
-  /** Local and Cloud histories are separate privacy boundaries on mobile. */
   executionMode?: 'local' | 'cloud';
   tags?: string[];
-  /** Optional project ID this conversation belongs to */
   projectId?: string;
-  /** Whether this is a temporary (unsaved) conversation */
   temporary?: boolean;
-  /** True when there are messages newer than the last time the user opened this chat */
   unread?: boolean;
-  /** Last server-owned Managed Cloud sync revision. Missing legacy state means `0`. */
   serverVersion?: string;
-  /**
-   * When this conversation is a fork of another, the id of the source (parent)
-   * conversation it branched from. Undefined for root conversations. Mirrors the
-   * shared conversation-branch contract (packages/ui/unified-chat BranchNavigator
-   * / packages/contracts/cloud-contracts conversation branches) so a mobile fork
-   * is a real branch with a parent link, not an untracked whole-thread copy
-   * (CAP-035).
-   */
   parentConversationId?: string;
-  /**
-   * The message id in the parent conversation at which this branch forks. Reuses
-   * the shared `forkPointMessageId` field name from the BranchNavigator contract
-   * (BranchItem.forkPointMessageId; the cloud branch request's fork `messageId`).
-   */
   forkPointMessageId?: string;
 }
 
@@ -238,10 +136,6 @@ export type AutoApproveMode = 'ask' | 'smart' | 'full';
 
 export type ConversationGroup = 'Today' | 'Yesterday' | 'This Week' | 'Older';
 
-/**
- * Typed chunk emitted by the SSE streaming service.
- * Maps to StreamDelta in services/streaming.ts.
- */
 export interface StreamChunk {
   type: 'content' | 'thinking' | 'artifact' | 'done' | 'error';
   content?: string;

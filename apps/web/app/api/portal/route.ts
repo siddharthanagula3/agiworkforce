@@ -32,14 +32,7 @@ const stripe = STRIPE_SECRET_KEY
     })
   : null;
 
-/**
- * Get validated origin for Stripe redirect URL.
- * Only allows origins from the whitelist defined in ALLOWED_ORIGINS env var.
- * Falls back to NEXT_PUBLIC_APP_URL if no valid origin is found.
- */
 function getValidatedOrigin(request: Request): string {
-  // Parse allowed origins from environment variable
-  // Format: comma-separated list, e.g., "https://agiworkforce.com,https://app.agiworkforce.com"
   const allowedOriginsEnv =
     process.env['ALLOWED_ORIGINS'] || process.env['NEXT_PUBLIC_APP_URL'] || '';
   const allowedOrigins = allowedOriginsEnv
@@ -47,19 +40,16 @@ function getValidatedOrigin(request: Request): string {
     .map((origin) => origin.trim().toLowerCase())
     .filter(Boolean);
 
-  // Add localhost for development
   if (process.env.NODE_ENV === 'development') {
     allowedOrigins.push('http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000');
   }
 
-  // Get the origin from the request header
   const headerOrigin = request.headers.get('origin')?.toLowerCase();
 
   if (headerOrigin && allowedOrigins.includes(headerOrigin)) {
     return headerOrigin;
   }
 
-  // Fallback: Extract origin from request URL and validate
   const requestUrl = new URL(request.url);
   const requestOrigin = `${requestUrl.protocol}//${requestUrl.host}`.toLowerCase();
 
@@ -67,8 +57,6 @@ function getValidatedOrigin(request: Request): string {
     return requestOrigin;
   }
 
-  // If no valid origin found, use a fallback from the allowed list only
-  // SECURITY: Never use NEXT_PUBLIC_APP_URL directly as fallback without validation
   const fallbackOrigin = allowedOrigins[0];
 
   if (!fallbackOrigin) {
@@ -79,7 +67,6 @@ function getValidatedOrigin(request: Request): string {
     throw createError.validation('Invalid origin - no allowed origins configured');
   }
 
-  // Validate fallback is a proper URL with https (or http for localhost)
   try {
     const fallbackUrl = new URL(fallbackOrigin);
     const isLocalhost =
@@ -112,14 +99,11 @@ function getValidatedOrigin(request: Request): string {
 async function handlePortal(request: NextRequest) {
   const { userId, email: userEmail } = await getClerkAuthUser(request);
 
-  // CSRF protection for state-changing endpoint after authenticating the
-  // Desktop bearer/cookie principal.
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) {
     return csrfError as NextResponse;
   }
 
-  // Rate limiting: 10 requests per minute per user/IP
   const rateLimitResponse = await withRateLimit(request, 'portal');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -158,17 +142,12 @@ async function handlePortal(request: NextRequest) {
   const subscription = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(subscription);
 
-  // A Stripe customer id left on a store- or organization-owned row is not
-  // permission to open that customer's Stripe portal. The canonical
-  // subscription owner must be Stripe; contradictory identifiers fail closed.
   if (subscription && !ownerPolicy.canOpenStripePortal) {
     throw createError.conflict(stripeBillingOwnershipMessage(ownerPolicy, 'portal'));
   }
 
-  // Self-healing: If no local subscription, try to find in Stripe by customer_id (BEST PRACTICE)
   if (!subscription) {
     try {
-      // First, check if we have customer_id stored in profiles
       let profileRows: Array<Pick<ProfileRow, 'stripe_customer_id'>>;
       try {
         profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
@@ -191,17 +170,11 @@ async function handlePortal(request: NextRequest) {
           'Found stripe_customer_id in profiles (BEST PRACTICE)',
         );
       } else {
-        // AUDIT-008-015: Email fallback for legacy data only
-        // DEPRECATION NOTICE: This fallback will be removed in a future version.
-        // All users should have stripe_customer_id stored in profiles table.
-        // This is safer for portal access than payment processing, but still risky
-        // because email addresses can be changed or associated with multiple accounts.
         // TODO(2026-Q3): Remove email fallback entirely. Track via DEPRECATION_PORTAL_EMAIL_FALLBACK metric.
         if (!userEmail) {
           throw createError.validation('User has no email address and no customer_id stored');
         }
 
-        // AUDIT-008-015: Warning log for email fallback usage - track for migration
         logger.warn(
           {
             userId: userId,
@@ -211,7 +184,6 @@ async function handlePortal(request: NextRequest) {
           'SECURITY WARNING: No stripe_customer_id in profile - using email fallback (DEPRECATED)',
         );
 
-        // List customers by email - could return multiple if email was reused
         const customers = await stripe.customers.list({ email: userEmail, limit: 10 });
 
         if (customers.data.length === 0) {
@@ -225,17 +197,6 @@ async function handlePortal(request: NextRequest) {
           );
         }
 
-        // BIZ-015: ownership must be PROVEN, not merely "not contradicted".
-        // A customer matched by email alone is not evidence of ownership -
-        // an account whose email previously belonged to someone else, or a
-        // legacy customer carrying no `user_id` metadata, would otherwise
-        // hand this caller a portal session over a stranger's billing
-        // record: their invoices, their card, their cancel button. The only
-        // acceptable match is a customer whose metadata names this user,
-        // which every customer created by `/api/checkout` carries. This
-        // mirrors the tightened check in `SubscriptionService.syncWithStripe`
-        // and deliberately refuses metadata-less legacy customers until an
-        // operator backfills `metadata.user_id`.
         const ownedCustomer =
           customers.data.find((customer) => customer.metadata?.['user_id'] === userId) ?? null;
 
@@ -256,7 +217,6 @@ async function handlePortal(request: NextRequest) {
 
         customerId = ownedCustomer.id;
 
-        // CRITICAL: Store customer_id for future lookups
         try {
           await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
             customerId,
@@ -278,21 +238,10 @@ async function handlePortal(request: NextRequest) {
         );
       }
 
-      // Found customer, allow portal access
-      // Ideally we should also trigger a sync here to fix the local state
-      // We'll proceed with creating the session using this ID
       if (!customerId) {
         throw createError.internal('No Stripe customer found for this account');
       }
       const origin = getValidatedOrigin(request);
-      // SEATS: whether this portal lets a customer edit the subscription
-      // quantity is decided by the Stripe Dashboard portal configuration, not
-      // here — no `configuration` is pinned, so this route cannot enable or
-      // disable it. Any seat change made there reaches us only as
-      // `customer.subscription.updated`, where the webhook reads the
-      // authoritative quantity via `resolveSubscriptionSeats`. Do NOT add
-      // `flow_data`/`configuration` without a configured portal-configuration
-      // id; guessing one would fail every portal request.
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
         return_url: `${origin}/pricing`,
@@ -307,9 +256,6 @@ async function handlePortal(request: NextRequest) {
         'Portal session created (self-healing)',
       );
 
-      // Audit: the caller opened Stripe's billing management surface, where
-      // plan and payment-method changes happen outside our own routes. The
-      // portal URL is a single-use credential and is never recorded.
       await recordAuditEvent({
         userId,
         eventType: 'billing_portal_opened',
@@ -319,21 +265,16 @@ async function handlePortal(request: NextRequest) {
 
       return NextResponse.json({ url: session.url }, { status: 200 });
     } catch (err) {
-      // Preserve deliberate auth/validation/availability responses from the
-      // recovery path; only collapse unknown Stripe lookup failures.
       if (isAppError(err)) throw err;
       logger.error({ error: err, userId: userId }, 'Self-healing portal lookup failed');
       throw createError.notFound('No subscription found.');
     }
   }
 
-  // Allow users to access portal even if canceled, to view invoices etc.
-  // The only strict requirement is having a customer ID.
   const allowedStatuses = ['active', 'trialing', 'past_due', 'canceled', 'unpaid'];
 
   let stripeCustomerId = subscription.stripe_customer_id;
 
-  // If no customer_id but we have subscription_id, try to retrieve it from Stripe
   if (!stripeCustomerId && subscription.stripe_subscription_id && stripe) {
     try {
       logger.info(
@@ -348,7 +289,6 @@ async function handlePortal(request: NextRequest) {
       );
       stripeCustomerId = stripeSubscription.customer as string;
 
-      // Update db with the customer_id for future requests
       if (stripeCustomerId) {
         await db
           .execute('update subscriptions set stripe_customer_id = $1 where user_id = $2', [
@@ -389,7 +329,6 @@ async function handlePortal(request: NextRequest) {
     );
   }
 
-  // Optional: Warn if status is weird, but usually Portal handles it.
   if (!allowedStatuses.includes(subscription.status)) {
     logger.warn(
       {
@@ -403,9 +342,6 @@ async function handlePortal(request: NextRequest) {
   const origin = getValidatedOrigin(request);
 
   try {
-    // See the seat note on the self-healing session above: seat/quantity edits
-    // made in Stripe's hosted portal arrive as `customer.subscription.updated`
-    // and are read from the subscription item, never from metadata.
     const session = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
       return_url: `${origin}/pricing`,

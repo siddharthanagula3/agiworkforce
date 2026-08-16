@@ -1,8 +1,3 @@
-/**
- * addCustomConnector reuses the web `/api/connectors/custom` route so a user can
- * add a remote-MCP connector with no OAuth app registration; isLikelyHttpsUrl is
- * the composer-side pre-check before the (authoritative) server validation.
- */
 const mockPost = jest.fn();
 const mockPut = jest.fn();
 jest.mock('../services/api', () => ({

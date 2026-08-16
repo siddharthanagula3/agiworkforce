@@ -1,15 +1,3 @@
-/**
- * E2B live binding verification (throwaway / re-runnable).
- *
- * Mirrors the EXACT SDK calls in apps/web/lib/e2b/runtime.ts so a green run confirms
- * the live round-trip: Sandbox.create({ timeoutMs }) → runCode(python) → files.write →
- * files.makeDir → files.list → kill. Reads E2B_API_KEY from the environment; NEVER
- * prints the key. One tiny sandbox — negligible credits.
- *
- * Usage (operator, with the key in env — do NOT paste it in chat or commit it):
- *   E2B_API_KEY=*** node apps/web/scripts/verify-e2b.mjs
- * or put E2B_API_KEY in apps/web/.env.local (gitignored) and run with `--env-file`.
- */
 import { Sandbox } from '@e2b/code-interpreter';
 
 const TIMEOUT_MS = 60_000;

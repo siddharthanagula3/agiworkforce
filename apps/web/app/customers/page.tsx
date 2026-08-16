@@ -11,26 +11,6 @@ export const metadata = buildMetadata({
   path: '/customers',
 });
 
-/**
- * WHY THIS PAGE HAS NO LOGOS.
- *
- * There is no named, permission-cleared customer to show, and inventing one —
- * or implying one with vague "teams like yours" copy — is the single fastest
- * way to lose an enterprise procurement review. The page is therefore designed
- * so it does not NEED social proof: it substitutes depth a reader can verify
- * for names they would have to take on faith.
- *
- * Every scenario below states its plan gate honestly, including the ones that
- * cost money. Claiming a Pro-gated capability is free would repeat exactly the
- * "frontier access on Free" error a prior audit caught.
- *   - Managed Cloud on CLI / VS Code / Chrome requires the `developer_surfaces`
- *     capability = Pro and above (apps/web/lib/free-chat-surface-policy.ts,
- *     BILLING_PLAN_CAPABILITY_TIERS in packages/contracts/types).
- *   - Scheduled work (`agi_work`) is likewise Pro and above.
- *   - Local and BYOK are NOT plan-gated — that is the point of the first two
- *     scenarios, and it is the honest answer to "what can we trial for free".
- * No prices appear here; /pricing owns those.
- */
 const SCENARIOS: {
   meta: string;
   title: string;

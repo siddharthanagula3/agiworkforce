@@ -1,12 +1,3 @@
-/**
- * Mobile client for the per-provider connector OAuth broker.
- *
- * `POST /api/connectors` answers 409 for a provider that has a registered
- * platform OAuth app ("connects through OAuth authorization, not a directory
- * toggle" — apps/web/app/api/connectors/route.ts). Before this the mobile
- * service let that 409 escape as a raw error toast, and a `source: 'oauth'` row
- * in `GET /api/connectors` made the WHOLE directory fail to parse.
- */
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 jest.mock('../services/api', () => ({
@@ -24,7 +15,6 @@ import {
   startConnectorOAuth,
 } from '../services/connectors';
 
-/** Shape of the error the shared HTTP client throws for a non-OK response. */
 function httpError(message: string, status: number): Error & { status: number } {
   return Object.assign(new Error(message), { status });
 }

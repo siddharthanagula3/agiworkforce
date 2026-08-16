@@ -1,10 +1,5 @@
-/**
- * LLM Models API — typed wrappers for llm_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface ChatMessageParam {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -69,8 +64,6 @@ export interface RouterSuggestion {
   model: string;
   reason: string;
 }
-
-// ---- Commands ----
 
 export async function llmSendMessage(request: LLMSendMessageRequest): Promise<LLMResponse> {
   return command<LLMResponse>('llm_send_message', { request });

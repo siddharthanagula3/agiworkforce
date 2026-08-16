@@ -1,15 +1,3 @@
-/**
- * One command list, two surfaces.
- *
- * The side panel exposes its page commands through the `/` autocomplete menu
- * (`matchSlashCommands`) and the submit-time expander (`expandSlashCommand`).
- * Both must continue to read the same registry; the retired prompt-chip row
- * must not reintroduce a second literal command list.
- *
- * These tests parse the real side_panel.ts source because the module has
- * build-time side effects that prevent importing it under vitest/jsdom (same
- * constraint documented in features/side-panel/onboarding.ts).
- */
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -21,7 +9,6 @@ const source = readFileSync(
   'utf8',
 );
 
-/** The `SLASH_COMMANDS` object literal, as source text. */
 function registryBlock(): string {
   const start = source.indexOf('const SLASH_COMMANDS: Record<string, SlashCommandMeta>');
   expect(start).toBeGreaterThan(-1);
@@ -30,7 +17,6 @@ function registryBlock(): string {
   return source.slice(start, end);
 }
 
-/** Every command key declared in the registry, in menu order. */
 function registryNames(): string[] {
   return Array.from(registryBlock().matchAll(/^ {2}'(\/[a-z]+)': \{$/gm)).map(
     (m) => m[1] as string,
@@ -60,9 +46,6 @@ describe('Chrome side-panel command list drives every command surface', () => {
   });
 
   it('keeps each command discoverable under the name the expander matches', () => {
-    // matchSlashCommands offers the registry key; expandSlashCommand looks up
-    // the raw submitted text. A display string that drifts from its key would
-    // make the menu offer a command that cannot be expanded.
     const block = registryBlock();
     for (const name of registryNames()) {
       const entry = block.slice(block.indexOf(`  '${name}': {`));

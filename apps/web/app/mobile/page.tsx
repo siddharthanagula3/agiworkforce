@@ -33,7 +33,6 @@ export const metadata: Metadata = {
   },
 };
 
-/** Local-first feature stories, rendered as alternating copy/visual rows. */
 const LOCAL_STORIES = [
   {
     name: 'Chat that runs on the phone',

@@ -14,19 +14,13 @@ import { useThemeColors } from '@/src/ui/theme';
 
 interface ImageGenProgressProps {
   prompt: string;
-  /** Real server-reported percentage. Omit for an indeterminate operation. */
   progress?: number;
   status: 'pending' | 'generating' | 'completed' | 'failed';
-  estimatedTime?: number; // seconds
+  estimatedTime?: number;
   errorMessage?: string;
   onRetry?: () => void;
 }
 
-/**
- * Image generation progress indicator shown in the chat thread
- * while an image is being generated. Replaces itself with
- * GeneratedImage on completion (handled by parent).
- */
 export function ImageGenProgress({
   prompt,
   progress,
@@ -37,7 +31,6 @@ export function ImageGenProgress({
 }: ImageGenProgressProps) {
   const colors = useThemeColors();
 
-  // Pulsing animation for "pending" state
   const pulseOpacity = useSharedValue(1);
 
   useEffect(() => {
@@ -52,7 +45,6 @@ export function ImageGenProgress({
     opacity: pulseOpacity.value,
   }));
 
-  // Animated progress bar width
   const barWidth = useSharedValue(0);
 
   useEffect(() => {

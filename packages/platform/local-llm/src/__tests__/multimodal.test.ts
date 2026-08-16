@@ -96,8 +96,8 @@ describe('multimodal: ensureVerifiedArtifact', () => {
   it('re-downloads when an existing file has the wrong digest', async () => {
     const sha = vi
       .fn()
-      .mockResolvedValueOnce('deadbeef') // stale on-disk
-      .mockResolvedValueOnce(CHECK); // good after re-download
+      .mockResolvedValueOnce('deadbeef')
+      .mockResolvedValueOnce(CHECK);
     const deps = makeDeps({ fileExists: vi.fn(async () => true), sha256OfFile: sha });
     await ensureVerifiedArtifact({ artifact, destPath: '/d/model.gguf', deps });
     expect(deps.deleteFile).toHaveBeenCalledWith('/d/model.gguf');
@@ -143,7 +143,6 @@ describe('multimodal: ensureMultimodalArtifacts', () => {
       mmprojPath: '/d/fixture-vision-projector.gguf',
     });
     expect(downloadToFile).toHaveBeenCalledTimes(2);
-    // progress never decreases and ends at 1.
     for (let i = 1; i < progress.length; i++) {
       expect(progress[i]).toBeGreaterThanOrEqual(progress[i - 1]);
     }
@@ -232,8 +231,6 @@ describe('multimodal: hasSufficientRAMForMultimodal (restructure §8 RAM gate)',
   });
 
   it('fails closed on an unknown (zero) RAM reading', () => {
-    // totalRAMMB is 0 when the native capability probe is unavailable —
-    // must never be treated as "unlimited RAM, allow it".
     expect(hasSufficientRAMForMultimodal(0)).toBe(false);
   });
 });

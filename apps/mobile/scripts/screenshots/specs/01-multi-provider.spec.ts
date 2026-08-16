@@ -1,13 +1,4 @@
 /* eslint-disable no-console -- Detox spec progress log goes to test runner stdout */
-/**
- * Detox spec — screenshot 01: local demo chat.
- *
- * Drives the app to a local chat state and captures the frame as the
- * raw PNG.
- *
- * Precondition: onboarding is complete and a local model is installed on the
- * simulator. The spec does not seed app state through launch arguments.
- */
 
 import { device, element, by, waitFor } from 'detox';
 describe('Screenshot 01 — local demo chat', () => {
@@ -38,11 +29,9 @@ describe('Screenshot 01 — local demo chat', () => {
       .toBeVisible()
       .withTimeout(20000);
 
-    // Scroll to show the answer, composer, and model badge.
     await element(by.id('chat.list')).scrollTo('top');
 
     await device.takeScreenshot('01-local-demo-chat');
-    // Detox writes to its own artifact dir; the pipeline copies to DETOX_CAPTURE_PATH
     console.log(`Captured to ${capturePath}`);
   });
 });

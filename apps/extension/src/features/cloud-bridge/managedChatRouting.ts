@@ -17,14 +17,6 @@ export interface ChromeManagedChatRoutingRequest {
   previousTaskType?: RoutingTaskType | null;
 }
 
-/**
- * Chrome's pure adapter into the canonical Managed Cloud router.
- *
- * This function cannot admit Local or BYOK routes: the generated
- * `chrome/managed-chat` runtime profile owns the trust and harness boundary.
- * Browser-action mechanics use the separate `chrome/browser-task` profile and
- * are never an inference fallback.
- */
 export function resolveChromeManagedChatRoute(
   request: ChromeManagedChatRoutingRequest,
 ): AutoRouteDecision {

@@ -1,52 +1,17 @@
 'use client';
 
-/**
- * Tiny headless dropdown menu — dependency-free replacement for the Radix
- * DropdownMenu the desktop/web sidebars used. packages/ui/ui must not pull Radix
- * (it would bloat the pure-UI package and break its dependency budget), and a
- * sidebar's 3-dots / project-filter menus are simple enough to own here.
- *
- * Behavior: click trigger to toggle; click outside or Escape to close; clicking
- * an item runs its handler then closes.
- *
- * Positioning: the panel uses `position: fixed` with coordinates computed from
- * the trigger's getBoundingClientRect, and is PORTALLED to document.body.
- *
- * The portal is load-bearing, not tidiness. Rendered inline, `position: fixed`
- * is not relative to the viewport whenever ANY ancestor has a transform, filter,
- * backdrop-filter or perspective — such an ancestor becomes the containing block
- * and the viewport coordinates computed here are then applied relative to it, so
- * the panel lands hundreds of pixels from its trigger (and off-screen entirely
- * on large displays). An ancestor with `overflow: hidden` clips it outright.
- * Both conditions are common in modals and scroll containers, and both are
- * invisible from here. Portalling to body removes the entire class of bug.
- *
- * The panel is repositioned on scroll/resize while open. Styling uses the same
- * hsl(var(--*)) tokens the surfaces resolve.
- */
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../cn';
 
 export interface MenuProps {
-  /** The clickable element that toggles the menu. */
   trigger: (args: { open: boolean; toggle: () => void }) => ReactNode;
   children: (args: { close: () => void }) => ReactNode;
   align?: 'start' | 'end';
-  /** Open above the trigger instead of below. */
   side?: 'top' | 'bottom';
   className?: string;
   menuClassName?: string;
-  /**
-   * Portal to document.body by default. Disable only inside modal layers that
-   * intentionally block pointer interaction outside their content boundary.
-   */
   portalled?: boolean;
-  /**
-   * Fires on every open/close transition (trigger toggle, outside click,
-   * Escape, item select). Lets hover-revealed trigger rows stay visible while
-   * their menu is open without duplicating open-state tracking.
-   */
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -67,9 +32,6 @@ export function Menu({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Notify open/close transitions (skip the initial mount, which is not a
-  // transition). Effect-based so it works for every close path (outside
-  // click, Escape, item select) without impure state updaters.
   const mountedRef = useRef(false);
   const onOpenChangeRef = useRef(onOpenChange);
   onOpenChangeRef.current = onOpenChange;
@@ -112,12 +74,6 @@ export function Menu({
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
       const eventPath = e.composedPath();
-      // The panel is portalled to document.body, so it is NOT inside
-      // containerRef any more. Checking the container alone would treat every
-      // click on a menu item as an outside click and close the menu before the
-      // item's handler could run. `composedPath` is also required for browser
-      // accessibility/automation clicks whose retargeted event node is not
-      // reported as a direct descendant by `Node.contains`.
       const insideTrigger = Boolean(
         containerRef.current &&
         (containerRef.current.contains(target) || eventPath.includes(containerRef.current)),
@@ -184,7 +140,6 @@ export interface MenuItemProps {
   close: () => void;
   icon?: ReactNode;
   children: ReactNode;
-  /** Trailing content (count, shortcut). */
   trailing?: ReactNode;
   destructive?: boolean;
   active?: boolean;

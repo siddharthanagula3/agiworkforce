@@ -28,8 +28,6 @@ describe('checkout seat validation', () => {
   });
 
   it('refuses a seat count on a per-account plan', () => {
-    // Accepting it would multiply a personal plan's price by a client-chosen
-    // integer — the same defect as dropping the seat count on Team, inverted.
     const result = CheckoutRequestSchema.safeParse({
       plan: 'pro',
       billingInterval: 'monthly',
@@ -104,15 +102,11 @@ describe('resolveCheckoutQuantity', () => {
   });
 
   it('returns 1 for per-account plans regardless of a stray seat value', () => {
-    // Defence in depth: the schema already rejects seats on these plans, so this
-    // guarantees the quantity sent to Stripe is 1 even if a caller bypasses it.
     expect(resolveCheckoutQuantity({ plan: 'pro', seats: 25 })).toBe(1);
     expect(resolveCheckoutQuantity({ plan: 'max_15x' })).toBe(1);
   });
 
   it('never returns 0 or a negative quantity', () => {
-    // A per-seat plan reaching here without seats is already a schema violation;
-    // the fallback is the seat floor, which is 2 since 2026-08-08.
     expect(resolveCheckoutQuantity({ plan: 'team' })).toBe(MIN_PURCHASABLE_SEATS);
     expect(resolveCheckoutQuantity({ plan: 'team' })).toBeGreaterThan(0);
   });

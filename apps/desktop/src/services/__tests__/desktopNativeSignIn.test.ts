@@ -1,12 +1,3 @@
-/**
- * Tests for the Clerk-session → AGI Cloud credential exchange.
- *
- * The exchange is what makes native sign-in produce the SAME durable credential
- * the browser-approval path produces, so the vault, refresh route, and expiry
- * schedule stay singular. These assert the happy path, every failure branch,
- * and — the regression that matters most — that a 5xx anywhere in the exchange
- * is reported as a service fault and never as the account being rejected.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -132,12 +123,6 @@ describe('exchangeClerkSessionForCloudCredential', () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  /**
-   * The exact defect: `/api/auth/device/approve` answering 500 must read as a
-   * service fault. The old path turned every non-2xx into "AGI Cloud rejected
-   * the device sign-in request", which blamed the user's account for a backend
-   * failure and made retrying look pointless.
-   */
   it.each([500, 502, 503])(
     'reports an approve HTTP %s as a service fault, never as a rejection',
     async (status) => {

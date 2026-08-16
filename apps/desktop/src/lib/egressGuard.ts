@@ -1,86 +1,13 @@
-/**
- * Central Egress Guard (Zero-Leak Chokepoint)
- *
- * Single enforcement point for OUR-cloud network egress. In Local mode the
- * desktop app must never send chats, files, telemetry, or account data to our
- * cloud infrastructure (web app, API gateway, Vercel, Neon, Clerk). BYOK
- * client-direct streaming to the user's OWN provider (Anthropic, OpenAI,
- * Google, etc.) must still work, so provider hosts are intentionally NOT on the
- * denylist.
- *
- * Trust-boundary mapping (see `selectPrivacyMode` in
- * apps/desktop/src/stores/appModeStore.ts):
- *   privacyMode 'managed' (Cloud workspace) -> our-cloud ALLOWED
- *   privacyMode 'local'   (Local workspace, including explicit BYOK forks)
- *                                             -> our-cloud BLOCKED
- *
- * CRITICAL: BYOK is a reviewed per-conversation fork inside the Local
- * workspace. The guard branches on canonical `selectPrivacyMode` and blocks
- * our-cloud egress for the entire Local/BYOK boundary.
- *
- * FAIL-CLOSED: if the mode cannot be read for any reason, we treat the session
- * as Local and block our-cloud egress. Blocking a request is safe; leaking is
- * not.
- *
- * SCOPE (do not over-trust): this is the WebView/TS-layer chokepoint — it wraps
- * `fetch` (`guardedFetch`), where chats, files, telemetry, and account calls
- * originate today. It does NOT intercept the Tauri Rust backend's own `reqwest`
- * calls; those sit OUTSIDE this guard and must honor the trust boundary on their
- * own. As of 2026-08-09 the Rust paths that can reach our cloud are:
- *
- *   1. Account/auth infra (`sys/account/mod.rs`), SSRF-allowlisted to
- *      `*.agiworkforce.com`. Account auth is not conversation data.
- *   2. `ManagedCloudProvider` (`core/llm/providers/managed_cloud_provider.rs`),
- *      which POSTs chat content to `get_api_base_url()/api/llm/v1/chat/completions`.
- *      This one is live, and this guard does not and cannot stop it — what keeps it
- *      inside the boundary is the router: `effective_trust_mode` in
- *      `core/llm/llm_router.rs` fails closed to `Local` when no trust mode was
- *      threaded through, and `provider_matches_trust_mode` only matches
- *      `Provider::ManagedCloud` under `TrustMode::ManagedCloud`. Registering the
- *      provider (`llm_ensure_managed_cloud`, `ensure_managed_cloud_provider`) opens
- *      no socket; only a routed send does. Treat that router pair, not this file, as
- *      the enforcement point for Rust chat egress.
- *   3. A DORMANT cloud-sync/device client (`integrations/sync` — declared but never
- *      instantiated outside its own test, and exposed by no Tauri command, so it does
- *      not egress in practice). If it is ever wired up, gate it on
- *      `privacyMode === 'managed'` the same way this guard does.
- *
- * There is no single host-authoritative egress policy spanning both layers yet:
- * `sys/security/policy_integration::check_network_request` exists but has zero
- * callers. See known-flaws `BYOK-RUST-EGRESS-01` and ledger CRIT-016.
- */
 
-// The private-boundary predicate lives in stores/privacyBoundary so egressGuard,
-// errorTracking, and analytics share ONE implementation (it drifted before — a
-// privacyBoundary → appModeStore is
-// the same import edge egressGuard used directly; the cloudAccountAuth → egressGuard
-// → appModeStore cycle stays broken on the cloudAccountAuth side (lazy require).
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
-// Host policy lives in ONE shared module (@agiworkforce/trust-boundaries) so desktop and
-// mobile can never drift apart again — they used to define separate denylists
-// and each failed to block some of our-cloud hosts the other blocked. The
-// reconciled UNION + the boundary-safe suffix matcher are shared; only the
-// platform-bound guardedFetch wrapper + privacy-mode read stay here.
 import { OUR_CLOUD_HOSTS, isOurCloudHost } from '@agiworkforce/trust-boundaries';
 
-// Re-export so existing desktop importers (and the egress tests) keep their
-// `../lib/egressGuard` import path.
 export { OUR_CLOUD_HOSTS, isOurCloudHost };
 
-/**
- * True when we are in a Local trust boundary (Local OR BYOK) and must block
- * our-cloud egress. Delegates to the shared `isPrivateTrustBoundary` so the
- * predicate stays in one place (fail-closed on an unreadable store).
- */
 function isLocalMode(): boolean {
   return isPrivateTrustBoundary();
 }
 
-/**
- * Extracts the hostname from a fetch input. Returns null when no host can be
- * determined (e.g. a relative URL with no document base). Desktop callers use
- * absolute URLs, so a parse failure here is an unexpected, suspicious case.
- */
 function extractHost(input: RequestInfo | URL): string | null {
   try {
     if (typeof input === 'string') {
@@ -89,11 +16,9 @@ function extractHost(input: RequestInfo | URL): string | null {
     if (input instanceof URL) {
       return input.hostname;
     }
-    // Request object.
     if (typeof Request !== 'undefined' && input instanceof Request) {
       return new URL(input.url).hostname;
     }
-    // Fallback: object with a `url` property (Request-like).
     const maybeUrl = (input as { url?: unknown }).url;
     if (typeof maybeUrl === 'string') {
       return new URL(maybeUrl).hostname;

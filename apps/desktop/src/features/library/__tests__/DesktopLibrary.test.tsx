@@ -1,17 +1,3 @@
-/**
- * DesktopLibrary.test.tsx — the desktop half of the Library transport.
- *
- * The shared view is covered in @agiworkforce/unified-chat. What is desktop's
- * alone is the transport: which URL each call hits, that it goes through
- * the account-pinned request context rather than a bare fetch, and that a
- * relative asset uri is resolved against Cloud — in a Tauri webview a
- * relative URL resolves to tauri://localhost and 404s. Preview bytes use that
- * same authenticated path and stay inside an app-owned dialog.
- *
- * These surfaces cannot be reached signed-out, and a signed-in session cannot
- * be synthesised (the auth store deliberately never persists accessToken), so
- * this is the level at which the wiring is verifiable without credentials.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 
@@ -80,7 +66,6 @@ vi.mock('@agiworkforce/unified-chat', async () => {
   };
 });
 
-/** Fail loudly rather than optional-chaining past a transport that never arrived. */
 function transport(): CapturedLibraryTransport {
   if (!captured.transport) throw new Error('LibraryView was never rendered with a transport');
   return captured.transport;
@@ -111,7 +96,6 @@ describe('DesktopLibrary transport', () => {
     mocks.signedIn = false;
     render(<DesktopLibrary />);
 
-    // "You have no files" and "we cannot see your files" are different claims.
     expect(screen.getByText(/Sign in to see your Library/i)).toBeTruthy();
     expect(screen.queryByTestId('shared-library')).toBeNull();
   });
@@ -130,7 +114,6 @@ describe('DesktopLibrary transport', () => {
     render(<DesktopLibrary />);
     await transport().fetchAsset('/api/files/a1');
 
-    // A relative URL inside a Tauri webview resolves to tauri://localhost.
     expect(mocks.fetch.mock.calls[0]![0]).toBe('https://agiworkforce.com/api/files/a1');
     expect(new Headers(mocks.fetch.mock.calls[0]![1].headers).get('Authorization')).toBe(
       'Bearer account-token',

@@ -1,14 +1,3 @@
-/**
- * Phase A Slice 4 — artifact component smoke tests
- *
- * Tests:
- * - ArtifactRenderer: renders correct data-testid per artifact kind
- * - ArtifactsSidebar: shows/hides correctly; empty state when no active artifact
- * - ReactPreview: iframe sandbox attributes correct
- * - PresentationArtifact: slide navigation
- * - SpreadsheetArtifact: basic cell rendering
- * - SidecarPanel: minimize/maximize
- */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
@@ -20,10 +9,6 @@ import { SpreadsheetArtifact } from '../artifact-components/SpreadsheetArtifact'
 import { SidecarPanel } from '../sidecar/SidecarPanel';
 import { useArtifactStore } from '../../stores/artifactStore';
 import type { Artifact } from '../../lib/types';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeArtifact(overrides: {
   id: string;
@@ -41,17 +26,12 @@ function makeArtifact(overrides: {
   };
 }
 
-// Stub dynamic import for mermaid (not available in test env)
 vi.mock('mermaid', () => ({
   default: {
     initialize: vi.fn(),
     render: vi.fn().mockResolvedValue({ svg: '<svg data-testid="mermaid-svg"></svg>' }),
   },
 }));
-
-// ---------------------------------------------------------------------------
-// ArtifactRenderer — kind routing
-// ---------------------------------------------------------------------------
 
 describe('ArtifactRenderer', () => {
   it('renders the outer container with data-testid', () => {
@@ -84,9 +64,6 @@ describe('ArtifactRenderer', () => {
     expect(screen.getByText(/# Hello World/)).toBeDefined();
   });
 
-  // CRITICAL #15 regression: a well-formed non-SVG document used to bypass
-  // sanitizeSvg entirely (the detached root was serialized unsanitized into
-  // the raw-HTML render path). It must hit the fallback instead.
   it('refuses to render an svg artifact whose root element is not <svg>', () => {
     const artifact = makeArtifact({
       id: 'a3-xss',
@@ -121,7 +98,6 @@ describe('ArtifactRenderer', () => {
     ]);
     const artifact = makeArtifact({ id: 'a4', type: 'table', content: data });
     render(<ArtifactRenderer artifact={artifact} />);
-    // Table artifacts now route to the shared tabular renderer.
     expect(screen.getByTestId('spreadsheet-artifact')).toBeDefined();
     expect(screen.getByText('Alice')).toBeDefined();
   });
@@ -171,7 +147,6 @@ describe('ArtifactRenderer', () => {
 
   it('shows unsupported message for unknown type', () => {
     const artifact = makeArtifact({ id: 'a8', type: 'code', content: 'x' });
-    // Override type to something not handled via unknown cast
     (artifact as unknown as Record<string, unknown>)['type'] = 'unknown-future-type';
     render(<ArtifactRenderer artifact={artifact} />);
     expect(screen.getByText(/Unsupported artifact type/)).toBeDefined();
@@ -196,10 +171,6 @@ describe('ArtifactRenderer', () => {
     expect(writeText).toHaveBeenCalledWith('const x = 1;');
   });
 });
-
-// ---------------------------------------------------------------------------
-// ArtifactsSidebar — show/hide + empty state
-// ---------------------------------------------------------------------------
 
 describe('ArtifactsSidebar', () => {
   beforeEach(() => {
@@ -233,7 +204,6 @@ describe('ArtifactsSidebar', () => {
       useArtifactStore.getState().openArtifact(artifact);
     });
     render(<ArtifactsSidebar isOpen={true} />);
-    // Title appears in both sidebar header and artifact renderer header
     const matches = screen.getAllByText('Sidebar Code');
     expect(matches.length).toBeGreaterThan(0);
   });
@@ -251,10 +221,6 @@ describe('ArtifactsSidebar', () => {
     expect(sidebar.style.width).toBe('420px');
   });
 });
-
-// ---------------------------------------------------------------------------
-// ReactPreview — iframe sandbox attributes
-// ---------------------------------------------------------------------------
 
 describe('ReactPreview', () => {
   it('renders the preview frame container', () => {
@@ -285,16 +251,11 @@ describe('ReactPreview', () => {
   it('buildReactPreviewDocument includes channelId in script', () => {
     const doc = buildReactPreviewDocument('export default () => null', 'test-channel-id', 'null');
     expect(doc).toContain('test-channel-id');
-    // Should include Babel CDN
     expect(doc).toContain('babel.min.js');
-    // Should include allow-only script execution note
     expect(doc).toContain('esm.sh/react@18');
   });
 
   it('buildReactPreviewDocument avoids wildcard postMessage targets and dynamic Function execution', () => {
-    // Ported from the retired desktop fork's security test: the sandbox document
-    // must post only to the explicit parentOrigin and execute user code via a
-    // blob module import, never `new Function` or a '*' postMessage target.
     const doc = buildReactPreviewDocument(
       'export default function App() { return <div>Hello</div>; }',
       'channel-1',
@@ -307,10 +268,6 @@ describe('ReactPreview', () => {
     expect(doc).toContain('import(moduleUrl)');
   });
 });
-
-// ---------------------------------------------------------------------------
-// PresentationArtifact — slide navigation
-// ---------------------------------------------------------------------------
 
 describe('PresentationArtifact', () => {
   const multiSlide = `# Slide 1\nContent one\n---\n# Slide 2\nContent two\n---\n# Slide 3\nContent three`;
@@ -346,7 +303,6 @@ describe('PresentationArtifact', () => {
   it('next button is disabled on last slide', () => {
     const artifact = makeArtifact({ id: 'p5', type: 'presentation', content: multiSlide });
     render(<PresentationArtifact artifact={artifact} />);
-    // Advance to last
     fireEvent.click(screen.getByLabelText('Next slide'));
     fireEvent.click(screen.getByLabelText('Next slide'));
     const nextBtn = screen.getByLabelText('Next slide');
@@ -366,18 +322,12 @@ describe('PresentationArtifact', () => {
       content: '# Big Title\n**bold point**\n- bullet one',
     });
     render(<PresentationArtifact artifact={artifact} />);
-    // Heading text renders without the leading '#'
     expect(screen.getByText('Big Title')).toBeDefined();
     expect(screen.queryByText(/# Big Title/)).toBeNull();
-    // Bold renders as <strong>, bullets as list items
     expect(screen.getByText('bold point').tagName).toBe('STRONG');
     expect(screen.getByText('bullet one').closest('li')).not.toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// SpreadsheetArtifact — cell rendering
-// ---------------------------------------------------------------------------
 
 describe('SpreadsheetArtifact', () => {
   const spreadsheetData = JSON.stringify([
@@ -416,14 +366,9 @@ describe('SpreadsheetArtifact', () => {
     const artifact = makeArtifact({ id: 's5', type: 'spreadsheet', content: 'not-json' });
     render(<SpreadsheetArtifact artifact={artifact} />);
     expect(screen.getByTestId('spreadsheet-artifact-fallback')).toBeDefined();
-    // The raw content is still shown, never a dead end.
     expect(screen.getByText('not-json')).toBeDefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// SidecarPanel — minimize / maximize
-// ---------------------------------------------------------------------------
 
 describe('SidecarPanel', () => {
   it('renders panel body when not minimized', () => {

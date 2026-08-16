@@ -1,14 +1,3 @@
-/**
- * MathBlock — renders a LaTeX expression using KaTeX inside a WebView.
- *
- * Supports:
- *   - display=false  (inline math, $...$)   — fixed 28px height row
- *   - display=true   (block math, $$...$$)  — auto-sizes via postMessage
- *
- * KaTeX is loaded from the official CDN. The WebView is sandboxed: no
- * navigation, no links, scrolling disabled. Content is fully self-contained
- * in the HTML string passed to the WebView.
- */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, useColorScheme } from 'react-native';
@@ -17,29 +6,17 @@ import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { agiPalette } from '@agiworkforce/design-tokens';
 import { useThemeColors } from '@/src/ui/theme';
-// `darkTokens` IS the dark palette (tokens.ts exports `colors` as
-// mobileNativeColors.dark). Only `transparent` is read from it below, because
-// that one value is byte-identical in both palettes and the module-scope
-// StyleSheet cannot call useThemeColors(). Do NOT take surface/text/accent
-// values from it here — they would bake dark values into light mode, and the
-// AP-02 gate cannot catch that because a token reference is not a literal.
-// Imported from the token module rather than the barrel: 38 mobile suites
-// jest.mock('@/src/ui/theme') without a `colors` export, and a module-scope
-// read of the barrel crashes them at import time.
 import { colors as darkTokens } from '@/src/ui/theme/tokens';
 
-// KaTeX CDN — pinned minor version for stability.
 const KATEX_VERSION = '0.16.21';
 const KATEX_CSS = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.css`;
 const KATEX_JS = `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.js`;
 
 interface MathBlockProps {
   latex: string;
-  /** true = $$...$$ display/block math; false = $...$ inline math */
   display: boolean;
 }
 
-/** Escapes a string for safe inclusion as HTML text content (not attributes). */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -49,20 +26,13 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** Builds a self-contained HTML page that renders latex with KaTeX. */
 function buildHtml(latex: string, display: boolean, isDark: boolean): string {
   const bg = isDark ? agiPalette.dark.surface.base : agiPalette.light.surface.base;
   const fg = isDark ? agiPalette.dark.text.primary : agiPalette.light.text.primary;
   const accentColor = isDark ? agiPalette.dark.accent.primary : agiPalette.light.accent.primary;
 
-  // SECURITY: pass latex as HTML-escaped TEXT content, then read it back via
-  // textContent — do NOT interpolate it into the inline <script>. JSON.stringify
-  // does not neutralise a literal "</script>" sequence (the HTML parser ends the
-  // script element regardless of JS string context), so chat-supplied LaTeX
-  // could inject arbitrary markup/script into this WebView.
   const latexEscaped = escapeHtml(latex);
 
-  // postMessage height after render so the RN side can size the View.
   const postMessageScript = `
     try {
       var el = document.getElementById('math-root');
@@ -130,14 +100,6 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
 </html>`;
 }
 
-/**
- * Renders a LaTeX expression using KaTeX in a WebView.
- *
- * For display (block) math the View auto-sizes to content height.
- * For inline math a fixed-height View is used because React Native does
- * not support inline WebViews in a text flow; the component renders as a
- * small block that visually reads as "between text segments".
- */
 export function MathBlock({ latex, display }: MathBlockProps) {
   const colors = useThemeColors();
   const systemScheme = useColorScheme();
@@ -159,7 +121,6 @@ export function MathBlock({ latex, display }: MathBlockProps) {
       try {
         const data = JSON.parse(event.nativeEvent.data) as { type?: unknown; value?: unknown };
         if (data.type === 'height' && typeof data.value === 'number' && data.value > 0) {
-          // Add small vertical padding to avoid clipping descenders.
           const padded = data.value + (display ? 20 : 8);
           if (!renderedRef.current || padded !== height) {
             renderedRef.current = true;
@@ -182,7 +143,6 @@ export function MathBlock({ latex, display }: MathBlockProps) {
   };
 
   if (display) {
-    // Block math: full-width View with auto height, teal left border from CSS
     return (
       <View
         style={[
@@ -203,7 +163,6 @@ export function MathBlock({ latex, display }: MathBlockProps) {
           onError={(event) => onWebViewError(event.nativeEvent)}
           onHttpError={(event) => onWebViewError(event.nativeEvent)}
           originWhitelist={['*']}
-          // Disable navigation — this WebView only renders a static page
           onShouldStartLoadWithRequest={(req) =>
             req.url === 'about:blank' || req.url === 'about:srcdoc'
           }
@@ -218,9 +177,6 @@ export function MathBlock({ latex, display }: MathBlockProps) {
     );
   }
 
-  // Inline math: small fixed-height row that sits between text nodes.
-  // We wrap in a View rather than injecting into a <Text> because WebView
-  // cannot be a child of Text in React Native.
   return (
     <View
       style={[styles.inlineContainer, { height }]}
@@ -251,7 +207,6 @@ export function MathBlock({ latex, display }: MathBlockProps) {
   );
 }
 
-/** Fallback plain-text render used while WebView loads or on error. */
 export function MathFallback({ latex, display }: MathBlockProps) {
   const colors = useThemeColors();
   if (display) {
@@ -283,8 +238,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   inlineContainer: {
-    // Inline math blocks are small rows that sit between paragraph lines.
-    // marginVertical creates breathing room without breaking text flow.
     marginVertical: 2,
     borderRadius: 4,
     overflow: 'hidden',
@@ -295,9 +248,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: darkTokens.transparent,
   },
-  // Accent-tinted colours are applied by the components below: the accent
-  // differs per theme (#111111 light, #f4f4f4 dark), so a module-scope
-  // StyleSheet can only ever bake in one of them.
   fallbackBlock: {
     borderRadius: 6,
     padding: 8,

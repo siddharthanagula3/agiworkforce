@@ -65,19 +65,6 @@ import type { CloudWorkMode, RoutingTaskType } from '@agiworkforce/types';
 
 import type { RoutingAttachment } from './types';
 
-// ============================================================================
-// Taxonomy
-// ============================================================================
-
-/**
- * The twelve task families, ordered as they are evaluated (first match wins).
- *
- * Each family narrows one or more canonical `RoutingTaskType` values; the
- * mapping itself is curated policy and lives in `routing-policies.json` under
- * `auto.taskFamilies.<family>.appliesToTaskTypes`, NOT here — the classifier
- * decides "which family", the policy decides "which tasks that family may
- * refine".
- */
 export const TASK_FAMILIES = [
   'deep_research',
   'agentic_work',
@@ -93,21 +80,12 @@ export const TASK_FAMILIES = [
   'general_chat',
 ] as const;
 
-/** One of the twelve deterministic task families. */
 export type TaskFamily = (typeof TASK_FAMILIES)[number];
 
-/** Runtime membership test — narrows an untrusted string onto the taxonomy. */
 export function isTaskFamily(value: unknown): value is TaskFamily {
   return typeof value === 'string' && (TASK_FAMILIES as readonly string[]).includes(value);
 }
 
-/**
- * Explainability vocabulary for the classifier (Decision #10 — every routing
- * decision carries a reason code, and nothing is substituted silently).
- *
- * The `ambiguous_*` codes are terminal: they mean the fast path declined, and
- * the caller must run the existing Auto policy unchanged.
- */
 export type TaskFamilyReasonCode =
   | 'family_research_mode'
   | 'family_work_mode_agiwork'
@@ -124,86 +102,31 @@ export type TaskFamilyReasonCode =
   | 'ambiguous_no_signals'
   | 'ambiguous_unknown_length';
 
-/** Result of the deterministic fast path. `family: null` means fall through. */
 export interface TaskFamilyClassification {
-  /** The resolved family, or `null` when the fast path declined to decide. */
   family: TaskFamily | null;
-  /** Why. Always present, including for the ambiguous outcomes. */
   reasonCode: TaskFamilyReasonCode;
 }
 
-// ============================================================================
-// Signals
-// ============================================================================
-
-/**
- * The structural signals the fast path is allowed to read.
- *
- * Every field is optional because every field is genuinely optional on the
- * wire. An absent field means UNKNOWN — it never means `false`. That
- * distinction is why the residual branches require an explicit
- * `messageCharCount` and otherwise return `ambiguous_unknown_length` instead
- * of guessing `simple_chat`.
- */
 export interface TaskFamilySignals {
-  /** `work_mode` — product execution mode, not a provider hint. */
   workMode?: CloudWorkMode | null;
-  /** `research` — the Deep Research toggle. */
   researchMode?: boolean;
-  /** `web_search` — server-owned web search tool toggle. */
   webSearch?: boolean;
-  /** `web_fetch` — server-owned fetch tool toggle. */
   webFetch?: boolean;
-  /** `code_execution` — sandboxed run-code toggle. */
   codeExecution?: boolean;
-  /** `office_creation` — server-owned document generation toggle. */
   officeCreation?: boolean;
-  /** `tools.length` — count of caller-declared tool definitions. */
   declaredToolCount?: number;
-  /** True when `tool_choice` is present and is not `'none'`. */
   toolChoiceForced?: boolean;
-  /** Attachment shapes, read exactly as `classifyTaskLocally` reads them. */
   attachments?: readonly RoutingAttachment[];
-  /** `estimateTokens` summed over prior history plus the outgoing turn. */
   estimatedInputTokens?: number;
-  /** Character length of the outgoing user turn. */
   messageCharCount?: number;
-  /** Prior turns already in the conversation. */
   priorTurnCount?: number;
-  /** `thinking_mode` — caller-requested extended thinking. */
   thinkingMode?: boolean;
-  /**
-   * Canonical runtime profile id (the surface), e.g. `web/cloud-chat`.
-   * Recorded for shadow-mode analysis; no family branches on it today because
-   * only one runtime profile reaches this stage.
-   */
   runtimeProfileId?: string;
 }
 
-// ============================================================================
-// Thresholds
-// ============================================================================
-
-/**
- * Cumulative-token threshold for `long_context`. Deliberately the SAME number
- * and the SAME strict comparison as `classifyTaskLocally` (`classify.ts`, step
- * 4) and `auto.tasks.long_context.minimumContextTokens` in
- * `routing-policies.json`, so the family can never disagree with the task type
- * about what "long" means.
- */
 export const LONG_CONTEXT_TOKEN_THRESHOLD = 50_000;
 
-/**
- * Character length below which a tool-free, attachment-free turn is treated as
- * `simple_chat`. Same number as `classifyTaskLocally`'s simple-chat guard
- * (`message.length < 80`); the word-count half of that guard is deliberately
- * NOT copied here because it reads the message body.
- */
 export const SIMPLE_CHAT_MAX_CHARS = 80;
-
-// ============================================================================
-// Classifier
-// ============================================================================
 
 function hasAnySignal(signals: TaskFamilySignals): boolean {
   return (
@@ -252,7 +175,6 @@ export function classifyTaskFamily(signals: TaskFamilySignals): TaskFamilyClassi
     return { family: null, reasonCode: 'ambiguous_no_signals' };
   }
 
-  // ─── Explicit tool/mode toggles (mirrors resolveToolAwareTaskType) ───────
   if (signals.researchMode === true) {
     return { family: 'deep_research', reasonCode: 'family_research_mode' };
   }
@@ -269,15 +191,9 @@ export function classifyTaskFamily(signals: TaskFamilySignals): TaskFamilyClassi
     return { family: 'web_grounded_answer', reasonCode: 'family_web_tool' };
   }
 
-  // ─── Attachments (mirrors classifyTaskLocally steps 2–3) ────────────────
   const attachments = signals.attachments;
   if (attachments && attachments.length > 0) {
     const hasScreenshot = attachments.some((attachment) => attachment.type === 'screenshot');
-    // A screenshot ALONE is not automation — `classifyTaskLocally` also
-    // requires an automation verb before it says `computer-use`. The
-    // structural stand-in for "there is a loop that can act" is a
-    // caller-declared tool surface; without one this falls through to vision,
-    // exactly as a bare screenshot does today.
     if (hasScreenshot && callerToolsPresent(signals)) {
       return { family: 'screen_automation', reasonCode: 'family_screenshot_with_tools' };
     }
@@ -292,12 +208,10 @@ export function classifyTaskFamily(signals: TaskFamilySignals): TaskFamilyClassi
     }
   }
 
-  // ─── Token budget (mirrors classifyTaskLocally step 4, same operator) ────
   if ((signals.estimatedInputTokens ?? 0) > LONG_CONTEXT_TOKEN_THRESHOLD) {
     return { family: 'long_context', reasonCode: 'family_context_over_threshold' };
   }
 
-  // ─── Caller-supplied tool surface ───────────────────────────────────────
   if (callerToolsPresent(signals)) {
     return { family: 'caller_tool_loop', reasonCode: 'family_caller_tools' };
   }
@@ -306,9 +220,6 @@ export function classifyTaskFamily(signals: TaskFamilySignals): TaskFamilyClassi
     return { family: 'extended_thinking', reasonCode: 'family_thinking_mode' };
   }
 
-  // ─── Residual: length is the only remaining structural discriminator ────
-  // An absent length is UNKNOWN, not "short". Guessing here would silently
-  // route long plain turns to the economy band.
   if (signals.messageCharCount === undefined) {
     return { family: null, reasonCode: 'ambiguous_unknown_length' };
   }
@@ -318,15 +229,6 @@ export function classifyTaskFamily(signals: TaskFamilySignals): TaskFamilyClassi
   return { family: 'general_chat', reasonCode: 'family_plain_turn' };
 }
 
-/**
- * Canonical task types each family is DESIGNED to narrow, for documentation
- * and test assertions only.
- *
- * The authoritative mapping is curated policy
- * (`auto.taskFamilies.<family>.appliesToTaskTypes`). This constant exists so a
- * test can prove the curated policy still agrees with the classifier's intent
- * rather than drifting from it unnoticed; it is never read at routing time.
- */
 export const TASK_FAMILY_INTENDED_TASK_TYPES: Readonly<
   Record<TaskFamily, readonly RoutingTaskType[]>
 > = {

@@ -19,26 +19,6 @@ import {
   createPendingAuthorization,
 } from '@/lib/connectors/oauth-store';
 
-/**
- * Start the hosted per-user OAuth flow for one connector.
- *
- * Browser-navigation endpoint (the directory's Connect button points here), so
- * failures redirect back to the connectors surface with a status flag rather
- * than returning JSON — the same shape /api/github/install/start uses. Native
- * clients that cannot follow a redirect chain pass `?mode=json` and receive
- * `{ authorizeUrl }` to open themselves.
- *
- * SECURITY PROPERTIES
- * - `state` is 32 random bytes, stored ONLY as its SHA-256 and bound to the
- *   signed-in user id at insert time. The callback compares the authenticated
- *   caller against the stored user.
- * - The PKCE `code_verifier` never leaves the server: it is encrypted into
- *   `connector_oauth_authorizations`, not into a cookie of any kind.
- * - `redirect_uri` comes from server-side configuration
- *   (`getConnectorOAuthRedirectUri`), never from this request's Host header, so
- *   a host-header injection cannot re-point the authorization code.
- * - A pending row is single-use and expires in 10 minutes.
- */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
@@ -73,12 +53,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const provider = getConnectorOAuthProvider(connectorId);
   const redirectUri = getConnectorOAuthRedirectUri();
 
-  // DISCOVERY PATH. An operator-registered provider always wins — it is the
-  // first rung of MCP's client-registration order, and an operator who took the
-  // trouble to register an app means it to be used. Only when there is no such
-  // provider do we ask whether the connector publishes a remote MCP endpoint we
-  // can discover authorization from, which is what makes a connector usable
-  // without anyone registering anything.
   if (!provider) {
     const endpoint = getMcpEndpoint(connectorId);
     if (endpoint) {
@@ -97,8 +71,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
 
       if (started.status === 'no-authorization-required') {
-        // An open MCP server. Sending the user to a consent screen that does
-        // not exist would be worse than telling them there is nothing to do.
         return fail('open', 200, 'This connector needs no authorization.');
       }
 
@@ -113,10 +85,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   if (!provider || !redirectUri) {
-    // Honest unavailability: no OAuth app is registered for this provider in
-    // this deployment (or the callback origin is unset), and no verified MCP
-    // endpoint exists to discover one from, so there is nothing to authorize
-    // against. Never start a flow that cannot complete.
     return fail(
       'unavailable',
       501,
@@ -132,8 +100,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       userId,
       connectorId,
       state,
-      // A non-PKCE provider still gets a stored verifier row so the schema stays
-      // uniform; it is simply never sent to the token endpoint.
       codeVerifier: pkce?.verifier ?? '',
       codeChallengeMethod: pkce ? 'S256' : 'plain',
       redirectUri,
@@ -162,8 +128,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     codeChallenge: pkce?.challenge ?? null,
   });
 
-  // The URL carries `state`; it is logged nowhere and only ever handed to the
-  // authenticated user who owns the pending row.
   if (wantsJson) return NextResponse.json({ connectorId, authorizeUrl });
   return NextResponse.redirect(authorizeUrl);
 }

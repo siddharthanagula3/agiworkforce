@@ -102,7 +102,6 @@ export function AutomationPermissionsSettings() {
       setRequesting(kind);
       try {
         await automation.requestAutomationPermission(kind);
-        // Re-check after a short delay to give the user time to toggle in Settings
         refreshTimerRef.current = setTimeout(() => void refresh(), 2000);
       } catch (err) {
         console.error('Failed to open System Settings:', err);

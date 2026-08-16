@@ -1,12 +1,3 @@
-/**
- * Cache-cost billing granularity: Anthropic reports a 1h/5m TTL breakdown
- * for cache-write tokens (`usage.cache_creation.ephemeral_1h_input_tokens`)
- * only on `message_start`, not on `message_delta`. `translateAnthropicStream`
- * must carry that breakdown through onto the emitted `usage` StreamChunk so
- * downstream billing (mirrors `cacheCreation1hInputTokens` in
- * `apps/web/lib/llm-providers/base.ts`) can bill the 1h-priced subset at 2x
- * input instead of the 5m-priced 1.25x rate.
- */
 
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';

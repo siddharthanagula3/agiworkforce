@@ -89,8 +89,6 @@ describe('Managed Cloud sign-out boundary', () => {
     mocks.closeWindows.mockResolvedValue(undefined);
     mocks.signOut.mockImplementation(
       async (options?: { beforeCredentialRevocation?: () => Promise<void> }) => {
-        // Match CloudAccountAuth: in-memory authority clears before its bounded
-        // remote/native teardown promise settles.
         mocks.serviceSession = null;
         await options?.beforeCredentialRevocation?.();
         return serviceSignOut.promise;
@@ -107,7 +105,6 @@ describe('Managed Cloud sign-out boundary', () => {
       'The Managed Cloud account changed while this request was in progress.',
     );
 
-    // A new account signs in while the old runtime teardown is still pending.
     mocks.serviceSession = { access_token: 'token-b' };
     projectAccount('account-b', 'token-b', 'free');
     runtimeDisposal.resolve();

@@ -1,11 +1,3 @@
-/**
- * The four hard-abstain categories refuse regardless of retrieval confidence.
- *
- * Each case is phrased so the corpus DOES contain related text — there is a
- * billing FAQ, a privacy FAQ, a security section and a legal-adjacent section
- * in the index. That is the point: the refusal must not depend on retrieval
- * failing. The adapter spy proves no model ran.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -92,8 +84,6 @@ describe('hard-abstain categories', () => {
   it.each(CASES)(
     'refuses $category even though the corpus has related text',
     async ({ question, reason, expectedPaths, category }) => {
-      // The corpus really does talk about this area — the refusal is not
-      // retrieval failing in disguise.
       const retrieval = retrieveSupportChunks(question);
       expect(retrieval.chunks.length).toBeGreaterThan(0);
       expect(classifyHardAbstain(question)).toBe(category);
@@ -130,8 +120,6 @@ describe('hard-abstain categories', () => {
 
   it('downgrades a completed, correctly-cited answer whose text drifts into a refused category', async () => {
     const question = 'how do I switch models mid conversation';
-    // Question is innocuous and retrieves above the floor, so the model IS
-    // called and a real citation IS resolved...
     const retrieval = retrieveSupportChunks(question);
     expect(retrieval.passedFloor).toBe(true);
     expect(classifyHardAbstain(question)).toBeNull();
@@ -148,7 +136,6 @@ describe('hard-abstain categories', () => {
 
     const result = await answerSupportQuestion(ask(question));
 
-    // ...and the post-generation classifier still catches the billing drift.
     expect(modelMocks.drainToLlmResponse).toHaveBeenCalledTimes(1);
     expect(result.kind).toBe('abstention');
     if (result.kind !== 'abstention') return;

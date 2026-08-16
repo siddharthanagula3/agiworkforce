@@ -1,23 +1,3 @@
-/**
- * OpenAI Responses API stream → StreamChunk translation.
- *
- * The Responses API emits a typed event stream. Mapping:
- *
- *   response.created                           → (ignored — observation only)
- *   response.in_progress                       → (ignored)
- *   response.output_item.added (function_call) → tool-use-start
- *   response.output_item.added (web_search_call) → server-tool-use
- *   response.output_text.delta                 → text-delta
- *   response.function_call_arguments.delta     → tool-use-delta
- *   response.reasoning_summary_text.delta      → thinking-delta
- *   response.reasoning_text.delta              → thinking-delta
- *   response.refusal.delta                     → text-delta (visible refusal)
- *   response.output_item.done (function_call)  → tool-use-end
- *   response.output_text.annotation.added      → citation-delta
- *   response.completed                         → final-output recovery + usage + stop
- *   response.incomplete                        → stop(max_tokens)
- *   response.failed / error / response.error   → error + stop(error)
- */
 
 import type { StreamChunk } from '@agiworkforce/types';
 
@@ -32,7 +12,6 @@ import type {
 
 interface OpenItem {
   type: 'message' | 'function_call' | 'reasoning' | 'web_search_call';
-  /** For function_call only — the call_id we expose to consumers. */
   callId?: string;
   name?: string;
   argumentsEmitted?: string;
@@ -61,10 +40,6 @@ export interface OpenAIResponsesStreamDiagnostics {
 }
 
 export interface TranslateOpenAIResponsesStreamOptions {
-  /**
-   * Receives only structural metadata. Response text, function names, arguments,
-   * URLs, and other user/provider content are deliberately excluded.
-   */
   onDiagnostics?: (diagnostics: OpenAIResponsesStreamDiagnostics) => void;
 }
 
@@ -106,7 +81,6 @@ function mapIncompleteReason(
       return 'max_tokens';
     case 'content_filter':
       // Safety-layer stop — first-class 'refusal', same member the
-      // Chat Completions adapter maps wire `content_filter` to.
       return 'refusal';
     case 'stop_sequence':
       return 'stop_sequence';
@@ -321,7 +295,6 @@ export async function* translateOpenAIResponsesStream(
       }
       case 'response.refusal.delta': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.refusal.delta' }>;
-        // Surface refusal text as visible content so the user sees it.
         if (ev.delta) {
           const key = `${ev.output_index}:${ev.content_index}`;
           emittedText.set(key, `${emittedText.get(key) ?? ''}${ev.delta}`);

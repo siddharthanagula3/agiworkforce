@@ -56,8 +56,6 @@ function executeWebviewScript(postMessage: ReturnType<typeof vi.fn>): void {
   );
   expect(inlineScript?.textContent).toBeTruthy();
 
-  // Parser/runtime coverage for the real nonce-authorized webview script.
-  // llm-guardrail-allow: executes repository-owned webview JavaScript in jsdom
   new Function(inlineScript?.textContent ?? '')();
 }
 

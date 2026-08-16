@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * ChatMessageList · upgraded web equivalent of the desktop ChatMessageList.
- *
- * Improvements over MessageListNew:
- * - Feeds from useAdaptedMessages() store adapter hook instead of raw props
- * - Smart auto-scroll: follows new content but pauses when user scrolls up
- * - Message grouping: consecutive messages from the same role share a visual group
- * - Streaming fingerprint tracking so scroll fires on content appends
- * - Stable memoized callbacks to prevent child re-renders
- *
- * Props interface is a superset of the old MessageListNew so the page component
- * can be migrated by swapping import + component name.
- */
-
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { MessageSearch } from './MessageSearch';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -64,45 +50,14 @@ function isRefusalFinish(message: ChatMessage | undefined | null): boolean {
   return reason === 'refusal' || reason === 'content_filter';
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface ChatMessageListProps {
-  /**
-   * Messages to display. When omitted the component pulls from
-   * useAdaptedMessages() · pass messages explicitly in tests or when the
-   * parent already holds a filtered slice.
-   */
   messages: ChatMessage[];
-  /** Authenticated account tier used by persisted billing-recovery cards. */
   currentTier?: UserTier;
-  /**
-   * AUDIT-FIX STR-20: which conversation these messages belong to. The
-   * component's `userScrolledUp` flag is component state that was never reset
-   * per conversation (and the host does not key this component), so scrolling
-   * up in chat A left chat B opening with auto-scroll silently disabled --
-   * a new reply would stream in below the fold with no indication. Changing
-   * this prop resets the scroll ownership for the newly displayed transcript.
-   */
   conversationId?: string | null;
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
-  /**
-   * Retry a Deep Research turn that errored or was stopped (CAP-045 slice 4).
-   * Surfaces that cannot send omit it, so no dead Retry control is rendered.
-   */
   onRetryResearch?: (messageId: string) => void;
-  /** The message whose research retry is currently in flight, if any. */
   retryingResearchMessageId?: string | null;
-  /**
-   * Continue Generation: called with the LAST assistant message's id when it
-   * ended early (truncated at the token cap, or user-stopped with partial
-   * text) and the user clicks the Continue button rendered below it. The
-   * affordance only appears when this callback is provided AND the message is
-   * continuable (metadata.finishReason 'length'/'max_tokens'/'stopped' with
-   * non-empty content) — surfaces that don't opt in see no behavior change.
-   */
   onContinue?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string) => void;
@@ -112,34 +67,20 @@ export interface ChatMessageListProps {
   branchingMessageId?: string | null;
   onBranch?: (messageId: string) => void;
   onSwitchBranch?: (conversationId: string) => void;
-  /** Called by ImageGenerationCard to re-generate in-place (aspect-ratio change / edit). */
   onRegenerateImage?: (
     messageId: string,
     opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
   ) => Promise<string>;
-  /** Resume polling an already-started durable video job; never starts one. */
   onResumeVideo?: (messageId: string) => void;
-  /** Start a new video turn only after the prior durable task terminally failed. */
   onRetryVideo?: (messageId: string) => void;
-  /** Called when user selects a follow-up suggestion pill */
   onSendMessage?: (content: string) => void;
-  /** When true, follow-up suggestion pills fade out (user is typing in the composer) */
   isUserTyping?: boolean;
   className?: string;
-  /**
-   * Called when the user clicks the recovery CTA on an inline paywall card.
-   * The persisted required tier is carried to the page so checkout can focus
-   * the exact plan instead of opening a generic comparison.
-   */
   onPaywallUpgrade?: (
     messageId: string,
     requiredTier: RequiredTier,
     recoveryAction: PaywallRecoveryAction,
   ) => void;
-  /**
-   * Called when the user clicks "Try later" on an inline paywall card.
-   * Receives the message ID so the parent can remove or hide the slot.
-   */
   onPaywallDismiss?: (messageId: string) => void;
 }
 
@@ -149,22 +90,14 @@ export interface MessageBranchGroup {
   branches: Array<{ conversationId: string; title: string }>;
 }
 
-/** A group of consecutive messages sharing the same role. */
 interface MessageGroup {
   role: 'user' | 'assistant';
   messages: ChatMessage[];
-  /** Index of first message in original array · used as React key. */
   firstId: string;
 }
 
-// ---------------------------------------------------------------------------
 // Pure helpers (exported for tests)
-// ---------------------------------------------------------------------------
 
-/**
- * Groups consecutive messages from the same role.
- * System messages are treated as 'assistant' for display purposes.
- */
 export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
   if (messages.length === 0) return [];
 
@@ -212,16 +145,9 @@ export function formatDateDivider(date: Date, now: Date = new Date()): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/**
- * Returns the ISO date string (YYYY-MM-DD) for a Date, used as a grouping key.
- */
 function toDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
-
-// ---------------------------------------------------------------------------
-// Date divider component
-// ---------------------------------------------------------------------------
 
 const DateDivider = memo(({ label }: { label: string }) => (
   <div
@@ -238,17 +164,6 @@ const DateDivider = memo(({ label }: { label: string }) => (
 ));
 DateDivider.displayName = 'DateDivider';
 
-// ---------------------------------------------------------------------------
-// Scroll-to-bottom button
-// ---------------------------------------------------------------------------
-
-/**
- * AUDIT-FIX GOV-33: framer-motion writes `opacity`/`transform` as INLINE
- * styles, which the global `prefers-reduced-motion` reset in globals.css
- * (`transition-duration: 0.01ms !important`) cannot reach — it only caps CSS
- * transitions/animations. The preference has to be read in JS and the
- * animation dropped at the source.
- */
 const ScrollToBottomButton = memo(({ onClick }: { onClick: () => void }) => {
   const prefersReducedMotion = useReducedMotion();
   return (
@@ -267,10 +182,6 @@ const ScrollToBottomButton = memo(({ onClick }: { onClick: () => void }) => {
 });
 ScrollToBottomButton.displayName = 'ScrollToBottomButton';
 
-// ---------------------------------------------------------------------------
-// Message group row
-// ---------------------------------------------------------------------------
-
 interface MessageGroupRowProps {
   group: MessageGroup;
   isLastGroup: boolean;
@@ -286,13 +197,11 @@ interface MessageGroupRowProps {
   branchingMessageId?: string | null;
   onBranch?: (messageId: string) => void;
   onSwitchBranch?: (conversationId: string) => void;
-  /** Called when a paywall Upgrade button is clicked. */
   onPaywallUpgrade?: (
     messageId: string,
     requiredTier: RequiredTier,
     recoveryAction: PaywallRecoveryAction,
   ) => void;
-  /** Called when a paywall Try-later button is clicked. */
   onPaywallDismiss?: (messageId: string) => void;
   onRegenerateImage?: (
     messageId: string,
@@ -336,18 +245,6 @@ interface MessageRowProps {
   onReadAloud: (messageId: string, content: string) => void;
 }
 
-// Per-message row component. Stable callbacks bound via useCallback below so
-// React.memo on MessageBubble actually short-circuits when sibling messages
-// stream or update.
-/**
- * Casts the generic metadata bag to the store's typed shape.
- *
- * AUDIT-FIX STR-17: this used the narrower `WebChatMessageMetadata`, which does
- * not even declare `agentActivity`, `research`, `generatedFiles` or
- * `cloudApproval` — so the memo comparators below could not have compared them.
- * `MessageMetadata` is the shape the store actually writes and MessageBubble
- * actually reads.
- */
 type RenderedMessageMetadata = MessageMetadata &
   Pick<
     WebChatMessageMetadata,
@@ -358,19 +255,6 @@ function getMeta(msg: ChatMessage | undefined): RenderedMessageMetadata | undefi
   return msg?.metadata as RenderedMessageMetadata | undefined;
 }
 
-/**
- * AUDIT-FIX STR-17: compares EVERY tool entry, not just index 0 and index -1.
- *
- * Sampling the ends of the list meant that with three or more parallel tools
- * the middle cards never left 'running', and that clicking Approve or Reject —
- * which flips `approved`/`status` on exactly one entry, usually not an end one
- * — produced no visual feedback at all until the whole batch resolved and the
- * length or the last status finally changed.
- *
- * Cost is O(tools) per message, bounded by the number of tool calls in a turn
- * (single digits), against the O(whole metadata bag) JSON serialization this
- * replaces.
- */
 function toolEntriesEqual(
   prev: MessageToolEntry[] | undefined,
   next: MessageToolEntry[] | undefined,
@@ -402,22 +286,6 @@ function toolEntriesEqual(
   return true;
 }
 
-/**
- * AUDIT-FIX STR-17: metadata equality over every field the transcript renders.
- *
- * Reference identity is the correct test for the object-valued spines: the
- * store patches metadata immutably (`{ ...m.metadata, ...patch }`, see
- * web-chat-store `patchMessageMetadata`) and the activity reducer
- * (`applyAgentActivityEvent`) returns a NEW state object for every event it
- * actually applies and the SAME object when it de-duplicates one. So `!==`
- * means "this field changed" with no traversal and no false negatives.
- *
- * Previously missing entirely — each one is a field the user watches move
- * during a run: `agentActivity` (the AGI Work activity spine, frozen for the
- * whole run on a tool-only turn), `generatedFiles`, `searchResults` past the
- * first `isSearching` flip, `codeExecutionResult` past `isExecutingCode`,
- * `research`, `cloudApproval`, and `isPinned` (the pin badge never appeared).
- */
 function renderedMetadataEqual(
   prev: RenderedMessageMetadata | undefined,
   next: RenderedMessageMetadata | undefined,
@@ -462,12 +330,6 @@ function renderedMetadataEqual(
   );
 }
 
-/**
- * AUDIT-FIX STR-17: one message-level comparison shared by both memo
- * comparators in this file, so they can never drift apart again (they already
- * had — the group comparator omitted `finishReason`/`streamError`, the list
- * comparator omitted `tools[0].status`).
- */
 function messageRenderEqual(prevMessage: ChatMessage, nextMessage: ChatMessage): boolean {
   return (
     prevMessage.id === nextMessage.id &&
@@ -475,20 +337,11 @@ function messageRenderEqual(prevMessage: ChatMessage, nextMessage: ChatMessage):
     prevMessage.role === nextMessage.role &&
     prevMessage.createdAt === nextMessage.createdAt &&
     prevMessage.isStreaming === nextMessage.isStreaming &&
-    // AUDIT-FIX BUG-28: attachments are rebuilt into a fresh array on every
-    // render by messageBubbleAttachments, so the identity of the array is
-    // useless — compare the descriptors that drive the attachment cards.
     attachmentsEqual(prevMessage.attachments, nextMessage.attachments) &&
     renderedMetadataEqual(getMeta(prevMessage), getMeta(nextMessage))
   );
 }
 
-/**
- * AUDIT-FIX BUG-28: attachment descriptors, compared field by field.
- * A finished upload changes only `url` (and often `size`), so an identity or
- * length check would report "unchanged" and the card would keep rendering the
- * pending state forever.
- */
 function attachmentsEqual(
   prev: ChatMessage['attachments'],
   next: ChatMessage['attachments'],
@@ -514,25 +367,6 @@ function attachmentsEqual(
   return true;
 }
 
-/**
- * AUDIT-FIX BUG-27: the fallback used when a message carries no `createdAt`.
- *
- * The previous code evaluated `new Date()` inline in the render path. Two
- * defects fell out of that one expression:
- *  1. MessageBubble's memo comparator tests
- *     `prev.timestamp.getTime() === next.timestamp.getTime()`, so for every
- *     optimistic message (created without `createdAt` — the normal case while
- *     streaming) the comparator could never return true and React.memo was
- *     fully defeated for the whole streaming turn;
- *  2. it is non-deterministic in render, so the server HTML and the client's
- *     first render disagreed.
- *
- * A frozen module-level sentinel fixes both. It is never displayed: the web
- * MessageBubble uses `timestamp` only to stamp derived artifact metadata
- * (`toGeneratedFile`, artifact `versions[].timestamp`), never as visible text,
- * and those paths only run on server-persisted messages, which always have a
- * real `createdAt`.
- */
 const UNKNOWN_MESSAGE_TIMESTAMP = new Date(0);
 
 function messageBubbleAttachments(message: ChatMessage) {
@@ -558,11 +392,6 @@ function messageBubbleAttachments(message: ChatMessage) {
   });
 }
 
-/**
- * GOV-20 — "when this clears" copy, or '' when there is nothing truthful to
- * say. Returns empty unless the classification asked for a reset time AND the
- * server actually sent a parsable instant: the card must never invent one.
- */
 function paywallResetLabel(paywall: { showResetTime?: boolean; resetAt?: string }): string {
   if (!paywall.showResetTime || !paywall.resetAt) return '';
   return formatUsageResetIn(paywall.resetAt) ?? '';
@@ -595,14 +424,11 @@ const MessageRow = ({
   const paywall = meta?.paywall;
   const requiredTier = normalizeRequiredTier(paywall?.requiredTier ?? 'basic');
 
-  // AUDIT-FIX BUG-27: one Date per message, derived only from persisted data.
   const timestamp = useMemo(
     () => (message.createdAt ? new Date(message.createdAt) : UNKNOWN_MESSAGE_TIMESTAMP),
     [message.createdAt],
   );
 
-  // AUDIT-FIX BUG-28: a stable attachment array so MessageBubble's comparator
-  // is not handed a brand-new array identity on every parent render.
   const attachments = useMemo(() => messageBubbleAttachments(message), [message]);
 
   const handleRegenerate = useCallback(
@@ -648,8 +474,6 @@ const MessageRow = ({
         currentTier={currentTier}
         requiredTier={requiredTier}
         reason={paywall.reason}
-        // GOV-20: the classifier's presentation flags. Absent on slots written
-        // before GOV-20, where the old always-upgrade behaviour is correct.
         showUpgradeCta={paywall.showUpgradeCta ?? true}
         suggestStandardModel={paywall.suggestStandardModel ?? false}
         resetLabel={paywallResetLabel(paywall)}
@@ -755,9 +579,6 @@ const MessageGroupRow = memo(
       </div>
     );
   },
-  // AUDIT-FIX STR-17 / BUG-28: every rendered field participates, via the
-  // shared helpers above. `onPin` was also simply missing from this list, so a
-  // surface that swapped its pin handler kept dispatching to the old one.
   (prev, next) => {
     return (
       prev.group.firstId === next.group.firstId &&
@@ -801,14 +622,6 @@ interface VirtualizedTranscriptRowData {
   footer: React.ReactNode;
 }
 
-/**
- * One variable-height row in the recycled transcript.
- *
- * Row zero is a measured presentation spacer that keeps short conversations
- * bottom-aligned. The final row owns all turn-level controls (typing, retry,
- * continuation, and follow-up suggestions), so those controls scroll with the
- * transcript instead of floating outside its history.
- */
 const VirtualizedTranscriptRow = ({
   index,
   style,
@@ -866,21 +679,10 @@ const VirtualizedTranscriptRow = ({
   );
 };
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 const SCROLL_THRESHOLD_PX = 120;
 const DEFAULT_TRANSCRIPT_ROW_HEIGHT = 160;
 const DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT = 640;
 
-/**
- * AUDIT-FIX GOV-29: what the live region says when generation starts and when
- * it finishes. Modelled on `buildAgentActivityAnnouncement` in
- * packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx — a short
- * discrete phrase, announced once per state change, never a re-read of the
- * whole transcript.
- */
 function buildStreamAnnouncement(message: ChatMessage | undefined): string {
   if (!message || message.role !== 'assistant') return 'Response complete';
   const activity = message.metadata?.['agentActivity'];
@@ -933,18 +735,8 @@ const ChatMessageListComponent = ({
   const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
-  /**
-   * Whether auto-scroll is active. Disabled when the user manually scrolls
-   * up; re-enabled when they scroll back to the bottom.
-   */
   const [userScrolledUp, setUserScrolledUp] = useState(false);
 
-  /**
-   * AUDIT-FIX STR-20: scroll ownership belongs to ONE transcript. Reset it (and
-   * jump to the bottom) whenever a different conversation is displayed, so a
-   * conversation the user has never scrolled in always opens pinned to the
-   * latest message. Without this, `userScrolledUp` leaked across conversations.
-   */
   const scrolledConversationRef = useRef<string | null>(conversationId);
   useEffect(() => {
     if (scrolledConversationRef.current === conversationId) return;
@@ -952,24 +744,10 @@ const ChatMessageListComponent = ({
     setUserScrolledUp(false);
   }, [conversationId]);
 
-  /**
-   * AUDIT-FIX BUG-30: date dividers are derived from local-time getters and
-   * `toLocaleDateString`. Rendering them during SSR computes "Today" /
-   * "Yesterday" and the fallback label in the SERVER's timezone and locale for
-   * every viewer on earth — and because React keeps the server DOM for the
-   * first paint, the reader is stuck with the server's answer. Dividers are
-   * therefore mounted only after hydration, where the viewer's own timezone is
-   * the one in effect.
-   */
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => setHasMounted(true), []);
 
-  /** AUDIT-FIX GOV-33: honour prefers-reduced-motion for inline motion styles. */
   const prefersReducedMotion = useReducedMotion();
-
-  // ---------------------------------------------------------------------------
-  // Derived state
-  // ---------------------------------------------------------------------------
 
   const groups = useMemo(() => groupMessages(messages), [messages]);
   const virtualizationKey = conversationId ?? groups[0]?.firstId ?? 'empty-transcript';
@@ -990,7 +768,6 @@ const ChatMessageListComponent = ({
 
   const lastMessage = useMemo(() => messages[messages.length - 1], [messages]);
 
-  /** Lightweight fingerprint · changes whenever streaming content grows. */
   const lastMessageFingerprint = useMemo(
     () => (lastMessage ? `${lastMessage.id}-${lastMessage.content.length}` : ''),
     [lastMessage],
@@ -998,12 +775,6 @@ const ChatMessageListComponent = ({
 
   const showTypingIndicator = isLoading && messages.length > 0 && !lastMessage?.isStreaming;
 
-  /**
-   * Continue Generation (ChatGPT/Claude parity): offered ONLY on the last
-   * message, only when it is a continuable assistant turn (truncated or
-   * user-stopped with partial text — see isMessageContinuable), and never
-   * while a request is in flight. No fake availability.
-   */
   const showContinue = Boolean(onContinue && !isLoading && isMessageContinuable(lastMessage));
 
   /**
@@ -1043,7 +814,6 @@ const ChatMessageListComponent = ({
     isRefusalFinish(lastMessage),
   );
 
-  /** Show follow-up suggestions when last message is a completed assistant reply */
   const showFollowUps =
     onSendMessage &&
     !isLoading &&
@@ -1051,16 +821,7 @@ const ChatMessageListComponent = ({
     !lastMessage?.isStreaming &&
     lastMessage.content.length > 20;
 
-  // ---------------------------------------------------------------------------
-  // Scroll management
-  // ---------------------------------------------------------------------------
-
-  // ─── In-conversation search (Cmd/Ctrl+F) ──────────────────────────────────
-  //
   // `MessageSearch` was complete but never exported or mounted, and nothing
-  // bound Cmd+F — so the browser's own find-in-page ran against a VIRTUALIZED
-  // transcript and could only ever match the handful of rows currently in the
-  // DOM. This owns the shortcut so search covers the whole conversation.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -1068,7 +829,6 @@ const ChatMessageListComponent = ({
   const searchMatches = useMemo(() => {
     const needle = searchQuery.trim().toLowerCase();
     if (!needle) return [] as number[];
-    // Indices into `groups`, which is what the virtual list renders.
     return groups.reduce<number[]>((acc, group, index) => {
       const hit = group.messages.some((message) =>
         typeof message.content === 'string'
@@ -1141,18 +901,6 @@ const ChatMessageListComponent = ({
     [virtualRowCount],
   );
 
-  /**
-   * AUDIT-FIX STR-19: coalesce auto-scroll to at most one call per animation
-   * frame.
-   *
-   * The auto-scroll effect is keyed on `${id}-${content.length}`, which changes
-   * on EVERY streamed token. It called smooth `scrollIntoView` each time, on a
-   * container that also carried the CSS `scroll-smooth` class — two smooth
-   * scroll animations restarting dozens of times a second, which is what made
-   * the transcript almost impossible to scroll up in during a response.
-   * Requests are now merged into a single rAF-scheduled scroll and the CSS
-   * `scroll-smooth` class is gone, so `behavior` is decided in one place.
-   */
   const scrollFrameRef = useRef<number | null>(null);
   const pendingScrollBehaviorRef = useRef<ScrollBehavior>('smooth');
 
@@ -1182,7 +930,6 @@ const ChatMessageListComponent = ({
     [],
   );
 
-  /** Detect when user scrolls away from the bottom. */
   const handleScroll = useCallback(() => {
     const el = listApiRef.current?.element;
     if (!el) return;
@@ -1190,11 +937,6 @@ const ChatMessageListComponent = ({
     setUserScrolledUp(distanceFromBottom > SCROLL_THRESHOLD_PX);
   }, []);
 
-  /**
-   * Auto-scroll when new messages/content arrive (respects user scroll).
-   * AUDIT-FIX STR-19 / GOV-33: token appends and reduced-motion users get a
-   * jump, not an animation; only a genuinely new turn animates.
-   */
   const isStreamingNow = Boolean(lastMessage?.isStreaming);
   useEffect(() => {
     if (userScrolledUp) return;
@@ -1212,18 +954,6 @@ const ChatMessageListComponent = ({
     conversationId,
   ]);
 
-  /**
-   * Variable-height rows are first positioned from an estimate and then
-   * corrected as ResizeObserver reports markdown, artifact, and image sizes.
-   * If the reader still owns the bottom pin, follow those measurement changes
-   * with an instant correction; otherwise a newly measured long response can
-   * grow below the viewport after the initial scroll and strand the reader in
-   * the middle of the transcript.
-   *
-   * A newly appended message is left to the effect above so completed turns
-   * can retain their smooth transition. Subsequent measurements for that same
-   * message count use the correction path here.
-   */
   const measuredLayoutRef = useRef({
     contentHeight: estimatedContentHeight,
     messageCount: messages.length,
@@ -1250,17 +980,6 @@ const ChatMessageListComponent = ({
     viewportHeight,
   ]);
 
-  /**
-   * AUDIT-FIX GOV-29: streaming output was never announced. `role="log"
-   * aria-live="polite"` sat on the ENTIRE scroll container, so assistive tech
-   * was handed the whole transcript as one live region — unrelated content got
-   * re-announced on every re-render and the delta itself was lost in it — and
-   * `aria-busy` was never toggled, so nothing marked the start or the end of
-   * generation. The container is now an inert log (`aria-live="off"`, which is
-   * required because `role="log"` implies polite) that reports its busy state,
-   * and a dedicated off-screen region announces the two moments that matter.
-   * This is the pattern AgentActivityTimeline.tsx:479 already uses.
-   */
   const isGenerating = Boolean(isLoading || lastMessage?.isStreaming);
   const [streamAnnouncement, setStreamAnnouncement] = useState('');
   const wasGeneratingRef = useRef(false);
@@ -1272,10 +991,6 @@ const ChatMessageListComponent = ({
       isGenerating ? 'Generating response' : buildStreamAnnouncement(lastMessage),
     );
   }, [isGenerating, lastMessage]);
-
-  // ---------------------------------------------------------------------------
-  // Memoized callbacks
-  // ---------------------------------------------------------------------------
 
   const handleRegenerate = useCallback((id: string) => onRegenerate?.(id), [onRegenerate]);
 
@@ -1469,10 +1184,6 @@ const ChatMessageListComponent = ({
     </>
   );
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-
   if (messages.length === 0 && !isLoading) {
     return (
       <div
@@ -1520,9 +1231,6 @@ const ChatMessageListComponent = ({
         overscanCount={6}
         onResize={({ height }) => setViewportHeight(height)}
         role="log"
-        // AUDIT-FIX GOV-29: role="log" implies aria-live="polite"; the explicit
-        // "off" is what actually silences the container so the region above is
-        // the single source of announcements. aria-busy marks generation.
         aria-live="off"
         aria-busy={isGenerating}
         aria-label="Chat messages"
@@ -1546,16 +1254,8 @@ const ChatMessageListComponent = ({
   );
 };
 
-/**
- * ChatMessageList · upgraded web message list with auto-scroll, message
- * grouping, and streaming-aware rendering.
- *
- * Replaces `MessageListNew`. Compatible with the same props interface.
- */
 export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
   return (
-    // AUDIT-FIX STR-20: a conversation switch MUST re-render (it resets scroll
-    // ownership); two transcripts of equal length would otherwise compare equal.
     prev.conversationId === next.conversationId &&
     prev.currentTier === next.currentTier &&
     prev.messages.length === next.messages.length &&
@@ -1580,8 +1280,6 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.branchingMessageId === next.branchingMessageId &&
     prev.onBranch === next.onBranch &&
     prev.onSwitchBranch === next.onSwitchBranch &&
-    // AUDIT-FIX STR-17: the same per-message comparison MessageGroupRow uses,
-    // so the two can never disagree about what "changed" means again.
     prev.messages.every((prevMessage, index) => {
       const nextMessage = next.messages[index];
       if (!nextMessage) return false;

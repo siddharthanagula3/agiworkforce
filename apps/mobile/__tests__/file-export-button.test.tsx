@@ -1,16 +1,3 @@
-/**
- * Regression: FileExportButton previously used @gorhom/bottom-sheet's plain
- * (non-modal) BottomSheet. That component positions itself relative to its
- * nearest ancestor, not the screen — and FileExportButton is mounted inside
- * MessageBubble, a row inside the virtualized message list. The sheet was
- * clipped to that row's small bounds and never visible; tapping "Export
- * Message..." silently no-opped with zero user-visible feedback.
- *
- * Fixed by switching to React Native's native Modal (same proven pattern as
- * MessageEditModal.tsx), which renders via a native window layer immune to
- * list-item clipping. This test locks in that the export sheet actually
- * becomes queryable/visible when `visible` is true.
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
@@ -50,7 +37,6 @@ jest.mock('expo-haptics', () => ({
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  // Any icon name resolves to the stub — robust to new icons added to MessageBubble.
   return new Proxy({}, { get: () => Icon });
 });
 

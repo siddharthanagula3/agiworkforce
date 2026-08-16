@@ -1,15 +1,3 @@
-/**
- * Reflect screen.
- *
- * Web has had Settings → Reflect for some time; Mobile had nothing. The recap
- * is entirely server-computed (GET /api/reflect), so this screen is a renderer
- * for the shared wire schema — no mobile-specific statistics logic exists or
- * should exist, or the two surfaces would report different numbers for the
- * same account.
- *
- * Cloud-only: the recap is built from Managed Cloud conversation metadata.
- * Local Mode chats never leave the device and are not part of it.
- */
 import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';

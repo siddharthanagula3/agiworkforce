@@ -1,20 +1,9 @@
-/**
- * ThemeEditorDialog
- *
- * A dialog for creating a new custom theme from scratch.
- * Provides color pickers for each ThemeColors field, name/ID/variant fields,
- * and a live mini-preview that reflects changes instantly.
- */
 
 import { useState, useCallback } from 'react';
 import { Moon, Sun, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ThemeDefinition, ThemeColors } from '../../themes/types';
 import { saveCustomTheme } from '../../themes';
-
-// ---------------------------------------------------------------------------
-// Default values for a new theme
-// ---------------------------------------------------------------------------
 
 const DEFAULT_COLORS: ThemeColors = {
   background: '222 47% 11%',
@@ -38,10 +27,6 @@ const DEFAULT_COLORS: ThemeColors = {
   ring: '217 91% 60%',
 };
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface ColorFieldProps {
   label: string;
   fieldKey: keyof ThemeColors;
@@ -54,14 +39,6 @@ interface ThemeEditorDialogProps {
   onSaved: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Parse an HSL string like "222 47% 11%" into a hex value for <input type="color">.
- * Returns a fallback if parsing fails.
- */
 function hslStringToHex(hsl: string): string {
   try {
     const parts = hsl.trim().split(/\s+/);
@@ -85,9 +62,6 @@ function hslStringToHex(hsl: string): string {
   }
 }
 
-/**
- * Convert a hex color string to an HSL string in the "H S% L%" format.
- */
 function hexToHslString(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
@@ -112,19 +86,12 @@ function hexToHslString(hex: string): string {
   return `${h} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-/**
- * Generate a kebab-case ID from a theme name.
- */
 function nameToId(name: string): string {
   return `custom-${name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')}`;
 }
-
-// ---------------------------------------------------------------------------
-// ColorField sub-component
-// ---------------------------------------------------------------------------
 
 function ColorField({ label, fieldKey, value, onChange }: ColorFieldProps) {
   const hexValue = hslStringToHex(value);
@@ -166,10 +133,6 @@ function ColorField({ label, fieldKey, value, onChange }: ColorFieldProps) {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// MiniPreview sub-component
-// ---------------------------------------------------------------------------
 
 interface MiniPreviewProps {
   colors: ThemeColors;
@@ -248,10 +211,6 @@ function MiniPreview({ colors }: MiniPreviewProps) {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Main dialog component
-// ---------------------------------------------------------------------------
 
 const COLOR_FIELDS: Array<{ key: keyof ThemeColors; label: string }> = [
   { key: 'background', label: 'Background' },

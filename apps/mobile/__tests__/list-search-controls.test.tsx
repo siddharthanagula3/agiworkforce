@@ -1,21 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M30 — the bottom search pill and the floating create pill are one shared
- * implementation.
- *
- * Both controls were hand-rolled inside `ChatsListScreen`, so Library, Projects
- * and the connectors directory each grew their own top-anchored field and
- * Projects hid creation in a 32×32 header square (under the 44pt iOS minimum).
- * These tests pin the contract every list screen now depends on: a target above
- * 44pt, a stacking offset that keeps the pill clear of the field, and a bottom
- * margin that clears the home indicator.
- */
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { Plus } from 'lucide-react-native';
 
-// A non-zero bottom inset: the whole point of these components owning the
-// safe-area read is that no host screen has to remember to add it.
 const mockInsetBottom = 34;
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -60,7 +47,6 @@ describe('BottomSearchBar', () => {
     const style = screen.getByTestId('bar').props.style;
     expect(style.marginBottom).toBe(mockInsetBottom + BOTTOM_SEARCH_BAR_MARGIN);
     expect(style.minHeight).toBe(BOTTOM_SEARCH_BAR_HEIGHT);
-    // A pill, not a rounded rectangle — the reference shape on every screen.
     expect(style.borderRadius).toBe(BOTTOM_SEARCH_BAR_HEIGHT / 2);
   });
 
@@ -88,7 +74,6 @@ describe('BottomSearchBar', () => {
         clearAccessibilityLabel="Clear everything search"
       />,
     );
-    // Whitespace is not a query.
     expect(empty.queryByLabelText('Clear everything search')).toBeNull();
     empty.unmount();
 
@@ -134,8 +119,6 @@ describe('FloatingPrimaryAction', () => {
   });
 
   it('exposes a list padding that clears both controls', () => {
-    // A list using this padding can always scroll its last row out from under
-    // the pill: the padding covers the pill, the gap and the field below it.
     expect(FLOATING_PRIMARY_ACTION_LIST_PADDING).toBeGreaterThanOrEqual(
       BOTTOM_SEARCH_BAR_MARGIN +
         BOTTOM_SEARCH_BAR_HEIGHT +

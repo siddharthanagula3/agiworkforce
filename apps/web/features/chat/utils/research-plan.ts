@@ -1,18 +1,5 @@
 import { isResearchStep, type ResearchStep } from '@agiworkforce/types';
 
-/**
- * Client-side reduction of the additive `x_research_plan` SSE event
- * (CAP-045 slice 2).
- *
- * The server re-emits the WHOLE plan on every change (last-write-wins, like
- * `x_search_results`), so reduction is a replace, not a merge — a client that
- * joined late still ends up with the complete queue.
- *
- * Every field is validated: the payload is model-influenced server output
- * arriving over the wire, so a malformed step is dropped rather than rendered.
- * A payload with no usable step returns null, which callers treat as "no
- * update" so a garbage event cannot erase a good plan.
- */
 export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null {
   if (!payload || typeof payload !== 'object') return null;
   const rawSteps = (payload as { steps?: unknown }).steps;
@@ -46,18 +33,12 @@ export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null 
       step.sourcesConsulted = Math.max(0, wire['sources_consulted']);
     }
     steps.push(step);
-    // Bound: the loop emits at most a handful of steps, but the wire is not
-    // trusted to stay that way.
     if (steps.length >= 50) break;
   }
 
   return steps.length > 0 ? steps : null;
 }
 
-/**
- * The queries a retry should NOT re-run: search steps a previous attempt
- * actually completed. Used to build the `research_resume` payload.
- */
 export function completedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
   return (steps ?? []).filter((step) => step.status === 'completed' && step.type === 'search');
 }

@@ -1,19 +1,5 @@
-/**
- * Git API
- *
- * TypeScript API wrappers for all 36 Tauri git commands.
- * Covers core operations, branches, stash, reset, remotes,
- * conflict resolution, and PR creation workflows.
- *
- * IMPORTANT: invoke() params use camelCase; Rust #[tauri::command]
- * params use snake_case. Tauri auto-converts at the IPC boundary.
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface GitStatus {
   branch: string;
@@ -67,7 +53,6 @@ export interface ConflictResolutionRequest {
   manualContent?: string;
 }
 
-/** Wire format sent to Rust (snake_case field names). */
 interface ConflictResolutionWire {
   hunk_index: number;
   strategy: string;
@@ -122,11 +107,6 @@ export interface PrReadinessResult {
   remote_up_to_date: boolean;
 }
 
-// ============================================================================
-// Core Operations
-// ============================================================================
-
-/** Initialize a new git repository at `path`. */
 export async function gitInit(path: string): Promise<string> {
   if (!isTauri) return 'Mock: git init';
   try {
@@ -136,7 +116,6 @@ export async function gitInit(path: string): Promise<string> {
   }
 }
 
-/** Get repository status (branch, staged, unstaged, conflicts). */
 export async function gitStatus(path: string): Promise<GitStatus> {
   if (!isTauri) {
     return {
@@ -156,7 +135,6 @@ export async function gitStatus(path: string): Promise<GitStatus> {
   }
 }
 
-/** Stage files for commit. Pass `["."]` to stage all. */
 export async function gitAdd(path: string, files: string[]): Promise<string> {
   if (!isTauri) return 'Mock: git add';
   try {
@@ -166,7 +144,6 @@ export async function gitAdd(path: string, files: string[]): Promise<string> {
   }
 }
 
-/** Create a commit with the given message. */
 export async function gitCommit(path: string, message: string): Promise<string> {
   if (!isTauri) return 'mock-commit-hash';
   try {
@@ -196,7 +173,6 @@ export async function gitPush(
   }
 }
 
-/** Pull from a remote (fetch + merge). */
 export async function gitPull(
   path: string,
   remote?: string | null,
@@ -214,7 +190,6 @@ export async function gitPull(
   }
 }
 
-/** Fetch refs from a remote without merging. */
 export async function gitFetch(path: string, remote?: string | null): Promise<string> {
   if (!isTauri) return 'Mock: fetch successful';
   try {
@@ -227,7 +202,6 @@ export async function gitFetch(path: string, remote?: string | null): Promise<st
   }
 }
 
-/** Get diff (staged or unstaged). Optionally filter by file. */
 export async function gitDiff(
   path: string,
   filePath?: string | null,
@@ -245,7 +219,6 @@ export async function gitDiff(
   }
 }
 
-/** Get commit log. Defaults to 50 entries. */
 export async function gitLog(path: string, limit?: number): Promise<GitCommit[]> {
   if (!isTauri) return [];
   try {
@@ -258,7 +231,6 @@ export async function gitLog(path: string, limit?: number): Promise<GitCommit[]>
   }
 }
 
-/** Clone a remote repository to a local destination. */
 export async function gitClone(url: string, destination: string): Promise<string> {
   if (!isTauri) return 'Mock: clone successful';
   try {
@@ -268,11 +240,6 @@ export async function gitClone(url: string, destination: string): Promise<string
   }
 }
 
-// ============================================================================
-// Branch Operations
-// ============================================================================
-
-/** List all local branches. */
 export async function gitListBranches(path: string): Promise<GitBranch[]> {
   if (!isTauri) return [];
   try {
@@ -282,7 +249,6 @@ export async function gitListBranches(path: string): Promise<GitBranch[]> {
   }
 }
 
-/** Create a new branch at the current HEAD. */
 export async function gitCreateBranch(path: string, branchName: string): Promise<string> {
   if (!isTauri) return `Mock: branch '${branchName}' created`;
   try {
@@ -292,7 +258,6 @@ export async function gitCreateBranch(path: string, branchName: string): Promise
   }
 }
 
-/** Switch to an existing branch. */
 export async function gitCheckout(path: string, branchName: string): Promise<string> {
   if (!isTauri) return `Mock: switched to '${branchName}'`;
   try {
@@ -302,7 +267,6 @@ export async function gitCheckout(path: string, branchName: string): Promise<str
   }
 }
 
-/** Create and switch to a new branch. */
 export async function gitCheckoutNewBranch(path: string, branchName: string): Promise<string> {
   if (!isTauri) return `Mock: switched to new branch '${branchName}'`;
   try {
@@ -312,7 +276,6 @@ export async function gitCheckoutNewBranch(path: string, branchName: string): Pr
   }
 }
 
-/** Delete a local branch. Triggers confirmation dialog. */
 export async function gitDeleteBranch(
   path: string,
   branchName: string,
@@ -330,7 +293,6 @@ export async function gitDeleteBranch(
   }
 }
 
-/** Merge a branch into the current branch. */
 export async function gitMerge(path: string, branchName: string): Promise<string> {
   if (!isTauri) return 'Mock: merge successful';
   try {
@@ -340,7 +302,6 @@ export async function gitMerge(path: string, branchName: string): Promise<string
   }
 }
 
-/** Get the current branch name. */
 export async function gitCurrentBranch(path: string): Promise<string> {
   if (!isTauri) return 'main';
   try {
@@ -350,7 +311,6 @@ export async function gitCurrentBranch(path: string): Promise<string> {
   }
 }
 
-/** Get the default branch name (main/master). */
 export async function gitDefaultBranch(path: string): Promise<string> {
   if (!isTauri) return 'main';
   try {
@@ -360,11 +320,6 @@ export async function gitDefaultBranch(path: string): Promise<string> {
   }
 }
 
-// ============================================================================
-// Stash Operations
-// ============================================================================
-
-/** Stash uncommitted changes. */
 export async function gitStash(path: string, message?: string | null): Promise<string> {
   if (!isTauri) return 'Mock: stash successful';
   try {
@@ -377,7 +332,6 @@ export async function gitStash(path: string, message?: string | null): Promise<s
   }
 }
 
-/** Pop the top stash entry. */
 export async function gitStashPop(path: string): Promise<string> {
   if (!isTauri) return 'Mock: stash pop successful';
   try {
@@ -386,10 +340,6 @@ export async function gitStashPop(path: string): Promise<string> {
     throw new Error(`git stash pop failed: ${err}`);
   }
 }
-
-// ============================================================================
-// Reset Operations
-// ============================================================================
 
 /**
  * Reset the repository to a commit.
@@ -429,11 +379,6 @@ export async function gitCheckoutFiles(path: string, files: string[]): Promise<s
   }
 }
 
-// ============================================================================
-// Remote Operations
-// ============================================================================
-
-/** List all configured remotes (name, url pairs). */
 export async function gitListRemotes(path: string): Promise<[string, string][]> {
   if (!isTauri) return [];
   try {
@@ -443,7 +388,6 @@ export async function gitListRemotes(path: string): Promise<[string, string][]> 
   }
 }
 
-/** Add a new remote. */
 export async function gitAddRemote(path: string, name: string, url: string): Promise<string> {
   if (!isTauri) return `Mock: remote '${name}' added`;
   try {
@@ -453,11 +397,6 @@ export async function gitAddRemote(path: string, name: string, url: string): Pro
   }
 }
 
-// ============================================================================
-// Conflict Resolution
-// ============================================================================
-
-/** Check if the repository has any unresolved conflicts. */
 export async function gitHasConflicts(path: string): Promise<boolean> {
   if (!isTauri) return false;
   try {
@@ -467,7 +406,6 @@ export async function gitHasConflicts(path: string): Promise<boolean> {
   }
 }
 
-/** List files with merge conflicts. */
 export async function gitListConflicts(path: string): Promise<string[]> {
   if (!isTauri) return [];
   try {
@@ -477,7 +415,6 @@ export async function gitListConflicts(path: string): Promise<string[]> {
   }
 }
 
-/** Get detailed conflict information for a file (hunks, markers). */
 export async function gitGetConflictDetails(
   path: string,
   filePath: string,
@@ -500,10 +437,6 @@ export async function gitGetConflictDetails(
   }
 }
 
-/**
- * Resolve conflicts in a file by applying resolution strategies per hunk.
- * Converts frontend camelCase to wire snake_case for Rust.
- */
 export async function gitResolveConflict(
   path: string,
   filePath: string,
@@ -520,7 +453,6 @@ export async function gitResolveConflict(
     };
   }
   try {
-    // Convert to wire format (snake_case for Rust)
     const wireResolutions: ConflictResolutionWire[] = resolutions.map((r) => ({
       hunk_index: r.hunkIndex,
       strategy: r.strategy,
@@ -536,7 +468,6 @@ export async function gitResolveConflict(
   }
 }
 
-/** Mark a file as resolved (stages it for commit). */
 export async function gitMarkResolved(path: string, filePath: string): Promise<string> {
   if (!isTauri) return `Mock: marked ${filePath} as resolved`;
   try {
@@ -546,7 +477,6 @@ export async function gitMarkResolved(path: string, filePath: string): Promise<s
   }
 }
 
-/** Get an LLM prompt for suggesting a conflict resolution. */
 export async function gitGetConflictSuggestionPrompt(
   path: string,
   filePath: string,
@@ -564,7 +494,6 @@ export async function gitGetConflictSuggestionPrompt(
   }
 }
 
-/** Abort an in-progress merge (resets to HEAD). */
 export async function gitAbortMerge(path: string): Promise<string> {
   if (!isTauri) return 'Mock: merge aborted';
   try {
@@ -574,7 +503,6 @@ export async function gitAbortMerge(path: string): Promise<string> {
   }
 }
 
-/** Complete a merge after all conflicts are resolved. */
 export async function gitCompleteMerge(path: string, message?: string | null): Promise<string> {
   if (!isTauri) return 'mock-merge-commit-hash';
   try {
@@ -587,11 +515,6 @@ export async function gitCompleteMerge(path: string, message?: string | null): P
   }
 }
 
-// ============================================================================
-// PR Operations
-// ============================================================================
-
-/** Get a summary of differences between two branches (for PR preview). */
 export async function gitGetBranchDiffSummary(
   path: string,
   baseBranch: string,
@@ -618,7 +541,6 @@ export async function gitGetBranchDiffSummary(
   }
 }
 
-/** Generate a PR title and description using AI. */
 export async function gitGeneratePrDescription(
   path: string,
   baseBranch: string,
@@ -636,7 +558,6 @@ export async function gitGeneratePrDescription(
   }
 }
 
-/** Create a pull request (prepares content; actual creation via GitHub API/MCP). */
 export async function gitCreatePr(
   path: string,
   config: PrCreationConfig,
@@ -658,7 +579,6 @@ export async function gitCreatePr(
   }
 }
 
-/** Check if a branch is ready for PR creation. */
 export async function gitCheckPrReadiness(
   path: string,
   baseBranch: string,
@@ -684,16 +604,7 @@ export async function gitCheckPrReadiness(
   }
 }
 
-// ============================================================================
-// Convenience Client
-// ============================================================================
-
-/**
- * Stateless client object grouping all git API functions.
- * Usage: `import { GitClient } from '@/api/git'`
- */
 export const GitClient = {
-  // Core
   init: gitInit,
   status: gitStatus,
   add: gitAdd,
@@ -705,7 +616,6 @@ export const GitClient = {
   log: gitLog,
   clone: gitClone,
 
-  // Branches
   listBranches: gitListBranches,
   createBranch: gitCreateBranch,
   checkout: gitCheckout,
@@ -715,19 +625,15 @@ export const GitClient = {
   currentBranch: gitCurrentBranch,
   defaultBranch: gitDefaultBranch,
 
-  // Stash
   stash: gitStash,
   stashPop: gitStashPop,
 
-  // Reset
   reset: gitReset,
   checkoutFiles: gitCheckoutFiles,
 
-  // Remotes
   listRemotes: gitListRemotes,
   addRemote: gitAddRemote,
 
-  // Conflicts
   hasConflicts: gitHasConflicts,
   listConflicts: gitListConflicts,
   getConflictDetails: gitGetConflictDetails,
@@ -737,7 +643,6 @@ export const GitClient = {
   abortMerge: gitAbortMerge,
   completeMerge: gitCompleteMerge,
 
-  // PR
   getBranchDiffSummary: gitGetBranchDiffSummary,
   generatePrDescription: gitGeneratePrDescription,
   createPr: gitCreatePr,

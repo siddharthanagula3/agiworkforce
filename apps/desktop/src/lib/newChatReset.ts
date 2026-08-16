@@ -7,32 +7,22 @@ import { toast } from 'sonner';
 
 const NEW_CHAT_ABORT_EVENT = 'chat:new-conversation';
 
-/**
- * Clears transient in-flight state before creating a new chat so stale
- * loading/thinking/tool indicators do not leak across conversations.
- */
 export async function resetInFlightChatState(): Promise<void> {
   const chatStore = useChatStore.getState();
   const agentStore = useAgentStore.getState();
   const toolStore = useToolStore.getState();
 
-  // Ask active listeners/components to abort in-flight work.
   window.dispatchEvent(new CustomEvent(NEW_CHAT_ABORT_EVENT));
 
-  // Reset stream/loading indicators immediately.
   chatStore.setIsLoading(false);
   chatStore.setStreamingMessage(null);
 
-  // Clear transient agent activity indicators.
   agentStore.setAgentStatus(null);
   agentStore.clearActionTrail();
   agentStore.clearBackgroundTasks();
 
-  // Clear project folder so new chats start without a pre-selected path.
   useProjectStore.getState().setCurrentFolder(null);
 
-  // AUDIT-STREAM-022 fix: Cancel active tool streams via backend first,
-  // then update local state. This ensures both channels (backend + activeToolStreams) are unified.
   const runningTools = Array.from(toolStore.activeToolStreams.values()).filter(
     (stream) => stream.status === 'running',
   );

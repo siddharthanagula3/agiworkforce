@@ -21,12 +21,10 @@ export interface RunVideoGenerationTurnInput {
   displayText: string;
   prompt: string;
   model: string;
-  /** Video output shape chosen in the composer sheet; route defaults apply when absent. */
   aspectRatio?: VideoGenRequest['aspect_ratio'];
   resolution?: VideoGenRequest['resolution'];
   ownerId: string;
   begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
-  /** Provider progress while the task runs, so the placeholder can show movement. */
   progress?: (
     conversationId: string,
     assistantMessageId: string,
@@ -61,7 +59,6 @@ export type VideoGenerationTurnOutcome = {
 
 let cloudVideoGeneration = 0;
 
-/** Invalidate late video callbacks during sign-out/account switch. */
 export function clearCloudVideoGenerationState(): void {
   cloudVideoGeneration += 1;
 }
@@ -70,15 +67,6 @@ const defaultDependencies: VideoGenerationTurnDependencies = {
   generate: generateVideo,
 };
 
-/**
- * Shared state-transition action for video turns, mirroring
- * `runImageGenerationTurn`.
- *
- * The difference that matters is DURATION: a video task runs for a minute or
- * more behind `/api/media/video/status`, so the account-epoch guard is checked
- * on every poll rather than only at the end — a sign-out midway through must
- * stop writing into a conversation the previous account owned.
- */
 export async function runVideoGenerationTurn(
   input: RunVideoGenerationTurnInput,
   dependencies: VideoGenerationTurnDependencies = defaultDependencies,
@@ -111,8 +99,6 @@ export async function runVideoGenerationTurn(
       {
         prompt: input.prompt,
         model: input.model,
-        // Omitted when absent so the route keeps applying its own defaults for
-        // any caller that has not selected a shape.
         ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
         ...(input.resolution ? { resolution: input.resolution } : {}),
       },
@@ -121,8 +107,6 @@ export async function runVideoGenerationTurn(
           if (!isAccountCurrent()) return;
           input.progress?.(input.conversationId, assistantMessageId, progress, status);
         },
-        // Stops the poll loop as soon as the account changes instead of waiting
-        // out the remaining five-minute window.
         shouldCancel: () => !isAccountCurrent(),
       },
     );

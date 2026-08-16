@@ -1,36 +1,8 @@
-/**
- * FollowUpSuggestions tests
- *
- * Covers:
- * deriveFollowUps() (extracted via re-export · see note below):
- * - Returns [] for content shorter than 20 chars or empty/whitespace
- * - Topic pattern matching for all 15 categories
- * - Deduplication of suggestions (same text text not emitted twice)
- * - Capability discovery: code-block pill, web-verify pill, summarize pill (>=10 messages)
- * - Content capped at 4000 chars to prevent ReDoS
- * - Generic fallback when no topic matches (< 2 suggestions)
- * - Long content (>500 chars) uses summary-style generics; short uses example-style
- * - Maximum 3 results returned
- * - IDs are stable ('followup-0', 'followup-1', ...)
- * - FollowUp types are correctly assigned
- *
- * FollowUpSuggestions component:
- * - Renders suggestion pills when content and conditions are met
- * - Returns null when isGenerating is true
- * - Returns null when deriveFollowUps returns []
- * - Fades out (opacity-0 class / pointer-events-none) when isUserTyping
- * - Clicking a pill calls onSelect with the pill text
- * - Hide button sets dismissed state and removes the row
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 import { deriveFollowUps, FollowUpSuggestions } from './FollowUpSuggestions';
-
-// ---------------------------------------------------------------------------
-// deriveFollowUps · guard clauses
-// ---------------------------------------------------------------------------
 
 describe('deriveFollowUps() · guard clauses', () => {
   it('returns [] for empty string', () => {
@@ -46,16 +18,10 @@ describe('deriveFollowUps() · guard clauses', () => {
   });
 
   it('returns results when content is exactly 20 chars', () => {
-    // 20 chars with no matching topic → will use generic fallback
     const result = deriveFollowUps('x'.repeat(20), 0);
-    // Generic fallback fires when matched.length < 2
     expect(result.length).toBeGreaterThan(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// deriveFollowUps · topic pattern matching
-// ---------------------------------------------------------------------------
 
 describe('deriveFollowUps() · topic patterns', () => {
   it('matches code-related pattern (function keyword)', () => {
@@ -127,8 +93,6 @@ describe('deriveFollowUps() · topic patterns', () => {
   });
 
   it('matches explanation/concept pattern', () => {
-    // "means" and "in other words" trigger the concept pattern.
-    // Content deliberately avoids code/bug/list/strategy/comparison keywords.
     const result = deriveFollowUps(
       'Photosynthesis means the process where plants convert sunlight into energy. In other words it refers to food production.',
       0,
@@ -138,7 +102,6 @@ describe('deriveFollowUps() · topic patterns', () => {
   });
 
   it('matches health/fitness pattern', () => {
-    // Avoid "plan" (triggers strategy pattern before health). Use fitness-only keywords.
     const result = deriveFollowUps(
       'This workout routine focuses on cardiovascular exercise, calorie tracking, and sleep quality for overall wellness.',
       0,
@@ -249,10 +212,6 @@ describe('deriveFollowUps() · topic patterns', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// deriveFollowUps · FollowUp types
-// ---------------------------------------------------------------------------
-
 describe('deriveFollowUps() · suggestion types', () => {
   it('assigns "apply" type to "Can you add unit tests for this?"', () => {
     const result = deriveFollowUps('Here is a class that implements the component logic.', 0);
@@ -272,10 +231,6 @@ describe('deriveFollowUps() · suggestion types', () => {
     expect(fu?.type).toBe('discover');
   });
 });
-
-// ---------------------------------------------------------------------------
-// deriveFollowUps · capability discovery
-// ---------------------------------------------------------------------------
 
 describe('deriveFollowUps() · capability discovery', () => {
   it('adds "Run this code" pill when response contains a code block', () => {
@@ -299,8 +254,7 @@ describe('deriveFollowUps() · capability discovery', () => {
   });
 
   it('does NOT add "Run this code" for inline code without a block (too short)', () => {
-    // Code fence content must be >= 10 chars: ```<10chars>```
-    const shortBlock = '```x```'; // only 1 char inside backticks
+    const shortBlock = '```x```';
     const content = `Here is something short: ${shortBlock} and more explanation text here.`;
     const result = deriveFollowUps(content, 0);
     const texts = result.map((f) => f.text);
@@ -335,7 +289,6 @@ describe('deriveFollowUps() · capability discovery', () => {
   });
 
   it('adds "Summarize this conversation" when messageCount >= 10', () => {
-    // Use content that does NOT match a topic pattern so slot is available
     const result = deriveFollowUps('x'.repeat(25), 10);
     const texts = result.map((f) => f.text);
     expect(texts).toContain('Summarize this conversation');
@@ -354,13 +307,8 @@ describe('deriveFollowUps() · capability discovery', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// deriveFollowUps · deduplication
-// ---------------------------------------------------------------------------
-
 describe('deriveFollowUps() · deduplication', () => {
   it('does not emit duplicate suggestion texts', () => {
-    // Content that would match multiple patterns with overlapping suggestions
     const content =
       'This function class component handles the error bug. ' +
       'It also has tests and coverage for unit tests and spec assertions.';
@@ -371,19 +319,13 @@ describe('deriveFollowUps() · deduplication', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// deriveFollowUps · content cap (ReDoS prevention)
-// ---------------------------------------------------------------------------
-
 describe('deriveFollowUps() · content cap at 4000 chars', () => {
   it('processes content longer than 4000 chars without error', () => {
-    // 5000 chars of valid content including a keyword
     const longContent = 'function '.padEnd(4001, 'x') + ' class component module';
     expect(() => deriveFollowUps(longContent, 0)).not.toThrow();
   });
 
   it('matches keyword at position < 4000 even in a very long response', () => {
-    // keyword near the start, content is 6000 chars
     const content = 'function doSomething() { '.padEnd(6000, 'y');
     const result = deriveFollowUps(content, 0);
     const texts = result.map((f) => f.text);
@@ -391,26 +333,18 @@ describe('deriveFollowUps() · content cap at 4000 chars', () => {
   });
 
   it('does NOT match a keyword placed at position > 4000', () => {
-    // Pad with neutral text, then place keyword after the 4000-char cut
     const neutral = 'a'.repeat(4001);
-    const content = neutral + ' function class component'; // keyword after cap
+    const content = neutral + ' function class component';
     const result = deriveFollowUps(content, 0);
-    // Should NOT match code pattern (keyword is beyond sample slice)
     const texts = result.map((f) => f.text);
     expect(texts).not.toContain('Can you add unit tests for this?');
   });
 });
 
-// ---------------------------------------------------------------------------
-// deriveFollowUps · generic fallback
-// ---------------------------------------------------------------------------
-
 describe('deriveFollowUps() · generic fallback', () => {
   it('returns generic suggestions when no topic matches and content >= 20 chars', () => {
-    // Content with no keywords from any topic pattern
     const result = deriveFollowUps('xxxxxxxxxxxxxxxxxxxxxxxxx', 0);
     expect(result.length).toBeGreaterThan(0);
-    // All results should come from GENERIC_FOLLOW_UPS
     const genericTexts = [
       'Tell me more about this',
       'Can you give an example?',
@@ -425,53 +359,34 @@ describe('deriveFollowUps() · generic fallback', () => {
   });
 
   it('uses summary-style generics for long content (> 500 chars)', () => {
-    // Long content with no matching topic
     const longNeutral = 'z'.repeat(501);
     const result = deriveFollowUps(longNeutral, 0);
-    // Summary style: first 3 generics from GENERIC_FOLLOW_UPS (index 0-2)
-    // index 0: 'Tell me more about this' (type: deeper)
-    // index 1: 'Can you give an example?' (type: apply)
-    // index 2: 'What are the next steps?' (type: apply)
     const texts = result.map((f) => f.text);
     expect(texts).toContain('Tell me more about this');
   });
 
   it('uses example-style generics for short content (<= 500 chars)', () => {
-    // Short content with no matching topic but >= 20 chars
     const shortNeutral = 'z'.repeat(25);
     const result = deriveFollowUps(shortNeutral, 0);
-    // Example style: index 1-4 of GENERIC_FOLLOW_UPS
-    // index 1: 'Can you give an example?'
-    // index 2: 'What are the next steps?'
-    // index 3: 'How can I apply this?'
     const texts = result.map((f) => f.text);
-    // 'Tell me more about this' (index 0) should NOT appear in short-content fallback
     expect(texts).not.toContain('Tell me more about this');
   });
 
   it('only fires generic fallback when matched.length < 2', () => {
-    // Content that matches exactly one topic (code), providing 3 suggestions already
     const result = deriveFollowUps(
       'Here is a function that does something interesting in the codebase.',
       0,
     );
-    // 3 suggestions already found from code pattern → no generic fallback needed
     const genericOnlySuggestions = ['Tell me more about this', 'Can you give an example?'];
     const texts = result.map((f) => f.text);
-    // Generic should not appear since we already have enough from topic match
     for (const generic of genericOnlySuggestions) {
       expect(texts).not.toContain(generic);
     }
   });
 });
 
-// ---------------------------------------------------------------------------
-// deriveFollowUps · result shape
-// ---------------------------------------------------------------------------
-
 describe('deriveFollowUps() · result shape', () => {
   it('returns at most 3 suggestions', () => {
-    // Content that matches multiple patterns
     const content =
       'The function class component handles database SQL query and api endpoint authentication.';
     const result = deriveFollowUps(content, 0);
@@ -495,10 +410,6 @@ describe('deriveFollowUps() · result shape', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// FollowUpSuggestions component
-// ---------------------------------------------------------------------------
-
 describe('FollowUpSuggestions component', () => {
   const CONTENT_WITH_CODE =
     'Here is a function that handles the user request and returns the proper response component.';
@@ -512,7 +423,6 @@ describe('FollowUpSuggestions component', () => {
       />,
     );
     expect(screen.getByRole('list')).toBeInTheDocument();
-    // Should have at least one listitem
     const items = screen.getAllByRole('listitem');
     expect(items.length).toBeGreaterThan(0);
   });
@@ -552,7 +462,6 @@ describe('FollowUpSuggestions component', () => {
       />,
     );
 
-    // Click the first suggestion pill (first listitem)
     const pills = screen.getAllByRole('listitem');
     fireEvent.click(pills[0]!);
     expect(onSelect).toHaveBeenCalledTimes(1);
@@ -600,7 +509,6 @@ describe('FollowUpSuggestions component', () => {
     const hideBtn = screen.getByRole('button', { name: 'Hide suggestions' });
     fireEvent.click(hideBtn);
 
-    // After dismiss, the entire row should be gone
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Hide suggestions' })).not.toBeInTheDocument();
   });
@@ -618,7 +526,6 @@ describe('FollowUpSuggestions component', () => {
   });
 
   it('passes messageCount to influence summarize pill visibility', () => {
-    // messageCount=0 → no summarize pill
     const { rerender } = render(
       <FollowUpSuggestions
         lastAssistantContent={'x'.repeat(25)}
@@ -629,7 +536,6 @@ describe('FollowUpSuggestions component', () => {
     let texts = screen.queryAllByRole('listitem').map((el) => el.textContent ?? '');
     expect(texts.some((t) => t.includes('Summarize this conversation'))).toBe(false);
 
-    // messageCount=10 → summarize pill should appear
     rerender(
       <FollowUpSuggestions
         lastAssistantContent={'x'.repeat(25)}

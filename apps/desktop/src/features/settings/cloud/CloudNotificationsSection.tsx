@@ -1,20 +1,3 @@
-/**
- * Cloud notification preferences, rendered inline.
- *
- * The `notifications` namespace of `/api/settings/preferences` is
- * bearer-reachable, so this replaces a cookie-gated child window that could
- * land on `/login`.
- *
- * Exactly ONE preference is exposed, because exactly one has a consumer:
- * `browserReplyReady`, read by the web chat page. The web section documents why
- * the email / mobile-push / agent-done groups were deleted — nothing sends
- * them. Desktop does not re-add them, and it does not pretend this toggle
- * governs Desktop's own notifications: those are device settings and stay in
- * Local settings, where the code that raises them lives.
- *
- * The whole namespace is written back on every save because
- * `PUT /api/settings/preferences` replaces a namespace's value outright.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 

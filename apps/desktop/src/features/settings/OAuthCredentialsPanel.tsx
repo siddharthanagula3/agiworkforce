@@ -6,9 +6,6 @@ import { Button } from '@/ui/Button';
 import { Label } from '@/ui/Label';
 import { Badge } from '@/ui/Badge';
 
-// Extended provider set for OAuth credentials configuration.
-// These go beyond the three providers in McpOAuthProvider since
-// credentials must be configurable for all OAuth-based connectors.
 type OAuthCredentialProvider =
   | 'github'
   | 'google'
@@ -110,7 +107,6 @@ function makeInitialState(): Record<OAuthCredentialProvider, ProviderCredentialS
   return state;
 }
 
-// Official brand SVG logos — inline to avoid external icon-pack dependencies.
 function ProviderIcon({ id }: { id: OAuthCredentialProvider }) {
   const icons: Record<OAuthCredentialProvider, React.ReactNode> = {
     github: (
@@ -235,7 +231,6 @@ export function OAuthCredentialsPanel() {
   const [state, setState] =
     useState<Record<OAuthCredentialProvider, ProviderCredentialState>>(makeInitialState);
 
-  // On mount, check which providers already have credentials configured.
   useEffect(() => {
     for (const p of PROVIDERS) {
       McpClient.oauthCredentialsStatus(p.id)

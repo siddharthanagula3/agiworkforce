@@ -13,8 +13,6 @@ vi.mock('@/lib/logger', () => ({ logger: loggerMocks }));
 const recordAuditEvent = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@/lib/security-audit', () => ({ recordAuditEvent }));
 
-// Only `price_current` is configured in this deployment; `price_legacy` is the
-// retired Price a long-standing subscriber is still billed on.
 vi.mock('@/lib/price-tier-mapping', () => ({
   isPriceIdRegistered: (priceId: string | null | undefined) => priceId === 'price_current',
   resolvePlanTier: (_metadata: unknown, priceId: string | null | undefined) =>
@@ -115,9 +113,6 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
   });
 
   it('never writes the terminal canceled status, which would block later renewals', async () => {
-    // updateSubscriptionFromStripeSubscription treats a locally-canceled row as
-    // unrecoverable. Stripe keeps billing a subscription whose invoice was
-    // refunded, so writing 'canceled' here would refuse every future renewal.
     const { db, calls } = makeDb((sql) =>
       sql.includes('from profiles') ? [{ id: 'user_123' }] : [],
     );
@@ -142,14 +137,9 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
     expect(calls.some((call) => call.sql.includes('handle_refund'))).toBe(true);
   });
 
-  // Stripe stopped shipping the per-refund `refunds` list on the Charge in
-  // webhook payloads at API version 2022-11-15 (this deployment pins
-  // 2026-04-22.dahlia), so `amount_refunded` — a running CUMULATIVE total — is
-  // the only amount the event carries. The delta has to come from our ledger.
   function refundLedgerDb(alreadyRevokedCents: number) {
     return makeDb((sql) => {
       if (sql.includes('from profiles')) return [{ id: 'user_123' }];
-      // sum() comes back from Postgres as a string.
       if (sql.includes('from credit_transactions'))
         return [{ revoked_cents: String(alreadyRevokedCents) }];
       return [];
@@ -161,7 +151,6 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
   }
 
   it('revokes only the new money on a second partial refund', async () => {
-    // $3 already clawed back for this charge; the event says $6 cumulative.
     const { db, calls } = refundLedgerDb(300);
 
     await dispatchStripeEvent(
@@ -174,8 +163,6 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
   });
 
   it('revokes nothing when a stale or replayed event repeats money already clawed back', async () => {
-    // Out-of-order delivery: the older event (300 cumulative) lands after the
-    // newer one (600) was already applied. A cumulative target makes it a no-op.
     const { db, calls } = refundLedgerDb(600);
 
     await dispatchStripeEvent(
@@ -275,8 +262,6 @@ describe('renewals on a Price the deployment no longer registers', () => {
   });
 
   it('still refuses an unregistered Price with no recorded paid tier', async () => {
-    // Nothing to grandfather: a first-ever event on an unknown Price must not be
-    // allowed to mint an entitlement.
     const { db } = makeDb(() => []);
 
     await expect(
@@ -285,28 +270,11 @@ describe('renewals on a Price the deployment no longer registers', () => {
   });
 });
 
-/**
- * The refund handler above spares credit top-ups from plan revocation by
- * reading `charge.metadata.type === 'credit_topup'`. Stripe copies metadata
- * onto a Charge from its PaymentIntent — NOT from the Checkout Session — so
- * that carve-out only works if the top-up checkout stamps
- * `payment_intent_data.metadata`. Setting `metadata` alone, which is what the
- * session-completed handler at the top of `handlers.ts` reads, leaves
- * `charge.metadata` empty and a refunded top-up would revoke the customer's
- * whole plan.
- *
- * `/api/billing/top-up` now creates this Checkout Session. Keep this repository
- * scan so a future creator cannot silently omit charge-visible metadata and
- * turn a top-up refund into wrongful plan revocation.
- */
 describe('credit top-up checkout must stamp charge-visible metadata', () => {
   it('every credit_topup checkout also sets payment_intent_data.metadata', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
 
-    // The whole surface, not just `app/`: checkout creation lives in
-    // `lib/services/` today, which an `app/`-rooted scan would walk straight
-    // past.
     const appDir = path.resolve(import.meta.dirname, '../../../../..');
     const skip = new Set(['node_modules', '__tests__', '.next', 'dist', 'e2e', '.turbo']);
     const offenders: string[] = [];
@@ -322,8 +290,6 @@ describe('credit top-up checkout must stamp charge-visible metadata', () => {
         if (!entry.name.endsWith('.ts')) continue;
 
         const src = fs.readFileSync(full, 'utf8');
-        // Only checkout-CREATION sites matter. The webhook reads the value and
-        // must not be mistaken for a producer of it.
         if (!src.includes('credit_topup')) continue;
         if (!/checkout\.sessions\.create/.test(src)) continue;
         if (!src.includes('payment_intent_data')) {

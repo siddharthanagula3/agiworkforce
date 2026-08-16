@@ -1,19 +1,3 @@
-/**
- * @file Desktop Device API Routes
- * @security
- * - Rate limiting: Applied per-endpoint based on operation type
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Authentication: JWT required for all endpoints
- * - Enumeration prevention: Returns 404 for both "not found" and "not owned"
- *
- * Rate limit rationale (OWASP compliant):
- * - POST /register: 10/min - prevents fake device creation
- * - GET /:desktopId/status: 60/min - read operation
- * - POST /:desktopId/command: 30/min - action-based
- * - GET /: 30/min - list operation
- * - POST /:desktopId/heartbeat: 600/min (10/sec) - real-time status
- * - DELETE /:desktopId: 10/min - destructive operation
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -28,20 +12,9 @@ import { isValidUuid } from '../validations/ids';
 
 const router: Router = Router();
 
-// GW-1 (audit 2026-05-03): authenticate FIRST, then rate-limit. The
-// previous order (rate-limit before authenticateToken) was inconsistent
-// with mobile.ts and meant any future route inserted between them
-// would silently bypass auth. Putting auth at the top of the chain
-// makes it impossible to forget.
 router.use(authenticateToken);
 
-// SECURITY: Baseline rate limit for all desktop endpoints (100/min fallback)
-// — applied AFTER auth so the per-IP bucket reflects authenticated traffic.
 router.use(createRateLimiter('default'));
-
-// =============================================================================
-// DATABASE TYPES
-// =============================================================================
 
 interface DesktopDevice {
   id: string;
@@ -55,11 +28,6 @@ interface DesktopDevice {
   updated_at: string;
 }
 
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
-
-// SECURITY: .strict() rejects unexpected fields to prevent mass assignment
 const registerDesktopSchema = z
   .object({
     name: z.string().min(1).max(100),
@@ -68,10 +36,6 @@ const registerDesktopSchema = z
   })
   .strict();
 
-// Strict payload schemas for each command type using discriminatedUnion
-// SECURITY: This prevents arbitrary data injection and validates command-specific fields
-// Note: Each inner object uses .strict() to reject unexpected fields
-// Zod v4: Use top-level format validators for better performance
 const chatPayloadSchema = z
   .object({
     type: z.literal('chat'),
@@ -86,7 +50,6 @@ const chatPayloadSchema = z
   })
   .strict();
 
-// Zod v4: Use top-level format validators for better performance
 const automationPayloadSchema = z
   .object({
     type: z.literal('automation'),
@@ -121,28 +84,11 @@ const commandSchema = z.discriminatedUnion('type', [
   queryPayloadSchema,
 ]);
 
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-/**
- * Check if a desktop device was seen within the last 60 seconds
- */
 function isOnline(lastSeenAt: string): boolean {
   const lastSeen = new Date(lastSeenAt).getTime();
   return Date.now() - lastSeen < 60000;
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
-/**
- * Register a new desktop device
- * POST /desktop/register
- *
- * SECURITY: Rate limited to 10/min to prevent fake device creation
- */
 router.post(
   '/register',
   createRateLimiter('device-register'),
@@ -179,17 +125,10 @@ router.post(
   },
 );
 
-/**
- * Get desktop device status
- * GET /desktop/:desktopId/status
- *
- * SECURITY: Rate limited to 60/min for responsive UX
- */
 router.get(
   '/:desktopId/status',
   createRateLimiter('device-status'),
   async (req: Request<{ desktopId: string }>, res: Response) => {
-    // Check auth first (consistent order: auth -> ownership -> action)
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -197,7 +136,6 @@ router.get(
 
     const { desktopId } = req.params;
 
-    // SECURITY: Validate UUID format to prevent injection
     if (!isValidUuid(desktopId)) {
       throw new AppError('Invalid desktop ID format', 400);
     }
@@ -210,11 +148,9 @@ router.get(
       .single();
 
     if (error || !desktop) {
-      // Return 404 for "not found" to prevent enumeration attacks
       throw new AppError('Desktop not found', 404);
     }
 
-    // Check ownership - return same 404 for "not owned" to prevent enumeration
     if (desktop.user_id !== user.userId) {
       throw new AppError('Desktop not found', 404);
     }
@@ -230,17 +166,10 @@ router.get(
   },
 );
 
-/**
- * Send command to desktop device
- * POST /desktop/:desktopId/command
- *
- * SECURITY: Rate limited to 30/min to prevent automation abuse
- */
 router.post(
   '/:desktopId/command',
   createRateLimiter('device-command'),
   async (req: Request<{ desktopId: string }>, res: Response) => {
-    // Check auth first (consistent order: auth -> ownership -> action)
     const user = req.user;
     if (!user) {
       throw new AppError('Unauthorized', 401);
@@ -248,7 +177,6 @@ router.post(
 
     const { desktopId } = req.params;
 
-    // SECURITY: Validate UUID format to prevent injection
     if (!isValidUuid(desktopId)) {
       throw new AppError('Invalid desktop ID format', 400);
     }
@@ -266,12 +194,10 @@ router.post(
       throw new AppError('Desktop not found', 404);
     }
 
-    // Check ownership - return same 404 for "not owned" to prevent enumeration
     if (desktop.user_id !== user.userId) {
       throw new AppError('Desktop not found', 404);
     }
 
-    // Send command to desktop via WebSocket (or queue if offline)
     const commandId = randomUUID();
     const { delivered, queued } = sendCommandToDesktop(
       user.userId,
@@ -295,12 +221,6 @@ router.post(
   },
 );
 
-/**
- * List all desktop devices for the current user
- * GET /desktop/
- *
- * SECURITY: Rate limited to 30/min for list operations
- */
 router.get('/', createRateLimiter('device-list'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -331,12 +251,6 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
   res.json({ desktops: userDesktops });
 });
 
-/**
- * Update desktop heartbeat (last seen)
- * POST /desktop/:desktopId/heartbeat
- *
- * SECURITY: Rate limited to 600/min (10/sec) for real-time status
- */
 router.post(
   '/:desktopId/heartbeat',
   createRateLimiter('heartbeat'),
@@ -348,7 +262,6 @@ router.post(
 
     const { desktopId } = req.params;
 
-    // SECURITY: Validate UUID format to prevent injection
     if (!isValidUuid(desktopId)) {
       throw new AppError('Invalid desktop ID format', 400);
     }
@@ -382,12 +295,6 @@ router.post(
   },
 );
 
-/**
- * Unregister (delete) a desktop device
- * DELETE /desktop/:desktopId
- *
- * SECURITY: Rate limited to 10/min for destructive operations
- */
 router.delete(
   '/:desktopId',
   createRateLimiter('device-delete'),
@@ -399,13 +306,11 @@ router.delete(
 
     const { desktopId } = req.params;
 
-    // SECURITY: Validate UUID format to prevent injection
     if (!isValidUuid(desktopId)) {
       throw new AppError('Invalid desktop ID format', 400);
     }
 
     const db = getUserScopedClient(user);
-    // First verify ownership
     const { data: desktop, error: fetchError } = await db
       .from('desktop_devices')
       .select('id, user_id')

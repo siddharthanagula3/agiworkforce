@@ -1,17 +1,3 @@
-/**
- * Detox configuration — AGI Mobile v1 e2e specs.
- *
- * Requirements:
- *   - iOS: Xcode 16+, iPhone 17 Pro simulator (or any iPhone 16+ class)
- *   - Android: Android SDK 34+, Pixel 8 emulator API 34
- *   - detox, detox-cli, ts-jest are devDependencies (installed 2026-07-04)
- *
- * Usage:
- *   iOS build:   pnpm exec detox build --configuration ios.sim.debug
- *   iOS debug:   pnpm exec detox test --configuration ios.sim.debug
- *   iOS release: pnpm exec detox test --configuration ios.sim.release
- *   Android:     pnpm exec detox test --configuration android.emu.debug
- */
 
 /** @type {Detox.DetoxConfig} */
 const simulatorArch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
@@ -51,12 +37,6 @@ module.exports = {
   devices: {
     'ios.sim': {
       type: 'ios.simulator',
-      // `DETOX_IOS_UDID` pins a SPECIFIC simulator; `DETOX_IOS_DEVICE` selects by
-      // device-type name. The UDID form matters when the run has to attach to a
-      // simulator that already holds state — a signed-in Cloud session, an
-      // installed local model — because selecting by type picks whichever
-      // matching simulator Detox finds first, which may be a different, empty
-      // one when several "iPhone 17 Pro" devices exist.
       device: process.env.DETOX_IOS_UDID
         ? { id: process.env.DETOX_IOS_UDID }
         : { type: process.env.DETOX_IOS_DEVICE || 'iPhone 17 Pro' },

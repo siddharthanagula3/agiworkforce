@@ -21,8 +21,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-// Stub the heavy 6-tab dialog: the wiring under test is "settings button opens
-// the dialog for the clicked project", not the dialog internals.
 vi.mock('../../chat/ProjectSettingsDialog', () => ({
   ProjectSettingsDialog: ({ open, project }: { open: boolean; project: Project | null }) =>
     open ? <div data-testid="settings-dialog">{project?.id ?? 'none'}</div> : null,

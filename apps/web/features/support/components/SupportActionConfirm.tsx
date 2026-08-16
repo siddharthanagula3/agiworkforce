@@ -1,29 +1,5 @@
 'use client';
 
-/**
- * The action confirmation flow.
- *
- * TWO separate, explicit user clicks stand between the model suggesting
- * something and anything happening:
- *
- *   offered  ──click "Set this up"──▶  preparing ──▶ confirming
- *   confirming ──click "Yes, do it"──▶ running ──▶ done
- *
- * The first click asks the SERVER to describe, in its own words, exactly what
- * would happen (`/actions/propose`). The second executes it
- * (`/actions/confirm`). Nothing here runs on mount, on a timer, on Enter from
- * the composer, or on the model's say-so. There is no autofocus on the confirm
- * button and no default-submit path that could reach it.
- *
- * `summary` and `effects` are the server's prose, rendered verbatim. The widget
- * never composes its own description of a mutation, because a description the
- * client invented is not what the server will actually do.
- *
- * The request body for execution is exactly `{ proposalId, confirmationToken }`.
- * No user id, no connector id, no key id, no target of any kind leaves the
- * browser — see `confirmAction` in ../lib/support-client.ts.
- */
-
 import { useState } from 'react';
 import type { SupportActionFollowUp } from '../lib/contract';
 import type { SupportActionFlow } from '../hooks/useSupportSession';
@@ -77,7 +53,6 @@ export function SupportActionConfirm({
   onCancel,
 }: {
   flow: SupportActionFlow;
-  /** Title from `/actions/available`; falls back to the raw id if unknown. */
   actionTitle: string;
   onPrepare: () => void;
   onConfirm: () => void;

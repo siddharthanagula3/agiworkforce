@@ -24,7 +24,6 @@ interface ArtifactFullScreenProps {
   artifact: Artifact | null;
   visible: boolean;
   onClose: () => void;
-  /** When provided, shows a Refresh button that re-generates the artifact. */
   onRegenerate?: () => void;
 }
 
@@ -40,7 +39,6 @@ interface ArtifactFullScreenProps {
  */
 const PREVIEWABLE_LANGUAGES = new Set(['html', 'svg', 'mermaid', 'jsx', 'tsx']);
 
-/** The kind to live-render, or null when the artifact can't be safely previewed. */
 function livePreviewKind(artifact: Artifact): PreviewableKind | null {
   const lang = artifact.language?.toLowerCase() ?? '';
   if (lang === 'html') return 'html';
@@ -49,13 +47,6 @@ function livePreviewKind(artifact: Artifact): PreviewableKind | null {
   return null;
 }
 
-/**
- * Returns true if this artifact language qualifies for the preview/source
- * toggle. Remote PDF/Office files have a secure download flow but no in-app
- * renderer, so offering a Preview segment for them would lead to a generic
- * source-only notice instead of a preview. They go straight to the generated
- * file details and Download/Share controls.
- */
 function isPreviewable(artifact: Artifact): boolean {
   const lang = artifact.language?.toLowerCase() ?? '';
   return PREVIEWABLE_LANGUAGES.has(lang);
@@ -72,7 +63,6 @@ function isMonospaceArtifact(artifact: Artifact): boolean {
   );
 }
 
-/** Derives the TYPE label shown next to the title (language takes priority). */
 function typeLabel(artifact: Artifact): string {
   const raw = artifact.language ?? artifact.type;
   return raw.toUpperCase();
@@ -80,15 +70,6 @@ function typeLabel(artifact: Artifact): string {
 
 type ViewMode = 'source' | 'preview';
 
-/**
- * Full-screen modal overlay for viewing expanded artifacts.
- *
- * Header (left→right):
- *   [Eye/Code toggle — only for previewable artifacts] | Title · TYPE | [Download] [Share?] [Refresh?] [Copy] [Close]
- *
- * Live preview is gated: because no sandboxed WebView pattern exists on mobile
- * today, the preview pane shows a placeholder. See SECURITY NOTE above.
- */
 export function ArtifactFullScreen({
   artifact,
   visible,
@@ -121,8 +102,6 @@ export function ArtifactFullScreen({
     artifact?.computeSession || artifact?.generatedFile || artifact?.artifactManifest,
   );
 
-  // Tokenized source spans for the monospace view. Unknown languages and
-  // oversize content come back as one plain token, matching the old render.
   const sourceTokens = useMemo(
     () =>
       artifact && isMonospaceArtifact(artifact)
@@ -149,9 +128,6 @@ export function ArtifactFullScreen({
       if (uri?.startsWith('file://')) {
         await shareFile(uri);
       } else if (artifact.generatedFile && uri && /^https?:\/\//.test(uri)) {
-        // Cloud generated file: the remote /api/files URL is auth-gated, so a
-        // shared LINK would 401 for the recipient. Download the real bytes
-        // (Bearer-authed) and share the file itself.
         const localUri = await downloadGeneratedFile(uri, artifact.generatedFile.fileName);
         await shareFile(localUri);
       } else {
@@ -181,25 +157,12 @@ export function ArtifactFullScreen({
     }
   }, [artifact, generatedFileSummary]);
 
-  /**
-   * Download / export: write content to a local file then open the native
-   * share sheet so the user can save or send the file.
-   *
-   * Picks the format by artifact type:
-   *   - document / research → markdown
-   *   - code / html / svg / etc. → plain text (preserves syntax)
-   *   - email / chart / image / fallback → plain text
-   */
   const handleDownload = useCallback(async () => {
     if (!artifact || downloading) return;
     setDownloading(true);
     try {
       const remoteUri = artifact.generatedFile?.uri;
       if (artifact.generatedFile && remoteUri && /^https?:\/\//.test(remoteUri)) {
-        // Cloud generated file (x_generated_files): the artifact's `content`
-        // is empty — the real bytes live behind the authed /api/files route.
-        // Download them (Bearer-authed) and hand the local file to the share
-        // sheet so the user can save/open it.
         const localUri = await downloadGeneratedFile(remoteUri, artifact.generatedFile.fileName);
         await shareFile(localUri);
       } else {
@@ -412,23 +375,8 @@ export function ArtifactFullScreen({
 
         {/* ── Content ── */}
         {canPreview && viewMode === 'preview' && previewKind ? (
-          /* LIVE preview for html/svg via the hardened SafeArtifactPreview sandbox
-           * (JS disabled, strict CSP, no RN bridge, navigation blocked). */
           <SafeArtifactPreview content={artifact.content} kind={previewKind} style={{ flex: 1 }} />
         ) : canPreview && viewMode === 'preview' ? (
-          /* Preview pane for mermaid/jsx/tsx — these need JS or compilation, which
-           * the JS-disabled sandbox intentionally does not provide, so we show an
-           * honest note instead of executing anything.
-           *
-           * SECURITY: We do NOT render untrusted artifact HTML in a WebView here.
-           * The existing MathBlock WebView is not a viable sandbox: it uses
-           * originWhitelist=['*'] and exposes window.ReactNativeWebView (the RN
-           * bridge). Rendering user-supplied HTML through it would allow arbitrary
-           * code to call postMessage back into the RN host. A safe implementation
-           * requires: sandboxIsolation, restricted originWhitelist (e.g. ['about:*']),
-           * no RN bridge exposure, and a server-side or in-process HTML sanitizer
-           * (no DOMPurify on mobile today). Flag: "Mobile live artifact preview —
-           * needs dedicated security review before implementation." */
           <View
             style={{
               flex: 1,
@@ -478,7 +426,6 @@ export function ArtifactFullScreen({
             </Pressable>
           </View>
         ) : (
-          /* Source view — monospace, horizontally scrollable for code/previewable langs */
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={{

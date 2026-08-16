@@ -1,5 +1,3 @@
-// Type declarations for optional UI dependencies that are not installed.
-// These stubs allow the code to compile without the actual packages.
 
 declare module '@radix-ui/react-aspect-ratio' {
   import * as React from 'react';

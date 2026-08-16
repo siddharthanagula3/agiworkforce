@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ConversationTitleMenu } from '../ConversationTitleMenu';
 
-// Radix focuses menu items via scrollIntoView, which jsdom does not implement.
 beforeAll(() => {
   if (!HTMLElement.prototype.scrollIntoView) {
     HTMLElement.prototype.scrollIntoView = () => {};

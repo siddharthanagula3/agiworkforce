@@ -1,10 +1,5 @@
-/**
- * Artifacts API — typed wrappers for artifact_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export type ArtifactType =
   | 'code'
@@ -76,8 +71,6 @@ export interface ArtifactResponse<T> {
   success: boolean;
   data: T;
 }
-
-// ---- Commands ----
 
 export async function artifactCreate(
   title: string,

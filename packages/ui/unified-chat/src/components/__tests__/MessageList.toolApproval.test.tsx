@@ -1,13 +1,3 @@
-/**
- * MessageList — tool-approval expired notice (streaming/approval cluster
- * Finding 1: dead tool-approval buttons after reload/restart).
- *
- * The approval registry backing `ChatRuntime.resolveToolApproval` is
- * process-memory-only and doesn't survive a reload/restart, even though a
- * persisted `awaiting_approval` tool card does. Without `approvalTurnExpired`,
- * the Approve/Reject buttons would render live-wired but silently no-op.
- * Pins the gate end-to-end through MessageList -> MessageBubble -> ToolCallCard.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MessageList } from '../MessageList';

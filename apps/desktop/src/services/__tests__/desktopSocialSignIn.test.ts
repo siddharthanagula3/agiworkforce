@@ -1,11 +1,3 @@
-/**
- * Social/SSO sign-in service.
- *
- * The one place Desktop sign-in leaves the app. These assert it opens the
- * SYSTEM browser (never an embedded webview, which Google/Microsoft/Apple
- * refuse), and that every way the return leg can fail produces a specific,
- * true sentence instead of a silent stall.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

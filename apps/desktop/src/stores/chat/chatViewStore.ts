@@ -223,10 +223,6 @@ export const useChatViewStore = create<ChatViewState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        // `showMessageTimestamps` is not persisted: no message renderer reads it
-        // and `toggleMessageTimestamps` has no caller outside the store facade,
-        // so a stored value described a display preference the transcript never
-        // honours. Persist it again together with the control that sets it.
         partialize: (state) => ({
           focusMode: state.focusMode,
         }),
@@ -236,7 +232,6 @@ export const useChatViewStore = create<ChatViewState>()(
   ),
 );
 
-// Cross-store subscription: update tokenUsage.max when selected model changes
 const IS_TEST_ENVIRONMENT =
   typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || process.env['VITEST']);
 
@@ -296,7 +291,6 @@ export function teardownChatViewModelSubscription(): void {
   sub.initialized = false;
 }
 
-// Selectors
 export const selectFocusMode = (state: ChatViewState) => state.focusMode;
 export const selectActiveView = (state: ChatViewState) => state.activeView;
 export const selectConversationMode = (state: ChatViewState) => state.conversationMode;

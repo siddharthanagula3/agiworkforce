@@ -103,14 +103,12 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
 
     return () => {
       isMounted = false;
-      // Clean up listeners that already resolved
       while (cleaners.length > 0) {
         const unlisten = cleaners.pop();
         if (unlisten) {
           unlisten();
         }
       }
-      // Also clean up listeners that resolve after unmount
       listenerPromises.then((fns) => fns.forEach((fn) => fn()));
     };
   }, []);

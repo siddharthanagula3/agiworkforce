@@ -199,7 +199,7 @@ export async function storeLocalProjectKnowledgeUpload(input: {
   const metadataTemp = `${resolved.metadataPath}.${tempId}.tmp`;
   await writeFile(/* turbopackIgnore: true */ objectTemp, input.data, { flag: 'wx' });
   await writeFile(
-    /* turbopackIgnore: true */ metadataTemp,
+metadataTemp,
     JSON.stringify({ contentType: claims.contentType }),
     { flag: 'wx', mode: 0o600 },
   );
@@ -213,8 +213,6 @@ export async function getProjectKnowledgeObject(
   if (isPrivateObjectStorageConfigured()) {
     const privateObject = await getPrivateObject(key);
     if (privateObject) return privateObject;
-    // Compatibility for rows registered before project knowledge moved to the
-    // private bucket. New uploads never write this public location.
     return isObjectStorageConfigured() ? getObject(key) : null;
   }
   const resolved = localPathForKey(key);
@@ -238,7 +236,6 @@ export async function getProjectKnowledgeObject(
 export async function deleteProjectKnowledgeObject(key: string): Promise<void> {
   if (isPrivateObjectStorageConfigured()) {
     await deletePrivateObject(key);
-    // Remove a possible legacy twin while both buckets remain configured.
     if (isObjectStorageConfigured()) await deleteObject(key);
     return;
   }

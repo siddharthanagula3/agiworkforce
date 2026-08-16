@@ -1,20 +1,5 @@
 import { vi } from 'vitest';
 
-// jsdom (pinned to 20.0.3 repo-wide, see root package.json pnpm.overrides)
-// implements none of matchMedia, ResizeObserver, IntersectionObserver,
-// Element.scrollIntoView, or DOMRect. Several ported primitives depend on
-// these at mount time (sonner's Toaster reads matchMedia for system-theme
-// detection; cmdk/input-otp/react-resizable-panels observe element size via
-// ResizeObserver; cmdk scrolls the active item into view; embla-carousel
-// uses IntersectionObserver + DOMRect for slide-visibility tracking) —
-// without these, render() throws instead of exercising the component.
-// matchMedia/ResizeObserver mock shapes match apps/desktop/src/test/setup.ts
-// for consistency, plus the legacy addListener/removeListener pair that
-// desktop's mock doesn't need (desktop has no next-themes provider) but this
-// package does: next-themes' system-theme listener (exercised by
-// ThemeToggle.test.tsx) calls the deprecated MediaQueryList.addListener API
-// rather than addEventListener, which every real browser still implements
-// for back-compat but jsdom's matchMedia stub does not.
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({

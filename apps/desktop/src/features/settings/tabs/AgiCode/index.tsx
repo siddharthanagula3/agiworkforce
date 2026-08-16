@@ -14,12 +14,6 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-/**
- * AGI Code settings section (source-of-truth IA · DESK-1). Surfaces the
- * code-agent instruction-file configuration (the real, previously-orphaned
- * `InstructionFilesSettings` — CLAUDE.md / AGENTS.md discovery patterns the
- * agi CLI + VS Code surfaces honor).
- */
 export function AgiCodeTab() {
   return (
     <Suspense fallback={<Fallback label="Loading AGI Code settings..." />}>

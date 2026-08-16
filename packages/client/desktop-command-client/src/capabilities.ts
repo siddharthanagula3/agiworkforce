@@ -1,10 +1,5 @@
-/**
- * Capabilities API — typed wrappers for capability sync/check Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Commands ----
 
 export async function syncCapabilities(capabilities: Record<string, boolean>): Promise<void> {
   return command<void>('sync_capabilities', { capabilities });

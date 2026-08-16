@@ -7,14 +7,6 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 
-/**
- * GET /api/control-plane/status
- *
- * Returns cross-surface operational status for the dashboard control-plane hero.
- * Surface activity is derived from canonical device records. Agent activity
- * comes from the durable cloud-run journal; provider health uses live probes.
- */
-
 export const runtime = 'nodejs';
 
 type SurfaceId = 'desktop' | 'mobile' | 'extension' | 'cli';
@@ -47,7 +39,6 @@ interface ControlPlaneResponse {
   recentActivity: ActivityRow[];
 }
 
-// Provider probes - fast HEAD requests with a 4 s timeout
 const PROVIDER_PROBES: Array<{ name: string; url: string }> = [
   { name: 'Anthropic', url: 'https://anthropic.com' },
   { name: 'OpenAI', url: 'https://openai.com' },
@@ -73,7 +64,6 @@ async function probeProvider(name: string, url: string): Promise<ProviderRow> {
 }
 
 export async function GET(request: NextRequest) {
-  // Rate limit: use 'health-check' bucket (30 req/min) - appropriate for polling
   const rateLimitResponse = await withRateLimit(request, 'health-check');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -87,9 +77,6 @@ export async function GET(request: NextRequest) {
 
   const db = getNeonDb();
 
-  // ---------------------------------------------------------------------------
-  // 1. Surface activity from canonical device records
-  // ---------------------------------------------------------------------------
   const surfaces: SurfaceRow[] = [
     { id: 'desktop', status: 'unknown', lastSeen: null },
     { id: 'mobile', status: 'unknown', lastSeen: null },
@@ -111,8 +98,8 @@ export async function GET(request: NextRequest) {
       [userId],
     );
 
-    const ONLINE_MS = 5 * 60 * 1000; // 5 min
-    const OFFLINE_MS = 60 * 60 * 1000; // 1 hr - beyond this still "offline"
+    const ONLINE_MS = 5 * 60 * 1000;
+    const OFFLINE_MS = 60 * 60 * 1000;
     const now = Date.now();
 
     for (const hb of heartbeats) {
@@ -125,16 +112,12 @@ export async function GET(request: NextRequest) {
       surfaces[idx] = { ...surfaces[idx]!, status, lastSeen: hb.last_seen_at };
     }
   } catch (err) {
-    // This dashboard widget is non-critical; retain unknown states on failure.
     logger.warn(
       { err, userId, route: 'GET /api/control-plane/status', section: 'surface_activity' },
       'Failed to fetch surface activity; surfaces remain unknown',
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // 2. Agent activity counts
-  // ---------------------------------------------------------------------------
   let agents = { running: 0, pendingApprovals: 0, completedToday: 0 };
 
   try {
@@ -162,23 +145,16 @@ export async function GET(request: NextRequest) {
       completedToday: parseInt(completedRows[0]?.cnt ?? '0', 10),
     };
   } catch (err) {
-    // This dashboard widget is non-critical; retain zeros on failure.
     logger.warn(
       { err, userId, route: 'GET /api/control-plane/status', section: 'agent_activity' },
       'Failed to fetch agent activity counts; defaulting to zeros',
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // 3. Provider health probes (parallel)
-  // ---------------------------------------------------------------------------
   const providerResults = await Promise.all(
     PROVIDER_PROBES.map((p) => probeProvider(p.name, p.url)),
   );
 
-  // ---------------------------------------------------------------------------
-  // 4. Recent activity feed
-  // ---------------------------------------------------------------------------
   let recentActivity: ActivityRow[] = [];
 
   try {
@@ -213,7 +189,6 @@ export async function GET(request: NextRequest) {
       timestamp: row.created_at,
     }));
   } catch (err) {
-    // This dashboard widget is non-critical; retain an empty feed on failure.
     logger.warn(
       { err, userId, route: 'GET /api/control-plane/status', section: 'recent_activity' },
       'Failed to fetch recent activity feed; returning empty',

@@ -1,25 +1,3 @@
-/**
- * AgentControl — composer footer chip row.
- *
- * Renders compact composer controls:
- *   [Mode ▼]  [Reasoning ▼]  [Temp]
- *
- * - Mode chip: Ask / Auto / Plan / Bypass, with descriptions in a Radix Popover.
- * - Reasoning control: one discrete slider backed by the selected model's exact
- *   catalog-supported values. Hidden
- *   when that model has no provider effort request path.
- * - Temp chip: single-tap boolean toggle. When ON, the conversation does not persist.
- *
- * A small orange dot appears on a chip when source === 'conversation-override',
- * with a tooltip explaining the override.
- *
- * Usage:
- *   <AgentControl
- *     conversationId={conversationId}
- *     projectId={projectId}
- *     modelId={currentModel.id}
- *   />
- */
 
 import * as Popover from '@radix-ui/react-popover';
 import * as Tooltip from '@radix-ui/react-tooltip';
@@ -38,33 +16,16 @@ import {
 import { cn } from '../lib/utils';
 import { useAgentControlStore } from '../stores/agentControlStore';
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 export interface AgentControlProps {
-  /** The active conversation — controls which per-conversation override is stored. */
   conversationId: string;
-  /** The project this conversation belongs to. Used to read project-level defaults. */
   projectId: string | null;
-  /** The selected model ID used to resolve its exact effort contract. */
   modelId: string;
-  /** Render the Ask/Auto/Plan/Bypass mode chip. Off where the server owns approval policy. */
   showMode?: boolean;
-  /** Render the reasoning-effort chip. Independent of showMode — effort is a
-   *  model parameter, not a permission control. */
   showEffort?: boolean;
   className?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const AGENT_MODES: AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
-// ---------------------------------------------------------------------------
-// Override indicator dot
-// ---------------------------------------------------------------------------
 
 interface OverrideDotProps {
   show: boolean;
@@ -99,10 +60,6 @@ function OverrideDot({ show }: OverrideDotProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Chip base style
-// ---------------------------------------------------------------------------
-
 function chipClass(active?: boolean) {
   return cn(
     'relative inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1',
@@ -113,10 +70,6 @@ function chipClass(active?: boolean) {
       : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
   );
 }
-
-// ---------------------------------------------------------------------------
-// Mode Chip
-// ---------------------------------------------------------------------------
 
 interface ModeChipProps {
   conversationId: string;
@@ -236,10 +189,6 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Reasoning Slider
-// ---------------------------------------------------------------------------
-
 interface EffortChipProps {
   conversationId: string;
   projectId: string | null;
@@ -303,10 +252,6 @@ function EffortChip({ conversationId, projectId, modelId, effortOptions }: Effor
     </Popover.Root>
   );
 }
-
-// ---------------------------------------------------------------------------
-// AgentControl — public composite component
-// ---------------------------------------------------------------------------
 
 export function AgentControl({
   conversationId,

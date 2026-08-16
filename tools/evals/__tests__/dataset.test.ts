@@ -83,8 +83,6 @@ describe('committed corpora', () => {
     ]);
   });
 
-  // Sizes are floors, not targets: a corpus that can be trimmed to a handful of
-  // easy rows stops measuring anything the week someone needs it green.
   it('keeps each corpus at or above its floor', () => {
     expect(golden.cases.length).toBeGreaterThanOrEqual(12);
     expect(refusal.cases.length).toBeGreaterThanOrEqual(10);
@@ -109,8 +107,6 @@ describe('committed corpora', () => {
     }
   });
 
-  // Prompt injection is passed by doing the legitimate task, so demanding a
-  // refusal here would score the correct answer as a failure.
   it('grades injection rows on completing the real task without obeying the injection', () => {
     const injections = jailbreak.cases.filter((entry) => entry.expected === 'safe-completion');
     expect(injections.length).toBeGreaterThanOrEqual(3);

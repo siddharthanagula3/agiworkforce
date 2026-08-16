@@ -1,21 +1,3 @@
-// packages/ui/unified-chat/src/components/InlineToolCall.tsx
-//
-// Shared inline tool-call UI for desktop + web. Locked anatomy from
-// docs/design/design-spec-2026-05-15.md §4:
-//   - borderless flex-row bar (32px tall, no border, no fill on collapsed state)
-//   - leading 16px Lucide icon at strokeWidth=1.75
-//   - label text at --text-base, arg summary muted + ellipsis-truncated at 360px
-//   - trailing chevron 14px (rotates 90deg when open)
-//   - expanded body: --bg-code bg, 1px --border-subtle border, 8px radius, 16px pad
-//   - states: pending / running / success / error / partial
-//   - multi-step sequences stack with a 1px left guideline (InlineToolCallStack)
-//
-// iconStyle='badge' — Claude-parity mode:
-//   - round 24px badge with single uppercase letter (or glyph) as leading icon
-//   - row height 28px (denser than lucide's 32px)
-//   - "Result" sub-label in small monospace below the row
-//
-// All icons are Lucide React per design-spec §4.6 + §5.
 
 import {
   useState,
@@ -48,23 +30,10 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 export type InlineToolCallStatus = 'pending' | 'running' | 'success' | 'error' | 'partial';
 
-/**
- * Icon rendering mode:
- * - `'lucide'` (legacy/default) — 16px Lucide line-icon, 32px row height.
- * - `'badge'` (Claude-parity) — 24px round colored badge with single uppercase
- *   letter inside (or a glyph for web-search / thinking / done), 28px row height.
- */
 export type InlineToolIconStyle = 'lucide' | 'badge';
 
-/**
- * Canonical tool category keys. Drive both icon mapping (§4.6) and any
- * future per-tool body renderers (§4.5). Callers can also pass `'auto'`
- * to derive from `toolName` heuristics.
- */
 export type InlineToolKind =
   | 'auto'
   | 'bash'
@@ -83,51 +52,22 @@ export type InlineToolKind =
   | 'unknown';
 
 export interface InlineToolCallProps {
-  /** Stable id used for aria-controls + test selection. */
   id: string;
-  /** Human-readable tool label rendered next to the icon. */
   label: string;
-  /** Optional arg summary rendered next to label (muted, ellipsis). */
   argSummary?: string;
-  /** Lifecycle state. Drives icon, label suffix, and color. */
   status: InlineToolCallStatus;
-  /** Canonical tool kind; defaults to `'auto'` which derives from `label`. */
   kind?: InlineToolKind;
-  /**
-   * Expanded body content. Caller decides the renderer per-tool (e.g.
-   * `<pre>` for bash, syntax-highlighted code for read, diff for write).
-   * If omitted the bar is not expandable.
-   */
   body?: ReactNode;
-  /** Short error message rendered as label suffix when `status === 'error'`. */
   errorMessage?: string;
-  /** Controlled-mode: caller decides open/closed state. */
   open?: boolean;
-  /** Controlled-mode callback. */
   onOpenChange?: (open: boolean) => void;
-  /** Uncontrolled-mode initial open state. */
   defaultOpen?: boolean;
   className?: string;
-  /** Override icon mapping. Receives the resolved Lucide icon props. */
   iconOverride?: ComponentType<LucideProps>;
-  /**
-   * Icon rendering mode. Defaults to `'lucide'` to preserve existing snapshots.
-   * Set to `'badge'` for Claude-parity round-badge style with sub-label "Result".
-   */
   iconStyle?: InlineToolIconStyle;
-  /**
-   * Custom badge letter override when `iconStyle === 'badge'`. If omitted,
-   * derives from `kindToBadge` map.
-   */
   iconLetter?: string;
-  /**
-   * Sub-label rendered below the row when `iconStyle === 'badge'` and
-   * `status === 'success'`. Defaults to "Result".
-   */
   resultLabel?: string;
 }
-
-// ─── Icon mapping (§4.6) ──────────────────────────────────────────────────────
 
 const ICON_BY_KIND: Record<Exclude<InlineToolKind, 'auto'>, ComponentType<LucideProps>> = {
   bash: Terminal,
@@ -146,23 +86,11 @@ const ICON_BY_KIND: Record<Exclude<InlineToolKind, 'auto'>, ComponentType<Lucide
   unknown: Wrench,
 };
 
-// ─── Badge mapping (badge iconStyle) ─────────────────────────────────────────
-
-/**
- * For kinds that render a Lucide glyph in the badge rather than a letter,
- * store the ComponentType here. The badge background is always a subtle
- * surface token so these inherit --text-muted color.
- */
 type BadgeGlyph = { kind: 'glyph'; Icon: ComponentType<LucideProps> };
 type BadgeLetter = { kind: 'letter'; letter: string };
 type BadgeCheck = { kind: 'check' };
 export type BadgeConfig = BadgeGlyph | BadgeLetter | BadgeCheck;
 
-/**
- * Maps each concrete InlineToolKind to a badge config.
- * read / write / edit / fs-list all map to letter "F" (filesystem family).
- * thinking → clock glyph, done → green check, web-search → search-glass glyph.
- */
 export const KIND_TO_BADGE: Record<Exclude<InlineToolKind, 'auto'>, BadgeConfig> = {
   bash: { kind: 'letter', letter: '>' },
   read: { kind: 'letter', letter: 'F' },
@@ -180,7 +108,6 @@ export const KIND_TO_BADGE: Record<Exclude<InlineToolKind, 'auto'>, BadgeConfig>
   unknown: { kind: 'letter', letter: '?' },
 };
 
-/** Heuristic mapping when `kind === 'auto'`. Matches by lowercase substring. */
 export function inferKindFromLabel(label: string): Exclude<InlineToolKind, 'auto'> {
   const l = label.toLowerCase();
   if (l.includes('mcp__') || l.includes('mcp_') || l.includes('mcp ') || l.startsWith('mcp')) {
@@ -220,8 +147,6 @@ function resolveBadgeConfig(kind: InlineToolKind, label: string, iconLetter?: st
   return KIND_TO_BADGE[resolved] ?? { kind: 'letter', letter: '?' };
 }
 
-// ─── Badge icon sub-component ─────────────────────────────────────────────────
-
 function BadgeIcon({ config }: { config: BadgeConfig }) {
   if (config.kind === 'check') {
     return (
@@ -250,7 +175,6 @@ function BadgeIcon({ config }: { config: BadgeConfig }) {
       </span>
     );
   }
-  // letter
   return (
     <span
       className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--chat-surface-elevated,rgba(26,25,21,0.06))] text-[color:var(--chat-text-muted,#8b8680)] text-[10px] font-semibold select-none"
@@ -262,8 +186,6 @@ function BadgeIcon({ config }: { config: BadgeConfig }) {
     </span>
   );
 }
-
-// ─── Status decoration ────────────────────────────────────────────────────────
 
 function StatusIndicator({ status }: { status: InlineToolCallStatus }) {
   if (status === 'pending' || status === 'running') {
@@ -296,11 +218,9 @@ function StatusIndicator({ status }: { status: InlineToolCallStatus }) {
       />
     );
   }
-  // success: silent — no trailing indicator (per spec §4.4)
   return null;
 }
 
-/** Label suffix per state (§4.4). */
 function labelSuffix(status: InlineToolCallStatus, errorMessage?: string): string {
   switch (status) {
     case 'pending':
@@ -331,8 +251,6 @@ function colorClassForStatus(status: InlineToolCallStatus): string {
       return 'text-[color:var(--chat-text-secondary,inherit)]';
   }
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function InlineToolCall({
   id,
@@ -489,8 +407,6 @@ export function InlineToolCall({
     );
   }
 
-  // ─── lucide (legacy) mode ────────────────────────────────────────────────────
-
   const Icon = resolveIcon(kind, label, iconOverride);
 
   return (
@@ -582,8 +498,6 @@ export function InlineToolCall({
     </div>
   );
 }
-
-// ─── Multi-step stack (§4.2 — 1px left guideline) ─────────────────────────────
 
 export interface InlineToolCallStackProps {
   children: ReactNode;

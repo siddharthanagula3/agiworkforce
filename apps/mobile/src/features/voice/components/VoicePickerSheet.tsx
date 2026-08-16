@@ -1,13 +1,3 @@
-/**
- * Pre-flight voice picker — parity with
- * references-2/chatgpt-ios-voice-02-choose-spruce-voice.png.
- *
- * Distinct from `VoiceSelector`, which is the "Voice & Language" SETTINGS sheet
- * (a scrolling list of every option, reached from Settings). This is the step
- * between the intro and the live conversation: one voice at a time, swipeable,
- * with a single commit action. Same underlying VOICE_PRESETS, different job —
- * choosing before you start, rather than configuring after.
- */
 
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, View, useWindowDimensions } from 'react-native';
@@ -41,9 +31,6 @@ function Orb({ size = ORB_SIZE }: { size?: number }) {
   );
 }
 
-// Same shape as VoiceOnboardingSheet's pill, and same reason: the fill sits on
-// a View because the Pressable's own background did not paint inside the
-// entering-animated sheet. Kept identical so the two sheets stay consistent.
 const PILL = {
   backgroundColor: colors.white,
   borderRadius: 999,
@@ -59,7 +46,6 @@ const PILL_LABEL = {
 
 export interface VoicePickerSheetProps {
   visible: boolean;
-  /** Commit the highlighted voice and enter the conversation. */
   onStart: () => void;
   onDismiss: () => void;
 }
@@ -79,11 +65,6 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
   const [index, setIndex] = useState(initialIndex);
   const listRef = useRef<FlatList<VoicePreset>>(null);
 
-  /**
-   * Paging index from scroll offset. The store is written on commit, not on
-   * every swipe — browsing past a voice is not choosing it, and writing here
-   * would silently change the user's saved voice when they back out.
-   */
   const handleMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const next = Math.round(event.nativeEvent.contentOffset.x / width);

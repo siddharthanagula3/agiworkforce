@@ -1,11 +1,3 @@
-/**
- * Tests for check-no-hardcoded-endpoints.mjs — the HARD-005 recurrence guard.
- *
- * A guard that cannot fail is decoration. One test runs the real guard against
- * the real repository; the rest run a variant whose SCAN_ROOTS and BUDGETS are
- * repointed at a throwaway sandbox, so the classification rules are exercised
- * without planting files in (or mutating) the working tree.
- */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -18,11 +10,6 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GUARD = join(REPO_ROOT, 'scripts', 'check-no-hardcoded-endpoints.mjs');
 const GUARD_SOURCE = readFileSync(GUARD, 'utf8');
 
-/**
- * Write a guard variant that scans `sandboxDir` instead of the repo roots and
- * carries only `budgets`. The variant lives in the sandbox and resolves
- * REPO_ROOT to the sandbox's parent, so nothing in the repo is read or touched.
- */
 function writeGuardVariant(sandboxDir, budgets) {
   const patched = GUARD_SOURCE.replace(
     /const SCAN_ROOTS = \[[^\]]*\];/,
@@ -37,10 +24,6 @@ function writeGuardVariant(sandboxDir, budgets) {
   return scriptPath;
 }
 
-/**
- * Run the guard variant over a sandbox containing `files`
- * (`{ 'packages/pkg/src/x.ts': '...' }`), with optional BUDGETS entries.
- */
 function runOnSandbox(files, budgets = []) {
   const sandbox = mkdtempSync(join(tmpdir(), 'hard005-'));
   try {

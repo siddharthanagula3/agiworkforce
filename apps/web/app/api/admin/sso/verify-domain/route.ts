@@ -17,19 +17,6 @@ import {
   ssoErrorResponse,
 } from '@/lib/server/sso/sso-route-guard';
 
-/**
- * Prove the organization controls the email domain its SSO connection claims.
- *
- * POST /api/admin/sso/verify-domain  { connectionId }            - run the check
- * PUT  /api/admin/sso/verify-domain  { connectionId }            - reissue the challenge
- *
- * This deployment creates instance-level Clerk enterprise connections, which
- * route every sign-in whose email domain matches. Without this check, an org
- * owner could claim a domain they do not control and capture its users'
- * authentication. Verification is therefore a hard precondition of activation,
- * enforced here, in PATCH /api/admin/sso/[id], and by a database constraint.
- */
-
 export const runtime = 'nodejs';
 
 const ENDPOINT = '/api/admin/sso/verify-domain';
@@ -60,13 +47,6 @@ async function loadOwnedConnection(
     };
   }
 
-  // Both reads below talk to the database, and both run before either handler's
-  // try block. Left bare, a Neon outage or an unmigrated `sso_connections`
-  // relation escapes as an unhandled rejection — the caller sees a bare
-  // framework 500 and the operator gets no log line. Route them through the
-  // same mapping every other SSO handler uses so infrastructure failure is
-  // reported as infrastructure failure (503 when the database is unreachable),
-  // never as a benign "not verified" or a disabled-SSO shrug.
   try {
     const rows = await principal.db.query<SSOConnectionRow>(
       `select ${SSO_CONNECTION_SELECT_COLUMNS} from sso_connections where id = $1 limit 1`,
@@ -110,9 +90,6 @@ async function readJson(request: NextRequest): Promise<unknown | symbol> {
 
 const INVALID_JSON = Symbol.for('invalid-json');
 
-/**
- * POST — check DNS for the challenge record and mark the domain verified.
- */
 export async function POST(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'api-key-create');
   if (rateLimitResponse) return rateLimitResponse;
@@ -182,8 +159,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           verified: false,
           reason: outcome.reason,
           error: message,
-          // Repeating the instructions for a lapsed challenge would send the
-          // admin to publish a record this endpoint will never accept.
           domainVerification:
             outcome.reason === 'challenge_expired'
               ? null
@@ -193,16 +168,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    // Clear the token on success: the challenge has served its purpose and a
-    // published record should not stay valid for a future re-claim.
-    //
-    // Exclusivity is enforced HERE, not at draft creation. 0092 replaced the
-    // global unique index on lower(domain) with a partial one over verified
-    // rows, because a global reservation let any tenant permanently squat a
-    // domain it did not own. The consequence is that the uniqueness collision
-    // now surfaces at this moment instead, so it must be handled: two tenants
-    // can hold drafts for one domain, and the loser of a verification race
-    // deserves a 409, not an unhandled 500.
     let updated: SSOConnectionRow[];
     try {
       updated = await principal.db.query<SSOConnectionRow>(
@@ -258,10 +223,6 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 }
 
-/**
- * PUT — issue a fresh challenge. Also the way to re-verify a domain whose
- * ownership needs re-proving, which deactivates the connection until it passes.
- */
 export async function PUT(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'api-key-create');
   if (rateLimitResponse) return rateLimitResponse;

@@ -1,26 +1,5 @@
-/**
- * Tests for the relevance gate in retrieveMemoryContext.
- *
- * DoD (P1-MOBILE-MEM):
- *   - An irrelevant unpinned memory must NOT be injected when the query has
- *     no keyword overlap with stored facts.
- *   - A relevant memory (keyword match) IS injected.
- *   - A pinned memory IS injected even without a keyword match (explicitly
- *     user-curated, always relevant).
- *
- * Mock strategy: stub @/storage/memory so tests run without a real SQLite DB.
- * The storage layer is the boundary; retrieveMemoryContext is the unit.
- *
- * Note: Jest hoists jest.mock() factories before variable declarations, so the
- * shared fact store must use a `mock`-prefixed name (Jest permits those in
- * factories) rather than a plain `let`.
- */
 
 import type { MemoryFact } from '../storage/types';
-
-// ---------------------------------------------------------------------------
-// Shared in-memory fact store — `mock` prefix is required for jest hoisting.
-// ---------------------------------------------------------------------------
 
 let mockFacts: MemoryFact[] = [];
 
@@ -38,7 +17,6 @@ jest.mock('../storage/memory', () => ({
     return mockFacts.filter((f) => f.fact.toLowerCase().includes(q)).slice(0, k);
   }),
   searchMemoryByEmbedding: jest.fn(async () => [] as string[]),
-  // Remaining exports unused by retrieveMemoryContext; stubs only.
   insertMemoryFact: jest.fn(),
   deleteMemoryFact: jest.fn(),
   updateMemoryFact: jest.fn(),
@@ -46,22 +24,13 @@ jest.mock('../storage/memory', () => ({
   updateEmbedding: jest.fn(),
 }));
 
-// Stub expo-crypto so the store module can be imported without a native module.
 jest.mock('expo-crypto', () => ({
   randomUUID: jest.fn(() => 'test-uuid'),
 }));
 
-// ---------------------------------------------------------------------------
-// Import under test (after mocks)
-// ---------------------------------------------------------------------------
-
 import { retrieveMemoryContext } from '../src/features/memory/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useCloudMemoryStore } from '../stores/memory/cloudMemoryStore';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeFact(id: string, fact: string, pinned = false): MemoryFact {
   return {
@@ -72,10 +41,6 @@ function makeFact(id: string, fact: string, pinned = false): MemoryFact {
     created_at: Date.now(),
   };
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 beforeEach(() => {
   mockFacts = [];
@@ -96,15 +61,12 @@ describe('retrieveMemoryContext — relevance gate', () => {
   });
 
   it('does NOT inject irrelevant unpinned fact when query has no keyword overlap', async () => {
-    // Fact is about "dark mode"; query is about cooking — no overlap.
     mockFacts = [makeFact('f-irrelevant', 'User prefers dark mode in all apps', false)];
     const result = await retrieveMemoryContext('what is a good recipe for pasta');
-    // No text match, no pinned facts → gate returns empty array.
     expect(result).toEqual([]);
   });
 
   it('injects pinned fact even when query has no keyword overlap', async () => {
-    // Pinned facts are always relevant (user explicitly curated them).
     mockFacts = [makeFact('f-pinned', 'User prefers dark mode in all apps', true)];
     const result = await retrieveMemoryContext('what is a good recipe for pasta');
     expect(result).toHaveLength(1);
@@ -118,7 +80,6 @@ describe('retrieveMemoryContext — relevance gate', () => {
       makeFact('f-unpinned-2', 'User has a cat named Whiskers', false),
     ];
     const result = await retrieveMemoryContext('translate this to French');
-    // "translate" has no keyword match in any fact. Only pinned fact is returned.
     expect(result.map((f) => f.id)).toEqual(['f-pinned']);
   });
 
@@ -127,14 +88,11 @@ describe('retrieveMemoryContext — relevance gate', () => {
       makeFact('f-pinned', 'User prefers formal tone', true),
       makeFact('f-match', 'User likes Python programming', false),
     ];
-    // Query is a substring of the fact text so searchMemoryByText returns f-match,
-    // and the function returns text-match results rather than the pinned fallback.
     const result = await retrieveMemoryContext('Python programming');
     expect(result.map((f) => f.id)).toContain('f-match');
   });
 
   it('respects the k limit on pinned fallback', async () => {
-    // 10 pinned facts stored; k=3 must cap the result.
     mockFacts = Array.from({ length: 10 }, (_, i) => makeFact(`p${i}`, `Pinned fact ${i}`, true));
     const result = await retrieveMemoryContext('irrelevant query xyz', 3);
     expect(result.length).toBeLessThanOrEqual(3);
@@ -163,12 +121,6 @@ describe('retrieveMemoryContext — cloud mode', () => {
     } as never);
   }
 
-  // Regression: retrieveMemoryContext used to check
-  // `fact.includes(entireQuery)` — the SHORT stored fact containing the WHOLE
-  // (often long) chat message as a literal substring — which only matched a
-  // verbatim repeat of the fact and silently returned nothing for any real
-  // question. "Cloud memory stores facts but the model never uses them" was
-  // this bug in production. Word-overlap matching is the fix under test.
   it('matches a realistic multi-word question against a short stored fact', async () => {
     seedCloudEntry('f1', 'User prefers Rust over Python');
     const result = await retrieveMemoryContext(

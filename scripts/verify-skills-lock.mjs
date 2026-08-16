@@ -1,30 +1,4 @@
 #!/usr/bin/env node
-/**
- * skills-lock.json verifier — makes the supply-chain lock actually bind.
- *
- * Before this script existed, `skills-lock.json` recorded hashes that nothing
- * ever checked: no loader consulted it, no job regenerated it, and the skills
- * it named had already been deleted from the tree. A lock file whose name
- * promises integrity but which nothing verifies is worse than no lock at all.
- *
- * What this enforces, per configured root:
- *   - every discoverable skill has a lock entry with declared provenance;
- *   - every lock entry still corresponds to a skill on disk;
- *   - every recorded hash still matches the bytes on disk;
- *   - every declared reference tree really is non-loadable (contains no
- *     SKILL.md), so "these are examples, not skills" stays true.
- *
- * Hashing is `agiskill-sha256-v1`, specified in
- * `packages/tools/skills/src/integrity.ts` and reimplemented identically here
- * and in `apps/cli/src/skills.rs`. `--self-test` pins this implementation to
- * the same known-answer vector the other two assert, so the three cannot drift
- * apart silently.
- *
- * Usage:
- *   node scripts/verify-skills-lock.mjs              verify (exit 1 on any failure)
- *   node scripts/verify-skills-lock.mjs --regenerate rewrite skills-lock.json
- *   node scripts/verify-skills-lock.mjs --self-test  algorithm known-answer check only
- */
 
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -40,10 +14,6 @@ const DEFAULT_ROOTS = ['.agents/skills'];
 const DEFAULT_REFERENCE_TREES = ['packages/tools/skills/reference-bundles'];
 const UNDECLARED_SOURCE = 'UNKNOWN — declare the upstream repo or URL before merging';
 const KNOWN_SOURCE_TYPES = new Set(['github', 'url', 'first-party']);
-
-// ---------------------------------------------------------------------------
-// agiskill-sha256-v1
-// ---------------------------------------------------------------------------
 
 function sha256Hex(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -83,15 +53,6 @@ function computeSkillTreeHash(packageDir) {
   return `sha256-tree-v1:${digest.digest('hex')}`;
 }
 
-// ---------------------------------------------------------------------------
-// Discovery
-// ---------------------------------------------------------------------------
-
-/**
- * Mirrors what the loaders actually discover: `<root>/<id>/SKILL.md` packages
- * and flat `<root>/<name>.md` files. Anything the loaders would not load is not
- * a skill and is deliberately not locked.
- */
 function discoverSkills(roots) {
   const found = new Map();
   for (const root of roots) {
@@ -112,7 +73,6 @@ function discoverSkills(roots) {
       } else if (
         entry.isFile() &&
         entry.name.toLowerCase().endsWith('.md') &&
-        // Mirrors the loaders: a root's own README is documentation, not a skill.
         entry.name.toLowerCase() !== 'readme.md'
       ) {
         const id = entry.name.replace(/\.md$/i, '');
@@ -129,7 +89,6 @@ function discoverSkills(roots) {
   return found;
 }
 
-/** Best-effort `version:` read. Absent is normal and never an error. */
 function readDeclaredVersion(source) {
   const fence = /^---[ \t]*\r?\n([\s\S]{0,131072}?)\r?\n---[ \t]*\r?\n/.exec(source);
   if (!fence) return null;
@@ -149,10 +108,6 @@ function listSkillManifestsUnder(directory, out = []) {
   }
   return out;
 }
-
-// ---------------------------------------------------------------------------
-// Lock file
-// ---------------------------------------------------------------------------
 
 function readLock() {
   if (!existsSync(LOCK_PATH)) {
@@ -244,8 +199,6 @@ function regenerate() {
     const prior = previous[id];
     skills[id] = {
       path: skill.path,
-      // Provenance is human knowledge: carry it forward when known, and refuse
-      // to invent it when not. Verify rejects the placeholder.
       source:
         typeof prior?.source === 'string' && prior.source.length > 0
           ? prior.source
@@ -259,8 +212,6 @@ function regenerate() {
   const next = {
     version: LOCK_VERSION,
     algorithm: HASH_ALGORITHM,
-    // Human-authored provenance history survives regeneration; the script never
-    // writes or edits it.
     ...(Array.isArray(existing.notes) ? { notes: existing.notes } : {}),
     roots,
     referenceTrees: lockReferenceTrees(existing),
@@ -269,10 +220,6 @@ function regenerate() {
   writeFileSync(LOCK_PATH, `${JSON.stringify(next, null, 2)}\n`, 'utf-8');
   return Object.keys(skills).length;
 }
-
-// ---------------------------------------------------------------------------
-// Known-answer vector — shared with the TS and Rust implementations
-// ---------------------------------------------------------------------------
 
 function selfTest() {
   const skillMd = '---\nname: demo\ndescription: Demo skill.\nversion: 1.2.3\n---\n\nBody.\n';
@@ -287,8 +234,6 @@ function selfTest() {
     failures.push(`content hash vector mismatch: ${actualContent} != ${expectedContent}`);
   }
 
-  // Recompute the tree digest from the vector bytes directly rather than from a
-  // temp directory, so the check works on a read-only checkout.
   const members = [
     ['SKILL.md', Buffer.from(skillMd, 'utf-8')],
     ['scripts/run.sh', Buffer.from(runSh, 'utf-8')],
@@ -307,8 +252,6 @@ function selfTest() {
     failures.push(`tree hash vector mismatch: ${actualTree} != ${expectedTree}`);
   }
 
-  // The vector above hashes bytes in memory; this proves the on-disk walker
-  // agrees with it, which is the path CI actually depends on.
   const fixtureRoot = join(REPO_ROOT, 'scripts', '__fixtures__', 'skills-lock-vector');
   if (existsSync(fixtureRoot) && statSync(fixtureRoot).isDirectory()) {
     const walked = computeSkillTreeHash(fixtureRoot);
@@ -321,8 +264,6 @@ function selfTest() {
 
   return failures;
 }
-
-// ---------------------------------------------------------------------------
 
 const args = new Set(process.argv.slice(2));
 

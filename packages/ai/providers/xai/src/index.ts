@@ -48,7 +48,6 @@ const XAI_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface XAIAdapterConfig extends ProviderAdapterConfig {
-  /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
 }
 

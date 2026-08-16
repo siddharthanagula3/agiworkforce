@@ -1,11 +1,3 @@
-/**
- * Blocking WCAG 2.1 A/AA audit for the reachable Desktop cloud-web sign-in.
- *
- * The Desktop E2E harness serves the same React tree used by the Tauri shell
- * with VITE_BUILD_TARGET=web. The signed-out surface does not require secrets,
- * which keeps the audit deterministic in CI while still exercising rendered
- * product UI rather than an isolated component.
- */
 
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';

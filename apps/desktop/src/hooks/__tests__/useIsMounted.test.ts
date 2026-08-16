@@ -1,6 +1,3 @@
-/**
- * useIsMounted tests — pin the contract of the shared unmount-guard hook.
- */
 
 import { describe, expect, it } from 'vitest';
 import { renderHook } from '@testing-library/react';

@@ -1,33 +1,3 @@
-/**
- * @file presence-service.ts
- *
- * Decides whether a human is actually there. This is the module that stops the
- * widget from lying.
- *
- * # FOUR INDEPENDENT GATES. ALL MUST PASS. DEFAULT IS UNAVAILABLE.
- *
- *   1. DEPLOYMENT SWITCH — `AGI_SUPPORT_LIVE_HANDOFF_ENABLED` must be explicitly
- *      truthy. A deployment that never configured support cannot claim a human,
- *      even if presence rows somehow exist. Absent ⇒ unavailable.
- *   2. EXPLICIT ROSTER — at least one `support_agent_presence` row with
- *      `status = 'online'`. Rows only exist for humans an admin deliberately
- *      onboarded. Empty table ⇒ unavailable.
- *   3. LIVENESS, NOT A STALE BOOLEAN — `last_heartbeat_at` must be inside the
- *      TTL. This is the gate that matters most in practice: a status column
- *      alone ALWAYS eventually lies, because an agent who closes the tab, loses
- *      wifi, or sleeps their laptop never writes `offline`. With the TTL they
- *      decay to unavailable within ~90s with no action from anyone.
- *   4. CAPACITY — at least one fresh agent below `max_concurrent_sessions`.
- *      Otherwise the user would join a queue no one can serve.
- *
- * ANY failure — including a thrown database error — resolves to unavailable.
- * There is no code path from an exception to "a human is available".
- *
- * The headline/detail strings are authored HERE, server-side, and rendered
- * verbatim by the UI. That is deliberate: a client cannot compose "connecting
- * you to an agent" because the server never hands it that sentence unless a
- * claimable session with a deadline exists.
- */
 
 import 'server-only';
 
@@ -36,7 +6,6 @@ import { getHandoffConfig, type HandoffConfig } from './config';
 import { listFreshOnlineAgents } from './store';
 import type { HandoffAvailability, HandoffAvailabilityReason } from './types';
 
-/** Short cache so a widget mount storm does not fan out to the database. */
 const CACHE_TTL_MS = 5_000;
 
 interface CacheEntry {
@@ -59,10 +28,6 @@ function fallbackBlock(config: HandoffConfig) {
   };
 }
 
-/**
- * Copy for every unavailable reason. Note what is NOT here: no "shortly", no
- * "connecting", no estimate that is not backed by a real deadline.
- */
 function unavailableCopy(
   reason: Exclude<HandoffAvailabilityReason, 'live'>,
   config: HandoffConfig,
@@ -138,8 +103,6 @@ export async function resolveHumanAvailability(
 ): Promise<HandoffAvailability> {
   const config = getHandoffConfig();
 
-  // GATE 1 — deployment switch. Checked before any I/O so an unconfigured
-  // deployment cannot even be made to query for agents.
   if (!config.liveHandoffEnabled) {
     return buildUnavailable('not_configured', config);
   }
@@ -150,20 +113,16 @@ export async function resolveHumanAvailability(
 
   let availability: HandoffAvailability;
   try {
-    // GATES 2 + 3 — an explicitly-online roster, filtered by heartbeat freshness
-    // in the SQL predicate itself.
     const agents = await listFreshOnlineAgents(config.heartbeatTtlSeconds);
     if (agents.length === 0) {
       availability = buildUnavailable('no_agents_online', config);
     } else {
-      // GATE 4 — capacity.
       const hasHeadroom = agents.some(
         (agent) => agent.active_sessions < agent.max_concurrent_sessions,
       );
       availability = hasHeadroom ? buildLive(config) : buildUnavailable('at_capacity', config);
     }
   } catch (error) {
-    // Fail closed. A database error must never resolve to "a human is there".
     logger.error({ error }, 'Support presence lookup failed · defaulting to unavailable');
     availability = buildUnavailable('no_agents_online', config);
   }

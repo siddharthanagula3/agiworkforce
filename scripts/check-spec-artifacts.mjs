@@ -1,18 +1,4 @@
 #!/usr/bin/env node
-// check-spec-artifacts.mjs — validate the machine-readable AGI engineering-playbook artifacts.
-//
-// Dependency-free (Node ESM, built-ins only). Asserts each artifact in
-// docs/spec/artifacts/ parses as JSON and carries schema_version + generated_at
-// plus its required top-level keys.
-//
-// Usage:
-//   node scripts/check-spec-artifacts.mjs              validate the current artifacts
-//   node scripts/check-spec-artifacts.mjs --dir <d>    validate artifacts in <d>
-//   node scripts/check-spec-artifacts.mjs --diff <old> diff current artifacts vs an older snapshot dir
-//   node scripts/check-spec-artifacts.mjs --diff <old> --dir <new>   diff two snapshot dirs
-//
-// Exits non-zero on any validation failure. --diff is descriptive (drift report),
-// not a failure condition by itself.
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve, isAbsolute } from 'node:path';
@@ -21,8 +7,6 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DIR = resolve(__dirname, '..', 'docs', 'spec', 'artifacts');
 
-// Required top-level keys per artifact. schema_version + generated_at are
-// required on every file and asserted separately.
 const COMMON_KEYS = ['schema_version', 'generated_at'];
 const SPEC = {
   'engineering_rules.json': ['invariants', 'rules'],
@@ -99,8 +83,6 @@ function validate(dir) {
   }
   return { errors, loaded };
 }
-
-// --- diff support: report added/removed/changed top-level entries between snapshots ---
 
 function stableStringify(value) {
   if (Array.isArray(value)) return '[' + value.map(stableStringify).join(',') + ']';

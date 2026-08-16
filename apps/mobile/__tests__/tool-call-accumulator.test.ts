@@ -1,10 +1,3 @@
-/**
- * Tool-call accumulator — verifies the parse+accumulate layer that turns the
- * server's tool-call SSE deltas into the ToolCall[] MessageBubble renders.
- *
- * Sequences mirror the real server emission (stream-transform.ts for server
- * tools, tool-loop.ts for MCP) so this fails if the wiring drifts.
- */
 import {
   createToolCallAccumulator,
   accumulateToolCallDelta,
@@ -20,7 +13,6 @@ function run(deltas: StreamDelta[]) {
 
 describe('toolCallAccumulator', () => {
   it('accumulates a SERVER web_search tool into one running→completed entry', () => {
-    // Real order: status(searching) -> arg fragments(by index, no id) -> result block.
     const tools = run([
       { x_tool_status: { type: 'server_tool_use', name: 'web_search', status: 'searching' } },
       { tool_calls: [{ index: 1, function: { arguments: '{"query":"AGI ' } }] },
@@ -54,7 +46,6 @@ describe('toolCallAccumulator', () => {
   });
 
   it('accumulates an MCP tool (id-keyed) without forking a name duplicate', () => {
-    // MCP order: tool_calls start (id+name) -> arg frags -> status(running) -> result.
     const tools = run([
       {
         tool_calls: [
@@ -78,7 +69,7 @@ describe('toolCallAccumulator', () => {
       },
     ]);
 
-    expect(tools).toHaveLength(1); // NOT 2 — status must not fork a name-keyed dup
+    expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe('get_weather');
     expect(tools[0].input).toBe('{"city":"SF"}');
     expect(tools[0].status).toBe('completed');

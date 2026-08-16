@@ -87,8 +87,6 @@ describe('ArtifactPanel HTML preview on a dedicated artifact origin', () => {
       />,
     );
 
-    // Let the (mocked) probe resolve so a stale `unknown` cannot pass this by
-    // accident — the notice must stay absent AFTER the probe reports 'blocked'.
     await act(async () => {
       await Promise.resolve();
     });
@@ -96,8 +94,6 @@ describe('ArtifactPanel HTML preview on a dedicated artifact origin', () => {
   });
 
   it('still warns when there is no artifact origin', async () => {
-    // The exact same panel, same artifact, same blocked probe — only the origin
-    // differs. This is the control for the assertion above.
     await forceBlockedProbe();
 
     render(
@@ -127,8 +123,6 @@ describe('ArtifactPanel HTML preview on a dedicated artifact origin', () => {
       />,
     );
 
-    // No `sandbox-ready` ever arrives; the frame must degrade to srcdoc AND the
-    // panel must go back to telling the user scripts cannot run there.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3_100);
     });

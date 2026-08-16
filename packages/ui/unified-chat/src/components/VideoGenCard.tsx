@@ -7,12 +7,6 @@ export interface VideoGenCardProps {
   description: string;
   videoUrl?: string;
   progress?: number;
-  /**
-   * Download the finished video. Optional because Local mode has no fetchable
-   * URL to hand out; when omitted the control is not rendered rather than
-   * rendered dead — a download button that does nothing reads as a bug.
-   * Mirrors `ImageGenCard`'s `onDownload` contract.
-   */
   onDownload?: () => void;
   onShare?: () => void;
 }
@@ -46,14 +40,6 @@ export function VideoGenCard({
   return (
     <div className="my-2">
       {status === 'generating' && (
-        /**
-         * A full-size shimmering placeholder occupying the space the video will
-         * fill, rather than a small labelled card. Video takes 1-2 minutes, so
-         * reserving the real footprint keeps the thread from jumping when the
-         * result lands, and the moving highlight distinguishes "still working"
-         * from "finished and broken" without needing a progress number the
-         * provider does not reliably give us.
-         */
         <div
           className="relative w-full aspect-video overflow-hidden rounded-xl bg-[var(--chat-surface-elevated)]"
           role="status"

@@ -1,13 +1,3 @@
-/**
- * ArtifactsPanel supplies the web `CloudPublisher` (CAP-015 slice 3).
- *
- * `@agiworkforce/artifacts` documented the gap plainly: "No surface ships a
- * CloudPublisher yet, so byok/managed publish currently resolves to
- * { kind: 'unavailable' } everywhere." These tests are the proof that the web
- * panel closed it — that a `publishArtifact` prop actually reaches the viewer,
- * that invoking it hits the publish endpoint with the artifact's real content,
- * and that it resolves to a cloud result rather than the unavailable arm.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { PublishResult } from '@agiworkforce/artifacts';
@@ -16,8 +6,6 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 
-// Capture the prop the panel injects. The real viewer drags in the whole
-// sandbox/iframe stack; this test only cares about the wiring.
 let capturedPublish: (() => Promise<PublishResult>) | undefined;
 
 vi.mock('./ArtifactPreview', () => ({
@@ -97,8 +85,6 @@ describe('ArtifactsPanel · publish wiring', () => {
     render(<ArtifactsPanel />);
     const result = await capturedPublish!();
 
-    // The unavailable arm is what shipped before a publisher existed; a real
-    // hosted URL is the whole point of this slice.
     expect(result.kind).toBe('cloud');
     expect(result.shareUrl).toBe(
       'https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
@@ -108,7 +94,6 @@ describe('ArtifactsPanel · publish wiring', () => {
     const [url, init] = fetchMock.mock.calls[0]! as unknown as [string, RequestInit];
     expect(url).toBe('/api/artifacts/publish');
     expect(init.method).toBe('POST');
-    // CSRF must be attached: publishing makes content world-readable.
     expect((init.headers as Record<string, string>)['x-csrf-token']).toBe('test-token');
 
     const body = JSON.parse(String(init.body));

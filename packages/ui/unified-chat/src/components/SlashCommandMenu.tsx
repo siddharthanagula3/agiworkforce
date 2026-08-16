@@ -1,38 +1,24 @@
-/**
- * SlashCommandMenu — Phase A Slice 5 (ported from UAC)
- *
- * Autocomplete dropdown for slash commands with keyboard navigation.
- * Consumes the slash command registry from the package lib.
- */
 
 import React, { type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import type { SlashCommand } from '../lib/slashCommands';
 
-// Re-export CommandSuggestion shape so hosts that built on the UAC type can use this.
 export interface CommandSuggestion {
-  /** Stable command identifier without the leading slash. */
   id?: string;
   command: string;
   description: string;
   example?: string;
   icon?: ReactNode;
   isSkill?: boolean;
-  /** The underlying SlashCommand registry entry, if available. */
   slashCommand?: SlashCommand;
 }
 
 export interface SlashCommandMenuProps {
-  /** Whether to show the menu */
   show: boolean;
-  /** List of command suggestions */
   suggestions: CommandSuggestion[];
-  /** Currently selected index */
   selectedIndex: number;
-  /** Callback when a suggestion is selected */
   onSelect: (suggestion: CommandSuggestion) => void;
-  /** Callback when hovering over a suggestion */
   onHover: (index: number) => void;
 }
 
@@ -61,8 +47,6 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                 type="button"
                 key={suggestion.id ?? suggestion.command}
                 onMouseDown={(event) => {
-                  // Keep focus in the composer so selecting a command does not
-                  // collapse the input or lose its current argument.
                   event.preventDefault();
                   onSelect(suggestion);
                 }}

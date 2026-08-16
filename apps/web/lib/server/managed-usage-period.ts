@@ -24,11 +24,6 @@ function addCalendarMonths(anchor: Date, months: number): Date {
   );
 }
 
-/**
- * Resolve the active monthly included-usage window inside a Stripe billing
- * period. A yearly price changes payment frequency only; it must not turn one
- * monthly allowance into the allowance for the entire year.
- */
 export function resolveManagedUsagePeriod(input: {
   subscriptionPeriodStart: Date;
   subscriptionPeriodEnd: Date;

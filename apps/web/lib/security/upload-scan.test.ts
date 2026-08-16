@@ -98,10 +98,6 @@ describe('inspectUploadBytes — SVG active content', () => {
     ['handler after a solidus', '<svg/onload=alert(1)>'],
     ['foreignObject with a solidus', '<svg><foreignobject/x></svg>'],
   ])('rejects %s, which the [\\s>] classes used to miss', (_label, markup) => {
-    // The HTML tokenizer treats a solidus after a tag name, or between
-    // attributes, as a separator — every one of these parses AND executes in a
-    // browser. The scanner matched only [\s>], so all three were reported
-    // clean by the check whose entire job is to catch them.
     const result = inspectUploadBytes(utf8(markup), 'image/svg+xml');
     expect(result.ok).toBe(false);
     expect(result.findings.some((f) => f.code === 'active_content_svg')).toBe(true);
@@ -122,8 +118,6 @@ describe('inspectUploadBytes — PDF active content', () => {
 
 describe('inspectUploadBytes — reporting', () => {
   it('reports every distinct problem rather than stopping at the first', () => {
-    // A shebang script declared as a PNG is both an executable and a type lie;
-    // an operator triaging this should see both.
     const result = inspectUploadBytes(utf8('#!/bin/sh\necho hi'), 'image/png');
     expect(result.findings.length).toBeGreaterThan(1);
     expect(result.findings.some((f) => f.code === 'executable')).toBe(true);

@@ -34,9 +34,7 @@ interface PlusMenuProps {
   webSearchEnabled: boolean;
   onToggleWebSearch: () => void;
   visionSupported?: boolean;
-  /** Current text in the chat input (for prompt stash save) */
   promptStashText?: string;
-  /** Callback to load a saved prompt into the chat input */
   onPromptStashLoad?: (text: string) => void;
 }
 
@@ -56,12 +54,10 @@ export function PlusMenu({
   const [showToolsPanel, setShowToolsPanel] = useState(false);
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
-  // Folder selection
   const currentFolder = useProjectStore(selectCurrentFolder);
   const setCurrentFolder = useProjectStore((s) => s.setCurrentFolder);
   const folderDisplayName = currentFolder ? formatFolderPath(currentFolder) : null;
 
-  // Prompt stash
   const stashEntries = usePromptStashStore((s) => s.entries);
   const stashSave = usePromptStashStore((s) => s.save);
   const stashRemove = usePromptStashStore((s) => s.remove);
@@ -114,7 +110,6 @@ export function PlusMenu({
     [onPromptStashLoad],
   );
 
-  // When popover closes, also close sub-panels
   const handleOpenChange = useCallback((open: boolean) => {
     setIsOpen(open);
     if (!open) {
@@ -201,7 +196,7 @@ export function PlusMenu({
               <span>Plugins</span>
             </button>
           </div>
-        ) : /* Stash sub-panel */ showStashPanel ? (
+        ) : showStashPanel ? (
           <div>
             <button
               type="button"

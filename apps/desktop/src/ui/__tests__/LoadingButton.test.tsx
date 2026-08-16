@@ -23,7 +23,6 @@ describe('LoadingButton', () => {
         </LoadingButton>,
       );
 
-      // The loading text appears both visually and in the sr-only span
       expect(screen.getAllByText('Saving...')).toHaveLength(2);
     });
 
@@ -81,7 +80,6 @@ describe('LoadingButton', () => {
         </LoadingButton>,
       );
 
-      // The sr-only span should contain the loading text for screen readers
       const srOnlyElements = screen.getAllByText('Processing your request');
       const srOnlySpan = srOnlyElements.find((el) => el.classList.contains('sr-only'));
       expect(srOnlySpan).toBeInTheDocument();
@@ -105,10 +103,9 @@ describe('LoadingButton', () => {
     it('should position spinner on left by default', () => {
       const { container } = render(<LoadingButton loading>Click me</LoadingButton>);
 
-      // Check that the button content structure has spinner before text
       const button = container.querySelector('button');
       const children = button?.children;
-      expect(children?.[0]?.tagName.toLowerCase()).toBe('svg'); // Spinner
+      expect(children?.[0]?.tagName.toLowerCase()).toBe('svg');
     });
 
     it('should position spinner on right when specified', () => {
@@ -120,8 +117,7 @@ describe('LoadingButton', () => {
 
       const button = container.querySelector('button');
       const children = button?.children;
-      // Last visible element should be spinner (before sr-only span)
-      expect(children?.[1]?.tagName.toLowerCase()).toBe('svg'); // Spinner
+      expect(children?.[1]?.tagName.toLowerCase()).toBe('svg');
     });
   });
 });

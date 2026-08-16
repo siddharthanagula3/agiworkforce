@@ -1,8 +1,3 @@
-/**
- * Video admission fails CLOSED. Every gate here exists because the alternative
- * is spending a Max-tier video generation the account is not entitled to, or
- * firing one the user never asked for.
- */
 
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
 
@@ -39,11 +34,6 @@ describe('resolveMobileVideoGenerationRequest', () => {
     expect(decision.prompt).toBe('a cat surfing');
   });
 
-  /**
-   * Video is never INFERRED from wording. A prompt that merely mentions video
-   * while in text mode is an ordinary chat message — guessing would spend a
-   * paid generation on someone who just used the word.
-   */
   it('does not claim a text-mode message that merely mentions video', () => {
     const decision = resolveMobileVideoGenerationRequest({
       ...ENTITLED,
@@ -137,17 +127,6 @@ describe('resolveMobileVideoGenerationRequest', () => {
   });
 });
 
-/**
- * Auto intent routing, matching how Auto already reaches an image model from
- * the wording of a prompt. Video was previously reachable only from `/video`
- * or the composer's Video mode, so "Create a video of a cat" in an Auto chat
- * was answered as prose by a text model.
- *
- * The bar is deliberately higher than the image classifier's. A false positive
- * here spends a Max-15x per-second video generation and takes a minute to come
- * back, so a generation verb AND a medium noun AND a generation-shaped
- * continuation are all required.
- */
 describe('resolveMobileVideoGenerationRequest — Auto intent routing', () => {
   const TEXT_MODE = { ...ENTITLED, mediaMode: 'text' as const };
 
@@ -166,8 +145,6 @@ describe('resolveMobileVideoGenerationRequest — Auto intent routing', () => {
     expect(decision.prompt).toBe(text);
   });
 
-  // Each of these would be a billed video generation if the pattern were the
-  // naive `\b(video)\b`. They must all stay in chat.
   it.each([
     'create a video game character',
     'make a movie recommendation',
@@ -183,8 +160,6 @@ describe('resolveMobileVideoGenerationRequest — Auto intent routing', () => {
   });
 
   it('never hijacks an explicit Image-mode send', () => {
-    // This resolver runs BEFORE the image one, so an unguarded pattern would
-    // bill an explicit image request as video.
     expect(
       resolveMobileVideoGenerationRequest({
         ...ENTITLED,

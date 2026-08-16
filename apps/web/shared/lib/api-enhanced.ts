@@ -1,21 +1,11 @@
-/**
- * Enhanced API client with standardized error handling
- *
- * This module provides an enhanced API client that wraps the base API client
- * with comprehensive error handling, retry logic, and user-friendly error messages.
- *
- * It uses the consolidated error utilities from @shared/lib/error-utils.
- */
 
 import { apiClient } from './api';
 import { APIException, type APIResponse as BaseAPIResponse } from '@shared/stores/query-client';
 import { toast } from 'sonner';
 import { isRetryableError, getRetryDelay, getErrorMessage } from './error-utils';
 
-// Re-export APIResponse type from query-client
 export type { APIResponse } from '@shared/stores/query-client';
 
-// Enhanced error types
 export interface APIErrorDetails {
   code: string;
   message: string;
@@ -31,12 +21,10 @@ export interface ErrorHandler {
   getRetryDelay: (error: APIException, attempt: number) => number;
 }
 
-// Default error handler
 class DefaultErrorHandler implements ErrorHandler {
   handle(error: APIException): void {
     console.error('API Error:', error);
 
-    // Show user-friendly error message
     const userMessage = getErrorMessage(error);
     toast.error(userMessage);
   }
@@ -50,14 +38,9 @@ class DefaultErrorHandler implements ErrorHandler {
   }
 }
 
-// Custom error handler for specific use cases
 class AuthErrorHandler implements ErrorHandler {
   handle(error: APIException): void {
     if (error.code === 'AUTH_FAILED' || error.code === 'REFRESH_FAILED') {
-      // Auth is managed by Clerk session cookies. A full navigation clears any
-      // stale in-memory client state after auth fails; the absolute same-origin
-      // URL preserves that reload behavior without treating this as a relative
-      // App Router destination.
       window.location.assign(new URL('/login', window.location.origin));
     } else {
       toast.error('Authentication error. Please log in again.');
@@ -65,7 +48,7 @@ class AuthErrorHandler implements ErrorHandler {
   }
 
   shouldRetry(_error: APIException): boolean {
-    return false; // Don't retry auth errors
+    return false;
   }
 
   getRetryDelay(): number {
@@ -73,7 +56,6 @@ class AuthErrorHandler implements ErrorHandler {
   }
 }
 
-// Error handler registry
 class ErrorHandlerRegistry {
   private handlers: Map<string, ErrorHandler> = new Map();
   private defaultHandler: ErrorHandler = new DefaultErrorHandler();
@@ -102,14 +84,11 @@ class ErrorHandlerRegistry {
   }
 }
 
-// Global error handler registry
 export const errorHandlers = new ErrorHandlerRegistry();
 
-// Register default handlers
 errorHandlers.register('AUTH_FAILED', new AuthErrorHandler());
 errorHandlers.register('REFRESH_FAILED', new AuthErrorHandler());
 
-// Enhanced API client with error handling
 export class EnhancedAPIClient {
   private baseClient = apiClient;
   private maxRetries = 3;
@@ -127,10 +106,8 @@ export class EnhancedAPIClient {
       } catch (error) {
         lastError = error as APIException;
 
-        // Handle the error
         errorHandlers.handleError(lastError);
 
-        // Check if we should retry
         if (attempt < this.maxRetries && errorHandlers.shouldRetry(lastError)) {
           const delay = errorHandlers.getRetryDelay(lastError, attempt);
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -220,14 +197,8 @@ export class EnhancedAPIClient {
   }
 }
 
-// Enhanced API client instance
 export const enhancedApiClient = new EnhancedAPIClient();
 
-// Utility functions for error handling - now using consolidated utilities
-
-/**
- * Handle API error and return user-friendly message
- */
 export const handleAPIError = (error: unknown): string => {
   if (error instanceof APIException) {
     errorHandlers.handleError(error);
@@ -249,7 +220,6 @@ export { isRetryableError } from './error-utils';
  */
 export { getRetryDelay } from './error-utils';
 
-// React Query error handler
 export const queryErrorHandler = (error: unknown) => {
   if (error instanceof APIException) {
     errorHandlers.handleError(error);
@@ -258,7 +228,6 @@ export const queryErrorHandler = (error: unknown) => {
   }
 };
 
-// Mutation error handler
 export const mutationErrorHandler = (error: unknown) => {
   if (error instanceof APIException) {
     errorHandlers.handleError(error);

@@ -1,19 +1,7 @@
-/**
- * tierResolver.ts — Resolves the current user's subscription tier.
- *
- * Priority chain:
- *   1. Cached value from globalState (populated only by account tier refresh)
- *   2. 'byok' fallback (safe default — never over-gates)
- *
- * This module is intentionally free of side-effects and VS Code window calls
- * so that it can be unit-tested in isolation.
- */
 
 import * as vscode from 'vscode';
 import { type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
-
-// ─── Tier type ────────────────────────────────────────────────────────────────
 
 /**
  * Local alias for the canonical {@link UIPlanTier} from `@agiworkforce/types`.
@@ -55,14 +43,9 @@ export const TIER_ORDER: readonly Tier[] = [
 /** Re-export of the canonical {@link tierAtLeast} comparator. */
 export { tierAtLeast };
 
-// ─── Validation ───────────────────────────────────────────────────────────────
-
 function coerceTier(raw: string | undefined): Tier | undefined {
   if (raw === undefined) return undefined;
   const normalized = raw.toLowerCase().replace(/-/g, '_');
-  // Legacy aliases from before the 2026-06-30 tier rename: 'hobby' -> 'basic',
-  // 'pro+'/'pro_plus' -> 'max' (pro_plus was never shipped and was removed
-  // with no direct successor; anything gated on it now gates on 'max').
   const remapped =
     normalized === 'hobby'
       ? 'basic'
@@ -74,11 +57,6 @@ function coerceTier(raw: string | undefined): Tier | undefined {
 
 export type AccountTierLoader = (secrets: vscode.SecretStorage) => Promise<TierInfo | undefined>;
 
-/**
- * Remove account-derived tier state when a device session ends or cannot be
- * revalidated. Leaving a previous Pro/Team tier cached after sign-out makes
- * managed models appear reachable even though the account token is gone.
- */
 export async function clearAccountTierCache(context: vscode.ExtensionContext): Promise<void> {
   const configuration = vscode.workspace.getConfiguration('agiWorkforce');
   const updates: Thenable<void>[] = [];
@@ -91,13 +69,6 @@ export async function clearAccountTierCache(context: vscode.ExtensionContext): P
   await Promise.all(updates);
 }
 
-/**
- * Refresh the server-owned account tier and replace any prior cache.
- *
- * A failed or malformed refresh clears the old account tier so model and Auto
- * admission fail closed instead of retaining paid reachability from an earlier
- * session. Provider BYOK remains available through the independent app-server.
- */
 export async function refreshAccountTierCache(
   context: vscode.ExtensionContext,
   loadTier: AccountTierLoader = fetchTierInfo,
@@ -126,8 +97,6 @@ export async function refreshAccountTierCache(
   return tier;
 }
 
-// ─── Main resolver ────────────────────────────────────────────────────────────
-
 /**
  * Synchronous tier resolution for callers that cannot await — currently the
  * webview HTML builders, which run inside `resolveWebviewView` / a constructor.
@@ -147,13 +116,9 @@ export function resolveTierSync(context: vscode.ExtensionContext): Tier {
  * @param context - ExtensionContext used to read cached globalState tier.
  */
 export async function resolveTier(context: vscode.ExtensionContext): Promise<Tier> {
-  // Cached tier is populated only by the authenticated account refresh. There
-  // is intentionally no user/workspace entitlement override: diagnostics must
-  // not make a paid model appear reachable without server-owned admission.
   const cachedRaw = context.globalState.get<string>('tierStatus.cachedTier');
   const cachedTier = coerceTier(cachedRaw);
   if (cachedTier !== undefined) return cachedTier;
 
-  // Safe fallback keeps Local/provider BYOK available without inventing plan access.
   return 'byok';
 }

@@ -17,12 +17,6 @@ function research(overrides: Partial<MessageResearchState> = {}): MessageResearc
   };
 }
 
-/**
- * Research runs are bounded by an iteration and a search cap that the loop has
- * always enforced (`totalSearches >= maxSearches`) and never reported. A count
- * that simply stops climbing looks like the run gave up; showing it against
- * the cap says the budget is spent.
- */
 describe('ResearchActivity budget', () => {
   it('shows searches against the cap while the run can still spend it', () => {
     render(
@@ -37,8 +31,6 @@ describe('ResearchActivity budget', () => {
   });
 
   it('drops the cap once the run is finished', () => {
-    // On a completed run the total is the interesting number; "4 of 12" would
-    // imply the run stopped short of something it was still allowed to do.
     render(
       <ResearchActivity
         isStreaming={false}
@@ -58,7 +50,6 @@ describe('ResearchActivity budget', () => {
   });
 
   it('falls back to a bare count when the server reported no cap', () => {
-    // Older runs, and any path that does not emit max_searches.
     render(<ResearchActivity isStreaming research={research({ searches: 3 })} />);
 
     expect(screen.getByText(/3 searches/)).toBeInTheDocument();

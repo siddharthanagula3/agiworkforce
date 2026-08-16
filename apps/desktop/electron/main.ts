@@ -1,23 +1,3 @@
-/**
- * Electron main process for the AGI cloud desktop shell.
- *
- * One Desktop surface, two shells (see `apps/desktop/AGENTS.md`): this is the
- * cloud-only shell. It follows the Claude-desktop model (founder decision,
- * 2026-08-04): the renderer is the HOSTED cloud web app at agiworkforce.com,
- * loaded top-level in a pinned session partition — the app updates the moment
- * the web deploys, auth is the ordinary same-origin Clerk cookie session, and
- * there is no second UI to maintain.
- *
- * A bundled fallback renderer remains available: AGI_CLOUD_RENDERER=bundled
- * serves the `VITE_BUILD_TARGET=electron` Vite bundle over the privileged
- * `agi://cloud` scheme with native Clerk sign-in proxied by this process
- * (mirroring src-tauri/src/sys/account/clerk_native.rs). It is the tested
- * escape hatch if the remote model hits a wall (offline shell, webview auth
- * changes) — not dead code.
- *
- * Either way this shell never touches Local-mode capabilities — no filesystem
- * features, no shell execution, no MCP hosting.
- */
 import {
   BrowserWindow,
   Notification,
@@ -66,7 +46,6 @@ import {
 } from './permissionPolicy';
 
 let mainWindow: BrowserWindow | null = null;
-/** Deep link that arrived before the window was ready (bundled mode only). */
 let pendingDeepLink: string | null = null;
 
 function installedMacArchitecture(): DesktopCloudMacArchitecture {
@@ -74,15 +53,8 @@ function installedMacArchitecture(): DesktopCloudMacArchitecture {
   throw new Error(`Unsupported AGI Cloud macOS architecture: ${process.arch}`);
 }
 
-/** Delay before pre-loading the quick-ask panel, so it never competes with
- * the main window's first paint. */
 const QUICK_ASK_WARMUP_MS = 5000;
 
-// ---------------------------------------------------------------------------
-// Bundled-renderer scheme: standard + secure so document.origin is agi://cloud
-// and API fetches carry `Origin: agi://cloud` (never `null`). Must run before
-// app.whenReady(); registering it is harmless in remote mode.
-// ---------------------------------------------------------------------------
 protocol.registerSchemesAsPrivileged([
   {
     scheme: RENDERER_SCHEME,
@@ -141,7 +113,6 @@ async function serveRenderer(request: Request): Promise<Response> {
   try {
     body = await fs.readFile(filePath);
   } catch {
-    // SPA fallback: unknown paths render the app shell (react-router routes).
     filePath = path.join(distDir, 'index.html');
     try {
       body = await fs.readFile(filePath);
@@ -159,10 +130,6 @@ async function serveRenderer(request: Request): Promise<Response> {
   return new Response(new Uint8Array(body), { status: 200, headers });
 }
 
-// ---------------------------------------------------------------------------
-// IPC (bundled mode) — every handler validates the sender: only the main
-// frame of our own window, loaded from the agi:// renderer origin.
-// ---------------------------------------------------------------------------
 function isTrustedSender(event: Electron.IpcMainInvokeEvent): boolean {
   const frame = event.senderFrame;
   if (!frame || frame !== event.sender.mainFrame) return false;
@@ -191,7 +158,6 @@ function registerIpcHandlers(): void {
     } catch {
       return;
     }
-    // OS browser only for web links — file:, agiworkforce:, smb: etc. stay shut.
     if (
       parsed.protocol === 'https:' ||
       parsed.protocol === 'http:' ||
@@ -241,7 +207,6 @@ function registerIpcHandlers(): void {
         if (typeof value === 'string') win.setTitle(value);
         return true;
       case 'startDragging':
-        // Dragging is CSS-driven in Electron (-webkit-app-region: drag).
         return false;
       default:
         return false;
@@ -330,9 +295,6 @@ function registerIpcHandlers(): void {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Deep links (SSO returns from the system browser; bundled mode).
-// ---------------------------------------------------------------------------
 function deliverDeepLink(url: string): void {
   if (!url.startsWith(`${DEEP_LINK_SCHEME}://`)) return;
   if (mainWindow && !mainWindow.webContents.isLoading()) {
@@ -345,14 +307,7 @@ function deliverDeepLink(url: string): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Window
-// ---------------------------------------------------------------------------
 function configureSession(targetSession: Electron.Session): void {
-  // The AGI renderer may use microphone-only media, notifications, fullscreen,
-  // sanitized clipboard writes and display capture. Check both the requesting
-  // origin and media subtype: Electron's coarse `media` permission also covers
-  // camera access, and this cloud-only shell has no camera feature or entitlement.
   targetSession.setPermissionRequestHandler((_webContents, permission, callback, details) => {
     callback(shouldGrantCloudPermissionRequest(permission, details));
   });
@@ -360,10 +315,6 @@ function configureSession(targetSession: Electron.Session): void {
     shouldGrantCloudPermissionCheck(permission, requestingOrigin, details),
   );
 
-  // The composer's screen-capture feature calls getDisplayMedia; without this
-  // handler Electron renders no picker. Prefer macOS's system picker; on hosts
-  // where it is unavailable, present an explicit source chooser rather than
-  // silently sharing the first screen.
   targetSession.setDisplayMediaRequestHandler(
     (request, callback) => {
       if (
@@ -401,19 +352,6 @@ function configureSession(targetSession: Electron.Session): void {
   );
 }
 
-/**
- * Branded offline/unreachable screen.
- *
- * Without this the remote renderer shows Chromium's own "This site can't be
- * reached" interstitial as the ENTIRE app window — no branding, no explanation
- * that this is a connectivity problem rather than a broken install, and a Reload
- * button that re-runs the same failing navigation. That is what a user sees on
- * captive-portal wifi, in a tunnel, or during an agiworkforce.com outage.
- *
- * Served as a data: URL so it works with no network and no local build output.
- * The retry navigates to the app origin, which is on the navigation allowlist —
- * if it fails again `did-fail-load` simply brings this screen back.
- */
 function offlineScreenUrl(targetUrl: string, detail: string): string {
   const html = `<!doctype html><html><head><meta charset="utf-8">
 <meta name="color-scheme" content="dark"><title>AGI — offline</title><style>
@@ -452,24 +390,7 @@ function createMainWindow(): void {
     minWidth: 800,
     minHeight: 600,
     show: false,
-    // Electron paints a white window before the first frame. In a dark-themed
-    // app that reads as a flash on launch and on every top-level navigation.
-    // Matches agiCoolPalette.dark.surface.base.
     backgroundColor: '#212121',
-    // NOTE: deliberately no `titleBarStyle: 'hiddenInset'`.
-    //
-    // hiddenInset was applied to the BUNDLED renderer only (`!isRemote`), and the
-    // React shell it loads reserves no top inset. macOS floats the traffic lights
-    // over the web content at roughly x=13-75, y=12-32, while the sidebar header
-    // starts at exactly x=12, y=12 — so the brand mark sat underneath them, and
-    // with the sidebar collapsed the expand button landed entirely under the
-    // yellow and green buttons and could not be clicked at all. Since the
-    // collapsed state persists across restarts, that was unrecoverable.
-    //
-    // The shipped remote path never set it and is unaffected. Matching it here
-    // costs a frameless look on an escape-hatch mode and buys back a working
-    // window; re-introducing it requires a real --titlebar-inset in the shell
-    // plus WebkitAppRegion drag handling, not just the flag.
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
@@ -483,8 +404,6 @@ function createMainWindow(): void {
     },
   });
 
-  // User-agent cleanup, popup denial and the navigation allowlist — shared
-  // with the quick-ask panel so both cloud windows enforce the same policy.
   applyRemoteWindowPolicy(mainWindow);
 
   mainWindow.once('ready-to-show', () => {
@@ -501,9 +420,6 @@ function createMainWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
-    // The warm quick-ask panel is a hidden BrowserWindow, so on platforms
-    // where closing the main window quits the app it would otherwise keep
-    // `window-all-closed` from ever firing. macOS keeps running by design.
     if (process.platform !== 'darwin') destroyQuickAsk();
   });
 
@@ -512,11 +428,8 @@ function createMainWindow(): void {
   mainWindow.webContents.on(
     'did-fail-load',
     (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-      // Sub-resource failures are the page's own problem, not a dead app window.
       if (!isMainFrame) return;
-      // -3 is ERR_ABORTED: a superseded navigation, not a failure the user caused.
       if (errorCode === -3) return;
-      // Don't recurse if the offline screen itself somehow fails to load.
       if (validatedURL.startsWith('data:')) return;
       void mainWindow?.loadURL(
         offlineScreenUrl(entryUrl, `${errorDescription || 'load failed'} (${errorCode})`),
@@ -527,7 +440,6 @@ function createMainWindow(): void {
   void mainWindow.loadURL(entryUrl);
 }
 
-/** Raise the main window, recreating it if it has been closed (macOS). */
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createMainWindow();
@@ -538,10 +450,6 @@ function showMainWindow(): void {
   mainWindow.focus();
 }
 
-/**
- * Tray "New Chat": send the window back to a fresh chat. In bundled mode the
- * renderer owns its own routing, so reloading the shell is the equivalent.
- */
 function openNewChat(): void {
   showMainWindow();
   const target =
@@ -549,12 +457,6 @@ function openNewChat(): void {
   void mainWindow?.loadURL(target);
 }
 
-/**
- * Check the real published AGI Cloud release and offer the signed DMG.
- *
- * This is deliberately a manual installer flow. There is no electron-updater
- * feed today, so claiming an in-place update would leave users on a dead path.
- */
 async function checkForCloudUpdate(): Promise<void> {
   try {
     const update = await checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
@@ -605,9 +507,6 @@ async function checkForCloudUpdate(): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// App lifecycle
-// ---------------------------------------------------------------------------
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -641,9 +540,6 @@ if (!hasSingleInstanceLock) {
 
     createMainWindow();
 
-    // Shell garnish: menu-bar entry point plus the two global hotkeys. Both
-    // routes call the same handlers, so a hotkey the OS refuses to register
-    // still has a working equivalent in the tray menu.
     const garnishHandlers = {
       onOpen: showMainWindow,
       onNewChat: openNewChat,
@@ -657,13 +553,9 @@ if (!hasSingleInstanceLock) {
       onScreenshot: garnishHandlers.onScreenshot,
     });
 
-    // Pre-load the quick-ask page once the main window has settled, so the
-    // first summon is instant instead of a cold page load.
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
 
     app.on('activate', () => {
-      // Checked against the main window, not the window count: the hidden
-      // quick-ask panel is a window and would otherwise mask a closed app.
       showMainWindow();
     });
   });

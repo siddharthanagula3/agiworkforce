@@ -1,13 +1,4 @@
 #!/usr/bin/env node
-/**
- * AP-02: Scan web source for hardcoded color literals.
- * Recommends Tailwind classes (bg-primary, text-foreground, etc.)
- * or CSS custom properties (var(--color-primary)) instead.
- * Exit 0 = clean, 1 = literals found.
- *
- * Note: tailwind.config.ts does not exist in this project — Tailwind v4
- * config lives in app/globals.css @theme, which is already exempt below.
- */
 
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
@@ -23,7 +14,6 @@ const SRC_DIRS = [
 
 const EXTENSIONS = new Set(['.ts', '.tsx', '.css']);
 
-// Directories that must be excluded entirely
 const EXCLUDE_DIRS = new Set([
   join(ROOT, '__tests__'),
   join(ROOT, '.next'),
@@ -31,23 +21,16 @@ const EXCLUDE_DIRS = new Set([
   join(ROOT, 'scripts'),
 ]);
 
-// Individual files where color literals are intentional/authoritative
 const EXCLUDE_FILES = new Set([
-  // CSS custom property DEFINITIONS live here — values must be literal
   join(ROOT, 'app', 'globals.css'),
 ]);
 
-// Patterns that indicate a hardcoded color literal
 const COLOR_PATTERNS = [
-  // hex colors: #rgb #rgba #rrggbb #rrggbbaa
   { re: /#[0-9a-fA-F]{3,8}\b/g, label: 'hex color' },
-  // rgb() / rgba()
   { re: /rgba?\s*\(/g, label: 'rgb/rgba()' },
-  // hsl() / hsla()
   { re: /hsla?\s*\(/g, label: 'hsl/hsla()' },
 ];
 
-// Lines that should be exempt regardless of match
 const EXEMPT_LINE_RE = [
   /^\s*\/\//, // single-line TS/JS comment
   /^\s*\*/, // JSDoc / block comment continuation
@@ -57,7 +40,6 @@ const EXEMPT_LINE_RE = [
   /color-scheme/, // <meta name="color-scheme" ...>
 ];
 
-// Strip HTML entities (&#8226; etc.) before regex matching to avoid false positives
 function stripHtmlEntities(line) {
   return line.replace(/&#[0-9a-fA-F]+;/g, '');
 }

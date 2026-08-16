@@ -1,16 +1,3 @@
-/**
- * POST /api/support/actions/confirm
- *
- * Execute a previously proposed action, after the user explicitly confirmed it.
- *
- * THE BODY IS EXACTLY `{ proposalId, confirmationToken }`.
- *
- * There is no `actionId` and there are no `params` — the schema strips unknown
- * keys, and the service reads the action and its parameters back out of the
- * stored proposal row. This is what makes retargeting structurally impossible
- * rather than merely checked: a confirm request has no field in which to name a
- * different effect.
- */
 
 import 'server-only';
 
@@ -68,9 +55,6 @@ async function handlePost(request: NextRequest) {
       surface: parsed.data.surface ?? 'web',
       request,
     });
-    // `result` may be a `secret_once` payload carrying a live API key. It is
-    // returned to the caller's own authenticated response and nowhere else —
-    // see the contract note on SupportActionResult.
     return NextResponse.json({ outcome: 'success', actionId, result });
   } catch (error) {
     if (error instanceof SupportActionRefusal) return refusalResponse(error);

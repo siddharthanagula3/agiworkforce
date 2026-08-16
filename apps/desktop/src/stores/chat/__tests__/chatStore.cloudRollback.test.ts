@@ -1,12 +1,3 @@
-/**
- * DESKTOP-CLOUDROLLBACK-01 regression guard.
- *
- * When a chat is created in cloud mode and the async `createCloudConversation`
- * rejects (offline / auth failure), the rollback must NOT silently discard a
- * conversation the user has already typed a message into. It may only clean up
- * an EMPTY optimistic conversation. Losing a sent message with no feedback is a
- * production data-loss bug.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const localStorageMock = {
@@ -38,7 +29,6 @@ vi.mock('../../utils/localStorage', () => ({
   },
 }));
 
-// Force cloud mode so createConversation takes the cloud-create path.
 vi.mock('../appModeStore', () => ({
   useAppModeStore: {
     getState: vi.fn(() => ({ mode: 'cloud' })),
@@ -47,7 +37,6 @@ vi.mock('../appModeStore', () => ({
   selectPrivacyMode: vi.fn(() => 'managed'),
 }));
 
-// createCloudConversation rejects to exercise the rollback `.catch`.
 const createCloudConversation = vi.fn().mockRejectedValue(new Error('offline'));
 vi.mock('../../services/cloudChat', () => ({
   createCloudConversation: (...args: unknown[]) => createCloudConversation(...args),
@@ -74,13 +63,11 @@ describe('DESKTOP-CLOUDROLLBACK-01: cloud-create failure must not lose a sent me
 
   it('preserves a conversation that already holds a user message', async () => {
     const id = useChatStore.getState().createConversation('New chat');
-    // The user sends a message into the optimistic conversation BEFORE the async
-    // cloud-create rejection lands.
     useChatStore.setState({
       messagesByConversation: { [id]: [{ id: 'm1', role: 'user', content: 'hello' } as never] },
     });
 
-    await flushAsync(); // let the rejected promise's `.catch` run
+    await flushAsync();
 
     const state = useChatStore.getState();
     expect(state.messagesByConversation[id]).toBeDefined();
@@ -90,7 +77,6 @@ describe('DESKTOP-CLOUDROLLBACK-01: cloud-create failure must not lose a sent me
 
   it('still discards an EMPTY optimistic conversation (original cleanup preserved)', async () => {
     const id = useChatStore.getState().createConversation('New chat');
-    // No message added → empty optimistic conversation.
 
     await flushAsync();
 

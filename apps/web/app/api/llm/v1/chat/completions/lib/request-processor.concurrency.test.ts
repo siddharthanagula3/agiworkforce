@@ -4,13 +4,6 @@ import { getDefaultModelFor } from '@agiworkforce/types';
 
 const FREE_CHAT_MODEL = getDefaultModelFor('free', 'chat');
 
-/**
- * PERF: the managed preflight is what a user waits through before the first
- * token. These tests pin the legs that must overlap — a regression back to a
- * strict await chain is invisible in behaviour and only shows up as latency,
- * so each case blocks one leg and asserts another has already started.
- */
-
 const mocks = vi.hoisted(() => ({
   enforceSafety: vi.fn(),
   hydrate: vi.fn(),
@@ -123,7 +116,6 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-/** Let every already-scheduled microtask run without resolving the blocked leg. */
 const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {

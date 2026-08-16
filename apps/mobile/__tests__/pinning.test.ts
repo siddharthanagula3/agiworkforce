@@ -1,4 +1,3 @@
-// AUDIT-FIX: C-7 — verify placeholder pins block release while still allowing tests.
 import {
   PINS_BY_HOST,
   PINNING_ENFORCED,
@@ -21,10 +20,6 @@ beforeEach(() => {
   jest.restoreAllMocks();
 });
 
-// ---------------------------------------------------------------------------
-// PINS_BY_HOST shape
-// ---------------------------------------------------------------------------
-
 describe('PINS_BY_HOST', () => {
   it('is frozen (immutable)', () => {
     expect(Object.isFrozen(PINS_BY_HOST)).toBe(true);
@@ -43,16 +38,8 @@ describe('PINS_BY_HOST', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Enforcement state
-// ---------------------------------------------------------------------------
-
 describe('PINNING_ENFORCED', () => {
   it('is false until ops provisions real SPKI pins (#387)', () => {
-    // Enforcing against the placeholder pins below would fail-close every
-    // request to our prod hosts and break cloud on real device builds. Standard
-    // platform TLS validation still applies; this flips to true once real
-    // hashes land and the release-lane check:tls-pins guard passes.
     expect(PINNING_ENFORCED).toBe(false);
   });
 });
@@ -62,12 +49,8 @@ describe('startup pinning guard (P0-FIX 2026-05-29: release builds must LAUNCH, 
     expect(hasPlaceholderPins()).toBe(true);
   });
 
-  // REGRESSION (DoD D2): the guard previously threw at module load, crashing
-  // every release build on launch via the app/_layout.tsx import chain.
   it('release build with enforcement off is "disabled" and does NOT throw', () => {
     expect(() => pinningStartupState({ isDev: false, isTest: false })).not.toThrow();
-    // PINNING_ENFORCED is false (#387) so the chokepoint is a passthrough; the
-    // app launches and falls back to standard TLS rather than failing closed.
     expect(pinningStartupState({ isDev: false, isTest: false })).toBe('disabled');
   });
 
@@ -77,8 +60,6 @@ describe('startup pinning guard (P0-FIX 2026-05-29: release builds must LAUNCH, 
   });
 
   it('importing lib/pinning (runs the startup check at module load) does not crash', () => {
-    // The module already loaded at the top of this file; prove a fresh, isolated
-    // require also does not throw even though placeholder pins are present.
     expect(() => {
       jest.isolateModules(() => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.isolateModules requires a synchronous require to re-evaluate the module's load-time guard.
@@ -87,10 +68,6 @@ describe('startup pinning guard (P0-FIX 2026-05-29: release builds must LAUNCH, 
     }).not.toThrow();
   });
 });
-
-// ---------------------------------------------------------------------------
-// hostHasPins
-// ---------------------------------------------------------------------------
 
 describe('hostHasPins', () => {
   it('returns true for a configured prod host', () => {
@@ -105,10 +82,6 @@ describe('hostHasPins', () => {
     expect(hostHasPins('not-a-url')).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// pinsForUrl
-// ---------------------------------------------------------------------------
 
 describe('pinsForUrl', () => {
   it('returns the configured pins for a known host', () => {
@@ -139,10 +112,6 @@ describe('provisioned pin checks', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// requiresPin
-// ---------------------------------------------------------------------------
-
 describe('requiresPin', () => {
   it('returns true for agiworkforce.com', () => {
     expect(requiresPin('agiworkforce.com')).toBe(true);
@@ -164,10 +133,6 @@ describe('requiresPin', () => {
     expect(requiresPin('stripe.com')).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// assertPinningReadyIfEnforced
-// ---------------------------------------------------------------------------
 
 describe('assertPinningReadyIfEnforced', () => {
   it('does not throw when all required hosts have at least one pin', () => {
@@ -194,11 +159,6 @@ describe('assertPinningReadyIfEnforced', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// secureFetch — passthrough while enforcement is off (#387). It fails closed
-// only once PINNING_ENFORCED is flipped on with still-unprovisioned pins.
-// ---------------------------------------------------------------------------
-
 describe('secureFetch (smoke)', () => {
   it('passes through to fetch while enforcement is off (#387)', async () => {
     const mockFetch = jest.spyOn(global, 'fetch').mockResolvedValue(fakeOk());
@@ -207,10 +167,6 @@ describe('secureFetch (smoke)', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// PinningError
-// ---------------------------------------------------------------------------
 
 describe('PinningError', () => {
   it('is named PinningError', () => {

@@ -19,7 +19,6 @@ export function useModel() {
 
   const isAutoMode = selectedModelId.startsWith('auto');
 
-  // When auto-routed: show "ModelName · task" instead of "Auto Economy"
   const displayName = useMemo(() => {
     if (isAutoMode && lastRoutingDecision?.wasRouted) {
       const routedMeta = modelsById[lastRoutingDecision.routedModelId];

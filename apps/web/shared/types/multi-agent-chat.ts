@@ -1,11 +1,4 @@
-/**
- * Multi-Agent Chat System Types
- * TypeScript interfaces for the multi-agent chat database schema
- */
 
-// =============================================
-// ENUMS AND CONSTANTS
-// =============================================
 
 export type ConversationType = 'single' | 'multi_agent' | 'collaborative' | 'mission_control';
 export type ConversationStatus = 'active' | 'paused' | 'completed' | 'archived' | 'failed';
@@ -31,10 +24,6 @@ export type TaskStatus =
 
 export type ReactionType = 'like' | 'helpful' | 'unhelpful' | 'insightful' | 'flag' | 'bookmark';
 
-// =============================================
-// DATABASE ROW TYPES
-// =============================================
-
 export interface MultiAgentConversation {
   id: string;
   user_id: string;
@@ -43,22 +32,18 @@ export interface MultiAgentConversation {
   conversation_type: ConversationType;
   status: ConversationStatus;
 
-  // Configuration
   orchestration_mode: OrchestrationMode;
   collaboration_strategy: CollaborationStrategy;
   max_agents: number;
 
-  // Metadata
   metadata: Record<string, unknown>;
   tags: string[];
 
-  // Statistics
   total_messages: number;
   total_tokens: number;
   total_cost: number;
   active_agents_count: number;
 
-  // Timestamps
   started_at: string;
   last_message_at: string | null;
   completed_at: string | null;
@@ -70,32 +55,26 @@ export interface ConversationParticipant {
   id: string;
   conversation_id: string;
 
-  // Agent identification
   employee_id: string;
   employee_name: string;
   employee_role: string;
   employee_provider: string;
 
-  // Participation details
   participant_role: ParticipantRole;
   status: ParticipantStatus;
 
-  // Capabilities
   capabilities: string[];
   tools_available: string[];
 
-  // Statistics
   message_count: number;
   tokens_used: number;
   cost_incurred: number;
   tasks_assigned: number;
   tasks_completed: number;
 
-  // Activity tracking
   last_active_at: string | null;
   total_active_duration: number;
 
-  // Timestamps
   joined_at: string;
   left_at: string | null;
   created_at: string;
@@ -106,32 +85,25 @@ export interface AgentCollaboration {
   id: string;
   conversation_id: string;
 
-  // Collaboration details
   session_name: string | null;
   session_type: SessionType;
 
-  // Participating agents
   participant_ids: string[];
   lead_participant_id: string | null;
 
-  // Task tracking
   task_description: string;
   task_status: TaskStatus;
 
-  // Collaboration flow
   workflow_steps: unknown[];
   current_step: number;
 
-  // Results
   collaboration_result: unknown | null;
   output_artifacts: unknown[];
 
-  // Metrics
   total_messages: number;
   total_iterations: number;
   consensus_score: number | null;
 
-  // Timestamps
   started_at: string;
   completed_at: string | null;
   created_at: string;
@@ -143,11 +115,9 @@ export interface MessageReaction {
   message_id: string;
   user_id: string;
 
-  // Reaction details
   reaction_type: ReactionType;
   feedback_text: string | null;
 
-  // Timestamps
   created_at: string;
   updated_at: string;
 }
@@ -157,39 +127,29 @@ export interface ConversationMetadata {
   conversation_id: string;
   user_id: string;
 
-  // Display settings
   is_pinned: boolean;
   is_archived: boolean;
   is_favorite: boolean;
   folder_id: string | null;
 
-  // Sharing settings
   is_public: boolean;
   share_token: string | null;
   shared_with: string[];
 
-  // Model configuration
   default_model: string | null;
   default_temperature: number | null;
   default_max_tokens: number | null;
 
-  // UI preferences
   ui_settings: Record<string, unknown>;
 
-  // Analytics
   view_count: number;
   export_count: number;
   share_count: number;
 
-  // Timestamps
   last_viewed_at: string;
   created_at: string;
   updated_at: string;
 }
-
-// =============================================
-// INSERT TYPES (for creating new records)
-// =============================================
 
 export type MultiAgentConversationInsert = Omit<
   MultiAgentConversation,
@@ -287,13 +247,8 @@ export type ConversationMetadataInsert = Omit<
   default_model?: string | null;
   default_temperature?: number | null;
   default_max_tokens?: number | null;
-  // Updated: Jan 15th 2026 - Fixed any type
   ui_settings?: Record<string, unknown>;
 };
-
-// =============================================
-// UPDATE TYPES (for updating records)
-// =============================================
 
 export type MultiAgentConversationUpdate = Partial<
   Omit<MultiAgentConversation, 'id' | 'user_id' | 'created_at' | 'updated_at'>
@@ -311,10 +266,6 @@ export type ConversationMetadataUpdate = Partial<
   Omit<ConversationMetadata, 'id' | 'conversation_id' | 'user_id' | 'created_at' | 'updated_at'>
 >;
 
-// =============================================
-// EXTENDED TYPES (with joins)
-// =============================================
-
 export interface ConversationWithParticipants extends Omit<MultiAgentConversation, 'metadata'> {
   participants: ConversationParticipant[];
   metadata?: ConversationMetadata | Record<string, unknown>;
@@ -331,10 +282,6 @@ export interface ParticipantWithStats extends ConversationParticipant {
   conversation_title: string | null;
   efficiency_score: number;
 }
-
-// =============================================
-// API REQUEST/RESPONSE TYPES
-// =============================================
 
 export interface CreateConversationRequest {
   title?: string;
@@ -400,10 +347,6 @@ export interface ConversationStats {
   average_conversation_duration: number;
 }
 
-// =============================================
-// REAL-TIME SUBSCRIPTION TYPES
-// =============================================
-
 export interface RealtimeConversationUpdate {
   conversation_id: string;
   update_type:
@@ -439,17 +382,12 @@ export interface PresenceState {
   last_seen: string;
 }
 
-// =============================================
-// ERROR TYPES
-// =============================================
-
 export interface DatabaseError {
   code: string;
   message: string;
   details?: unknown;
 }
 
-// Updated: Jan 15th 2026 - Fixed any type
 export class MultiAgentChatError extends Error {
   constructor(
     message: string,

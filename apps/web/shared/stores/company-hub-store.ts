@@ -1,7 +1,3 @@
-/**
- * Company Hub Store
- * Manages multi-agent collaboration workspace state
- */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -36,8 +32,8 @@ export interface AgentAssignment {
 export interface HubMessage {
   id: string;
   sessionId: string;
-  from: string; // Agent name or 'user' or 'system'
-  to?: string; // Target agent or 'all'
+  from: string;
+  to?: string;
   type: 'user' | 'agent' | 'system' | 'handoff' | 'completion' | 'error' | 'upsell';
   content: string;
   timestamp: Date;
@@ -75,27 +71,21 @@ export interface CompanyHubSession {
 }
 
 export interface CompanyHubState {
-  // Session management
   activeSessionId: string | null;
   sessions: Record<string, CompanyHubSession>;
 
-  // Agent tracking (using Record for Immer compatibility)
   assignedAgents: Record<string, AgentAssignment>;
   agentStatuses: Record<string, AgentStatus>;
 
-  // Token usage
   tokenUsage: TokenUsageByModel;
   sessionTokens: number;
   sessionCost: number;
 
-  // Messages
   messages: HubMessage[];
 
-  // Upsell
   upsellQueue: UpsellRequest[];
   pendingUpsell: UpsellRequest | null;
 
-  // UI state
   isOrchestrating: boolean;
   isPaused: boolean;
   error: string | null;
@@ -103,39 +93,32 @@ export interface CompanyHubState {
 }
 
 export interface CompanyHubActions {
-  // Session management
   createSession: (userId: string, taskDescription: string) => string;
   setActiveSession: (sessionId: string | null) => void;
   updateSessionStatus: (sessionId: string, status: CompanyHubSession['status']) => void;
   completeSession: (sessionId: string) => void;
 
-  // Agent management
   assignAgent: (agent: AgentAssignment) => void;
   updateAgentStatus: (agentId: string, status: Partial<AgentStatus>) => void;
   removeAgent: (agentId: string) => void;
   clearAgents: () => void;
 
-  // Token tracking
   updateTokenUsage: (usage: Partial<TokenUsageByModel>) => void;
   addTokens: (model: string, tokens: number, cost: number, provider: string) => void;
   resetTokenUsage: () => void;
 
-  // Messages
   addMessage: (message: Omit<HubMessage, 'id' | 'timestamp'>) => void;
   clearMessages: () => void;
 
-  // Upsell management
   addUpsellRequest: (request: Omit<UpsellRequest, 'id' | 'timestamp' | 'isResolved'>) => void;
   resolveUpsell: (requestId: string, response: 'approved' | 'denied') => void;
   setPendingUpsell: (request: UpsellRequest | null) => void;
 
-  // Orchestration control
   startOrchestration: () => void;
   pauseOrchestration: () => void;
   resumeOrchestration: () => void;
   stopOrchestration: () => void;
 
-  // Utility
   setError: (error: string | null) => void;
   reset: () => void;
 }
@@ -167,7 +150,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
       immer((set, _get) => ({
         ...INITIAL_STATE,
 
-        // Session management
         createSession: (userId: string, taskDescription: string) => {
           const sessionId = crypto.randomUUID();
           const now = new Date();
@@ -218,10 +200,8 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
           });
         },
 
-        // Agent management
         assignAgent: (agent: AgentAssignment) => {
           set((state) => {
-            // Check if agent already exists with same data (avoid unnecessary updates)
             const existingAgent = state.assignedAgents[agent.agentId];
             if (
               existingAgent &&
@@ -229,14 +209,12 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
               existingAgent.progress === agent.progress &&
               existingAgent.currentTask === agent.currentTask
             ) {
-              return; // Already assigned with same state, skip update
+              return;
             }
 
-            // Atomic update: update both assignedAgents and session.assignedAgents together
             state.assignedAgents[agent.agentId] = agent;
             state.lastUpdate = new Date();
 
-            // Update session
             if (state.activeSessionId) {
               const session = state.sessions[state.activeSessionId];
               if (session) {
@@ -256,11 +234,8 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
 
         updateAgentStatus: (agentId: string, status: Partial<AgentStatus>) => {
           set((state) => {
-            // Single source of truth: assignedAgents is the primary store
-            // agentStatuses is kept in sync for backward compatibility
             const agent = state.assignedAgents[agentId];
             if (agent) {
-              // Merge status into the agent assignment (pick only compatible fields)
               const { status: newStatus, currentTask, toolsUsing, output } = status;
               const updatedAgent: AgentAssignment = {
                 ...agent,
@@ -272,7 +247,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
 
               state.assignedAgents[agentId] = updatedAgent as (typeof state.assignedAgents)[string];
 
-              // Also update in session's assignedAgents for consistency
               if (state.activeSessionId) {
                 const session = state.sessions[state.activeSessionId];
                 if (session) {
@@ -288,7 +262,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
               state.lastUpdate = new Date();
             }
 
-            // Keep agentStatuses in sync (secondary store for status queries)
             const existingStatus = state.agentStatuses[agentId];
             if (existingStatus) {
               state.agentStatuses[agentId] = {
@@ -296,7 +269,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
                 ...status,
               } as AgentStatus;
             } else if (agent) {
-              // Only create agentStatuses entry if agent exists
               state.agentStatuses[agentId] = status as AgentStatus;
             }
           });
@@ -308,7 +280,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             delete state.agentStatuses[agentId];
             state.lastUpdate = new Date();
 
-            // Update session
             if (state.activeSessionId) {
               const session = state.sessions[state.activeSessionId];
               if (session) {
@@ -327,7 +298,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             state.agentStatuses = {};
             state.lastUpdate = new Date();
 
-            // Update session
             if (state.activeSessionId) {
               const session = state.sessions[state.activeSessionId];
               if (session) {
@@ -338,7 +308,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
           });
         },
 
-        // Token tracking
         updateTokenUsage: (usage: Partial<TokenUsageByModel>) => {
           set((state) => {
             Object.entries(usage).forEach(([model, stats]) => {
@@ -352,7 +321,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
               }
             });
 
-            // Recalculate totals
             state.sessionTokens = Object.values(state.tokenUsage).reduce(
               (sum, stat) => sum + stat.totalTokens,
               0,
@@ -397,7 +365,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
           });
         },
 
-        // Messages
         addMessage: (message: Omit<HubMessage, 'id' | 'timestamp'>) => {
           set((state) => {
             const newMessage: HubMessage = {
@@ -418,7 +385,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
           });
         },
 
-        // Upsell management
         addUpsellRequest: (request: Omit<UpsellRequest, 'id' | 'timestamp' | 'isResolved'>) => {
           set((state) => {
             const newRequest: UpsellRequest = {
@@ -430,7 +396,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
 
             state.upsellQueue.push(newRequest);
             state.pendingUpsell = newRequest;
-            state.isPaused = true; // Pause orchestration until resolved
+            state.isPaused = true;
             state.lastUpdate = new Date();
           });
         },
@@ -444,7 +410,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
             }
 
             state.pendingUpsell = null;
-            state.isPaused = false; // Resume orchestration
+            state.isPaused = false;
             state.lastUpdate = new Date();
           });
         },
@@ -456,7 +422,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
           });
         },
 
-        // Orchestration control
         startOrchestration: () => {
           set((state) => {
             state.isOrchestrating = true;
@@ -521,7 +486,6 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
           });
         },
 
-        // Utility
         setError: (error: string | null) => {
           set((state) => {
             state.error = error;
@@ -558,41 +522,19 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
   ),
 );
 
-// ============================================================================
-// SELECTOR HOOKS (optimized with useShallow to prevent stale closures)
-// ============================================================================
-
-/**
- * Selector for active session - returns stable reference when session hasn't changed
- */
 export const useActiveSession = () =>
   useCompanyHubStore((state) =>
     state.activeSessionId ? state.sessions[state.activeSessionId] : null,
   );
 
-/**
- * Selector for assigned agents record - returns stable reference to the record
- * Use this when you need access to agents by ID
- */
 export const useAssignedAgentsRecord = () => useCompanyHubStore((state) => state.assignedAgents);
 
-/**
- * Selector for assigned agents as array - memoized through store
- * Note: Returns a new array reference on each call. For optimized renders,
- * prefer useAssignedAgentsRecord and derive the array with useMemo in the component.
- */
 export const useAssignedAgents = () =>
   useCompanyHubStore((state) => Object.values(state.assignedAgents));
 
-/**
- * Selector for a specific agent by ID - returns stable reference when agent hasn't changed
- */
 export const useAssignedAgent = (agentId: string) =>
   useCompanyHubStore((state) => state.assignedAgents[agentId]);
 
-/**
- * Selector for token usage - uses useShallow for multi-value selection
- */
 export const useTokenUsage = () =>
   useCompanyHubStore(
     useShallow((state) => ({
@@ -602,19 +544,10 @@ export const useTokenUsage = () =>
     })),
   );
 
-/**
- * Selector for hub messages - returns stable reference when messages haven't changed
- */
 export const useHubMessages = () => useCompanyHubStore((state) => state.messages);
 
-/**
- * Selector for pending upsell - returns stable reference
- */
 export const usePendingUpsell = () => useCompanyHubStore((state) => state.pendingUpsell);
 
-/**
- * Selector for orchestration status - uses useShallow for multi-value selection
- */
 export const useOrchestrationStatus = () =>
   useCompanyHubStore(
     useShallow((state) => ({
@@ -624,17 +557,8 @@ export const useOrchestrationStatus = () =>
     })),
   );
 
-/**
- * Selector for active session ID - primitive value, no shallow needed
- */
 export const useActiveSessionId = () => useCompanyHubStore((state) => state.activeSessionId);
 
-/**
- * Selector for upsell queue - returns stable reference
- */
 export const useUpsellQueue = () => useCompanyHubStore((state) => state.upsellQueue);
 
-/**
- * Selector for last update timestamp - primitive value
- */
 export const useLastUpdate = () => useCompanyHubStore((state) => state.lastUpdate);

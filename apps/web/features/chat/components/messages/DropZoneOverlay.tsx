@@ -1,18 +1,10 @@
 'use client';
 
-/**
- * DropZoneOverlay - Full-area overlay shown when files are dragged over the chat message list.
- *
- * Renders a semi-transparent backdrop with a dashed border, upload icon, and helper text.
- * Fades in/out via framer-motion AnimatePresence.
- */
-
 import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload } from 'lucide-react';
 
 interface DropZoneOverlayProps {
-  /** Whether a drag is currently over the drop target */
   visible: boolean;
 }
 

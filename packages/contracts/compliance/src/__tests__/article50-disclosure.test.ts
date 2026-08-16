@@ -16,8 +16,6 @@ describe('Article50Disclosure — compose', () => {
       offersManagedCloud: true,
       thirdPartyAiProviders: ['Anthropic', 'OpenAI', 'Google'],
     });
-    // Single combined screen — verifies PRD V5 lock #26 "covers V4's 5.1.2(i)
-    // consent flow + adds explicit chatbot label" without double-prompting.
     expect(copy.title).toBe('Before you start');
     expect(copy.summary).toContain('You are interacting with an AI system');
     expect(copy.summary).toContain('Responses can be inaccurate');
@@ -57,7 +55,6 @@ describe('Article50Disclosure — compose', () => {
       offersManagedCloud: true,
       thirdPartyAiProviders: [],
     });
-    // These strings are the verbatim OJ text — bit-for-bit equality.
     expect(copy.article50_1).toBe(ARTICLE_50_1_VERBATIM);
     expect(copy.article50_2).toBe(ARTICLE_50_2_VERBATIM);
     expect(copy.article50_1).toContain('they are interacting with an AI system');

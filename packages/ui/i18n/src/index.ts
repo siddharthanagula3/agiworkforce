@@ -1,12 +1,3 @@
-/**
- * Shared i18n contract for every surface.
- *
- * Each app owns its own `i18next` instance — web needs the browser language
- * detector, mobile needs `expo-localization`, and desktop persists the choice
- * to its own store — but the language list, the fallback rule and the
- * translations themselves are defined once, here. Three copies of that list is
- * how web came to offer three languages while desktop offered twelve.
- */
 
 import { resources } from './resources';
 
@@ -14,12 +5,9 @@ export { resources };
 
 export interface SupportedLanguage {
   code: string;
-  /** English name, for menus that group or search by it. */
   name: string;
-  /** The language's own name — what a speaker of it expects to see. */
   nativeName: string;
   flag: string;
-  /** Right-to-left script; hosts must set `dir` on the document. */
   rtl?: boolean;
 }
 
@@ -61,13 +49,10 @@ export function languageFor(code: string): SupportedLanguage | undefined {
   return SUPPORTED_LANGUAGES.find((lang) => lang.code === code);
 }
 
-/** Shared `i18next.init` options. Hosts add their own detector and plugins. */
 export const baseInitOptions = {
   resources,
   fallbackLng: DEFAULT_LANGUAGE,
   defaultNS: 'common' as const,
   ns: NAMESPACES,
-  // React already escapes; letting i18next escape again double-encodes
-  // apostrophes and accented characters in the very languages this exists for.
   interpolation: { escapeValue: false },
 } as const;

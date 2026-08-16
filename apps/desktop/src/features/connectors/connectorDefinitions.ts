@@ -58,9 +58,6 @@ export const CONNECTOR_CATEGORIES: ConnectorCategory[] = [
 ];
 
 export const CONNECTORS: ConnectorDef[] = [
-  // ─────────────────────────────────────────────
-  // Featured connectors
-  // ─────────────────────────────────────────────
   {
     id: 'gmail',
     name: 'Gmail',
@@ -144,11 +141,6 @@ export const CONNECTORS: ConnectorDef[] = [
     provider: 'canva',
     category: 'Design',
     color: 'blue',
-    // AUDIT-FIX: no `McpOAuthProvider::from_str` arm and no
-    // `get_connector_mcp_mapping` entry exist for 'canva' — clicking Connect
-    // previously failed immediately with "Unknown provider: canva". Hidden
-    // until real backend support lands (see
-    // DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01).
     comingSoon: true,
     authType: 'oauth',
     docsUrl: 'https://www.canva.dev',
@@ -176,11 +168,6 @@ export const CONNECTORS: ConnectorDef[] = [
     provider: 'hubspot',
     category: 'CRM & Sales',
     color: 'orange',
-    // AUDIT-FIX: no `McpOAuthProvider::from_str` arm and no
-    // `get_connector_mcp_mapping` entry exist for 'hubspot' — clicking
-    // Connect previously failed immediately with "Unknown provider:
-    // hubspot". Hidden until real backend support lands (see
-    // DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01).
     comingSoon: true,
     authType: 'oauth',
     docsUrl: 'https://developers.hubspot.com',
@@ -195,13 +182,6 @@ export const CONNECTORS: ConnectorDef[] = [
     category: 'Development',
     color: 'purple',
     featured: true,
-    // AUDIT-FIX: Linear's backend mapping (`get_connector_mcp_mapping` in
-    // mcp_oauth.rs) is a fully working `ApiKey`-credentialed connector, but
-    // this catalog previously declared `authType: 'oauth'`, which routed
-    // `ConnectorGallery.handleConnectClick` to the OAuth flow —
-    // `McpOAuthProvider::from_str` has no 'linear' arm, so every attempt
-    // failed immediately with "Unknown provider: linear", making a
-    // fully-working integration unreachable through the UI.
     authType: 'api_key',
     apiKeyPlaceholder: 'API key...',
     docsUrl: 'https://developers.linear.app',
@@ -300,9 +280,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://context7.com',
   },
 
-  // ─────────────────────────────────────────────
-  // Communication
-  // ─────────────────────────────────────────────
   {
     id: 'outlook',
     name: 'Outlook',
@@ -361,9 +338,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://discord.com/developers/docs',
   },
 
-  // ─────────────────────────────────────────────
-  // Productivity
-  // ─────────────────────────────────────────────
   {
     id: 'asana',
     name: 'Asana',
@@ -432,9 +406,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://airtable.com/developers/web/api',
   },
 
-  // ─────────────────────────────────────────────
-  // Development
-  // ─────────────────────────────────────────────
   {
     id: 'sentry',
     name: 'Sentry',
@@ -490,9 +461,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://planetscale.com/docs',
   },
 
-  // ─────────────────────────────────────────────
-  // Design
-  // ─────────────────────────────────────────────
   {
     id: 'miro',
     name: 'Miro',
@@ -520,9 +488,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://docs.excalidraw.com',
   },
 
-  // ─────────────────────────────────────────────
-  // CRM & Sales
-  // ─────────────────────────────────────────────
   {
     id: 'salesforce',
     name: 'Salesforce',
@@ -593,9 +558,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://docs.clay.com',
   },
 
-  // ─────────────────────────────────────────────
-  // Data & BI / Analytics
-  // ─────────────────────────────────────────────
   {
     id: 'snowflake',
     name: 'Snowflake',
@@ -667,9 +629,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://posthog.com/docs/api',
   },
 
-  // ─────────────────────────────────────────────
-  // Finance
-  // ─────────────────────────────────────────────
   {
     id: 'paypal',
     name: 'PayPal',
@@ -725,9 +684,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://docs.mercury.com',
   },
 
-  // ─────────────────────────────────────────────
-  // Automation
-  // ─────────────────────────────────────────────
   {
     id: 'zapier',
     name: 'Zapier',
@@ -784,9 +740,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://docs.workato.com/api/',
   },
 
-  // ─────────────────────────────────────────────
-  // Storage
-  // ─────────────────────────────────────────────
   {
     id: 'box',
     name: 'Box',
@@ -829,9 +782,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://www.dropbox.com/developers',
   },
 
-  // ─────────────────────────────────────────────
-  // Meetings
-  // ─────────────────────────────────────────────
   {
     id: 'fireflies',
     name: 'Fireflies',
@@ -874,9 +824,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://developer.fellow.app',
   },
 
-  // ─────────────────────────────────────────────
-  // Marketing
-  // ─────────────────────────────────────────────
   {
     id: 'klaviyo',
     name: 'Klaviyo',
@@ -920,9 +867,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://mailchimp.com/developer/',
   },
 
-  // ─────────────────────────────────────────────
-  // AI & ML
-  // ─────────────────────────────────────────────
   {
     id: 'huggingface',
     name: 'Hugging Face',
@@ -952,9 +896,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://elevenlabs.io/docs/api-reference',
   },
 
-  // ─────────────────────────────────────────────
-  // Content
-  // ─────────────────────────────────────────────
   {
     id: 'wordpress',
     name: 'WordPress',
@@ -996,9 +937,6 @@ export const CONNECTORS: ConnectorDef[] = [
     docsUrl: 'https://gamma.app',
   },
 
-  // ─────────────────────────────────────────────
-  // Research
-  // ─────────────────────────────────────────────
   {
     id: 'pubmed',
     name: 'PubMed',
@@ -1018,19 +956,6 @@ export const CONNECTOR_DIRECTORY = CONNECTORS.filter((c) => !c.comingSoon);
 
 export const FEATURED_CONNECTORS = CONNECTOR_DIRECTORY.filter((c) => c.featured);
 
-// ─────────────────────────────────────────────
-// Custom remote MCP connectors
-// ─────────────────────────────────────────────
-//
-// `CustomRemoteMcpConnectorDialog.tsx` adds a user-supplied remote MCP
-// server directly into the MCP config under a `custom-<slug>` key — it has
-// no entry in this static catalog (there's nothing to catalog ahead of
-// time) and no OAuth/API-key credential row, so it can never be looked up
-// via `connectorById`. `buildCustomMcpConnectorDef` synthesizes a minimal,
-// honest `ConnectorDef` on the fly from the server id alone (the only data
-// available once connected — `DesktopMcpServerConfig` has no stored display
-// name), so the gallery's "Connected" section and Configure view can render
-// these entries instead of silently dropping them.
 export const CUSTOM_MCP_SERVER_PREFIX = 'custom-';
 
 export function isCustomMcpConnectorId(id: string): boolean {
@@ -1057,9 +982,6 @@ export function buildCustomMcpConnectorDef(serverId: string): ConnectorDef {
     name: titleCaseSlug(slug) || 'Custom connector',
     icon: '\u{1F50C}',
     description: 'Custom remote MCP server',
-    // Reuses the existing Model Context Protocol brand icon
-    // (CONNECTOR_BRAND_ICONS['modelcontextprotocol'] in ConnectorGallery.tsx)
-    // as the "generic MCP icon" for these entries.
     provider: 'modelcontextprotocol',
     category: 'Automation',
     color: 'slate',

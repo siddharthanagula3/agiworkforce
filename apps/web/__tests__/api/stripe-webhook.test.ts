@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-// Mock environment variables before imports
 const mockEnv = {
   STRIPE_SECRET_KEY: 'sk_test_mock_key',
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
@@ -11,7 +10,6 @@ const mockEnv = {
 vi.stubEnv('STRIPE_SECRET_KEY', mockEnv.STRIPE_SECRET_KEY);
 vi.stubEnv('STRIPE_WEBHOOK_SECRET', mockEnv.STRIPE_WEBHOOK_SECRET);
 
-// Mock logger
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -21,15 +19,11 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock security audit
 vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
-  // AUDIT-TRAIL-01: the subscription-deleted handler records a plan_changed
-  // audit event. Omitting it here makes the import undefined and 500s the hook.
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Neon DB mock — use module-level objects so they survive resetModules
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockDb = {
@@ -46,7 +40,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => mockDb),
 }));
 
-// Mock subscription service
 const mockAllocateCredits = vi.fn();
 const mockResetCredits = vi.fn();
 
@@ -57,7 +50,6 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-// Mock credit service
 const mockGetBalance = vi.fn();
 const mockDeductCredits = vi.fn();
 
@@ -68,7 +60,6 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-// Mock price tier mapping
 vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: vi.fn(() => 'pro'),
   isValidPlanTier: vi.fn(() => true),
@@ -76,7 +67,6 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   isPriceIdRegistered: vi.fn(() => true),
 }));
 
-// Utility to generate Stripe signature
 function generateStripeSignature(
   payload: string,
   secret: string,
@@ -91,10 +81,8 @@ function generateStripeSignature(
   };
 }
 
-// Mock Stripe with proper signature verification
 const mockStripeWebhooks = {
   constructEvent: vi.fn((body: string, signature: string, secret: string) => {
-    // Parse the signature
     const parts = signature.split(',');
     const timestampPart = parts.find((p) => p.startsWith('t='));
     const signaturePart = parts.find((p) => p.startsWith('v1='));
@@ -106,13 +94,11 @@ const mockStripeWebhooks = {
     const timestamp = parseInt(timestampPart.split('=')[1]!, 10);
     const providedSignature = signaturePart.split('=')[1]!;
 
-    // Verify timestamp is not too old (5 minute tolerance)
     const currentTime = Math.floor(Date.now() / 1000);
     if (currentTime - timestamp > 300) {
       throw new Error('Webhook timestamp too old');
     }
 
-    // Verify signature
     const signedPayload = `${timestamp}.${body}`;
     const expectedSignature = crypto
       .createHmac('sha256', secret)
@@ -127,7 +113,6 @@ const mockStripeWebhooks = {
   }),
 };
 
-// Create a mock Stripe class that works with ESM imports
 class MockStripe {
   webhooks = mockStripeWebhooks;
   checkout = {
@@ -175,20 +160,16 @@ describe('Stripe Webhook Security Tests', () => {
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Re-establish getNeonDb mock after resetModules
     const neonModule = await import('@/lib/server/neon-db');
     (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
-    // Default: idempotency returns true (should process event)
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes('process_stripe_event_idempotent')) {
         return Promise.resolve([{ process_stripe_event_idempotent: true }]);
       }
-      // Subscription lookup
       if (sql.includes('subscriptions')) {
         return Promise.resolve([{ id: 'sub_db_123', user_id: 'user_123' }]);
       }
-      // Profile lookup
       if (sql.includes('profiles')) {
         return Promise.resolve([{ id: 'user_123' }]);
       }
@@ -197,7 +178,6 @@ describe('Stripe Webhook Security Tests', () => {
 
     mockExecute.mockResolvedValue(1);
 
-    // Restore subscription service mocks
     mockAllocateCredits.mockResolvedValue(undefined);
     mockResetCredits.mockResolvedValue(undefined);
     mockGetBalance.mockResolvedValue({ credits_remaining_cents: 0 });
@@ -255,7 +235,6 @@ describe('Stripe Webhook Security Tests', () => {
         },
       });
 
-      // Generate signature with wrong secret
       const { signature } = generateStripeSignature(eventPayload, 'wrong_secret');
 
       const request = new NextRequest('http://localhost/api/stripe-webhook', {
@@ -321,7 +300,6 @@ describe('Stripe Webhook Security Tests', () => {
         },
       });
 
-      // Generate signature with timestamp 10 minutes ago (beyond 5-minute tolerance)
       const oldTimestamp = Math.floor(Date.now() / 1000) - 600;
       const { signature } = generateStripeSignature(
         eventPayload,
@@ -373,7 +351,6 @@ describe('Stripe Webhook Security Tests', () => {
 
   describe('Idempotency', () => {
     it('should skip already processed events', async () => {
-      // Mock idempotency check to return false (already processed)
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: false }]);
@@ -405,7 +382,6 @@ describe('Stripe Webhook Security Tests', () => {
 
       const response = await POST(request);
 
-      // The response indicates the event was already processed
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.message).toContain('already processed');
@@ -581,7 +557,6 @@ describe('Stripe Webhook Security Tests', () => {
         data: { object: {} },
       });
 
-      // Use invalid signature
       const { signature } = generateStripeSignature(eventPayload, 'wrong_secret');
 
       const request = new NextRequest('http://localhost/api/stripe-webhook', {
@@ -595,7 +570,6 @@ describe('Stripe Webhook Security Tests', () => {
 
       await POST(request);
 
-      // Verify security audit was called
       expect(logInvalidSignature).toHaveBeenCalled();
     });
   });

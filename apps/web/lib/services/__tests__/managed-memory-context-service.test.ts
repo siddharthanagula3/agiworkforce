@@ -147,10 +147,6 @@ describe('persistManagedAutoMemoryFacts', () => {
 
     expect(first).toEqual({ extracted: 7, inserted: 2, excluded: 0 });
     expect(second).toEqual({ extracted: 7, inserted: 2, excluded: 0 });
-    // Selected by CONTENT, not by position. The write path also reads the
-    // account's memory exclusions, so `calls[0]` and `calls[1]` are no longer
-    // the two inserts — indexing positionally made this test depend on how
-    // many queries the function happens to issue rather than on what it wrote.
     const insertCalls = query.mock.calls.filter((call) =>
       String(call[0]).includes('insert into user_memories'),
     );

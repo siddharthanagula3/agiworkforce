@@ -1,21 +1,3 @@
-/**
- * E2B sandbox compute metering — unit tests.
- *
- * The invariant under test is the one that made every sandbox second free:
- * `AGI_E2B_COMPUTE_MICROUSD_PER_SECOND` ships empty in `.env.example`, so an
- * unset rate resolved to 0, which `sandboxComputeCostCents` then reports as
- * "this interval costs nothing".
- *
- * The protection is `sandboxComputeIsPriceable()`: `getE2BExecutor()` calls it
- * before creating or resuming a sandbox, so a production runtime with no rate
- * serves no managed compute at all rather than serving it free (the refusal
- * itself is asserted in `runtime.test.ts`). Off production — dev, preview,
- * `next build` — metering stays inert and sandboxes are still served.
- *
- * Metering itself still runs for sandboxes that were already alive when the
- * rate went away, so it must never throw at pause / kill / reclaim, and it must
- * count what it could not charge for.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -30,7 +12,6 @@ vi.mock('@/lib/services/credit-service', () => ({
 
 const RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
 
-/** Every test starts from a deployment that has configured none of these. */
 function clearScopedEnv(): void {
   vi.stubEnv(RATE_ENV, undefined);
   vi.stubEnv('NODE_ENV', undefined);
@@ -46,7 +27,6 @@ function resetMocks(): void {
   settleCreditsDurably.mockResolvedValue({ status: 'settled' });
 }
 
-/** Fresh module per test: the missing-rate warning and the unbilled total are process state. */
 async function loadModule() {
   vi.resetModules();
   return import('../compute-metering');
@@ -101,8 +81,6 @@ describe('sandboxComputeIsPriceable — the provisioning gate', () => {
   });
 
   it('is true during the production build phase', async () => {
-    // `next build` runs with NODE_ENV=production and serves no customer; a
-    // refusal here would break every deploy that has not priced sandboxes yet.
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('NEXT_PHASE', 'phase-production-build');
     const mod = await loadModule();
@@ -154,8 +132,6 @@ describe('meterSandboxComputeInterval', () => {
   });
 
   it('reports every unpriced interval and never throws at the caller', async () => {
-    // Reachable despite the provisioning gate: a sandbox that was already alive
-    // when the rate was removed still gets paused / killed / reclaimed.
     vi.stubEnv('NODE_ENV', 'production');
     const mod = await loadModule();
 
@@ -177,8 +153,6 @@ describe('meterSandboxComputeInterval', () => {
   });
 
   it('counts an interval that rounds to 0 cents at a realistic rate as unbilled', async () => {
-    // ~28 µUSD/s is a plausible E2B rate: 60s = 0.168 cents, which Math.round
-    // drops. The seconds are still lost revenue, so they must be counted.
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv(RATE_ENV, '28');
     const mod = await loadModule();
@@ -207,7 +181,6 @@ describe('meterSandboxComputeInterval', () => {
 
   it('settles a priced interval into the usage ledger', async () => {
     vi.stubEnv('NODE_ENV', 'production');
-    // 28 µUSD/s over an hour = 10.08 cents.
     vi.stubEnv(RATE_ENV, '28');
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });

@@ -57,33 +57,23 @@
  *   - DISPATCH_HMAC_REQUIRED_AFTER is exported and is a valid ISO 8601 date string
  */
 
-// ---------------------------------------------------------------------------
-// Mocks — must be declared before imports
-// ---------------------------------------------------------------------------
-
-// Mock expo-crypto with a deterministic SHA-256 implementation using Node's
-// built-in `crypto` module so tests run in Jest without native modules.
 jest.mock('expo-crypto', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const nodeCrypto = require('crypto');
 
-  // Deterministic SHA-256 over a Buffer / Uint8Array using Node crypto
   function nodesha256(data: ArrayBuffer): ArrayBuffer {
     const hash = nodeCrypto.createHash('sha256').update(Buffer.from(data)).digest();
     return hash.buffer.slice(hash.byteOffset, hash.byteOffset + hash.byteLength) as ArrayBuffer;
   }
 
-  // Deterministic random bytes counter (starts at 0) for predictable nonces
   let _nonceCounter = 0;
 
   return {
     __esModule: true,
     CryptoDigestAlgorithm: { SHA256: 'SHA-256', SHA512: 'SHA-512' },
-    // digest(algorithm, ArrayBuffer) — used by our sha256() helper
     digest: jest.fn(async (_algo: string, data: ArrayBuffer) => {
       return nodesha256(data);
     }),
-    // getRandomBytes — return deterministic bytes for reproducible nonce tests
     getRandomBytes: jest.fn((n: number): Uint8Array => {
       const bytes = new Uint8Array(n);
       for (let i = 0; i < n; i++) {
@@ -92,22 +82,16 @@ jest.mock('expo-crypto', () => {
       _nonceCounter++;
       return bytes;
     }),
-    // digestStringAsync — not used by the v2 implementation but kept for compat
     digestStringAsync: jest.fn(async (_algo: string, data: string) => {
       return nodeCrypto.createHash('sha256').update(data).digest('hex');
     }),
     randomUUID: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
     getRandomBytesAsync: jest.fn(async (n: number) => new Uint8Array(n)),
-    // expose reset helper for tests that need fresh nonce counters
     __resetNonceCounter: () => {
       _nonceCounter = 0;
     },
   };
 });
-
-// ---------------------------------------------------------------------------
-// Imports
-// ---------------------------------------------------------------------------
 
 import {
   deriveDispatchSecret,
@@ -117,24 +101,14 @@ import {
   type HmacSessionState,
 } from '../lib/dispatchHmac';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Create a fresh HmacSessionState with a known 32-byte key (64 hex chars). */
 async function makeState(pairingCode = 'TESTCODE', salt = 'testsalt'): Promise<HmacSessionState> {
   const secret = await deriveDispatchSecret(pairingCode, salt);
   return { secret, nonceCache: new Map() };
 }
 
-/** Clone a state so tests don't share mutable nonceCache references. */
 function cloneState(state: HmacSessionState): HmacSessionState {
   return { secret: state.secret, nonceCache: new Map(state.nonceCache) };
 }
-
-// ---------------------------------------------------------------------------
-// 1. Key derivation
-// ---------------------------------------------------------------------------
 
 describe('Key derivation — deriveDispatchSecret', () => {
   it('produces a 64-char hex string (32 bytes)', async () => {
@@ -162,10 +136,6 @@ describe('Key derivation — deriveDispatchSecret', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. Sign / Verify — round-trip
-// ---------------------------------------------------------------------------
-
 describe('HMAC sign/verify — round-trip', () => {
   it('signMessage returns an envelope with all required fields', async () => {
     const state = await makeState();
@@ -188,9 +158,7 @@ describe('HMAC sign/verify — round-trip', () => {
   it('nonce is a base64 string (24 chars for 16 bytes)', async () => {
     const state = await makeState();
     const env = await signMessage(state, 'ping', {});
-    // 16 bytes base64 = ceil(16/3)*4 = 24 chars
     expect(env.nonce).toHaveLength(24);
-    // Valid base64 characters
     expect(env.nonce).toMatch(/^[A-Za-z0-9+/=]{24}$/);
   });
 
@@ -213,7 +181,7 @@ describe('HMAC sign/verify — round-trip', () => {
 
   it('full round-trip: sign on sender state, verify on receiver state', async () => {
     const senderState = await makeState('ROUNDTRIP', 'sess1');
-    const receiverState = await makeState('ROUNDTRIP', 'sess1'); // same derivation inputs
+    const receiverState = await makeState('ROUNDTRIP', 'sess1');
 
     const payload = { action: 'emergency_stop', sentAt: '2026-05-05T00:00:00Z' };
     const envelope = await signMessage(senderState, 'emergency_stop', payload);
@@ -228,10 +196,6 @@ describe('HMAC sign/verify — round-trip', () => {
     expect(env1.nonce).not.toBe(env2.nonce);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 3. HMAC Reject — invalid HMAC
-// ---------------------------------------------------------------------------
 
 describe('HMAC rejection', () => {
   it('returns hmac_mismatch for a tampered hmac field', async () => {
@@ -268,7 +232,6 @@ describe('HMAC rejection', () => {
     const senderState = await makeState();
     const receiverState = await makeState();
     const env = await signMessage(senderState, 'pong', { timestamp: Date.now() });
-    // Shift ts by 1ms — still within 30s window but HMAC now invalid
     const tampered = { ...env, ts: env.ts + 1 };
     const result = await verifyMessage(receiverState, tampered);
     expect(result.ok).toBe(false);
@@ -277,7 +240,7 @@ describe('HMAC rejection', () => {
 
   it('returns hmac_mismatch when wrong session key is used', async () => {
     const senderState = await makeState('SENDERKEY', 'saltsalt');
-    const wrongState = await makeState('WRONGKEY1', 'saltsalt'); // different pairing code
+    const wrongState = await makeState('WRONGKEY1', 'saltsalt');
     const env = await signMessage(senderState, 'ping', {});
     const result = await verifyMessage(wrongState, env);
     expect(result.ok).toBe(false);
@@ -285,21 +248,15 @@ describe('HMAC rejection', () => {
   });
 
   it('constant-time comparison: all single-char hmac tamperings are rejected', async () => {
-    // Not a true timing test (Jest cannot measure ns-level timing), but ensures
-    // the constant-time comparison path is exercised and the rejection reason is
-    // always 'hmac_mismatch', not a short-circuit early return.
     const senderState = await makeState('CTIMEKEY', 'ctimesalt');
     const env = await signMessage(senderState, 'ping', { seq: 1 });
 
-    // Build a set of hex chars that differ from the real hmac at a given position
     function tamperAt(hmac: string, pos: number): string {
       const orig = hmac[pos];
-      // Use a character that is guaranteed different from orig
       const alt = orig === 'a' ? 'b' : 'a';
       return hmac.slice(0, pos) + alt + hmac.slice(pos + 1);
     }
 
-    // Tamper at first, middle, and last positions
     const positions = [0, 31, 63];
     for (const pos of positions) {
       const recvState = await makeState('CTIMEKEY', 'ctimesalt');
@@ -313,10 +270,6 @@ describe('HMAC rejection', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Replay — timestamp window
-// ---------------------------------------------------------------------------
-
 describe('Replay rejection — timestamp window', () => {
   const RealDateNow = Date.now.bind(Date);
 
@@ -326,9 +279,7 @@ describe('Replay rejection — timestamp window', () => {
 
   it('returns timestamp_expired for a ts more than 30s in the past', async () => {
     const senderState = await makeState();
-    // Sign a message with real time
     const env = await signMessage(senderState, 'ping', {});
-    // Receiver checks 31s later — message is expired
     jest.spyOn(Date, 'now').mockReturnValue(env.ts + 31_000);
     const receiverState = await makeState();
     const result = await verifyMessage(receiverState, env);
@@ -339,7 +290,6 @@ describe('Replay rejection — timestamp window', () => {
   it('returns timestamp_expired for a ts more than 30s in the future', async () => {
     const senderState = await makeState();
     const env = await signMessage(senderState, 'ping', {});
-    // Message claims to be from 31s in the future
     jest.spyOn(Date, 'now').mockReturnValue(env.ts - 31_000);
     const receiverState = await makeState();
     const result = await verifyMessage(receiverState, env);
@@ -350,7 +300,6 @@ describe('Replay rejection — timestamp window', () => {
   it('accepts a ts within +30s window (29 999ms old)', async () => {
     const senderState = await makeState();
     const env = await signMessage(senderState, 'ping', {});
-    // Receiver is 29 999ms later — still within window
     jest.spyOn(Date, 'now').mockReturnValue(env.ts + 29_999);
     const receiverState = await makeState();
     const result = await verifyMessage(receiverState, env);
@@ -358,7 +307,6 @@ describe('Replay rejection — timestamp window', () => {
   });
 
   it('accepts a ts that is slightly in the future (1s ahead)', async () => {
-    // Clocks may drift — accept up to 30s in the future
     const senderState = await makeState();
     const env = await signMessage(senderState, 'ping', {});
     jest.spyOn(Date, 'now').mockReturnValue(env.ts - 1_000);
@@ -367,13 +315,8 @@ describe('Replay rejection — timestamp window', () => {
     expect(result.ok).toBe(true);
   });
 
-  // Keep RealDateNow reference to avoid accidental use
   void RealDateNow;
 });
-
-// ---------------------------------------------------------------------------
-// 5. Replay — nonce sliding-window cache
-// ---------------------------------------------------------------------------
 
 describe('Replay rejection — nonce sliding-window cache', () => {
   afterEach(() => {
@@ -385,11 +328,9 @@ describe('Replay rejection — nonce sliding-window cache', () => {
     const receiverState = await makeState();
 
     const env = await signMessage(senderState, 'ping', {});
-    // First verify: accepted and nonce cached
     const r1 = await verifyMessage(receiverState, env);
     expect(r1.ok).toBe(true);
 
-    // Second verify with identical envelope (same nonce): replay rejected
     const r2 = await verifyMessage(receiverState, env);
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.reason).toBe('nonce_replay');
@@ -399,10 +340,8 @@ describe('Replay rejection — nonce sliding-window cache', () => {
     const senderState = await makeState();
     const receiverState = await makeState();
 
-    // Both messages signed with the same payload but different nonces
     const env1 = await signMessage(senderState, 'ping', { timestamp: 1000 });
     const env2 = await signMessage(senderState, 'ping', { timestamp: 1000 });
-    // Ensure nonces actually differ (mock counter increments)
     expect(env1.nonce).not.toBe(env2.nonce);
 
     const r1 = await verifyMessage(receiverState, env1);
@@ -416,39 +355,23 @@ describe('Replay rejection — nonce sliding-window cache', () => {
     const receiverState = await makeState();
 
     const t0 = 1_000_000;
-    // At time t0: sign and verify a message
     jest.spyOn(Date, 'now').mockReturnValue(t0);
     const env = await signMessage(senderState, 'ping', {});
 
-    // Adjust env.ts to match mocked now (signMessage uses Date.now internally)
-    // Since env.ts comes from Date.now() inside signMessage, it should equal t0
     const r1 = await verifyMessage(receiverState, env);
     expect(r1.ok).toBe(true);
 
-    // At time t0 + 61s: nonce cache TTL expired; re-verify same nonce
-    // ts is still within window (we move time forward 61s but ts is t0)
-    // Actually ts would now be 61s old — outside 30s window.
-    // Use a fresh envelope signed at the new time, then test that the
-    // old nonce WAS evicted (by testing nonceCache size).
     const t1 = t0 + 61_000;
     jest.spyOn(Date, 'now').mockReturnValue(t1);
 
-    // Sign a new message (ts = t1) with a DIFFERENT nonce
     const env2 = await signMessage(senderState, 'ping', {});
-    // Verify to trigger pruning
     const r2 = await verifyMessage(receiverState, env2);
     expect(r2.ok).toBe(true);
 
-    // After pruning, the nonce from env (at t0) should be gone from the cache
-    // because t0 + 61_000 - 60_000 = t0 + 1_000 > t0
     expect(receiverState.nonceCache.has(env.nonce)).toBe(false);
   });
 
   it('after eviction, the previously seen (expired) nonce can be re-used', async () => {
-    // This models the extreme edge case where an attacker waits >60s to replay.
-    // The nonce is no longer in the cache, but the ts check will catch it
-    // (the original ts is now > 30s old). This test verifies the two defenses
-    // work in tandem.
     const senderState = await makeState();
     const receiverState = await makeState();
 
@@ -458,27 +381,18 @@ describe('Replay rejection — nonce sliding-window cache', () => {
     const r1 = await verifyMessage(receiverState, env);
     expect(r1.ok).toBe(true);
 
-    // 61s later: nonce evicted from cache
     const t1 = t0 + 61_000;
     jest.spyOn(Date, 'now').mockReturnValue(t1);
 
-    // The nonce is now absent from the cache...
-    // Trigger pruning by calling verifyMessage with a fresh msg
     const env2 = await signMessage(senderState, 'ping', {});
     await verifyMessage(receiverState, env2);
     expect(receiverState.nonceCache.has(env.nonce)).toBe(false);
 
-    // ...but replaying env at t1 is still rejected by timestamp_expired
-    // (env.ts = t0 which is 61s old, exceeds 30s window)
     const r2 = await verifyMessage(receiverState, env);
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.reason).toBe('timestamp_expired');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 6. Malformed messages
-// ---------------------------------------------------------------------------
 
 describe('Malformed message rejection', () => {
   it('returns malformed for non-object input (string)', async () => {
@@ -499,7 +413,6 @@ describe('Malformed message rejection', () => {
     const state = await makeState();
     const result = await verifyMessage(state, {
       hmac: 'a'.repeat(64),
-      // nonce: missing
       ts: Date.now(),
       type: 'ping',
       payload: {},
@@ -513,7 +426,6 @@ describe('Malformed message rejection', () => {
     const result = await verifyMessage(state, {
       hmac: 'a'.repeat(64),
       nonce: 'AAAAAAAAAAAAAAAAAAAAAA==',
-      // ts: missing
       type: 'ping',
       payload: {},
     });
@@ -527,7 +439,6 @@ describe('Malformed message rejection', () => {
       hmac: 'a'.repeat(64),
       nonce: 'AAAAAAAAAAAAAAAAAAAAAA==',
       ts: Date.now(),
-      // type: missing
       payload: {},
     });
     expect(result.ok).toBe(false);
@@ -541,10 +452,6 @@ describe('Malformed message rejection', () => {
     if (!result.ok) expect(result.reason).toBe('malformed');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 7. Unsigned messages
-// ---------------------------------------------------------------------------
 
 describe('Unsigned Dispatch messages', () => {
   const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -587,7 +494,7 @@ describe('Unsigned Dispatch messages', () => {
   it('rejects unsigned message after DISPATCH_HMAC_REQUIRED_AFTER (fail-closed)', async () => {
     const state = await makeState();
     const cutoff = new Date(DISPATCH_HMAC_REQUIRED_AFTER).getTime();
-    jest.spyOn(Date, 'now').mockReturnValue(cutoff + 1_000); // past cutoff
+    jest.spyOn(Date, 'now').mockReturnValue(cutoff + 1_000);
 
     const rawMsg = { action: 'emergency_stop', sentAt: '2026-06-06T00:00:00Z' };
     const result = await verifyMessage(state, rawMsg);
@@ -603,17 +510,12 @@ describe('Unsigned Dispatch messages', () => {
     const rawMsg = { action: 'ping' };
     await verifyMessage(state, rawMsg);
 
-    // warn should NOT be called with the SECURITY message after cutoff
     const securityWarns = warnSpy.mock.calls.filter(
       (args) => typeof args[0] === 'string' && args[0].includes('SECURITY'),
     );
     expect(securityWarns).toHaveLength(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 8. Wire format — canonical signing input
-// ---------------------------------------------------------------------------
 
 describe('Wire format — canonical signing input', () => {
   it('DISPATCH_HMAC_REQUIRED_AFTER is a valid ISO 8601 date string', () => {
@@ -641,19 +543,12 @@ describe('Wire format — canonical signing input', () => {
   });
 
   it('verify fails if canonical input uses non-alphabetical key order', async () => {
-    // This test constructs a fake envelope where the hmac was computed with
-    // a different key ordering (type < nonce instead of nonce < type) and
-    // confirms it fails verification — proving our canonical ordering is
-    // actually enforced.
     const state = await makeState();
     const env = await signMessage(state, 'ping', {});
 
-    // Tamper: swap nonce and type values without recomputing hmac
     const tampered = { ...env, nonce: env.type, type: env.nonce };
     const recvState = cloneState(state);
     const result = await verifyMessage(recvState, tampered);
-    // Either hmac_mismatch (nonce/type values are wrong) or malformed;
-    // either way it must not be ok:true
     expect(result.ok).toBe(false);
   });
 });

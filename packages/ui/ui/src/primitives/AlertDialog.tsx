@@ -1,26 +1,5 @@
 'use client';
 
-/**
- * Drift resolution: classified 'drifted', same divergence family as Dialog.tsx.
- * Merged rather than picking one side:
- *
- * - Visual: kept web's glassmorphic, viewport-height-clamped content
- *   (`max-h-[calc(100vh-2rem)] overflow-hidden`, `bg-background/95 backdrop-blur-xl`,
- *   soft `bg-black/70 backdrop-blur-sm` overlay). Desktop's plain shadcn defaults
- *   have no height clamp, so a long AlertDialog body can overflow the viewport
- *   with no scroll affordance — a real correctness gap web already fixed.
- * - Footer: kept web's `border-t border-border/60 pt-4` divider + `gap-2` spacing
- *   (desktop has neither). Cancel button spacing follows web's footer-level gap
- *   rather than desktop's `mt-2 sm:mt-0` button-level margin — both are
- *   equivalent visually, but consolidating on one convention avoids double
- *   spacing when this component and Dialog.tsx share a footer pattern.
- * - Stacking: AlertDialog is pinned to the same `z-[var(--z-modal,300)]` layer as
- *   Dialog (both are modal-class overlays). When an AlertDialog is triggered from
- *   inside an open Dialog, Radix's portal-append-order means the AlertDialog's
- *   DOM node paints after (on top of) the Dialog's, so equal z-index still
- *   resolves correctly. This also fixes desktop's stale `z-50`, which sat below
- *   desktop's migrated `--z-modal` Dialog.
- */
 import * as React from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import { cn } from '../cn';
@@ -31,7 +10,6 @@ const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 
 const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface AlertDialogOverlayProps extends React.ComponentPropsWithoutRef<
   typeof AlertDialogPrimitive.Overlay
 > {

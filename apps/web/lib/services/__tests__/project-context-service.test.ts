@@ -66,7 +66,6 @@ describe('loadProjectContext', () => {
         },
       ],
     });
-    // Owner guard is part of the SQL, not caller policy.
     expect(query.mock.calls[0]?.[0]).toContain('user_id = $2');
     expect(query.mock.calls[0]?.[1]).toEqual(['proj-1', 'user-1']);
     expect(query.mock.calls[1]?.[0]).toContain(
@@ -75,7 +74,6 @@ describe('loadProjectContext', () => {
     expect(context?.siblingChats).toEqual([
       { title: 'Pricing chat', preview: 'User: How much is Pro?' },
     ]);
-    // Sibling query is owner-scoped (user_id) and excludes the current conversation.
     expect(query.mock.calls[2]?.[0]).toContain('from web_conversations');
     expect(query.mock.calls[2]?.[0]).toContain('c.id <> $3');
     expect(query.mock.calls[2]?.[1]).toEqual(['proj-1', 'user-1', 'conv-current']);
@@ -88,7 +86,6 @@ describe('loadProjectContext', () => {
       { projectId: 'proj-foreign', userId: 'user-1' },
     );
     expect(context).toBeNull();
-    // No second query for files when the project itself is not visible.
     expect(query).toHaveBeenCalledTimes(1);
   });
 

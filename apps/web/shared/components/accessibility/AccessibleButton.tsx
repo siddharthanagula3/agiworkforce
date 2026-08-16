@@ -31,18 +31,15 @@ const AccessibleButton = forwardRef<HTMLButtonElement, AccessibleButtonProps>(
     const { announce, trackInteraction } = useAccessibility();
 
     const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-      // Track interaction for analytics
       trackInteraction('click', 'button', {
         buttonText: children,
         ariaLabel,
       });
 
-      // Announce to screen readers if requested
       if (announceOnClick && announceText) {
         announce(announceText);
       }
 
-      // Call original onClick handler
       onClick?.(event);
     };
 

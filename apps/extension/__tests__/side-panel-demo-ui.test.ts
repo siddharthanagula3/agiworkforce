@@ -187,16 +187,9 @@ describe('Chrome side-panel demo surface', () => {
   });
 });
 
-/**
- * Four separate strings promised "/ for commands" — the placeholder in two
- * places, the empty-state copy, and the composer placeholder — while nothing in
- * the panel listened for the key. The commands existed and expanded correctly on
- * submit, so they worked only for someone who already knew their names.
- */
 describe('Chrome side-panel slash commands', () => {
   it('drives the menu and the expander from one command list', () => {
     expect(source).toContain('const SLASH_COMMANDS: Record<string, SlashCommandMeta>');
-    // expandSlashCommand must read the shared list, not a private copy.
     expect(source).toContain('const exact = SLASH_COMMANDS[trimmed]');
     expect(source).toContain('for (const [cmd, meta] of Object.entries(SLASH_COMMANDS))');
   });
@@ -211,7 +204,6 @@ describe('Chrome side-panel slash commands', () => {
     expect(source).toContain("e.key === 'ArrowDown'");
     expect(source).toContain("e.key === 'ArrowUp'");
     expect(source).toContain("e.key === 'Escape'");
-    // Without this the send handler also fires and dispatches "/su" as a message.
     expect(source).toContain('e.stopImmediatePropagation()');
   });
 

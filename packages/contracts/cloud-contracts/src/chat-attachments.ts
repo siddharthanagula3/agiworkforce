@@ -20,15 +20,6 @@ export const CHAT_ATTACHMENT_MIME_TYPES = [
   'text/html',
   'text/css',
   'application/json',
-  // Jupyter notebooks. Kept as a distinct type rather than folded into
-  // application/json so a notebook stays identifiable end-to-end.
-  //
-  // It does NOT buy cell extraction on the chat path: hydration base64s the
-  // stored bytes and labels them with `normalizeChatDocumentMimeType`, which
-  // returns text/plain for everything except PDF, so the model receives the
-  // whole serialized notebook — base64 image outputs and kernel metadata
-  // included. Cell extraction (`extractNotebookText`) exists only in the web
-  // project-knowledge extractor, which this roster does not feed.
   'application/x-ipynb+json',
   'application/xml',
 ] as const;
@@ -91,7 +82,6 @@ export function isChatImageMimeType(mimeType: string): boolean {
   );
 }
 
-/** Anthropic's text document block requires text/plain. */
 export function normalizeChatDocumentMimeType(mimeType: string): string {
   const mime = mimeType.trim().toLowerCase();
   if (mime === 'application/pdf') return mime;

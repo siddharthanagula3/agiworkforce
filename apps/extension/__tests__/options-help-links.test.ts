@@ -25,10 +25,7 @@ const accountRefresh = vi.hoisted(() =>
   ),
 );
 
-// options.ts calls buildPage() at module load, so every browser/chrome API it
-// touches on the way down has to exist on globalThis BEFORE the import.
 const chromeHarness = vi.hoisted(() => {
-  // jsdom ships CSSStyleSheet without the constructable-stylesheet methods.
   class FakeStyleSheet {
     replaceSync(): void {}
   }

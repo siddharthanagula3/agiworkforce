@@ -3,7 +3,6 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { StatusStep, ToolCall, ApprovalRequest } from '@/types/chat';
 
-/** A file or output artifact produced by an agent run */
 export interface RunArtifact {
   id: string;
   type: 'file_created' | 'file_modified' | 'command_run' | 'error';
@@ -18,27 +17,20 @@ export interface Agent {
   model: string;
   status: 'running' | 'completed' | 'failed' | 'waiting';
   currentStep: string;
-  /** Current action being performed, e.g. "Running: search_files in /src" */
   currentAction?: string;
-  progress: number; // 0-100
-  /** Total number of steps (used for ETA calculation) */
+  progress: number;
   totalSteps?: number;
-  /** Steps completed count (used for ETA calculation) */
   stepsCompleted?: number;
   steps: StatusStep[];
   toolCalls: ToolCall[];
-  /** Artifacts produced during the run */
   artifacts?: RunArtifact[];
   startedAt: string;
   updatedAt: string;
 }
 
 interface AgentState {
-  /** Active agents synced from desktop companion via WebRTC */
   agents: Agent[];
-  /** Currently selected agent for detail view */
   selectedAgentId: string | null;
-  /** Approval requests pending user action */
   pendingApprovals: ApprovalRequest[];
 
   setAgents: (agents: Agent[]) => void;
@@ -47,7 +39,6 @@ interface AgentState {
   selectAgent: (id: string | null) => void;
   clearCompleted: () => void;
 
-  /** Approval actions */
   addApproval: (approval: ApprovalRequest) => void;
   reconcileApprovals: (pendingIds: string[]) => void;
   removeApproval: (id: string) => void;
@@ -133,9 +124,6 @@ export const useAgentStore = create<AgentState>()(
       approveRequest: (id) => {
         const approval = get().pendingApprovals.find((request) => request.id === id);
         if (!approval || approval.status !== 'pending') return;
-        // Keep the request visibly pending until Desktop closes it with the
-        // protocol-level `approval_closed` event. Local transport acceptance
-        // alone is not proof that the privileged action was resolved.
         sendApprovalDecision(id, true);
       },
 
@@ -148,7 +136,6 @@ export const useAgentStore = create<AgentState>()(
     {
       name: 'agent-store',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[agentStore] Hydration failed:', error);

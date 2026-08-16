@@ -14,7 +14,6 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-/** Billing settings section (source-of-truth IA · DESK-1). */
 export function BillingTab() {
   return (
     <Suspense fallback={<Fallback label="Loading billing..." />}>

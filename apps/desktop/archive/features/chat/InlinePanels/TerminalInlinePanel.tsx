@@ -1,9 +1,3 @@
-/**
- * TerminalInlinePanel Component
- *
- * Displays terminal command output inline with command, stdout, stderr,
- * exit code, and other metadata.
- */
 
 import React, { memo, useEffect, useRef } from 'react';
 import { Copy, Check } from 'lucide-react';
@@ -37,7 +31,6 @@ const TerminalInlinePanelComponent: React.FC<TerminalInlinePanelProps> = memo(
       return null;
     }
 
-    // In compact mode, hide terminal output completely
     if (compactMode) {
       return null;
     }

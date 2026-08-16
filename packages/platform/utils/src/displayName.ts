@@ -42,11 +42,8 @@ export function normalizeDisplayName(name: string): string {
   const hasLower = name !== name.toLocaleUpperCase();
   const hasUpper = name !== name.toLocaleLowerCase();
 
-  // Mixed case is intentional — never second-guess it.
   if (hasLower && hasUpper) return name;
-  // Initials, not a shouted name.
   if (!hasLower && name.length <= 2) return name;
-  // No cased characters at all (e.g. CJK, digits) — nothing to normalise.
   if (!hasLower && !hasUpper) return name;
 
   return name
@@ -57,14 +54,6 @@ export function normalizeDisplayName(name: string): string {
     );
 }
 
-/**
- * The name to show for a signed-in user, given whatever the identity provider
- * supplied. Falls back to the email local-part, then to a neutral label —
- * never renders an empty string or "undefined" into the UI.
- *
- * The email fallback is normalised too: a local-part is usually lowercase
- * ("jsmith"), and "Jsmith" reads far better than "jsmith" in an account row.
- */
 export function resolveAccountDisplayName(
   name: string | null | undefined,
   email: string | null | undefined,
@@ -79,11 +68,6 @@ export function resolveAccountDisplayName(
   return fallback;
 }
 
-/**
- * The single letter shown in an avatar circle. Uses the FIRST CASED letter so
- * a name like "_siddhartha" or "(dev) Sam" does not render punctuation as the
- * user's identity.
- */
 export function accountInitial(displayName: string, fallback = '?'): string {
   const match = displayName.match(/\p{L}|\p{N}/u);
   return (match?.[0] ?? fallback).toLocaleUpperCase();

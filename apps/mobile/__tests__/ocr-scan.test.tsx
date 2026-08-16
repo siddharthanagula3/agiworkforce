@@ -2,8 +2,6 @@ import React from 'react';
 import { NativeModules, Platform } from 'react-native';
 import { recognizeText } from '../src/features/image/services/ocr';
 
-// ── OCR service unit tests ────────────────────────────────────────────────
-
 describe('recognizeText', () => {
   const mockRecognize = jest.fn();
 
@@ -41,8 +39,6 @@ describe('recognizeText', () => {
     expect(result.regions).toHaveLength(0);
   });
 });
-
-// ── TaskChipType includes scan ────────────────────────────────────────────
 
 describe('TaskChipType includes scan', () => {
   it('exports scan as a valid chip type', () => {

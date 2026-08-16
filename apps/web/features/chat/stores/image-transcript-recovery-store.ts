@@ -24,7 +24,6 @@ export type ImagePromptTranscriptRecovery = {
 export type ImageResultTranscriptRecovery = {
   phase: 'result';
   status: ImageTranscriptRecoveryStatus;
-  /** Distinguishes an unsaved generated asset from an unsaved terminal failure state. */
   kind?: 'asset' | 'generation-failure';
   conversationId: string;
   assistantMessageId: string;
@@ -42,9 +41,7 @@ export function imageTranscriptMutationKeys(recovery: ImageTranscriptRecovery): 
 }
 
 interface ImageTranscriptRecoveryState {
-  /** Runtime-only recovery payloads keyed by the idempotent assistant row UUID. */
   recoveries: Record<string, ImageTranscriptRecovery>;
-  /** Runtime-only per-message mutex. Record form keeps Zustand updates immutable. */
   mutationsInFlight: Record<string, true>;
   setRecovery: (recovery: ImageTranscriptRecovery) => void;
   removeRecovery: (assistantMessageId: string) => void;
@@ -57,15 +54,6 @@ interface ImageTranscriptRecoveryState {
 
 const uniqueIds = (messageIds: string[]): string[] => [...new Set(messageIds)];
 
-/**
- * Navigation-safe owner for paid-image transcript recovery.
- *
- * WebChatPage can unmount while a provider or transcript request is pending.
- * This deliberately non-persisted Zustand store survives client-side route
- * remounts, while a full reload clears potentially stale in-flight state. It
- * owns both the exact retry payload and the mutex that prevents a late upsert
- * from racing delete/edit/regeneration of the same optimistic rows.
- */
 export const useImageTranscriptRecoveryStore = create<ImageTranscriptRecoveryState>()(
   (set, get) => ({
     recoveries: {},

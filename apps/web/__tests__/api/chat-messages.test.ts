@@ -1,8 +1,3 @@
-/**
- * Chat Messages API Tests
- *
- * Tests for /api/chat/conversations/[id]/messages endpoints
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -10,7 +5,6 @@ import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 const CHAT_MODEL = requireProviderDefaultModel('openai');
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -31,7 +25,6 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// Mock Neon DB and Clerk auth — routes use these instead of Neon after Wave 3.
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();
@@ -46,18 +39,15 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 
-// Mock CreditService
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     checkAvailable: vi.fn().mockResolvedValue(true),
   },
 }));
 
-// Mock fetch for LLM API calls
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-// Import after mocks
 import { POST } from '@/app/api/chat/conversations/[id]/messages/route';
 import { CreditService } from '@/lib/services/credit-service';
 
@@ -100,20 +90,15 @@ describe('Chat Messages API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Set env vars needed by the route
     process.env['NEXT_PUBLIC_SITE_URL'] = 'http://localhost:3001';
 
-    // Default: authenticated user
     mockRequireCurrentUserId.mockResolvedValue('user-123');
 
-    // Default: empty DB results
     mockQuery.mockResolvedValue([]);
     mockExecute.mockResolvedValue(undefined);
 
-    // Default: user has credits
     vi.mocked(CreditService.checkAvailable).mockResolvedValue(true);
 
-    // Default LLM response
     mockFetch.mockResolvedValue({
       ok: true,
       json: () =>
@@ -146,7 +131,6 @@ describe('Chat Messages API', () => {
 
     describe('Input Validation', () => {
       it('should return 400 if message content is empty', async () => {
-        // conversation found
         mockQuery.mockResolvedValueOnce([mockConversation]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -181,7 +165,6 @@ describe('Chat Messages API', () => {
 
     describe('Conversation Verification', () => {
       it('should return 404 if conversation not found', async () => {
-        // Empty result = conversation not found
         mockQuery.mockResolvedValueOnce([]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -200,11 +183,8 @@ describe('Chat Messages API', () => {
 
     describe('Conversation ownership', () => {
       it('should only allow the authenticated user to send messages to their own conversation', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -217,7 +197,6 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        // The child write is admitted only through the exact active-workspace parent.
         expect(mockQuery).toHaveBeenNthCalledWith(
           1,
           expect.stringMatching(/user_id = \$2[\s\S]*organization_id is not distinct from \$3/),
@@ -226,7 +205,6 @@ describe('Chat Messages API', () => {
       });
 
       it('should return 404 when trying to message a conversation owned by another user', async () => {
-        // No conversation returned (ownership check fails)
         mockQuery.mockResolvedValueOnce([]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -245,11 +223,8 @@ describe('Chat Messages API', () => {
 
     describe('Message Flow', () => {
       it('should save message and return it in the response', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // count for auto-title check
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -266,16 +241,12 @@ describe('Chat Messages API', () => {
         const data = await response.json();
         expect(data.message).toBeDefined();
         expect(data.message).not.toHaveProperty('cost_cents');
-        // LLM is NOT called inline; streaming is handled by /api/llm/v1/chat/completions
         expect(mockFetch).not.toHaveBeenCalled();
       });
 
       it('should not call LLM API (streaming is handled externally via useChatStream)', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -288,14 +259,11 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        // The route never calls the LLM directly; streaming is the caller's responsibility
         expect(mockFetch).not.toHaveBeenCalled();
       });
 
       it('should return 500 if message save fails', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert throws
         mockQuery.mockRejectedValueOnce(new Error('DB error'));
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -312,11 +280,8 @@ describe('Chat Messages API', () => {
       });
 
       it('should warn but still save when skipLlm is omitted (legacy callers)', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -329,7 +294,6 @@ describe('Chat Messages API', () => {
         });
         const response = await POST(request, mockContext);
 
-        // Still saves message and returns 200; no LLM call
         expect(response.status).toBe(200);
         expect(mockFetch).not.toHaveBeenCalled();
       });
@@ -337,11 +301,8 @@ describe('Chat Messages API', () => {
 
     describe('Auto-titling', () => {
       it('should auto-title conversation on first user message', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // count = 1 (first message triggers auto-title)
         mockQuery.mockResolvedValueOnce([{ count: '1' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -354,7 +315,6 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        // Title update should be called via db.execute
         expect(mockExecute).toHaveBeenCalledWith(
           expect.stringContaining('update web_conversations'),
           expect.arrayContaining(['What is the weather today?']),
@@ -362,11 +322,8 @@ describe('Chat Messages API', () => {
       });
 
       it('should truncate long messages for title', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // count = 1 (first message)
         mockQuery.mockResolvedValueOnce([{ count: '1' }]);
 
         const longMessage =
@@ -382,7 +339,6 @@ describe('Chat Messages API', () => {
         });
         await POST(request, mockContext);
 
-        // The title argument (first param in the execute call array) should be truncated
         expect(mockExecute).toHaveBeenCalledWith(
           expect.stringContaining('update web_conversations'),
           expect.arrayContaining([expect.stringMatching(/^.{50}\.\.\./)]),
@@ -392,11 +348,8 @@ describe('Chat Messages API', () => {
 
     describe('Model Selection', () => {
       it('should store the model on assistant messages when provided', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert (assistant role, model provided)
         mockQuery.mockResolvedValueOnce([mockAssistantMessage]);
-        // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -415,9 +368,7 @@ describe('Chat Messages API', () => {
         const response = await POST(request, mockContext);
 
         expect(response.status).toBe(200);
-        // LLM is never called inline; model is passed through to DB insert
         expect(mockFetch).not.toHaveBeenCalled();
-        // Verify the insert includes the model parameter
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_messages'),
           expect.arrayContaining([CHAT_MODEL]),
@@ -426,12 +377,6 @@ describe('Chat Messages API', () => {
     });
 
     describe('Idempotency / retry-safety (P1 silent-data-loss fix)', () => {
-      // useChatStream retries a transient save failure. The retry passes the
-      // same client-supplied id, so the insert MUST be idempotent or a retry of
-      // an already-committed message would throw a unique-violation (false
-      // failure) or create a duplicate. The ON CONFLICT update must also be
-      // scoped to the SAME conversation so a victim's message id POSTed into an
-      // attacker's conversation cannot overwrite/return the victim's row (IDOR).
       function getInsertSql(): string {
         const insertCall = mockQuery.mock.calls.find(
           (call) => typeof call[0] === 'string' && call[0].includes('insert into web_messages'),
@@ -441,9 +386,9 @@ describe('Chat Messages API', () => {
       }
 
       it('upserts the message id (ON CONFLICT) so retries cannot duplicate or throw', async () => {
-        mockQuery.mockResolvedValueOnce([mockConversation]); // conversation lookup
-        mockQuery.mockResolvedValueOnce([mockUserMessage]); // upsert
-        mockQuery.mockResolvedValueOnce([{ count: '5' }]); // count
+        mockQuery.mockResolvedValueOnce([mockConversation]);
+        mockQuery.mockResolvedValueOnce([mockUserMessage]);
+        mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
           method: 'POST',
@@ -477,19 +422,14 @@ describe('Chat Messages API', () => {
         await POST(request, mockContext);
 
         const sql = getInsertSql().toLowerCase().replace(/\s+/g, ' ');
-        // Guard against a regression to a bare `do update` that would let a
-        // cross-conversation id collision overwrite another user's message.
         expect(sql).toContain('where web_messages.conversation_id = excluded.conversation_id');
       });
     });
 
     describe('Response shape', () => {
       it('should return { message } (not usage or assistantMessage) in response', async () => {
-        // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
@@ -505,7 +445,6 @@ describe('Chat Messages API', () => {
         expect(response.status).toBe(200);
         const data = await response.json();
         expect(data.message).toBeDefined();
-        // Route no longer returns assistantMessage or usage (streaming is external)
         expect(data.assistantMessage).toBeUndefined();
         expect(data.usage).toBeUndefined();
       });

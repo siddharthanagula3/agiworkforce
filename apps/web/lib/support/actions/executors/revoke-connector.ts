@@ -1,23 +1,3 @@
-/**
- * @file Executor: disconnect one of the CALLER'S OWN connectors.
- *
- * Ownership is not validated against a static id allowlist — it is validated
- * against the caller's own resolved connector list, so a syntactically valid
- * id for a connector this user does not have is refused with the same
- * "not found" as an id that does not exist at all.
- *
- * The revoke does exactly what the settings UI does (/api/connectors DELETE):
- * soft-delete the enablement row AND clear the saved per-tool "Always allow"
- * verdicts. Doing only the first would be a WEAKER revoke than the control the
- * user already has, which is not acceptable for an action a bot performed.
- *
- * CUSTOM MCP CONNECTORS ARE OUT OF SCOPE, AND THAT IS DELIBERATE.
- * `public.user_custom_connectors` (migration 0052) has no `is_active` column —
- * the only way to disconnect one is to DELETE the row, which destroys the URL,
- * the transport and the user's encrypted bearer token. That is irreversible,
- * and irreversible operations are not in this allowlist. The agent explains and
- * links to Settings → Connections instead.
- */
 
 import 'server-only';
 
@@ -30,7 +10,6 @@ const PG_UNDEFINED_TABLE = '42P01';
 
 export const CUSTOM_CONNECTOR_PREFIX = 'custom-';
 
-/** The control the agent points at when it refuses a custom connector. */
 export const CUSTOM_CONNECTOR_CONTROL = Object.freeze({
   label: 'Settings → Connections',
   href: '/settings/connections',
@@ -58,11 +37,6 @@ function refuseCustomConnector(): never {
   );
 }
 
-/**
- * Ownership pre-check, run at PROPOSE time and again after the token claim.
- * A connector can be disconnected between the two, so the second call is not
- * redundant — it is the one that decides whether the mutation runs.
- */
 export async function assertConnectorRevocable(userId: string, connectorId: string): Promise<void> {
   if (connectorId.startsWith(CUSTOM_CONNECTOR_PREFIX)) refuseCustomConnector();
 
@@ -89,9 +63,6 @@ export async function executeRevokeConnector(args: {
   const db = getNeonDb();
 
   if (connectorId === 'github') {
-    // Matches the settings route: unlink this user's installations so github
-    // tools stop being offered. The app stays installed on GitHub, so this is
-    // reversible by relinking.
     try {
       await db.execute(`delete from github_installations where user_id = $1`, [userId]);
     } catch (error) {
@@ -117,10 +88,6 @@ export async function executeRevokeConnector(args: {
     }
   }
 
-  // Best-effort, exactly as the settings route treats it: the connector is
-  // already disconnected and its tools will not be offered, so a cleanup
-  // failure must not turn a successful revoke into an error. Logged, never
-  // swallowed.
   try {
     await db.execute(
       `delete from public.connector_tool_permissions where user_id = $1 and connector_id = $2`,

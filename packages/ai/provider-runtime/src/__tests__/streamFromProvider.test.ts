@@ -420,7 +420,6 @@ describe('streamFromProvider — catchTransportErrors', () => {
       }),
     );
 
-    // Give the first chunk a tick to be read, then abort.
     await new Promise((resolve) => setTimeout(resolve, 10));
     controller.abort();
 
@@ -436,15 +435,6 @@ describe('streamFromProvider — catchTransportErrors', () => {
 });
 
 describe('streamFromProvider — idle watchdog (opt-in)', () => {
-  /**
-   * A real `fetch()` implementation errors the response body stream (rejecting any pending
-   * `reader.read()`) when the request's `AbortSignal` fires — that's the actual mechanism
-   * the watchdog relies on to tear down a stalled connection, not `reader.cancel()` (which
-   * only resolves pending reads as a graceful `done`, silently swallowing the timeout). This
-   * mock reproduces that real behaviour, rejecting with the signal's own `reason` (exactly
-   * what a spec-compliant fetch does) so the watchdog's `StreamIdleTimeoutError` instance
-   * round-trips back out.
-   */
   function makeStallingFetch(onAbort: () => void): StreamFromProviderOptions<unknown>['fetchImpl'] {
     const encoder = new TextEncoder();
     return (async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -482,7 +472,6 @@ describe('streamFromProvider — idle watchdog (opt-in)', () => {
     const iterator = streamFromProvider({ ...BASE, fetchImpl })[Symbol.asyncIterator]();
     const first = await iterator.next();
     expect(first.value).toEqual({ type: 'text-delta', delta: 'first' });
-    // Clean up without waiting on the hang forever.
     await iterator.return?.();
     expect(aborted).toBe(false);
   });

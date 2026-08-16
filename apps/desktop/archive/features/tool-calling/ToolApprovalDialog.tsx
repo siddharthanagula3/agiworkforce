@@ -1,9 +1,3 @@
-/**
- * ToolApprovalDialog Component
- *
- * Modal dialog for approving dangerous tool operations.
- * Shows tool details, parameters, and risk level before execution.
- */
 
 import { useState } from 'react';
 import { AlertTriangle, Play, X, ChevronRight, ChevronDown } from 'lucide-react';

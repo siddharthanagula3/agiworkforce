@@ -1,27 +1,3 @@
-/**
- * Security Audit Logging
- *
- * Logs security-relevant events to the security_audit_logs table.
- * Use this for tracking authentication failures, rate limits, authorization failures, etc.
- *
- * This module owns the ONLY raw INSERT into `public.security_audit_logs` and the
- * only call into `public.record_enterprise_audit_event(...)`. Do not scatter raw
- * audit SQL across route handlers — add an event type here and call
- * `recordAuditEvent` instead.
- *
- * Two taxonomies live side by side on purpose:
- *   - `SecurityEventType`  — FAILURE/abuse signals (auth_failed, rate_limit_exceeded, …).
- *     `lib/services/security-monitoring-service.ts` builds an exhaustive
- *     `Record<SecurityEventType, number>` over it, so this union MUST NOT be widened.
- *   - `AuditEventType`     — successful BUSINESS events an enterprise auditor
- *     expects (sign-in, key created, member role changed, plan changed, …).
- *     These are the strings the read layer already assumes
- *     (`app/api/settings/audit-logs/actions/route.ts`,
- *     `app/api/settings/activity/route.ts`).
- *
- * SECURITY: 'server-only' import is defense-in-depth · this module must never
- * be imported by client components.
- */
 import 'server-only';
 import { getNeonDb } from './server/neon-db';
 import { logger } from './logger';
@@ -47,9 +23,6 @@ export interface SecurityAuditEvent {
   details?: Record<string, unknown>;
 }
 
-/**
- * Log a security event to the audit table
- */
 export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void> {
   const {
     userId,
@@ -82,17 +55,6 @@ export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void>
   }
 }
 
-/**
- * Extract IP address from request headers.
- *
- * SECURITY: Vercel (and most reverse proxies) APPEND the real client IP at
- * the END of `x-forwarded-for`. The leftmost value is client-supplied and
- * trivially spoofable via `curl -H 'X-Forwarded-For: 1.2.3.4'`. Reading the
- * leftmost IP poisons audit logs and breaks IP-based alerting (rate-limit
- * keys at `lib/rate-limit.ts:421` correctly use the rightmost · this path
- * was the divergence). Prefer `x-real-ip` (set by the platform, not client-
- * settable on Vercel), then fall back to the rightmost x-forwarded-for hop.
- */
 export function getClientIp(request: Request): string | undefined {
   const realIp = request.headers.get('x-real-ip');
   if (realIp) {
@@ -107,9 +69,6 @@ export function getClientIp(request: Request): string | undefined {
   return undefined;
 }
 
-/**
- * Helper to log authentication failures
- */
 export async function logAuthFailure(
   request: Request,
   reason: string,
@@ -126,21 +85,6 @@ export async function logAuthFailure(
   });
 }
 
-/**
- * Helper to log rate limit exceeded
- */
-/**
- * GOV-23: `userId` must come from a SIGNATURE-VERIFIED principal.
- *
- * The caller in `lib/rate-limit.ts` used to base64-decode the Bearer payload
- * with no verification to fill this field, so an attacker could craft an
- * unsigned token carrying any `sub`, trip a rate limit, and write the abuse row
- * against another user's account. It now passes the resolved rate-limit bucket,
- * whose `user:` form is only ever produced after Clerk verification.
- *
- * `identifier` is the bucket the decision was actually made against — never a
- * client-supplied value.
- */
 export async function logRateLimitExceeded(
   request: Request,
   identifier: string,
@@ -157,9 +101,6 @@ export async function logRateLimitExceeded(
   });
 }
 
-/**
- * Helper to log authorization failures
- */
 export async function logAuthorizationFailure(
   request: Request,
   resource: string,
@@ -177,9 +118,6 @@ export async function logAuthorizationFailure(
   });
 }
 
-/**
- * Helper to log suspicious activity
- */
 export async function logSuspiciousActivity(
   request: Request,
   description: string,
@@ -197,9 +135,6 @@ export async function logSuspiciousActivity(
   });
 }
 
-/**
- * Helper to log CSRF validation failures
- */
 export async function logCsrfFailure(request: Request, userId?: string): Promise<void> {
   await logSecurityEvent({
     userId,
@@ -212,9 +147,6 @@ export async function logCsrfFailure(request: Request, userId?: string): Promise
   });
 }
 
-/**
- * Helper to log invalid signature (e.g., webhook signature)
- */
 export async function logInvalidSignature(
   request: Request,
   source: string,
@@ -231,22 +163,6 @@ export async function logInvalidSignature(
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Business audit trail
-//
-// Everything below records SUCCESSFUL (and explicitly denied) security-relevant
-// business events — the rows the Enterprise "audit trail" claim depends on.
-// The failure-signal helpers above are unchanged and stay on their own union.
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Business audit actions.
- *
- * Values already consumed by the read layer are spelled exactly as the read
- * layer expects them (`login`, `logout`, `api_key_created`, `api_key_revoked`,
- * `two_factor_disabled`) so existing filters and the activity mapper light up
- * without changing those routes.
- */
 export type AuditEventType =
   | 'login'
   | 'logout'
@@ -268,26 +184,10 @@ export type AuditEventType =
   | 'two_factor_disabled'
   | 'admin_policy_changed';
 
-/** Matches the `outcome` CHECK on public.enterprise_audit_events. */
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
-/**
- * Matches the `severity` CHECK on public.enterprise_audit_events
- * ({info, warning, critical}). `security_audit_logs` accepts a 7-value superset
- * (0032_security_severity_superset.sql), so these three are valid for both
- * tables and no mapping is needed in either direction.
- */
 export type AuditEventSeverity = 'info' | 'warning' | 'critical';
 
-/**
- * The ONLY detail fields an audit call site may record.
- *
- * Deliberately narrow: every value here is an identifier, a name, a role, a
- * plan slug, a count or an outcome. There is no field for key material, tokens,
- * SAML assertions, SCIM bearers, Stripe secrets, prompts or message content —
- * and `sanitizeAuditDetail` drops anything not listed here at runtime, so an
- * `as never`/JS caller cannot smuggle one in either.
- */
 export interface AuditEventDetail {
   resourceType?: string;
   resourceId?: string;
@@ -312,22 +212,14 @@ export interface AuditEventDetail {
 }
 
 export interface AuditEvent {
-  /** Authenticated actor. `null` for system actors (e.g. Stripe webhooks). */
   userId?: string | null;
   eventType: AuditEventType;
   outcome?: AuditOutcome;
   severity?: AuditEventSeverity;
-  /** Request being observed · supplies IP, user-agent and endpoint. */
   request?: Request;
-  /** Override when there is no Request (background/webhook actors). */
   endpoint?: string;
   detail?: AuditEventDetail;
-  /**
-   * When present the event is ALSO written to public.enterprise_audit_events so
-   * org admins can read it through the gateway's audit-events endpoint.
-   */
   organizationId?: string | null;
-  /** Product surface the action came from. Defaults to 'web'. */
   surface?: string;
 }
 
@@ -354,15 +246,9 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'isCurrent',
 ]);
 
-/**
- * Second line of defence: even an allowlisted key must never carry a key name
- * that reads like credential material, in case this list is ever extended
- * carelessly.
- */
 const SECRET_KEY_NAME_RE =
   /(token|secret|password|passphrase|api[-_]?key|private|credential|assertion|authorization|cookie|jwt|signature|hash|salt|seed)/i;
 
-/** Value shapes that must never be persisted, even under a benign key. */
 const SECRET_VALUE_PATTERNS: readonly RegExp[] = [
   /sk_(live|test)_/i, // Stripe / AGI API keys
   /\bwhsec_/i, // Stripe webhook signing secret
@@ -389,10 +275,6 @@ function scrubString(value: string): string {
   return trimmed;
 }
 
-/**
- * Reduce a caller-supplied detail object to the allowlisted, secret-free subset
- * that is safe to persist. Never throws.
- */
 export function sanitizeAuditDetail(detail: AuditEventDetail | undefined): Record<string, unknown> {
   const safe: Record<string, unknown> = {};
   if (!detail || typeof detail !== 'object') return safe;
@@ -421,19 +303,6 @@ export function sanitizeAuditDetail(detail: AuditEventDetail | undefined): Recor
   return safe;
 }
 
-/**
- * Record a security-relevant business event.
- *
- * Writes one row to `public.security_audit_logs` and, when `organizationId` is
- * supplied, one row to `public.enterprise_audit_events` via the SECURITY DEFINER
- * writer added in 0087_enterprise_audit_event_writes.sql.
- *
- * CONTRACT: this function NEVER throws and never rejects. An audit failure must
- * not break the request it observes, so both writes are swallowed at this
- * boundary and reported through the logger. This is the one place in the
- * codebase where swallowing is correct — do not re-raise from here, and do not
- * add a `throw` to any helper it calls.
- */
 export async function recordAuditEvent(event: AuditEvent): Promise<void> {
   const eventType = event.eventType;
   const outcome: AuditOutcome = event.outcome ?? 'success';
@@ -463,16 +332,7 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     logger.error({ error: err, eventType }, 'Failed to prepare audit event');
   }
 
-  // The two writes are guarded INDEPENDENTLY on purpose: a failure of the
-  // per-user log must not also suppress the org-scoped enterprise row (and vice
-  // versa), or one broken table would silently empty the other's audit trail.
-
   try {
-    // The read layer this table already has (`app/api/settings/audit-logs/route.ts`)
-    // filters and projects on `details->>'resource_type'` / `'resource_id'` —
-    // snake_case. Emitting only the camelCase names would leave its resourceType
-    // filter permanently empty, so both spellings are persisted: snake_case for
-    // that existing contract, camelCase for the enterprise metadata payload.
     const detailsForSecurityLog: Record<string, unknown> = { ...detail };
     if (typeof detail['resourceType'] === 'string') {
       detailsForSecurityLog['resource_type'] = detail['resourceType'];
@@ -480,9 +340,6 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     if (typeof detail['resourceId'] === 'string') {
       detailsForSecurityLog['resource_id'] = detail['resourceId'];
     }
-    // `outcome` is a first-class column on enterprise_audit_events but only a
-    // detail on security_audit_logs, so mirror it into details for the
-    // user-facing read paths.
     if (outcome !== 'success') {
       detailsForSecurityLog['outcome'] = outcome;
       detailsForSecurityLog['description'] = eventType;
@@ -502,7 +359,6 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
       ],
     );
   } catch (err) {
-    // Swallow-at-boundary: see the CONTRACT note above.
     logger.error({ error: err, eventType }, 'Failed to record audit event');
   }
 
@@ -528,7 +384,6 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
   }
 }
 
-/** Coarse resource classification for enterprise_audit_events.resource_type. */
 function inferResourceType(eventType: AuditEventType): string {
   switch (eventType) {
     case 'login':

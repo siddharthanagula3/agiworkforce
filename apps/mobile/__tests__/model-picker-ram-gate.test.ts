@@ -1,10 +1,3 @@
-/**
- * Tier-3 multimodal RAM gate wiring (W10 residual, wired 2026-07-16):
- * a device below the 3.5 GB floor must see an HONEST DISABLED state for the
- * catalog-owned tier-3 vision path — locked with a reason, never a download button —
- * and prepareModel must hard-refuse even if the UI raced hydration. Unknown
- * RAM fails closed, matching the package gate's default-deny posture.
- */
 import {
   getCapabilities,
   getDefaultModel,
@@ -56,7 +49,6 @@ function capsWithRam(totalRAMMB: number) {
   };
 }
 
-/** ModelDef derived from the catalog-owned tier-3 multimodal row. */
 function visionModelDef(): ModelDef {
   return {
     id: VISION_CATALOG_MODEL.id,
@@ -77,7 +69,6 @@ function visionModelDef(): ModelDef {
   };
 }
 
-/** ModelDef derived from the catalog-owned text-only default row. */
 function textDefaultDef(): ModelDef {
   return {
     ...visionModelDef(),
@@ -125,7 +116,6 @@ describe('multimodal RAM gate (>=3.5GB) in the model picker install store', () =
   });
 
   it('fails closed while RAM is unknown (no capability answer yet)', () => {
-    // No hydrate — totalRAMMB is still null.
     const status = useModelInstallStore.getState().statusForModel(visionModelDef());
     expect(status.status).toBe('locked');
     expect(status.error).toBe(MULTIMODAL_RAM_LOCK_REASON);

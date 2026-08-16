@@ -1,15 +1,3 @@
-// Real-UI smoke for the Chrome extension: load the built dist/ into Chromium via
-// --load-extension and drive the primary user workflows through the actual UI —
-// render, no console/CSP errors, composer input, drawer navigation, model picker,
-// allowlist persistence, and end-to-end job autofill with real content-script
-// injection. Platform-appropriate real-UI tool for an MV3 extension = Playwright
-// launching a persistent context with the unpacked extension (already a workspace
-// dependency). Backend-dependent flows (managed chat, computer-use, auth/pairing)
-// need a live gateway and are out of scope for this offline harness.
-//
-// Run: pnpm --filter @agiworkforce/extension build && node apps/extension/e2e/smoke.mjs
-// Exact-package evidence: AGI_E2E_SCREENSHOT_DIR=/tmp/agi-extension-captures \
-//   node apps/extension/e2e/smoke.mjs apps/extension/extension.zip
 import { chromium } from 'playwright';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -119,10 +107,6 @@ function fail(msg) {
   process.exitCode = 1;
 }
 
-// Synthetic Greenhouse application form, served by a local HTTP server that
-// Chromium's --host-resolver-rules maps `boards.greenhouse.io` onto, so the tab's
-// real URL is http://boards.greenhouse.io/... — triggering the extension's
-// URL-based platform detection AND real content-script injection.
 const FORM_HTML =
   '<!doctype html><html><head><title>Apply</title></head><body>' +
   '<form id="application_form" tool-name="submit_application" tool-description="Submit this synthetic application">' +
@@ -171,12 +155,9 @@ try {
   console.log('service worker booted:', sw.url());
 
   if (screenshotDirectory) {
-    // Captures document the usable local/signed-out surfaces, not the first-run
-    // carousel. This state is already established later by the regular smoke.
     await sw.evaluate(() => chrome.storage.local.set({ agi_onboarding_completed: true }));
   }
 
-  // ── Render + logs: both extension pages build their primary UI cleanly ──
   for (const [name, path, markers] of [
     ['side_panel', 'src/side_panel.html', ['sp-messages', 'sp-composer', 'sp-input', 'sp-send']],
     ['options', 'src/options.html', ['opt-']],
@@ -262,7 +243,6 @@ try {
     await page.close();
   }
 
-  // ── Signed-out history must not adopt another owner ─────────────────────
   {
     const page = await context.newPage();
     page.setDefaultTimeout(8000);
@@ -385,7 +365,6 @@ try {
     await page.close();
   }
 
-  // ── Real content-script → background WebMCP discovery + SPA epochs ───────
   async function runWebMCPSmoke(control, target, baseUrl) {
     const parsedBaseUrl = new URL(baseUrl);
     const webMCPOrigin = parsedBaseUrl.origin;
@@ -456,7 +435,6 @@ try {
     );
   }
 
-  // ── Quick stays local and cannot bypass the signed-out owner gate ────────
   {
     const page = await context.newPage();
     page.setDefaultTimeout(8000);
@@ -516,7 +494,6 @@ try {
     await page.close();
   }
 
-  // ── Signed-out account state: options must not offer a fake Log out action ──
   {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extId}/src/options.html`, {
@@ -537,7 +514,6 @@ try {
     await page.close();
   }
 
-  // ── First-run onboarding: modal focus + honest progress semantics ────────
   {
     const page = await context.newPage();
     page.setDefaultTimeout(8000);
@@ -613,7 +589,6 @@ try {
     await page.close();
   }
 
-  // ── Side-panel interactions: composer input, drawer nav, model picker ──
   {
     const page = await context.newPage();
     page.setDefaultTimeout(8000);
@@ -676,9 +651,6 @@ try {
       );
     }
 
-    // Executable visual contract for the Chrome side-panel geometry. The
-    // offline harness cannot prove an authenticated cloud turn, but it can
-    // prevent narrow-width clipping, theme drift, and off-panel menus.
     for (const colorScheme of ['dark', 'light']) {
       await page.emulateMedia({ colorScheme });
       for (const width of [320, 390, 500]) {
@@ -776,10 +748,6 @@ try {
       );
     }
 
-    // Auth sync is background-owned. A side-panel document opened in a tab is
-    // still an extension-owned UI context and must be allowed to request a
-    // freshly loaded Sync Host session (signed-out is a successful null token,
-    // not an allowlist/policy failure).
     const authBridge = await page.evaluate(() =>
       Promise.race([
         chrome.runtime.sendMessage({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: true }),
@@ -824,10 +792,6 @@ try {
     }
     await captureScreenshot(page, 'agi-chrome-exact-side-panel-signed-out-local.png');
 
-    // Managed authenticated chat needs a live gateway and account, which this
-    // offline harness intentionally does not provide. Re-enable the textarea
-    // only to verify its local interaction behavior after the signed-out state
-    // above has been asserted.
     await page.evaluate(() => {
       const input = document.getElementById('sp-input');
       if (input instanceof HTMLTextAreaElement) input.disabled = false;
@@ -889,9 +853,6 @@ try {
       fail(`composer modes: unexpected controls ${JSON.stringify(composerModes)}`);
     }
 
-    // Workflows exposes only controls that execute today. The previous shortcut
-    // modal advertised Start from + Schedule fields with no replay/scheduler
-    // consumer, and onboarding advertised a slash finder that did not exist.
     await page.click('#sp-menu-btn');
     await page.click('#sp-drawer-wf-btn');
     await page.locator('#sp-tab-workflows').focus();
@@ -943,8 +904,6 @@ try {
       );
     }
 
-    // The workflows check leaves a modal and drawer over the composer. Dismiss
-    // both before driving the real slash-command listeners below.
     await page.evaluate(() => {
       document.getElementById('sp-create-shortcut-overlay')?.classList.remove('open');
       document.getElementById('sp-drawer')?.classList.remove('open');
@@ -953,15 +912,6 @@ try {
       });
     });
 
-    // ── Slash-command autocomplete ──
-    // Four strings promised "/ for commands" while nothing in the panel listened
-    // for the key, so the commands only worked for someone who already knew them.
-    //
-    // Driven with synthetic key events rather than page.keyboard: signed out, the
-    // cloud gate is up and the composer collapses to a 0x0 box, so it cannot be
-    // clicked or focused. That is correct product behaviour, and it is the same
-    // live-gateway limitation this harness already documents at the top. The
-    // events below still run the real listeners registered on the real textarea.
     const slashOpened = await page.evaluate(() => {
       const input = document.getElementById('sp-input');
       if (!input) return null;
@@ -1008,7 +958,6 @@ try {
       fail('slash menu: Enter sent the raw fragment instead of completing the command');
     }
 
-    // ArrowDown moves the selection when a fragment matches more than one command.
     const slashArrow = await page.evaluate(`(() => {
       const input = document.getElementById('sp-input');
       input.value = '/t';
@@ -1022,7 +971,6 @@ try {
       fail(`slash menu: ArrowDown did not move selection ${JSON.stringify(slashArrow)}`);
     }
 
-    // Escape dismisses without completing.
     const slashEscape = await page.evaluate(`(() => {${press('Escape')}
       return {
         closed: !document.getElementById('sp-slash-menu').classList.contains('visible'),
@@ -1056,7 +1004,6 @@ try {
     await page.close();
   }
 
-  // ── Persistence -> UI render: the site allowlist survives a reload ──
   {
     const ORIGIN = 'https://persist-smoke.example.com';
     const page = await context.newPage();
@@ -1085,7 +1032,6 @@ try {
     await page.close();
   }
 
-  // ── Job autofill end to end (the extension's core value) ──
   {
     const FORM_URL = 'http://boards.greenhouse.io/smoketestco/jobs/1234567';
     const PROFILE = {
@@ -1112,7 +1058,7 @@ try {
 
     const form = await context.newPage();
     await form.goto(FORM_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await form.waitForTimeout(1500); // content-script injection at document_idle
+    await form.waitForTimeout(1500);
 
     const runResult = await ext.evaluate(async (urlPart) => {
       const tabs = await chrome.tabs.query({});

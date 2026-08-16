@@ -1,51 +1,20 @@
-/**
- * WEB-APIKEY-CSRF-BLOCK-01: API-key CSRF bypass, extended from RT-04
- *
- * RT-04 (rt-04-csrf-bearer-bypass.test.ts) proved CSRF only bypasses for a
- * cryptographically valid Clerk JWT, never for an arbitrary Bearer string.
- * This suite proves the same invariant holds now that `isBearerTokenValid`
- * also recognizes AGI API keys (sk_live_/sk_test_), verified via
- * ApiKeyService rather than Clerk:
- *
- * 1. THE ATTACK THIS MUST RULE OUT: a garbage sk_-shaped Bearer token
- *    (looks like an API key, never issued / doesn't verify) combined with a
- *    valid Clerk session cookie must NOT bypass CSRF. If it did, an
- *    attacker could defeat CSRF on any cookie-authenticated mutation by
- *    simply attaching an `Authorization: Bearer sk_live_whatever` header —
- *    exactly the RT-04 vulnerability class, reintroduced via API keys.
- * 2. A cryptographically verified API key DOES bypass CSRF (the actual
- *    fix — this is what was broken before).
- * 3. Clerk-JWT bypass and cookie-only CSRF requirements are unchanged
- *    (rt-04 covers this in depth; this file adds one direct check as
- *    cheap insurance that the new sk_ branch didn't disturb the JWT branch).
- *
- * ApiKeyService is mocked at the module boundary (unit-level, matching this
- * file's mocked-Clerk-verifyToken style) — the real Argon2/DB round trip is
- * proven separately in api-auth.test.ts and the auth-gate integration test.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Test the REAL csrf.ts implementation, not the global test/setup.ts mock
-// that always returns null for requireCsrfToken.
 vi.mock('@/lib/csrf', async (importOriginal) => importOriginal());
 
 vi.mock('server-only', () => ({}));
 
-// Clerk JWT verification — controls the Clerk-bearer branch.
 const mockVerifyToken = vi.fn();
 vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-// Clerk session (cookie) — simulates "the victim's browser auto-attaches a
-// valid session cookie" half of the attack.
 const mockAuth = vi.fn();
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
 }));
 
-// ApiKeyService.verifyKey — controls the API-key bearer branch.
 const mockVerifyKey = vi.fn();
 vi.mock('@/lib/services/api-key-service', () => ({
   ApiKeyService: { verifyKey: (...args: unknown[]) => mockVerifyKey(...args) },
@@ -75,18 +44,13 @@ describe('WEB-APIKEY-CSRF-BLOCK-01: API-key CSRF bypass', () => {
     vi.clearAllMocks();
     mockVerifyToken.mockRejectedValue(new Error('not a JWT'));
     mockVerifyKey.mockResolvedValue(null);
-    // No Clerk session cookie by default — most tests exercise the pure
-    // Bearer-token decision. The attack test below overrides this.
     mockAuth.mockResolvedValue({ userId: null });
   });
 
   describe('THE ATTACK: garbage sk_-shaped bearer + valid session cookie', () => {
     it('does NOT bypass CSRF — requireCsrfToken still 403s with no x-csrf-token', async () => {
-      // Victim's browser auto-attaches a valid Clerk session cookie...
       mockAuth.mockResolvedValue({ userId: 'victim-user' });
-      // ...attacker's forged cross-site request adds a garbage sk_-shaped
-      // bearer, hoping presence alone would skip CSRF.
-      mockVerifyKey.mockResolvedValue(null); // never issued / doesn't verify
+      mockVerifyKey.mockResolvedValue(null);
 
       const req = makeRequest('POST', {
         bearerToken: GARBAGE_SK_LIVE_KEY,
@@ -98,7 +62,6 @@ describe('WEB-APIKEY-CSRF-BLOCK-01: API-key CSRF bypass', () => {
       expect((result as Response).status).toBe(403);
       const body = await (result as Response).json();
       expect(body.code).toBe('CSRF_VALIDATION_FAILED');
-      // Proves the garbage key was actually checked, not skipped on prefix alone.
       expect(mockVerifyKey).toHaveBeenCalledWith(GARBAGE_SK_LIVE_KEY);
     });
 
@@ -148,9 +111,6 @@ describe('WEB-APIKEY-CSRF-BLOCK-01: API-key CSRF bypass', () => {
     });
 
     it('a verified key still bypasses even with a valid session cookie present', async () => {
-      // Not the attack case: here the key genuinely verifies, so bypass is
-      // the correct, safe outcome (an attacker cannot forge a passing
-      // ApiKeyService.verifyKey() result).
       mockAuth.mockResolvedValue({ userId: 'user-1' });
       mockVerifyKey.mockResolvedValue({ id: 'key-1', user_id: 'user-1' });
 

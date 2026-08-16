@@ -14,19 +14,6 @@ import {
   type OrgSharedOverview,
 } from '../hooks/use-settings-queries';
 
-/**
- * Organization sharing — the admin view of what the org shares and who can see it.
- *
- * HONEST SCOPE, stated in the UI rather than only in a comment:
- *   - Sharing is READ-ONLY. A member can open a shared project; only its owner
- *     can edit or delete it. The API refuses `write` for exactly this reason.
- *   - Sharing a project exposes its instructions and knowledge files to the
- *     organization. Conversations stay personal. The confirmation copy says so
- *     before the share happens, not after.
- *   - Only a project or connector the CALLER owns can be shared, so this screen
- *     never lists another member's private work as shareable.
- */
-
 const cardStyle = {
   border: '1px solid var(--settings-border)',
   borderRadius: 'var(--radius-lg)',
@@ -119,8 +106,6 @@ async function fetchOwnProjects(): Promise<OwnProject[]> {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = (await res.json()) as { projects: OwnProject[] };
-  // Only the caller's own projects can be shared; a project reached THROUGH a
-  // share is not theirs to re-share.
   return (json.projects ?? []).filter((project) => !project.isOrgShared);
 }
 

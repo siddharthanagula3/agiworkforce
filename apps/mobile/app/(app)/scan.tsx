@@ -28,16 +28,6 @@ import type { Attachment } from '@/src/features/chat/components/AttachmentPrevie
 
 type ScanPhase = 'camera' | 'processing' | 'preview';
 
-/**
- * ScanScreen — Wave 2 OCR/Scan hero screen.
- *
- * Flow:
- *   1. Full-screen camera viewfinder
- *   2. User taps shutter → capture → on-device OCR (Apple Vision / ML Kit)
- *   3. Preview: photo with teal bounding rects over detected text blocks
- *   4. Editable composer pre-filled "Summarize this:\n<extracted text>"
- *   5. Send → new conversation with the selected local model
- */
 export default function ScanScreen() {
   const router = useRouter();
   const c = useThemeColors();
@@ -52,15 +42,12 @@ export default function ScanScreen() {
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraSlow, setCameraSlow] = useState(false);
 
-  // OCR results
   const [extractedText, setExtractedText] = useState('');
   const [regions, setRegions] = useState<OcrRegion[]>([]);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
-  // Image dimensions for scaling overlay rects to preview size
   const [imgNaturalSize, setImgNaturalSize] = useState<{ w: number; h: number } | null>(null);
 
-  // Composer
   const [promptText, setPromptText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -96,13 +83,11 @@ export default function ScanScreen() {
       setPhase('processing');
       setOcrError(null);
 
-      // Run on-device OCR
       try {
         const result = await recognizeText(photo.uri);
         setExtractedText(result.text);
         setRegions(result.regions);
 
-        // Pre-fill composer
         const prefill = result.text.trim()
           ? `Summarize this:\n\n${result.text.trim()}`
           : 'What does this image say?';
@@ -151,8 +136,6 @@ export default function ScanScreen() {
   const handleSend = useCallback(async () => {
     if (!capturedUri || isSending) return;
 
-    // Guard BEFORE creating a conversation so an empty/failed scan does not leave
-    // an orphan "Scan" conversation behind.
     const content = promptText.trim();
     if (!content) {
       Alert.alert(
@@ -192,7 +175,6 @@ export default function ScanScreen() {
     setCameraSlow(false);
   }, []);
 
-  // ── Permission not yet determined ────────────────────────────────────────
   if (!permission) {
     return (
       <View style={styles.centered}>
@@ -201,7 +183,6 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Permission denied ────────────────────────────────────────────────────
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
@@ -255,7 +236,6 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Processing spinner ───────────────────────────────────────────────────
   if (phase === 'processing' && capturedUri) {
     return (
       <View style={styles.flex}>
@@ -268,7 +248,6 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Preview: photo + overlay rects + composer ────────────────────────────
   if (phase === 'preview' && capturedUri) {
     return (
       <KeyboardAvoidingView
@@ -385,7 +364,6 @@ export default function ScanScreen() {
     );
   }
 
-  // ── Live camera viewfinder ───────────────────────────────────────────────
   return (
     <View style={styles.flex}>
       <CameraView
@@ -472,8 +450,6 @@ export default function ScanScreen() {
   );
 }
 
-// ── OCR overlay component ──────────────────────────────────────────────────
-
 interface OcrOverlayProps {
   regions: OcrRegion[];
   imgNaturalW: number;
@@ -493,8 +469,6 @@ function OcrOverlay({
   colors,
   styles,
 }: OcrOverlayProps) {
-  // The image is rendered with contentFit="cover" filling the full screen.
-  // We compute the displayed image rect (cover scaling) to map pixel coords → screen coords.
   const screenAspect = screenW / screenH;
   const imgAspect = imgNaturalW / imgNaturalH;
 
@@ -504,12 +478,10 @@ function OcrOverlay({
   let offsetY = 0;
 
   if (imgAspect > screenAspect) {
-    // Image is wider — height fills screen, width is cropped
     displayH = screenH;
     displayW = screenH * imgAspect;
     offsetX = (screenW - displayW) / 2;
   } else {
-    // Image is taller — width fills screen, height is cropped
     displayW = screenW;
     displayH = screenW / imgAspect;
     offsetY = (screenH - displayH) / 2;
@@ -526,7 +498,6 @@ function OcrOverlay({
         const width = r.width * scaleX;
         const height = r.height * scaleY;
 
-        // Skip rects outside visible screen area
         if (left + width < 0 || left > screenW || top + height < 0 || top > screenH) {
           return null;
         }
@@ -552,8 +523,6 @@ function OcrOverlay({
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────
-
 const CORNER_SIZE = 20;
 const CORNER_THICKNESS = 2.5;
 
@@ -570,7 +539,6 @@ function createStyles(colors: ColorScheme) {
       justifyContent: 'center',
     },
 
-    // Permission
     permissionContainer: {
       flex: 1,
       backgroundColor: colors.background,
@@ -608,7 +576,6 @@ function createStyles(colors: ColorScheme) {
       alignItems: 'center',
     },
 
-    // Processing overlay
     processingOverlay: {
       ...StyleSheet.absoluteFill,
       backgroundColor: colors.scrim,
@@ -622,7 +589,6 @@ function createStyles(colors: ColorScheme) {
       fontWeight: '500',
     },
 
-    // Top bar
     topBarSafeArea: {
       position: 'absolute',
       top: 0,
@@ -667,7 +633,6 @@ function createStyles(colors: ColorScheme) {
       fontWeight: '500',
     },
 
-    // Scan guide corners
     scanGuide: {
       position: 'absolute',
       top: '25%',
@@ -720,7 +685,6 @@ function createStyles(colors: ColorScheme) {
       borderBottomRightRadius: 3,
     },
 
-    // Hint
     hintBadge: {
       position: 'absolute',
       bottom: '32%',
@@ -736,7 +700,6 @@ function createStyles(colors: ColorScheme) {
       fontWeight: '400',
     },
 
-    // Shutter
     bottomBarSafeArea: {
       position: 'absolute',
       bottom: 0,
@@ -762,14 +725,12 @@ function createStyles(colors: ColorScheme) {
       opacity: 0.5,
     },
 
-    // OCR region rect
     ocrRect: {
       position: 'absolute',
       borderWidth: 1.5,
       borderRadius: 3,
     },
 
-    // Preview bottom stack
     promptSafeArea: {
       position: 'absolute',
       bottom: 0,

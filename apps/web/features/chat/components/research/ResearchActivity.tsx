@@ -1,25 +1,5 @@
 'use client';
 
-/**
- * ResearchActivity
- *
- * Compact activity header for Deep Research runs, rendered above the assistant
- * message while a research run streams and kept (with final counts) after it
- * completes. Mirrors the ChatGPT/Claude research UX: phase label ("Searching
- * the web...", "Writing report"), elapsed time, and search/source counts.
- * The per-round search steps render in the existing ToolTimeline and the
- * source list in the existing ResearchPanel/InlineSourcesList -- this header
- * only reports run-level state, never fabricated activity.
- *
- * CAP-045 slice 2 adds the plan queue: the queries the run's planning turn
- * committed to, each with the status the SERVER reported. Nothing here invents
- * a step or advances one on its own.
- *
- * CAP-045 slice 4 adds Retry for a run that errored or was stopped. Retry goes
- * back through the normal send path (so the attempt reserves and meters like
- * any other request) carrying the sources this run already gathered.
- */
-
 import { useEffect, useState } from 'react';
 import {
   Telescope,
@@ -59,7 +39,6 @@ const STEP_STATUS_LABELS: Record<ResearchStep['status'], string> = {
   failed: 'Failed',
 };
 
-/** One planned/executed research step. Status comes only from the server. */
 function PlanStepRow({ step }: { step: ResearchStep }) {
   const Icon =
     step.status === 'completed'
@@ -106,15 +85,8 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
 
 interface ResearchActivityProps {
   research: MessageResearchState;
-  /** True while the assistant message is still streaming. */
   isStreaming: boolean;
-  /**
-   * Re-run this research question. Rendered only for a run that ended in
-   * error/interrupted, and only when the surface can actually send: an
-   * always-visible Retry that does nothing would be a dead control.
-   */
   onRetry?: () => void;
-  /** True while a retry request this component started is in flight. */
   isRetrying?: boolean;
 }
 
@@ -130,8 +102,6 @@ export function ResearchActivity({
       research.phase === 'searching' ||
       research.phase === 'synthesizing');
 
-  // Live elapsed clock while the run is active; the server-reported elapsed_ms
-  // is the anchor so the display never drifts from the actual run time.
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (!isActive) return;
@@ -151,10 +121,6 @@ export function ResearchActivity({
   const interrupted = research.phase === 'interrupted';
   const complete = research.phase === 'complete';
 
-  // Search count against the cap the run is actually bounded by. A bare count
-  // that stops climbing looks like the run gave up; "12 of 12" says the budget
-  // is spent. The cap is only shown WHILE the run can still spend it — on a
-  // finished run the total is the interesting number, not the ceiling.
   const counts: string[] = [];
   if (typeof research.searches === 'number' && research.searches > 0) {
     const searchLabel = `search${research.searches === 1 ? '' : 'es'}`;
@@ -167,8 +133,6 @@ export function ResearchActivity({
   if (typeof research.sources === 'number' && research.sources > 0) {
     counts.push(`${research.sources} source${research.sources === 1 ? '' : 's'}`);
   }
-  // Round progress. `maxIterations` has always been decoded from the status
-  // event and stored; nothing ever displayed it.
   if (
     isActive &&
     typeof research.iteration === 'number' &&

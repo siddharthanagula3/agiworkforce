@@ -17,9 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 interface CustomInstructionsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** If provided, shows conversation-specific instructions tab for this conversation */
   conversationId?: string;
-  /** Initial tab to show */
   initialTab?: 'conversation' | 'global';
 }
 
@@ -29,26 +27,21 @@ export function CustomInstructionsDialog({
   conversationId,
   initialTab = 'conversation',
 }: CustomInstructionsDialogProps) {
-  // Use selectors to prevent unnecessary re-renders
   const globalInstructions = useCustomInstructionsStore((s) => s.globalInstructions);
   const globalInstructionsEnabled = useCustomInstructionsStore((s) => s.globalInstructionsEnabled);
   const maxInstructionsLength = useCustomInstructionsStore((s) => s.maxInstructionsLength);
 
-  // Track if we've initialized local state for this dialog open
   const hasInitialized = useRef(false);
 
   const [activeTab, setActiveTab] = useState<'conversation' | 'global'>(
     conversationId ? initialTab : 'global',
   );
 
-  // Local state for both instruction types
   const [localConversationInstructions, setLocalConversationInstructions] = useState('');
   const [localGlobalInstructions, setLocalGlobalInstructions] = useState('');
   const [isConversationDirty, setIsConversationDirty] = useState(false);
   const [isGlobalDirty, setIsGlobalDirty] = useState(false);
 
-  // Load initial values when dialog opens or conversation changes
-  // Only run once when dialog opens to prevent infinite loops
   useEffect(() => {
     if (open && !hasInitialized.current) {
       hasInitialized.current = true;
@@ -56,7 +49,6 @@ export function CustomInstructionsDialog({
       setIsGlobalDirty(false);
 
       if (conversationId) {
-        // Access store function directly to avoid dependency issues
         const convInstructions =
           useUnifiedChatStore.getState().getConversationCustomInstructions(conversationId) || '';
         setLocalConversationInstructions(convInstructions);
@@ -64,7 +56,6 @@ export function CustomInstructionsDialog({
       }
     }
 
-    // Reset initialization flag when dialog closes
     if (!open) {
       hasInitialized.current = false;
     }
@@ -89,7 +80,6 @@ export function CustomInstructionsDialog({
   );
 
   const handleSave = useCallback(() => {
-    // Save conversation instructions if dirty
     if (conversationId && isConversationDirty) {
       useUnifiedChatStore
         .getState()
@@ -97,7 +87,6 @@ export function CustomInstructionsDialog({
       setIsConversationDirty(false);
     }
 
-    // Save global instructions if dirty
     if (isGlobalDirty) {
       useCustomInstructionsStore.getState().setGlobalInstructions(localGlobalInstructions);
       setIsGlobalDirty(false);
@@ -114,7 +103,6 @@ export function CustomInstructionsDialog({
   ]);
 
   const handleCancel = useCallback(() => {
-    // Reset to original values
     setLocalGlobalInstructions(globalInstructions);
     setIsGlobalDirty(false);
 
@@ -244,7 +232,6 @@ export function CustomInstructionsDialog({
               </TabsContent>
             </Tabs>
           ) : (
-            // No conversation context - only show global instructions
             <div className="space-y-4 mt-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">

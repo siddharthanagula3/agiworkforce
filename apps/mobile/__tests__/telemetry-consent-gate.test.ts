@@ -1,13 +1,3 @@
-/**
- * Zero-leak telemetry gate tests for storage/telemetry.ts (Agent Beta-4).
- *
- * enqueueTelemetryEvent must DROP the event (never touch the DB queue) unless
- * BOTH hold:
- *   1. the user has explicitly opted in (MMKV `telemetry_opted_in` === true), AND
- *   2. the app is NOT in Local mode (Local is on-device only).
- *
- * The gate is fail-closed: unset consent / unknown mode / read errors → drop.
- */
 
 let mockConsent: boolean | undefined = false;
 jest.mock('@/lib/mmkv', () => ({

@@ -57,11 +57,6 @@ export interface ManagedCloudConversationDetail {
 
 export interface ManagedCloudChatRequestOptions {
   signal?: AbortSignal;
-  /**
-   * Stable workspace bound to the conversation. `null` explicitly means the
-   * Personal workspace; `undefined` preserves the server's active-workspace
-   * fallback for callers that are not operating on an existing binding.
-   */
   organizationId?: string | null;
 }
 

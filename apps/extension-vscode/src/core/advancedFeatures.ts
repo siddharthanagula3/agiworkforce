@@ -1,8 +1,3 @@
-/**
- * advancedFeatures.ts — Credential validation for opt-in inline completions.
- *
- * Extracted from `extension.ts` (~95 LOC) per A1 decomposition.
- */
 
 import * as vscode from 'vscode';
 import { t } from '../l10n';
@@ -29,8 +24,6 @@ export async function validateAdvancedFeatureFlags(
       getApiKey(context.secrets),
     ]);
     if (!hasInlineCompletionCredential(accountToken, apiKey)) {
-      // The choice comes back as the button's own label, so it and the
-      // comparison must resolve through the same lookup.
       const openAccount = t('advancedFeatures.openAccount');
       void vscode.window
         .showInformationMessage(t('advancedFeatures.inlineNeedsCredential'), openAccount)

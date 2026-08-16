@@ -9,11 +9,6 @@ export class ProjectConversationMembershipError extends Error {
   }
 }
 
-/**
- * Replaces the complete conversation membership for one owned project.
- * Callers must invoke this inside the same database transaction as project
- * creation/update so metadata and membership cannot partially commit.
- */
 export async function replaceProjectConversationMembership(
   db: DatabaseAdapter,
   params: {

@@ -1,9 +1,3 @@
-/**
- * The four owned Cloud windows must apply the presentation policy, not their own
- * hardcoded `contentProtected: true` (DES-C09). This drives the real openers
- * through a mocked `WebviewWindow` and asserts the options each one is created
- * with.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const windowHarness = vi.hoisted(() => ({

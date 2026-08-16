@@ -1,29 +1,10 @@
-/**
- * Mobile surface trust-boundary tests.
- *
- * Mobile v1 uses a binary local/cloud mode (no BYOK — mobile cannot securely
- * store provider API keys the same way desktop can). These tests verify the
- * isolation invariants for the binary model.
- *
- * Key rules:
- *   local  → on-device models only; no cloud routing; no managed compute
- *   cloud  → managed AGI compute only; waitlist-gated
- */
 
-// Mobile uses Jest (react-native test runner); describe/it/expect are globals.
 
 import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
-// ---------------------------------------------------------------------------
-// conversationMode.ts logic — mirrors apps/mobile/src/features/chat/utils/
-// ---------------------------------------------------------------------------
-
 type ConversationExecutionMode = 'local' | 'cloud';
 
-// Mirrors executionModeForModel
 const executionModeForModel = (modelId?: string | null): ConversationExecutionMode => {
-  // Cloud-managed models have a specific naming pattern — they require a
-  // managed-cloud session (not local or BYOK)
   const CLOUD_MODEL_PREFIXES = ['claude-', 'gpt-', 'gemini-', 'command-'];
   if (!modelId) return 'local';
   const lower = modelId.toLowerCase();
@@ -31,7 +12,6 @@ const executionModeForModel = (modelId?: string | null): ConversationExecutionMo
   return isCloudManaged ? 'cloud' : 'local';
 };
 
-// Mirrors providerForExecutionMode
 const providerForExecutionMode = (mode: ConversationExecutionMode): 'local' | 'cloud_managed' => {
   return mode === 'cloud' ? 'cloud_managed' : 'local';
 };
@@ -69,10 +49,6 @@ describe('conversationMode routing', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Trust-boundary gate invariants for mobile
-// ---------------------------------------------------------------------------
-
 describe('mobile trust-boundary gate invariants', () => {
   it('CRITICAL: local mode does not use cloud_managed provider', () => {
     expect(providerForExecutionMode('local')).not.toBe('cloud_managed');
@@ -97,13 +73,8 @@ describe('mobile trust-boundary gate invariants', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// AppMode store isolation
-// ---------------------------------------------------------------------------
-
 describe('mobile appMode store defaults', () => {
   it('default appMode is local (privacy-safe default)', () => {
-    // The store defaults to 'local' — confirmed in appModeStore.ts
     const DEFAULT_MODE: ConversationExecutionMode = 'local';
     expect(DEFAULT_MODE).toBe('local');
     expect(DEFAULT_MODE).not.toBe('cloud');
@@ -116,13 +87,7 @@ describe('mobile appMode store defaults', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tier guard — byok tier is a known concept even if mobile v1 does not
-// expose it in the UI (reserved for future BYOK key vault integration)
-// ---------------------------------------------------------------------------
-
 describe('tier guard — byok awareness', () => {
-  // Mirrors apps/mobile/src/features/model-picker/tierGuard.ts tier ordering
   const MOBILE_TIER_ORDER = ['local', 'byok', 'hobby', 'pro', 'pro_plus', 'max'];
 
   it('byok is positioned between local and hobby in the tier order', () => {
@@ -149,12 +114,7 @@ describe('tier guard — byok awareness', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// isCloudUnlocked — guards access to cloud models
-// ---------------------------------------------------------------------------
-
 describe('cloud model access gate', () => {
-  // Mirrors apps/mobile/src/features/model-picker/store.ts isCloudUnlocked logic
   const isCloudUnlocked = (authToken: string | null, hasSubscription: boolean): boolean => {
     return !!authToken && hasSubscription;
   };
@@ -172,7 +132,6 @@ describe('cloud model access gate', () => {
   });
 
   it('CRITICAL: local mode must never see cloud unlocked without auth', () => {
-    // Without an auth token, cloud models are unreachable regardless of appMode
     expect(isCloudUnlocked(null, false)).toBe(false);
     expect(isCloudUnlocked(null, true)).toBe(false);
   });

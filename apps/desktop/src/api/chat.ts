@@ -1,36 +1,14 @@
-/**
- * Chat API - Intent Detection, Stop Command Handling, and Message Loading
- *
- * Provides TypeScript bindings for smart intent detection
- * that automatically determines whether user messages are:
- * - Conversation (questions, discussion)
- * - Action requests (do something)
- * - Stop commands (halt current operation)
- * - Clarification requests (follow-up questions)
- *
- * Also provides message loading functionality for conversations.
- */
 
 import { invoke } from '../lib/tauri-mock';
 import { toast } from 'sonner';
 import type { Message } from '../types/chat';
 
-/**
- * User intent types for smart routing
- */
 export type UserIntent = 'conversation' | 'action_request' | 'stop' | 'clarification';
 
-/**
- * Result of intent detection with confidence scoring
- */
 export interface IntentResult {
-  /** The detected intent type */
   intent: UserIntent;
-  /** Confidence score from 0.0 to 1.0 */
   confidence: number;
-  /** Detected action verbs if any */
   action_verbs: string[];
-  /** Whether auto mode should be activated for this intent */
   should_auto_execute: boolean;
 }
 
@@ -147,27 +125,15 @@ export async function loadConversationMessages(
   });
 }
 
-/**
- * ChatClient - Convenience class for chat operations
- */
 export class ChatClient {
-  /**
-   * Detect intent from user message
-   */
   static async detectIntent(content: string): Promise<IntentResult> {
     return detectIntent(content);
   }
 
-  /**
-   * Check if message is a stop command
-   */
   static async isStopCommand(content: string): Promise<boolean> {
     return isStopCommand(content);
   }
 
-  /**
-   * Handle stop command
-   */
   static async handleStop(): Promise<boolean> {
     return handleStop();
   }
@@ -181,9 +147,6 @@ export class ChatClient {
     return stopGeneration(conversationId);
   }
 
-  /**
-   * Load all messages for a conversation
-   */
   static async loadConversationMessages(
     conversationId: number,
     userId: string,
@@ -191,23 +154,14 @@ export class ChatClient {
     return loadConversationMessages(conversationId, userId);
   }
 
-  /**
-   * Determine if auto mode should be activated based on intent
-   */
   static shouldAutoExecute(result: IntentResult): boolean {
     return result.should_auto_execute && result.confidence > 0.5;
   }
 
-  /**
-   * Check if intent requires immediate action
-   */
   static requiresAction(result: IntentResult): boolean {
     return result.intent === 'action_request' || result.intent === 'stop';
   }
 
-  /**
-   * Check if intent is conversational
-   */
   static isConversational(result: IntentResult): boolean {
     return result.intent === 'conversation' || result.intent === 'clarification';
   }

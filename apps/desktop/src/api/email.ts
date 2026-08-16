@@ -1,9 +1,3 @@
-/**
- * Email & Contacts API — Tauri IPC wrappers
- *
- * Wraps all 24 Rust commands from sys/commands/email.rs.
- * invoke() params use camelCase; command names use snake_case.
- */
 
 import { invoke } from '../lib/tauri-mock';
 import type {
@@ -14,10 +8,6 @@ import type {
   EmailMessage,
   EmailProviderConfig,
 } from '../types/email';
-
-// ---------------------------------------------------------------------------
-// Interfaces
-// ---------------------------------------------------------------------------
 
 export interface SendEmailRequest {
   accountId: number;
@@ -36,10 +26,6 @@ export interface EmailSearchResult {
   total: number;
   query: string;
 }
-
-// ---------------------------------------------------------------------------
-// Email Account Commands
-// ---------------------------------------------------------------------------
 
 export async function emailConnect(
   provider: string,
@@ -77,10 +63,6 @@ export async function emailRemoveAccount(accountId: number): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Folder Commands
-// ---------------------------------------------------------------------------
-
 export async function emailListFolders(accountId: number): Promise<string[]> {
   try {
     return await invoke<string[]>('email_list_folders', { accountId });
@@ -88,10 +70,6 @@ export async function emailListFolders(accountId: number): Promise<string[]> {
     throw new Error(`Failed to list email folders: ${(error as Error).message}`);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Message Commands
-// ---------------------------------------------------------------------------
 
 export async function emailFetchInbox(
   accountId: number,
@@ -192,10 +170,6 @@ export async function emailDownloadAttachment(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Send Commands
-// ---------------------------------------------------------------------------
-
 export async function emailSend(request: SendEmailRequest): Promise<string> {
   try {
     return await invoke<string>('email_send', { request });
@@ -211,10 +185,6 @@ export async function emailSendMessage(request: SendEmailRequest): Promise<strin
     throw new Error(`Failed to send message: ${(error as Error).message}`);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Search Commands
-// ---------------------------------------------------------------------------
 
 export async function emailSearch(
   accountId: number,
@@ -233,10 +203,6 @@ export async function emailSearch(
     throw new Error(`Failed to search emails: ${(error as Error).message}`);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Contact Commands
-// ---------------------------------------------------------------------------
 
 export async function contactCreate(contact: Contact): Promise<number> {
   try {
@@ -308,20 +274,13 @@ export async function contactExportVcard(filePath: string): Promise<number> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Convenience Client Object
-// ---------------------------------------------------------------------------
-
 export const EmailClient = {
-  // Accounts
   connect: emailConnect,
   listAccounts: emailListAccounts,
   removeAccount: emailRemoveAccount,
 
-  // Folders
   listFolders: emailListFolders,
 
-  // Messages
   fetchInbox: emailFetchInbox,
   listMessages: emailListMessages,
   getMessage: emailGetMessage,
@@ -330,11 +289,9 @@ export const EmailClient = {
   moveMessage: emailMoveMessage,
   downloadAttachment: emailDownloadAttachment,
 
-  // Send
   send: emailSend,
   sendMessage: emailSendMessage,
 
-  // Search
   search: emailSearch,
 
   // Keyring

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeToggle } from '@agiworkforce/ui';
 
-// Mock next-themes
 const mockSetTheme = vi.fn();
 let mockTheme = 'system';
 
@@ -63,17 +62,14 @@ describe('ThemeToggle', () => {
   it('renders an icon for each theme state', () => {
     const { rerender } = render(<ThemeToggle />);
 
-    // system → monitor icon (svg should be present)
     mockTheme = 'system';
     rerender(<ThemeToggle />);
     expect(screen.getByRole('button')).toBeInTheDocument();
 
-    // light → sun icon
     mockTheme = 'light';
     rerender(<ThemeToggle />);
     expect(screen.getByRole('button')).toBeInTheDocument();
 
-    // dark → moon icon
     mockTheme = 'dark';
     rerender(<ThemeToggle />);
     expect(screen.getByRole('button')).toBeInTheDocument();

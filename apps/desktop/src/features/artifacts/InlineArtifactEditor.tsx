@@ -1,10 +1,3 @@
-/**
- * InlineArtifactEditor
- *
- * An inline editor for artifact content. Renders a monospace textarea for code
- * artifacts and a regular textarea for document / other types. On save it
- * computes a line-level diff and calls `onSave`; on cancel it calls `onCancel`.
- */
 
 import { useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';

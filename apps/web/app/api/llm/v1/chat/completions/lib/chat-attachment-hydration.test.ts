@@ -51,8 +51,6 @@ describe('hydrateChatAttachments', () => {
     });
   });
 
-  // PER-27: deleting one Library file used to 404 every subsequent turn in the
-  // conversation that referenced it, forever, with no in-product recovery.
   it('degrades a soft-deleted owned attachment to a placeholder instead of failing the turn', async () => {
     const assetId = '32b71cf4-c0d1-4cc7-b6c4-776ece82f137';
     mocks.getMediaAssetById.mockResolvedValue({

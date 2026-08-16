@@ -26,10 +26,6 @@ interface UserProfileProps {
 }
 
 function getInitials(fullName: string): string {
-  // FIX (audit 2026-05-20, §14): replace the misleading non-null assertion
-  // pattern `parts[0]![0] ?? 'U'`. After `.filter(Boolean)` every entry is
-  // a non-empty string, but the `!` told a reader otherwise; safe optional
-  // access is both correct and self-documenting.
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return 'U';
   const first = parts[0] ?? '';
@@ -39,7 +35,6 @@ function getInitials(fullName: string): string {
 }
 
 function getAvatarColor(name: string): string {
-  // Deterministic hue from name string
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -48,22 +43,16 @@ function getAvatarColor(name: string): string {
   return `hsl(${hue}, 45%, 38%)`;
 }
 
-/**
- * Map the legacy free/plan strings stored in settingsStore to the canonical UIPlanTier.
- * Legacy `free` is the alias for `byok` per MEMORY.md tier list.
- */
 function resolvePlanTier(plan: string): UIPlanTier {
   return normalizeUIPlanTier(plan, 'byok');
 }
 
-/** Derive usage source from the plan tier without inventing quota numbers. */
 function deriveUsageMeter(tier: UIPlanTier): UsageMeter {
   if (tier === 'local') return { remaining: null, resetsAt: null, source: 'unbounded' };
   if (tier === 'byok') return { remaining: null, resetsAt: null, source: 'user-api-key' };
   return { remaining: null, resetsAt: null, source: 'managed-plan' };
 }
 
-/** Format days-until-reset from an ISO timestamp. */
 function formatResetsIn(isoDate: string): string {
   const days = Math.max(
     0,
@@ -74,7 +63,6 @@ function formatResetsIn(isoDate: string): string {
   return `in ${days}d`;
 }
 
-/** Format token counts for the meter row. */
 function formatTokenRow(usedTokens: number, limitTokens: number): { used: string; total: string } {
   const usedK = Math.round((usedTokens / 1_000) * 10) / 10;
   const totalK = Math.round((limitTokens / 1_000) * 10) / 10;
@@ -83,10 +71,6 @@ function formatTokenRow(usedTokens: number, limitTokens: number): { used: string
     total: `${totalK}k`,
   };
 }
-
-// ---------------------------------------------------------------------------
-// UsageMeterRow — visual block shown inside the profile popover
-// ---------------------------------------------------------------------------
 
 interface UsageMeterRowProps {
   meter: UsageMeter;
@@ -113,7 +97,6 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
     );
   }
 
-  // managed-plan
   if (
     meter.remaining === null ||
     meter.usedTokens === undefined ||
@@ -162,10 +145,6 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// UserProfile
-// ---------------------------------------------------------------------------
-
 export function UserProfile({ collapsed }: UserProfileProps) {
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -181,7 +160,6 @@ export function UserProfile({ collapsed }: UserProfileProps) {
   const avatarColor = getAvatarColor(profile.fullName || 'user');
   const displayName = profile.fullName.trim() || 'Your Account';
 
-  // Close popover on outside click
   useEffect(() => {
     if (!open) return;
     function handleOutside(e: MouseEvent) {
@@ -199,7 +177,6 @@ export function UserProfile({ collapsed }: UserProfileProps) {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [open]);
 
-  // Close on Escape
   useEffect(() => {
     if (!open) return;
     function handleKeyDown(e: KeyboardEvent) {

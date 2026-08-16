@@ -4,32 +4,18 @@ import { cn } from '@shared/lib/utils';
 import { Skeleton } from '@agiworkforce/ui';
 
 interface MessageBubbleSkeletonProps {
-  /** Whether this skeleton represents a user message (right-aligned). */
   isUser?: boolean;
-  /** Number of text line skeletons to render inside the bubble. */
   lines?: number;
-  /** Animation variant forwarded to all child Skeleton primitives. */
   animation?: 'pulse' | 'wave' | 'none';
   className?: string;
 }
 
-/**
- * MessageBubbleSkeleton · loading placeholder that mirrors the shape and
- * layout of a real MessageItem from MessageListNew.
- *
- * Layout matches MessageItem exactly:
- *  - 8px avatar circle (h-8 w-8)
- *  - flex gap-4, reversed for user messages
- *  - Name + time header row
- *  - Rounded bubble or prose area for content
- */
 export function MessageBubbleSkeleton({
   isUser = false,
   lines = 2,
   animation = 'pulse',
   className,
 }: MessageBubbleSkeletonProps) {
-  // Vary the width of each text line for a natural look.
   const lineWidths = ['w-full', 'w-4/5', 'w-3/5', 'w-2/3', 'w-3/4'];
 
   return (
@@ -53,14 +39,12 @@ export function MessageBubbleSkeleton({
 
           {/* Message body */}
           {isUser ? (
-            /* User messages use a pill-shaped bubble */
             <Skeleton
               animation={animation}
               className="inline-block rounded-2xl rounded-tr-sm px-4 py-3"
               style={{ width: `${55 + (lines - 1) * 15}%`, height: `${lines * 24 + 16}px` }}
             />
           ) : (
-            /* Assistant messages use a prose text block with varying lines */
             <div className="space-y-2 w-full">
               {Array.from({ length: lines }).map((_, index) => (
                 <Skeleton

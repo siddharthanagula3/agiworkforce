@@ -1,12 +1,3 @@
-/**
- * Contract tests for `src/background/policy.ts` — the single source of truth
- * for message-router gates, bridge-URL validation, and shortcut-action
- * allowlisting (introduced in C-02/C-03/H-02 audit 2026-05-19).
- *
- * These tests import from production source rather than mirror — that
- * mirror pattern is exactly what made H-02 invisible. Any future regression
- * in the policy module must fail these tests.
- */
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -121,9 +112,6 @@ describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
   });
 
   it('gates privileged tab / cookie / chat operations (no legitimate web-page sender)', () => {
-    // These have background handlers but no content-script sender in the
-    // extension; without gating, any allowlisted origin could enumerate/close/
-    // switch tabs, write cookies, or start paid CHAT_MESSAGE runs invisibly.
     for (const t of [
       'CHAT_MESSAGE',
       'GET_ALL_TABS',
@@ -407,7 +395,6 @@ describe('policy — generateRecordId (M-04)', () => {
   });
 
   it('uses crypto-strong entropy (48-bit suffix, not Math.random)', () => {
-    // Verify the suffix is 12 hex chars sourced from crypto.randomUUID.
     const id = generateRecordId('p');
     const suffix = id.split('_')[2];
     expect(suffix).toMatch(/^[0-9a-f]{12}$/);
@@ -446,9 +433,6 @@ describe('policy — MESSAGE_POLICY matrix (Arch #1 audit 2026-05-19)', () => {
   });
 
   it('getMessagePolicy returns the fail-safe default for unknown types', () => {
-    // Unknown types fall back to allowlisted-tab + cross-tab — safe for
-    // read-only handlers; you MUST add an explicit entry for DOM-writing
-    // or state-persisting types.
     const policy = getMessagePolicy('NEWLY_ADDED_FOO');
     expect(policy.senderClass).toBe('allowlisted-tab');
     expect(policy.allowsCrossTab).toBe(true);

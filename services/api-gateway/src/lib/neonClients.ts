@@ -7,14 +7,6 @@ type SqlClient = ReturnType<typeof neon>;
 type QueryRows = Record<string, unknown>[];
 type LooseDbRow = ReturnType<typeof JSON.parse>;
 
-/**
- * Minimal shape the query builder needs from its executor: a parameterized
- * query method returning either a bare row array or `{ rows }` (both are
- * normalized by rowsFromResult() below). The service-role neon() HTTP client
- * and the RLS-capable data-layer DatabaseAdapter are both wrapped down to
- * this shape so NeonQueryBuilder/NeonDataClient never depend on which one is
- * live behind them.
- */
 interface QueryExecutor {
   query(text: string, values: unknown[]): Promise<unknown>;
 }
@@ -511,11 +503,6 @@ const SYSTEM_TABLES: Record<SystemClientPurpose, ReadonlySet<string>> = {
   'gateway-health': new Set(['profiles']),
 };
 
-/**
- * Return the privileged database connection for operations that cannot run as
- * an end user. Callers must name the purpose so service-role access remains
- * visible in review. User-owned canonical data must use getUserScopedClient.
- */
 export function getSystemClient(_purpose: SystemClientPurpose): CloudDbClient {
   const existing = systemClients.get(_purpose);
   if (existing) return existing;
@@ -533,32 +520,12 @@ export function getSystemClient(_purpose: SystemClientPurpose): CloudDbClient {
 }
 
 export interface UserAuth {
-  /** Clerk or gateway-issued user id — must match the token's own `sub` claim. */
   userId: string;
-  /**
-   * Raw bearer token, ALREADY signature-verified by the caller. authenticateToken
-   * (middleware/auth.ts) verifies it via Clerk verifyToken() or
-   * jwt.verify(..., JWT_SECRET) and attaches the raw string as req.user.token —
-   * that verification is the precondition withUser() below assumes. Never pass
-   * an unverified token here.
-   */
   token: string;
 }
 
 let rlsAdapter: DatabaseAdapter | null = null;
 
-/**
- * Lazily construct the pooled, RLS-capable Neon adapter that backs
- * getUserScopedClient(). Deliberately separate from getSql() above: this uses
- * @neondatabase/serverless's WebSocket Pool (via @agiworkforce/data-layer's
- * NeonDatabaseAdapter) instead of the one-shot HTTP driver, because
- * `SET LOCAL` only persists for the lifetime of a held connection/transaction.
- *
- * `unsafeAllowUnverifiedJwtSubject: true` is safe here ONLY because every
- * caller of getUserScopedClient() is contractually required to pass a
- * UserAuth.token that was already signature-verified upstream — see the
- * UserAuth doc comment.
- */
 function getRlsAdapter(): DatabaseAdapter {
   rlsAdapter ??= createDatabaseClient({
     provider: 'neon',
@@ -569,33 +536,11 @@ function getRlsAdapter(): DatabaseAdapter {
   return rlsAdapter;
 }
 
-/**
- * Release the pooled RLS adapter's connections. Call on graceful shutdown
- * (SIGTERM) alongside closing the HTTP/WS servers. No-op if the adapter was
- * never constructed — most short-lived processes (e.g. tests) never touch
- * this lazy path.
- */
 export async function disposeUserScopedClientPool(): Promise<void> {
   if (!rlsAdapter) return;
   await rlsAdapter.dispose();
 }
 
-/**
- * SECURITY (P1-GW-RLS, real fix): binds `auth.token` via
- * NeonDatabaseAdapter.withUser() (packages/platform/data-layer/src/adapters/neon.ts),
- * which runs every query as the NON-BYPASSRLS `app_rls` role with
- * `request.jwt.claim.sub` set to the token's own `sub` claim — the same
- * mechanism apps/web/lib/server/rls-db.ts uses in production. RLS policies
- * keyed on that GUC (0037_rls_user_isolation.sql and friends) now enforce
- * tenant isolation at the DATABASE level for tables that have one.
- *
- * This boundary is fail closed. Missing or malformed tokens throw before a
- * query is built. Connection, role, policy, and query failures are returned to
- * the caller as database errors by NeonQueryBuilder; they are never retried on
- * the privileged system connection. This deliberately turns RLS provisioning
- * drift into an observable request failure instead of silent tenant-boundary
- * bypass.
- */
 export function getUserScopedClient(auth: UserAuth): CloudDbClient {
   if (!auth.token) {
     throw new Error('User-scoped database access requires a verified bearer token');

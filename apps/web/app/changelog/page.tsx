@@ -21,8 +21,6 @@ interface Release {
   body: string[];
 }
 
-// Changelog is the one place versions belong · that's the page's purpose.
-// Everything else on the marketing site avoids version numbers.
 const RELEASES: Release[] = [
   {
     date: '2026-05-08',

@@ -1,74 +1,13 @@
-/**
- * Intelligent Intent Classifier (January 2026)
- *
- * This module classifies user intent into specific categories for multi-modal routing.
- * It determines what type of output the user wants (chat, image, video, audio, etc.)
- * and what tools/capabilities are needed.
- *
- * Architecture:
- * 1. For Basic tier: Fast keyword-based classification (free, instant)
- * 2. For Pro and above: Uses a fast, cheap classifier model with recent knowledge cutoff
- * 3. Returns structured intent with confidence and required capabilities
- *
- * CLASSIFIER MODEL SELECTION (January 2026):
- * We use the fastest, cheapest model with the most recent knowledge cutoff for classification.
- * This ensures the classifier understands modern terminology, tools, and user expectations.
- *
- * Concrete classifier models are resolved from the canonical routing catalog.
- * Prefer its low-latency structured-output route, then its tool-aware and
- * high-accuracy fallbacks for ambiguous tasks.
- *
- * Intent Types:
- * - Chat: Regular conversation, Q&A, explanations
- * - Coding: Code generation, debugging, review
- * - Reasoning: Complex analysis, math, logic puzzles
- * - Agentic: Browser automation, workflows, multi-step tasks
- * - Multimodal: Tasks involving image/video analysis (input)
- * - Image Generation: Create images from text
- * - Video Generation: Create videos from text
- * - Search: Web search, research queries
- * - Deep Research: In-depth research with multiple sources
- * - TTS: Text-to-speech conversion
- * - STT: Speech-to-text transcription
- * - Music: Music generation
- */
 
 import type { ModelMetadata } from '../constants/llm';
 
-// ============================================
-// CLASSIFIER MODEL CONFIGURATION
-// ============================================
-
-/**
- * Classifier Model Requirements
- *
- * Based on industry research (January 2026):
- * - Hybrid approach: Local keyword matching + LLM classification for ambiguous cases
- * - Separation of concerns: Router (classification) vs Task execution (main model)
- * - NVIDIA LLM Router: Uses semantic classification with small models (~1.7B params)
- * - vLLM Semantic Router: Uses lightweight classifiers like ModernBERT
- * - Key insight: 47% latency reduction, 48% token savings with smart routing
- *
- * Classifier Model Requirements (model-agnostic):
- * 1. Fast: <200ms latency for classification prompts
- * 2. Cheap: <$0.50/1M tokens input (classification is ~200 tokens = ~$0.0001)
- * 3. Recent: Knowledge cutoff within last 6 months for modern tool/API awareness
- * 4. Accurate: Good at structured output (JSON) and classification tasks
- *
- * Sources:
- * - https://arize.com/blog/best-practices-for-building-an-ai-agent-router/
- * - https://build.nvidia.com/nvidia/llm-router
- * - https://www.redhat.com/en/blog/bringing-intelligent-efficient-routing-open-source-ai-vllm-semantic-router
- */
 export interface ClassifierModelSpec {
-  /** Minimum requirements for a classifier model */
   requirements: {
     maxLatencyMs: number;
     maxInputCostPer1M: number;
     maxKnowledgeAgeMonths: number;
     requiresStructuredOutput: boolean;
   };
-  /** Preferred capabilities (soft requirements) */
   preferences: {
     supportsJsonMode: boolean;
     supportsFunctionCalling: boolean;
@@ -76,10 +15,6 @@ export interface ClassifierModelSpec {
   };
 }
 
-/**
- * Default classifier requirements
- * Any model meeting these specs can be used for intent classification
- */
 export const CLASSIFIER_REQUIREMENTS: ClassifierModelSpec = {
   requirements: {
     maxLatencyMs: 300, // Must respond quickly
@@ -94,15 +29,8 @@ export const CLASSIFIER_REQUIREMENTS: ClassifierModelSpec = {
   },
 };
 
-/**
- * Model categories for classifier selection (provider-agnostic)
- * The actual model is selected at runtime based on available providers
- */
 export type ClassifierCategory = 'flash' | 'mini' | 'reasoning';
 
-/**
- * Get classifier category description
- */
 export function getClassifierCategorySpec(category: ClassifierCategory): {
   description: string;
   targetLatencyMs: number;
@@ -134,9 +62,6 @@ export function getClassifierCategorySpec(category: ClassifierCategory): {
   }
 }
 
-/**
- * Select the best classifier category based on use case
- */
 export function selectClassifierCategory(options: {
   preferSpeed?: boolean;
   preferAccuracy?: boolean;
@@ -152,18 +77,11 @@ export function selectClassifierCategory(options: {
   if (options.preferCost) {
     return 'mini';
   }
-  return 'mini'; // Default balanced option
+  return 'mini';
 }
 
-/**
- * User-facing routing modes (similar to OpenAI's Auto/Fast/Thinking)
- * These simplify the complexity for end users
- */
 export type UserRoutingMode = 'auto' | 'fast' | 'thinking' | 'creative';
 
-/**
- * Map user routing mode to internal classification strategy
- */
 export function getClassificationStrategy(mode: UserRoutingMode): {
   useLocalFirst: boolean;
   localConfidenceThreshold: number;
@@ -203,30 +121,20 @@ export function getClassificationStrategy(mode: UserRoutingMode): {
   }
 }
 
-// ============================================
-// TYPES
-// ============================================
-
-/**
- * Extended intent types covering all modalities
- */
 export type IntentType =
-  | 'chat' // General conversation
-  | 'coding' // Code generation/debugging
-  | 'reasoning' // Complex analysis/math
-  | 'agentic' // Browser/automation/multi-step
-  | 'multimodal' // Image/video analysis (input)
-  | 'image-gen' // Image generation (output)
-  | 'video-gen' // Video generation (output)
-  | 'search' // Web search
-  | 'deep-research' // In-depth research
-  | 'tts' // Text-to-speech
-  | 'stt' // Speech-to-text
-  | 'music'; // Music generation
+  | 'chat'
+  | 'coding'
+  | 'reasoning'
+  | 'agentic'
+  | 'multimodal'
+  | 'image-gen'
+  | 'video-gen'
+  | 'search'
+  | 'deep-research'
+  | 'tts'
+  | 'stt'
+  | 'music';
 
-/**
- * Tool categories that can be matched to intents
- */
 export type ToolCategory =
   | 'browser'
   | 'file-system'
@@ -239,27 +147,21 @@ export type ToolCategory =
   | 'api'
   | 'communication';
 
-/**
- * Classified intent with confidence and metadata
- */
 export interface ClassifiedIntent {
   primary: IntentType;
-  secondary?: IntentType; // For hybrid tasks
-  confidence: number; // 0-1
+  secondary?: IntentType;
+  confidence: number;
   keywords: string[];
   requiredCapabilities: Array<keyof ModelMetadata['capabilities']>;
   suggestedTools: ToolCategory[];
-  reasoning?: string; // LLM's reasoning (for Pro and above)
+  reasoning?: string;
 }
 
-/**
- * Options for intent classification
- */
 export interface ClassificationOptions {
   tier: 'basic' | 'pro' | 'max' | 'enterprise';
   hasAttachments: boolean;
   attachmentTypes: Array<'image' | 'audio' | 'video' | 'document'>;
-  conversationContext?: string; // Previous messages for context
+  conversationContext?: string;
   userPreferences?: {
     preferredImageModel?: string;
     preferredVideoModel?: string;
@@ -267,14 +169,6 @@ export interface ClassificationOptions {
   };
 }
 
-// ============================================
-// INTENT KEYWORDS
-// ============================================
-
-/**
- * Keywords for fast local classification
- * Organized by intent type with high-confidence and medium-confidence patterns
- */
 const INTENT_KEYWORDS: Record<IntentType, { high: string[]; medium: string[] }> = {
   chat: {
     high: [
@@ -442,13 +336,6 @@ const INTENT_KEYWORDS: Record<IntentType, { high: string[]; medium: string[] }> 
   },
 };
 
-// ============================================
-// CAPABILITY MAPPING
-// ============================================
-
-/**
- * Maps intent types to required model capabilities
- */
 const INTENT_CAPABILITIES: Record<IntentType, Array<keyof ModelMetadata['capabilities']>> = {
   chat: [],
   coding: ['tools'],
@@ -464,9 +351,6 @@ const INTENT_CAPABILITIES: Record<IntentType, Array<keyof ModelMetadata['capabil
   music: [], // Handled by music models
 };
 
-/**
- * Maps intent types to suggested tool categories
- */
 const INTENT_TOOLS: Record<IntentType, ToolCategory[]> = {
   chat: [],
   coding: ['code-execution', 'file-system'],
@@ -482,21 +366,12 @@ const INTENT_TOOLS: Record<IntentType, ToolCategory[]> = {
   music: ['audio'],
 };
 
-// ============================================
-// CLASSIFICATION FUNCTIONS
-// ============================================
-
-/**
- * Fast keyword-based classification (used for Basic tier or as first pass)
- * Returns null if confidence is too low
- */
 export function classifyIntentLocally(
   message: string,
   options: ClassificationOptions,
 ): ClassifiedIntent | null {
   const lowerMessage = message.toLowerCase();
 
-  // Check for attachments first - they strongly indicate intent
   if (options.hasAttachments) {
     if (options.attachmentTypes.includes('image')) {
       return {
@@ -530,7 +405,6 @@ export function classifyIntentLocally(
   const KEYWORD_SCORE_HIGH = 3;
   const KEYWORD_SCORE_MEDIUM = 1;
 
-  // Score each intent type
   const scores: Array<{ type: IntentType; score: number; keywords: string[] }> = [];
 
   for (const [intentType, keywords] of Object.entries(INTENT_KEYWORDS)) {
@@ -556,10 +430,8 @@ export function classifyIntentLocally(
     }
   }
 
-  // Sort by score
   scores.sort((a, b) => b.score - a.score);
 
-  // If no matches, default to chat
   if (scores.length === 0) {
     return DEFAULT_CHAT_INTENT;
   }
@@ -567,13 +439,11 @@ export function classifyIntentLocally(
   const topResult = scores[0]!;
   const secondResult = scores[1];
 
-  // Calculate confidence based on score and gap to second result
   let confidence = Math.min(0.95, 0.4 + topResult.score * 0.1);
   if (secondResult && topResult.score - secondResult.score <= 1) {
-    confidence *= 0.8; // Reduce confidence if close competition
+    confidence *= 0.8;
   }
 
-  // Return null if confidence is too low for keyword-based (need LLM)
   if (confidence < 0.6 && options.tier !== 'basic') {
     return null;
   }
@@ -588,9 +458,6 @@ export function classifyIntentLocally(
   };
 }
 
-/**
- * Generate LLM prompt for intent classification (Pro and above)
- */
 export function getIntentClassificationPrompt(
   message: string,
   options: ClassificationOptions,
@@ -633,12 +500,8 @@ Respond in JSON format:
 }`;
 }
 
-/**
- * Parse LLM response for intent classification
- */
 export function parseIntentResponse(response: string, fallbackMessage: string): ClassifiedIntent {
   try {
-    // Try to extract JSON from response
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
@@ -659,7 +522,6 @@ export function parseIntentResponse(response: string, fallbackMessage: string): 
     // JSON parsing failed, try text parsing
   }
 
-  // Text-based fallback parsing
   const normalized = response.toLowerCase();
   let primary: IntentType = 'chat';
 
@@ -687,8 +549,6 @@ export function parseIntentResponse(response: string, fallbackMessage: string): 
     primary = 'music';
   }
 
-  // If text parsing found a specific intent (non-default), use it rather than
-  // discarding it in favour of local classification.
   if (primary !== 'chat') {
     return {
       primary,
@@ -699,7 +559,6 @@ export function parseIntentResponse(response: string, fallbackMessage: string): 
     };
   }
 
-  // Fallback to local classification for ambiguous messages
   const localResult = classifyIntentLocally(fallbackMessage, {
     tier: 'basic',
     hasAttachments: false,
@@ -709,9 +568,6 @@ export function parseIntentResponse(response: string, fallbackMessage: string): 
   return localResult || DEFAULT_CHAT_INTENT;
 }
 
-/**
- * All valid intent type values for O(1) lookup.
- */
 const VALID_INTENT_TYPES = new Set<IntentType>([
   'chat',
   'coding',
@@ -727,9 +583,6 @@ const VALID_INTENT_TYPES = new Set<IntentType>([
   'music',
 ]);
 
-/**
- * Default chat intent returned when classification is uncertain.
- */
 const DEFAULT_CHAT_INTENT: ClassifiedIntent = {
   primary: 'chat',
   confidence: 0.5,
@@ -738,9 +591,6 @@ const DEFAULT_CHAT_INTENT: ClassifiedIntent = {
   suggestedTools: [],
 };
 
-/**
- * Validate and normalize intent type
- */
 function validateIntentType(type: string): IntentType {
   const normalized = type.toLowerCase().trim();
 
@@ -748,7 +598,6 @@ function validateIntentType(type: string): IntentType {
     return normalized as IntentType;
   }
 
-  // Fuzzy matching
   if (normalized.includes('image') && normalized.includes('gen')) return 'image-gen';
   if (normalized.includes('video') && normalized.includes('gen')) return 'video-gen';
   if (normalized.includes('research')) return 'deep-research';
@@ -763,10 +612,6 @@ function validateIntentType(type: string): IntentType {
 
   return 'chat';
 }
-
-// ============================================
-// MAIN CLASSIFICATION FUNCTION
-// ============================================
 
 /**
  * Classify user intent
@@ -784,20 +629,16 @@ export async function classifyIntent(
   options: ClassificationOptions,
   llmClassify?: (prompt: string) => Promise<string>,
 ): Promise<ClassifiedIntent> {
-  // First, try local classification
   const localResult = classifyIntentLocally(message, options);
 
-  // For Basic tier, always use local classification
   if (options.tier === 'basic') {
     return localResult || DEFAULT_CHAT_INTENT;
   }
 
-  // For Pro and above, use LLM if local confidence is low or LLM is available
   if (localResult && localResult.confidence >= 0.8) {
     return localResult;
   }
 
-  // Use LLM classification if available
   if (llmClassify) {
     try {
       const prompt = getIntentClassificationPrompt(message, options);
@@ -808,26 +649,15 @@ export async function classifyIntent(
     }
   }
 
-  // Return local result or default
   return localResult || DEFAULT_CHAT_INTENT;
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
-
-/**
- * Check if an intent requires a specific model type (not chat)
- */
 export function requiresSpecializedModel(intent: IntentType): boolean {
   return ['image-gen', 'video-gen', 'search', 'deep-research', 'tts', 'stt', 'music'].includes(
     intent,
   );
 }
 
-/**
- * Get the model category for an intent
- */
 export function getModelCategory(
   intent: IntentType,
 ): 'chat' | 'image' | 'video' | 'search' | 'tts' | 'stt' | 'music' {
@@ -850,9 +680,6 @@ export function getModelCategory(
   }
 }
 
-/**
- * Convert legacy TaskType to IntentType
- */
 export function taskTypeToIntent(
   taskType: 'coding' | 'reasoning' | 'general' | 'agentic' | 'multimodal',
 ): IntentType {
@@ -860,9 +687,6 @@ export function taskTypeToIntent(
   return taskType;
 }
 
-/**
- * Convert IntentType to legacy TaskType for backward compatibility
- */
 export function intentToTaskType(
   intent: IntentType,
 ): 'coding' | 'reasoning' | 'general' | 'agentic' | 'multimodal' {

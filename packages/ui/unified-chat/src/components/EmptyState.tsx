@@ -2,37 +2,13 @@ import { PLAN_LABEL, isFreePlan } from '@agiworkforce/types';
 import { useTierStore, selectTier } from '../stores/tierStore';
 import { useUIStore } from '../stores/uiStore';
 
-/**
- * Composer-first empty state per design-spec §8.
- *
- * Layout (top-to-bottom, vertically centered):
- *   1. Plan badge pill — free tiers only, with optional host-configurable CTA
- *   2. Display headline — single line, serif display font, --text-2xl
- *
- * The composer and quick chips are rendered by ChatInterface below this
- * component — they are NOT in this file (separation of concerns).
- *
- * What we explicitly do NOT render here (spec §8.3):
- *   ❌ Multi-step onboarding wizard
- *   ❌ Welcome splash
- *   ❌ Tip-of-the-day
- *   ❌ Tour overlays
- *   ❌ "Try one of these prompts" header label
- */
 export interface EmptyStateProps {
-  /** Override the default "What can I help with?" headline. */
   headline?: string;
-  /** Override the label inside the plan/mode badge. Defaults to the shared plan label. */
   planBadgeLabel?: string;
-  /** Optional badge CTA copy. Omitted hosts render a passive plan/mode badge. */
   planBadgeActionLabel?: string;
-  /** Accessible label for the badge CTA. */
   planBadgeActionAriaLabel?: string;
-  /** Settings tab used by the default badge CTA handler. Defaults to billing. */
   planBadgeActionTab?: string;
-  /** Host-owned badge CTA action. */
   onPlanBadgeAction?: () => void;
-  /** Whether to append " plan" after the badge label. Defaults true. */
   showPlanBadgeNoun?: boolean;
 }
 

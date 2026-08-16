@@ -1,10 +1,6 @@
-// Export service - handles exporting and sharing chat sessions
 import type { ChatSession, ChatMessage } from '../types';
 
 export class ChatExportService {
-  /**
-   * Export chat as markdown
-   */
   exportAsMarkdown(session: ChatSession, messages: ChatMessage[]): string {
     let markdown = `# ${session.title}\n\n`;
     markdown += `**Created:** ${session.createdAt.toLocaleString()}\n`;
@@ -35,9 +31,6 @@ export class ChatExportService {
     return markdown;
   }
 
-  /**
-   * Export chat as JSON
-   */
   exportAsJSON(session: ChatSession, messages: ChatMessage[]): string {
     const data = {
       session: {
@@ -62,9 +55,6 @@ export class ChatExportService {
     return JSON.stringify(data, null, 2);
   }
 
-  /**
-   * Export chat as HTML
-   */
   exportAsHTML(session: ChatSession, messages: ChatMessage[]): string {
     let html = `<!DOCTYPE html>
 <html lang="en">
@@ -163,9 +153,6 @@ export class ChatExportService {
     return html;
   }
 
-  /**
-   * Export chat as plain text
-   */
   exportAsText(session: ChatSession, messages: ChatMessage[]): string {
     let text = `${session.title}\n`;
     text += `${'='.repeat(session.title.length)}\n\n`;
@@ -210,9 +197,6 @@ export class ChatExportService {
     URL.revokeObjectURL(url);
   }
 
-  /**
-   * Export and download chat in specified format
-   */
   async exportChat(
     session: ChatSession,
     messages: ChatMessage[],
@@ -255,22 +239,13 @@ export class ChatExportService {
     this.downloadFile(content, filename, mimeType);
   }
 
-  /**
-   * Generate shareable link for a chat session
-   */
   async generateShareLink(_sessionId: string): Promise<string> {
-    // Generate share token and store in database
     const shareToken = this.generateShareToken();
     const shareLink = `${window.location.origin}/share/${shareToken}`;
 
-    // Update session with share link (handled by conversation-storage service)
-    // The share link is stored in the chat_sessions.shared_link column
     return shareLink;
   }
 
-  /**
-   * Copy chat to clipboard
-   */
   async copyToClipboard(
     session: ChatSession,
     messages: ChatMessage[],
@@ -284,7 +259,6 @@ export class ChatExportService {
     await navigator.clipboard.writeText(content);
   }
 
-  // Helper methods
   private formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;

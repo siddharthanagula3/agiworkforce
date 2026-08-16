@@ -24,44 +24,20 @@ const RETIRED_MODEL_LITERAL_PATTERN = [
   )
   .join('|');
 
-// Prevention-layer selectors, shared by every `no-restricted-syntax` block.
-//
-// Flat config merges rules by NAME, so a later scoped block that declares
-// `no-restricted-syntax` replaces these options wholesale rather than adding to
-// them. Any block that needs an extra selector must spread this list first or
-// the model-catalog and egress gates silently stop applying to its files.
 const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
   {
-    // Hardcoded model IDs — the catalog (models.json) is the SSOT.
-    // The selector matches string literals that look like a real
-    // model ID, not generic prefix tokens. The regex requires a
-    // digit (or canonical model-family word) immediately after
-    // the provider prefix so substring tests like
-    // `model.includes('claude-')` and tool-name strings like
-    // `'claude-code'` are NOT flagged. Matches concrete versioned model IDs
-    // and provider model literals in either quote style, while leaving generic
-    // provider prefixes and tool/documentation names alone.
     selector:
       'Literal[value=/^(gpt-[0-9]|claude-(?:opus|sonnet|haiku|[1-9])|gemini-[0-9]|grok-[0-9]|o[1-9]-[a-z])/]',
     message:
       'Hardcoded model ID detected. Read from models.json via packages/contracts/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
   },
   {
-    // Deprecated aliases are catalog-owned. Building this selector from the
     // retired-model registry keeps the fast ESLint feedback without creating
-    // a second authored list that must change during every model rollover.
     selector: `Literal[value=/^(?:${RETIRED_MODEL_LITERAL_PATTERN})$/]`,
     message:
       'Deprecated model alias literal detected. Never hardcode model IDs: resolve the current catalog route through @agiworkforce/types helpers.',
   },
   {
-    // Egress chokepoint (trust-boundary P0). A raw fetch() to an our-cloud
-    // URL built from WEB_APP_URL / API_BASE_URL bypasses the central guard
-    // and can silently upload a Local- or BYOK-mode session to our cloud.
-    // Route every such call through guardedFetch (apps/desktop/src/lib/
-    // egressGuard.ts), which fails closed when privacyMode !== 'managed'.
-    // BYOK provider hosts are intentionally NOT covered. In practice this
-    // only matches apps/desktop — the sole surface defining these constants.
     selector:
       "CallExpression[callee.name='fetch']:has(TemplateLiteral Identifier[name=/^(WEB_APP_URL|API_BASE_URL)$/])",
     message:
@@ -70,7 +46,6 @@ const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
 ];
 
 export default [
-  // Global ignores
   {
     ignores: [
       'dist/**',
@@ -83,7 +58,6 @@ export default [
       '**/.next/**',
       'node_modules/**',
       '**/node_modules/**',
-      // ts-rs generated protocol bindings (see scripts/generate-protocol-types.mjs)
       'packages/contracts/types/src/generated/**',
       '**/src-tauri/**',
       'target/**',
@@ -100,7 +74,6 @@ export default [
       'coverage/**',
       '**/coverage/**',
       '**/.expo/**',
-      // Downloaded VS Code test harness (binaries + sample extensions) — not source
       '**/.vscode-test/**',
       '.claude/worktrees/**',
       '**/.claude/worktrees/**',
@@ -110,42 +83,28 @@ export default [
       '**/.worktrees/**',
       '.remember/**',
       '**/.remember/**',
-      // Root-level utility/test scripts
       'create-account.js',
       'test-*.js',
-      // Web app maintenance/migration scripts (Node.js CJS, not app source)
       'apps/web/scripts/**',
-      // Mobile utility scripts (Node.js ESM, not RN/Expo source)
       'apps/mobile/scripts/**',
-      // CLI utility scripts (Node.js ESM, not Rust source)
       'apps/cli/scripts/**',
-      // CLI parity workflow artifacts are authored for the workflow runner, not
-      // as standalone Node/Browser source files.
       'apps/cli/docs/parity/**',
-      // VS Code extension utility scripts (Node.js CJS, not app source)
       'apps/extension-vscode/scripts/**',
-      // Workspace stub for react-native-worklets (CJS, no linting needed)
       'packages/react-native-worklets/**',
-      // Archived dead code — do not lint
       'docs/archive/**',
-      // AI coding tool config directories (not app source)
       '.opencode/**',
       '.codex/**',
       '.cursor/**',
       '**/.vercel/**',
-      // Build artifacts (Vite SPA output served as static files)
       '**/public/chat/**',
       '**/dist-web/**',
-      // Rust crate vendored JS files (not app source)
       'crates/**',
       '**/crates/**',
     ],
   },
 
-  // Base JS config
   js.configs.recommended,
 
-  // TypeScript files
   {
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
@@ -156,12 +115,9 @@ export default [
         ecmaFeatures: { jsx: true },
       },
       globals: {
-        // React global (JSX transform)
         React: 'readonly',
         JSX: 'readonly',
-        // Node.js namespace
         NodeJS: 'readonly',
-        // Browser globals
         window: 'readonly',
         alert: 'readonly',
         confirm: 'readonly',
@@ -287,7 +243,6 @@ export default [
         PerformanceMeasure: 'readonly',
         PerformanceResourceTiming: 'readonly',
         Storage: 'readonly',
-        // WebRTC globals
         RTCPeerConnection: 'readonly',
         RTCDataChannel: 'readonly',
         RTCSessionDescription: 'readonly',
@@ -345,7 +300,6 @@ export default [
         module: 'readonly',
         require: 'readonly',
         exports: 'readonly',
-        // Test globals
         describe: 'readonly',
         it: 'readonly',
         expect: 'readonly',
@@ -377,9 +331,7 @@ export default [
       },
     },
     rules: {
-      // TypeScript rules
       ...tsPlugin.configs.recommended.rules,
-      // `no-undef` is not TypeScript-aware and produces false positives in TS files.
       'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -391,77 +343,41 @@ export default [
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-namespace': 'off',
 
-      // React rules
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
       'react/no-unescaped-entities': 'off',
 
-      // React Hooks rules
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
 
-      // Import rules
       'import/no-named-as-default': 'off',
       'import/no-duplicates': 'off',
       'import/default': 'off',
       'import/no-named-as-default-member': 'off',
 
-      // General rules
       'no-unused-vars': 'off',
       'no-useless-catch': 'off',
       'prefer-const': 'warn',
-      // Prevent console.log in production — use toast or structured logging instead.
-      // console.warn and console.error are allowed for error reporting.
       'no-console': ['warn', { allow: ['warn', 'error', 'debug'] }],
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // PREVENTION LAYER — Wave 1.5 (per docs/plans/UNIFIED_LAUNCH_PLAN.md §1.5).
-  //
-  // Two recurring bug classes earned dedicated AST gates after the
-  // 2026-05-05 audit (a CLI ghost-model regression, a stale hardcoded
-  // model const, and web routes reusing
-  // privileged database credentials for downstream DB ops on user-scoped data):
-  //
-  //   1. Hardcoded model IDs anywhere except `models.json`, the catalog
-  //      itself, tests, and explicitly-marked marketing copy. The locked
-  //      rule (CLAUDE.md §"Critical rules") is "never hardcode model IDs;
-  //      read from models.json" — this rule keeps regressions out at lint
-  //      time instead of catching them in QA.
-  //   2. Privileged database clients must stay in explicit server-side
-  //      service modules so reviewers can audit every credential boundary
-  //      from one place.
-  //
-  // Both rules use `no-restricted-syntax` with AST selectors so they fire
-  // before TypeScript checks. Known-violating sites get a baseline
   // override (below) tagged with `// FIXME: P1-XX` so `main` stays green
-  // while the migration lands.
-  // ---------------------------------------------------------------------------
   {
     files: ['**/*.ts', '**/*.tsx'],
     ignores: [
-      // The catalog SSOT itself — model IDs are LITERALLY the data here.
       'packages/contracts/types/src/models.json',
       'packages/contracts/types/src/model-catalog.ts',
-      // Canonical on-device/local model inventory. The repository-wide model
-      // literal guard permits this exact owner while rejecting copied siblings.
       'packages/platform/local-llm/src/catalog.ts',
-      // Tests can — and should — assert against literal model IDs to
-      // pin the catalog SSOT. The harm is in production code paths.
       '**/*.test.ts',
       '**/*.test.tsx',
       '**/*.spec.ts',
       '**/*.spec.tsx',
       '**/__tests__/**',
       '**/__mocks__/**',
-      // MARKETING constants files explicitly carry model IDs as ad copy.
-      // Convention: any file under a `marketing/` directory or whose
-      // name ends with `Marketing.ts(x)` is allowed to hold literals.
       '**/marketing/**',
       '**/*Marketing.ts',
       '**/*Marketing.tsx',
-      // Generated TypeScript declaration files — mirror upstream APIs.
       '**/*.d.ts',
     ],
     rules: {
@@ -469,15 +385,6 @@ export default [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // V3 surface guardrails — narrow-scope rules that lock the new desktop chat
-  // shell to the design-spec brand + IA decisions.
-  //
-  // These rules apply ONLY to `apps/desktop/src/components/v3/**` (and the
-  // matching e2e specs). Existing surfaces are not retroactively affected;
-  // the scope can be widened in a follow-up PR once each legacy site is
-  // either fixed or annotated.
-  // ---------------------------------------------------------------------------
   {
     files: [
       'apps/desktop/src/components/v3/**/*.ts',
@@ -488,16 +395,11 @@ export default [
       'no-restricted-syntax': [
         'error',
         {
-          // Brand string — user-facing copy must be "AGI", not "AGI Workforce",
-          // per docs/design/design-spec-2026-05-15.md. Catches both bare
-          // string literals (toast titles, alt text) and JSX text children.
           selector: ':matches(Literal[value=/^AGI Workforce/], JSXText[value=/AGI Workforce/])',
           message:
             'User-facing brand string must be "AGI" per docs/design/design-spec-2026-05-15.md. Use a BRAND_NAME constant or `t("brand.name")` for i18n. To opt out (legal copy, audit logs), add `// eslint-disable-next-line no-restricted-syntax` with a justification.',
         },
       ],
-      // Block re-introducing the deleted ModeSelectionDialog component.
-      // Mode selection lives in OnboardingWizard.tsx per CLAUDE.md.
       'no-restricted-imports': [
         'error',
         {
@@ -513,7 +415,6 @@ export default [
     },
   },
 
-  // JavaScript files
   {
     files: ['**/*.js', '**/*.cjs', '**/*.mjs'],
     languageOptions: {
@@ -531,7 +432,6 @@ export default [
     },
   },
 
-  // VS Code extension build scripts (CommonJS Node.js)
   {
     files: ['apps/extension-vscode/*.js'],
     languageOptions: {
@@ -549,7 +449,6 @@ export default [
     },
   },
 
-  // CLI npm wrapper scripts/tests (Node.js ESM)
   {
     files: ['apps/cli/npm/**/*.js', 'apps/cli/npm/**/*.mjs'],
     languageOptions: {
@@ -561,7 +460,6 @@ export default [
     },
   },
 
-  // Jest manual mocks are CommonJS files even when the package source is ESM.
   {
     files: ['**/__mocks__/**/*.js'],
     languageOptions: {
@@ -575,7 +473,6 @@ export default [
     },
   },
 
-  // Expo config plugins (CommonJS Node.js scripts loaded via require() by expo prebuild)
   {
     files: ['apps/mobile/native/**/*.cjs', 'apps/mobile/lib/polyfills/**/*.cjs'],
     languageOptions: {
@@ -592,7 +489,6 @@ export default [
     },
   },
 
-  // Browser extension files
   {
     files: ['apps/extension/**/*.js', 'apps/extension/**/*.ts', 'apps/extension/**/*.tsx'],
     languageOptions: {
@@ -640,7 +536,6 @@ export default [
     },
   },
 
-  // Node.js services
   {
     files: ['services/**/*.ts', 'services/**/*.js'],
     languageOptions: {
@@ -664,7 +559,6 @@ export default [
     },
   },
 
-  // Test files
   {
     files: [
       '**/*.test.ts',
@@ -695,9 +589,6 @@ export default [
     },
   },
 
-  // Webdriver scenarios intentionally emit step diagnostics that are captured
-  // as CI artifacts. Keep the production no-console rule strict without
-  // turning those test-runner logs into repository-wide lint failures.
   {
     files: ['apps/desktop/wdio/**/*.ts'],
     rules: {
@@ -705,8 +596,6 @@ export default [
     },
   },
 
-  // Web app: `any` is used extensively for web port compatibility (desktop-to-web stubs,
-  // Tauri API shims, and Zustand store adapters). The web app has its own
   // eslint.config.mjs (eslint-config-next) for full per-workspace linting.
   {
     files: ['apps/web/**/*.ts', 'apps/web/**/*.tsx'],
@@ -716,16 +605,11 @@ export default [
     },
   },
 
-  // Web app stubs: intentionally use `any` for desktop-parity stub implementations.
-  // These files provide no-op shims for Tauri/desktop-only modules so the web app compiles.
   {
     files: [
-      // Unified store stubs (desktop Zustand stores shimmed for web)
       'apps/web/stores/unified/**/*.ts',
       'apps/web/stores/unified/**/*.tsx',
-      // API stubs (desktop Tauri API wrappers)
       'apps/web/api/**/*.ts',
-      // Utility stubs (desktop-only utilities)
       'apps/web/utils/autoCorrection.ts',
       'apps/web/utils/captureTransforms.ts',
       'apps/web/utils/clipboard.ts',
@@ -736,15 +620,12 @@ export default [
       'apps/web/utils/security.ts',
       'apps/web/utils/subscriptionGate.ts',
       'apps/web/utils/tokenCount.ts',
-      // Store stubs
       'apps/web/stores/artifactStore.ts',
       'apps/web/stores/memoryStore.ts',
       'apps/web/stores/schedulerStore.ts',
-      // Constant stubs
       'apps/web/constants/errorMessages.ts',
       'apps/web/constants/event-names.ts',
       'apps/web/constants/planModels.ts',
-      // Component stubs (desktop-only UI components shimmed for web)
       'apps/web/components/Browser/BrowserVisualization.tsx',
       'apps/web/components/Canvas.tsx',
       'apps/web/components/Editor/MonacoEditor.tsx',
@@ -762,10 +643,6 @@ export default [
     },
   },
 
-  // Desktop app: `any` is now enforced (warn from base config applies)
-  // (apps/desktop has its own tsconfig with stricter settings for local development)
-
-  // Mobile app: `any` is now enforced (warn from base config applies)
   {
     files: ['apps/mobile/**/*.ts', 'apps/mobile/**/*.tsx'],
     rules: {
@@ -773,20 +650,6 @@ export default [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // MOBILE THEME GATE — literal monochrome colours (PAR-M13).
-  //
-  // `tailwind.config.js` aliases `white` to `var(--agi-fg)` and ThemeVars
-  // publishes it from the active palette, so class-based opacity ramps follow
-  // the theme. An inline `rgba(255, 255, 255, …)` / `rgba(0, 0, 0, …)` bypasses
-  // that entirely: Dispatch shipped 32%-opacity white placeholder text on a
-  // near-white surface in light theme. Every one of these has a token —
-  // `border`/`borderLight`, `neutralSurface`, `inputSurface`, `progressTrack`,
-  // `scrim`, `cameraOverlay*` (src/ui/theme/tokens.ts).
-  //
-  // Scope is `src/features/**` + `src/shared/**`: the palette SSOT itself
-  // (`src/ui/theme/tokens.ts`) is where these literals legitimately live.
-  // ---------------------------------------------------------------------------
   {
     files: [
       'apps/mobile/src/features/**/*.ts',
@@ -795,17 +658,11 @@ export default [
       'apps/mobile/src/shared/**/*.tsx',
     ],
     ignores: [
-      // Tests and mocks assert against literal palette values on purpose.
       'apps/mobile/src/**/*.test.ts',
       'apps/mobile/src/**/*.test.tsx',
       'apps/mobile/src/**/__tests__/**',
       'apps/mobile/src/**/__mocks__/**',
 
-      // INTENTIONAL — literal white over a permanently dark surface.
-      // The voice sheet paints its own `rgba(12,12,16,0.97)` scrim in both
-      // themes (VoiceRecording.tsx:155), so its foreground must stay literal
-      // white; the same reasoning tailwind.config.js:69 records for the voice
-      // gradient and the camera preview.
       'apps/mobile/src/features/voice/**',
     ],
     rules: {
@@ -813,9 +670,6 @@ export default [
         'error',
         ...PREVENTION_LAYER_RESTRICTED_SYNTAX,
         {
-          // Matches `rgba(255,255,255,…)` and `rgba(0,0,0,…)` with any inner
-          // spacing, in a plain string (including a JSX attribute value) or a
-          // template literal chunk.
           selector:
             ':matches(Literal[value=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/], TemplateElement[value.raw=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/])',
           message:
@@ -825,33 +679,11 @@ export default [
     },
   },
 
-  // ---------------------------------------------------------------------------
-  // PREVENTION-LAYER BASELINE — Wave 1.5
-  //
-  // The two prevention rules above (no-restricted-syntax for hardcoded
-  // model IDs + privileged database client construction) ship in Wave 1.5
-  // BEFORE any caller migration. The files listed below contain known
   // violations that pre-date the rule; each is tagged with a FIXME
-  // pointing at the wave/task that will migrate it. Tests, the catalog
-  // SSOT, and marketing copy are exempted in the rule itself (above).
-  //
-  // Migration tickets:
   //   FIXME: P1-MODEL-CATALOG-MIGRATION — replace hardcoded literals with
-  //     getRoutingSlotModel() / getDefaultModelFor() / resolveAutoModeModel()
-  //     reads from packages/contracts/types model-catalog. Tracked across:
-  //       - Wave 1   P0-G/I  → services/api-gateway routes (4 files)
-  //       - Wave 1   P0-J/K/L → packages/{routing,provider-protocol}
-  //       - Wave 2   model-id sweep → desktop / cli / mobile / web
   //   FIXME: P1-DATA-CLIENT-MIGRATION — route handlers use direct database
-  //     clients instead of shared server data services. Tracked under Wave 1
-  //     P0-G (api-gateway) and P0-C (web billing + device flows).
-  //
-  // Once a wave migrates a file, remove its entry from the lists below
-  // so the rule starts enforcing on it again.
-  // ---------------------------------------------------------------------------
   {
     files: [
-      // Web — production code paths still on hardcoded model IDs.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-C / Wave 2 sweep)
       'apps/web/lib/marketing-constants.ts',
       'apps/web/lib/assert-quota.ts',
@@ -884,7 +716,6 @@ export default [
       'apps/web/features/settings/hooks/use-settings-queries.ts',
       'apps/web/features/settings/services/user-preferences.ts',
 
-      // Desktop — production code paths.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 2 desktop+cli sweep)
       'apps/desktop/src/components/Settings/ComputerUseSettings.tsx',
       'apps/desktop/src/components/Workflows/AutomationBuilder.tsx',
@@ -894,33 +725,26 @@ export default [
       'apps/desktop/src/stores/voiceModeStore.ts',
       'apps/desktop/src/test/msw-setup.ts',
 
-      // Mobile + VS Code extension surfaces.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 2 mobile+vscode sweep)
       'apps/extension-vscode/src/features/model-picker/modelConstants.ts',
       'apps/mobile/lib/models.ts',
 
-      // Shared packages.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-J/K/L)
       'packages/ai/providers/google/src/catalog.ts',
       'packages/ai/routing/src/classify.ts',
       'packages/client/desktop-command-client/src/memoryImport.ts',
 
-      // Services — api-gateway routes.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-G/I)
-      // llm.ts migrated in Wave 1 task #10 (P0-I) — entry removed.
       'services/api-gateway/src/routes/cloudChat.ts',
       'services/api-gateway/src/routes/dotfile.ts',
       'services/api-gateway/src/routes/models.ts',
     ],
     rules: {
-      // Baseline — these files violate the prevention layer; migration is
-      // tracked above. Remove the entry once migrated.
       'no-restricted-syntax': 'off',
     },
   },
   {
     files: [
-      // Direct privileged database construction outside shared server data services.
       // FIXME: P1-DATA-CLIENT-MIGRATION (Wave 1 P0-C web data sweep)
       'apps/web/lib/security-audit.ts',
     ],
@@ -929,6 +753,5 @@ export default [
     },
   },
 
-  // Prettier config (must be last to override other formatting rules)
   prettierConfig,
 ];

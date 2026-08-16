@@ -46,9 +46,6 @@ describe('RecipeCard content preservation', () => {
   it('renders trailing sections instead of dropping them', () => {
     render(<RecipeCard content={RECIPE_WITH_NOTES} />);
 
-    // The regression: parseRecipe used to switch to a `'other'` section that
-    // nothing collected, so everything after Instructions vanished from the
-    // card while still being present in the model's answer.
     expect(screen.getByText('Notes')).toBeInTheDocument();
     expect(screen.getByText(/Overripe bananas give the best flavour/)).toBeInTheDocument();
     expect(screen.getByText(/Freezes for up to three months/)).toBeInTheDocument();
@@ -72,8 +69,6 @@ describe('MessageFormatCard', () => {
     expect(screen.queryByTestId('original')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Original response' }));
-    // The whole answer is reachable verbatim — this is the guarantee that makes
-    // heuristic parsers safe to render at all.
     expect(screen.getByTestId('original')).toHaveTextContent('Overripe bananas');
 
     fireEvent.click(screen.getByRole('button', { name: 'Formatted view' }));

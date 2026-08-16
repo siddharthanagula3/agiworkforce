@@ -1,16 +1,3 @@
-/**
- * GET /api/support/account/context
- *
- * Read-only account context for the SIGNED-IN caller, plus the model-safe
- * projection of it and the citations an account-grounded answer needs.
- *
- * The caller identity comes from `getClerkAuthUser(request)` and nothing else.
- * There is no `userId` query parameter and no body — a support agent cannot ask
- * this endpoint about anyone but the person holding the session.
- *
- * Signed out (marketing widget) is a 401, and the widget renders the anonymous
- * experience: no account facts, no actions.
- */
 
 import 'server-only';
 
@@ -34,7 +21,6 @@ async function handleGet(request: NextRequest) {
 
   return NextResponse.json({
     context,
-    // The ONLY field a caller may put in a model prompt.
     facts: toModelSafeAccountFacts(context),
     citations: buildSupportAccountCitations(context),
   });

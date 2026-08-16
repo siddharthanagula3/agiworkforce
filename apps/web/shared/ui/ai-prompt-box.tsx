@@ -27,7 +27,6 @@ import {
   Textarea,
 } from '@agiworkforce/ui';
 
-// Minimal custom styles (injected on client only)
 const styles = `
   *:focus-visible { outline-offset: 0 !important; --ring-offset: 0 !important; }
   textarea::-webkit-scrollbar { width: 6px; }
@@ -49,7 +48,6 @@ function useInjectStylesOnce(cssText: string) {
   }, [cssText]);
 }
 
-// VoiceRecorder Component
 interface VoiceRecorderProps {
   isRecording: boolean;
   onStartRecording: () => void;
@@ -57,12 +55,9 @@ interface VoiceRecorderProps {
   visualizerBars?: number;
 }
 
-// Pre-generate stable random values for visualizer bars outside component
-// This avoids calling Math.random() during render
 const generateBarStyles = (count: number) => {
   const styles: Array<{ height: string; animationDuration: string }> = [];
   for (let i = 0; i < count; i++) {
-    // Use deterministic pseudo-random based on index for consistent styling
     const heightSeed = Math.sin(i * 12.9898) * 43758.5453;
     const durationSeed = Math.sin(i * 78.233) * 43758.5453;
     const height = Math.max(15, (heightSeed - Math.floor(heightSeed)) * 100);
@@ -84,7 +79,6 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   const [time, setTime] = React.useState(0);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Generate stable bar styles once per bar count using useMemo
   const barStyles = React.useMemo(() => generateBarStyles(visualizerBars), [visualizerBars]);
 
   React.useEffect(() => {
@@ -138,7 +132,6 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   );
 };
 
-// ImageViewDialog Component
 interface ImageViewDialogProps {
   imageUrl: string | null;
   onClose: () => void;
@@ -168,7 +161,6 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({ imageUrl, onClose }) 
   );
 };
 
-// PromptInput Context and Components
 interface PromptInputContextType {
   isLoading: boolean;
   value: string;
@@ -343,7 +335,6 @@ const PromptInputAction: React.FC<PromptInputActionProps> = ({
   );
 };
 
-// Custom Divider Component
 const CustomDivider: React.FC = () => (
   <div className="relative mx-1 h-6 w-[1.5px]">
     <div
@@ -356,7 +347,6 @@ const CustomDivider: React.FC = () => (
   </div>
 );
 
-// Main PromptInputBox Component
 interface PromptInputBoxProps {
   onSend?: (message: string, files?: File[]) => void;
   isLoading?: boolean;
@@ -403,10 +393,6 @@ export const PromptInputBox = React.forwardRef(
         if (!isImageFile(file)) {
           return;
         }
-        // HARD-006: this was a private `10 * 1024 * 1024`, 2 MiB BELOW the
-        // canonical cap the presign route actually enforces — a client-side
-        // gate that silently drops files the server would have accepted. The
-        // limit is not this component's to choose.
         if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
           return;
         }

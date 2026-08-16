@@ -3,12 +3,7 @@
 import * as React from 'react';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 export interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
-  /**
-   * Visual intent. `success` and `warning` are additive values; existing
-   * `default` / `destructive` callers are unaffected.
-   */
   variant?: 'default' | 'destructive' | 'success' | 'warning';
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -21,7 +16,6 @@ function Alert({
   ref,
   ...props
 }: AlertProps) {
-  // Destructive alerts interrupt assistive tech (assertive); others announce politely.
   const liveValue = ariaLive ?? (variant === 'destructive' ? 'assertive' : 'polite');
   return (
     <div

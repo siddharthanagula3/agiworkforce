@@ -1,26 +1,5 @@
 'use client';
 
-/**
- * ConnectorConsentSummary
- *
- * The short, plain-language disclosure shown wherever a user is about to grant
- * (or has granted) a connector access. Five lines, readable in under fifteen
- * seconds, linking out to /agent-permissions and /acceptable-use for the full
- * statement.
- *
- * WHY THIS EXISTS — it replaces `accessScopes()`, which generated its lines from
- * a connector's declared authType and described storage that does not exist:
- * "OAuth tokens stored securely in your account" was shown for every OAuth
- * connector, but POST /api/connectors returns 501 for every branded catalog
- * connector and `user_connectors` holds only connector_id + auth_type +
- * is_active — no tokens, no endpoints (see lib/user-connector-tools.ts header).
- *
- * EVERY LINE HERE MUST BE TRACEABLE. The matrix these are rendered against is
- * docs/legal/agent-authority-and-connector-scopes.md. If you change the tool
- * loop's approval gate, the connector surface, or a revocation path, update that
- * file and this component together.
- */
-
 import { ShieldAlert } from 'lucide-react';
 
 const POINTS: { title: string; body: string }[] = [

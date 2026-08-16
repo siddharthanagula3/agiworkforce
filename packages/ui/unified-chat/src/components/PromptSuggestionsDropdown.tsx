@@ -1,11 +1,3 @@
-/**
- * PromptSuggestionsDropdown — Phase A Slice 5 (ported from UAC)
- *
- * Displays prompt continuation suggestions like Gemini CLI.
- * Shows contextual suggestions as user types.
- *
- * No desktop-specific dependencies.
- */
 
 import React, { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

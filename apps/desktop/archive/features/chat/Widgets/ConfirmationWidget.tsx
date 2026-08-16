@@ -13,36 +13,21 @@ import { cn } from '../../../lib/utils';
 import { WidgetRegistry } from './WidgetRegistry';
 import type { WidgetRendererProps, WidgetActionEvent } from './index';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface ConfirmationWidgetData {
   id: string;
   type: 'confirmation';
   createdAt?: string;
-  /** Main message to display */
   message: string;
-  /** Additional details or context */
   details?: string;
-  /** Confirm button label */
   confirmLabel?: string;
-  /** Cancel button label */
   cancelLabel?: string;
-  /** Visual variant for severity */
   variant?: 'default' | 'warning' | 'danger' | 'info';
-  /** Action ID to include in response */
   actionId?: string;
-  /** Current state of the confirmation */
   state?: {
     status: 'pending' | 'confirmed' | 'cancelled';
     confirmedAt?: string;
   };
 }
-
-// ============================================================================
-// Component
-// ============================================================================
 
 const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidgetData>> = ({
   widget,
@@ -68,7 +53,6 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
   const isConfirmed = localStatus === 'confirmed';
   const isCancelled = localStatus === 'cancelled';
 
-  // Emit action
   const emitAction = useCallback(
     (action: string, payload?: Record<string, unknown>) => {
       const event: WidgetActionEvent = {
@@ -81,7 +65,6 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
     [widget.id, actionId, onAction],
   );
 
-  // Handle confirm
   const handleConfirm = useCallback(async () => {
     if (!isPending || readOnly || isLoading) return;
 
@@ -94,7 +77,6 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
     }
   }, [isPending, readOnly, isLoading, emitAction]);
 
-  // Handle cancel
   const handleCancel = useCallback(async () => {
     if (!isPending || readOnly || isLoading) return;
 
@@ -107,7 +89,6 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
     }
   }, [isPending, readOnly, isLoading, emitAction]);
 
-  // Variant styles
   const variantStyles = {
     default: {
       container: 'border-border bg-muted/50',
@@ -133,7 +114,6 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
 
   const styles = variantStyles[variant];
 
-  // Confirmed state
   if (isConfirmed) {
     return (
       <div className="flex items-center gap-3 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
@@ -148,7 +128,6 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
     );
   }
 
-  // Cancelled state
   if (isCancelled) {
     return (
       <div className="flex items-center gap-3 p-4 rounded-lg border border-border bg-muted/50">
@@ -163,7 +142,6 @@ const ConfirmationWidgetComponent: React.FC<WidgetRendererProps<ConfirmationWidg
     );
   }
 
-  // Pending state - show confirmation UI
   return (
     <div className={cn('rounded-lg border overflow-hidden', styles.container)}>
       {/* Content */}
@@ -220,7 +198,6 @@ ConfirmationWidgetComponent.displayName = 'ConfirmationWidget';
 
 export const ConfirmationWidget = memo(ConfirmationWidgetComponent);
 
-// Register the widget
 WidgetRegistry.register({
   type: 'confirmation',
   displayName: 'Confirmation',
@@ -229,9 +206,6 @@ WidgetRegistry.register({
   icon: HelpCircle,
 });
 
-/**
- * Create a confirmation widget data object
- */
 export function createConfirmationWidget(
   message: string,
   options?: {

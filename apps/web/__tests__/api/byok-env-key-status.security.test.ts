@@ -1,16 +1,8 @@
-/**
- * Threat model: GET /api/byok/env-key-status must NEVER reveal the value of any
- * provider API key or host env-var name. The authenticated response shape is
- * { providers: [{id, isSet}] }. Only `isSet` (boolean) communicates whether a
- * key is configured. No env-var name, value, partial value, hash, length, or
- * obfuscated form may appear in the response body or any response header.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 
-// ─── Baseline mocks ───────────────────────────────────────────────────────────
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -35,10 +27,8 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn().mockResolvedValue({ userId: 'user_test' }),
 }));
 
-// ─── Import route under test ──────────────────────────────────────────────────
 import { GET } from '@/app/api/byok/env-key-status/route';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function makeGetRequest(searchParams?: string): NextRequest {
   const url = searchParams
     ? `http://localhost/api/byok/env-key-status?${searchParams}`
@@ -46,24 +36,20 @@ function makeGetRequest(searchParams?: string): NextRequest {
   return new NextRequest(url, { method: 'GET' });
 }
 
-// Providers that should have keys set in controlled tests
 const TEST_KEY_VALUE = 'sk-test-anthropic-key-1234567890abcdef';
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
 describe('GET /api/byok/env-key-status — key leak prevention', () => {
   let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     vi.clearAllMocks();
     originalEnv = { ...process.env };
-    // Clear all BYOK provider env vars so tests start clean
     for (const { envVar } of BYOK_PROVIDERS) {
       delete process.env[envVar];
     }
   });
 
   afterEach(() => {
-    // Restore original env
     for (const key of Object.keys(process.env)) {
       if (!(key in originalEnv)) {
         delete process.env[key];
@@ -72,7 +58,6 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     Object.assign(process.env, originalEnv);
   });
 
-  // ─── (a) Response body shape — no host env names or value fields ──────────
   describe('response body shape', () => {
     it('returns providers array with id and isSet only', async () => {
       process.env['ANTHROPIC_API_KEY'] = TEST_KEY_VALUE;
@@ -85,10 +70,8 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
 
       for (const provider of data.providers) {
         const p = provider as Record<string, unknown>;
-        // Required fields
         expect(typeof p['id']).toBe('string');
         expect(typeof p['isSet']).toBe('boolean');
-        // Forbidden fields — any of these would expose host secret posture.
         expect(p).not.toHaveProperty('envVar');
         expect(p).not.toHaveProperty('env');
         expect(p).not.toHaveProperty('environmentVariable');
@@ -116,8 +99,6 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
         for (const [field, value] of Object.entries(provider)) {
           if (field === 'id') continue;
           if (typeof value === 'string') {
-            // Any unknown string field longer than 8 chars on a non-metadata key
-            // could be an obfuscated or partial key — flag it
             expect(value.length).toBeLessThanOrEqual(8);
           }
         }
@@ -126,7 +107,6 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
 
     it('isSet is true when key is configured, false when absent', async () => {
       process.env['ANTHROPIC_API_KEY'] = TEST_KEY_VALUE;
-      // openai key left unset
 
       const response = await GET(makeGetRequest());
       const data = (await response.json()) as { providers: { id: string; isSet: boolean }[] };
@@ -158,9 +138,8 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
 
       const anthropic = data.providers.find((p) => p.id === 'anthropic');
       expect(anthropic?.isSet).toBe(true);
-      // The actual long key must not appear in the raw response body
       expect(body).not.toContain(longKey);
-      expect(body).not.toContain('aaaaaaaaaaaa'); // detect partial leak of repeated chars
+      expect(body).not.toContain('aaaaaaaaaaaa');
     });
 
     it('Unicode in key value — isSet true, no value leaked', async () => {
@@ -201,7 +180,6 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     });
   });
 
-  // ─── (b) Response headers — no X-Key-Value or similar ────────────────────
   describe('response headers — no key-leaking headers', () => {
     it('no header contains the key value', async () => {
       process.env['ANTHROPIC_API_KEY'] = TEST_KEY_VALUE;
@@ -235,7 +213,6 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     });
   });
 
-  // ─── (c) Query param injection ─────────────────────────────────────────────
   describe('query param injection must not reveal key', () => {
     it('?reveal=true does NOT add any value field to response', async () => {
       process.env['ANTHROPIC_API_KEY'] = TEST_KEY_VALUE;
@@ -261,10 +238,8 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
       const normalData = await normalResponse.json();
       const debugData = await debugResponse.json();
 
-      // Same keys in the response
       expect(Object.keys(debugData)).toEqual(Object.keys(normalData));
 
-      // debug response must not contain the key value
       const debugBody = JSON.stringify(debugData);
       expect(debugBody).not.toContain(TEST_KEY_VALUE);
     });
@@ -308,10 +283,8 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     });
   });
 
-  // ─── (e) Error path — missing env var ────────────────────────────────────
   describe('error path — missing keys', () => {
     it('returns 200 with isSet: false when key missing, not an error response', async () => {
-      // All keys already deleted in beforeEach
       const response = await GET(makeGetRequest());
       expect(response.status).toBe(200);
 
@@ -337,7 +310,6 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     it('rate-limit bypassed during test does not expose keys', async () => {
       process.env['ANTHROPIC_API_KEY'] = TEST_KEY_VALUE;
 
-      // withRateLimit is mocked to null — simulate rate limit passing — still no leak
       const response = await GET(makeGetRequest());
       const body = await response.text();
 
@@ -345,7 +317,6 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     });
   });
 
-  // ─── Rate-limit behavior (unit-level) ─────────────────────────────────────
   describe('rate limit enforcement', () => {
     it('returns 429 when rate limiter signals exceeded', async () => {
       const { withRateLimit } = await import('@/lib/rate-limit');

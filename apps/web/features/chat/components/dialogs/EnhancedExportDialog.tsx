@@ -1,7 +1,3 @@
-/**
- * EnhancedExportDialog - Export chat history in multiple formats
- * Supports Markdown, JSON, HTML, PDF, and DOCX
- */
 
 import React, { useState } from 'react';
 import {

@@ -6,7 +6,6 @@ import { useThemeColors } from '@/src/ui/theme';
 
 export interface MemoryControlsCardProps {
   isCloud: boolean;
-  /** Master switch. When false the two switches below are inert and disabled. */
   memoryEnabled: boolean;
   referencePastChats: boolean;
   generateMemoryFromHistory: boolean;

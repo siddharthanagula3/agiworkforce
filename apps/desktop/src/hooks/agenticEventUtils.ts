@@ -1,15 +1,4 @@
-/**
- * agenticEventUtils.ts
- *
- * Pure utility functions shared across agentic event sub-hooks.
- * Extracted from useAgenticEvents.ts so multiple hooks can import
- * them without circular dependencies.
- */
 import type { ActionLogEntryType, ActionLogStatus } from '../stores/unifiedChatStore';
-
-// =============================================================================
-// Status / type normalization
-// =============================================================================
 
 export const normalizeActionStatus = (status?: string): ActionLogStatus => {
   if (!status) return 'pending';
@@ -95,10 +84,6 @@ export const mapToolNameToActionType = (toolName?: string): ActionLogEntryType =
   return 'terminal';
 };
 
-// =============================================================================
-// MCP tool display name
-// =============================================================================
-
 const decodeMcpIdComponent = (value: string): string => {
   if (value.startsWith('hex:')) {
     try {
@@ -122,7 +107,6 @@ const decodeMcpIdComponent = (value: string): string => {
 };
 
 export const getMcpToolDisplayName = (toolId: string): string => {
-  // New/legacy canonical format: mcp__<server>__<tool>
   if (toolId.startsWith('mcp__')) {
     const parts = toolId.split('__', 3);
     if (parts.length === 3) {
@@ -130,13 +114,8 @@ export const getMcpToolDisplayName = (toolId: string): string => {
       return decoded.replace(/_/g, ' ');
     }
   }
-  // Legacy underscore format fallback: mcp_<server>_<tool>
   return toolId.replace(/^mcp_[^_]+_/, '').replace(/_/g, ' ');
 };
-
-// =============================================================================
-// Misc
-// =============================================================================
 
 export const safeJsonStringify = (value: unknown): string | undefined => {
   if (value === undefined || value === null) return undefined;

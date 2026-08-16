@@ -42,22 +42,9 @@ interface MessageBubbleProps {
   isLast?: boolean;
   onRetry?: (messageId: string) => void;
   onArtifactClick?: (artifact: Artifact) => void;
-  /**
-   * Approve/reject one pending tool call (see the `awaiting_approval`
-   * `ToolCall.status`). Omit to leave awaiting-approval cards read-only (no
-   * fake affordance) — e.g. a host whose runtime lacks
-   * `resolveToolApproval`.
-   */
   onToolApprove?: (messageId: string, toolCallId: string) => void;
   onToolReject?: (messageId: string, toolCallId: string) => void;
-  /**
-   * True when this message's suspended approval turn is no longer live (see
-   * `ChatRuntime.hasLiveApprovalTurn`'s doc comment) -- awaiting_approval
-   * tool cards render an expired notice instead of live buttons, which would
-   * otherwise render wired but silently no-op.
-   */
   approvalTurnExpired?: boolean;
-  /** Resend affordance shown on an expired approval card. Omit to show text guidance only (no fake availability). */
   onResendApproval?: (messageId: string) => void;
   /**
    * Host-derived artifacts for this message plus the body with their fenced
@@ -66,24 +53,9 @@ interface MessageBubbleProps {
    * before, so hosts without the derivation capability are unaffected.
    */
   artifactProjection?: MessageArtifactProjection | null;
-  /**
-   * Commit an edited body for one of the user's own turns. Wire it and the user
-   * bubble grows an Edit affordance; omit it and no edit control renders at all
-   * rather than one that silently does nothing.
-   *
-   * Only user turns are editable. Rewriting an assistant turn would let the
-   * transcript claim the model said something it never said, which is a
-   * provenance problem, not a convenience.
-   */
   onEdit?: (messageId: string, newContent: string) => void;
 }
 
-/**
- * Optional projections the runtime dropped to stay inside the managed-cloud
- * message-metadata budget (see `MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH`).
- * Persisted by `CloudRuntime.persistAssistantTurn` so the note survives a
- * reopen — the reply itself is intact, only these side-panels are missing.
- */
 function readTrimmedMetadataFields(message: ChatMessage): string[] {
   const raw = message.metadata?.['metadataTrimmed'];
   if (!Array.isArray(raw)) return [];
@@ -117,19 +89,8 @@ export function StreamingThinkingStatus() {
   );
 }
 
-/**
- * Validate a markdown link URL against an allowlist of safe schemes.
- *
- * Returns the trimmed URL if it is safe to render in `<a href>`, or `null`
- * if the URL has a dangerous scheme (e.g., `javascript:`, `data:`, `vbscript:`).
- *
- * Allowlisted: http(s), mailto, tel, and relative paths starting with `/` or `#`.
- * Anything else (including bare schemes like `javascript:exec` or `data:text/html,…`)
- * is rejected and the caller should render the link text as plain text.
- */
 export function safeHref(url: string): string | null {
   const trimmed = url.trim();
-  // Allow: http(s):, mailto:, tel:, relative paths starting with / or #
   if (/^(https?:|mailto:|tel:)/i.test(trimmed)) return trimmed;
   if (/^[/#]/.test(trimmed)) return trimmed;
   return null;
@@ -198,16 +159,12 @@ function CodeBlock({ code, language }: CodeBlockProps) {
   );
 }
 
-// Lightweight markdown renderer — handles code blocks, tables, headers, lists,
-// blockquotes, bold, italic, inline code, links, and strikethrough.
 function renderContent(content: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  // Split on fenced code blocks
   const parts = content.split(/(```[\s\S]*?```)/g);
 
   parts.forEach((part, i) => {
     if (part.startsWith('```')) {
-      // Extract language and body
       const lines = part.slice(3).split('\n');
       const lang = lines[0]?.trim() || undefined;
       const body = lines
@@ -215,8 +172,6 @@ function renderContent(content: string): React.ReactNode[] {
         .join('\n');
       nodes.push(<CodeBlock key={i} code={body} language={lang} />);
     } else {
-      // Render plain-text segment line by line to preserve whitespace
-      // Detect table rows (lines starting with |)
       const lines = part.split('\n');
       let tableBuffer: string[] = [];
       let listBuffer: { ordered: boolean; items: string[] } | null = null;
@@ -288,12 +243,8 @@ function renderContent(content: string): React.ReactNode[] {
       };
 
       lines.forEach((line, li) => {
-        // Ordered list item: "1. text" or "1) text"
-        // Use {0,10} instead of * to prevent ReDoS on whitespace-heavy input
         const orderedMatch = /^\s{0,10}\d+[.)]\s(.+)$/.exec(line);
-        // Unordered list item: "- text" or "* text" (but not ** which is bold)
         const unorderedMatch = /^\s{0,10}[-*]\s(.+)$/.exec(line);
-        // Avoid matching "* text *" patterns as list items when they look like emphasis
         const isUnorderedList =
           unorderedMatch && !(line.trim().startsWith('*') && !line.trim().startsWith('* '));
 
@@ -323,7 +274,6 @@ function renderContent(content: string): React.ReactNode[] {
           if (line === '') {
             nodes.push(<span key={`${i}-${li}-br`} className="block h-3" />);
           } else if (/^#{1,6}\s/.test(line)) {
-            // Headers
             const hashMatch = /^(#{1,6})\s(.+)$/.exec(line);
             if (hashMatch) {
               const level = hashMatch[1]!.length;
@@ -350,7 +300,6 @@ function renderContent(content: string): React.ReactNode[] {
               );
             }
           } else if (line.startsWith('> ')) {
-            // Blockquote
             const quoteText = line.slice(2);
             nodes.push(
               <blockquote
@@ -380,14 +329,8 @@ function renderContent(content: string): React.ReactNode[] {
   return nodes;
 }
 
-// Inline rendering: bold, italic, inline code, links, strikethrough
 function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  // Handle [text](url), ~~strikethrough~~, **bold**, *italic*, `code`
-  // Use [^~], [^*], [^`] negated classes instead of .+?/.* to prevent ReDoS
-  // AUDIT-FIX: alert-449 — bound the negated-class quantifiers so adversarial
-  // input cannot produce polynomial backtracking even though each alternative
-  // is already non-overlapping. 4 KB per inline span is far above realistic.
   const regex =
     /(\[([^\]]{1,4096})\]\(([^)]{1,4096})\)|~~[^~]{1,4096}~~|\*\*[^*]{1,4096}\*\*|\*[^*]{1,4096}\*|`[^`]{1,4096}`)/g;
   let last = 0;
@@ -399,9 +342,6 @@ function renderInline(text: string): React.ReactNode {
     }
     const token = match[0];
     if (token.startsWith('[') && match[2] && match[3]) {
-      // Link: [text](url) — only render anchor for safe schemes (http(s), mailto,
-      // tel, relative). javascript:, data:, vbscript: etc. fall back to plain text
-      // to prevent XSS via model-generated markdown links.
       const href = safeHref(match[3]);
       if (href !== null) {
         parts.push(
@@ -448,13 +388,6 @@ function renderInline(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : parts;
 }
 
-/**
- * MarkdownLite — reusable wrapper around the lightweight markdown renderer.
- *
- * Renders headings, lists, tables, code blocks, blockquotes, and inline
- * formatting without pulling in react-markdown. Used by MessageBubble for
- * assistant text and by artifact renderers (e.g. PresentationArtifact slides).
- */
 export function MarkdownLite({ content, className }: { content: string; className?: string }) {
   return <div className={className}>{renderContent(content)}</div>;
 }
@@ -632,12 +565,6 @@ function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) 
   );
 }
 
-/**
- * The stored user turn, right-aligned (web `.user-bubble` parity: px-4 py-2.5,
- * radius-2xl, --chat-user-bubble-bg). No per-message timestamp — the web feed
- * uses date dividers plus provenance for time cues, not a stamp under every
- * user turn.
- */
 function UserBubbleBody({ content }: { content: string }) {
   return (
     <div
@@ -652,15 +579,6 @@ function UserBubbleBody({ content }: { content: string }) {
   );
 }
 
-/**
- * Hover-revealed user actions (web parity). Edit renders only when the host
- * wired a commit handler, so a surface without one shows Copy alone rather than
- * a button that does nothing.
- *
- * AUDIT-FIX GOV-30: `opacity-0 group-hover:opacity-100` had no focus
- * counterpart, so a keyboard user tabbed into a fully transparent button —
- * focus ring included. `group-focus-within` reveals it.
- */
 function UserBubbleActions({
   copied,
   onCopy,
@@ -672,8 +590,6 @@ function UserBubbleActions({
   onStartEdit?: (() => void) | undefined;
   t: (key: string, fallback: string) => string;
 }) {
-  // AUDIT-FIX GOV-38: 44px touch target on phones (28px was below the
-  // minimum), compact on pointer viewports.
   const iconButton =
     'h-11 w-11 touch-manipulation sm:h-7 sm:w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]';
 
@@ -717,27 +633,15 @@ export function MessageBubble({
   const { t } = useUiTranslation('chat');
   const isUser = message.role === 'user';
   const isStreaming = Boolean(message.isStreaming);
-  // `null` means "not editing". A string holds the in-progress draft, so
-  // cancelling restores the stored content rather than whatever was typed.
   const [editDraft, setEditDraft] = useState<string | null>(null);
   const canonicalActivity = message.metadata?.['agentActivity'] as AgentActivityState | undefined;
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const [copied, setCopied] = useState(false);
-  // Derived artifacts (host capability) win over the pre-attached list because
-  // the projection already merged `message.artifacts` into itself on id.
   const renderedArtifacts = artifactProjection?.artifacts ?? message.artifacts;
-  // Body text only. Copy/ActionBar keep `message.content` so the user can still
-  // copy the code the artifact card lifted out (web parity).
   const bodyContent = artifactProjection?.displayContent ?? message.content;
   const trimmedMetadataFields = isUser ? [] : readTrimmedMetadataFields(message);
   const hostBridge = useHostBridge();
-  // Managed quota / rate-limit refusal (see MessageLimitCard + useChat's
-  // `error` stream case). Takes precedence over the generic failure block.
   const paywallBlock = isUser ? null : readMessagePaywall(message.metadata);
-  // A failed turn used to render a completely blank bubble: `message.error`
-  // was written and never read, and the list-level notice only covers the LAST
-  // message, so a mid-transcript failure was invisible. Fall back to the
-  // PERSISTED `metadata.streamError` so the failure survives a reload too.
   const failureMessage =
     isUser || isStreaming || paywallBlock
       ? undefined
@@ -783,8 +687,6 @@ export function MessageBubble({
 
   function commitEdit() {
     const next = (editDraft ?? '').trim();
-    // An empty body would blank the turn the assistant answered, leaving a
-    // transcript whose reply has no question. Treat it as a cancel.
     if (next.length > 0 && next !== message.content) onEdit?.(message.id, next);
     setEditDraft(null);
   }
@@ -807,8 +709,6 @@ export function MessageBubble({
               value={editDraft ?? ''}
               onChange={(event) => setEditDraft(event.target.value)}
               onKeyDown={(event) => {
-                // Enter commits and Escape abandons, matching the composer.
-                // Shift+Enter stays a newline so a multi-line turn is editable.
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
                   commitEdit();
@@ -850,7 +750,6 @@ export function MessageBubble({
     );
   }
 
-  // Assistant message
   return (
     <div
       data-role="assistant"
@@ -886,8 +785,6 @@ export function MessageBubble({
 
       <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
         {isStreaming && !message.content.trim() && !canonicalActivity ? (
-          /* Pre-first-token placeholder (web parity): a pulsing dot + "Thinking…"
-             instead of a bare blinking caret on an empty bubble. */
           <StreamingThinkingStatus />
         ) : (
           <>
@@ -914,9 +811,6 @@ export function MessageBubble({
       {!canonicalOwnsToolActivity && message.toolCalls && message.toolCalls.length > 0 && (
         <div className="mt-2 space-y-2">
           {message.toolCalls.map((toolCall) =>
-            // Awaiting-approval calls need the approve/reject affordance
-            // ToolCallCard already implements — every other status keeps the
-            // existing lightweight ToolCallRow unchanged.
             toolCall.status === 'awaiting_approval' ? (
               <ToolCallCard
                 key={toolCall.id}

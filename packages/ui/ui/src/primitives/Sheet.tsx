@@ -14,7 +14,6 @@ const SheetClose = SheetPrimitive.Close;
 
 const SheetPortal = SheetPrimitive.Portal;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface SheetOverlayProps extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay> {
   ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Overlay>>;
 }

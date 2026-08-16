@@ -1,11 +1,3 @@
-/**
- * Mode-aware conversation search (chatViewStore.searchConversations).
- *
- * Local mode → in-memory search over the on-device message store, no network.
- * Cloud mode (signed in) → server full-text search GET /api/search, mapped into
- * the result shape. Network/auth failure → falls back to local search.
- * Guards the M2.1 server-backed search change.
- */
 
 jest.mock('../lib/mmkv', () => ({
   mmkvStorage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
@@ -110,7 +102,6 @@ describe('chatViewStore.searchConversations — mode routing', () => {
     useChatViewStore.getState().searchConversations('rust');
     await flushDebounce();
 
-    // Fell back to the on-device store → local conversation surfaces.
     const ids = useChatViewStore.getState().searchResults.map((r) => r.conversationId);
     expect(ids).toContain('c1');
   });

@@ -1,82 +1,38 @@
-/**
- * Signed **org policy** fixture contract retained under
- * `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`.
- *
- * An org policy is a signed data document that admins distribute (file drop,
- * MDM, or self-hosted gateway) and every all-mode surface enforces locally. It
- * lives with the offline licensing boundary because its root of trust is an org
- * license. It is NOT a cloud endpoint — it is a signed file, verified fully
- * offline.
- *
- * Root of trust: the org LICENSE. The policy signature must verify against a key
- * listed in the (already-verified) license's `policyKeys[]`, so a forged policy
- * cannot loosen anything the license did not authorize.
- *
- * Monotonic tightening: a policy may only RESTRICT relative to product defaults
- * (or a prior policy), never GRANT. See `checkPolicyTightening` for the exact
- * lattice and `DEFAULT_POLICY_BASELINE` for the product-default baseline it
- * tightens against.
- *
- * Scope note: this pass ships the schema + verifier + fixtures only. It is not
- * wired into any surface's enforcement path. Any future enforcement path
- * requires the complete design and superseding ADR described by the retention
- * decision.
- */
 
 import { z } from 'zod';
 
 import type { LicenseClaims } from './claims';
 import { verifySignedContainer } from './container';
 
-/** The `format` discriminator for signed org-policy containers. */
 export const POLICY_CONTAINER_FORMAT = 'agipolicy-v1';
 
-/** BYOK posture. Permissiveness order: `allowed` > `allowlist` > `forbidden`. */
 export const OrgPolicyByokSchema = z.enum(['allowed', 'forbidden', 'allowlist']);
 export type OrgPolicyByok = z.infer<typeof OrgPolicyByokSchema>;
 
 export const OrgPolicyEgressSchema = z
   .object({
-    /** Whether managed-cloud egress is permitted at all. */
     managedCloud: z.boolean(),
-    /**
-     * BYOK provider domains the org permits. `['*']` means unrestricted (all
-     * domains). A concrete list restricts to those domains.
-     */
     byokDomainsAllowlist: z.array(z.string()),
   })
   .strict();
 
 export const OrgPolicyAuditExportSchema = z
   .object({
-    /** Whether the org requires audit export (a compliance OBLIGATION). */
     required: z.boolean(),
-    /** Optional export destination path. */
     path: z.string().optional(),
   })
   .strict();
 
-/**
- * `OrgPolicy` — the exact schema from design §2.2.
- *
- * `allowedProviders` / `allowedModels` use `'*'` to mean "unrestricted"; a
- * concrete list restricts to those ids (`allowedModels` accepts models.json ids
- * or `'local:*'`). Values are validated for SHAPE only — this contract does not
- * assert any particular provider/model id exists.
- */
 export const OrgPolicySchema = z
   .object({
     policyId: z.string().min(1),
     orgId: z.string().min(1),
-    /** Monotonic version counter for this org's policy series. */
     version: z.number().int().nonnegative(),
-    /** Unix epoch milliseconds when the policy was issued. */
     issuedAt: z.number().int(),
     allowedProviders: z.array(z.string()),
     allowedModels: z.array(z.string()),
     byok: OrgPolicyByokSchema,
     egress: OrgPolicyEgressSchema,
-    /** Max local retention in days; absent = unbounded (product default). */
     retentionDays: z.number().int().nonnegative().optional(),
     auditExport: OrgPolicyAuditExportSchema,
     updateChannel: z.string().optional(),
@@ -85,39 +41,15 @@ export const OrgPolicySchema = z
 
 export type OrgPolicy = z.infer<typeof OrgPolicySchema>;
 
-// ---------------------------------------------------------------------------
-// Monotonic tightening
-// ---------------------------------------------------------------------------
-
-/**
- * The permission fields that participate in the monotonic-tightening lattice.
- * Non-permission metadata (`policyId`, `orgId`, `version`, `issuedAt`,
- * `updateChannel`, `auditExport.path`) is deliberately excluded — it does not
- * grant or restrict a capability.
- */
 export interface PolicyPermissions {
   allowedProviders: string[];
   allowedModels: string[];
   byok: OrgPolicyByok;
   egress: { managedCloud: boolean; byokDomainsAllowlist: string[] };
-  /** `undefined` = unbounded retention (most permissive). */
   retentionDays?: number;
   auditExport: { required: boolean };
 }
 
-/**
- * The product-default baseline every first policy tightens against — the
- * maximally-permissive point of the lattice:
- *   - all providers and models allowed (`['*']`),
- *   - BYOK allowed,
- *   - managed-cloud egress allowed, all BYOK domains allowed (`['*']`),
- *   - unbounded retention,
- *   - audit export not required.
- *
- * A first policy can only pare this down. To enforce version-to-version
- * monotonicity ("a policy cannot re-enable what a prior policy forbade"), pass
- * the prior policy's permissions as the baseline instead.
- */
 export const DEFAULT_POLICY_BASELINE: PolicyPermissions = {
   allowedProviders: ['*'],
   allowedModels: ['*'],
@@ -147,13 +79,8 @@ function extractPermissions(policy: OrgPolicy): PolicyPermissions {
   };
 }
 
-/**
- * Report a violation if `candidate`'s allowlist is broader than `baseline`'s.
- * `'*'` means unrestricted (broadest). Returns a message, or `null` if the
- * candidate list is a tightening (subset) of the baseline.
- */
 function listViolation(field: string, candidate: string[], baseline: string[]): string | null {
-  if (baseline.includes('*')) return null; // baseline unrestricted → anything is ⊑
+  if (baseline.includes('*')) return null;
   if (candidate.includes('*')) {
     return `${field}: policy re-grants all ("*") but the baseline restricts to [${baseline.join(', ')}]`;
   }
@@ -166,24 +93,9 @@ function listViolation(field: string, candidate: string[], baseline: string[]): 
 
 export interface TighteningResult {
   ok: boolean;
-  /** Human-readable reasons the candidate is more permissive than the baseline. */
   violations: string[];
 }
 
-/**
- * Pure monotonic-tightening check: is `candidate` no more permissive than
- * `baseline` on every lattice field? A policy may only restrict, never grant.
- *
- * Lattice (candidate must be ⊑ baseline):
- *   - allowedProviders / allowedModels / egress.byokDomainsAllowlist: subset,
- *     with `'*'` as the unrestricted top.
- *   - byok: `allowed` > `allowlist` > `forbidden`.
- *   - egress.managedCloud: `true` (permit) > `false` (deny).
- *   - retentionDays: shorter is tighter; `undefined` = unbounded (top). A policy
- *     may not retain LONGER than the baseline.
- *   - auditExport.required: `true` (required) is tighter than `false`. A policy
- *     may not DROP a required audit the baseline mandated.
- */
 export function checkPolicyTightening(
   candidate: OrgPolicy | PolicyPermissions,
   baseline: PolicyPermissions = DEFAULT_POLICY_BASELINE,
@@ -243,12 +155,7 @@ export function checkPolicyTightening(
   return { ok: violations.length === 0, violations };
 }
 
-// ---------------------------------------------------------------------------
-// Verification
-// ---------------------------------------------------------------------------
-
 export type OrgPolicyErrorCode =
-  /** Not a well-formed container, or policy JSON/schema invalid. */
   | 'malformed'
   /** Well-formed, but no key in the license's `policyKeys[]` verifies it. */
   | 'bad_signature'
@@ -262,7 +169,6 @@ export type OrgPolicyErrorCode =
 export interface OrgPolicyError {
   code: OrgPolicyErrorCode;
   message: string;
-  /** Populated for `not_tightening`: each lattice field that was loosened. */
   violations?: string[];
 }
 
@@ -271,11 +177,6 @@ export type OrgPolicyVerifyResult =
   | { ok: false; error: OrgPolicyError };
 
 export interface VerifyOrgPolicyOptions {
-  /**
-   * The baseline the policy must tighten against. Defaults to
-   * `DEFAULT_POLICY_BASELINE`. Pass a prior policy's permissions to enforce
-   * version-to-version monotonicity.
-   */
   baseline?: PolicyPermissions;
 }
 

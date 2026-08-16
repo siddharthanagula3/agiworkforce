@@ -152,8 +152,6 @@ describe('WebChatPage image durability boundary', () => {
       imageUrl: GENERATED_ASSET_URL,
     });
 
-    // This is the page's recovery action: persist the captured row payload,
-    // without passing through the generation coordinator/provider again.
     requireImageMessagePersistence(
       await persistImageGenerationAssistantMessage({
         conversationId: CONVERSATION_ID,

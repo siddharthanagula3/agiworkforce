@@ -25,13 +25,8 @@ import { publishArtifact as corePublishArtifact } from '@agiworkforce/artifacts'
 import type { LocalPublishResult } from '@agiworkforce/artifacts';
 import type { PublishableArtifact } from '@agiworkforce/artifacts';
 
-// Re-export for convenience so ArtifactPanel does not import from two places.
 export type { LocalPublishResult };
 
-/**
- * Map artifact type to a file extension for local export.
- * Mirrors the extension logic in the desktop ArtifactPanel download handler.
- */
 function artifactTypeToExtension(type: string, language?: string): string {
   switch (type) {
     case 'html':
@@ -56,16 +51,10 @@ function artifactTypeToExtension(type: string, language?: string): string {
   }
 }
 
-/**
- * The Tauri file:// writer. Resolves the app data directory at call time,
- * creates the `artifacts/` sub-directory if needed, writes the content, and
- * returns the `file://` URL.
- */
 async function tauriLocalFileWriter(artifact: PublishableArtifact): Promise<string> {
   const dataDir = await appDataDir();
   const artifactsDir = await join(dataDir, 'artifacts');
 
-  // Create the directory (no-op if it already exists).
   await mkdir(artifactsDir, { recursive: true });
 
   const ext = artifactTypeToExtension(artifact.type, artifact.language);
@@ -75,9 +64,6 @@ async function tauriLocalFileWriter(artifact: PublishableArtifact): Promise<stri
 
   await writeTextFile(filePath, artifact.content);
 
-  // Return a proper file:// URL. On macOS/Linux the path starts with /;
-  // on Windows it starts with a drive letter (C:\...). The URL constructor
-  // handles both cases correctly.
   return `file://${filePath}`;
 }
 
@@ -98,10 +84,6 @@ export function makeDesktopPublishCallback(
       surface: 'desktop',
       localFileWriter: tauriLocalFileWriter,
     });
-    // The service's local path returns a LocalPublishResult or throws; the
-    // cloud/unavailable arms belong to byok/managed, which this adapter never
-    // asks for. Assert the cross-package contract here so the panel is not
-    // forced to carry a branch it can never take.
     if (result.kind !== 'local') {
       throw new Error(
         `publishArtifact returned "${result.kind}" for a local publish; expected "local".`,

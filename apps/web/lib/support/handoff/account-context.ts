@@ -1,24 +1,3 @@
-/**
- * @file account-context.ts
- *
- * Builds the account context that travels with an escalation — the "so the user
- * never repeats themselves" half of the brief.
- *
- * TRUST BOUNDARY: every field here is derived SERVER-SIDE from a verified Clerk
- * user id. Nothing on this path reads a plan, tier, or usage figure from the
- * request body. A client that claims `planTier: 'enterprise'` changes nothing.
- *
- * PRIVACY BOUNDARY: this context is written to `support_handoff_sessions` and
- * mailed to the support mailbox. It therefore carries only what a human needs
- * to act — plan, status, period end, usage PERCENTAGES. It never carries
- * private allowance operands (cents/units), which is why it calls
- * `getManagedUsageSummary` (the public percentage-only contract) and never
- * `lib/server/managed-usage-policy`.
- *
- * DEGRADATION: a lookup that times out yields `null` plus a `degraded` note, not
- * a zero. A human reading "usage 0%" would act on it; reading "usage lookup
- * timed out" they will not.
- */
 
 import 'server-only';
 
@@ -27,13 +6,10 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { logger } from '@/lib/logger';
 import type { HandoffAccountContext } from './types';
 
-/** Support must not hang on a slow dependency; a partial context still helps. */
 const LOOKUP_TIMEOUT_MS = 2_000;
 
 function withTimeout<T>(promise: Promise<T>, label: string): Promise<T | null> {
   return Promise.race([
-    // Promise.resolve() so a dependency that throws synchronously (or returns a
-    // non-promise) degrades to a null fact rather than failing the escalation.
     Promise.resolve(promise).catch((error: unknown) => {
       logger.warn({ error, label }, 'Support handoff account lookup failed');
       return null;

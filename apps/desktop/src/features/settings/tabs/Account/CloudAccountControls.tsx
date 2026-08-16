@@ -1,22 +1,3 @@
-/**
- * Cloud account controls Desktop was missing entirely (DES-C21): the account
- * identifier, active sessions, API keys, and account deletion.
- *
- * Every call here uses the device bearer against a route that authenticates via
- * `getClerkAuthUser` (`apps/web/lib/api-auth.ts` Path 2b) and whose CSRF gate is
- * bypassed for a verifying bearer (`apps/web/lib/csrf.ts` `isBearerTokenValid`).
- *
- * Active sessions were previously unreachable: the route resolved its caller
- * through a route-local `requireBrowserSession()` that required a Clerk cookie
- * and a `sessionId`, which a device token has neither of. That route now
- * resolves callers through `getClerkAuthUser` too
- * (`apps/web/app/api/settings/sessions/session-principal.ts`), so the list and
- * the revocations below are real. The one thing still not expressible with a
- * device token is "which listed session is me": those rows are Clerk BROWSER
- * sessions and this app is not one of them. The server says so
- * (`currentSessionKnown: false`) and this section repeats it rather than
- * marking an arbitrary row as current.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -140,11 +121,6 @@ function ActiveSessionsSection() {
     }
   };
 
-  // "Log out of all devices" means exactly that, so it is two revocations, not
-  // one: the server ends every Clerk session on the account, and then this app
-  // signs itself out — which revokes the device token and its refresh family
-  // through POST /api/auth/logout. Skipping the second step would leave the
-  // credential that is actually in front of the user still valid.
   const handleRevokeAll = async () => {
     setRevokingAll(true);
     setError(null);

@@ -23,21 +23,6 @@ import {
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
-/**
- * Cloud Code agent approvals.
- *
- *   GET  — the approvals in this session still waiting on the user.
- *   POST — decide one and resume the turn it suspended.
- *
- * A turn that stops at the approval boundary cannot be continued by retrying
- * `POST ../agent`: that starts a NEW turn against a new idempotency key. This is
- * the only path back into a suspended turn, which is why it exists.
- *
- * No `Idempotency-Key` header is required here, and none would help: the
- * reservation key is derived from the turn and step being decided, and the
- * decision itself is single-winner in the database.
- */
-
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
@@ -122,7 +107,6 @@ async function handleDecideApproval(request: NextRequest, context: RouteContext)
       stepIndex,
       decision,
       planTier,
-      // Client disconnect cancels the resumed turn; usage is settled either way.
       signal: request.signal,
     });
     return NextResponse.json(result);

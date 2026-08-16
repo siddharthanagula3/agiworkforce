@@ -1,17 +1,9 @@
 import { logger } from '@shared/lib/logger';
-/**
- * Global Search Service
- * Searches across all chat sessions and messages with advanced filtering
- * Includes search history tracking and analytics
- */
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 export interface SearchResult {
-  // Non-chat results reuse `sessionId` as the primary entity id and
-  // `sessionTitle` as the display name; the click handler routes by `type`
-  // ('project' → /projects/${id}, 'file' → /library, else → /chat/${id}).
   type: 'session' | 'message' | 'project' | 'file';
   sessionId: string;
   sessionTitle: string;
@@ -20,19 +12,19 @@ export interface SearchResult {
   role?: 'user' | 'assistant' | 'system';
   createdAt: Date;
   updatedAt: Date;
-  matchedText: string; // The text that matched the search
-  contextBefore?: string; // Text before the match for context
-  contextAfter?: string; // Text after the match for context
+  matchedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
 }
 
 export interface SearchFilters {
   query: string;
-  sessionIds?: string[]; // Filter by specific sessions
-  startDate?: Date; // Filter messages after this date
-  endDate?: Date; // Filter messages before this date
-  role?: 'user' | 'assistant' | 'system'; // Filter by message role
-  includeArchived?: boolean; // Include archived sessions
-  limit?: number; // Max results (default: 50)
+  sessionIds?: string[];
+  startDate?: Date;
+  endDate?: Date;
+  role?: 'user' | 'assistant' | 'system';
+  includeArchived?: boolean;
+  limit?: number;
 }
 
 export interface SearchStats {
@@ -41,7 +33,7 @@ export interface SearchStats {
   messageMatches: number;
   projectMatches: number;
   fileMatches: number;
-  searchTime: number; // in milliseconds
+  searchTime: number;
 }
 
 export interface RecentSearch {
@@ -84,9 +76,6 @@ interface APISearchStats {
   fileMatches?: number;
 }
 
-// The /api/search route returns project and file matches in separate arrays
-// (see the route's own comments): sessions/messages navigate to /chat, projects
-// to /projects, files to /library — queried together but shaped distinctly.
 interface APIProjectResult {
   type: 'project';
   projectId: string;
@@ -130,10 +119,6 @@ async function buildReadHeaders(): Promise<HeadersInit> {
 class GlobalSearchService {
   private readonly DEFAULT_LIMIT = 50;
 
-  /**
-   * Search across all chat sessions and messages
-   * Automatically tracks the search in history
-   */
   async search(
     _userId: string,
     filters: SearchFilters,
@@ -180,9 +165,6 @@ class GlobalSearchService {
       contextAfter: r.contextAfter,
     }));
 
-    // Surface project matches alongside conversations. The route already
-    // queries them (owner-scoped, soft-delete-aware) but keeps them separate
-    // because they navigate to /projects/${id} rather than /chat/${id}.
     const projectResults: SearchResult[] = (data.projects || []).map((p) => ({
       type: 'project' as const,
       sessionId: p.projectId,
@@ -195,8 +177,6 @@ class GlobalSearchService {
       contextAfter: p.contextAfter,
     }));
 
-    // Library file matches — navigate to /library (there is no per-file deep
-    // link), so like projects they ride in `sessionId` but route by type.
     const fileResults: SearchResult[] = (data.files || []).map((f) => ({
       type: 'file' as const,
       sessionId: f.fileId,
@@ -226,9 +206,6 @@ class GlobalSearchService {
     return { results, stats };
   }
 
-  /**
-   * Get recent searches for a user (deduplicated)
-   */
   async getRecentSearches(_userId: string, limit: number = 10): Promise<RecentSearch[]> {
     try {
       const headers = await buildReadHeaders();
@@ -254,16 +231,6 @@ class GlobalSearchService {
     }
   }
 
-  /**
-   * Get the current authenticated user's own popular searches from the last
-   * N days ("Trending Searches"). Scoped server-side to the caller's user id
-   * (derived from the auth token / session, see /api/search route.ts and the
-   * get_popular_searches(p_user_id, ...) Neon function) — this method
-   * intentionally does NOT take a userId argument. Do not add one: passing a
-   * client-supplied userId here instead of relying on server-side auth would
-   * reopen the cross-user data leak this was fixed for (any user could read
-   * any other user's raw search query text by passing their id).
-   */
   async getPopularSearches(limit: number = 10, days: number = 7): Promise<PopularSearch[]> {
     try {
       const headers = await buildReadHeaders();
@@ -289,9 +256,6 @@ class GlobalSearchService {
     }
   }
 
-  /**
-   * Clear all search history for a user
-   */
   async clearSearchHistory(_userId: string): Promise<number> {
     try {
       const headers = await buildMutateHeaders();
@@ -313,9 +277,6 @@ class GlobalSearchService {
     }
   }
 
-  /**
-   * Get search suggestions based on user history and popular searches
-   */
   async getSearchSuggestions(
     _userId: string,
     partialQuery: string,
@@ -352,9 +313,6 @@ class GlobalSearchService {
     }
   }
 
-  /**
-   * Search with autocomplete
-   */
   async autocomplete(_userId: string, partialQuery: string, limit: number = 5): Promise<string[]> {
     if (partialQuery.trim().length < 2) return [];
 
@@ -367,10 +325,6 @@ class GlobalSearchService {
     }
   }
 
-  /**
-   * Get the current user's own trending search terms (last 7 days).
-   * Returns simple string array for backward compatibility.
-   */
   async getTrendingSearchTerms(limit: number = 10): Promise<string[]> {
     const popular = await this.getPopularSearches(limit, 7);
     return popular.map((p) => p.query);

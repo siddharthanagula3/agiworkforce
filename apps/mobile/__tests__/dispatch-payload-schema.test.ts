@@ -1,25 +1,3 @@
-/**
- * Cross-surface contract test: dispatch payload schema.
- *
- * Mobile dispatch payloads must conform to the control-message schema enforced
- * by `apps/mobile/lib/dispatchAgentValidator.ts` (parseAgent). This is the
- * chokepoint between the desktop signer and `useAgentStore.setAgents` — a
- * compromised relay or same-LAN MITM that crafts an `agents_update` payload
- * with malformed entries gets dropped here.
- *
- * Distinct from `control-message-agent-schema.test.ts` (per-field
- * unit-tests): this file exercises the WIRE-FORMAT payload shape that flows
- * through `handleControlMessageInner` in connectionStore.ts:240-261 — i.e.
- * the `{ action: 'agents_update', agents: Agent[] }` envelope — with:
- *
- *   • happy path: well-formed envelope + valid agents → all parse
- *   • invalid 1 : agent missing a required field → that agent dropped, rest kept
- *   • invalid 2 : agent has a wrong-type field → that agent dropped
- *   • invalid 3 : oversize string (UI-DoS class) → that agent dropped
- *
- * This pins the payload generator's invariants against the receiver's
- * validator and prevents accidental schema drift across the surface boundary.
- */
 
 import {
   parseAgent,
@@ -28,14 +6,11 @@ import {
   MAX_AGENTS_PER_UPDATE,
 } from '../lib/dispatchAgentValidator';
 
-// ── Payload generator ────────────────────────────────────────────────────────
-
 interface AgentsUpdatePayload {
   action: 'agents_update';
   agents: unknown[];
 }
 
-/** Build a single, well-formed agent object as the desktop would emit it. */
 function makeValidAgent(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'agent-001',
@@ -52,17 +27,10 @@ function makeValidAgent(overrides: Record<string, unknown> = {}): Record<string,
   };
 }
 
-/** Build the agents_update envelope the dispatch handler expects. */
 function makeAgentsUpdatePayload(agents: unknown[]): AgentsUpdatePayload {
   return { action: 'agents_update', agents };
 }
 
-/**
- * Runs the same validation logic as `handleControlMessageInner` in
- * connectionStore.ts:246-260 — cap to MAX_AGENTS_PER_UPDATE, then parseAgent
- * each entry, then keep only the parsed agents. Returns the array of
- * accepted agents so tests can pin the receiver's contract.
- */
 function validatePayload(payload: AgentsUpdatePayload): {
   accepted: ReturnType<typeof parseAgent>[];
   droppedCount: number;
@@ -80,8 +48,6 @@ function validatePayload(payload: AgentsUpdatePayload): {
   }
   return { accepted, droppedCount };
 }
-
-// ── Happy path ───────────────────────────────────────────────────────────────
 
 describe('dispatch payload — happy path validates against schema', () => {
   it('accepts a well-formed agents_update with one agent', () => {
@@ -125,8 +91,6 @@ describe('dispatch payload — happy path validates against schema', () => {
   });
 });
 
-// ── Invalid case 1: missing required field ──────────────────────────────────
-
 describe('dispatch payload — invalid: missing required field', () => {
   it('drops an agent whose required `name` field is missing', () => {
     const malformed = makeValidAgent();
@@ -149,14 +113,11 @@ describe('dispatch payload — invalid: missing required field', () => {
     const payload = makeAgentsUpdatePayload([good, missingId, missingProgress]);
     const { accepted, droppedCount } = validatePayload(payload);
 
-    // Critical: receiver doesn't reject the whole payload — it filters.
     expect(accepted).toHaveLength(1);
     expect(droppedCount).toBe(2);
     expect(accepted[0]!.id).toBe('good-1');
   });
 });
-
-// ── Invalid case 2: wrong type ──────────────────────────────────────────────
 
 describe('dispatch payload — invalid: wrong type', () => {
   it('drops an agent whose `progress` is a string instead of number', () => {
@@ -190,8 +151,6 @@ describe('dispatch payload — invalid: wrong type', () => {
   });
 });
 
-// ── Invalid case 3: oversize ────────────────────────────────────────────────
-
 describe('dispatch payload — invalid: oversize fields', () => {
   it('drops an agent whose `name` exceeds MAX_AGENT_NAME_LEN (UI hijack defense)', () => {
     const payload = makeAgentsUpdatePayload([
@@ -214,8 +173,6 @@ describe('dispatch payload — invalid: oversize fields', () => {
   });
 
   it('caps an oversize payload at MAX_AGENTS_PER_UPDATE entries', () => {
-    // A hostile relay sends 60 agents — receiver must cap at 50 (the
-    // MAX_AGENTS_PER_UPDATE constant from dispatchAgentValidator.ts).
     const oversizeAgents = Array.from({ length: 60 }, (_, i) =>
       makeValidAgent({ id: `agent-${i}` }),
     );
@@ -224,7 +181,6 @@ describe('dispatch payload — invalid: oversize fields', () => {
 
     expect(accepted.length).toBeLessThanOrEqual(MAX_AGENTS_PER_UPDATE);
     expect(accepted).toHaveLength(MAX_AGENTS_PER_UPDATE);
-    // First MAX entries kept; trailing entries silently dropped.
     expect(accepted[0]!.id).toBe('agent-0');
     expect(accepted[MAX_AGENTS_PER_UPDATE - 1]!.id).toBe(`agent-${MAX_AGENTS_PER_UPDATE - 1}`);
   });

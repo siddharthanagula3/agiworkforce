@@ -1,26 +1,3 @@
-/**
- * Google Gemini / Cloud Code Assist API tool-schema scrubber.
- *
- * Gemini's tool validation rejects a strict subset of JSON Schema (no
- * `additionalProperties`, `$ref`, `pattern`, `format`, length/numeric
- * constraints, etc.). This module:
- *   1. Strips disallowed keywords
- *   2. Resolves local `$ref` pointers (so the tool author can keep authoring
- *      schemas with `$defs`)
- *   3. Flattens `anyOf` / `oneOf` of literals into a single `enum`
- *   4. Strips `null` variants from unions (Gemini infers nullability differently)
- *   5. As a last resort, picks a single representative type for surviving
- *      unions so Gemini accepts the tool declaration
- *
- * Pure function. Use this from `ProviderAdapter.normalizeToolSchemas` for
- * Google models.
- *
- * Ported from OpenClaw `src/agents/schema/clean-for-gemini.ts` (MIT, Peter Steinberger).
- * See THIRD_PARTY_LICENSES.md at repo root for full attribution.
- *
- * Adaptation note: the original return type was `TSchema` from typebox.
- * We use `unknown` here — callers cast at the API boundary.
- */
 
 export const GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
   'patternProperties',
@@ -30,11 +7,8 @@ export const GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
   '$ref',
   '$defs',
   'definitions',
-  // Non-standard (OpenAPI) keyword; Claude validators reject it.
   'examples',
 
-  // Cloud Code Assist appears to validate tool schemas more strictly/quirkily than
-  // draft 2020-12 in practice; these constraints frequently trigger 400s.
   'minLength',
   'maxLength',
   'minimum',
@@ -48,9 +22,6 @@ export const GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
   'minProperties',
   'maxProperties',
 
-  // JSON Schema composition keywords not supported by OpenAPI 3.0 subset.
-  // `const` is handled separately (converted to enum) in the cleaning loop,
-  // but `not` has no safe equivalent and must be stripped.
   'not',
 ]);
 

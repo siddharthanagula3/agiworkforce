@@ -34,77 +34,31 @@ import type {
   RoutingMessage,
 } from './types';
 
-// ============================================================================
-// Hoisted regex patterns (compiled once at module load)
-// ----------------------------------------------------------------------------
-// `js-hoist-regexp`: defining regexes inside `classifyTaskLocally` would
-// re-compile them on every call. The auto-router runs on every keystroke
-// of the chat composer in some surfaces, so this is hot.
-// ============================================================================
-
-/** Slash-prefixed image generation commands (`/image`, `/imagine`, …). */
 const RE_IMAGE_SLASH = /^\/(image|imagine|draw|generate)\b/i;
 
-/**
- * Natural-language image generation phrases ("make an image of …").
- *
- * A generation verb alone is deliberately NOT enough — the phrase has to name a
- * visual medium. "Create a plan", "generate the quarterly report" and "make a
- * function" all lead with the same verbs, and routing those to an image model
- * would be both wrong and billable. The noun list is the whole guard, so it is
- * extended by adding media nouns rather than by loosening the verb side.
- *
- * The nouns beyond the original seven (artwork through wallpaper) cover the
- * vocabulary people actually use for image requests; without them a prompt like
- * "draw a portrait of a fox" fell through to a text model and came back as
- * prose describing the picture it did not draw.
- */
 const RE_IMAGE_PHRASE =
   /\b(generate|create|make|draw)\s+(me\s+)?(an?\s+|some\s+)?(\w+\s+){0,2}(image|picture|photo|photograph|illustration|logo|mockup|wireframe|artwork|drawing|painting|sketch|portrait|poster|banner|avatar|thumbnail|wallpaper)\b/i;
 
-/** Computer-use automation verbs that signal browser / desktop control. */
 const RE_COMPUTER_USE = /\b(click|navigate|fill|submit|automate)\b/i;
 
-/** Code fence used to wrap code blocks in markdown. */
 const RE_CODE_FENCE = /```/;
 
-/**
- * Coding signals: language keywords, SQL, common runtime errors / stack-trace
- * markers. The expression intentionally stays small — strong signals are
- * enough; the LLM fallback covers ambiguous prose-with-keywords cases.
- */
 const RE_CODING =
   /\bfunction\b|\bclass\b|\bSELECT\b|\bdef\b|\bimport\b|stack ?trace|TypeError|undefined|NullPointerException/;
 
-/** Reasoning-mode action verbs (math / proof / formal derivation). */
 const RE_REASONING_VERB = /\b(prove|derive|solve|calculate|theorem|integral|differential)\b/i;
 
-/** Inline arithmetic expression (`12 + 7`, `a * b = c`, …). */
 const RE_REASONING_MATH = /\b\d+\s*[+\-*/=]\s*\d/;
 
-/** Explicit multi-agent, delegation, and tool-discovery requests. */
 const RE_AGENTIC =
   /\b(tool discovery|discover (the )?(best |available )?tools?|multi-agent|parallel agents?|autonomous agents?|subagents?)\b|\b(use|run|coordinate|orchestrate|delegate to|spawn)\s+(multiple\s+|parallel\s+|autonomous\s+)?(agents?|subagents?|tools?)\b/i;
 
-/** Recency / web-search signals — anything that requires fresh info. */
 const RE_RESEARCH = /\b(latest|today|2026|current|recent news|search the web|cite sources)\b/i;
 
-/** Creative-writing imperatives — long-form prose generation. */
-// AUDIT-FIX: alert-448 — bound whitespace runs so the regex stays linear-time.
 const RE_CREATIVE_WRITING =
   /\b(write|draft|compose)[ \t]{1,32}(a|an|the)?[ \t]{0,32}(story|poem|email|essay|tweet|blog)/i;
 
-/** Whitespace splitter for word counting in the simple-chat heuristic. */
 const RE_WHITESPACE = /\s+/;
-
-// ============================================================================
-// Tokenizer-inflation multipliers
-// ----------------------------------------------------------------------------
-// Empirically calibrated provider baselines. Per-model drift belongs to the
-// canonical model catalog and is applied through `tokenizerDriftFactor`; do
-// not add model-family or release-specific branches here.
-// Numbers are characters-per-token: smaller divisor → MORE tokens per char.
-// ============================================================================
 
 const TOKENS_PER_CHAR_DEFAULT = 1 / 3.5;
 
@@ -115,18 +69,7 @@ const TOKENS_PER_CHAR_BY_PROVIDER: Readonly<Record<string, number>> = {
   deepseek: 1 / 3.4,
 };
 
-/**
- * Estimate token count for `text` using the provider and tokenizer-drift
- * metadata owned by the canonical model catalog. Both canonical IDs and
- * provider API IDs resolve through `getModelMetadataById`. Unknown or omitted
- * IDs fail closed to the neutral default rather than inferring a provider from
- * an unregistered string prefix.
- *
- * Used by callers to compute `cumulativeTokens` for `ConversationContext`.
- * Stays a tight inline calculation — no allocations on the hot path.
- */
 export function estimateTokens(text: string, model?: string): number {
-  // `js-early-exit`: empty input bypasses the model lookup.
   if (text.length === 0) return 0;
 
   const metadata = getModelMetadataById(model?.toLowerCase());
@@ -140,14 +83,6 @@ export function estimateTokens(text: string, model?: string): number {
 
   return Math.ceil(text.length * providerBaseline * drift);
 }
-
-// ============================================================================
-// classifyTaskLocally
-// ----------------------------------------------------------------------------
-// Priority-ordered. The first heuristic to fire wins; falling through to
-// general (the lowest-confidence bucket) signals that the LLM fallback should
-// be invoked by the caller when `confidence < 0.6`.
-// ============================================================================
 
 /**
  * Run the priority-ordered heuristic classifier against the outgoing user
@@ -163,91 +98,57 @@ export function classifyTaskLocally(
   history: ReadonlyArray<RoutingMessage>,
   attachments?: ReadonlyArray<RoutingAttachment>,
 ): ClassifierResult {
-  // ─── 1. Image generation ────────────────────────────────────────────────
-  // Slash command takes precedence over the natural-language phrase form.
   if (RE_IMAGE_SLASH.test(message) || RE_IMAGE_PHRASE.test(message)) {
     return { type: 'image_generation', confidence: 0.95 };
   }
 
-  // ─── 2. Computer use ────────────────────────────────────────────────────
-  // Only fires when BOTH a screenshot attachment AND an automation verb
-  // are present — bare screenshots without a verb fall through to multimodal.
   const hasScreenshot = attachments?.some((a) => a.type === 'screenshot') ?? false;
   if (hasScreenshot && RE_COMPUTER_USE.test(message)) {
     return { type: 'computer-use', confidence: 0.9 };
   }
 
-  // ─── 3. Multimodal ──────────────────────────────────────────────────────
-  // Any image/* or video/* MIME drops the request into multimodal even when
-  // the message body is empty (e.g. drag-drop a screenshot with no caption).
   if (attachments?.some((a) => a.mime.startsWith('image/') || a.mime.startsWith('video/'))) {
     return { type: 'multimodal', confidence: 0.85 };
   }
 
-  // ─── 4. Long context ────────────────────────────────────────────────────
-  // Cumulative-token guard. We add the outgoing message to the history sum
-  // because callers haven't yet committed it to history.
   const cumulativeTokens = sumTokens(message, history);
   if (cumulativeTokens > 50_000) {
     return { type: 'long_context', confidence: 0.9 };
   }
 
-  // ─── 5. Coding ──────────────────────────────────────────────────────────
-  // Code fences are a stronger signal than keyword soup; either is enough.
   if (RE_CODE_FENCE.test(message) || RE_CODING.test(message)) {
     return { type: 'coding', confidence: 0.85 };
   }
 
-  // ─── 6. Reasoning ───────────────────────────────────────────────────────
   if (RE_REASONING_VERB.test(message) || RE_REASONING_MATH.test(message)) {
     return { type: 'reasoning', confidence: 0.8 };
   }
 
-  // ─── 7. Agentic orchestration / tool discovery ──────────────────────────
   if (RE_AGENTIC.test(message)) {
     return { type: 'agentic', confidence: 0.85 };
   }
 
-  // ─── 8. Research / recency ──────────────────────────────────────────────
   if (RE_RESEARCH.test(message)) {
     return { type: 'research', confidence: 0.85 };
   }
 
-  // ─── 9. Creative writing ────────────────────────────────────────────────
   if (RE_CREATIVE_WRITING.test(message)) {
     return { type: 'creative_writing', confidence: 0.75 };
   }
 
-  // ─── 10. Simple chat ────────────────────────────────────────────────────
-  // `js-length-check-first`: the cheap `length < 80` test runs BEFORE the
-  // expensive `split(/\s+/)`, so long messages skip the allocation entirely.
   if (message.length < 80 && message.split(RE_WHITESPACE).length < 15) {
     return { type: 'simple_chat', confidence: 0.7 };
   }
 
-  // ─── 11. General fallback ───────────────────────────────────────────────
-  // Confidence stays at 0.5 to trigger the LLM fallback in the caller.
   return { type: 'general', confidence: 0.5 };
 }
 
-// ============================================================================
-// applyConversationContext
-// ----------------------------------------------------------------------------
-// 5-turn sticky pivot. Uses the LAST 3 entries of `recentTaskTypes` to compute
-// the running mode; matches → +0.1 confidence boost; high-confidence (≥0.85)
-// turns are allowed to override the mode for a different task type.
-// ============================================================================
-
-/** Minimum confidence required to override the conversation's running mode. */
 const PIVOT_OVERRIDE_THRESHOLD = 0.85;
 
-/** Confidence boost applied when the new turn matches the running mode. */
 const STICKY_BOOST = 0.1;
 
-/** Maximum confidence value — keeps boosted scores from exceeding 1.0. */
 const MAX_CONFIDENCE = 1.0;
 
-/** Number of recent turns inspected by the sticky pivot. */
 const STICKY_WINDOW = 3;
 
 /**
@@ -270,12 +171,10 @@ export function applyConversationContext(
   local: ClassifierResult,
   ctx: ConversationContext,
 ): ClassifierResult {
-  // Long-context guard runs first so it cannot be overridden by sticky pivot.
   if (ctx.cumulativeTokens > 50_000 && local.type !== 'long_context') {
     return { type: 'long_context', confidence: 0.9 };
   }
 
-  // Need at least one prior turn to compute a mode.
   if (ctx.recentTaskTypes.length === 0) {
     return local;
   }
@@ -283,12 +182,10 @@ export function applyConversationContext(
   const window = ctx.recentTaskTypes.slice(-STICKY_WINDOW);
   const runningMode = computeMode(window);
 
-  // No clear mode (e.g. tie) → return unchanged.
   if (runningMode === null) {
     return local;
   }
 
-  // Mode matches new turn → boost confidence and stay on the same task type.
   if (runningMode === local.type) {
     return {
       type: local.type,
@@ -296,42 +193,24 @@ export function applyConversationContext(
     };
   }
 
-  // Mode differs but new turn has high confidence → allow the pivot.
   if (local.confidence >= PIVOT_OVERRIDE_THRESHOLD) {
     return local;
   }
 
-  // Mode differs and new turn lacks the confidence to flip → snap to mode.
-  // Confidence is the new turn's confidence (we are NOT inventing certainty).
   return { type: runningMode, confidence: local.confidence };
 }
 
-// ============================================================================
-// Internal helpers
-// ============================================================================
-
-/**
- * Sum estimated tokens across the outgoing message AND the prior history.
- * Uses the default tokenizer (chars/3.5) — the actual provider is not yet
- * known at classification time.
- */
 function sumTokens(message: string, history: ReadonlyArray<RoutingMessage>): number {
   let total = estimateTokens(message);
-  // `js-early-exit`: prefer a hot for-loop over a reduce-with-allocation.
   for (let i = 0; i < history.length; i++) {
     total += estimateTokens(history[i]!.content);
   }
   return total;
 }
 
-/**
- * Compute the strict mode of a small array of task types. Returns `null` on
- * empty input or on ties — callers treat `null` as "no clear running mode".
- */
 function computeMode(values: ReadonlyArray<RoutingTaskType>): RoutingTaskType | null {
   if (values.length === 0) return null;
 
-  // `js-set-map-lookups`: O(1) lookups via Map for the count.
   const counts = new Map<RoutingTaskType, number>();
   for (let i = 0; i < values.length; i++) {
     const v = values[i]!;
@@ -352,6 +231,5 @@ function computeMode(values: ReadonlyArray<RoutingTaskType>): RoutingTaskType | 
     }
   }
 
-  // Strict mode: a tie means "no mode".
   return tie ? null : bestType;
 }

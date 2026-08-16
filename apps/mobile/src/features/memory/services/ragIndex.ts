@@ -1,13 +1,3 @@
-/**
- * sqlite-vec RAG index for on-device doc Q&A.
- *
- * Chunking: ~500-token chunks with 50-token overlap. Token counting uses a
- * whitespace approximation (1 word ≈ 1.3 tokens) which is accurate enough for
- * chunk-boundary decisions without a real tokenizer dependency.
- *
- * Vectorization: deterministic character n-gram feature hashing (384-dim).
- * This is a lexical local vectorizer, not a claimed neural embedding model.
- */
 
 import { getDb } from '@/storage/db';
 import {
@@ -21,9 +11,7 @@ import type { ParsedDocument, SupportedDocType } from '@/services/docParser';
 const EMBEDDING_DIM = 384;
 
 export interface ChunkingOptions {
-  /** Target token count per chunk (default: 500) */
   targetTokens?: number;
-  /** Overlap token count between consecutive chunks (default: 50) */
   overlapTokens?: number;
 }
 
@@ -37,8 +25,6 @@ export interface Chunk {
   source_uri: string | null;
 }
 
-// Whitespace-based token count approximation: 1 word ≈ 1.3 tokens.
-// Accurate enough for chunk boundary decisions; avoids a tokenizer dependency.
 function estimateTokens(text: string): number {
   const words = text
     .trim()
@@ -51,7 +37,6 @@ function chunkText(text: string, targetTokens: number, overlapTokens: number): s
   const words = text.split(/\s+/).filter((w) => w.length > 0);
   if (words.length === 0) return [];
 
-  // Convert target/overlap from tokens → words (inverse of the 1.3 factor)
   const targetWords = Math.floor(targetTokens / 1.3);
   const overlapWords = Math.floor(overlapTokens / 1.3);
 
@@ -72,21 +57,10 @@ function generateChunkId(conversationId: string, index: number): string {
   return `${conversationId}_chunk_${index}`;
 }
 
-/**
- * Escape SQL LIKE metacharacters (`\`, `%`, `_`) in a literal string so it can
- * be embedded in a LIKE pattern and matched literally. Pair with `ESCAPE '\'`.
- */
 function escapeLikeLiteral(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-/**
- * Build the LIKE prefix pattern that matches every chunk_id belonging to a
- * conversation. The conversationId and the literal `_chunk_` separator are
- * escaped so only the trailing `%` acts as a wildcard — a conversationId that
- * contains `_` or `%` can no longer over-match another conversation's chunks.
- * Use with `ESCAPE '\'` in the SQL statement.
- */
 function chunkIdLikePattern(conversationId: string): string {
   return `${escapeLikeLiteral(conversationId)}\\_chunk\\_%`;
 }
@@ -101,49 +75,32 @@ async function ensureDocChunkVecTable(db: Awaited<ReturnType<typeof getDb>>): Pr
     `);
     return true;
   } catch (error) {
-    // sqlite-vec not available in this build — vector retrieval will fall back
-    // to returning all chunks ordered by position.
     console.warn('[ragIndex] sqlite-vec table unavailable; using text fallback:', error);
     return false;
   }
 }
 
-/**
- * Character n-gram feature-hashing vectorizer.
- *
- * Produces a unit-normalised Float32Array(384) from the input text using
- * trigram feature hashing into EMBEDDING_DIM buckets. It is lexical rather than
- * semantic: chunks with overlapping character sequences are ranked closer, and
- * the implementation is deterministic with no model download requirement.
- */
 async function vectorizeText(text: string): Promise<Float32Array | null> {
   const normalized = text.toLowerCase().replace(/\s+/g, ' ').trim();
   if (normalized.length === 0) return null;
 
   const vec = new Float32Array(EMBEDDING_DIM);
 
-  // Trigram feature hashing: for each 3-char window compute a stable bucket
-  // index using a simple polynomial hash and accumulate a count.
   const len = normalized.length;
   for (let i = 0; i < len - 2; i++) {
-    // FNV-1a–inspired: combine char codes with multiply-xor so collisions are
-    // spread across the bucket range rather than clustered at low indices.
-    let h = 2166136261; // FNV offset basis (32-bit)
+    let h = 2166136261;
     h = (h ^ normalized.charCodeAt(i)) * 16777619;
     h = (h ^ normalized.charCodeAt(i + 1)) * 16777619;
     h = (h ^ normalized.charCodeAt(i + 2)) * 16777619;
-    // Map to [0, EMBEDDING_DIM) with unsigned right-shift to avoid negatives.
     const bucket = (h >>> 0) % EMBEDDING_DIM;
     vec[bucket] += 1;
   }
 
-  // Also hash unigrams so very short texts (< 3 chars) still get signal.
   for (let i = 0; i < len; i++) {
     const bucket = ((normalized.charCodeAt(i) * 16777619) >>> 0) % EMBEDDING_DIM;
     vec[bucket] += 0.25;
   }
 
-  // L2-normalise to unit length so cosine-distance comparisons are meaningful.
   let norm = 0;
   for (let i = 0; i < EMBEDDING_DIM; i++) {
     norm += vec[i] * vec[i];
@@ -196,7 +153,6 @@ export async function indexDocument(
             [chunk.id, embedding as unknown as string],
           );
         } catch (error) {
-          // Insertion failure is non-fatal — text fallback remains available.
           console.warn('[ragIndex] Failed to persist chunk vector; using text fallback:', error);
         }
       }
@@ -224,12 +180,10 @@ export async function retrieve(conversationId: string, query: string, k = 5): Pr
         return fullChunks;
       }
     } catch (error) {
-      // sqlite-vec unavailable or query failed — fall through to text fallback.
       console.warn('[ragIndex] Vector retrieval failed; using text fallback:', error);
     }
   }
 
-  // Text fallback: return the first K chunks in document order.
   const allChunks = await db.getAllAsync<Record<string, unknown>>(
     'SELECT * FROM doc_chunks WHERE conversation_id = ? ORDER BY chunk_index ASC LIMIT ?;',
     [conversationId, k],
@@ -253,7 +207,6 @@ export async function deleteDocument(conversationId: string): Promise<void> {
       chunkIdLikePattern(conversationId),
     ]);
   } catch (error) {
-    // sqlite-vec table may not exist.
     console.warn('[ragIndex] Vector cleanup skipped:', error);
   }
 }

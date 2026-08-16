@@ -1,9 +1,3 @@
-/**
- * MCPB Bundle Browser
- *
- * One-click MCP server installation with real-time progress tracking.
- * Integrates with the mcpbStore for state management.
- */
 import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Card } from '@/ui/Card';
@@ -64,7 +58,6 @@ function isOfficialRegistryEntry(bundle: McpBundle) {
   return bundle.id.startsWith(OFFICIAL_REGISTRY_BUNDLE_PREFIX);
 }
 
-// Installation Progress Modal
 function InstallProgressModal({
   progress,
   onClose,
@@ -219,7 +212,6 @@ function StatusStep({
   );
 }
 
-// Bundle Details Modal
 function BundleDetailsModal({
   bundle,
   onClose,
@@ -491,7 +483,6 @@ function BundleDetailsModal({
   );
 }
 
-// Bundle Card Component
 function BundleCard({
   bundle,
   onViewDetails,
@@ -584,7 +575,6 @@ function BundleCard({
   );
 }
 
-// Main Component
 export interface MCPBundleBrowserProps {
   onConfigureServer?: () => void;
 }
@@ -638,7 +628,6 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(searchQuery);
 
-  // Fetch registry on mount
   useEffect(() => {
     fetchRegistry();
   }, [fetchRegistry]);

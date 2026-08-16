@@ -1,8 +1,3 @@
-/**
- * Regression for desktop-memory-decay-bridge-hardcoded: the memory bridge must
- * surface AppState.memory.decayEnabled from the real backend decay config
- * (memory_get_decay_config) instead of a hardcoded `false`.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = {
@@ -45,7 +40,6 @@ vi.mock('../memoryStore', () => ({
 }));
 
 async function flush() {
-  // Let the chained dynamic import().then() macrotasks/microtasks settle.
   for (let i = 0; i < 10; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -91,8 +85,6 @@ describe('bridgeMemoryStore — decayEnabled reflects real backend config', () =
     bridgeMemoryStore();
     await flush();
 
-    // A subsequent memory-store change must keep the real (disabled) value,
-    // not resurrect a hardcoded default.
     memoryState.memories = [{ importance: 0.5 }];
     memorySubscribers.forEach((fn) => fn(memoryState));
 

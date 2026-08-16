@@ -1,11 +1,3 @@
-/**
- * Local Runtime Settings — LM Studio, llama.cpp, and vLLM
- *
- * Mirrors the Ollama card in `./index.tsx` (URL config + installed/running state,
- * no fake availability) for the other local OpenAI-compatible runtimes. URL
- * edits participate in the parent Settings transaction; status checks remain
- * local to each card.
- */
 import React from 'react';
 import { Check, Loader2, RefreshCw, Server } from 'lucide-react';
 import { toast } from 'sonner';
@@ -63,9 +55,6 @@ const RUNTIMES: RuntimeConfig[] = [
   },
 ];
 
-// Explicit per-runtime lookup rather than a binary ternary — a binary
-// lmstudio/llamacpp check would silently fall through to llamacpp's URL/setter
-// for any third (or later) runtime key added here.
 function selectPersistedUrl(state: ReturnType<typeof useSettingsStore.getState>, key: RuntimeKey) {
   switch (key) {
     case 'lmstudio':

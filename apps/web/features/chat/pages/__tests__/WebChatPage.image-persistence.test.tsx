@@ -870,9 +870,6 @@ describe('WebChatPage paid image transcript recovery', () => {
       },
     });
 
-    // Simulate the server-backed transcript hydration performed after a full
-    // reload. Only the saved row is carried forward; no runtime recovery state
-    // or in-memory message object is reused.
     initialPage.unmount();
     useImageTranscriptRecoveryStore.getState().reset();
     useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, [

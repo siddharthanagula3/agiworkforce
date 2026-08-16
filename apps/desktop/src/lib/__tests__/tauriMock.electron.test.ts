@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * The bundled Electron renderer stays browser-class except for its audited
- * Managed Cloud account bridge. This regression test guards both halves of
- * that boundary: account commands reach the preload shim, Local commands do
- * not acquire a native execution path.
- */
 describe('tauri-mock Electron account bridge', () => {
   afterEach(() => {
     vi.doUnmock('../runtimeEnvironment');

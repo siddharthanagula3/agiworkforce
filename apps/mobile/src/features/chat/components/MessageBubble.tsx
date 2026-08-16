@@ -71,30 +71,16 @@ import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityS
 import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
 import { generatedFileArtifactsFromMetadata } from '@/src/features/chat/utils/generatedFileArtifacts';
 
-/** Reaction state: cycles thumbsUp -> thumbsDown -> null */
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
 
-/**
- * Must match PERF_CHIP_SHOW_KEY in app/(app)/settings/performance.tsx — that
- * screen's "Show performance chip in chat" toggle writes this raw MMKV key
- * (default true); this file is the only reader. Kept as a duplicated literal
- * rather than importing from a route file.
- */
 const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
 
-/**
- * Whether the message's model can produce reasoning. Only hides the thinking
- * chip for models explicitly flagged `supportsThinking: false` (e.g. plain
- * local models that never emit <think> blocks). Unknown/auto models keep the
- * existing behavior of showing the chip whenever `reasoning` is present.
- */
 function modelSupportsThinking(modelId?: string): boolean {
   if (!modelId || isAutoMode(modelId)) return true;
   const def = getModelById(modelId);
   return def?.supportsThinking !== false;
 }
 
-/** Returns provenance strings for an assistant message's model field. */
 function getProvenance(model?: string): { provider?: string; model?: string } | null {
   if (!model) return null;
   if (isAutoMode(model)) {
@@ -119,10 +105,6 @@ interface MessageBubbleProps {
   onRetryMessage?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
-  /** Called when the user allows/denies an MCP/connector tool call awaiting
-   *  approval (`x_tool_approval_request`) rendered in this message's
-   *  ToolCallTimeline. Distinct from `onApprove`/`onReject` above, which drive
-   *  the unrelated risk-action `ApprovalCard` (file_delete/command/etc.). */
   onResolveToolApproval?: (
     messageId: string,
     toolCallId: string,
@@ -130,12 +112,6 @@ interface MessageBubbleProps {
   ) => void;
 }
 
-/**
- * Single chat message bubble.
- * ChatGPT-mobile layout: user turns are right-aligned rounded pills; assistant turns are
- * full-width plain text (no avatar, no role label) with an always-visible action row
- * (copy / regenerate / 👍 / 👎) beneath completed answers.
- */
 function MessageActionButton({
   label,
   icon: Icon,
@@ -178,19 +154,6 @@ export const MessageBubble = memo(function MessageBubble({
   const assistantProvenance = isAssistant ? getProvenance(message.model) : null;
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
   const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
-  // NOT gated on `canonicalActivity`, unlike steps/toolCalls below: those are
-  // genuinely re-rendered by AgentActivityTimeline, but reasoning is not --
-  // AgentActivityState has no reasoning entry kind (packages/client/
-  // client-runtime/src/agentActivity.ts drops 'reasoning-delta' outright), so
-  // suppressing the chip here hid it on every tool/research/agiwork turn with
-  // nothing taking its place.
-  // Parse on READ, not just on stream. A message pulled by cloud sync or
-  // produced by an agent run never went through this device's streaming
-  // parser, so its `content` still carries the server's literal
-  // `<thinking>…</thinking>` markers and rendered as tag soup. Re-parsing here
-  // is cheap, idempotent (a message with no tags comes back unchanged), and
-  // covers every source. The stream path still parses so the ThinkingChip can
-  // tick live.
   const parsedThinking = useMemo(
     () => (isAssistant ? parseAssistantThinking(message.content) : null),
     [isAssistant, message.content],
@@ -198,23 +161,10 @@ export const MessageBubble = memo(function MessageBubble({
   const displayContent = parsedThinking?.hasReasoning ? parsedThinking.content : message.content;
   const reasoningText =
     message.reasoning ?? (parsedThinking?.hasReasoning ? parsedThinking.reasoning : undefined);
-  // When WE parsed reasoning out of the content, the chip is not optional: the
-  // text has already been removed from the visible answer, so suppressing the
-  // chip on the model-capability gate would delete it from the UI entirely.
-  // The gate only decides whether to show a chip for a `reasoning` field that
-  // arrived separately — there, hiding it loses nothing.
   const hasReasoning =
     isAssistant &&
     reasoningText !== undefined &&
     (parsedThinking?.hasReasoning === true || modelSupportsThinking(message.model));
-  // FlashList v2 recycles component instances across list items for
-  // performance -- bare useState here would bleed a PRIOR message's UI state
-  // (an expanded artifact, an open export sheet, a half-typed edit draft)
-  // onto whichever message this instance now renders after a recycle.
-  // editModalVisible/editText are the sharpest case: a recycled instance
-  // stuck mid-edit would show one message's draft text inside another
-  // message's bubble -- a real correctness bug, not just a visual glitch.
-  // useRecyclingState resets each field whenever message.id changes.
   const [expandedArtifact, setExpandedArtifact] = useRecyclingState<Artifact | null>(null, [
     message.id,
   ]);
@@ -227,9 +177,6 @@ export const MessageBubble = memo(function MessageBubble({
   ]);
   const [editModalVisible, setEditModalVisible] = useRecyclingState(false, [message.id]);
   const [editText, setEditText] = useRecyclingState('', [message.id]);
-  // Seed from persisted metadata.reaction so a rating survives FlashList row
-  // recycling and reload (and is restored from the server on Cloud). Re-seeds
-  // when the row recycles to a different message.id.
   const [reaction, setReaction] = useRecyclingState<ReactionType>(
     (message.metadata?.reaction as ReactionType) ?? null,
     [message.id],
@@ -239,10 +186,6 @@ export const MessageBubble = memo(function MessageBubble({
   const reducedMotion = useReducedMotion();
   const themeColors = useThemeColors();
 
-  // Text-derived artifacts live in the gallery store. Generated Cloud files
-  // are richer message-owned descriptors and are also projected through
-  // metadata so they survive sync/reopen. Merge all three sources by id with
-  // the direct message descriptor winning, preserving its GeneratedFile data.
   const appMode = useChatAppModeStore((s) => s.appMode);
   const storedArtifacts = useArtifactStore((s) => s.artifacts);
   const inlineArtifacts = useMemo<Artifact[]>(() => {
@@ -253,16 +196,12 @@ export const MessageBubble = memo(function MessageBubble({
       )
       .map((artifact) => ({
         id: artifact.id,
-        // MobileArtifactKind is a subset of Artifact['type'], so the kinds map
-        // across directly.
         type: artifact.kind,
         title: artifact.title,
         content: artifact.content,
         ...(artifact.language ? { language: artifact.language } : {}),
       }));
 
-    // Generated-file metadata is a Managed Cloud projection. Never interpret
-    // it from a Local repository, even if malformed legacy data contains it.
     const persistedFiles =
       appMode === 'cloud'
         ? generatedFileArtifactsFromMetadata(message.metadata?.generatedFiles, message.createdAt)
@@ -317,9 +256,6 @@ export const MessageBubble = memo(function MessageBubble({
     [onResolveToolApproval, message.id],
   );
 
-  // Rehydrate a server-owned approval checkpoint from the persisted Cloud
-  // message when possible. Only a missing/invalid run reference is expired;
-  // restarting the app no longer invalidates a real pending approval.
   const approvalTurnExpired = Boolean(onResolveToolApproval) && !isApprovalTurnLive(message.id);
 
   const handleImagePress = useCallback(
@@ -333,9 +269,6 @@ export const MessageBubble = memo(function MessageBubble({
     setFullScreenImageUrl(null);
   }, [setFullScreenImageUrl]);
 
-  // Read-aloud state is deliberately per-bubble: only one message can be
-  // speaking at a time, and unmounting mid-speech (FlashList recycles rows on
-  // scroll) must not leave the synthesiser running with no way to stop it.
   const [isSpeaking, setIsSpeaking] = useRecyclingState(false, [message.id]);
 
   const handleToggleReadAloud = useCallback(() => {
@@ -344,8 +277,6 @@ export const MessageBubble = memo(function MessageBubble({
       setIsSpeaking(false);
       return;
     }
-    // Stop whatever else is speaking first — the engine is a single shared
-    // resource, so starting a second utterance would overlap the first.
     void voiceOutput.stop();
     setIsSpeaking(true);
     void voiceOutput
@@ -358,8 +289,6 @@ export const MessageBubble = memo(function MessageBubble({
 
   useEffect(() => {
     return () => {
-      // Recycled or unmounted while speaking: silence it, or the audio outlives
-      // the row that owns the stop control.
       if (isSpeaking) void voiceOutput.stop();
     };
   }, [isSpeaking]);
@@ -378,7 +307,6 @@ export const MessageBubble = memo(function MessageBubble({
         if (hapticsEnabled) {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
-        // Cycle: null -> thumbsUp -> thumbsDown -> null
         setReaction((prev) => {
           let next: ReactionType;
           if (prev === null) next = 'thumbsUp';
@@ -392,8 +320,6 @@ export const MessageBubble = memo(function MessageBubble({
     [isAssistant, hapticsEnabled, message.id, onReaction, setReaction],
   );
 
-  // Explicit reaction toggle for the always-visible action row: tapping a thumb sets it,
-  // tapping the active thumb clears it (double-tap keeps its own null→up→down cycle).
   const applyReaction = useCallback(
     (target: Exclude<ReactionType, null>) => {
       if (hapticsEnabled) {
@@ -430,13 +356,11 @@ export const MessageBubble = memo(function MessageBubble({
     let destructiveIndex: number;
 
     if (isUser) {
-      // User message: Edit, Copy, Delete, Cancel
       const editOption = onEditMessage ? ['Edit Message'] : [];
       options = [...editOption, 'Copy Message', ...deleteOption, 'Cancel'];
       cancelIndex = options.length - 1;
       destructiveIndex = onDeleteMessage ? options.indexOf('Delete Message') : -1;
     } else {
-      // Assistant message: Retry, Copy, Export, Delete, Cancel
       const retryOption = onRetryMessage ? ['Retry'] : [];
       options = [...retryOption, 'Copy Message', ...exportOption, ...deleteOption, 'Cancel'];
       cancelIndex = options.length - 1;
@@ -508,11 +432,6 @@ export const MessageBubble = memo(function MessageBubble({
     handleOpenEditModal,
   ]);
 
-  // Message actions (Copy/Retry/Edit/Delete/Export) are otherwise only reachable
-  // via the onLongPress action sheet below, which has no standard discoverable
-  // VoiceOver equivalent. Mirror the same option set as native accessibility
-  // actions so screen-reader users can reach them from the rotor "Actions" menu
-  // without needing to perform a long-press gesture.
   const accessibilityActionsList = useMemo<AccessibilityActionInfo[]>(() => {
     const actions: AccessibilityActionInfo[] = [];
     if (isUser && onEditMessage) actions.push({ name: 'edit', label: 'Edit message' });
@@ -522,9 +441,6 @@ export const MessageBubble = memo(function MessageBubble({
       actions.push({ name: 'export', label: 'Export message' });
     }
     if (onDeleteMessage) actions.push({ name: 'delete', label: 'Delete message' });
-    // Tool-call rows (ToolCallTimeline) sit inside this same accessible container,
-    // so VoiceOver never reaches their own onPress — mirror them here too, same
-    // rationale as the message actions above.
     if (isAssistant && !canonicalActivity && message.toolCalls) {
       for (const tool of message.toolCalls) {
         actions.push({
@@ -593,17 +509,12 @@ export const MessageBubble = memo(function MessageBubble({
     [displayContent, themeColors],
   );
 
-  // Compute image display width: full bubble width minus avatar + gap + padding
   const imageWidth = Math.min(width - 80, 320);
 
   const messageContent = (
     <Animated.View
       testID={isAssistant && message.isStreaming ? 'chat.message.assistant.streaming' : undefined}
       entering={reducedMotion ? undefined : FadeInDown.duration(200).springify()}
-      // py-4 rather than py-3: a right-aligned user bubble followed by a
-      // full-width assistant code block left only ~24pt between two filled
-      // surfaces of different widths, which reads as the block overlapping the
-      // bubble's lower-left corner rather than as two separate turns.
       className="px-4 py-4"
     >
       <Pressable
@@ -1107,7 +1018,6 @@ export const MessageBubble = memo(function MessageBubble({
     </Animated.View>
   );
 
-  // Wrap assistant messages with a double-tap gesture handler for reactions
   if (isAssistant) {
     return (
       <TapGestureHandler

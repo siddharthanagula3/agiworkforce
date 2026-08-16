@@ -1,8 +1,3 @@
-/**
- * The Electron app is a Managed-Cloud-only shell. Its signed-out gate shares
- * the native Desktop auth components, but it must not advertise a Local
- * execution plane that the shell deliberately does not ship.
- */
 
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

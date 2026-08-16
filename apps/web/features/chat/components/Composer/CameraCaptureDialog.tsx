@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * Take a photo with the webcam and attach it.
- *
- * Unlike the screenshot path — where the browser's own picker shows the user
- * exactly what will be captured before it happens — `getUserMedia` hands back a
- * live stream with no UI. Grabbing a frame straight from it would turn the
- * camera light on and attach a photo the user never saw, so the preview here is
- * required rather than decorative: nothing is captured until the shutter is
- * pressed, and the stream is stopped on every exit path.
- *
- * The frame is produced as a `File` so it enters the exact same attachment
- * pipeline as a screenshot or a drag-and-drop image.
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, X } from 'lucide-react';
 
@@ -22,7 +8,6 @@ import { cn } from '@shared/lib/utils';
 interface CameraCaptureDialogProps {
   open: boolean;
   onClose: () => void;
-  /** Receives the captured frame. Called once, then the dialog closes. */
   onCapture: (file: File) => void;
 }
 
@@ -53,8 +38,6 @@ export function CameraCaptureDialog({ open, onClose, onCapture }: CameraCaptureD
     void navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'user' }, audio: false })
       .then((stream) => {
-        // The dialog can close while the permission prompt is open. Stopping the
-        // stream here is what keeps the camera light from staying on.
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
           return;
@@ -76,7 +59,6 @@ export function CameraCaptureDialog({ open, onClose, onCapture }: CameraCaptureD
     };
   }, [open, stopStream]);
 
-  // Escape closes, matching every other overlay in the composer.
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {

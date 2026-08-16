@@ -1,17 +1,8 @@
-/**
- * Cross-device Chrome preferences.
- *
- * Only this explicit boolean allowlist may enter chrome.storage.sync. Browser
- * history, page allowlists, autofill profiles, credentials, task payloads, and
- * native-bridge state remain device-local.
- */
 export const SYNCED_PREFERENCE_KEYS = [
   'agi_task_notifications',
   'agi_thinking_enabled',
   'agi_quick_mode',
   'agi_cu_ask_before_acting',
-  // Written by side_panel.ts and read by inPagePanel/setup.ts. The `agi_`
-  // prefix the other entries carry is not part of this one's real key.
   'in_page_panel_enabled',
 ] as const;
 
@@ -108,10 +99,6 @@ async function hydratePreferences(storage: SyncedPreferenceStorage): Promise<voi
   ]);
 }
 
-/**
- * Hydrate local preferences from sync and mirror subsequent safe preference
- * changes in both directions. Returns a cleanup function for tests/reloads.
- */
 export async function initializeSyncedPreferences(
   storage: SyncedPreferenceStorage = chrome.storage,
   onMirrorError: (error: unknown) => void = () => undefined,

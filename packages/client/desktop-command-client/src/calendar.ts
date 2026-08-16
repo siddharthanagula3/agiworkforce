@@ -1,10 +1,5 @@
-/**
- * Calendar API — typed wrappers for calendar_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface CalendarOAuthConfig {
   provider: string;
@@ -75,8 +70,6 @@ export interface CalendarSyncResponse {
   synced: number;
   errors: string[];
 }
-
-// ---- Commands ----
 
 export async function calendarConnect(
   config: CalendarOAuthConfig,

@@ -3,7 +3,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MessageHistory } from '../MessageHistory';
 import { invoke } from '@/lib/tauri-mock';
 
-// Mock Radix Select to render a simple native <select> that triggers onValueChange
 vi.mock('@radix-ui/react-select', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require('react');
@@ -129,18 +128,14 @@ describe('MessageHistory', () => {
 
     render(<MessageHistory connections={mockConnections} />);
 
-    // Select a connection via the mocked native select
     const selectEl = screen.getByTestId('radix-select');
     fireEvent.change(selectEl, { target: { value: 'conn-1' } });
 
-    // Fill in a channel ID
     const channelInput = screen.getByPlaceholderText('Channel / Recipient ID');
     fireEvent.change(channelInput, { target: { value: 'general' } });
 
-    // Click Load History
     fireEvent.click(screen.getByText('Load History'));
 
-    // Wait for messages to appear
     await waitFor(() => {
       expect(screen.getByText('Hello everyone!')).toBeInTheDocument();
     });
@@ -165,7 +160,6 @@ describe('MessageHistory', () => {
     fireEvent.click(screen.getByText('Load History'));
 
     await waitFor(() => {
-      // msg-3 has no sender_name, so sender_id should be displayed
       expect(screen.getByText('user-3')).toBeInTheDocument();
     });
   });

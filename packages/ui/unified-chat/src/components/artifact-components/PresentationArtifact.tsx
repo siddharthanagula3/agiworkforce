@@ -1,18 +1,3 @@
-/**
- * PresentationArtifact — slide-deck renderer for presentation artifacts.
- *
- * Surface-agnostic: no Tauri imports, no desktop-specific deps.
- * Splits the artifact content into slides on `---` separator lines (CRLF
- * tolerant), falling back to `#`/`##` heading boundaries, then renders one
- * MarkdownLite slide at a time with:
- *  - prev/next buttons + ArrowLeft/ArrowRight/Home/End keyboard navigation
- *  - a slide "x / y" indicator and clickable slide dots
- *  - a working fullscreen toggle on the deck container
- *
- * Speaker notes: our artifact producers (desktop `create_artifact` tool)
- * emit plain markdown with `---` separators only — there is no speaker-notes
- * format in the repo, so none is invented here.
- */
 
 import { ChevronLeft, ChevronRight, Maximize2, Presentation } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -25,15 +10,12 @@ export interface PresentationArtifactProps {
   className?: string;
 }
 
-/** Max clickable dots before falling back to the numeric indicator only. */
 const MAX_DOTS = 16;
 
-/** Split deck content into slides: `---` separator lines first, then headings. */
 export function splitSlides(raw: string): string[] {
   const content = raw.replace(/\r\n/g, '\n').trim();
   if (!content) return [];
 
-  // A separator is a line consisting solely of --- (3+ dashes, optional spaces).
   const parts = content.split(/\n[ \t]*-{3,}[ \t]*\n/);
   if (parts.length > 1) {
     return parts.map((s) => s.trim()).filter(Boolean);
@@ -62,7 +44,6 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
   const [currentSlide, setCurrentSlide] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Clamp in case the artifact content shrank between renders (streaming).
   const slideIndex = Math.min(currentSlide, Math.max(slides.length - 1, 0));
 
   const goTo = useCallback(

@@ -1,18 +1,7 @@
-/**
- * Unit tests for chatStore streaming state management.
- *
- * Tests verify that isStreaming, streamingContent, and streamingReasoning
- * are properly cleaned up on success, error, and abort.
- *
- * We test the streaming state transitions by directly invoking the store
- * action callbacks (onDelta, onDone, onError) rather than hitting the real
- * streaming service, keeping the tests fast and deterministic.
- */
 
 import { Alert } from 'react-native';
 import { act, waitFor } from '@testing-library/react-native';
 
-// Mock all external dependencies before importing the store
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => null),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -23,8 +12,6 @@ jest.mock('../services/authSession', () => ({
 }));
 
 jest.mock('../services/api', () => {
-  // ApiPaywallError must be provided here so chatStore's `instanceof ApiPaywallError`
-  // check doesn't throw "Right-hand side of instanceof is not an object".
   function MockApiPaywallError(
     this: { feature: string; requiredTier: string; reason: string; name: string; message: string },
     feat: string,
@@ -91,9 +78,6 @@ jest.mock('../storage/installedModels', () => ({
   markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Memory retrieval is the observable for "did this turn inject memory?" — the
-// real implementations read SQLite / the cloud memory store, which is not the
-// unit under test here.
 jest.mock('../src/features/memory/store', () => ({
   retrieveMemoryContext: jest.fn(async () => []),
 }));
@@ -136,7 +120,6 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// Import after mocks are established
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../services/api';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
@@ -205,16 +188,10 @@ const mockRetrievePastChatContext = retrievePastChatContext as jest.MockedFuncti
 >;
 let capturedLocalGenerateOptions: Parameters<typeof localGenerate>[1] | null = null;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Get the current store state without using hooks */
 function getState() {
   return useChatStore.getState();
 }
 
-/** Reset store to initial state between tests */
 function resetStore() {
   useWaitlistStore.setState({
     joined: false,
@@ -296,10 +273,6 @@ function seedCloudConversation(model = CLOUD_MODEL) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('chatStore — streaming state', () => {
   beforeEach(() => {
     __resetCloudAccountSessionForTests();
@@ -324,7 +297,6 @@ describe('chatStore — streaming state', () => {
     mockMarkInstalledModelUsed.mockResolvedValue(undefined);
     capturedLocalGenerateOptions = null;
 
-    // Seed the store with a conversation and empty message list
     useChatStore.setState({
       conversations: [
         {
@@ -341,10 +313,6 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('streaming success path', () => {
-    // The composer's mode chips, "Choose Style" sheet and task chips must reach
-    // the CLOUD turn, not only Local generation. This test previously ran
-    // without `seedCloudConversation()`, so `MODEL` resolved to a Local-mode
-    // conversation and it passed while the Cloud path shipped the controls dead.
     it('sends selected chat mode and style context to the remote stream', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
@@ -439,9 +407,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('omits web_search when the user turned the Capabilities preference off', async () => {
-      // PAR-M33: search stays ambient (no per-turn composer toggle), but the
-      // Capabilities switch is a real privacy control — a user who turned it
-      // off must never have a cloud turn silently search the web.
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
       useChatStore.setState({
@@ -468,8 +433,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('keeps the model capability clamp when the web-search preference is on', async () => {
-      // The preference can only ever REMOVE the flag: an unsupported model must
-      // still not receive a cosmetic web_search:true.
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       const unsupportedSearchModel = SEARCH_UNSUPPORTED_MODEL;
       useTierStore.setState({ tier: 'max', genericWebSearchAvailable: false });
@@ -528,10 +491,6 @@ describe('chatStore — streaming state', () => {
     it('omits ambient web search when the account capability handshake denies it', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      // A DENIAL requires a handshake to have actually been received. An empty
-      // array on its own now means "never asked" — which must NOT deny, because
-      // that state is reachable on a cold start and used to disable every server
-      // tool on Mobile permanently.
       useTierStore.setState({
         grantedCapabilities: [],
         capabilityHandshakeReceived: true,
@@ -553,11 +512,6 @@ describe('chatStore — streaming state', () => {
       expect(capturedBody?.web_search).toBeUndefined();
     });
 
-    // Regression: Mobile shipped with web search, code execution and deep
-    // research permanently off because `grantedCapabilities` starts empty,
-    // `refreshTier` early-returns while the app is in Local mode (how it always
-    // launches), and every failure path was swallowed — so "never asked" was
-    // indistinguishable from "denied" and the gate failed closed forever.
     it('still requests web search when no capability handshake has been received', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
@@ -850,12 +804,10 @@ describe('chatStore — streaming state', () => {
     it('sets isStreaming=true while streaming, then clears it on onDone', async () => {
       let capturedCallbacks: StreamCallbacks | null = null;
 
-      // streamChat captures the callbacks and never resolves — we control it
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
             capturedCallbacks = callbacks;
-            // Simulate successful streaming completion after capturing callbacks
             setTimeout(() => {
               callbacks.onDelta({ content: 'Hello' });
               callbacks.onDone();
@@ -893,7 +845,6 @@ describe('chatStore — streaming state', () => {
         await getState().sendMessage(CONV_ID, 'test', MODEL);
       });
 
-      // After completion, the assistant message content should be the full text
       const msgs = getState().messages[CONV_ID] ?? [];
       const assistantMsg = msgs.find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('Hello world');
@@ -937,7 +888,6 @@ describe('chatStore — streaming state', () => {
           new Promise<void>((resolve) => {
             callbacks.onDelta({ content: 'Here are the results.' });
             callbacks.onDelta({ x_interactive_card: { card: mapCard } });
-            // Replayed card and file deltas must replace/dedupe, not duplicate.
             callbacks.onDelta({ x_interactive_card: { card: mapCard } });
             callbacks.onDelta({
               x_generated_files: {
@@ -1067,13 +1017,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('strips <thinking> tags from cloud delta.content into reasoning instead of rendering them raw', async () => {
-      // Regression: apps/web's stream-transform.ts intentionally emits Anthropic
-      // extended-thinking as literal `<thinking>...</thinking>` markers inline in
-      // delta.content (the same tag convention parseLocalThinking already handles
-      // for local models). The cloud onDelta handler appended delta.content to
-      // streamingContent unparsed, so a Claude thinking-model reply rendered raw
-      // `<thinking>...</thinking>` tag soup as the visible assistant message
-      // instead of routing the reasoning into the reasoning field / ThinkingChip.
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
@@ -1123,10 +1066,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('extracts tag reasoning split across chunk boundaries without duplication', async () => {
-      // Regression: parseLocalThinking re-parses the FULL raw content buffer on
-      // every delta (required to handle a tag straddling two chunks). Naively
-      // accumulating its output onto the previous reasoning value across deltas
-      // would duplicate the reasoning text on every subsequent chunk.
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
@@ -1193,8 +1132,6 @@ describe('chatStore — streaming state', () => {
       mockRetrievePastChatContext.mockResolvedValue(PAST_CHAT_EXCERPT);
     });
 
-    // mockResolvedValue survives clearAllMocks, so restore the module-factory
-    // defaults or every later suite would see this memory injected.
     afterEach(() => {
       mockRetrieveMemoryContext.mockResolvedValue([]);
       mockRetrievePastChatContext.mockResolvedValue(null);
@@ -1217,9 +1154,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('suppresses memory injection in the send path when the master switch is off', async () => {
-      // PAR-M41: memoryEnabled must win over the mode-scoped sub-preference —
-      // a Cloud settings pull from another device can set referencePastChats
-      // back to true underneath a user who turned memory off on this device.
       useCloudSettingsStore.setState({ memoryEnabled: false, referencePastChats: true });
       seedCloudConversation();
       const turn = captureCloudTurn();
@@ -1289,8 +1223,6 @@ describe('chatStore — streaming state', () => {
         },
       ]);
       mockLocalGenerate.mockImplementation(async () => {
-        // Regression guard: the previous implementation persisted immediately
-        // after preflight, before local generation had produced any result.
         expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
         return { text: 'Nice to meet you.', runtime: 'executorch', aborted: false };
       });
@@ -1687,10 +1619,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('injects Cloud project custom instructions into the remote stream (regression: was local-only)', async () => {
-      // Cloud project custom instructions previously never reached the server —
-      // the injection at send-time was hard-gated to executionMode === 'local',
-      // so a Cloud project's Custom Instructions were silently ignored on every
-      // Cloud turn despite the project editor UI accepting and saving them.
       useChatStore.setState({
         conversations: [
           {
@@ -2113,13 +2041,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('paints a visible error in the assistant bubble when the stream errors with no content', async () => {
-      // End-to-end guarantee behind the streaming-timeout fix: a stream that errors
-      // before any token (e.g. a timed-out request that never responded) must leave
-      // the user with visible feedback in the assistant message — NOT a blank,
-      // forever-"streaming" placeholder. This pins the path PAST the service
-      // boundary: streamChat's onError → the assistant message the user actually
-      // sees. Without the placeholder (created before streaming) this would be a
-      // no-op and the user would be stranded.
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
@@ -2141,8 +2062,6 @@ describe('chatStore — streaming state', () => {
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg?.isStreaming).toBe(false);
       expect(assistantMsg?.content).toBe('Something went wrong. Please try again.');
-      // And the prominent one-tap retry banner fires for stream/timeout errors too
-      // (store.error), not just pre-flight failures.
       expect(getState().error).toBe('Something went wrong. Please try again.');
     });
 
@@ -2200,8 +2119,6 @@ describe('chatStore — streaming state', () => {
         });
       });
 
-      // The composer keeps its draft on this contract: blocked pre-flight →
-      // false, no acceptance signal, and NO user message in the transcript.
       expect(accepted).toBe(false);
       expect(onAccepted).not.toHaveBeenCalled();
       expect(getState().messages[CONV_ID] ?? []).toHaveLength(0);
@@ -2261,8 +2178,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('resets streaming state even when the stream resolves without onDone or onError', async () => {
-      // The structural finally-cleanup: a stream that silently resolves (the
-      // stuck-composer bug class) must still return the composer to rest.
       mockStreamChat.mockImplementation(() => Promise.resolve());
 
       await act(async () => {
@@ -2290,12 +2205,6 @@ describe('chatStore — streaming state', () => {
           }),
       );
 
-      // This asserts the Thinking toggle drives `thinking` (the regression this test
-      // guards). Effort is only sent for a model whose registry reasoning supports
-      // the selected rung — MODEL has no such metadata, so effort is correctly
-      // omitted here; the effort-selection logic itself is covered by
-      // turn-effort.test.ts.
-      // Toggle OFF (default) → thinking false.
       useModelStore.setState({ thinkingEnabledPerModel: {} });
       await act(async () => {
         await getState().sendMessage(CONV_ID, 'no thinking', MODEL);
@@ -2303,7 +2212,6 @@ describe('chatStore — streaming state', () => {
       expect(capturedBody?.thinking).toBe(false);
       expect(capturedBody?.effort).toBeUndefined();
 
-      // Toggle ON → thinking true.
       useModelStore.setState({ thinkingEnabledPerModel: { [MODEL]: true } });
       await act(async () => {
         await getState().sendMessage(CONV_ID, 'with thinking', MODEL);
@@ -2460,8 +2368,6 @@ describe('chatStore — streaming state', () => {
       expect(backgroundSignal?.aborted).toBe(false);
       expect(getState().streamingConversationIds).toContain(backgroundConversationId);
 
-      // Explicit cleanup: returning to the owner chat is the only action that
-      // may abort its run.
       act(() => {
         useChatStore.setState({ currentConversationId: backgroundConversationId });
         getState().stopStreaming();
@@ -2508,10 +2414,8 @@ describe('chatStore — streaming state', () => {
     });
 
     it('sets isStreaming=false when stopStreaming is called', async () => {
-      // streamChat never resolves — we stop it manually
       mockStreamChat.mockImplementation(() => new Promise<void>(() => {}));
 
-      // Start streaming (don't await — it won't resolve)
       act(() => {
         useChatStore.setState({ currentConversationId: CONV_ID, isStreaming: true });
         getState().sendMessage(CONV_ID, 'hi', MODEL);
@@ -2544,7 +2448,6 @@ describe('chatStore — streaming state', () => {
     });
 
     it('marks streaming messages as not-streaming when stop is called', async () => {
-      // Manually insert a streaming assistant message
       useChatStore.setState({
         currentConversationId: CONV_ID,
         isStreaming: true,

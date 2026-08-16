@@ -1,30 +1,3 @@
-/**
- * PaywallBottomSheet
- *
- * Opens as a @gorhom/bottom-sheet modal when an ApiPaywallError is caught in
- * the chat send path. Renders the gated feature, server reason, and the action
- * that can actually resolve it: subscribe, update billing, upgrade, or contact
- * sales. An inactive subscriber must never be mislabeled as a lower-tier user.
- *
- * Design mirrors the web InlinePaywallCard but uses React Native primitives.
- *
- * Usage:
- *   const paywallRef = useRef<BottomSheet>(null);
- *   const [paywallProps, setPaywallProps] = useState<PaywallSheetProps | null>(null);
- *
- *   // On ApiPaywallError:
- *   setPaywallProps({ feature, requiredTier, reason });
- *   paywallRef.current?.expand();
- *
- *   <PaywallBottomSheet
- *     ref={paywallRef}
- *     feature={paywallProps?.feature ?? 'token_cap'}
- *     requiredTier={paywallProps?.requiredTier ?? 'basic'}
- *     reason={paywallProps?.reason}
- *     recoveryAction={paywallProps?.recoveryAction}
- *     onDismiss={() => paywallRef.current?.close()}
- *   />
- */
 
 import { useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { View, Pressable } from 'react-native';
@@ -42,10 +15,6 @@ import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING, isBillingPlanTier } from '@agiworkforce/types';
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
 
-// ---------------------------------------------------------------------------
-// Static lookup tables — module-level so they are never recreated on render.
-// ---------------------------------------------------------------------------
-
 const FEATURE_LABELS: Record<string, string> = {
   general_upgrade: 'More features',
   video_generation: 'Video generation',
@@ -60,65 +29,26 @@ const FEATURE_LABELS: Record<string, string> = {
   model_access: 'This model',
 };
 
-/** Fallback label when the feature key is unrecognised. */
 const UNKNOWN_FEATURE_LABEL = 'This feature';
 
-/** Fallback label when the tier key is unrecognised. */
 const UNKNOWN_TIER_LABEL = 'a higher';
 
-/**
- * Plan name for a `requiredTier` straight off the wire, or the vague fallback
- * when the key is not a plan we sell.
- *
- * Read from the shared billing catalog rather than a local table: the tiers this
- * sheet names are the same ones `BILLING_PLAN_CAPABILITY_TIERS` gates on, so a
- * local copy that lagged the catalog turned real refusals into "Upgrade to a
- * higher" — which is what `video_generation` (gated to Max 15x) rendered while
- * `max_15x` was missing here.
- */
 function tierLabelFor(requiredTier: string): string {
   return isBillingPlanTier(requiredTier)
     ? BILLING_PLAN_PRICING[requiredTier].label
     : UNKNOWN_TIER_LABEL;
 }
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 export interface PaywallSheetProps {
-  /** Feature key from ApiPaywallError.feature (e.g. 'token_cap'). */
   feature: string;
-  /** Required tier key from ApiPaywallError.requiredTier (e.g. 'basic'). */
   requiredTier: string;
-  /** Optional human-readable reason from the server (e.g. '10/10 images used'). */
   reason?: string;
-  /** Recovery that can actually resolve the server refusal. */
   recoveryAction?: PaywallRecoveryAction;
-  /**
-   * Optional caller-owned recovery. Billing settings uses this for its real
-   * portal action instead of navigating back to itself.
-   */
   onPrimaryAction?: () => void | Promise<void>;
-  /**
-   * Honest replacement for the CTA when this surface has no allowed recovery
-   * action (for example, native plan changes before store products exist).
-   */
   primaryActionUnavailableMessage?: string;
-  /** Called when the user dismisses the sheet. */
   onDismiss: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
-/**
- * PaywallBottomSheet wraps @gorhom/bottom-sheet.
- * The caller controls open/close via a ref; props drive the copy.
- *
- * Pass `ref` to imperatively call `.expand()` / `.close()`.
- */
 export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
   function PaywallBottomSheetInner(
     {
@@ -136,16 +66,11 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     const router = useRouter();
     const sheetRef = useRef<BottomSheet>(null);
 
-    // Expose expand() / close() / snapToIndex() to the parent via forwardRef.
     useImperativeHandle(forwardedRef, () => sheetRef.current as BottomSheet);
 
     const featureLabel = FEATURE_LABELS[feature] ?? UNKNOWN_FEATURE_LABEL;
     const tierLabel = tierLabelFor(requiredTier);
 
-    // Sales handoff is intentionally exact, not normalize-and-guess: an
-    // unrecognised future tier must fail closed rather than becoming an
-    // external-navigation CTA. The destination is a fixed HTTPS AGI origin and
-    // still passes through the strict safeOpenURL allowlist.
     const salesTier =
       recoveryAction === 'upgrade' && (requiredTier === 'team' || requiredTier === 'enterprise')
         ? requiredTier
@@ -218,8 +143,6 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       <BottomSheet
         ref={sheetRef}
         index={-1}
-        // Expose the upgrade/recovery controls instead of announcing the
-        // entire sheet as one opaque adjustable element.
         accessible={false}
         onChange={handleSheetChange}
         enablePanDownToClose
@@ -358,8 +281,4 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
 
 PaywallBottomSheet.displayName = 'PaywallBottomSheet';
 
-/**
- * Expose the internal ref type so callers can store a ref to the BottomSheet
- * and call `.expand()` / `.close()` imperatively.
- */
 export type { BottomSheet as PaywallBottomSheetHandle };

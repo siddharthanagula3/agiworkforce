@@ -1,9 +1,5 @@
 import type { BillingPlanTier } from '@agiworkforce/types';
 
-/**
- * Billing tiers come from the shared catalog. `pay_per_result` remains only as
- * a compatibility value for historical native pricing rows.
- */
 export type PricingModel = BillingPlanTier | 'pay_per_result';
 
 export interface PricingPlan {

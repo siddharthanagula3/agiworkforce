@@ -38,7 +38,6 @@
 
 import 'server-only';
 
-/** Repo truthy convention, matching lib/api-auth.ts. Absent ⇒ false. */
 function isTruthy(raw: string | undefined): boolean {
   if (!raw) return false;
   return ['1', 'true', 'on', 'yes'].includes(raw.trim().toLowerCase());
@@ -49,15 +48,9 @@ function readInt(key: string, fallback: number, min: number, max: number): numbe
   if (!raw) return fallback;
   const parsed = Number.parseInt(raw.trim(), 10);
   if (!Number.isFinite(parsed)) return fallback;
-  // Clamp rather than throw: a fat-fingered env var must not take support down,
-  // and an out-of-range value must not disable a timeout.
   return Math.min(max, Math.max(min, parsed));
 }
 
-/**
- * Deliberately strict-ish but not RFC-complete. Its only job is to reject
- * obvious junk so a misconfigured address does not read as "configured".
- */
 const EMAIL_RE = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/u;
 
 export function isValidEmail(value: string | null | undefined): value is string {
@@ -75,22 +68,16 @@ export const DEFAULT_FALLBACK_EMAIL = 'support@agiworkforce.com';
 export const DEFAULT_EXPECTED_REPLY = 'within one business day';
 
 export interface HandoffConfig {
-  /** Gate 1: live handoff is impossible unless this is explicitly enabled. */
   liveHandoffEnabled: boolean;
   fallbackEmail: string;
   fromEmail: string;
   expectedReplyCopy: string;
-  /** A presence row older than this is treated as offline regardless of its status column. */
   heartbeatTtlSeconds: number;
-  /** Hard ceiling on any `waiting` state. */
   waitTimeoutSeconds: number;
-  /** A `connected` session with no activity for this long is swept closed. */
   idleTimeoutSeconds: number;
   pollIntervalMs: number;
   retentionDays: number;
-  /** Present only when RESEND_API_KEY is set. Never logged, never serialized. */
   resendApiKey: string | null;
-  /** True when an escalation email can actually be delivered. */
   emailConfigured: boolean;
 }
 
@@ -111,15 +98,11 @@ export function getHandoffConfig(): HandoffConfig {
     pollIntervalMs: readInt('AGI_SUPPORT_HANDOFF_POLL_INTERVAL_MS', 3000, 1000, 60_000),
     retentionDays: readInt('AGI_SUPPORT_HANDOFF_RETENTION_DAYS', 90, 1, 3650),
     resendApiKey,
-    // Both halves are required. An API key with an unverified/absent `from`
-    // would be rejected by the provider at send time, which is a silent failure
-    // dressed up as a configured channel.
     emailConfigured:
       Boolean(resendApiKey) && isValidEmail(fromEmail) && isValidEmail(fallbackEmail),
   };
 }
 
-/** Heartbeat cadence handed to an agent client: comfortably inside the TTL. */
 export function heartbeatIntervalMs(config: HandoffConfig): number {
   return Math.max(5_000, Math.floor((config.heartbeatTtlSeconds * 1000) / 3));
 }

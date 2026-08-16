@@ -1,9 +1,3 @@
-/**
- * artifactUtils.tsx
- *
- * Shared utilities for artifact type display: icons and file extensions.
- * Used by ArtifactPanel and ArtifactToolbar to avoid duplicating switch statements.
- */
 
 import {
   Code2,
@@ -16,9 +10,6 @@ import {
 } from 'lucide-react';
 import type { ArtifactType } from '@/stores/artifactStore';
 
-/**
- * Returns the file extension string for the given artifact type.
- */
 export function getArtifactFileExtension(type: ArtifactType): string {
   switch (type) {
     case 'code':
@@ -40,9 +31,6 @@ export function getArtifactFileExtension(type: ArtifactType): string {
   }
 }
 
-/**
- * Icon component for an artifact type. Accepts an optional className override.
- */
 export function ArtifactTypeIcon({
   type,
   className = 'h-3.5 w-3.5',

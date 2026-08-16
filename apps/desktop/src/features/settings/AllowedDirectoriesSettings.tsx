@@ -22,13 +22,7 @@ import { Label } from '@/ui/Label';
 import { ScrollArea } from '@/ui/ScrollArea';
 
 export function AllowedDirectoriesSettings() {
-  // Heading and the add/cancel/remove actions are the only strings here that
-  // exist in the shared corpus. The security explainer, "Browse", "Allowed
-  // Paths (N)" and the empty state have no keys in
-  // packages/ui/i18n/locales, so this panel still reads part English in a
-  // non-English locale until those keys are added there.
   const { t } = useTranslation();
-  // Use individual selectors to prevent re-renders on unrelated state changes
   const allowedDirectories = useSettingsStore((state) => state.allowedDirectories);
   const addAllowedDirectory = useSettingsStore((state) => state.addAllowedDirectory);
   const removeAllowedDirectory = useSettingsStore((state) => state.removeAllowedDirectory);
@@ -42,7 +36,6 @@ export function AllowedDirectoriesSettings() {
 
     const path = manualPath.trim();
 
-    // On web, skip filesystem validation and just add the path
     if (!isTauri) {
       if (allowedDirectories.includes(path)) {
         setError('Directory already added');
@@ -68,7 +61,6 @@ export function AllowedDirectoriesSettings() {
       addAllowedDirectory(path);
       setManualPath('');
     } catch (e) {
-      // SET-003 fix: Don't add path if verification fails - require explicit user action
       console.error('Failed to validate path:', e);
       setError(
         'Could not verify path. Please check the path exists and try again, or use Browse to select.',

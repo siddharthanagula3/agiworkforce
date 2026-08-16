@@ -74,8 +74,6 @@ describe('persistGeneratedFile', () => {
     expect(insertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'file', mimeType: 'application/pdf', provider: 'openai' }),
     );
-    // The serve URL is the SAME-ORIGIN authenticated route, not the raw R2
-    // public URL — the renderer gates only accept same-origin sources.
     expect(result).toMatchObject({
       assetId: 'asset_1',
       url: '/api/files/asset_1',
@@ -224,7 +222,6 @@ describe('collectGeneratedFileRefs', () => {
       },
       sink,
     );
-    // Same refs again — must dedupe by file id.
     collectGeneratedFileRefs({ type: 'code_execution_output', file_id: 'file_x' }, sink);
 
     expect([...sink.keys()].sort()).toEqual(['cfile_1', 'file_x']);

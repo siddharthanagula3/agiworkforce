@@ -2,15 +2,6 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Tauri event contract.
- *
- * A `listen('x')` whose name nothing emits is silent: no type error, no runtime
- * warning, just a panel that never updates. This test is the only thing that
- * notices, so it reads both sides out of source rather than trusting a
- * hand-maintained list.
- */
-
 const DESKTOP_ROOT = resolve(__dirname, '../..');
 const FRONTEND_ROOT = join(DESKTOP_ROOT, 'src');
 const RUST_ROOT = join(DESKTOP_ROOT, 'src-tauri/src');
@@ -26,12 +17,8 @@ function collectFiles(dir: string, extensions: string[]): string[] {
   return found;
 }
 
-// `listen` must be followed immediately by `(` or a generic argument — a bare
-// `listen` in prose ("listen for output") would otherwise match the next call.
 const LISTEN_PATTERN = /\blisten(?:<[\s\S]{0,400}?>)?\(\s*(['"])([^'"]+)\1/g;
 
-// Covers `app.emit("x", …)`, the plugin variants, and the module-local
-// `emit_event` / `emit_scheduler_event` helpers that take the handle first.
 const EMIT_PATTERN =
   /(?:\.emit(?:_all|_to|_filter)?|emit_event|emit_scheduler_event|emit_to_frontend)\s*\(\s*(?:&?[A-Za-z_][\w.]*\s*,\s*)?"([^"]+)"/g;
 
@@ -41,10 +28,6 @@ function listenedEvents(): Map<string, string[]> {
     if (file.includes('__tests__')) continue;
     const source = readFileSync(file, 'utf8');
     for (const match of source.matchAll(LISTEN_PATTERN)) {
-      // A capture group is `string | undefined` under noUncheckedIndexedAccess,
-      // and the skip is not just to satisfy the compiler: an unmatched group
-      // would otherwise be keyed as the literal "undefined" and read as an event
-      // name that no Rust side could ever emit.
       const name = match[2];
       if (!name) continue;
       const sites = events.get(name) ?? [];
@@ -66,20 +49,11 @@ function emittedEvents(): Set<string> {
   return events;
 }
 
-/**
- * Names that are legitimately listened for without a Rust emitter in this
- * repository. Every entry needs a reason; nothing lands here to silence a
- * failure. Entries are tolerated, never required — a plan item that adds the
- * missing emitter does not break this test.
- */
 const UNEMITTED_BY_DESIGN: Record<string, string> = {
-  // Emitted by the updater plugin inside Tauri itself, not by our crate.
   'tauri://update-download-progress': 'tauri-plugin-updater',
   'tauri://update-downloaded': 'tauri-plugin-updater',
   'tauri://update-error': 'tauri-plugin-updater',
 
-  // Known-open gaps owned by other ExecutionPlan items. Listed so this test
-  // still guards everything else instead of being deleted wholesale.
   'agi:browser_action': 'no browser-automation event source exists yet',
   'agi:file_changed': 'file edits ship as agi:file_operation; consumer not migrated',
   'agi:goal_completed': 'chat agent workflow events (agentWorkflowEvents.ts)',
@@ -103,8 +77,6 @@ describe('Tauri event contract', () => {
   const emitted = emittedEvents();
 
   it('extracts both sides of the contract', () => {
-    // Guards the regexes: a rename that breaks extraction would otherwise make
-    // every assertion below vacuously pass.
     expect(listened.size).toBeGreaterThan(50);
     expect(emitted.size).toBeGreaterThan(50);
   });
@@ -125,23 +97,19 @@ describe('Tauri event contract', () => {
 
   describe('surfaces repaired by ExecutionPlan #40', () => {
     const repaired = [
-      // Agent collaboration panel <- SwarmOrchestrator
       'swarm:started',
       'swarm:subtask_started',
       'swarm:subtask_completed',
       'swarm:subtask_failed',
       'swarm:completed',
-      // Scheduler store <- sys/commands/scheduler.rs
       'scheduler:job_added',
       'scheduler:job_removed',
       'scheduler:job_updated',
       'scheduler:job_executed',
       'scheduler:error',
-      // Execution store <- llm_executor.rs / tool_stream.rs / frontend_events.rs
       'llm:stream_chunk',
       'agi:tool_stream',
       'agi:terminal_command',
-      // Computer-use store <- frontend_events.rs
       'agi:screenshot',
     ];
 

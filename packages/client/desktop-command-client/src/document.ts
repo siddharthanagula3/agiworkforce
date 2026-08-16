@@ -1,10 +1,5 @@
-/**
- * Document API — typed wrappers for document_* Tauri commands (read, create Word/Excel/PDF/PPT).
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface DocumentContent {
   text: string;
@@ -58,8 +53,6 @@ export interface PresentationConfig {
   slides: { title: string; content: string[] }[];
   [key: string]: unknown;
 }
-
-// ---- Commands ----
 
 export async function documentRead(filePath: string): Promise<DocumentContent> {
   return command<DocumentContent>('document_read', { filePath });

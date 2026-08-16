@@ -1,9 +1,3 @@
-/**
- * Coverage for the on-device VL (multimodal) route: when a multimodal GGUF model
- * and its mmproj projector are both present on disk, runVisionQuery must pass the
- * real image into the model via `images` + `mmprojPath` (llama.rn initMultimodal),
- * not fall back to OCR.
- */
 
 import { runVisionQuery, resolveVisionRoute } from '../src/features/image/services/vision';
 import { listInstalledModels } from '@/storage/installedModels';
@@ -17,8 +11,6 @@ jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn().mockResolvedValue({ exists: true }),
 }));
 
-// Use the REAL catalog + isMultimodalModel from local-llm; only stub the
-// inference entrypoint so the test never touches native runtimes.
 jest.mock('@agiworkforce/local-llm', () => {
   const actual = jest.requireActual('@agiworkforce/local-llm');
   return { ...actual, localGenerate: jest.fn() };

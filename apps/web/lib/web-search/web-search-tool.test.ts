@@ -1,12 +1,3 @@
-/**
- * Unit tests for the platform web_search tool.
- *
- * Covers tool identity/definition, missing-config handling, input validation,
- * the happy path against Perplexity's Search API response shape, malformed
- * upstream entries (salvage-not-fail), HTTP error passthrough, timeout, and
- * the model-facing formatter / FetchedSource mapping. All HTTP is mocked —
- * mirrors url-fetch-tool.test.ts's conventions.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 
@@ -133,10 +124,8 @@ describe('executeWebSearch — happy path', () => {
       snippet: 'A short snippet.',
       date: '2026-07-01',
     });
-    // null date on the second entry must not survive as a `date` key.
     expect(outcome.results[1]?.date).toBeUndefined();
 
-    // Auth + body shape sent to the real Perplexity Search endpoint.
     expect(fetchImpl).toHaveBeenCalledWith(
       'https://api.perplexity.ai/search',
       expect.objectContaining({

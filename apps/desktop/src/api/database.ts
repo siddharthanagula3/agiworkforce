@@ -1,26 +1,6 @@
-/**
- * Database API
- *
- * TypeScript wrappers for all database Tauri commands.
- * Covers SQL (Postgres, MySQL, SQLite), MongoDB, and Redis operations
- * plus secure password storage, query building, and pool management.
- *
- * 40 commands total:
- * - SQL Core: create_pool, execute_query, execute_prepared, execute_batch, close_pool, list_pools, get_pool_stats
- * - SQL Query Builders: build_select, build_insert, build_update, build_delete, validate_query
- * - MySQL: test_connection, list_tables, describe_table, list_indexes, call_procedure, bulk_insert
- * - MongoDB: connect, find, find_one, insert_one, insert_many, update_many, delete_many, disconnect
- * - Redis: connect, get, set, del, exists, expire, hget, hset, hgetall, disconnect
- * - Password: store_password, has_stored_password, get_stored_password, delete_stored_password
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** Database connection configuration */
 export interface ConnectionConfig {
   database_type: 'Postgres' | 'MySql' | 'Sqlite' | 'MongoDB' | 'Redis';
   host?: string;
@@ -32,14 +12,12 @@ export interface ConnectionConfig {
   connection_string?: string;
 }
 
-/** Connection pool configuration */
 export interface PoolConfig {
   max_size: number;
   min_idle: number;
   connection_timeout_seconds: number;
 }
 
-/** SQL query result */
 export interface QueryResult {
   columns?: string[];
   rows?: SqlRowValue[][];
@@ -47,10 +25,8 @@ export interface QueryResult {
   execution_time_ms?: number;
 }
 
-/** SQL row value types */
 export type SqlRowValue = string | number | boolean | null;
 
-/** SQL query validation result */
 export interface QueryValidation {
   is_valid: boolean;
   query_type?: string;
@@ -60,7 +36,6 @@ export interface QueryValidation {
   error?: string;
 }
 
-/** Connection pool statistics */
 export interface PoolStats {
   active_connections: number;
   idle_connections: number;
@@ -68,7 +43,6 @@ export interface PoolStats {
   total_queries: number;
 }
 
-/** MySQL column information */
 export interface MySqlColumnInfo {
   name: string;
   data_type: string;
@@ -78,7 +52,6 @@ export interface MySqlColumnInfo {
   extra?: string;
 }
 
-/** MySQL index information */
 export interface MySqlIndexInfo {
   name: string;
   columns: string[];
@@ -86,23 +59,18 @@ export interface MySqlIndexInfo {
   index_type?: string;
 }
 
-/** MongoDB document type */
 export type MongoDocument = Record<string, unknown>;
 
-/** MongoDB query filter */
 export type MongoFilter = Record<string, unknown>;
 
-/** MongoDB update operations */
 export type MongoUpdate = Record<string, unknown>;
 
-/** MongoDB operation result */
 export interface MongoResult {
   matched_count?: number;
   modified_count?: number;
   upserted_id?: string;
 }
 
-/** SELECT query parameters */
 export interface SelectQuery {
   table: string;
   columns: string[];
@@ -111,34 +79,23 @@ export interface SelectQuery {
   offset?: number;
 }
 
-/** INSERT query parameters */
 export interface InsertQuery {
   table: string;
   columns: string[];
   values: string[][];
 }
 
-/** UPDATE query parameters */
 export interface UpdateQuery {
   table: string;
   set_values: Record<string, string>;
   where_clause?: string;
 }
 
-/** DELETE query parameters */
 export interface DeleteQuery {
   table: string;
   where_clause?: string;
 }
 
-// ============================================================================
-// SQL Core Operations
-// ============================================================================
-
-/**
- * Create a new SQL connection pool.
- * Supports Postgres, MySQL, and SQLite.
- */
 export async function dbCreatePool(
   connectionId: string,
   config: ConnectionConfig,
@@ -160,10 +117,6 @@ export async function dbCreatePool(
   }
 }
 
-/**
- * Execute a read-only SQL query against a connection.
- * Only SELECT and WITH (CTE) statements are allowed.
- */
 export async function dbExecuteQuery(connectionId: string, sql: string): Promise<QueryResult> {
   if (!isTauri) {
     console.debug('[database] dbExecuteQuery (mock)', connectionId, sql);
@@ -180,11 +133,6 @@ export async function dbExecuteQuery(connectionId: string, sql: string): Promise
   }
 }
 
-/**
- * Execute a prepared statement with parameterized values.
- * Supports SELECT, INSERT, UPDATE, DELETE, and WITH statements.
- * Write operations (INSERT/UPDATE/DELETE) require user confirmation.
- */
 export async function dbExecutePrepared(
   connectionId: string,
   sql: string,
@@ -206,11 +154,6 @@ export async function dbExecutePrepared(
   }
 }
 
-/**
- * Execute multiple read-only SQL queries in a batch.
- * Each query must be a SELECT or WITH statement.
- * Maximum 100 queries per batch.
- */
 export async function dbExecuteBatch(
   connectionId: string,
   queries: string[],
@@ -230,9 +173,6 @@ export async function dbExecuteBatch(
   }
 }
 
-/**
- * Close a SQL connection pool and release resources.
- */
 export async function dbClosePool(connectionId: string): Promise<void> {
   if (!isTauri) {
     console.debug('[database] dbClosePool (mock)', connectionId);
@@ -246,9 +186,6 @@ export async function dbClosePool(connectionId: string): Promise<void> {
   }
 }
 
-/**
- * List all active connection pool IDs.
- */
 export async function dbListPools(): Promise<string[]> {
   if (!isTauri) {
     console.debug('[database] dbListPools (mock)');
@@ -262,9 +199,6 @@ export async function dbListPools(): Promise<string[]> {
   }
 }
 
-/**
- * Get statistics for a connection pool (active/idle connections, query count).
- */
 export async function dbGetPoolStats(connectionId: string): Promise<PoolStats> {
   if (!isTauri) {
     console.debug('[database] dbGetPoolStats (mock)', connectionId);
@@ -278,14 +212,6 @@ export async function dbGetPoolStats(connectionId: string): Promise<PoolStats> {
   }
 }
 
-// ============================================================================
-// SQL Query Validation & Building
-// ============================================================================
-
-/**
- * Validate a SQL query for security and correctness.
- * Returns risk level, tables accessed, and any warnings.
- */
 export async function dbValidateQuery(sql: string): Promise<QueryValidation> {
   if (!isTauri) {
     console.debug('[database] dbValidateQuery (mock)', sql);
@@ -299,9 +225,6 @@ export async function dbValidateQuery(sql: string): Promise<QueryValidation> {
   }
 }
 
-/**
- * Build a SELECT SQL string from structured parameters.
- */
 export async function dbBuildSelect(query: SelectQuery): Promise<string> {
   if (!isTauri) {
     console.debug('[database] dbBuildSelect (mock)', query.table);
@@ -315,10 +238,6 @@ export async function dbBuildSelect(query: SelectQuery): Promise<string> {
   }
 }
 
-/**
- * Build an INSERT SQL string from structured parameters.
- * WARNING: Returns interpolated SQL. Use dbExecutePrepared for actual writes.
- */
 export async function dbBuildInsert(query: InsertQuery): Promise<string> {
   if (!isTauri) {
     console.debug('[database] dbBuildInsert (mock)', query.table);
@@ -332,10 +251,6 @@ export async function dbBuildInsert(query: InsertQuery): Promise<string> {
   }
 }
 
-/**
- * Build an UPDATE SQL string from structured parameters.
- * WARNING: Returns interpolated SQL. Use dbExecutePrepared for actual writes.
- */
 export async function dbBuildUpdate(query: UpdateQuery): Promise<string> {
   if (!isTauri) {
     console.debug('[database] dbBuildUpdate (mock)', query.table);
@@ -349,9 +264,6 @@ export async function dbBuildUpdate(query: UpdateQuery): Promise<string> {
   }
 }
 
-/**
- * Build a DELETE SQL string from structured parameters.
- */
 export async function dbBuildDelete(query: DeleteQuery): Promise<string> {
   if (!isTauri) {
     console.debug('[database] dbBuildDelete (mock)', query.table);
@@ -365,13 +277,6 @@ export async function dbBuildDelete(query: DeleteQuery): Promise<string> {
   }
 }
 
-// ============================================================================
-// MySQL-Specific Operations
-// ============================================================================
-
-/**
- * Test a MySQL connection by executing a simple query.
- */
 export async function dbMysqlTestConnection(connectionId: string): Promise<boolean> {
   if (!isTauri) {
     console.debug('[database] dbMysqlTestConnection (mock)', connectionId);
@@ -385,9 +290,6 @@ export async function dbMysqlTestConnection(connectionId: string): Promise<boole
   }
 }
 
-/**
- * List all tables in a MySQL database.
- */
 export async function dbMysqlListTables(connectionId: string): Promise<string[]> {
   if (!isTauri) {
     console.debug('[database] dbMysqlListTables (mock)', connectionId);
@@ -401,9 +303,6 @@ export async function dbMysqlListTables(connectionId: string): Promise<string[]>
   }
 }
 
-/**
- * Describe a MySQL table schema (columns, types, keys).
- */
 export async function dbMysqlDescribeTable(
   connectionId: string,
   tableName: string,
@@ -423,9 +322,6 @@ export async function dbMysqlDescribeTable(
   }
 }
 
-/**
- * List indexes on a MySQL table.
- */
 export async function dbMysqlListIndexes(
   connectionId: string,
   tableName: string,
@@ -445,10 +341,6 @@ export async function dbMysqlListIndexes(
   }
 }
 
-/**
- * Call a MySQL stored procedure with parameters.
- * Procedure name must match pattern: [a-zA-Z_][a-zA-Z0-9_]{0,63}
- */
 export async function dbMysqlCallProcedure(
   connectionId: string,
   procedureName: string,
@@ -470,10 +362,6 @@ export async function dbMysqlCallProcedure(
   }
 }
 
-/**
- * Bulk insert rows into a MySQL table.
- * Column names and table name are validated against SQL injection.
- */
 export async function dbMysqlBulkInsert(
   connectionId: string,
   tableName: string,
@@ -497,13 +385,6 @@ export async function dbMysqlBulkInsert(
   }
 }
 
-// ============================================================================
-// MongoDB Operations
-// ============================================================================
-
-/**
- * Connect to a MongoDB instance.
- */
 export async function dbMongoConnect(
   connectionId: string,
   config: ConnectionConfig,
@@ -523,9 +404,6 @@ export async function dbMongoConnect(
   }
 }
 
-/**
- * Find documents in a MongoDB collection.
- */
 export async function dbMongoFind(
   connectionId: string,
   collection: string,
@@ -550,9 +428,6 @@ export async function dbMongoFind(
   }
 }
 
-/**
- * Find a single document in a MongoDB collection.
- */
 export async function dbMongoFindOne(
   connectionId: string,
   collection: string,
@@ -574,10 +449,6 @@ export async function dbMongoFindOne(
   }
 }
 
-/**
- * Insert a single document into a MongoDB collection.
- * Returns the inserted document ID.
- */
 export async function dbMongoInsertOne(
   connectionId: string,
   collection: string,
@@ -599,10 +470,6 @@ export async function dbMongoInsertOne(
   }
 }
 
-/**
- * Insert multiple documents into a MongoDB collection.
- * Returns an array of inserted document IDs.
- */
 export async function dbMongoInsertMany(
   connectionId: string,
   collection: string,
@@ -629,9 +496,6 @@ export async function dbMongoInsertMany(
   }
 }
 
-/**
- * Update multiple documents in a MongoDB collection.
- */
 export async function dbMongoUpdateMany(
   connectionId: string,
   collection: string,
@@ -655,10 +519,6 @@ export async function dbMongoUpdateMany(
   }
 }
 
-/**
- * Delete multiple documents from a MongoDB collection.
- * Returns the count of deleted documents.
- */
 export async function dbMongoDeleteMany(
   connectionId: string,
   collection: string,
@@ -680,9 +540,6 @@ export async function dbMongoDeleteMany(
   }
 }
 
-/**
- * Disconnect from a MongoDB instance.
- */
 export async function dbMongoDisconnect(connectionId: string): Promise<void> {
   if (!isTauri) {
     console.debug('[database] dbMongoDisconnect (mock)', connectionId);
@@ -696,13 +553,6 @@ export async function dbMongoDisconnect(connectionId: string): Promise<void> {
   }
 }
 
-// ============================================================================
-// Redis Operations
-// ============================================================================
-
-/**
- * Connect to a Redis instance.
- */
 export async function dbRedisConnect(
   connectionId: string,
   config: ConnectionConfig,
@@ -722,9 +572,6 @@ export async function dbRedisConnect(
   }
 }
 
-/**
- * Get a value from Redis by key.
- */
 export async function dbRedisGet(connectionId: string, key: string): Promise<string | null> {
   if (!isTauri) {
     console.debug('[database] dbRedisGet (mock)', connectionId, key);
@@ -741,10 +588,6 @@ export async function dbRedisGet(connectionId: string, key: string): Promise<str
   }
 }
 
-/**
- * Set a key-value pair in Redis with optional expiration.
- * Maximum key size: 512MB. Maximum expiration: 1 year.
- */
 export async function dbRedisSet(
   connectionId: string,
   key: string,
@@ -768,10 +611,6 @@ export async function dbRedisSet(
   }
 }
 
-/**
- * Delete one or more keys from Redis.
- * Returns the count of keys deleted.
- */
 export async function dbRedisDel(connectionId: string, keys: string[]): Promise<number> {
   if (!isTauri) {
     console.debug('[database] dbRedisDel (mock)', connectionId, keys.length);
@@ -788,9 +627,6 @@ export async function dbRedisDel(connectionId: string, keys: string[]): Promise<
   }
 }
 
-/**
- * Check if a key exists in Redis.
- */
 export async function dbRedisExists(connectionId: string, key: string): Promise<boolean> {
   if (!isTauri) {
     console.debug('[database] dbRedisExists (mock)', connectionId, key);
@@ -807,10 +643,6 @@ export async function dbRedisExists(connectionId: string, key: string): Promise<
   }
 }
 
-/**
- * Set a TTL (time-to-live) on a Redis key.
- * Returns true if the timeout was set.
- */
 export async function dbRedisExpire(
   connectionId: string,
   key: string,
@@ -832,9 +664,6 @@ export async function dbRedisExpire(
   }
 }
 
-/**
- * Get a field value from a Redis hash.
- */
 export async function dbRedisHGet(
   connectionId: string,
   key: string,
@@ -856,10 +685,6 @@ export async function dbRedisHGet(
   }
 }
 
-/**
- * Set a field-value pair in a Redis hash.
- * Returns true if a new field was created.
- */
 export async function dbRedisHSet(
   connectionId: string,
   key: string,
@@ -883,9 +708,6 @@ export async function dbRedisHSet(
   }
 }
 
-/**
- * Get all fields and values from a Redis hash.
- */
 export async function dbRedisHGetAll(
   connectionId: string,
   key: string,
@@ -905,9 +727,6 @@ export async function dbRedisHGetAll(
   }
 }
 
-/**
- * Disconnect from a Redis instance.
- */
 export async function dbRedisDisconnect(connectionId: string): Promise<void> {
   if (!isTauri) {
     console.debug('[database] dbRedisDisconnect (mock)', connectionId);
@@ -921,14 +740,6 @@ export async function dbRedisDisconnect(connectionId: string): Promise<void> {
   }
 }
 
-// ============================================================================
-// Secure Password Storage
-// ============================================================================
-
-/**
- * Store a database connection password securely using encrypted storage.
- * Password is encrypted with machine-derived keys (Argon2id + AES-GCM).
- */
 export async function dbStorePassword(connectionId: string, password: string): Promise<void> {
   if (!isTauri) {
     console.debug('[database] dbStorePassword (mock)', connectionId);
@@ -945,10 +756,6 @@ export async function dbStorePassword(connectionId: string, password: string): P
   }
 }
 
-/**
- * Check if a password exists for a database connection.
- * Does NOT return the actual password for security reasons.
- */
 export async function dbHasStoredPassword(connectionId: string): Promise<boolean> {
   if (!isTauri) {
     console.debug('[database] dbHasStoredPassword (mock)', connectionId);
@@ -962,11 +769,6 @@ export async function dbHasStoredPassword(connectionId: string): Promise<boolean
   }
 }
 
-/**
- * Retrieve a stored database password for creating a connection.
- * Requires explicit user approval (Critical risk level).
- * Should only be called when establishing a connection.
- */
 export async function dbGetStoredPassword(connectionId: string): Promise<string | null> {
   if (!isTauri) {
     console.debug('[database] dbGetStoredPassword (mock)', connectionId);
@@ -980,9 +782,6 @@ export async function dbGetStoredPassword(connectionId: string): Promise<string 
   }
 }
 
-/**
- * Delete a stored database password.
- */
 export async function dbDeleteStoredPassword(connectionId: string): Promise<void> {
   if (!isTauri) {
     console.debug('[database] dbDeleteStoredPassword (mock)', connectionId);

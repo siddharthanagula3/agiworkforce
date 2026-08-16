@@ -13,25 +13,6 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { listLibraryAssets, type LibraryAssetRow } from '@/lib/server/media-assets';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 
-/**
- * GET /api/library — the user-scoped Library listing over `media_assets`
- * (generated images, code-interpreter outputs, document deliverables) that
- * powers the web `/chat/library` page. Contract: `LibraryListResponseSchema` in
- * `@agiworkforce/cloud-contracts` cloud-contracts.
- *
- * Auth: Clerk session cookie (browser) or `Authorization: Bearer <jwt>`
- * (desktop/mobile cloud later) — same dual path as sibling API routes.
- * Owner-scoped: only the authenticated user's rows are listed; bytes are
- * served exclusively through the authed `/api/files/{id}` route (no public
- * URLs are minted here).
- *
- * Filters: kind (image|video|file), surface (artifact|file — LEGACY rows
- * without persisted metadata.surface fold to 'file'), origin
- * (generated|uploaded, derived from metadata.origin), q (filename/prompt
- * ILIKE). Offset pagination with a limit+1 probe, matching
- * `/api/chat/conversations`.
- */
-
 export const runtime = 'nodejs';
 
 function headers(request: NextRequest) {
@@ -49,12 +30,6 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'application/pdf': 'pdf',
 };
 
-/**
- * Display filename: the persisted `metadata.filename` when the writer
- * recorded one (all generated-file pipelines do). LEGACY image-generation
- * rows have empty metadata — fall back to a kind-derived name so the UI
- * never shows a blank title, without inventing provenance.
- */
 function fileNameForRow(row: LibraryAssetRow): string {
   const fromMetadata = row.metadata['filename'];
   if (typeof fromMetadata === 'string' && fromMetadata.trim()) return fromMetadata.trim();
@@ -62,11 +37,6 @@ function fileNameForRow(row: LibraryAssetRow): string {
   return ext ? `${row.kind}.${ext}` : row.kind;
 }
 
-/**
- * Inline-render affordance: the persisted Wave A `metadata.previewable` when
- * present; LEGACY rows fall back to mime-derived (image/* → true), the same
- * rule `classifyGeneratedFile` applies at persistence time.
- */
 function previewableForRow(row: LibraryAssetRow): boolean {
   const persisted = row.metadata['previewable'];
   if (typeof persisted === 'boolean') return persisted;
@@ -83,7 +53,6 @@ function toLibraryItem(row: LibraryAssetRow): LibraryItem {
     kind: row.kind,
     byte_count: row.byteSize,
     uri: `/api/files/${row.id}`,
-    // Legacy fallback documented in the contract: missing surface → 'file'.
     surface: surface === 'artifact' || surface === 'file' ? surface : 'file',
     previewable: previewableForRow(row),
     origin: origin === 'upload' || origin === 'uploaded' ? 'uploaded' : 'generated',
@@ -114,13 +83,8 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid query parameters');
   }
   const { kind, surface, origin, q, limit, offset } = parsed.data;
-  // Recently-deleted bin: list soft-deleted assets (30-day window) instead of
-  // live ones. Read directly off the query string to avoid changing the shared
-  // LibraryListQuerySchema contract.
   const deleted = sp.get('deleted') === 'true';
 
-  // limit+1 probe: fetch one extra row to learn whether another page exists
-  // without a COUNT(*) (matches /api/chat/conversations).
   const rows = await listLibraryAssets(userId, {
     kind,
     surface,

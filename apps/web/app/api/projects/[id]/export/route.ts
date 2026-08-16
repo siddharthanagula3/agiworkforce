@@ -1,20 +1,5 @@
 import 'server-only';
 
-/**
- * GET /api/projects/[id]/export — portable snapshot of one project.
- *
- * Only an account-wide GDPR export existed, which is the wrong granularity for
- * the common case: moving one project somewhere else, archiving a finished
- * piece of work, or handing a client their material. There was no project-level
- * export at all.
- *
- * OWNER ONLY, deliberately narrower than GET on the project itself. That route
- * also serves org-shared readers, but an export is a bulk extraction of every
- * knowledge file's text — a viewer on a shared project should not be able to
- * walk away with the whole corpus. Sharing grants reading in place, not
- * exfiltration.
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -27,7 +12,6 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** Schema version of the export envelope, so an importer can branch on it. */
 const PROJECT_EXPORT_VERSION = 1;
 
 function isSchemaNotReady(error: unknown): boolean {
@@ -57,10 +41,6 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
     throw createError.notFound('Project not found');
   }
 
-  // Knowledge files, with their extracted text so the export is self-contained
-  // — a manifest of filenames the recipient cannot read would not be an export.
-  // Superseded and deleted rows are excluded: the export mirrors the project as
-  // it stands, not its edit history.
   let knowledgeFiles: Record<string, unknown>[] = [];
   try {
     knowledgeFiles = await db.query<Record<string, unknown>>(
@@ -73,8 +53,6 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
       [id],
     );
   } catch (error) {
-    // A pre-migration deployment exports the project without its files rather
-    // than failing the whole export.
     if (!isSchemaNotReady(error)) throw error;
   }
 
@@ -112,16 +90,13 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
     status: 200,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      // Downloads as a file rather than rendering in the tab.
       'Content-Disposition': `attachment; filename="${fileName}"`,
-      // An export is a snapshot of live data; never let a proxy keep it.
       'Cache-Control': 'no-store',
     },
   });
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleExportProject));
-// See the note in ../duplicate/route.ts: the preflight helper's signature does
 // not satisfy Next 16's typed-route constraint when exported directly.
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

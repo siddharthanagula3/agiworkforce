@@ -1,11 +1,3 @@
-/**
- * Client-safe logger facade.
- *
- * Server-side API routes use the Pino logger from @/lib/logger directly.
- * This module provides a console-based logger for client components and
- * shared code that runs in both environments. Log-level gating suppresses
- * debug/info in production.
- */
 
 const isDevelopment = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
 

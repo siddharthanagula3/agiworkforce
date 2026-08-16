@@ -22,19 +22,6 @@
  * ```
  */
 
-/**
- * Supported types of context items.
- *
- * Each type represents a different source of information:
- * - `file`: Local file from the filesystem
- * - `folder`: Directory containing multiple files
- * - `url`: Web page content
- * - `web`: Web search results
- * - `image`: Image file with optional OCR text
- * - `code-snippet`: Code excerpt with line numbers
- * - `selection`: Text selection from an editor
- * - `clipboard`: Content from system clipboard
- */
 export type ContextItemType =
   | 'file'
   | 'folder'
@@ -45,25 +32,13 @@ export type ContextItemType =
   | 'selection'
   | 'clipboard';
 
-/**
- * Base properties shared by all context item types.
- *
- * Extended by specific context item types to add type-specific fields.
- */
 export interface BaseContextItem {
-  /** Unique identifier for this context item */
   id: string;
-  /** Discriminant for the context item type */
   type: ContextItemType;
-  /** Display name for the item */
   name: string;
-  /** Optional description or summary */
   description?: string;
-  /** Estimated token count for LLM context window */
   tokens?: number;
-  /** When the context item was created */
   timestamp: Date;
-  /** Optional icon identifier (e.g., emoji, icon name) */
   icon?: string;
 }
 
@@ -87,17 +62,11 @@ export interface BaseContextItem {
  */
 export interface FileContextItem extends BaseContextItem {
   type: 'file';
-  /** Absolute path to the file */
   path: string;
-  /** File content as text */
   content?: string;
-  /** Language identifier (e.g., 'typescript', 'python', 'markdown') */
   language?: string;
-  /** File size in bytes */
   size?: number;
-  /** Number of lines in the file */
   lineCount?: number;
-  /** Short excerpt for preview (first few lines) */
   excerpt?: string;
 }
 
@@ -120,13 +89,9 @@ export interface FileContextItem extends BaseContextItem {
  */
 export interface FolderContextItem extends BaseContextItem {
   type: 'folder';
-  /** Absolute path to the folder */
   path: string;
-  /** Number of files contained in the folder */
   fileCount?: number;
-  /** Total size in bytes */
   size?: number;
-  /** List of file names (not full paths) */
   files?: string[];
 }
 
@@ -154,21 +119,13 @@ export interface FolderContextItem extends BaseContextItem {
  */
 export interface UrlContextItem extends BaseContextItem {
   type: 'url';
-  /** The URL of the web page */
   url: string;
-  /** Page title from <title> tag */
   title?: string;
-  /** URL to the site's favicon */
   favicon?: string;
-  /** Extracted page content (typically main text) */
   content?: string;
-  /** Additional metadata extracted from the page */
   metadata?: {
-    /** Site name from Open Graph tags */
     siteName?: string;
-    /** Author from meta tags */
     author?: string;
-    /** Publication date from meta tags */
     publishedDate?: string;
   };
 }
@@ -197,17 +154,11 @@ export interface UrlContextItem extends BaseContextItem {
  */
 export interface WebContextItem extends BaseContextItem {
   type: 'web';
-  /** The search query that was executed */
   query: string;
-  /** Array of search results */
   results?: Array<{
-    /** Result title */
     title: string;
-    /** Result URL */
     url: string;
-    /** Text snippet/preview */
     snippet: string;
-    /** Source domain (e.g., 'stackoverflow.com') */
     source?: string;
   }>;
 }
@@ -233,21 +184,13 @@ export interface WebContextItem extends BaseContextItem {
  */
 export interface ImageContextItem extends BaseContextItem {
   type: 'image';
-  /** File path if loaded from disk */
   path?: string;
-  /** URL if loaded from web */
   url?: string;
-  /** Base64-encoded data URL for inline images */
   dataUrl?: string;
-  /** Image width in pixels */
   width?: number;
-  /** Image height in pixels */
   height?: number;
-  /** Image format (e.g., 'png', 'jpeg', 'webp') */
   format?: string;
-  /** File size in bytes */
   size?: number;
-  /** Text extracted via OCR (Optical Character Recognition) */
   ocrText?: string;
 }
 
@@ -271,15 +214,10 @@ export interface ImageContextItem extends BaseContextItem {
  */
 export interface CodeSnippetContextItem extends BaseContextItem {
   type: 'code-snippet';
-  /** The code content */
   code: string;
-  /** Programming language identifier */
   language: string;
-  /** Optional source file path */
   filePath?: string;
-  /** Starting line number in the source file */
   startLine?: number;
-  /** Ending line number in the source file */
   endLine?: number;
 }
 
@@ -301,11 +239,8 @@ export interface CodeSnippetContextItem extends BaseContextItem {
  */
 export interface SelectionContextItem extends BaseContextItem {
   type: 'selection';
-  /** Selected text content */
   content?: string;
-  /** Path to the file containing the selection */
   path?: string;
-  /** Size of the selection in bytes */
   size?: number;
 }
 
@@ -326,11 +261,8 @@ export interface SelectionContextItem extends BaseContextItem {
  */
 export interface ClipboardContextItem extends BaseContextItem {
   type: 'clipboard';
-  /** Clipboard text content */
   content?: string;
-  /** Optional path if clipboard contains a file reference */
   path?: string;
-  /** Size of the content in bytes */
   size?: number;
 }
 
@@ -383,13 +315,9 @@ export type ContextItem =
  * ```
  */
 export interface CreateContextItemOptions {
-  /** Type of context item to create */
   type: ContextItemType;
-  /** Display name for the item */
   name: string;
-  /** Optional description */
   description?: string;
-  /** Additional type-specific properties */
   [key: string]: unknown;
 }
 
@@ -413,21 +341,13 @@ export interface CreateContextItemOptions {
  * ```
  */
 export interface ContextSuggestion {
-  /** Unique identifier */
   id: string;
-  /** Type of context item */
   type: ContextItemType;
-  /** Display label for the suggestion */
   label: string;
-  /** Value to use when selected (e.g., file path, URL) */
   value: string;
-  /** Optional description text */
   description?: string;
-  /** Icon to display (emoji or icon identifier) */
   icon?: string;
-  /** Relevance score (0-1) for ranking */
   score?: number;
-  /** Additional metadata for the suggestion */
   metadata?: Record<string, unknown>;
 }
 
@@ -448,21 +368,13 @@ export interface ContextSuggestion {
  * ```
  */
 export interface AutocompleteState {
-  /** Whether the autocomplete dropdown is visible */
   active: boolean;
-  /** The trigger character that activated autocomplete (e.g., '@', '#') */
   trigger: string;
-  /** Current search query after the trigger */
   query: string;
-  /** List of matching suggestions */
   suggestions: ContextSuggestion[];
-  /** Index of the currently selected suggestion (-1 if none) */
   selectedIndex: number;
-  /** Optional position for absolutely positioned dropdown */
   position?: {
-    /** Top position in pixels */
     top: number;
-    /** Left position in pixels */
     left: number;
   };
 }

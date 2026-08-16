@@ -2,21 +2,6 @@ import 'server-only';
 
 import type { SamlAttributeMapping } from './idp-metadata';
 
-/**
- * Thin wrapper over Clerk's enterprise-connection API.
- *
- * Clerk is the SAML/OIDC implementation. We never parse a SAML assertion or
- * metadata document ourselves — validated values are forwarded and Clerk owns
- * the protocol. This module exists to (a) keep the Clerk import in one place,
- * (b) translate Clerk's responses into the Service Provider values an admin
- * must paste into their IdP, and (c) turn a missing Clerk entitlement into an
- * explicit, honest error instead of a confusing 500.
- *
- * Clerk enterprise SSO requires a paid Clerk plan with the Enhanced
- * Authentication add-on. If the instance is not entitled, Clerk rejects the
- * call and we surface that plainly rather than pretending SSO was configured.
- */
-
 export class ClerkNotProvisionedError extends Error {
   readonly reason: 'missing_credentials' | 'not_entitled';
 
@@ -52,7 +37,6 @@ export interface OidcProvisionInput {
   domain: string;
   discoveryUrl: string;
   clientId: string;
-  /** Forwarded to Clerk and never persisted locally. */
   clientSecret: string;
 }
 
@@ -61,7 +45,6 @@ export type ProvisionInput = SamlProvisionInput | OidcProvisionInput;
 export interface ProvisionedConnection {
   clerkConnectionId: string;
   active: boolean;
-  /** Present for SAML connections; Clerk does not issue these for OIDC. */
   acsUrl: string | null;
   spEntityId: string | null;
   spMetadataUrl: string | null;
@@ -77,11 +60,6 @@ interface ClerkEnterpriseConnectionLike {
   } | null;
 }
 
-/**
- * The exact shape forwarded to Clerk. Named fields rather than a loose record
- * so a typo in a provider parameter is a compile error, not a connection that
- * silently omits the setting it was supposed to carry.
- */
 export interface ClerkConnectionParams {
   name?: string;
   domains?: string[];
@@ -139,11 +117,6 @@ function statusOf(error: unknown): number | null {
   return typeof status === 'number' ? status : null;
 }
 
-/**
- * Clerk answers 402/403 when the instance lacks the Enhanced Authentication
- * add-on. That is an operator problem, not a caller problem, and must not be
- * reported as a generic failure.
- */
 function rethrowClerkError(error: unknown, action: string): never {
   if (error instanceof ClerkNotProvisionedError) {
     throw error;
@@ -165,18 +138,12 @@ export function buildParams(input: ProvisionInput, active: boolean): ClerkConnec
     name: input.name,
     domains: [input.domain],
     active,
-    // Attribute values are refreshed from the IdP on each sign-in so a
-    // deprovisioned name or email does not persist in our directory.
     syncUserAttributes: true,
   };
 
   if (input.providerType === 'saml') {
     const saml: NonNullable<ClerkConnectionParams['saml']> = {
-      // IdP-initiated flows accept an unsolicited assertion; requiring an
-      // SP-initiated flow removes that class of replay.
       allowIdpInitiated: false,
-      // A connection for example.com must not also capture sso.example.com,
-      // which may be delegated to a different team.
       allowSubdomains: false,
     };
     if (input.metadataUrl) saml.idpMetadataUrl = input.metadataUrl;
@@ -249,7 +216,6 @@ export async function deleteConnection(
   try {
     await client.deleteEnterpriseConnection(clerkConnectionId);
   } catch (error) {
-    // A connection already gone from Clerk is the desired end state.
     if (statusOf(error) === 404) return;
     rethrowClerkError(error, 'removal');
   }

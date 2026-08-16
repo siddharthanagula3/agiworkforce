@@ -6,13 +6,6 @@ const WEB_ROOT = join(__dirname, '..');
 const readWebFile = (p: string) => readFileSync(join(WEB_ROOT, p), 'utf8');
 const REPO_ROOT = join(WEB_ROOT, '..', '..');
 
-/**
- * WEB-13 hardening guard: the production security-header set must not silently
- * regress. These are declared in next.config.ts `headers()` (applied to every
- * route) plus the per-request CSP-with-nonce in proxy.ts. The values are pinned
- * so a weakening edit (e.g. dropping HSTS preload, loosening X-Frame-Options)
- * fails CI instead of shipping.
- */
 describe('WEB-13 · production security headers', () => {
   const config = readWebFile('next.config.ts');
 

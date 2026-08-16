@@ -1,14 +1,8 @@
 #!/usr/bin/env npx tsx
-/**
- * Test script to verify LLM API keys are configured and working
- * Run with: npx tsx apps/web/scripts/test-llm-keys.ts
- */
 
 import 'dotenv/config';
 import { getModelMetadataById, requireProviderDefaultModel } from '@agiworkforce/types';
 
-// The probe below posts to api.anthropic.com, so it needs the catalog's wire ID
-// (apiModelId), not the display ID the rest of the app routes on.
 const anthropicProbeModelId = (() => {
   const modelId = requireProviderDefaultModel('anthropic');
   return getModelMetadataById(modelId)?.apiModelId ?? modelId;
@@ -32,8 +26,6 @@ const providers = [
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     }),
-    // Anthropic requires a POST request with a body. The model comes from the
-    // catalog so a retired ID cannot make a working key report as broken.
     testBody: JSON.stringify({
       model: anthropicProbeModelId,
       max_tokens: 1,
@@ -59,12 +51,10 @@ async function testProvider(provider: (typeof providers)[0]) {
     return { name: provider.name, status: 'not_configured' };
   }
 
-  // Mask key for display
   const maskedKey =
     key.length > 12 ? `${key.substring(0, 8)}...${key.substring(key.length - 4)}` : '[short key]';
   console.log(`✓ ${provider.envKey} is configured: ${maskedKey} (${key.length} chars)`);
 
-  // Test API connection
   try {
     let url = provider.testUrl;
     const headers: Record<string, string> = provider.getHeaders?.(key) || {};
@@ -88,7 +78,6 @@ async function testProvider(provider: (typeof providers)[0]) {
       const errorText = await response.text();
       console.log(`  ❌ API error (status ${response.status})`);
 
-      // Check for specific error types
       if (response.status === 401) {
         console.log(`  ⚠️ Authentication failed - key may be invalid or expired`);
       } else if (response.status === 429) {

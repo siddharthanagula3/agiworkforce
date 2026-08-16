@@ -13,21 +13,8 @@ import {
   type Catalog,
 } from '../pricing';
 
-// ============================================================================
-// Logic tests — run against a SYNTHETIC fixture catalog, never the live data.
-// ----------------------------------------------------------------------------
-// The pricing helpers are injectable (optional trailing `catalog` arg) so the
-// *logic* (drift = 1 + factor, promo flips at the cutoff, effective price
-// switches to post_promo, deprecation boundary, missing-id fail-safe) is
-// verified against controlled values. Asserting the real catalog's own numbers
-// would be circular — it can only lock a value in, never catch a wrong one,
-// and would break on every weekly sync. Real-catalog *invariants* are tested
-// separately below.
-// ============================================================================
-
 const FIXTURE: Catalog = {
   models: {
-    // Drifted model: tokenizer_drift_factor 0.35 → inflation 1.35.
     'fx-drift': {
       id: 'fx-drift',
       provider: 'fixture',
@@ -35,14 +22,12 @@ const FIXTURE: Catalog = {
       outputCost: 20,
       tokenizer_drift_factor: 0.35,
     },
-    // Flat model: no drift, no promo, no deprecation.
     'fx-flat': {
       id: 'fx-flat',
       provider: 'fixture',
       inputCost: 3,
       outputCost: 15,
     },
-    // Promo model: discounted now (0.5 / 1), reverts to 2 / 4 after the cutoff.
     'fx-promo': {
       id: 'fx-promo',
       provider: 'fixture',
@@ -51,8 +36,6 @@ const FIXTURE: Catalog = {
       promo_expires_at: '2026-06-01T00:00:00Z',
       post_promo_prices: { input: 2, output: 4 },
     },
-    // Ordered tiers deliberately coexist with a promo so both composition and
-    // greatest-qualifying-threshold behavior are observable.
     'fx-long': {
       id: 'fx-long',
       provider: 'fixture',
@@ -79,7 +62,6 @@ const FIXTURE: Catalog = {
         },
       ],
     },
-    // Dated-deprecation model: sunsets 2026-06-15.
     'fx-sunset': {
       id: 'fx-sunset',
       provider: 'fixture',
@@ -91,7 +73,7 @@ const FIXTURE: Catalog = {
 };
 
 const BEFORE = new Date('2026-05-30T00:00:00Z');
-const AFTER = new Date('2026-06-10T00:00:00Z'); // past promo cutoff, before sunset
+const AFTER = new Date('2026-06-10T00:00:00Z');
 const AFTER_SUNSET = new Date('2026-06-20T00:00:00Z');
 
 describe('tokenizerDriftFactor + ESTIMATE_INFLATION (logic)', () => {
@@ -122,7 +104,7 @@ describe('isPromoExpired + effective prices (logic)', () => {
   it('promo active before the cutoff, expired at/after it', () => {
     expect(isPromoExpired('fx-promo', BEFORE, FIXTURE)).toBe(false);
     expect(isPromoExpired('fx-promo', AFTER, FIXTURE)).toBe(true);
-    expect(isPromoExpired('fx-flat', AFTER, FIXTURE)).toBe(false); // no promo field
+    expect(isPromoExpired('fx-flat', AFTER, FIXTURE)).toBe(false);
   });
   it('effective prices switch to post_promo_prices once the promo expires', () => {
     expect(effectiveInputPrice('fx-promo', BEFORE, FIXTURE)).toBe(0.5);
@@ -169,12 +151,6 @@ describe('effectiveModelPricing input-length composition', () => {
     });
   });
 });
-
-// ============================================================================
-// Invariant tests — run against the REAL catalog. These assert STRUCTURAL
-// properties that must hold regardless of the (sync-updated) numbers, so they
-// catch malformed data without locking in magic values.
-// ============================================================================
 
 interface RealModel {
   inputCost?: number;

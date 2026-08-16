@@ -1,22 +1,5 @@
-/**
- * Greenhouse-specific form field selectors and helpers.
- *
- * Greenhouse job application forms are served at:
- *   boards.greenhouse.io/<company>/jobs/<id>  (hosted board)
- *   <company>.greenhouse.io/               (custom domain with GH embed)
- *
- * Field name attributes are stable across all Greenhouse customers:
- *   job_application[first_name], job_application[last_name],
- *   job_application[email], job_application[phone], etc.
- *
- * Resumé upload uses <input type="file" name="resume"> inside a hidden div;
- * the visible control is a styled <label> that triggers the file picker.
- * We cannot fill a file input programmatically — that triggers escalation.
- */
 
 import type { DetectedField } from './detector';
-
-// ─── URL detection ────────────────────────────────────────────────────────────
 
 const GREENHOUSE_URL_PATTERNS = [
   /boards\.greenhouse\.io\//i,
@@ -28,12 +11,6 @@ export function isGreenhouseUrl(url: string): boolean {
   return GREENHOUSE_URL_PATTERNS.some((re) => re.test(url));
 }
 
-// ─── Selector constants ───────────────────────────────────────────────────────
-
-/**
- * Prioritised selectors per profile key.
- * Greenhouse uses `name="job_application[field_name]"` consistently.
- */
 export const GREENHOUSE_SELECTORS: Record<string, string[]> = {
   firstName: [
     'input[name="job_application[first_name]"]',
@@ -100,7 +77,6 @@ export const GREENHOUSE_SELECTORS: Record<string, string[]> = {
     'input[aria-label*="City" i]',
     'input[placeholder*="city" i]',
   ],
-  // Education fields (Greenhouse adds these for some postings)
   currentCompany: [
     'input[name="job_application[company]"]',
     'input[id*="company"]',
@@ -115,7 +91,6 @@ export const GREENHOUSE_SELECTORS: Record<string, string[]> = {
     'input[aria-label*="Position" i]',
     'input[placeholder*="title" i]',
   ],
-  // File inputs (always skipped by filler → triggers escalation)
   'files.resume': [
     'input[type="file"][name="resume"]',
     'input[type="file"][name="job_application[resume]"]',
@@ -127,8 +102,6 @@ export const GREENHOUSE_SELECTORS: Record<string, string[]> = {
     'input[type="file"][name*="cover"]',
   ],
 };
-
-// ─── Selector resolution ──────────────────────────────────────────────────────
 
 export function resolveGreenhouseSelector(
   key: string,
@@ -173,8 +146,6 @@ export function collectResolvableGreenhouseFields(): DetectedField[] {
   return result;
 }
 
-// ─── Form container detection ─────────────────────────────────────────────────
-
 export function findGreenhouseFormContainer(): Element | null {
   const selectors = [
     '#application_form',
@@ -183,7 +154,6 @@ export function findGreenhouseFormContainer(): Element | null {
     'form[id*="application"]',
     'form[class*="application"]',
     '[data-qa="application-form"]',
-    // Embedded iFrame scenario — the content script may be inside the iframe
     'form',
   ];
   for (const sel of selectors) {
@@ -193,8 +163,6 @@ export function findGreenhouseFormContainer(): Element | null {
   return null;
 }
 
-// ─── Custom question detection ────────────────────────────────────────────────
-
 export interface GreenhouseCustomField {
   key: string;
   selector: string;
@@ -202,10 +170,6 @@ export interface GreenhouseCustomField {
   fieldType: DetectedField['fieldType'];
 }
 
-/**
- * Greenhouse custom questions use input IDs like `job_application_answers_attributes_0_answer`.
- * Labels are in a preceding <label> or the question text node.
- */
 export function detectGreenhouseCustomFields(container: Element): GreenhouseCustomField[] {
   const results: GreenhouseCustomField[] = [];
   const seen = new Set<string>();

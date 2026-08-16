@@ -2,15 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
 
-// includeThoughts on the canonical ThinkingConfig defaults to true when the
-// caller doesn't set it -- this pins that default so services/api-gateway's
-// /api/v1/providers/:providerId/stream (which passes a caller-supplied
-// ChatRequest.thinking straight through) keeps its existing behavior
-// unchanged. apps/web's web v1 route is the one caller that explicitly
-// opts OUT (includeThoughts:false) to hold byte-stability with the
-// pre-adapter Google provider -- see apps/web/app/api/llm/v1/chat/
-// completions/lib/canonical-request.ts's toCanonicalGoogleThinking and its
-// 'buildGoogleChatRequest -> translateChatRequest wire' test.
 describe('translateChatRequest thinkingConfig.includeThoughts default', () => {
   it('defaults to includeThoughts:true when the caller never sets the field', () => {
     const req: ChatRequest = {

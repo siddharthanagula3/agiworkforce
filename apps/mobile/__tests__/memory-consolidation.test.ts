@@ -1,8 +1,3 @@
-/**
- * Unit tests for dedupeAgainstExisting — the pure consolidation dedup step.
- * (consolidateFactsFromTurn is the thin async DB wrapper; its dedup logic lives
- * here and is exercised directly.)
- */
 import { dedupeAgainstExisting } from '../src/features/memory/services/consolidation';
 import type { MemoryFact } from '../storage/types';
 

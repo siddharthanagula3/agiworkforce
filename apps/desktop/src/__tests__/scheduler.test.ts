@@ -1,14 +1,6 @@
-/**
- * Scheduler Tauri Commands Integration Tests
- *
- * Tests for the proactive scheduling Tauri commands that expose the
- * ProactiveScheduler to the frontend, allowing users to schedule
- * automated tasks with cron expressions.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 
-// Mock Tauri modules before importing anything else
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
@@ -17,7 +9,6 @@ vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(),
 }));
 
-// Types matching the Rust backend structures (serde rename_all = "camelCase")
 type SchedulerActionType =
   | 'workflow'
   | 'agiTask'
@@ -54,9 +45,6 @@ describe('Scheduler Tauri Commands', () => {
     vi.clearAllMocks();
   });
 
-  // ==========================================================================
-  // scheduler_add_job - Add cron/interval job
-  // ==========================================================================
   describe('scheduler_add_job', () => {
     it('should add a cron job for daily execution', async () => {
       const mockJobId = 'job-uuid-123';
@@ -197,9 +185,6 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // scheduler_list_jobs - List all jobs
-  // ==========================================================================
   describe('scheduler_list_jobs', () => {
     it('should list all scheduled jobs', async () => {
       const mockJobs: ScheduledJob[] = [
@@ -311,9 +296,6 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // scheduler_pause_job - Pause a job
-  // ==========================================================================
   describe('scheduler_pause_job', () => {
     it('should pause an active job', async () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
@@ -359,9 +341,6 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // scheduler_resume_job - Resume a job
-  // ==========================================================================
   describe('scheduler_resume_job', () => {
     it('should resume a paused job', async () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
@@ -407,9 +386,6 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // scheduler_remove_job - Remove a job
-  // ==========================================================================
   describe('scheduler_remove_job', () => {
     it('should remove an existing job', async () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
@@ -465,9 +441,6 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // scheduler_get_next_runs - Get upcoming runs
-  // ==========================================================================
   describe('scheduler_get_next_runs', () => {
     it('should get next runs with default limit', async () => {
       const mockNextRuns: NextRunEntry[] = [
@@ -538,7 +511,6 @@ describe('Scheduler Tauri Commands', () => {
         limit: 10,
       })) as NextRunEntry[];
 
-      // Verify results are sorted chronologically
       for (let i = 0; i < result.length - 1; i++) {
         const currentTime = new Date(result[i]!.nextRun).getTime();
         const nextTime = new Date(result[i + 1]!.nextRun).getTime();
@@ -557,7 +529,6 @@ describe('Scheduler Tauri Commands', () => {
     });
 
     it('should only include active jobs', async () => {
-      // Backend should only return active jobs, not paused/failed ones
       const mockNextRuns: NextRunEntry[] = [
         {
           jobId: 'active-job-1',
@@ -582,9 +553,6 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // scheduler_get_job - Get a specific job by ID
-  // ==========================================================================
   describe('scheduler_get_job', () => {
     it('should get a job by ID', async () => {
       const mockJob: ScheduledJob = {
@@ -652,14 +620,10 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // Job lifecycle integration tests
-  // ==========================================================================
   describe('Job lifecycle', () => {
     it('should handle full job lifecycle: create -> pause -> resume -> remove', async () => {
       const jobId = 'lifecycle-job';
 
-      // Create job
       vi.mocked(invoke).mockResolvedValueOnce(jobId);
       const createdId = await invoke('scheduler_add_job', {
         name: 'Lifecycle Test',
@@ -669,17 +633,14 @@ describe('Scheduler Tauri Commands', () => {
       });
       expect(createdId).toBe(jobId);
 
-      // Pause job
       vi.mocked(invoke).mockResolvedValueOnce(true);
       const paused = await invoke('scheduler_pause_job', { jobId });
       expect(paused).toBe(true);
 
-      // Resume job
       vi.mocked(invoke).mockResolvedValueOnce(true);
       const resumed = await invoke('scheduler_resume_job', { jobId });
       expect(resumed).toBe(true);
 
-      // Remove job
       vi.mocked(invoke).mockResolvedValueOnce(true);
       const removed = await invoke('scheduler_remove_job', { jobId });
       expect(removed).toBe(true);
@@ -688,7 +649,6 @@ describe('Scheduler Tauri Commands', () => {
     });
 
     it('should handle job failure accumulation', async () => {
-      // Job with 3 consecutive failures should be marked as failed
       const mockFailedJob: ScheduledJob = {
         id: 'failing-job',
         name: 'Failing Job',
@@ -714,9 +674,6 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // Cron expression validation tests
-  // ==========================================================================
   describe('Cron expression support', () => {
     const validCronExpressions = [
       { expr: '0 0 * * * *', desc: 'every hour' },
@@ -765,9 +722,6 @@ describe('Scheduler Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // Action type tests
-  // ==========================================================================
   describe('Action type support', () => {
     const actionTypes: Array<{ type: SchedulerActionType; data: Record<string, unknown> }> = [
       { type: 'workflow', data: { workflowId: 'wf-123' } },

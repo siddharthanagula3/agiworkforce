@@ -11,24 +11,13 @@ export interface ChatPreferences {
   compactMode: boolean;
   autoApproveTools: boolean;
   autoInjectSkills?: boolean;
-  /**
-   * Authoritative master switch for automatic memory retrieval and generation.
-   * Optional only for persisted pre-v27 settings; callers must treat missing as off.
-   */
   memoryEnabled?: boolean;
-  /** Allow automatic memory generation for turns that use tools or web search. */
   allowToolAssistedMemoryGeneration?: boolean;
-  /** Legacy mirror retained for the native settings contract. */
   autoSaveMemories?: boolean;
   agentMode: AgentMode;
   chatStorageMode: 'local' | 'cloud';
   sendShortcut?: 'enter' | 'mod-enter';
   autoTTS?: boolean;
-  /**
-   * Start new Managed Cloud conversations as temporary: excluded from history
-   * and purged by the retention cron. Optional for persisted pre-existing
-   * settings; treat missing as off.
-   */
   temporaryChat?: boolean;
 }
 
@@ -122,7 +111,6 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
           }
         },
         setChatAgentMode: async (mode) => {
-          // Lazy import breaks potential circular dependency with settingsStore
           const { useSettingsStore } = await import('../settingsStore');
           await useSettingsStore.getState().setAgentMode(mode);
         },

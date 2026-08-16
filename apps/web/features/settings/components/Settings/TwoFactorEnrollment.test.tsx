@@ -53,22 +53,18 @@ describe('TwoFactorEnrollmentPanel · enable', () => {
     render(<TwoFactorEnrollmentPanel onStatusChange={onStatusChange} />);
 
     const setupButton = await screen.findByRole('button', { name: /set up authenticator app/i });
-    // The server has said "off", so the panel must not be claiming a second factor.
     expect(screen.queryByText(/Two-factor authentication is on/i)).toBeNull();
 
-    // GET status resolved before /setup is ever called — nothing is optimistic.
     service.get2FAStatus.mockResolvedValue(enabledStatus());
     await user.click(setupButton);
 
     await waitFor(() => expect(service.setup2FA).toHaveBeenCalledTimes(1));
 
-    // Manual-entry secret is selectable, and the otpauth URI is rendered as a QR image.
     expect(await screen.findByTestId('totp-secret')).toHaveTextContent(SECRET);
     expect(
       await screen.findByAltText(/QR code containing your two-factor setup key/i),
     ).toBeInTheDocument();
 
-    // Backup codes exist locally at this point but must stay hidden until verified.
     expect(screen.queryByText(BACKUP_CODES[0]!)).toBeNull();
 
     await user.type(screen.getByLabelText(/Enter the 6-digit code from the app/i), '123456');
@@ -96,11 +92,9 @@ describe('TwoFactorEnrollmentPanel · enable', () => {
     await user.click(screen.getByRole('button', { name: /verify and enable/i }));
 
     expect(await screen.findByText(/That code was not accepted/i)).toBeInTheDocument();
-    // No success banner, no backup codes, and the user is still on the verify step.
     expect(screen.queryByText(/is now enabled on your account/i)).toBeNull();
     expect(screen.queryByText(BACKUP_CODES[0]!)).toBeNull();
     expect(screen.getByRole('button', { name: /verify and enable/i })).toBeInTheDocument();
-    // Status was only read on mount — a rejected code never triggers a re-read.
     expect(service.get2FAStatus).toHaveBeenCalledTimes(1);
   });
 
@@ -137,15 +131,12 @@ describe('TwoFactorEnrollmentPanel · backup codes', () => {
       expect(codeList).toHaveTextContent(backupCode);
     }
 
-    // Dismissal is blocked until the user says they saved them.
     const done = screen.getByRole('button', { name: /^Done$/i });
     expect(done).toBeDisabled();
     await user.click(screen.getByLabelText(/I have saved these backup codes/i));
     expect(done).toBeEnabled();
     await user.click(done);
 
-    // Once dismissed the plaintext codes are gone from the DOM for good; only
-    // the server-reported remaining count survives.
     await waitFor(() => expect(screen.queryByRole('list', { name: /Backup codes/i })).toBeNull());
     expect(screen.queryByText(BACKUP_CODES[0]!)).toBeNull();
     expect(await screen.findByText(/3 backup codes remaining/i)).toBeInTheDocument();
@@ -182,7 +173,6 @@ describe('TwoFactorEnrollmentPanel · disable', () => {
     await user.click(await screen.findByRole('button', { name: /turn off two-factor/i }));
 
     const confirm = screen.getByRole('button', { name: /turn off two-factor/i });
-    // An empty code can never reach the route — it would just 400.
     expect(confirm).toBeDisabled();
 
     await user.type(screen.getByLabelText(/Authenticator or backup code/i), 'AAAA-1111');

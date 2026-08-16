@@ -1,9 +1,3 @@
-/**
- * Cloud API Client
- *
- * HTTP client for the AGI Workforce API gateway (cloud-mode conversations).
- * Handles conversation CRUD and LLM message sending via SSE streaming.
- */
 
 import { guardedFetch } from '../lib/egressGuard';
 import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
@@ -34,26 +28,14 @@ import {
   type ManagedCloudMessage,
 } from '@agiworkforce/cloud-contracts';
 
-// Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS.
-// The Electron shell also needs the absolute base: its renderer origin is
-// `agi://cloud` (never same-origin with the API), and that origin is
-// explicitly CORS-allowlisted server-side.
 // Exported so runtimes can resolve relative wire uris (e.g. the
-// `x_generated_files` `/api/files/{id}` paths) against the same base.
 export const CLOUD_API_BASE_URL = isTauri || isElectronHost ? WEB_APP_URL : '';
 const usesNativeCloudSession = isTauri || isElectronHost;
 
-/** Maximum size of one not-yet-dispatched Managed Cloud SSE event. */
 export const CLOUD_SSE_MAX_EVENT_CHARS = 1_048_576;
-/** Maximum time a successful Managed Cloud stream may remain silent. */
 export const CLOUD_SSE_IDLE_TIMEOUT_MS = 90_000;
-/** Bound the all-history helpers that materialize results in renderer memory. */
 export const CLOUD_MAX_CONVERSATIONS = MANAGED_CLOUD_CONVERSATION_LIMITS.maxItems;
 export const CLOUD_MAX_MESSAGES_PER_CONVERSATION = MANAGED_CLOUD_MESSAGE_LIMITS.maxItems;
-
-// ============================================================================
-// Type Definitions
-// ============================================================================
 
 export interface CloudMessage {
   id: string;
@@ -97,17 +79,6 @@ export type CloudChatMessageContent =
       | { type: 'image_url'; image_url: { url: string } }
     >;
 
-// ============================================================================
-// Auth Helper
-// ============================================================================
-
-/**
- * Retrieves auth headers for API requests.
- *
- * Desktop (Tauri): Uses cloudAccountAuth.getValidSession() for Bearer token.
- * Web (cloud): Session is in httpOnly cookies — browser sends them
- * automatically. We fetch a CSRF token for state-changing requests.
- */
 function captureDesktopCloudAccountId(): string | undefined {
   return usesNativeCloudSession ? cloudAccountAuth.getSession()?.user?.id : undefined;
 }
@@ -129,7 +100,6 @@ export async function getAuthHeaders(
     'X-AGI-Surface': 'desktop',
   };
 
-  // Desktop mode: add Bearer token from Tauri auth service
   const session = await readAccountBoundSession(expectedAccountId);
   if (session?.access_token) {
     headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -139,8 +109,6 @@ export async function getAuthHeaders(
     throw new Error('AGI Cloud requires a connected Desktop session.');
   }
 
-  // Web mode: Clerk session cookies are httpOnly and sent automatically.
-  // Fetch a CSRF token for state-changing requests.
   if (!session?.access_token && typeof document !== 'undefined') {
     try {
       const csrfResp = await guardedFetch(`${CLOUD_API_BASE_URL}/api/csrf`, {
@@ -161,12 +129,6 @@ export async function getAuthHeaders(
   return headers;
 }
 
-/**
- * Executes an authenticated AGI Cloud request and invalidates the Desktop
- * session when the server rejects its bearer token. A 403 is intentionally
- * left to the caller because it can represent a valid user lacking permission
- * for a specific tenant object.
- */
 export async function cloudFetch(
   input: Parameters<typeof guardedFetch>[0],
   init?: Parameters<typeof guardedFetch>[1],
@@ -177,10 +139,6 @@ export async function cloudFetch(
     throw new Error('The Managed Cloud account changed while this request was in progress.');
   }
   if (usesNativeCloudSession && response.status === 401) {
-    // A request may have left with T1 immediately before a same-account refresh
-    // installed T2. A late T1 rejection must not revoke the newer valid
-    // credential. Only the exact bearer that the server rejected may invalidate
-    // the still-current Desktop session; unauthenticated requests never do.
     const dispatchedAuthorization = new Headers(init?.headers).get('Authorization');
     const dispatchedToken = dispatchedAuthorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     const currentSession = cloudAccountAuth.getSession();
@@ -201,9 +159,6 @@ export async function accountBoundCloudFetch(
   assertBoundary?.();
   if (!expectedAccountId) return cloudFetch(input, init);
 
-  // Resolve the credential again at the final transport boundary. A token may
-  // rotate for the same account, but an account switch while an earlier auth
-  // lookup was pending must fail before any queued payload reaches fetch.
   const session = await readAccountBoundSession(expectedAccountId);
   assertBoundary?.();
   if (!session?.access_token) {
@@ -267,11 +222,6 @@ export function createCloudChatPersistenceClient(
   });
 }
 
-/**
- * Authenticated, trust-boundary-aware client for the durable managed-run
- * journal. All Desktop Cloud follow/cancel traffic uses the same guarded
- * egress path and Clerk/CSRF headers as the completion request itself.
- */
 export interface DesktopCloudRunCleanupCredential {
   accountId: string;
   accessToken: string;
@@ -303,14 +253,6 @@ export function createDesktopCloudAgentRunClient(
   });
 }
 
-/**
- * Cancellation-only client for a runtime that is being torn down.
- *
- * Sign-out and A -> B replacement synchronously revoke current authority before
- * awaiting runtime disposal. The retiring runtime is still allowed to cancel
- * its own server-owned run, using the exact old credential it captured; it may
- * not use this client for new work or current-account reads.
- */
 export function createDesktopCloudAgentRunCleanupClient(
   credential: DesktopCloudRunCleanupCredential,
 ): ManagedCloudAgentRunClient {
@@ -338,13 +280,6 @@ export function createDesktopCloudAgentRunCleanupClient(
   });
 }
 
-// ============================================================================
-// Conversation CRUD
-// ============================================================================
-
-/**
- * Lists all cloud conversations for the current user.
- */
 export async function listCloudConversations(): Promise<CloudConversation[]> {
   const client = createCloudChatPersistenceClient();
   const conversations: CloudConversation[] = [];
@@ -370,9 +305,6 @@ export async function listCloudConversations(): Promise<CloudConversation[]> {
   return conversations;
 }
 
-/**
- * Creates a new cloud conversation.
- */
 export async function createCloudConversation(
   title: string,
   model: string,
@@ -382,9 +314,6 @@ export async function createCloudConversation(
   );
 }
 
-/**
- * Fetches a single cloud conversation by ID, including its messages.
- */
 export async function getCloudConversation(id: string): Promise<CloudConversation> {
   const client = createCloudChatPersistenceClient();
   const messages: CloudMessage[] = [];
@@ -415,9 +344,6 @@ export async function getCloudConversation(id: string): Promise<CloudConversatio
   };
 }
 
-/**
- * Deletes a cloud conversation by ID.
- */
 export async function deleteCloudConversation(id: string): Promise<void> {
   await createCloudChatPersistenceClient().deleteConversation(id);
 }
@@ -431,13 +357,6 @@ export async function updateCloudConversationTitle(
   );
 }
 
-// ============================================================================
-// Usage
-// ============================================================================
-
-/**
- * Fetches the current user's cloud API usage summary.
- */
 export async function getCloudUsage(): Promise<CloudUsage> {
   const expectedAccountId = captureDesktopCloudAccountId();
   const headers = await getAuthHeaders(expectedAccountId);
@@ -459,21 +378,12 @@ export async function getCloudUsage(): Promise<CloudUsage> {
   return parseManagedUsageSummaryResponse(await res.json());
 }
 
-// ============================================================================
-// Models (Cloud Mode Model Picker)
-// ============================================================================
-
-/** Minimal validated projection consumed by the Desktop discovery adapter. */
 export interface CloudModelInfo {
   id: string;
   name: string;
   provider: string;
 }
 
-/**
- * Public response envelope from GET /api/models. Rich catalog fields remain
- * owned by @agiworkforce/types; this client validates only discovery identity.
- */
 export interface CloudModelsResponse {
   models: CloudModelInfo[];
   version?: string;
@@ -481,9 +391,7 @@ export interface CloudModelsResponse {
 }
 
 export interface CloudGeneratedImage {
-  /** Media-library asset id parsed from the authenticated file URL. */
   id: string;
-  /** Authenticated, same-cloud-origin `/api/files/{id}` URL. */
   uri: string;
   provider: ManagedMediaImageProvider;
   model: string;
@@ -540,11 +448,6 @@ export async function getCloudModels(): Promise<CloudModelInfo[]> {
   }
 }
 
-/**
- * Generates one durable image through the same managed-media endpoint used by
- * Web. Desktop deliberately rejects inline base64 fallbacks: they cannot
- * survive a reload and must never be persisted into chat metadata.
- */
 export async function generateCloudImage(input: {
   prompt: string;
   provider: ManagedMediaImageProvider;
@@ -633,10 +536,6 @@ export async function generateCloudImage(input: {
   };
 }
 
-// ============================================================================
-// SSE Streaming
-// ============================================================================
-
 class CloudSseEventLimitError extends Error {
   constructor() {
     super('AGI Cloud returned a stream event that exceeds the safe renderer limit.');
@@ -651,12 +550,6 @@ class CloudSseIdleTimeoutError extends Error {
   }
 }
 
-/**
- * Incremental SSE decoder with a bound over both an unfinished wire line and
- * the aggregate data fields of the current event. A single network chunk may
- * contain many small events larger than the cap in total; complete events are
- * drained before the remaining frame is measured.
- */
 class BoundedCloudSseDecoder {
   private buffer = '';
   private dataLines: string[] = [];
@@ -827,14 +720,6 @@ function readCloudStreamChunk(
   });
 }
 
-/**
- * The host's IANA time zone, or null when the runtime cannot resolve one.
- *
- * The completions route validates `client_timezone` with `isValidIanaTimeZone`
- * and caps it at 64 characters, so a missing/exotic value must be OMITTED
- * rather than substituted — a wrong zone is worse than none (the model would
- * confidently answer "today" in the wrong calendar day).
- */
 function resolveClientTimeZone(): string | null {
   try {
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -880,15 +765,6 @@ export async function sendCloudMessage(
     workMode?: CloudWorkMode;
     skillName?: string;
     effort?: string;
-    /**
-     * Client-minted uuid for this turn's assistant row. Serialised as the
-     * route's `assistant_message_id` (accepted at
-     * `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`'s
-     * `assistant_message_id: z.string().uuid().optional()`), which turns on the
-     * server-side assistant-turn persistence net — without it the server takes
-     * the `assistant_turn_not_server_persisted` skip branch and a crash or
-     * dropped connection after generation loses the (already billed) turn.
-     */
     assistantMessageId?: string;
   },
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void,
@@ -908,7 +784,6 @@ export async function sendCloudMessage(
     return;
   }
 
-  // Build message history — use provided history or fall back to single message
   const chatMessages =
     messageHistory && messageHistory.length > 0
       ? messageHistory
@@ -916,7 +791,6 @@ export async function sendCloudMessage(
 
   const clientTimeZone = resolveClientTimeZone();
 
-  // Use the OpenAI-compatible endpoint deployed on Vercel
   const openAiBody: Record<string, unknown> = {
     model,
     messages: chatMessages,
@@ -929,16 +803,9 @@ export async function sendCloudMessage(
     ...(requestOptions?.workMode ? { work_mode: requestOptions.workMode } : {}),
     ...(requestOptions?.skillName ? { skill_name: requestOptions.skillName } : {}),
     ...(requestOptions?.effort ? { effort: requestOptions.effort } : {}),
-    // Server-side durability net for the assistant turn — see the
-    // `assistantMessageId` doc on requestOptions.
     ...(requestOptions?.assistantMessageId
       ? { assistant_message_id: requestOptions.assistantMessageId }
       : {}),
-    // The user's IANA zone. The route reads `client_timezone` and passes it to
-    // `buildCapabilityPreamble`; when it is absent the whole "use that local
-    // calendar date for 'today'" clause is dropped and the model answers date
-    // questions in the server's calendar day. Resolved (never guessed) — an
-    // environment with no resolvable zone simply omits the field.
     ...(clientTimeZone ? { client_timezone: clientTimeZone } : {}),
     use_prompt_cache: true,
   };
@@ -961,7 +828,6 @@ export async function sendCloudMessage(
         onCredential,
       );
     } catch (err) {
-      // Network error or abort
       onError(err instanceof Error ? err : new Error(String(err)));
       return;
     }
@@ -983,19 +849,6 @@ export async function sendCloudMessage(
   }
 }
 
-// ============================================================================
-// Tool-approval resume — POST /api/llm/v1/chat/completions/approve
-// ============================================================================
-
-/**
- * Resumes a turn the server suspended on `x_tool_approval_request`. Sends only
- * the tenant-owned run id plus the per-call decisions. The server restores the
- * exact private transcript, tool arguments, policy, and event cursor from its
- * approval checkpoint. On
- * success the response is the SAME `text/event-stream` shape as
- * `sendCloudMessage` — streamed through the identical callbacks so the
- * continuation appends onto the same assistant message.
- */
 export async function sendCloudApprovalResume(
   runId: string,
   toolApprovals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>,
@@ -1049,11 +902,6 @@ export async function sendCloudApprovalResume(
   }
 }
 
-/**
- * Shared SSE-response consumer for both `sendCloudMessage` and
- * `sendCloudApprovalResume` — same OpenAI-compatible `data: {...}` line
- * format, same [DONE] sentinel, same error-response handling.
- */
 async function consumeCloudSseResponse(
   res: Response,
   onChunk: (text: string) => void,
@@ -1126,7 +974,6 @@ async function consumeCloudSseResponse(
       }
     }
   } catch (err) {
-    // Propagate read errors (including abort)
     onError(err instanceof Error ? err : new Error(String(err)));
   } finally {
     try {
@@ -1143,17 +990,6 @@ async function consumeCloudSseResponse(
   }
 }
 
-/**
- * A non-2xx AGI Cloud response, carrying the machine-readable classification
- * the payload supplied.
- *
- * The refusal used to be flattened to a plain `Error`, so a managed quota /
- * rate-limit block arrived at the UI indistinguishable from a network failure:
- * a disappearing toast and no reset time, no upgrade path, no "switch to a
- * standard model" hint. `code` feeds
- * `classifyManagedQuotaErrorCode` and `resetAt` is the server's own instant —
- * never synthesised beyond translating a `Retry-After` delay.
- */
 export class CloudApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
@@ -1175,12 +1011,6 @@ function readErrorString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-/**
- * Reset instant for an exceeded ceiling: the payload's `reset_at` (top level or
- * nested under `error`), else a `Retry-After` delay converted to an instant.
- * Returns undefined when the server said nothing — the UI then shows no reset
- * time rather than inventing one.
- */
 function readCloudErrorResetAt(payload: unknown, response: Response): string | undefined {
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
     const body = payload as Record<string, unknown>;
@@ -1225,8 +1055,6 @@ async function readCloudResponseError(response: Response): Promise<CloudApiError
     // Never surface an untrusted HTML/error response body. The status remains
     // enough to diagnose the request without leaking response content.
   }
-  // Read outside the JSON branch: a proxy-generated 429 can carry `Retry-After`
-  // with a non-JSON body.
   const resetAt = readCloudErrorResetAt(payload, response);
 
   const message =
@@ -1243,15 +1071,6 @@ async function readCloudResponseError(response: Response): Promise<CloudApiError
   });
 }
 
-// ============================================================================
-// Internal Helpers
-// ============================================================================
-
-/**
- * Parses a single `data: {...}` SSE line and dispatches text content via
- * `onChunk`. A malformed or explicit error event terminates the stream so an
- * empty/failed provider response can never fall through to `onDone`.
- */
 function parseAndDispatchLine(
   line: string,
   onChunk: (text: string) => void,
@@ -1309,7 +1128,6 @@ function parseAndDispatchLine(
       return true;
     }
 
-    // Support both { text: "..." } and OpenAI-style { choices: [{ delta: { content: "..." } }] }
     if (typeof obj['text'] === 'string') {
       onChunk(obj['text']);
       return false;
@@ -1326,8 +1144,6 @@ function parseAndDispatchLine(
     }
     return false;
   } catch {
-    // Never log the raw line: it can contain model output or tool data. A
-    // malformed data event is a failed stream, not a successful empty reply.
     onError(new Error('AGI Cloud returned a malformed stream event.'));
     return true;
   }

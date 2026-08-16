@@ -1,41 +1,18 @@
 'use client';
 
-/**
- * AgentStatusBar
- *
- * Shown below the header when the AI agent is actively working.
- * Displays:
- * - Animated spinner + "Working on: [current action]" + elapsed time
- * - Collapsible action trail (timeline of steps)
- *
- * Framer-motion is used for expand/collapse animation.
- */
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@shared/lib/utils';
 import { ActionTrail, type ActionTrailEntry } from './ActionTrail';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface AgentStatusBarProps {
-  /** Whether the agent is currently working */
   isActive: boolean;
-  /** Current action description (e.g. "Searching the web...", "Analyzing code...") */
   currentAction?: string;
-  /** List of action trail entries for the collapsible timeline */
   actionTrail?: ActionTrailEntry[];
-  /** When the current work started (for elapsed time counter) */
   startedAt?: Date;
   className?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Elapsed time hook
-// ---------------------------------------------------------------------------
 
 function useElapsedTime(startedAt: Date | undefined, active: boolean): string {
   const [elapsed, setElapsed] = useState('0s');
@@ -76,10 +53,6 @@ function useElapsedTime(startedAt: Date | undefined, active: boolean): string {
 
   return elapsed;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export const AgentStatusBar: React.FC<AgentStatusBarProps> = ({
   isActive,

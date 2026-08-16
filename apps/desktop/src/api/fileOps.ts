@@ -1,18 +1,5 @@
-/**
- * File Operations API
- *
- * TypeScript API wrappers for all file_ops Tauri commands.
- * 22 commands covering file CRUD, directory management, binary I/O,
- * ranged reads, workspace listing, and undo support.
- *
- * Rust param names are snake_case; invoke() params are camelCase.
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface FileMetadata {
   size: number;
@@ -58,11 +45,6 @@ export interface WorkspaceFile {
   language: string | null;
 }
 
-// ============================================================================
-// File Read Operations
-// ============================================================================
-
-/** Read a text file by path. Rust: file_read(path) */
 export async function fileRead(path: string): Promise<string> {
   try {
     return await invoke<string>('file_read', { path });
@@ -71,7 +53,6 @@ export async function fileRead(path: string): Promise<string> {
   }
 }
 
-/** Read a text file by filePath. Rust: file_read_text(file_path) */
 export async function fileReadText(filePath: string): Promise<string> {
   try {
     return await invoke<string>('file_read_text', { filePath });
@@ -80,7 +61,6 @@ export async function fileReadText(filePath: string): Promise<string> {
   }
 }
 
-/** Read a binary file, returned as base64. Rust: file_read_binary(file_path) */
 export async function fileReadBinary(filePath: string): Promise<string> {
   try {
     return await invoke<string>('file_read_binary', { filePath });
@@ -89,10 +69,6 @@ export async function fileReadBinary(filePath: string): Promise<string> {
   }
 }
 
-/**
- * Read a file with line-number offset and limit.
- * Rust: file_read_range(path, offset?, limit?)
- */
 export async function fileReadRange(
   path: string,
   offset?: number | null,
@@ -109,10 +85,6 @@ export async function fileReadRange(
   }
 }
 
-/**
- * Read file content with metadata (size, line count, language, excerpt).
- * Rust: fs_read_file_content(file_path)
- */
 export async function fsReadFileContent(filePath: string): Promise<FileContextContent> {
   try {
     return await invoke<FileContextContent>('fs_read_file_content', { filePath });
@@ -121,11 +93,6 @@ export async function fsReadFileContent(filePath: string): Promise<FileContextCo
   }
 }
 
-// ============================================================================
-// File Write Operations
-// ============================================================================
-
-/** Write text content to a file. Rust: file_write(path, content) */
 export async function fileWrite(path: string, content: string): Promise<void> {
   try {
     await invoke('file_write', { path, content });
@@ -134,7 +101,6 @@ export async function fileWrite(path: string, content: string): Promise<void> {
   }
 }
 
-/** Write text content to a file by filePath. Rust: file_write_text(file_path, content) */
 export async function fileWriteText(filePath: string, content: string): Promise<void> {
   try {
     await invoke('file_write_text', { filePath, content });
@@ -143,7 +109,6 @@ export async function fileWriteText(filePath: string, content: string): Promise<
   }
 }
 
-/** Write binary (base64-encoded) content to a file. Rust: file_write_binary(file_path, base64_content) */
 export async function fileWriteBinary(filePath: string, base64Content: string): Promise<void> {
   try {
     await invoke('file_write_binary', { filePath, base64Content });
@@ -152,11 +117,6 @@ export async function fileWriteBinary(filePath: string, base64Content: string): 
   }
 }
 
-// ============================================================================
-// File Mutation Operations
-// ============================================================================
-
-/** Delete a file. Rust: file_delete(path) */
 export async function fileDelete(path: string): Promise<void> {
   try {
     await invoke('file_delete', { path });
@@ -165,7 +125,6 @@ export async function fileDelete(path: string): Promise<void> {
   }
 }
 
-/** Rename / move a file. Rust: file_rename(old_path, new_path) */
 export async function fileRename(oldPath: string, newPath: string): Promise<void> {
   try {
     await invoke('file_rename', { oldPath, newPath });
@@ -174,7 +133,6 @@ export async function fileRename(oldPath: string, newPath: string): Promise<void
   }
 }
 
-/** Copy a file. Rust: file_copy(src, dest) */
 export async function fileCopy(src: string, dest: string): Promise<void> {
   try {
     await invoke('file_copy', { src, dest });
@@ -183,7 +141,6 @@ export async function fileCopy(src: string, dest: string): Promise<void> {
   }
 }
 
-/** Move a file (rename with fallback to copy+delete). Rust: file_move(src, dest) */
 export async function fileMove(src: string, dest: string): Promise<void> {
   try {
     await invoke('file_move', { src, dest });
@@ -192,11 +149,6 @@ export async function fileMove(src: string, dest: string): Promise<void> {
   }
 }
 
-// ============================================================================
-// File Query Operations
-// ============================================================================
-
-/** Check whether a path exists. Rust: file_exists(path) */
 export async function fileExists(path: string): Promise<boolean> {
   try {
     return await invoke<boolean>('file_exists', { path });
@@ -205,7 +157,6 @@ export async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-/** Get metadata for a path (by path). Rust: file_metadata(path) */
 export async function fileMetadata(path: string): Promise<FileMetadata> {
   try {
     return await invoke<FileMetadata>('file_metadata', { path });
@@ -214,7 +165,6 @@ export async function fileMetadata(path: string): Promise<FileMetadata> {
   }
 }
 
-/** Get metadata for a path (by filePath). Rust: file_get_metadata(file_path) */
 export async function fileGetMetadata(filePath: string): Promise<FileMetadata> {
   try {
     return await invoke<FileMetadata>('file_get_metadata', { filePath });
@@ -223,7 +173,6 @@ export async function fileGetMetadata(filePath: string): Promise<FileMetadata> {
   }
 }
 
-/** Open a file or directory with the OS default application. Rust: file_open_with_default_app(path) */
 export async function fileOpenWithDefaultApp(path: string): Promise<void> {
   try {
     await invoke('file_open_with_default_app', { path });
@@ -232,11 +181,6 @@ export async function fileOpenWithDefaultApp(path: string): Promise<void> {
   }
 }
 
-// ============================================================================
-// Directory Operations
-// ============================================================================
-
-/** Create a directory (recursive). Rust: dir_create(path) */
 export async function dirCreate(path: string): Promise<void> {
   try {
     await invoke('dir_create', { path });
@@ -245,7 +189,6 @@ export async function dirCreate(path: string): Promise<void> {
   }
 }
 
-/** List directory entries. Rust: dir_list(path) */
 export async function dirList(path: string): Promise<DirEntry[]> {
   try {
     return await invoke<DirEntry[]>('dir_list', { path });
@@ -254,7 +197,6 @@ export async function dirList(path: string): Promise<DirEntry[]> {
   }
 }
 
-/** Delete a directory. Rust: dir_delete(path, recursive) */
 export async function dirDelete(path: string, recursive: boolean): Promise<void> {
   try {
     await invoke('dir_delete', { path, recursive });
@@ -263,10 +205,6 @@ export async function dirDelete(path: string, recursive: boolean): Promise<void>
   }
 }
 
-/**
- * Traverse a directory with a glob pattern. Returns matching paths (max 10,000).
- * Rust: dir_traverse(path, glob_pattern)
- */
 export async function dirTraverse(path: string, globPattern: string): Promise<string[]> {
   try {
     return await invoke<string[]>('dir_traverse', { path, globPattern });
@@ -275,7 +213,6 @@ export async function dirTraverse(path: string, globPattern: string): Promise<st
   }
 }
 
-/** Get workspace files (filtered, sorted). Rust: fs_get_workspace_files(workspace_path) */
 export async function fsGetWorkspaceFiles(workspacePath: string): Promise<WorkspaceFile[]> {
   try {
     return await invoke<WorkspaceFile[]>('fs_get_workspace_files', { workspacePath });
@@ -284,14 +221,6 @@ export async function fsGetWorkspaceFiles(workspacePath: string): Promise<Worksp
   }
 }
 
-// ============================================================================
-// Undo Operations
-// ============================================================================
-
-/**
- * Undo a file operation (restore, delete, or create).
- * Rust: undo_file_operation(operation, path, content?)
- */
 export async function undoFileOperation(
   operation: string,
   path: string,

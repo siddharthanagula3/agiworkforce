@@ -1,20 +1,9 @@
-/**
- * Tool Display Names
- *
- * Translates technical tool names to user-friendly descriptions
- * for non-technical users in simple mode.
- */
 
 export interface ToolDisplayInfo {
-  /** User-friendly name */
   displayName: string;
-  /** Active form (e.g., "Searching...") */
   activeForm: string;
-  /** Completed form (e.g., "Searched") */
   completedForm: string;
-  /** Short description for tooltips */
   description: string;
-  /** Icon category for UI */
   category:
     | 'search'
     | 'browser'
@@ -27,11 +16,7 @@ export interface ToolDisplayInfo {
     | 'system';
 }
 
-/**
- * Mapping of technical tool names to user-friendly display info
- */
 const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
-  // Browser/Web tools
   browser_navigate: {
     displayName: 'Open website',
     activeForm: 'Opening website...',
@@ -89,7 +74,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'browser',
   },
 
-  // Search tools
   web_search: {
     displayName: 'Search the web',
     activeForm: 'Searching...',
@@ -112,7 +96,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'search',
   },
 
-  // File tools
   file_read: {
     displayName: 'Read file',
     activeForm: 'Reading file...',
@@ -163,7 +146,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'file',
   },
 
-  // Code tools
   code_execute: {
     displayName: 'Run code',
     activeForm: 'Running code...',
@@ -186,7 +168,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'code',
   },
 
-  // Terminal tools
   terminal_execute: {
     displayName: 'Run command',
     activeForm: 'Running command...',
@@ -209,7 +190,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'terminal',
   },
 
-  // Media tools
   image_generate: {
     displayName: 'Create image',
     activeForm: 'Creating image...',
@@ -246,7 +226,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'media',
   },
 
-  // Data tools
   database_query: {
     displayName: 'Search database',
     activeForm: 'Searching data...',
@@ -262,7 +241,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'data',
   },
 
-  // Communication tools
   email_send: {
     displayName: 'Send email',
     activeForm: 'Sending email...',
@@ -278,7 +256,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'communication',
   },
 
-  // MCP tools (translate MCP tool IDs)
   mcp__filesystem__read_file: {
     displayName: 'Read file',
     activeForm: 'Reading file...',
@@ -322,7 +299,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     category: 'file',
   },
 
-  // System tools
   system_info: {
     displayName: 'Check system',
     activeForm: 'Checking system...',
@@ -332,10 +308,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
   },
 };
 
-/**
- * Get user-friendly display info for a tool
- * Falls back to a cleaned-up version of the technical name if not found
- */
 export function getToolDisplayInfo(technicalName: string | undefined | null): ToolDisplayInfo {
   if (!technicalName) {
     return {
@@ -347,15 +319,12 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
     };
   }
 
-  // Normalize the name (lowercase, trim)
   const normalized = technicalName.toLowerCase().trim();
 
-  // Direct match
   if (TOOL_DISPLAY_MAP[normalized]) {
     return TOOL_DISPLAY_MAP[normalized];
   }
 
-  // Try without underscores
   const withoutUnderscores = normalized.replace(/_/g, '');
   for (const [key, value] of Object.entries(TOOL_DISPLAY_MAP)) {
     if (key.replace(/_/g, '') === withoutUnderscores) {
@@ -363,7 +332,6 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
     }
   }
 
-  // Try partial matches for common patterns
   if (normalized.includes('search') || normalized.includes('find')) {
     return {
       displayName: 'Searching',
@@ -485,12 +453,10 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
     };
   }
 
-  // MCP tools - extract the action from mcp__{server}__{action} format
   if (normalized.startsWith('mcp__') || normalized.startsWith('mcp_')) {
     const parts = normalized.split('__').filter(Boolean);
     if (parts.length >= 2) {
       const action = parts[parts.length - 1] || 'working';
-      // Convert snake_case to readable form
       const readable = action.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
       return {
         displayName: readable,
@@ -502,7 +468,6 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
     }
   }
 
-  // Default fallback - clean up the technical name
   const cleanedName = technicalName
     .replace(/^(mcp__|tool_|action_)/i, '')
     .replace(/_/g, ' ')
@@ -518,23 +483,14 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
   };
 }
 
-/**
- * Get just the friendly display name
- */
 export function getFriendlyToolName(technicalName: string | undefined | null): string {
   return getToolDisplayInfo(technicalName).displayName;
 }
 
-/**
- * Get the active form (e.g., "Searching...")
- */
 export function getToolActiveForm(technicalName: string | undefined | null): string {
   return getToolDisplayInfo(technicalName).activeForm;
 }
 
-/**
- * Get the completed form (e.g., "Search complete")
- */
 export function getToolCompletedForm(technicalName: string | undefined | null): string {
   return getToolDisplayInfo(technicalName).completedForm;
 }

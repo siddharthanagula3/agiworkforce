@@ -1,12 +1,6 @@
 import type { AuditAction, AuditSeverity } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
-/**
- * Cloud heartbeat/audit writes are separate from the paired companion's signed
- * transport heartbeat. Keep this no-op until a server-owned audit endpoint is
- * available; the live Dispatch connection is monitored in companion.ts.
- */
-
 export function startMobileHeartbeat(): () => void {
   if (!FEATURES.companion) return () => {};
   return () => {};

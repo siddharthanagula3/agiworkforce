@@ -4,14 +4,6 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 
-/**
- * LanguageSelector · native <select> that switches the i18n language.
- *
- * Persistence is automatic: i18next-browser-languagedetector is configured
- * with `caches: ['localStorage']` and `lookupLocalStorage: 'agiworkforce-language'`,
- * so calling `i18n.changeLanguage(code)` writes to localStorage automatically.
- * No manual localStorage.setItem call is needed.
- */
 export function LanguageSelector() {
   const { i18n } = useTranslation();
 

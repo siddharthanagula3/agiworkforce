@@ -12,7 +12,6 @@ interface StatusTrailProps {
 }
 
 function getIconForType(type: ActionTrailEntry['type']) {
-  // Icons are decorative - screen readers use aria-label on parent
   switch (type) {
     case 'thinking':
       return <Brain className="w-4 h-4 animate-pulse" aria-hidden="true" />;
@@ -60,7 +59,6 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
   const isCompleted = entry.type === 'completed';
   const isError = entry.type === 'error';
 
-  // Calculate progress if available
   const progress =
     entry.progress ??
     (entry.currentStep && entry.totalSteps
@@ -168,7 +166,6 @@ export function StatusTrailContent({
     return null;
   }
 
-  // Check if any items are currently in progress
   const hasActiveItems = actionTrail.some((entry) =>
     ['thinking', 'searching', 'coding', 'running'].includes(entry.type),
   );
@@ -211,7 +208,6 @@ export function FloatingStatusTrail({ messageId, className }: FloatingStatusTrai
     return null;
   }
 
-  // Check if any items are currently in progress
   const hasActiveItems = actionTrail.some((entry) =>
     ['thinking', 'searching', 'coding', 'running'].includes(entry.type),
   );

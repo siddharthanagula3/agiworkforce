@@ -19,7 +19,6 @@ type CapabilitiesSettings = {
 const NAMESPACE = 'capabilities';
 
 const DEFAULT_SETTINGS: CapabilitiesSettings = {
-  // Privacy-safe default: memory does not read or generate until the user opts in.
   memory: false,
   generateFromHistory: true,
   allowToolAssistedGeneration: false,
@@ -30,10 +29,6 @@ export function CapabilitiesSection() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  // AUDIT-FIX PAR-32: a swallowed load failure left the toggles showing
-  // DEFAULT_SETTINGS (both on) under a 'Synced to your account' label, so a
-  // user whose stored preference was memory:false saw it rendered on — and
-  // toggling anything then persisted that wrong baseline. Track the failure.
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -61,7 +56,6 @@ export function CapabilitiesSection() {
     setSaveError(null);
     try {
       await savePreferenceNamespace(NAMESPACE, next);
-      // Let the chat runtime pick up the new Memory toggle without a reload.
       resetMemoryCapabilityCache();
       setSavedAt(Date.now());
     } catch (error) {
@@ -127,8 +121,6 @@ export function CapabilitiesSection() {
         {row(
           'Memory',
           'Allow AGI to remember details across conversations',
-          // AUDIT-FIX PAR-32: while the stored value is unknown the control
-          // must not be presented as an editable reflection of it.
           <Switch
             aria-label="Memory"
             checked={settings.memory}

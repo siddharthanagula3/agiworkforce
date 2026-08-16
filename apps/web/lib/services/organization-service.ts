@@ -1,14 +1,3 @@
-/**
- * @file organization-service.ts
- *
- * # Client injection contract (WEB-RLS-BYPASS mitigation)
- *
- * All methods are USER-CONTEXT and accept a `db: DatabaseAdapter` parameter.
- * RLS policies enforce organization membership visibility and mutability via
- * `db.withUser(jwt)` on the caller side.
- *
- * Never add a private `getDatabase()` here. See lib/services/README.md.
- */
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -23,18 +12,12 @@ interface OrgMemberWithProfile extends OrganizationMemberRow {
 }
 
 export class OrganizationService {
-  /**
-   * Create a new organization.
-   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
-   * RLS policies enforce that only authenticated users can create organizations.
-   */
   static async createOrganization(
     db: DatabaseAdapter,
     userId: string,
     name: string,
     slug: string,
   ): Promise<Organization> {
-    // 1. Create Org
     const [org] = await db
       .query<OrganizationRow>(
         `insert into organizations (name, slug, created_by)
@@ -51,7 +34,6 @@ export class OrganizationService {
       throw new Error('Organization insert returned no row');
     }
 
-    // 2. Add creator as Owner
     try {
       await db.execute(
         `insert into organization_members (organization_id, user_id, role)
@@ -61,7 +43,6 @@ export class OrganizationService {
     } catch (memberError) {
       logger.error({ error: memberError, orgId: org.id }, 'Failed to add owner to organization');
 
-      // Cleanup: Delete the orphaned organization
       try {
         await db.execute(`delete from organizations where id = $1`, [org.id]);
         logger.info({ orgId: org.id }, 'Cleaned up orphaned organization after member add failure');
@@ -78,11 +59,6 @@ export class OrganizationService {
     return org as unknown as Organization;
   }
 
-  /**
-   * Get user's organizations.
-   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
-   * RLS policies enforce that only organizations the user is a member of are returned.
-   */
   static async getUserOrganizations(db: DatabaseAdapter, userId: string): Promise<Organization[]> {
     const rows = await db
       .query<OrganizationRow>(
@@ -100,13 +76,6 @@ export class OrganizationService {
     return rows as unknown as Organization[];
   }
 
-  /**
-   * Get members of an organization.
-   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
-   * RLS policies enforce that only members of accessible organizations are returned.
-   *
-   * SEV-WEB-08 / WEB-31: explicit column list to limit blast radius.
-   */
   static async getOrganizationMembers(
     db: DatabaseAdapter,
     orgId: string,
@@ -144,11 +113,6 @@ export class OrganizationService {
     })) as OrganizationMember[];
   }
 
-  /**
-   * Add member to organization.
-   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
-   * RLS policies enforce that only org admins/owners can add members.
-   */
   static async addMember(
     db: DatabaseAdapter,
     orgId: string,
@@ -167,18 +131,6 @@ export class OrganizationService {
     }
   }
 
-  /**
-   * Remove member.
-   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
-   * RLS policies enforce that only org admins/owners can remove members.
-   *
-   * The `role <> 'owner'` predicate is a second line, not the guarantee: 0085's
-   * DEFERRABLE at-least-one-owner constraint trigger rejects any transaction
-   * that would COMMIT an ownerless organization. It is written here so this
-   * path reports "not removed" rather than surfacing a raw constraint error,
-   * and so a bare DELETE can never silently orphan the billing account.
-   * Ownership moves through POST /api/settings/organization/transfer-ownership.
-   */
   static async removeMember(db: DatabaseAdapter, orgId: string, userId: string): Promise<void> {
     try {
       const removed = await db.execute(

@@ -1,16 +1,3 @@
-/**
- * Archived Chats screen.
- *
- * Web has had Settings → Archived chats for some time; Mobile had no way to
- * see an archived conversation at all. Worse, Mobile's cloud list request
- * omitted the `archived` filter entirely (server default is `include`), so a
- * chat archived on web still appeared in the Mobile chat list — archiving
- * looked broken rather than absent. That filter is fixed in
- * stores/chat/chatMessageStore.ts; this screen is where the archived chats go.
- *
- * Cloud-only by design: `archived` lives on web_conversations, and Local Mode
- * conversations never leave the device, so there is no archived set to read.
- */
 import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, RefreshControl, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -145,8 +132,6 @@ export default function ArchivedChatsScreen() {
         try {
           await restoreArchivedConversation(conversation.id);
           removeFromList(conversation.id);
-          // The chat list filters on `archived=exclude`, so it will not show the
-          // restored chat until it is re-read from the server.
           await loadConversations();
         } catch (error) {
           Alert.alert(

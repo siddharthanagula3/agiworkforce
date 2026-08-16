@@ -41,7 +41,6 @@ describe('ThinkingBlock', () => {
     const { container } = render(
       <ThinkingBlock content="thinking..." isStreaming={false} defaultExpanded={false} />,
     );
-    // Clock SVG is present; no element with Brain class from lucide
     const svgs = container.querySelectorAll('svg');
     expect(svgs.length).toBeGreaterThan(0);
   });
@@ -76,10 +75,8 @@ describe('ThinkingBlock', () => {
       <ThinkingBlock content="hidden content" isStreaming={false} defaultExpanded={false} />,
     );
 
-    // Body <p> not present when collapsed
     expect(container.querySelector('p')).toBeNull();
     await user.click(screen.getByRole('button', { name: /expand reasoning/i }));
-    // Body <p> present after expanding
     expect(container.querySelector('p')?.textContent).toBe('hidden content');
   });
 
@@ -114,7 +111,6 @@ describe('ThinkingBlockFlow', () => {
       />,
     );
     expect(screen.getByText('solo thought')).toBeInTheDocument();
-    // Single block does not show a "Thought N" label
     expect(screen.queryByText('Thought 1')).not.toBeInTheDocument();
   });
 
@@ -144,10 +140,7 @@ describe('ThinkingBlockFlow', () => {
         defaultExpanded={true}
       />,
     );
-    // Last block expanded → body <p> with content visible
     expect(screen.getByText('last content')).toBeInTheDocument();
-    // First block collapsed → the <p> body element should not be present
-    // (preview text may appear in header span, but the body <p> should not)
     const bodyParagraphs = container.querySelectorAll('p');
     const bodyTexts = Array.from(bodyParagraphs).map((p) => p.textContent);
     expect(bodyTexts).not.toContain('first content');
@@ -162,7 +155,6 @@ describe('ThinkingBlockFlow', () => {
         ]}
       />,
     );
-    // Connector line has absolute positioning class
     expect(container.querySelector('.absolute')).toBeTruthy();
   });
 });

@@ -1,9 +1,3 @@
-/**
- * MessageActions Component
- *
- * Renders action buttons for messages including copy, bookmark,
- * reactions, regenerate, edit, and delete.
- */
 
 import React, { memo } from 'react';
 import {
@@ -25,7 +19,6 @@ import { ReactionConfig } from './types';
 import { SaveToMemoryButton } from '@/features/memory/SaveToMemoryButton';
 
 export interface MessageActionsProps {
-  // State
   showActions: boolean;
   copied: boolean;
   bookmarked?: boolean;
@@ -35,13 +28,11 @@ export interface MessageActionsProps {
   isUser: boolean;
   hasError?: boolean;
 
-  // Reaction picker
   reactionConfigs: ReactionConfig[];
   showReactionPicker: boolean;
   onToggleReactionPicker: () => void;
   onReaction: (reaction: MessageReaction) => void;
 
-  // Handlers
   onCopy: () => void;
   onBookmark: () => void;
   onRegenerate?: () => void;
@@ -51,13 +42,11 @@ export interface MessageActionsProps {
   onSpeak?: () => void;
   onFork?: () => void;
 
-  // Conditional rendering
   canEdit: boolean;
   canRegenerate: boolean;
   isSpeaking?: boolean;
   ttsSupported?: boolean;
 
-  /** Raw text content of the message (for Save to Memory) */
   messageContent?: string;
 }
 

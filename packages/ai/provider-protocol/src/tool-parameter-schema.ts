@@ -1,34 +1,8 @@
-/**
- * Tool parameter schema normalization (provider-quirk-aware).
- *
- * Ensures tool parameter schemas are accepted by every provider's tool
- * validator:
- *   - **Gemini** rejects several JSON Schema keywords + top-level `type`
- *     alongside `anyOf`. Use `cleanSchemaForGemini` from `./lib/clean-for-gemini`.
- *   - **OpenAI** rejects function tool schemas unless top-level is
- *     `type: "object"` (TypeBox root unions compile to `{ anyOf: [...] }`
- *     without `type`). We auto-flatten union schemas into a single object
- *     schema with merged properties.
- *   - **Anthropic** expects full JSON Schema draft 2020-12 compliance — close
- *     to a passthrough for our shape.
- *   - **xAI** rejects validation-constraint keywords (minLength/maxLength
- *     etc.). Caller can request a strip via `unsupportedKeywords`.
- *
- * Pure function. Pass through from `ProviderAdapter.normalizeToolSchemas`.
- *
- * Ported and simplified from OpenClaw `src/agents/pi-tools-parameter-schema.ts`
- * (MIT, Peter Steinberger). The original sourced unsupported-keyword sets
- * from a per-model compat config; we accept them as a direct argument.
- *
- * See THIRD_PARTY_LICENSES.md at repo root for full attribution.
- */
 
 import { cleanSchemaForGemini } from './lib/clean-for-gemini';
 
 export interface ToolParameterSchemaOptions {
-  /** Provider id — drives Gemini cleanup vs generic flattening. */
   modelProvider?: string;
-  /** Set of JSON Schema keywords to strip (e.g. xAI's reject list). */
   unsupportedKeywords?: ReadonlySet<string>;
 }
 

@@ -21,10 +21,6 @@ import { cn } from '../../../lib/utils';
 import { WidgetRegistry } from './WidgetRegistry';
 import type { DataTableWidgetData, WidgetRendererProps, WidgetActionEvent } from './index';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 type SortDirection = 'asc' | 'desc' | null;
 
 interface SortState {
@@ -32,22 +28,16 @@ interface SortState {
   direction: SortDirection;
 }
 
-// ============================================================================
-// Component
-// ============================================================================
-
 const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData>> = ({
   widget,
   onAction,
 }) => {
   const { columns, rows, sortable = true, filterable = true, pageSize = 10, totalRows } = widget;
 
-  // Local state
   const [sortState, setSortState] = useState<SortState>({ column: null, direction: null });
   const [filterQuery, setFilterQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
 
-  // Emit action event
   const emitAction = useCallback(
     (action: string, payload?: unknown) => {
       const event: WidgetActionEvent = {
@@ -60,7 +50,6 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
     [widget.id, onAction],
   );
 
-  // Filter rows
   const filteredRows = useMemo(() => {
     if (!filterQuery.trim()) return rows;
 
@@ -74,7 +63,6 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
     );
   }, [rows, columns, filterQuery]);
 
-  // Sort rows
   const sortedRows = useMemo(() => {
     if (!sortState.column || !sortState.direction) return filteredRows;
 
@@ -82,12 +70,10 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
       const aVal = a[sortState.column!];
       const bVal = b[sortState.column!];
 
-      // Handle null/undefined
       if (aVal == null && bVal == null) return 0;
       if (aVal == null) return sortState.direction === 'asc' ? -1 : 1;
       if (bVal == null) return sortState.direction === 'asc' ? 1 : -1;
 
-      // Compare values
       let comparison = 0;
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         comparison = aVal - bVal;
@@ -99,19 +85,16 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
     });
   }, [filteredRows, sortState]);
 
-  // Paginate rows
   const paginatedRows = useMemo(() => {
     const start = currentPage * pageSize;
     return sortedRows.slice(start, start + pageSize);
   }, [sortedRows, currentPage, pageSize]);
 
-  // Pagination info
   const totalPages = Math.ceil(sortedRows.length / pageSize);
   const displayedTotal = totalRows ?? rows.length;
   const startRow = currentPage * pageSize + 1;
   const endRow = Math.min((currentPage + 1) * pageSize, sortedRows.length);
 
-  // Handle sort click
   const handleSort = useCallback(
     (columnKey: string) => {
       setSortState((prev) => {
@@ -131,23 +114,21 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
           direction: newDirection,
         };
       });
-      setCurrentPage(0); // Reset to first page on sort
+      setCurrentPage(0);
     },
     [emitAction],
   );
 
-  // Handle filter change
   const handleFilterChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setFilterQuery(value);
-      setCurrentPage(0); // Reset to first page on filter
+      setCurrentPage(0);
       emitAction('filter', { query: value });
     },
     [emitAction],
   );
 
-  // Handle row click
   const handleRowClick = useCallback(
     (row: Record<string, unknown>, index: number) => {
       emitAction('row-click', { row, index });
@@ -155,7 +136,6 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
     [emitAction],
   );
 
-  // Format cell value for display
   const formatCellValue = (value: unknown): string => {
     if (value == null) return '-';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -168,7 +148,6 @@ const DataTableWidgetComponent: React.FC<WidgetRendererProps<DataTableWidgetData
     return String(value);
   };
 
-  // Get sort icon
   const getSortIcon = (columnKey: string) => {
     if (sortState.column !== columnKey) {
       return <ArrowUpDown size={14} className="opacity-50" />;
@@ -309,7 +288,6 @@ DataTableWidgetComponent.displayName = 'DataTableWidget';
 
 export const DataTableWidget = memo(DataTableWidgetComponent);
 
-// Register the widget
 WidgetRegistry.register({
   type: 'data-table',
   displayName: 'Data Table',

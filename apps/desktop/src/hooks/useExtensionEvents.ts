@@ -1,7 +1,3 @@
-/**
- * Shared browser extension state hook backed by a singleton store.
- * Listener initialization is owned by app startup, not component mounts.
- */
 
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -10,16 +6,10 @@ import {
   type ExtensionEventState,
 } from '../stores/extensionEventsStore';
 
-// ─── Public state shape ────────────────────────────────────────────────────────
-
 export type { ExtensionAgentStatus, ExtensionEventState };
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
 export interface UseExtensionEventsReturn extends ExtensionEventState {
-  /** Invoke agi-workforce.stopAgent Tauri command */
   stopAgent: () => Promise<void>;
-  /** Reset state back to idle (e.g. after user dismisses error) */
   resetState: () => void;
 }
 

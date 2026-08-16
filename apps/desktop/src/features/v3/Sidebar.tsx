@@ -44,12 +44,9 @@ import { AgiMark, shortcutLabel } from '@agiworkforce/ui';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { useCloudTaskBadge } from './useCloudTaskBadge';
 
-// ─── recents grouping ────────────────────────────────────────────────────────
-
 type RecentsGroup = {
   label: string;
   items: ConversationSummary[];
-  /** Pinned group: always shown in full, never subject to the 30-item cap. */
   noCap?: boolean;
 };
 
@@ -76,8 +73,6 @@ function groupConversations(
     .filter((c) => (archived ? c.archived === true : c.archived !== true))
     .sort((a, b) => conversationUpdatedAtMs(b) - conversationUpdatedAtMs(a));
 
-  // Pinned conversations float to a dedicated top group (ChatGPT-style),
-  // independent of recency; the display layer applies the collapsed 30-row cap.
   const pinned = sorted.filter((c) => c.pinned);
   const rest = sorted.filter((c) => !c.pinned);
 
@@ -106,8 +101,6 @@ function groupConversations(
   return result;
 }
 
-// ─── per-mode nav config ──────────────────────────────────────────────────────
-
 type NavItem = {
   id: string;
   label: string;
@@ -115,10 +108,6 @@ type NavItem = {
   beta?: boolean;
 };
 
-/**
- * Count pill for a nav row. Renders nothing at zero: an empty badge would claim
- * pending work that does not exist, and a "0" reads as a broken counter.
- */
 function NavBadge({ count, collapsed }: { count: number; collapsed?: boolean }) {
   if (count <= 0) return null;
   return (
@@ -134,8 +123,6 @@ function NavBadge({ count, collapsed }: { count: number; collapsed?: boolean }) 
         padding: '0 4px',
         borderRadius: 999,
         background: 'var(--chat-accent-primary)',
-        // Accent background + elevated-surface text is the existing on-accent
-        // idiom here (see CapModal's primary button); there is no on-accent token.
         color: 'var(--chat-surface-elevated)',
         fontSize: collapsed ? 9 : 10,
         fontWeight: 600,
@@ -153,9 +140,6 @@ function navItemsForMode(
   t: TFunction,
 ): NavItem[] {
   void mode;
-  // Cloud mode had no nav destinations at all. Library is a Managed Cloud
-  // surface — the files live in cloud storage — so it belongs here and only
-  // here: local sessions keep their files on the device and are not cataloged.
   if (privacyMode === 'managed') {
     return [
       { id: 'library', label: t('sidebar.nav.library'), icon: Library },
@@ -164,11 +148,6 @@ function navItemsForMode(
       { id: 'customize', label: t('sidebar.nav.customize'), icon: Settings },
     ];
   }
-  // Projects moved to its own ChatGPT-style folder section below; the rest
-  // stay as flat nav entries. Code, Design, and Research are absent from the
-  // managed list above: Code opens device files, Design keeps its board in
-  // device memory, and Research drives the on-device swarm engine — none of
-  // them may render over a Managed Cloud session.
   return [
     { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
     { id: 'code', label: t('sidebar.nav.code'), icon: FileCode },
@@ -181,8 +160,6 @@ function navItemsForMode(
   ];
 }
 
-// Folder-icon accent for a project: explicit color override, else a stable
-// cycle through the design-token palette (mirrors AgiWorkProjects).
 const PROJECT_ACCENTS = [
   'var(--chat-accent-secondary)',
   'var(--chat-accent-primary)',
@@ -197,8 +174,6 @@ function projectAccent(project: Project, index: number): string {
     project.color ?? PROJECT_ACCENTS[index % PROJECT_ACCENTS.length] ?? 'var(--chat-text-muted)'
   );
 }
-
-// ─── collapsed rail items ─────────────────────────────────────────────────────
 
 function railItems(
   privacyMode: 'local' | 'byok' | 'managed',
@@ -216,16 +191,11 @@ function railItems(
     items.push({ id: 'research', icon: Telescope, title: t('sidebar.nav.research') });
     items.push({ id: 'automation', icon: Zap, title: t('sidebar.nav.automation') });
     items.push({ id: 'tasks', icon: ListChecks, title: t('sidebar.nav.tasks') });
-    // Was missing: collapsing the sidebar in Local mode dropped Scheduled
-    // entirely, even though the expanded nav offers it (the managed branch
-    // always had it). RefreshCw matches Local's expanded icon for this row.
     items.push({ id: 'scheduled', icon: RefreshCw, title: t('sidebar.nav.scheduled') });
   }
   items.push({ id: 'customize', icon: Settings, title: t('sidebar.nav.customize') });
   return items;
 }
-
-// ─── avatar initials helper ───────────────────────────────────────────────────
 
 function initials(name?: string | null, email?: string | null): string {
   if (name) {
@@ -236,26 +206,18 @@ function initials(name?: string | null, email?: string | null): string {
   return '?';
 }
 
-// ─── component ───────────────────────────────────────────────────────────────
-
 export interface SidebarProps {
   mode: V3Mode;
-  /** Start a new chat; pass a projectId to scope the new chat to a project. */
   onNewChat?: (projectId?: string) => void;
   onOpenSearch?: () => void;
   onCreateProject?: () => void;
   onNavigateView?: (view: string) => void;
-  /** The shell's current panel, so the nav can show where the user is. */
   activeView?: string;
   onJumpConversation?: (id: string) => void;
   onOpenAccountMenu?: () => void;
   accountMenuOpen?: boolean;
 }
 
-/**
- * Nav id -> shell view. Shared by the click handler and the selected-state check
- * so the highlight can never disagree with where the click actually goes.
- */
 const NAV_ID_TO_VIEW: Record<string, string> = {
   projects: 'projects',
   artifacts: 'artifacts',
@@ -281,9 +243,6 @@ export function Sidebar({
   accountMenuOpen = false,
 }: SidebarProps) {
   const { t } = useTranslation('v3');
-  // Persisted via useUIStore (localStorage key `agiworkforce-ui`) — the same
-  // store the legacy chat sidebar already uses for this, so the collapse
-  // state now survives a reload/restart instead of resetting to expanded.
   const collapsed = useSidecarStore(selectSidebarCollapsed);
   const setCollapsed = useSidecarStore((s) => s.setSidebarCollapsed);
   const [showAll, setShowAll] = useState(false);
@@ -322,7 +281,6 @@ export function Sidebar({
   );
   const displayGroups = useMemo(() => {
     if (showAll) return groups;
-    // Keep pinned rows visible, then cap the collapsed recency list at 30.
     let seen = 0;
     return groups
       .map((g) => {
@@ -338,12 +296,8 @@ export function Sidebar({
   const totalItems = useMemo(() => groups.reduce((n, g) => n + g.items.length, 0), [groups]);
 
   const navItems = useMemo(() => navItemsForMode(mode, privacyMode, t), [mode, privacyMode, t]);
-  // Platform-correct label. Was a hardcoded ⌘K, which is wrong for every
-  // Windows and Linux user of the desktop app.
   const searchShortcut = useMemo(() => shortcutLabel('K'), []);
   const RAIL_ITEMS = useMemo(() => railItems(privacyMode, t), [privacyMode, t]);
-  // Managed Cloud runs are durable and can stop waiting on the user while
-  // nothing on screen says so; the hook polls only in managed mode.
   const { needsUserCount: tasksNeedingInput } = useCloudTaskBadge();
 
   const handleNavClick = useCallback(
@@ -415,12 +369,6 @@ export function Sidebar({
       onOpenAccountMenu?.();
       return;
     }
-    // This row is labelled "Sign in" / "Cloud sync", so it has to reach the
-    // Cloud account boundary. It used to call openSettings('account'), but in
-    // Local mode SettingsPanel's LOCAL_HIDDEN_TABS contains 'account' and
-    // resolveVisibleTab rewrites it to 'general' — the button silently opened
-    // General settings and read as a dead control. Entering Cloud makes the
-    // shell render AuthPage, which is the only real sign-in route on Desktop.
     setAppMode('cloud');
   }, [isSignedIn, onOpenAccountMenu, setAppMode]);
 
@@ -521,8 +469,6 @@ export function Sidebar({
             padding: collapsed ? '7px 0' : '7px 10px',
             justifyContent: collapsed ? 'center' : 'flex-start',
             borderRadius: 8,
-            // Claude-style ghost row: transparent, borderless, hover-fill — not a boxed
-            // elevated form control.
             border: 'none',
             background: 'transparent',
             cursor: 'pointer',
@@ -582,9 +528,6 @@ export function Sidebar({
         <div style={{ padding: '0 8px', flexShrink: 0 }}>
           {navItems.map((item) => {
             const Icon = item.icon;
-            // The nav previously gave no indication of the current section and had
-            // no focus ring at all — keyboard users could not tell where they were
-            // in either sense.
             const isActive = NAV_ID_TO_VIEW[item.id] === activeView;
             return (
               <button
@@ -851,8 +794,6 @@ export function Sidebar({
               <button
                 key={it.id}
                 data-nav-id={it.id}
-                // Collapsed, the icon is the only label, so the count has to be
-                // in the tooltip too or it is unreadable.
                 title={badgeCount > 0 ? `${it.title} (${badgeCount})` : it.title}
                 onClick={() => handleNavClick(it.id)}
                 style={{

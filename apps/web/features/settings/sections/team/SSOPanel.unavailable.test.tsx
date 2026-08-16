@@ -17,11 +17,6 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const fetchMock = vi.fn();
 
-/**
- * CRIT-011: a backend failure must never be presented as "your organization
- * does not have SSO". Hiding the panel is reserved for the entitlement answer;
- * anything else has to say the server could not be reached.
- */
 describe('SSOPanel when the connection list cannot be read', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock);
@@ -49,7 +44,6 @@ describe('SSOPanel when the connection list cannot be read', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/could not be loaded/i);
     expect(alert).toHaveTextContent(/not a change to your plan/i);
-    // The heading stays, so the admin can see SSO still exists as a feature.
     expect(screen.getByText('Single sign-on (SAML / OIDC)')).toBeVisible();
   });
 

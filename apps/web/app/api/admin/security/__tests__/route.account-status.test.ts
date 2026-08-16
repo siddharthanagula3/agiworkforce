@@ -1,17 +1,3 @@
-/**
- * CRIT-014 — the admin control plane must enforce account status on itself.
- *
- * `/api/admin/security` is the only authenticated route that does not go
- * through `getClerkAuthUser`, so it was the only one that never read
- * `profiles.account_status`. Since `?action=suspend-user` writes that column and
- * deliberately does not revoke the Clerk session, a suspended admin kept a valid
- * token, kept `publicMetadata.role: 'admin'`, and kept the ability to read the
- * security feed and suspend/ban/reactivate other accounts.
- *
- * Revert `assertAccountActive` out of `verifyAdminAccess` and every test in the
- * first two blocks below fails: the route answers 200 to a suspended admin and
- * writes `account_status = 'banned'` on their behalf.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -64,8 +50,6 @@ vi.mock('@clerk/nextjs/server', () => ({
   }),
 }));
 
-// Imported by the route under test; the account-status read is the behaviour
-// being asserted, so it is controlled rather than exercised against Postgres.
 vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
 }));

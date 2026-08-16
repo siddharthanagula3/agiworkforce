@@ -93,7 +93,6 @@ describe('ThinkingMessageBlock', () => {
     expect(screen.getByTestId('inline-panels')).toHaveTextContent('assistant-1');
     expect(screen.getByTestId('widget-list')).toHaveTextContent('assistant-1:1');
     expect(screen.getByTestId('reasoning-accordion')).toHaveTextContent('Plan the tool calls');
-    // "Final answer" appears in both the markdown body and the sources footer test double.
     expect(screen.getAllByText('Final answer')).toHaveLength(2);
   });
 });

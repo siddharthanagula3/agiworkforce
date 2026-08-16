@@ -1,4 +1,3 @@
-// Chat Hooks - Public API
 
 export { useShareConversation } from './use-share-conversation';
 export { useKeyboardShortcuts } from './use-keyboard-shortcuts';

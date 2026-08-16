@@ -1,33 +1,15 @@
-/**
- * applyEdit.ts — Utilities for applying LLM-generated code edits
- *
- * Replaces the "open new document" pattern with an inline apply flow:
- * 1. Extract code block from LLM response
- * 2. Offer user: Apply Inline | View in New Tab | Cancel
- * 3. Apply inline via WorkspaceEdit, or fall back to new tab
- */
 
 import * as vscode from 'vscode';
 import { t } from '../l10n';
 
-/**
- * Extract the first fenced code block matching the given language from text.
- * Falls back to any fenced code block if no language match found.
- */
 export function extractCodeBlock(text: string, lang: string): string | undefined {
-  // PR-3A (F-28): escape regex metacharacters in `lang` before
-  // interpolation. languageId is normally alphanumeric but a custom-
-  // language extension could register `foo|bar` etc. — without escape
-  // this would silently match unintended code blocks.
   const escapedLang = lang.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Try language-specific block first
   const langPattern = new RegExp('```(?:' + escapedLang + ')\\s*\\n([\\s\\S]*?)```', 'i');
   const langMatch = langPattern.exec(text);
   if (langMatch?.[1] !== undefined) {
     return langMatch[1].trimEnd();
   }
 
-  // Fall back to any fenced code block
   const anyPattern = /```(?:\w*)\s*\n([\s\S]*?)```/;
   const anyMatch = anyPattern.exec(text);
   if (anyMatch?.[1] !== undefined) {
@@ -37,10 +19,6 @@ export function extractCodeBlock(text: string, lang: string): string | undefined
   return undefined;
 }
 
-/**
- * Present the LLM response to the user with options to apply inline or view in new tab.
- * If no code block is found, falls back to opening a new tab directly.
- */
 export async function applyLlmEdit(
   editor: vscode.TextEditor,
   selection: vscode.Selection,
@@ -54,7 +32,6 @@ export async function applyLlmEdit(
   const codeBlock = extractCodeBlock(llmResponse, lang);
 
   if (codeBlock === undefined || selection.isEmpty) {
-    // No applicable code block — open new tab
     await openInNewTab(llmResponse, commandLabel);
     return;
   }
@@ -71,9 +48,6 @@ export async function applyLlmEdit(
     return;
   }
 
-  // The returned choice is the button's own label, so both must come from the
-  // same lookup — comparing against an English literal would drop every click
-  // in a translated VS Code.
   const applyInline = t('applyEdit.applyInline');
   const viewInNewTab = t('applyEdit.viewInNewTab');
   const choice = await vscode.window.showInformationMessage(

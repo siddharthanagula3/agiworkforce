@@ -1,14 +1,3 @@
-/**
- * Centralized API URL configuration.
- *
- * All API base URLs are derived from three environment variables:
- *  - VITE_API_BASE_URL      — the Next.js app's `/api/*` surface
- *  - VITE_WEB_APP_URL       — the public web app (Next.js)
- *  - VITE_GATEWAY_BASE_URL  — the Express api-gateway (`services/api-gateway`)
- *
- * Every module that needs a base URL should import from here instead of
- * defining its own constant, so that overrides apply in one place.
- */
 
 /**
  * Base URL for `/api/*` routes served by the Next.js app.
@@ -20,7 +9,6 @@
  */
 export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || 'https://agiworkforce.com';
 
-/** Public web app base URL (Next.js). */
 export const WEB_APP_URL: string =
   (import.meta.env['VITE_WEB_APP_URL'] as string | undefined) || 'https://agiworkforce.com';
 

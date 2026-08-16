@@ -55,7 +55,6 @@ describe('useStreamingArtifactSync', () => {
       { initialProps: { block: blockFor('```html\n<!DOCTYPE') } },
     );
 
-    // User closes the panel mid-stream — the same block must not force it open again.
     useArtifactsStore.getState().setPanelOpen(false);
 
     rerender({ block: blockFor('```html\n<!DOCTYPE html>\n<body>') });

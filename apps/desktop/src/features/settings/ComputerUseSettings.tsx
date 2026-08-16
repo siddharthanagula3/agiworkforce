@@ -31,7 +31,6 @@ import { ComputerUseConsentDialog } from './ComputerUseConsentDialog';
 import { getAllModels } from '@/constants/llm';
 import { STORAGE_KEYS } from '../../constants/storageKeys';
 
-// Backend types — mirror Rust definitions.
 type PermissionStatus = 'allowed' | 'denied' | 'ask_every_time';
 
 interface AppPermissionEntry {
@@ -48,8 +47,6 @@ interface ActiveWindowInfo {
   bundle_id?: string | null;
 }
 
-// Stream 2: computer-use model picker — derived from models.json at module load
-// so it stays in sync when the catalog is updated.
 const AUTO_OPTION = {
   id: '',
   label: 'Auto (router default)',
@@ -96,14 +93,11 @@ export function ComputerUseSettings() {
   const [showAllowedInput, setShowAllowedInput] = useState(false);
   const [showDeniedInput, setShowDeniedInput] = useState(false);
 
-  // Stream 1: per-app permissions (backed by Tauri commands)
   const [permissions, setPermissions] = useState<AppPermissionEntry[]>([]);
   const [alwaysBlocked, setAlwaysBlocked] = useState<string[]>([]);
   const [activeWindow, setActiveWindow] = useState<ActiveWindowInfo | null>(null);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
 
-  // Stream 2: computer-use model selection (persisted in localStorage; passed
-  // to executeOpaTask on next run)
   const [computerUseModel, setComputerUseModel] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
     return window.localStorage.getItem(STORAGE_KEYS.COMPUTER_USE_MODEL) ?? '';
@@ -134,8 +128,6 @@ export function ComputerUseSettings() {
     }
   }, []);
 
-  // Initial load: registry + always-blocked list. Active window is fetched
-  // on demand because hitting AppleScript on every render is expensive.
   useEffect(() => {
     if (!computerUseEnabled) return;
     void refreshPermissions();
@@ -202,7 +194,6 @@ export function ComputerUseSettings() {
     );
   }, []);
 
-  // Group permissions by status for nicer rendering.
   const groupedPermissions = useMemo(() => {
     const allowed = permissions.filter((p) => p.status === 'allowed');
     const denied = permissions.filter((p) => p.status === 'denied');
@@ -688,10 +679,6 @@ export function ComputerUseSettings() {
   );
 }
 
-/**
- * Single row in the per-app permission registry. Shows the app name and
- * bundle id (if known), with status-cycling buttons and a remove control.
- */
 function PermissionRow({
   entry,
   onSetStatus,

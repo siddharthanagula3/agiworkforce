@@ -25,12 +25,6 @@ function isExportDocument(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Download the signed-in account's reviewed Cloud portability document and
- * hand it to the native share sheet. The API request remains subject to the
- * Local/Cloud egress guard, and every device-side step is bound to the account
- * epoch captured when the user tapped Export.
- */
 export async function exportCloudUserData(account: CloudAccountEpoch): Promise<void> {
   assertCloudAccountEpochCurrent(account);
   const response = await api.get<CloudUserExportResponse>('/api/user/export', {

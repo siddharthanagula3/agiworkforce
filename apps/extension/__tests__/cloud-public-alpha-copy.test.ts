@@ -14,7 +14,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// chrome shim — InviteCodeModal touches chrome.storage during mount/redeem.
 const chromeMock = vi.hoisted(() => {
   const localStore: Record<string, unknown> = {};
   const mock = {
@@ -54,10 +53,6 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-// ---------------------------------------------------------------------------
-// (a) cloudAgentClient 403 message — kill-switch / paid-tier truth
-// ---------------------------------------------------------------------------
-
 describe('callCloud 403 managed-compute message', () => {
   function mock403(bodyText: string): void {
     fetchMock.mockResolvedValueOnce({
@@ -71,7 +66,6 @@ describe('callCloud 403 managed-compute message', () => {
     mock403('public_launch_blocked');
     const err = await callCloud([{ role: 'user', content: 'hi' }], 'tok').catch((e) => e as Error);
     expect(err).toBeInstanceOf(Error);
-    // The stale/inverted instruction is gone.
     expect(err.message).not.toMatch(/requires AGI_MANAGED_COMPUTE_PRIVATE_BETA=1/);
     expect(err.message).not.toMatch(/must have it set/i);
   });
@@ -92,10 +86,6 @@ describe('callCloud 403 managed-compute message', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// (b) InviteCodeModal copy — no invite/waitlist-only framing for managed cloud
-// ---------------------------------------------------------------------------
-
 describe('InviteCodeModal public-alpha copy', () => {
   function mountAndText(): string {
     const modal = new InviteCodeModal({
@@ -113,7 +103,6 @@ describe('InviteCodeModal public-alpha copy', () => {
     const text = mountAndText().toLowerCase();
     expect(text).toContain('public alpha');
     expect(text).toContain('sign in');
-    // The old gate framing must be gone.
     expect(text).not.toContain('gated for v1');
     expect(text).not.toContain('unlock cloud routing');
     expect(text).not.toContain('join the waitlist');
@@ -124,7 +113,6 @@ describe('InviteCodeModal public-alpha copy', () => {
     const text = mountAndText();
     expect(text).toContain('Redeem a code');
     expect(text).toContain('Promo or invite code');
-    // No "Unlock cloud" CTA implying cloud is locked behind a code.
     expect(text).not.toContain('Unlock cloud');
   });
 });

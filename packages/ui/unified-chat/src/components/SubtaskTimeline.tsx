@@ -1,15 +1,8 @@
-// packages/ui/unified-chat/src/components/SubtaskTimeline.tsx
-// Ported from apps/desktop/src/components/UnifiedAgenticChat/SubtaskTimeline.tsx
-// Pure props — no store dependencies.
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, ChevronDown, Circle, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface SubtaskStep {
   id: string;
@@ -25,10 +18,6 @@ export interface SubtaskTimelineProps {
   steps: SubtaskStep[];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Duration helper
-// ─────────────────────────────────────────────────────────────────────────────
-
 function formatDuration(startedAt?: Date, completedAt?: Date): string | null {
   if (!startedAt || !completedAt) return null;
   const ms = completedAt.getTime() - startedAt.getTime();
@@ -36,10 +25,6 @@ function formatDuration(startedAt?: Date, completedAt?: Date): string | null {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Step icon
-// ─────────────────────────────────────────────────────────────────────────────
 
 function StepIcon({ status }: { status: SubtaskStep['status'] }) {
   switch (status) {
@@ -53,10 +38,6 @@ function StepIcon({ status }: { status: SubtaskStep['status'] }) {
       return <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />;
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Single step row
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface StepRowProps {
   step: SubtaskStep;
@@ -155,10 +136,6 @@ function StepRow({ step, isLast }: StepRowProps) {
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main export
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function SubtaskTimeline({ taskId: _taskId, steps }: SubtaskTimelineProps) {
   if (steps.length === 0) {

@@ -11,7 +11,6 @@ type InvokeMock = Mock<(cmd: string, args?: Record<string, unknown>) => Promise<
 
 async function getInvokeMock(): Promise<InvokeMock> {
   const { invoke } = await import('@tauri-apps/api/core');
-  // AUDIT-P3-TEST-TYPE: Cast is necessary here as the mock module returns vi.fn()
   return invoke as InvokeMock;
 }
 

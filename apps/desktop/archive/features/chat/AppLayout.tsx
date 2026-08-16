@@ -32,7 +32,6 @@ import { ExecutionSidecar } from '@/features/execution-sidecar';
 import { ReminderList } from '@/features/reminders/ReminderList';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
 
-// Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
 
 interface AppLayoutProps {
@@ -58,7 +57,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const closeArtifactPanel = useArtifactStore((state) => state.closePanel);
   const openArtifactPanel = useArtifactStore((state) => state.openPanel);
   const artifactPanelOpen = useArtifactStore((state) => state.panelOpen);
-  // Derived from artifactStore.panelOpen — the canonical source of truth.
   const isArtifactPanelOpen = artifactPanelOpen;
   const setIsArtifactPanelOpen = useCallback(
     (open: boolean) => {
@@ -71,7 +69,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     ARTIFACT_PANEL_DEFAULT_WIDTH,
   );
   const [isMediaLabOpen, setIsMediaLabOpen] = useState(false);
-  // Unified right panel: only one can be open at a time (besides artifacts)
   type RightPanel =
     | 'memory'
     | 'tasks'
@@ -104,7 +101,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     setCustomInstructionsOpen(true);
   }, []);
 
-  // Use useShallow to prevent re-renders from object reference changes
   const sidecarState = useUnifiedChatStore(useShallow((state) => state.sidecar));
   const sidecarWidth = useUnifiedChatStore((state) => state.sidecarWidth);
   const setSidecarWidth = useUnifiedChatStore((state) => state.setSidecarWidth);
@@ -259,7 +255,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         useUnifiedChatStore.getState().toggleMessageTimestamps();
       }
 
-      // Navigation shortcuts
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 'i') {
         e.preventDefault();
         openRightPanel('images');

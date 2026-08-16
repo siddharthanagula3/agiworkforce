@@ -13,20 +13,9 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Surface
-// ============================================================================
-
-/** Surface that emitted the audit event. */
 export type AuditSurface = 'desktop' | 'mobile' | 'web' | 'cli' | 'vscode';
 
-// ============================================================================
-// Actions
-// ============================================================================
-
-/** Auditable actions across the platform. */
 export type AuditAction =
-  // Authentication
   | 'auth_login'
   | 'auth_logout'
   // Tool approval
@@ -45,69 +34,30 @@ export type AuditAction =
   | 'data_exported'
   | 'data_deleted';
 
-// ============================================================================
-// Severity
-// ============================================================================
-
-/** Severity level of an audit event. */
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 
-// ============================================================================
-// Outcome
-// ============================================================================
-
-/** Outcome of the audited action. */
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
-// ============================================================================
-// Audit Event
-// ============================================================================
-
-/**
- * A single audit event representing a security- or compliance-relevant action.
- *
- * Events are append-only; once emitted they should not be mutated or deleted.
- */
 export interface AuditEvent {
-  /** Globally unique event identifier (UUID v4). */
   eventId: string;
 
-  /** ISO 8601 timestamp when the event occurred. */
   timestamp: string;
 
-  /** User ID of the actor (null for system-initiated events). */
   userId: string | null;
 
-  /** Surface that produced the event. */
   surface: AuditSurface;
 
-  /** The action that was performed. */
   action: AuditAction;
 
-  /** The resource acted upon (e.g., tool name, agent session ID, setting key). */
   resource: string;
 
-  /** Outcome of the action. */
   outcome: AuditOutcome;
 
-  /** Severity classification. */
   severity: AuditSeverity;
 
-  /** Free-form metadata for additional context. */
   metadata?: Record<string, unknown>;
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Infer the default severity for an action based on its nature.
- *
- * - Tool denials and agent failures are `warning`.
- * - Data deletion is `critical`.
- * - Everything else is `info`.
- */
 export function defaultSeverityForAction(action: AuditAction): AuditSeverity {
   switch (action) {
     case 'tool_denied':

@@ -4,21 +4,8 @@ import { toast } from 'sonner';
 import { useVoiceInputStore } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
 
-/** How long (ms) the preview is shown before auto-inserting into the composer */
 const PREVIEW_AUTO_CONFIRM_MS = 2000;
 
-/**
- * Floating overlay that appears over the chat composer while the user is
- * dictating (listening), waiting for Whisper (transcribing), waiting for
- * AI cleanup (processing), or previewing the result before insertion.
- * Returns null when idle.
- *
- * Visual states:
- *   listening    → pulsing red mic circle + "Release to transcribe"
- *   transcribing → grey spinner + "Transcribing..."
- *   processing   → grey sparkles + "Cleaning up..."
- *   preview      → green check + transcript text preview + "Inserting in Xs..."
- */
 const isPermissionError = (err: unknown): boolean => {
   if (err instanceof Error) {
     const msg = err.message.toLowerCase();
@@ -42,7 +29,6 @@ export function VoiceInputOverlay() {
 
   const [permissionDenied, setPermissionDenied] = useState(false);
 
-  // Auto-confirm after PREVIEW_AUTO_CONFIRM_MS when in preview mode
   const confirmRef = useRef(confirmTranscript);
   useEffect(() => {
     confirmRef.current = confirmTranscript;
@@ -53,7 +39,6 @@ export function VoiceInputOverlay() {
     return () => clearTimeout(timer);
   }, [mode]);
 
-  // Show error as toast — also track permission-denied state for persistent banner.
   useEffect(() => {
     if (error) {
       toast.error(error, { duration: 5000 });
@@ -63,15 +48,12 @@ export function VoiceInputOverlay() {
     }
   }, [error]);
 
-  // Reset permission-denied state on unmount.
   useEffect(() => {
     return () => {
       setPermissionDenied(false);
     };
   }, []);
 
-  // Reset permission-denied state when microphone access is successfully granted
-  // (i.e. mode transitions away from idle into an active recording state).
   useEffect(() => {
     if (mode === 'listening') {
       setPermissionDenied(false);
@@ -96,7 +78,6 @@ export function VoiceInputOverlay() {
   const isProcessing = mode === 'processing';
   const isPreview = mode === 'preview';
 
-  /** Label shown beneath the icon circle */
   const statusLabel = (() => {
     if (isListening) return '\u2325 Release to transcribe';
     if (isTranscribing) return 'Transcribing...';

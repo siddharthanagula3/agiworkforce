@@ -20,17 +20,9 @@ type ExtractionErrorCode =
   | 'document_too_complex'
   | 'document_unreadable';
 
-/**
- * Detail a rejection carries back to the route so it can purge the object and
- * file a moderation record. Deliberately NOT part of the user-facing message:
- * naming the detector that fired is an oracle to tune an evasion against.
- */
 export interface ExtractionRejectionDetail {
-  /** Digest of the inspected bytes, for the moderation record. */
   sha256?: string;
-  /** Provenance of the denylist that matched, when one did. */
   listLabel?: string;
-  /** Structural scanner findings, operator-facing only. */
   findings?: readonly UploadScanFinding[];
 }
 
@@ -45,11 +37,6 @@ export class ProjectKnowledgeExtractionError extends Error {
   }
 }
 
-/**
- * The single message every content rejection returns to the uploader. Uniform
- * on purpose: a distinct message per detector tells an attacker which check
- * fired, and the specific finding is already in the server log.
- */
 const KNOWLEDGE_FILE_REJECTION_MESSAGE =
   'This file could not be added because its contents failed a safety check.';
 
@@ -117,23 +104,6 @@ async function extractPdfText(data: Buffer): Promise<string | null> {
   }
 }
 
-/**
- * Load one object from the server-owned project prefix, verify its browser
- * checksum and declared metadata, then extract bounded text when supported.
- */
-/**
- * Pull the readable content out of a Jupyter notebook.
- *
- * A `.ipynb` is JSON, so it would technically survive the text path — but that
- * path would feed the model the notebook's ENTIRE serialized form: base64 PNG
- * outputs, execution counts, kernel metadata, per-cell ids. On a notebook with
- * a few plots that is megabytes of noise that crowds out the actual analysis
- * and burns the project's context budget.
- *
- * This keeps what a reader cares about — markdown prose, source code, and
- * TEXT outputs — and drops the rest. Cell order is preserved because a
- * notebook's meaning is sequential.
- */
 function extractNotebookText(bytes: Uint8Array, fileName: string): string | null {
   let parsed: unknown;
   try {
@@ -153,7 +123,6 @@ function extractNotebookText(bytes: Uint8Array, fileName: string): string | null
     );
   }
 
-  /** `source` and `text` are either a string or an array of lines. */
   const joinSource = (value: unknown): string => {
     if (typeof value === 'string') return value;
     if (Array.isArray(value)) return value.filter((line) => typeof line === 'string').join('');
@@ -174,8 +143,6 @@ function extractNotebookText(bytes: Uint8Array, fileName: string): string | null
     if (cell.cell_type === 'code') {
       if (source) parts.push(['```', source, '```'].join('\n'));
 
-      // Text outputs only. An image output is a base64 blob that means nothing
-      // to a text model and would dwarf the code that produced it.
       if (Array.isArray(cell.outputs)) {
         for (const rawOutput of cell.outputs) {
           if (!rawOutput || typeof rawOutput !== 'object') continue;
@@ -192,7 +159,6 @@ function extractNotebookText(bytes: Uint8Array, fileName: string): string | null
           const plain = joinSource(output.data?.['text/plain']).trim();
           if (plain) parts.push(`Output:\n${plain}`);
 
-          // Errors are frequently the most informative part of a notebook.
           if (typeof output.ename === 'string' && output.ename) {
             const detail = typeof output.evalue === 'string' ? `: ${output.evalue}` : '';
             parts.push(`Error: ${output.ename}${detail}`);
@@ -232,9 +198,6 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
-  // One pass over the bytes answers two questions: integrity (does the digest
-  // match what the browser computed?) and moderation (is that digest on the
-  // configured known-illegal-media list?).
   const hashMatch = matchDenylistedUpload(object.data);
   if (hashMatch.sha256 !== input.checksumSha256.toLowerCase()) {
     throw new ProjectKnowledgeExtractionError(
@@ -242,8 +205,6 @@ export async function extractProjectKnowledgeFile(
       'The uploaded file did not pass its integrity check. Upload it again.',
     );
   }
-  // An exact digest hit is a fact rather than a heuristic, so it outranks the
-  // structural scan below and is reported.
   if (hashMatch.matched) {
     throw new ProjectKnowledgeExtractionError(
       'known_illegal_media',
@@ -264,12 +225,6 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
-  // Inspect the actual BYTES before anything else touches them. Everything
-  // above this line — byte count, checksum, stored content type — verifies the
-  // client's own claims against each other; none of it opens the file. A
-  // knowledge file is then parsed by pdfjs, stuffed into every project turn's
-  // model context, and served back from this origin, so it gets the same
-  // structural inspection a chat attachment gets.
   const scan = await scanUploadBytes(object.data, declaredMimeType);
   if (!scan.ok) {
     throw new ProjectKnowledgeExtractionError(

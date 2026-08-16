@@ -1,16 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M42 — the permissions list reports the level the OS actually granted
- * instead of collapsing every kind to On / Ask / Off, and Location is gone.
- *
- * Covers the status→label map for every kind × every OS status, the per-kind
- * override, and the rendered row + accessibility label that consume it.
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
-
-// ── Theme mock ────────────────────────────────────────────────────────────────
 
 const themeColors = {
   textPrimary: '#fff',
@@ -34,8 +25,6 @@ jest.mock('@/src/ui/theme', () => ({
   useTheme: () => ({ colors: themeColors, isDark: true, statusBarStyle: 'light' }),
   useThemeColors: () => themeColors,
 }));
-
-// ── UI component mocks ────────────────────────────────────────────────────────
 
 jest.mock('@/components/ui/text', () => {
   const RN = require('react-native');
@@ -65,15 +54,9 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -101,8 +84,6 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
-
-// ── Expo permission adapter mocks ─────────────────────────────────────────────
 
 const undetermined = { status: 'undetermined', canAskAgain: true };
 
@@ -138,8 +119,6 @@ jest.mock('expo-calendar', () => ({
   requestRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
-// ── Permissions store mock ────────────────────────────────────────────────────
-
 const mockPermissionsState: {
   permissions: Record<string, { lastObservedStatus: string; userIntent: string }>;
   setObservedStatus: jest.Mock;
@@ -154,8 +133,6 @@ jest.mock('@/stores/permissionsStore', () => ({
   usePermissionsStore: (sel?: (s: typeof mockPermissionsState) => unknown) =>
     sel ? sel(mockPermissionsState) : mockPermissionsState,
 }));
-
-// ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import PermissionsScreen from '@/src/features/settings/permissions';
 import {
@@ -178,9 +155,6 @@ beforeEach(() => {
 });
 
 describe('permissionStatusLabel — OS status → granted level', () => {
-  // Every case is the level the registry already models for that kind, not a
-  // second source of truth: microphone/camera/contacts top out at
-  // allow_while_using, photos/notifications/calendar at allow_always.
   const grantedCases: Array<[string, string]> = [
     ['microphone', 'While using'],
     ['camera', 'While using'],
@@ -213,7 +187,6 @@ describe('permissionStatusLabel — OS status → granted level', () => {
   it('uses the per-kind override only where the registry declares one', () => {
     expect(PERMISSION_REGISTRY.reminders.levelLabels).toEqual({ allow_always: 'Read & write' });
     expect(PERMISSION_REGISTRY.notifications.levelLabels).toBeUndefined();
-    // Same underlying level, different label — the override is what separates them.
     expect(permissionStatusLabel('granted', 'notifications')).toBe(
       LEVEL_STATUS_LABELS.allow_always,
     );
@@ -237,8 +210,6 @@ describe('Location stub removal', () => {
   });
 
   it('leaves no adapter that resolves without asking the OS', async () => {
-    // The deleted stubs hard-returned 'undetermined' from both adapters. Every
-    // surviving adapter must be backed by a real Expo call.
     await Promise.all(
       PERMISSION_KINDS.map(async (kind) => {
         await expect(PERMISSION_REGISTRY[kind].getStatus()).resolves.toBeDefined();

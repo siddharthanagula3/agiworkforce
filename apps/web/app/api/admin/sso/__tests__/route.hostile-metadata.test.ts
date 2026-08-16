@@ -61,16 +61,10 @@ function base(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/**
- * Every case here is a payload an attacker (or a compromised admin) would send.
- * The invariant under test is identical throughout: the request is refused with
- * 400 and NOTHING is written or forwarded to the identity provider.
- */
 describe('SSO create rejects hostile identity-provider input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSubscription.mockResolvedValue({ plan_tier: 'enterprise', status: 'active' });
-    // Caller is a genuine org owner on an entitled plan; only the payload is hostile.
     mockQuery.mockResolvedValue([{ role: 'owner' }]);
     mockExecute.mockResolvedValue(undefined);
   });
@@ -301,7 +295,6 @@ describe('SSO create rejects hostile identity-provider input', () => {
     const response = await post(base({ attribute_mapping: { emailAddress: 'user.email' } }));
 
     expect(response.status).toBe(201);
-    // Still dormant and still not registered with any identity provider.
     expect((await response.json()).connection.isActive).toBe(false);
     expect(mockCreateEnterpriseConnection).not.toHaveBeenCalled();
   });

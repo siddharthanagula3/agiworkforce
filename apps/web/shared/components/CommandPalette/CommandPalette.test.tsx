@@ -1,14 +1,3 @@
-/**
- * CommandPalette tests
- *
- * Covers:
- * - Rendering in open/closed state
- * - Command groups (Actions, Navigate, Preferences)
- * - Search/filter behaviour
- * - Keyboard navigation (ArrowUp/Down, Enter, Escape)
- * - Sub-menu navigation for model switching
- * - Executing actions (navigation, theme toggle, sidebar toggle)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -28,10 +17,6 @@ const modelStoreMocks = vi.hoisted(() => ({
   setSelectedModelId: vi.fn(),
 }));
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 const mockPush = vi.fn();
 
 vi.mock('next/navigation', () => ({
@@ -44,7 +29,6 @@ vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'dark', setTheme: mockSetTheme }),
 }));
 
-// ChatStore
 const mockToggleSidebar = vi.fn();
 vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: () => ({
@@ -80,10 +64,6 @@ vi.mock('@/shared/stores/model-store', () => ({
     }),
 }));
 
-// Radix Dialog · render children directly (no Portal)
-// CommandPalette imports Dialog from @agiworkforce/ui (restructure Wave 3A moved
-// it off the deleted @/components/ui fork). Mock the barrel, preserving every
-// other real export so unrelated symbols the component tree pulls still resolve.
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
   return {
@@ -106,27 +86,15 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function renderPalette(open = true, onOpenChange = vi.fn()) {
   return render(<CommandPalette open={open} onOpenChange={onOpenChange} />);
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     navigationState.pathname = '/';
   });
-
-  // ============================================================
-  // Visibility
-  // ============================================================
 
   describe('visibility', () => {
     it('renders when open=true', () => {
@@ -139,10 +107,6 @@ describe('CommandPalette', () => {
       expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
     });
   });
-
-  // ============================================================
-  // Search input
-  // ============================================================
 
   describe('search input', () => {
     it('renders the search input', () => {
@@ -171,9 +135,7 @@ describe('CommandPalette', () => {
 
       fireEvent.change(input, { target: { value: 'settings' } });
 
-      // "Go to Settings" should still be visible
       expect(screen.getByText('Go to Settings')).toBeInTheDocument();
-      // "New Chat" should be filtered out
       expect(screen.queryByText('New Chat')).not.toBeInTheDocument();
     });
 
@@ -205,10 +167,6 @@ describe('CommandPalette', () => {
       expect(input.value).toBe('');
     });
   });
-
-  // ============================================================
-  // Command groups
-  // ============================================================
 
   describe('command groups', () => {
     it('shows Actions group', () => {
@@ -247,9 +205,6 @@ describe('CommandPalette', () => {
     });
 
     it('never renders the chat sidebar command (removed: unreachable + wrong state)', () => {
-      // The palette can't open on /chat routes (chat owns Cmd+K for search), so a
-      // chat-route-only sidebar command was unreachable; the sidebar has visible
-      // Collapse/Expand buttons instead.
       navigationState.pathname = '/chat';
       renderPalette();
       expect(screen.queryByText('Collapse Chat Sidebar')).not.toBeInTheDocument();
@@ -260,10 +215,6 @@ describe('CommandPalette', () => {
       expect(screen.getByText('Switch to System Theme')).toBeInTheDocument();
     });
   });
-
-  // ============================================================
-  // Command execution · navigation
-  // ============================================================
 
   describe('navigation commands', () => {
     it('navigates to /chat on New Chat click', () => {
@@ -294,33 +245,22 @@ describe('CommandPalette', () => {
     });
   });
 
-  // ============================================================
-  // Preferences commands
-  // ============================================================
-
   describe('preferences commands', () => {
     it('calls setTheme with next theme when theme toggle is clicked', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      // current theme is 'dark' → next is 'system'
       fireEvent.click(screen.getByText('Switch to System Theme'));
       expect(mockSetTheme).toHaveBeenCalledWith('system');
     });
   });
-
-  // ============================================================
-  // Sub-menu: model switching
-  // ============================================================
 
   describe('model sub-menu', () => {
     it('opens model sub-menu when Switch AI Model is clicked', () => {
       renderPalette();
       fireEvent.click(screen.getByText('Switch AI Model'));
 
-      // Sub-menu title should appear
       expect(screen.getByText('Switch AI Model')).toBeInTheDocument();
-      // Model options should appear
       expect(screen.getByText('Fixture Primary Model')).toBeInTheDocument();
       expect(screen.getByText('Fixture Secondary Model')).toBeInTheDocument();
     });
@@ -342,14 +282,11 @@ describe('CommandPalette', () => {
 
       fireEvent.click(screen.getByText('Switch AI Model'));
 
-      // Now in sub-menu
       expect(screen.getByText('Fixture Primary Model')).toBeInTheDocument();
 
       fireEvent.keyDown(input, { key: 'Escape' });
 
-      // Back to main menu · model options should be gone
       expect(screen.queryByText('Fixture Primary Model')).not.toBeInTheDocument();
-      // Main commands should be back
       expect(screen.getByText('New Chat')).toBeInTheDocument();
     });
 
@@ -370,10 +307,6 @@ describe('CommandPalette', () => {
     });
   });
 
-  // ============================================================
-  // Keyboard navigation
-  // ============================================================
-
   describe('keyboard navigation', () => {
     it('pressing Escape closes the palette', () => {
       const onOpenChange = vi.fn();
@@ -389,7 +322,6 @@ describe('CommandPalette', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      // Filter to a single result
       const input = screen.getByPlaceholderText('Type a command or search…');
       fireEvent.change(input, { target: { value: 'New Chat' } });
 
@@ -403,27 +335,19 @@ describe('CommandPalette', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      // Filter to multiple navigation commands.
       const input = screen.getByPlaceholderText('Type a command or search…');
       fireEvent.change(input, { target: { value: 'Go to' } });
 
-      // ArrowDown moves to the second visible result.
       fireEvent.keyDown(input, { key: 'ArrowDown' });
       fireEvent.keyDown(input, { key: 'Enter' });
 
-      // Could be any "Go to" page · just confirm navigation happened
       expect(mockPush).toHaveBeenCalled();
     });
   });
 
-  // ============================================================
-  // Footer
-  // ============================================================
-
   describe('footer', () => {
     it('shows result count', () => {
       renderPalette();
-      // Look for the numeric result count in the footer
       const footer = screen.getByText(/results/);
       expect(footer).toBeInTheDocument();
     });

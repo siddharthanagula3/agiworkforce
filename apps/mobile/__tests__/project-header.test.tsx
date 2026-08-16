@@ -1,19 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Mobile ProjectHeader tests.
- *
- * Pin the RN-native mirror's contract: accent palette mapping, privacy +
- * provider chip surfacing, imported-from chip surfacing, surface chip
- * canonical order (enforced upstream by summarizeProjectHeader).
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import { summarizeProjectHeader, type ProjectHeaderPresentation } from '@agiworkforce/types';
 
-// The real palette rather than a hand-listed copy: these mocks omitted
-// whatever token a component reached for next, and a missing key surfaces as
-// `undefined` deep in a style object instead of as a clear failure.
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
   return {

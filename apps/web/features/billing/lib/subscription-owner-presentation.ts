@@ -2,12 +2,6 @@ import type { MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
 
 export type VisibleSubscriptionSource = MeSubscriptionSource | undefined;
 
-/**
- * Client-side copy for a paid plan whose billing owner cannot use AGI's
- * mid-cycle Stripe upgrade flow. The server remains authoritative; this keeps
- * Pricing and Chat from first presenting a Stripe-only dialog that will be
- * rejected after the user acts.
- */
 export function billingOwnerPlanChangeMessage(source: VisibleSubscriptionSource): string {
   switch (source) {
     case 'apple':

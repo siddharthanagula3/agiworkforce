@@ -1,13 +1,3 @@
-/**
- * DynamicCanvas — Generative UI / Dynamic Workspace
- *
- * Renders AI-generated canvas elements (text, markdown, code, images, data tables,
- * kanban boards, charts, forms, and timers) as interactive, resizable widgets.
- * Connected to the Rust backend's Canvas/A2UI system.
- *
- * This is the "Carson-style" generative workspace where the AI can create
- * dynamic UI artifacts during conversations.
- */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Code2,
@@ -37,8 +27,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { invoke, listen, isTauri } from '../../lib/tauri-mock';
 
-// ─── Types matching Rust backend ───
-
 interface Position {
   x: number;
   y: number;
@@ -66,8 +54,6 @@ interface ElementStyle {
   opacity?: number;
 }
 
-// ─── Kanban Types ───
-
 interface KanbanCard {
   id: string;
   title: string;
@@ -81,15 +67,11 @@ interface KanbanColumn {
   cards: KanbanCard[];
 }
 
-// ─── Chart Types ───
-
 interface ChartDataPoint {
   label: string;
   value: number;
   color?: string;
 }
-
-// ─── Form Types ───
 
 interface FormField {
   name: string;
@@ -100,8 +82,6 @@ interface FormField {
   options?: string[];
   defaultValue?: string | number | boolean;
 }
-
-// ─── Canvas Element Union ───
 
 type CanvasElement =
   | { type: 'Text'; id: string; bounds: Bounds; content: string; style: ElementStyle }
@@ -168,8 +148,6 @@ interface Canvas {
   height: number;
 }
 
-// ─── Props ───
-
 interface DynamicCanvasProps {
   canvasId?: string;
   className?: string;
@@ -177,8 +155,6 @@ interface DynamicCanvasProps {
   onFormSubmit?: (elementId: string, data: Record<string, string | number | boolean>) => void;
   readOnly?: boolean;
 }
-
-// ─── Widget Palette Config ───
 
 interface PaletteItem {
   type: CanvasElement['type'];
@@ -199,8 +175,6 @@ const PALETTE_ITEMS: PaletteItem[] = [
   { type: 'Shape', label: 'Shape', description: 'Basic shape placeholder' },
 ];
 
-// ─── Chart Colors ───
-
 const CHART_COLORS = [
   '#3B82F6',
   '#10B981',
@@ -211,8 +185,6 @@ const CHART_COLORS = [
   '#06B6D4',
   '#84CC16',
 ];
-
-// ─── Helpers ───
 
 function getElementId(el: CanvasElement): string {
   return el.id;
@@ -264,8 +236,6 @@ function formatTime(totalSeconds: number): string {
 function generateId(): string {
   return `el-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-
-// ─── SVG Chart Renderer ───
 
 function SvgBarChart({
   data,
@@ -414,8 +384,6 @@ function SvgLineChart({
   );
 }
 
-// ─── Kanban Board Renderer ───
-
 function KanbanBoardContent({
   columns,
   onMoveCard,
@@ -485,8 +453,6 @@ function KanbanBoardContent({
     </div>
   );
 }
-
-// ─── Form Widget Renderer ───
 
 function FormContent({
   fields,
@@ -613,8 +579,6 @@ function FormContent({
   );
 }
 
-// ─── Timer Widget Renderer ───
-
 function TimerContent({
   mode,
   label,
@@ -729,8 +693,6 @@ function TimerContent({
   );
 }
 
-// ─── Widget Palette ───
-
 function WidgetPalette({
   open,
   onToggle,
@@ -776,8 +738,6 @@ function WidgetPalette({
     </div>
   );
 }
-
-// ─── Default Element Factories ───
 
 function createDefaultElement(
   type: CanvasElement['type'],
@@ -884,8 +844,6 @@ function createDefaultElement(
   }
 }
 
-// ─── Component ───
-
 export function DynamicCanvas({
   canvasId,
   className,
@@ -907,7 +865,6 @@ export function DynamicCanvas({
   } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Load canvas
   const loadCanvas = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
@@ -925,7 +882,6 @@ export function DynamicCanvas({
     }
   }, []);
 
-  // Listen for canvas updates
   useEffect(() => {
     if (!canvasId) {
       setLoading(false);
@@ -961,7 +917,6 @@ export function DynamicCanvas({
     };
   }, [canvasId, loadCanvas]);
 
-  // Create new canvas
   const createCanvas = useCallback(async () => {
     setLoading(true);
     try {
@@ -977,7 +932,6 @@ export function DynamicCanvas({
     }
   }, [loadCanvas]);
 
-  // Delete element
   const deleteElement = useCallback(
     async (elementId: string) => {
       if (!canvas) return;
@@ -1002,7 +956,6 @@ export function DynamicCanvas({
     [canvas, selectedElement],
   );
 
-  // Copy content
   const copyContent = useCallback(async (el: CanvasElement) => {
     let text = '';
     if ('content' in el) {
@@ -1028,7 +981,6 @@ export function DynamicCanvas({
     }
   }, []);
 
-  // Add widget from palette
   const addWidget = useCallback(
     async (type: CanvasElement['type']) => {
       if (!canvas) return;
@@ -1050,7 +1002,6 @@ export function DynamicCanvas({
     [canvas],
   );
 
-  // Kanban card move handler
   const handleKanbanMove = useCallback(
     (elementId: string, cardId: string, fromCol: string, toCol: string) => {
       setCanvas((prev) => {
@@ -1083,7 +1034,6 @@ export function DynamicCanvas({
     [],
   );
 
-  // Drag handling
   const handleMouseDown = useCallback(
     (id: string, e: React.MouseEvent) => {
       if (readOnly) return;
@@ -1159,7 +1109,6 @@ export function DynamicCanvas({
     };
   }, [dragging, canvas]);
 
-  // Export canvas
   const handleExport = useCallback(async () => {
     if (!canvas) return;
     try {
@@ -1177,8 +1126,6 @@ export function DynamicCanvas({
       console.error('Failed to export canvas:', err);
     }
   }, [canvas]);
-
-  // ─── Render ───
 
   if (loading) {
     return (

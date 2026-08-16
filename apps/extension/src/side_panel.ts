@@ -158,23 +158,12 @@ import { withTimeout } from './utils';
 
 const extensionSendQueue = getExtensionSendQueue();
 
-// ── Drawer: shared storage keys ──────────────────────────────────────────────
-/** Storage key matching inPagePanel/setup.ts IN_PAGE_PANEL_ENABLED_KEY */
 const SP_IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
-/** Storage key matching background.ts siteAllowlistCache + inPagePanel/setup.ts */
 const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 
-/** Session timer for the stats footer in the drawer */
 let _drawerSessionStart = Date.now();
 let _drawerSessionTimer: ReturnType<typeof setInterval> | null = null;
 
-/**
- * Module-level reference to the cloud account UI refresh function.
- * Populated by buildUI() after the inner function is created so that the
- * chrome.runtime.onMessage listener (which runs at module scope, outside
- * buildUI's closure) can call it to update account access after authentication
- * or plan changes.
- */
 let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
   /* no-op until buildUI() initialises the real implementation */
 };
@@ -186,15 +175,6 @@ let refreshEffortUI: () => void = () => {
   /* no-op until buildUI() initialises the real implementation */
 };
 
-/**
- * Load a stored conversation into the panel by id.
- *
- * Background runs (scheduled tasks, prompt shortcuts) file their answers into
- * the same conversation store the History drawer reads. This hook lets the
- * module-scope message listener, the boot sequence, and the Workflows task
- * rows all open one of those results using the same restore path a history
- * entry uses. Real implementation is installed by buildUI().
- */
 let openStoredConversation: (conversationId: string) => Promise<boolean> = async () => false;
 let historyRestoreInProgress = false;
 let historyRestoreToken = 0;
@@ -202,15 +182,6 @@ let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
 const scheduledTasksRequestFence = new ManagedCloudOwnerRequestFence();
 const scheduledTaskCreateRequestFence = new ManagedCloudOwnerRequestFence();
-/**
- * Account-backed chat mirroring, renderer side.
- *
- * The panel never fetches. It only (a) stamps provenance at dispatch, (b)
- * nudges the service worker, and (c) paints what the stored `cloudSync` record
- * says. The worker owns provenance enforcement, owner fencing, and every
- * request. Eligible Managed Cloud conversations sync automatically.
- */
-/** Repaints the "where is this chat stored" pill. Installed by buildUI(). */
 let updatePersistencePill: () => void = () => {
   /* no-op until buildUI() creates the composer */
 };
@@ -327,19 +298,10 @@ async function refreshActivePersistenceState(): Promise<void> {
   activePersistenceEntry = entry;
   updatePersistencePill();
 }
-/** Re-reads Chrome's active-tab group and repaints every group control. */
 let refreshTabGroupUI: () => void = () => {
   /* no-op until buildUI() registers the controls */
 };
 
-/**
- * Whether the CURRENT in-memory conversation could be mirrored.
- *
- * Mirrors the worker's `isCloudPersistenceEligible`: every turn must carry
- * Managed Cloud provenance, and an unstamped turn (a pre-feature restore) fails
- * closed. This is only used to choose a label — the worker re-derives the same
- * answer from stored state before any write.
- */
 function currentConversationCloudEligible(): boolean {
   return (
     _ctx.messages.length > 0 &&
@@ -406,18 +368,6 @@ function setManagedCloudChatState(
   updateSendButton();
 }
 
-/**
- * Side-panel UI message shape.
- *
- * File-local type for the Chrome extension side panel renderer.
- * Kept local because the extension renderer only needs a subset of the
- * canonical chat contract. Field mapping to canonical ChatMessage:
- *   - `id`        → canonical `id`
- *   - `role`      → canonical `role`
- *   - `content`   → canonical `content`
- *   - `timestamp` → canonical `createdAt` (here as Unix ms instead of ISO string)
- *   - `streaming` → canonical `isStreaming`
- */
 type ChatMessage = SidePanelChatMessage;
 
 interface ChatChunk {
@@ -447,29 +397,18 @@ export interface SharedSidePanelContext {
   isStreaming: boolean;
   currentStreamId: string | null;
   streamTimeoutHandle: ReturnType<typeof setTimeout> | null;
-  /** Track how many messages have already been rendered to avoid full DOM rebuilds. */
   lastRenderedCount: number;
   needsMessageRebuild: boolean;
   isConnected: boolean;
-  /**
-   * Whether extended thinking is enabled for the next outgoing message.
-   * Persisted to chrome.storage.local as 'agi_thinking_enabled'.
-   * The Managed Cloud gateway owns provider-specific reasoning translation.
-   */
   thinkingEnabled: boolean;
-  /** Per-turn Auto Economy override controlled by the Quick composer toggle. */
   quickMode: boolean;
-  /** Model picker state and last successful Auto route are conversation scoped. */
   conversationId: string;
   conversationScope: string | null;
-  /** Invalidates delayed boot/history continuations after the user changes state. */
   conversationGeneration: number;
-  /** Exact account/session incarnation that owns all visible Managed Cloud state. */
   managedCloudOwner: ManagedCloudOwner | null;
   selectedModel: string;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
-  /** Conversation-scoped reasoning preference, validated against the routed model. */
   reasoningEffort?: Effort;
 }
 
@@ -617,7 +556,6 @@ function managedOutboundRoutingPayload(): {
   };
 }
 
-// Provider display order in the grouped picker.
 const PROVIDER_GROUP_ORDER: ProviderId[] = [
   'anthropic',
   'openai',
@@ -641,26 +579,13 @@ let isRecording = false;
 let recordingActionCount = 0;
 let recordingStartUrl: string | null = null;
 
-/**
- * Pending image attachments added via the composer + menu.
- * Each entry is a data-URL (base64 PNG/JPEG) to be prepended to the
- * next outgoing message. Cleared after send.
- */
 const pendingAttachments: string[] = [];
-/** File reads and screenshot captures that must settle before a turn can send. */
 let composerAttachmentIntakeCount = 0;
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
-/** Exact catalog route captured for each in-flight assistant turn. */
 const resolvedRouteByStreamId = new Map<string, { model: string; provider: string }>();
-/** Snapshot request-only Quick state per stream; UI toggles may change mid-run. */
 const quickModeByStreamId = new Map<string, boolean>();
-/** Exact account/session incarnation captured when each stream was admitted. */
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
 
-/**
- * Hostname of the active browser tab, shown in the persistent context chip.
- * Updated whenever the side panel receives focus or a tab-changed message.
- */
 let currentPageHostname = '';
 
 type SidePanelTab = 'chat' | 'workflows' | 'computer-use';
@@ -683,9 +608,6 @@ function serializeMessagesForHistory() {
       role: message.role,
       content: message.content,
       timestamp: message.timestamp,
-      // Unconditional and for BOTH roles: this is the field the worker gates
-      // account persistence on, and a user turn with no provenance would
-      // disqualify the whole thread.
       ...(message.runtime ? { runtime: message.runtime } : {}),
       ...(message.role === 'assistant' && message.agentEvents
         ? { agentEvents: message.agentEvents }
@@ -746,14 +668,6 @@ function saveMessages(): void {
     });
 }
 
-/**
- * Ask the service worker to (eventually) mirror this conversation.
- *
- * Fire-and-forget by design. The worker debounces, re-checks provenance, and
- * fences on the owner; a dead worker or a rejected send is ignored because the
- * worker's sweep alarm catches up from stored state. Local history NEVER
- * depends on this succeeding — nothing awaits it and it cannot throw.
- */
 function requestCloudConversationSync(): void {
   const owner = _ctx.managedCloudOwner;
   if (!owner) return;
@@ -763,8 +677,6 @@ function requestCloudConversationSync(): void {
         type: 'SYNC_CONVERSATION',
         owner,
         conversationId: _ctx.conversationId,
-        // Tells the worker the trailing turn is still growing, so it does not
-        // write a copy it already knows will be superseded.
         streaming: _ctx.isStreaming,
       },
       () => {
@@ -920,11 +832,6 @@ function resetConversationView(): void {
   renderMessages();
 }
 
-/**
- * Revoke all renderer-owned Managed Cloud state before exposing a new Clerk
- * account/session. The background is then told to abort every operation owned
- * by the prior incarnation and cancel durable runs with their captured token.
- */
 async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null): Promise<boolean> {
   const previousOwner = _ctx.managedCloudOwner;
   if (
@@ -985,12 +892,6 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
 }
 
 function injectStyles(): void {
-  // M-08 audit 2026-05-19: switched from `document.createElement('style')` +
-  // textContent + appendChild (which CSP `style-src 'self'` blocks) to
-  // Constructable Stylesheets (`new CSSStyleSheet().replaceSync(...)` +
-  // `document.adoptedStyleSheets`). Constructable sheets are a DOM API, not
-  // CSS-source delivery, so they bypass style-src entirely. Chrome 73+
-  // supports them; manifest minimum_chrome_version is 132 so we're safe.
   const cssText = `
     /* ── AGI design tokens (dark) ── */
     ${getExtensionTokensCssAuto()}
@@ -1231,7 +1132,6 @@ function injectStyles(): void {
       line-height: 1.55;
       max-width: 220px;
     }
-
 
     /* ── Restricted-page notice; chat remains available ── */
     #sp-blocked {
@@ -4229,8 +4129,6 @@ function injectStyles(): void {
       }
     }
   `;
-  // M-08 audit 2026-05-19: Constructable Stylesheet — CSP-compliant
-  // because it's a DOM API call, not a <style> tag.
   if (
     typeof CSSStyleSheet === 'function' &&
     typeof (CSSStyleSheet.prototype as { replaceSync?: unknown }).replaceSync === 'function'
@@ -4239,9 +4137,6 @@ function injectStyles(): void {
     sheet.replaceSync(cssText + '\n' + COMPUTER_USE_PANEL_CSS);
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
-    // Fallback path for environments without Constructable Stylesheets
-    // (some JSDOM versions used in tests). Tests don't render the panel,
-    // so missing styles here is acceptable.
     const fallback = document.createElement('style');
     fallback.textContent = cssText;
     document.head.appendChild(fallback);
@@ -4333,13 +4228,6 @@ function resolveManagedToolApproval(
   );
 }
 
-/**
- * Button whose only content is an icon.
- *
- * EXT-06: these were emoji literals ("✕", "▶") sitting beside stroke-only
- * Lucide SVGs. Emoji render in the system emoji font at a different weight,
- * colour and baseline, so a row mixed two icon vocabularies.
- */
 function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
   const button = el('button', attrs);
   button.appendChild(renderIcon(icon, 12));
@@ -4352,7 +4240,6 @@ function renderMessages(): void {
 
   if (_ctx.messages.length === 0) {
     if (emptyEl) emptyEl.classList.remove('hidden');
-    // Remove all message nodes and reset counter
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
     _ctx.needsMessageRebuild = false;
@@ -4361,8 +4248,6 @@ function renderMessages(): void {
 
   if (emptyEl) emptyEl.classList.add('hidden');
 
-  // Only append messages that haven't been rendered yet — avoids full DOM rebuild on each
-  // streaming chunk and preserves browser focus/scroll state for already-rendered bubbles.
   if (
     shouldRebuildMessageDom({
       forceRebuild: _ctx.needsMessageRebuild,
@@ -4370,7 +4255,6 @@ function renderMessages(): void {
       messageCount: _ctx.messages.length,
     })
   ) {
-    // Messages were cleared — rebuild from scratch
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
     _ctx.needsMessageRebuild = false;
@@ -4458,18 +4342,9 @@ interface SlashCommandMeta {
   display: string;
   prompt: string;
   captureContext: boolean;
-  /** One-line description shown in the autocomplete menu. */
   hint: string;
 }
 
-/**
- * The panel's slash commands, in menu order.
- *
- * Single source of truth: `expandSlashCommand` (submit-time) and the autocomplete
- * menu both read this. Four separate strings promised
- * "/ for commands" while nothing listened for the key, so the commands were
- * undiscoverable unless you already knew them.
- */
 const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
   '/summarize': {
     display: '/summarize',
@@ -4513,7 +4388,6 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
   },
 };
 
-/** Commands whose name starts with `fragment` (`/tr` -> `/translate`). */
 function matchSlashCommands(fragment: string): Array<[string, SlashCommandMeta]> {
   const q = fragment.trim().toLowerCase();
   if (!q.startsWith('/') || q.includes(' ')) return [];
@@ -4527,7 +4401,6 @@ function expandSlashCommand(
   const exact = SLASH_COMMANDS[trimmed];
   if (exact) return exact;
 
-  // e.g. "/translate to French"
   for (const [cmd, meta] of Object.entries(SLASH_COMMANDS)) {
     if (trimmed.startsWith(cmd + ' ')) {
       const extra = trimmed.slice(cmd.length + 1).trim();
@@ -4723,9 +4596,6 @@ function sendMessage(text: string): void {
   const owner = _ctx.managedCloudOwner!;
   _ctx.conversationGeneration += 1;
 
-  // Route through the shared priority send queue for backpressure /
-  // cancellation parity with other surfaces. Drain immediately — current
-  // behavior is direct send.
   try {
     extensionSendQueue.enqueue({ value: prompt, mode: 'prompt' });
   } catch (err) {
@@ -4739,12 +4609,8 @@ function sendMessage(text: string): void {
 
   const slashCmd = expandSlashCommand(prompt);
   if (slashCmd?.captureContext) {
-    // For context-requiring commands, auto-capture page context first
     const displayText = slashCmd.display;
     const actualPrompt = slashCmd.prompt;
-    // Claim the inputs that belong to this turn before the asynchronous page
-    // capture begins. Otherwise an attachment or manually selected context
-    // added while capture is pending can be consumed by the wrong request.
     const pageContextAtAdmission = _ctx.pendingPageContext;
     _ctx.pendingPageContext = null;
     const attachmentsToSend = pendingAttachments.slice();
@@ -4758,11 +4624,6 @@ function sendMessage(text: string): void {
       role: 'user',
       content: displayText,
       timestamp: Date.now(),
-      // PROVENANCE — must be derived from the runtime that will actually
-      // handle this turn, never assumed. The CHAT_MESSAGE dispatch below goes
-      // to `executeChromeManagedChat`, i.e. Managed Cloud. If a Desktop-bridge
-      // or on-device send path is ever added here it must stamp 'local', which
-      // permanently disqualifies this thread from account persistence.
       runtime: 'managed-cloud',
     };
     _ctx.messages.push(userMsg);
@@ -4788,8 +4649,6 @@ function sendMessage(text: string): void {
             text: actualPrompt,
             pageContext: pageCtx ?? undefined,
             conversationHistory: history,
-            // Round-2 audit P0 #3 (2026-05-21): forward the snapshot taken
-            // above so the model can see the user's images / pastes.
             attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
             extendedThinking: _ctx.thinkingEnabled || undefined,
             modelSelection: _ctx.selectedModel,
@@ -4819,8 +4678,6 @@ function sendMessage(text: string): void {
     role: 'user',
     content: prompt,
     timestamp: Date.now(),
-    // PROVENANCE — see the note on the slash-command dispatch above. This turn
-    // is sent to Managed Cloud; a local send path must stamp 'local' instead.
     runtime: 'managed-cloud',
   };
   _ctx.messages.push(userMsg);
@@ -4830,8 +4687,6 @@ function sendMessage(text: string): void {
 
   const pageCtx = _ctx.pendingPageContext;
   _ctx.pendingPageContext = null;
-  // Round-2 audit P0 #3 fix (2026-05-21): snapshot before clearing so the
-  // CHAT_MESSAGE payload below actually carries the user's attachments.
   const attachmentsToSend = pendingAttachments.slice();
   pendingAttachments.length = 0;
   composerAttachmentNotice = null;
@@ -4840,7 +4695,6 @@ function sendMessage(text: string): void {
 
   const streamId = beginManagedStream(_ctx.quickMode);
 
-  // Build conversation history (exclude the message we're about to send)
   const history = selectModelHistory(_ctx.messages, userMsg.id);
 
   chrome.runtime.sendMessage(
@@ -4852,8 +4706,6 @@ function sendMessage(text: string): void {
       text: userMsg.content,
       pageContext: pageCtx ?? undefined,
       conversationHistory: history,
-      // Round-2 audit P0 #3 (2026-05-21): forward the snapshot so attachments
-      // actually reach the model.
       attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
       extendedThinking: _ctx.thinkingEnabled || undefined,
       modelSelection: _ctx.selectedModel,
@@ -4870,21 +4722,12 @@ function sendMessage(text: string): void {
   );
 }
 
-/**
- * Re-send the request that produced a failed assistant message.
- *
- * A failed stream previously left a dead end: the provider error was rendered
- * as message text and the only way forward was to retype the prompt. The user
- * turn is still in history, so retrying means dropping the failed assistant
- * message and sending that turn again.
- */
 function retryFailedMessage(messageId: string): void {
   if (_ctx.isStreaming) return;
 
   const failedIndex = _ctx.messages.findIndex((message) => message.id === messageId);
   if (failedIndex < 0) return;
 
-  // The prompt to repeat is the nearest preceding user turn.
   let promptText = '';
   for (let i = failedIndex - 1; i >= 0; i--) {
     const candidate = _ctx.messages[i];
@@ -4895,8 +4738,6 @@ function retryFailedMessage(messageId: string): void {
   }
   if (!promptText) return;
 
-  // Drop the failed assistant turn so the retry does not stack a second
-  // failure underneath the first.
   _ctx.messages.splice(failedIndex, 1);
   _ctx.needsMessageRebuild = true;
   saveMessages();
@@ -4963,10 +4804,6 @@ function updateConnectionStatus(): void {
   updateNativeBridgeAvailabilityUI();
 }
 
-/**
- * Native connectivity controls explicit Desktop/browser mechanics only.
- * Managed Cloud chat and its model picker remain available independently.
- */
 function updateNativeBridgeAvailabilityUI(): void {
   const notice = document.getElementById('sp-bridge-notice');
   const availability = getChromeSurfaceAvailability({
@@ -4982,7 +4819,6 @@ function updateNativeBridgeAvailabilityUI(): void {
 let contextBtn: HTMLButtonElement | null = null;
 
 function updateContextButton(): void {
-  // contextBtn is now the persistent composer-bar chip (sp-context-chip)
   if (!contextBtn) return;
   const hostname = currentPageHostname || 'page';
   if (_ctx.pendingPageContext) {
@@ -5068,12 +4904,6 @@ function updateComposerAdmissionControls(): void {
   }
 }
 
-/**
- * Read a File as a data URL with a single Promise wrapper around FileReader.
- * Keeps the drop/paste path readable without sprinkling reader.onload chains
- * through the call sites. Resolves to null on read error so callers can
- * filter and move on instead of throwing through Promise.all.
- */
 function readFileAsDataUrl(file: File): Promise<string | null> {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -5091,12 +4921,6 @@ function readFileAsDataUrl(file: File): Promise<string | null> {
   });
 }
 
-/**
- * The only data-URL shapes the managed transport will send. Mirrors
- * SUPPORTED_IMAGE_DATA_URL in `features/cloud-bridge/freeTrialClient.ts`:
- * anything outside this set makes createMultimodalUserContent throw, which the
- * user would only discover as a failed turn after pressing send.
- */
 const COMPOSER_ATTACHMENT_MIME_TYPES: ReadonlySet<string> = new Set([
   'image/png',
   'image/jpeg',
@@ -5107,7 +4931,6 @@ const COMPOSER_ATTACHMENT_ACCEPT = Array.from(COMPOSER_ATTACHMENT_MIME_TYPES).jo
 const COMPOSER_ATTACHMENT_DATA_URL =
   /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+={0,2}$/i;
 
-/** Decoded byte length of a base64 data URL, as the transport counts it. */
 function composerAttachmentBytes(dataUrl: string): number {
   const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
@@ -5120,22 +4943,12 @@ function pendingAttachmentBytes(): number {
   return total;
 }
 
-/** Rejection reason for the most recent intake attempt, shown next to the chips. */
 let composerAttachmentNotice: string | null = null;
 
 function attachmentBudgetLabel(bytes: number): string {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
-/**
- * The single append point for composer attachments. Every intake path — drag,
- * paste, the `+` menu file picker and the `+` menu screenshot — goes through
- * here so the composer can never hold more than `executeChromeManagedChat`
- * will accept (`assertAttachmentBudget`: at most MANAGED_CHAT_MAX_ATTACHMENTS
- * images totalling MANAGED_CHAT_MAX_ATTACHMENT_BYTES decoded bytes). Over-cap
- * intake used to be admitted here and rejected on the wire, which destroyed
- * the turn the user had already typed.
- */
 function admitComposerAttachment(dataUrl: string): boolean {
   if (!COMPOSER_ATTACHMENT_DATA_URL.test(dataUrl)) {
     composerAttachmentNotice = 'Only PNG, JPEG, WebP, and GIF images can be attached.';
@@ -5156,21 +4969,6 @@ function admitComposerAttachment(dataUrl: string): boolean {
   return true;
 }
 
-/**
- * Accept files from a drag-drop, paste or file-picker event and append their
- * data URLs to `pendingAttachments`. Files are pre-filtered on type and on the
- * canonical per-file attachment ceiling
- * (`MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES`, the same
- * `MAX_CHAT_ATTACHMENT_BYTES` the web composer and the upload presign route
- * use) so an obviously doomed file is never read into memory;
- * `admitComposerAttachment` then enforces the transport's count and total-byte
- * caps on append.
- *
- * Round-2 audit P0 #3 — chrome-ext composer drag-drop + paste-image wire,
- * 2026-05-21. Reuses the existing attachment preview UI; no schema work
- * needed because the wire path through CHAT_MESSAGE already snapshots
- * pendingAttachments per the round-3 fix in commit `38034fedb`.
- */
 function acceptIncomingComposerFiles(files: File[] | FileList): void {
   composerAttachmentNotice = null;
   const candidates = Array.from(files);
@@ -5250,7 +5048,6 @@ function updateAttachmentPreview(): void {
     const idx = i;
     removeBtn.addEventListener('click', () => {
       pendingAttachments.splice(idx, 1);
-      // Freeing a slot or bytes invalidates whatever the last rejection said.
       composerAttachmentNotice = null;
       updateAttachmentPreview();
     });
@@ -5294,20 +5091,12 @@ function autoResizeInput(ta: HTMLTextAreaElement): void {
   ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
 }
 
-/**
- * Returns true for URLs where content scripts cannot run and page context is
- * unavailable: browser internal pages, extension pages, data: URIs, etc.
- */
 function isRestrictedUrl(url: string): boolean {
   if (!url) return false;
   const RESTRICTED = ['chrome://', 'chrome-extension://', 'edge://', 'about:', 'data:', 'file:///'];
   return RESTRICTED.some((prefix) => url.startsWith(prefix));
 }
 
-/**
- * Toggles the restricted-page notice. Managed Cloud chat remains available;
- * only page context and browser automation are disabled.
- */
 function setBlockedState(blocked: boolean): void {
   const blockedEl = document.getElementById('sp-blocked');
   const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
@@ -5342,10 +5131,6 @@ function setBlockedState(blocked: boolean): void {
   updateSendButton();
 }
 
-/**
- * Queries the active tab URL and updates the persistent context chip label.
- * Safe to call multiple times; falls back gracefully when tab API is unavailable.
- */
 function refreshPageHostname(): void {
   try {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -5360,24 +5145,9 @@ function refreshPageHostname(): void {
   }
 }
 
-/**
- * Builds the first-run onboarding carousel overlay and appends it (hidden) to
- * document.body.  Call showOnboardingOverlay() after the async storage check
- * to reveal it.  The overlay sits at z-index 9999 so it covers the composer
- * and toolbar without needing to toggle their display state.
- *
- * Steps:
- *  0 — Beta disclosure ("I understand")
- *  1 — Automate repetitive tasks ("Next")
- *  2 — Tab group access ("Next")
- *  3 — Shortcuts ("Let's go" → dismisses)
- *  4 — Pin hint (inline inside carousel, same dismiss path)
- */
 function buildOnboardingOverlay(onComplete: () => void): void {
   const TOTAL_STEPS = 5;
   let currentStep = 0;
-
-  // ── Helper: SVG icons (inline, CSP-safe) ────────────────────────────────
 
   const flaskSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path d="M9 3h6M9 3v7l-4 8a2 2 0 0 0 1.8 2.9h10.4A2 2 0 0 0 19 18.9L15 10V3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -5396,7 +5166,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
   </svg>`;
 
-  // Hero SVG for step 1 (stacked browser windows with checklist glyph)
   const browserStackSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="6" y="18" width="56" height="42" rx="6" stroke="var(--agi-ext-border-strong)" stroke-width="1.5" fill="var(--agi-ext-surface)"/>
     <rect x="12" y="12" width="56" height="42" rx="6" stroke="var(--agi-ext-border-strong)" stroke-width="1.5" fill="var(--agi-ext-surface)"/>
@@ -5411,7 +5180,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <polyline points="24,39 27,42 31,36" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 
-  // Hero SVG for step 2 (browser tab group)
   const tabGroupSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="8" y="28" width="64" height="42" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
     <rect x="10" y="14" width="22" height="16" rx="4" fill="var(--agi-ext-accent)" opacity="0.85"/>
@@ -5423,7 +5191,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <rect x="14" y="62" width="40" height="4" rx="2" fill="var(--agi-ext-surface)"/>
   </svg>`;
 
-  // Hero SVG for step 3 (the real Workflows shortcut surface)
   const shortcutMenuSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="10" y="16" width="60" height="48" rx="8" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
     <text x="16" y="27" font-size="7" fill="var(--agi-ext-text-muted)" font-family="-apple-system,sans-serif" font-weight="600">WORKFLOWS</text>
@@ -5435,7 +5202,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <text x="40" y="56.5" font-size="6.5" text-anchor="middle" fill="var(--agi-ext-accent)" font-family="-apple-system,sans-serif">+ Create shortcut</text>
   </svg>`;
 
-  // Hero SVG for step 4 (extension card with pin icon highlighted)
   const pinHintSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="8" y="28" width="52" height="34" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
     <rect x="14" y="36" width="28" height="4" rx="2" fill="var(--agi-ext-surface)"/>
@@ -5448,7 +5214,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <polyline points="46,36 48,37 47,39" stroke="var(--agi-ext-accent-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 
-  // ── Overlay container ────────────────────────────────────────────────────
   const overlay = el('div', {
     id: 'sp-onboarding-overlay',
     role: 'dialog',
@@ -5458,7 +5223,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     inert: '',
   });
 
-  // ── Skip button ─────────────────────────────────────────────────────────
   const header = el('div', { id: 'sp-onboarding-header' });
   const skipBtn = el(
     'button',
@@ -5468,10 +5232,8 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   header.appendChild(skipBtn);
   overlay.appendChild(header);
 
-  // ── Steps container ──────────────────────────────────────────────────────
   const body = el('div', { id: 'sp-onboarding-body' });
 
-  // Step 0: Beta disclosure
   const step0 = el('div', {
     class: 'sp-ob-step active',
     'data-step': '0',
@@ -5482,7 +5244,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   step0.appendChild(el('div', { class: 'sp-ob-title' }, 'This is a beta feature'));
   const rows0 = el('div', { class: 'sp-ob-rows' });
 
-  // Row 1: flask
   const row0a = el('div', { class: 'sp-ob-row' });
   const row0aIcon = el('div', { class: 'sp-ob-row-icon', 'aria-hidden': 'true' });
   appendSvgString(row0aIcon, flaskSvg);
@@ -5495,7 +5256,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   row0a.appendChild(row0aText);
   rows0.appendChild(row0a);
 
-  // Row 2: eye
   const row0b = el('div', { class: 'sp-ob-row' });
   const row0bIcon = el('div', { class: 'sp-ob-row-icon', 'aria-hidden': 'true' });
   appendSvgString(row0bIcon, eyeSvg);
@@ -5508,7 +5268,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   row0b.appendChild(row0bText);
   rows0.appendChild(row0b);
 
-  // Row 3: warning (danger text + learn more)
   const row0c = el('div', { class: 'sp-ob-row' });
   const row0cIcon = el('div', { class: 'sp-ob-row-icon danger', 'aria-hidden': 'true' });
   appendSvgString(row0cIcon, warnSvg);
@@ -5530,7 +5289,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   step0.appendChild(rows0);
   body.appendChild(step0);
 
-  // Step 1: Value prop — automate repetitive tasks
   const step1 = el('div', {
     class: 'sp-ob-step',
     'data-step': '1',
@@ -5551,7 +5309,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   body.appendChild(step1);
 
-  // Step 2: Tab group access
   const step2 = el('div', {
     class: 'sp-ob-step',
     'data-step': '2',
@@ -5572,7 +5329,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   body.appendChild(step2);
 
-  // Step 3: Shortcuts
   const step3 = el('div', {
     class: 'sp-ob-step',
     'data-step': '3',
@@ -5593,7 +5349,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   body.appendChild(step3);
 
-  // Step 4: Pin hint
   const step4 = el('div', {
     class: 'sp-ob-step',
     'data-step': '4',
@@ -5616,7 +5371,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
 
   overlay.appendChild(body);
 
-  // ── Footer: progress dots + nav buttons ─────────────────────────────────
   const footer = el('div', { id: 'sp-onboarding-footer' });
 
   const dotsRow = el('div', {
@@ -5655,7 +5409,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   footer.appendChild(navRow);
   overlay.appendChild(footer);
 
-  // ── Step labels for each step's primary button ───────────────────────────
   const stepLabels: string[] = [
     t('spOnboardingUnderstand'),
     t('spNext'),
@@ -5672,7 +5425,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     t('spOnboardingDismissAria'),
   ];
 
-  // ── Navigation logic ─────────────────────────────────────────────────────
   function dismiss(): void {
     markOnboardingComplete();
     overlay.classList.remove('visible');
@@ -5696,16 +5448,13 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     currentStep = step;
     dotsRow.setAttribute('aria-valuenow', String(step + 1));
     dotsRow.setAttribute('aria-valuetext', `Step ${step + 1} of ${TOTAL_STEPS}`);
-    // Back button: hidden on step 0
     if (step === 0) {
       backBtn.setAttribute('hidden', '');
     } else {
       backBtn.removeAttribute('hidden');
     }
-    // Primary button label
     nextBtn.textContent = stepLabels[step] ?? t('spNext');
     nextBtn.setAttribute('aria-label', stepAriaLabels[step] ?? t('spWizardContinueAria'));
-    // Focus primary button on each step transition
     nextBtn.focus();
   }
 
@@ -5725,7 +5474,6 @@ function buildOnboardingOverlay(onComplete: () => void): void {
 
   skipBtn.addEventListener('click', () => dismiss());
 
-  // Esc key dismisses
   overlay.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -5757,20 +5505,14 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   document.body.appendChild(overlay);
 }
 
-/**
- * Reveals the onboarding carousel and focuses the primary button.
- * Called from the boot Promise.all once we confirm onboarding is incomplete.
- */
 function showOnboardingOverlay(): void {
   const overlay = document.getElementById('sp-onboarding-overlay');
   if (!overlay) return;
   overlay.classList.add('visible');
   overlay.setAttribute('aria-hidden', 'false');
   overlay.removeAttribute('inert');
-  // Focus the primary CTA for keyboard users
   const nextBtn = overlay.querySelector<HTMLButtonElement>('.sp-ob-btn-next');
   if (nextBtn) {
-    // Defer slightly so the overlay is painted before focus
     setTimeout(() => nextBtn.focus(), 50);
   }
 }
@@ -5798,9 +5540,6 @@ function buildUI(): void {
     }, 3500);
   }
 
-  // One active-tab group state drives the drawer, Workflows, and composer
-  // toolbar controls. The former three independent booleans immediately
-  // diverged after changing tabs or using a different control.
   type TabGroupStateRenderer = (grouped: boolean, known: boolean) => void;
   const tabGroupStateRenderers = new Set<TabGroupStateRenderer>();
   let currentTabGrouped = false;
@@ -5861,13 +5600,7 @@ function buildUI(): void {
   const header = el('div', { id: 'sp-header' });
   const headerLeft = el('div', { id: 'sp-header-left' });
 
-  // L-11 audit 2026-05-19: replaced innerHTML SVG injection with
-  // DOMParser-based import. Same end result — static SVG literal rendered
-  // into the wrapper — but no HTML parser involved.
   const logoEl = el('div', { id: 'sp-logo' });
-  // AGI brand mark: 12 spokes radiating from center (inner r=4.6, outer r=9).
-  // Spoke at index 0 (12 o'clock) uses amber/terra accent; others inherit text
-  // color via currentColor. Geometry mirrors packages/ui/ui/src/AgiMark.tsx.
   const logoSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AGI" role="img">
     <line x1="12" y1="7.4" x2="12" y2="3" stroke="var(--agi-ext-brand,#da7756)" stroke-width="1.5" stroke-linecap="round"/>
     <line x1="14.3" y1="8.016" x2="16.5" y2="4.206" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -5910,13 +5643,6 @@ function buildUI(): void {
     'aria-label': 'Available models',
   });
 
-  /**
-   * Provider ids that have a bundled SVG under icons/providers/. Kept in sync
-   * with scripts/vendor-provider-icons.mjs output. Any provider id NOT in this
-   * set resolves to the generic glyph up front so a missing icon never emits a
-   * net::ERR_FILE_NOT_FOUND console error (an <img> onerror handler cannot
-   * suppress the network error once the 404 request has been made).
-   */
   const BUNDLED_PROVIDER_ICON_IDS: ReadonlySet<string> = new Set([
     'agi-cloud',
     'anthropic',
@@ -5938,14 +5664,8 @@ function buildUI(): void {
     'zhipu',
   ]);
 
-  /** Generic provider glyph used when a provider has no bundled icon. */
   const GENERIC_PROVIDER_ICON_ID = 'custom-openai-compatible';
 
-  /**
-   * Resolves the chrome-extension URL for a provider logo SVG. Unknown
-   * provider ids resolve to the generic glyph instead of a 404ing URL.
-   * Falls back to undefined when chrome.runtime is unavailable (tests / SSR).
-   */
   function resolveProviderLogoUrl(providerId: string): string | undefined {
     const iconId = BUNDLED_PROVIDER_ICON_IDS.has(providerId)
       ? providerId
@@ -5957,13 +5677,6 @@ function buildUI(): void {
     }
   }
 
-  /**
-   * Builds a single model-option row with:
-   *  - 16px provider logo (or circle placeholder)
-   *  - Model name
-   *  - 1-line capability sub-label (Fastest / Balanced / Most capable)
-   *  - Checkmark on the selected item
-   */
   function buildModelOptionRow(m: ManagedModelPickerOption, isSelected: boolean): HTMLElement {
     const isAuto = m.value === 'auto';
 
@@ -5982,7 +5695,6 @@ function buildUI(): void {
       'aria-checked': String(isSelected),
     });
 
-    // Logo / dot
     if (isAuto) {
       opt.appendChild(el('div', { class: 'sp-model-auto-dot' }));
     } else if (m.provider) {
@@ -5996,8 +5708,6 @@ function buildUI(): void {
           height: '16',
         }) as HTMLImageElement;
         img.addEventListener('error', () => {
-          // Defensive: allowlisted icon unexpectedly missing from the bundle.
-          // Retry once with the generic glyph, then degrade to a placeholder.
           const genericUrl = resolveProviderLogoUrl(GENERIC_PROVIDER_ICON_ID);
           if (genericUrl && img.src !== genericUrl) {
             img.src = genericUrl;
@@ -6014,7 +5724,6 @@ function buildUI(): void {
       opt.appendChild(el('div', { class: 'sp-model-option-logo-placeholder' }));
     }
 
-    // Text block: name + sub-label
     const textBlock = el('div', { class: 'sp-model-option-text' });
     textBlock.appendChild(el('span', { class: 'sp-model-option-name' }, m.label));
     if (m.capability) {
@@ -6029,9 +5738,6 @@ function buildUI(): void {
     }
     opt.appendChild(textBlock);
 
-    // Every rendered model came from authenticated server admission intersected
-    // with this extension build's capability catalog, so there is no second,
-    // stale client-side plan gate here.
     const checkCell = el('span', { class: 'sp-model-option-check' });
     if (isSelected) checkCell.appendChild(renderIcon(Check, 12));
     opt.appendChild(checkCell);
@@ -6063,11 +5769,8 @@ function buildUI(): void {
     clearChildren(modelDropdownEl);
     const modelOptions = getManagedModelPickerOptions(managedModelAccess);
 
-    // 0. Provider count badge header
     const pickerHeader = el('div', { class: 'sp-model-picker-header' });
     pickerHeader.appendChild(el('span', { class: 'sp-model-picker-title' }, 'Select model'));
-    // FIX (audit batch-222 [LOW] documentation drift, 2026-06-13): derive the
-    // provider count from the actual model options instead of a hardcoded "13+".
     const providerCount = new Set(
       modelOptions
         .map((option) => option.provider)
@@ -6080,16 +5783,13 @@ function buildUI(): void {
     pickerHeader.appendChild(el('span', { class: 'provider-count-badge' }, providerCountLabel));
     modelDropdownEl.appendChild(pickerHeader);
 
-    // 1. "Best (auto)" as the first option, visually distinct
     const autoOpt = modelOptions.find((model) => model.value === 'auto');
     if (autoOpt) {
       modelDropdownEl.appendChild(buildModelOptionRow(autoOpt, _ctx.selectedModel === 'auto'));
     }
 
-    // 2. Collect non-auto options grouped by provider
     const nonAutoOptions = modelOptions.filter((model) => model.value !== 'auto');
 
-    // Build an ordered map of provider -> options
     const grouped = new Map<string, ManagedModelPickerOption[]>();
     for (const m of nonAutoOptions) {
       const provKey = m.provider ?? '__unknown__';
@@ -6097,7 +5797,6 @@ function buildUI(): void {
       grouped.get(provKey)!.push(m);
     }
 
-    // Render in canonical provider order, then any remainder
     const rendered = new Set<string>();
     for (const pid of PROVIDER_GROUP_ORDER) {
       const opts = grouped.get(pid);
@@ -6111,7 +5810,6 @@ function buildUI(): void {
       }
     }
 
-    // Any providers not in PROVIDER_GROUP_ORDER
     for (const [provKey, opts] of grouped.entries()) {
       if (rendered.has(provKey)) continue;
       modelDropdownEl.appendChild(
@@ -6126,7 +5824,6 @@ function buildUI(): void {
       }
     }
 
-    // 3. Thinking toggle at the bottom
     const toggleRow = el('div', { class: 'sp-thinking-toggle-row' });
     const toggleLabel = el(
       'label',
@@ -6255,7 +5952,6 @@ function buildUI(): void {
 
   const headerRight = el('div', { id: 'sp-header-right' });
 
-  // ── Recent chats ──────────────────────────────────────────────────────────
   const historyBtn = el('button', {
     class: 'sp-icon-btn',
     id: 'sp-history-btn',
@@ -6265,7 +5961,6 @@ function buildUI(): void {
   historyBtn.appendChild(renderIcon(Clock, 16));
   headerRight.appendChild(historyBtn);
 
-  // ── ＋ new chat button ─────────────────────────────────────────────────────
   const newChatBtn = el('button', {
     class: 'sp-icon-btn',
     id: 'sp-new-chat-btn',
@@ -6276,26 +5971,13 @@ function buildUI(): void {
   newChatBtn.addEventListener('click', () => {
     cancelCurrentManagedStream(false);
     resetConversationView();
-    // The header is visible from Workflows / Computer Use too, where this used to
-    // reset the transcript behind a display:none panel and look like a no-op.
     switchTab('chat');
   });
   headerRight.appendChild(newChatBtn);
 
-  // ── Quota badge (cloud free-prompts remaining) ─────────────────────────────
-  // Built in the drawer section block but inserted into the header here so it
-  // appears between the new-chat button and the menu button.
-  // `quotaBadgeEl` is defined later when the drawer is built; we use a late
-  // reference via getElementById at reveal time so the element is available
-  // after the initial DOM pass. For the header we create a placeholder span
-  // that becomes the actual badge once the drawer code runs.
-  // NOTE: quotaBadgeEl is declared via `let` in the drawer closure below and
-  // appended to headerRight there. We reserve the slot here via a wrapper so
-  // the layout order is correct.
   const quotaBadgeSlot = el('span', { id: 'sp-quota-badge-slot' });
   headerRight.appendChild(quotaBadgeSlot);
 
-  // ── ⋮ menu button ─────────────────────────────────────────────────────────
   const menuBtn = el('button', {
     class: 'sp-icon-btn',
     id: 'sp-menu-btn',
@@ -6307,7 +5989,6 @@ function buildUI(): void {
   header.appendChild(headerRight);
   document.body.appendChild(header);
 
-  // ── Helper: history load+restore (shared by drawer history section) ────────
   function formatHistoryDate(ts: number): string {
     const d = new Date(ts);
     const now = new Date();
@@ -6358,8 +6039,6 @@ function buildUI(): void {
       _ctx.currentStreamId = null;
       _ctx.pendingPageContext = null;
       _ctx.conversationGeneration += 1;
-      // Opening history is a read. Adopt the selected id directly unless the
-      // atomic session-owner claim found another live window using it.
       _ctx.conversationId = conversationOwner.conversationId;
       activePersistenceEntry = conversationOwner.forked ? undefined : entry;
       updatePersistencePill();
@@ -6392,8 +6071,6 @@ function buildUI(): void {
       const expectedGeneration = _ctx.conversationGeneration;
       if (conversationOwner.forked) {
         try {
-          // A real cross-window collision owns a distinct durable branch so a
-          // panel reload cannot discard the in-memory copy.
           await persistMessages();
         } catch (err) {
           console.warn('[SidePanel] failed to persist browser conversation branch:', err);
@@ -6407,15 +6084,10 @@ function buildUI(): void {
     }
   }
 
-  // Install the module-scope hook so notification clicks, the boot sequence and
-  // the Workflows task rows can open a stored background result through the
-  // same restore path a history entry uses.
   openStoredConversation = async (conversationId: string): Promise<boolean> => {
     try {
       const restored = await restoreHistoryEntry(conversationId);
       if (!restored) return false;
-      // Restoring while Workflows or Computer Use is showing would put the
-      // conversation behind whatever tab the click came from.
       switchTab('chat');
       return true;
     } catch (err) {
@@ -6424,19 +6096,11 @@ function buildUI(): void {
     }
   };
 
-  // #sp-settings-bar removed in Phase 3: the drawer's Bridge URL section
-  // supersedes it. The bridge-url save logic is in the drawer (drawerSaveBridgeUrl).
-  // bridgeUrlInput stub kept as an invisible element for legacy code that calls
-  // document.getElementById('sp-bridge-url-input').
   const bridgeUrlInput = el('input', {
     id: 'sp-bridge-url-input',
     type: 'hidden',
   }) as HTMLInputElement;
   document.body.appendChild(bridgeUrlInput);
-
-  // ── AGI menu drawer ────────────────────────────────────────────────────────
-  // The popup has been retired. All pairing, allowlist, memory, cloud-unlock,
-  // bridge-URL, tools, and chat-action controls live exclusively in this drawer.
 
   const drawerOverlay = el('div', { id: 'sp-drawer-overlay' });
   const drawer = el('div', {
@@ -6444,27 +6108,11 @@ function buildUI(): void {
     role: 'dialog',
     'aria-modal': 'true',
     'aria-label': 'AGI menu',
-    // Closed on first paint, so it must start inert too — otherwise the very
-    // first Tab press from the composer lands inside the hidden drawer.
     inert: '',
   });
 
   let drawerReturnFocus: HTMLElement = menuBtn;
 
-  /**
-   * Turn a Chrome extension-internals error into a sentence with a next step.
-   *
-   * These strings came straight from chrome.runtime and were shown verbatim:
-   * "Autofill failed: Could not establish connection. Receiving end does not
-   * exist." That describes the extension's message port, not anything the user
-   * did or can fix, and it reads as a crash. The underlying conditions are all
-   * ordinary and recoverable — the content script has not loaded on this tab
-   * yet, or the page is one extensions may not touch.
-   *
-   * Unrecognised errors keep their original text rather than being swallowed by
-   * a generic apology: an unknown failure the user can quote to support beats a
-   * friendly sentence that hides it.
-   */
   function explainExtensionFailure(message: string): string {
     if (/Receiving end does not exist|Could not establish connection/i.test(message)) {
       return "AGI isn't running on this page yet. Reload the tab, then try again.";
@@ -6482,13 +6130,7 @@ function buildUI(): void {
     drawerReturnFocus = trigger;
     drawerOverlay.classList.add('open');
     drawer.classList.add('open');
-    // The drawer is hidden by translateX(100%), which moves it off-screen but
-    // leaves every control focusable — Tab walked through ~30 invisible buttons
-    // before reaching the composer. `inert` removes them from the tab order AND
-    // the accessibility tree without touching the slide transition, which
-    // visibility:hidden or display:none would break.
     drawer.removeAttribute('inert');
-    // Refresh dynamic content when drawer opens
     void refreshDrawerPairingState();
     void refreshDrawerAllowlist();
     void refreshDrawerMemory();
@@ -6537,7 +6179,6 @@ function buildUI(): void {
     }
   });
 
-  // ── Drawer header ──────────────────────────────────────────────────────────
   const drawerHeader = el('div', { id: 'sp-drawer-header' });
   drawerHeader.appendChild(el('div', { id: 'sp-drawer-title' }, 'AGI in Chrome'));
   const drawerClose = el('button', { id: 'sp-drawer-close', 'aria-label': 'Close AGI menu' });
@@ -6548,12 +6189,10 @@ function buildUI(): void {
 
   const drawerBody = el('div', { id: 'sp-drawer-body' });
 
-  // ── Section 0: Chat actions ────────────────────────────────────────────────
   const chatActionsSection = el('div', { class: 'sp-drawer-section' });
   chatActionsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Chat'));
   const chatActionsRow = el('div', { class: 'sp-drawer-tools-row' });
 
-  // History button — opens the conversation history dropdown (now inside drawer)
   const drawerHistoryBtn = el('button', {
     class: 'sp-drawer-tool-btn',
     id: 'sp-drawer-history-btn',
@@ -6562,9 +6201,6 @@ function buildUI(): void {
   drawerHistoryBtn.appendChild(renderIcon(Clock, 13));
   drawerHistoryBtn.appendChild(document.createTextNode(' History'));
 
-  // History sub-list inside drawer (inline, not a floating dropdown).
-  // Styled via stylesheet classes, NOT element.style.cssText — the manifest's
-  // style-src 'self' CSP blocks runtime cssText on extension pages.
   const drawerHistoryList = el('div', { id: 'sp-drawer-history-list', hidden: '' });
   const drawerHistorySearch = el('input', {
     id: 'sp-drawer-history-search',
@@ -6594,8 +6230,6 @@ function buildUI(): void {
       return;
     }
     for (const entry of filteredEntries) {
-      // Two sibling buttons avoid invalid nested interactive controls while
-      // keeping both open and delete actions keyboard-reachable.
       const item = el('div', { class: 'sp-drawer-history-item' });
       const openButton = el('button', {
         class: 'sp-drawer-history-open',
@@ -6605,9 +6239,6 @@ function buildUI(): void {
       }) as HTMLButtonElement;
       openButton.disabled = _ctx.isStreaming || historyRestoreInProgress;
 
-      // Provenance badge, derived from the record already in hand — no extra
-      // storage read. The aria-label states it in words; a glyph alone is not
-      // an accessible way to tell a user where their transcript lives.
       const persistence = conversationPersistencePresentation(entry);
       const badge = el('span', {
         class: 'sp-drawer-history-badge',
@@ -6641,9 +6272,6 @@ function buildUI(): void {
         drawerHistoryError.textContent = t('spHistoryDeleting');
         drawerHistoryError.removeAttribute('hidden');
         void (async () => {
-          // Queue the durable account-side tombstone BEFORE removing the only
-          // local record that knows the cloud id. If the worker restarts or
-          // storage is unavailable, leave the row intact so the user can retry.
           const cloudConversationId = entry.cloudSync?.conversationId;
           if (cloudConversationId) {
             const organizationId = entry.cloudSync?.organizationId;
@@ -6736,7 +6364,6 @@ function buildUI(): void {
       .catch((err) => console.warn('[SidePanel] history list failed:', err));
   });
 
-  // Summarize button
   const drawerSummarizeBtn = el('button', {
     class: 'sp-drawer-tool-btn',
     id: 'sp-drawer-summarize-btn',
@@ -6757,7 +6384,6 @@ function buildUI(): void {
 
   drawerBody.appendChild(chatActionsSection);
 
-  // ── Section 1: Automation ──────────────────────────────────────────────────
   const viewsSection = el('div', { class: 'sp-drawer-section' });
   viewsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Automate'));
 
@@ -6804,7 +6430,6 @@ function buildUI(): void {
   viewsSection.appendChild(cuLaunchBtn);
   drawerBody.appendChild(viewsSection);
 
-  // ── Section 2: Tools (Capture / Refresh / Group) ───────────────────────────
   const toolsSection = el('div', { class: 'sp-drawer-section' });
   toolsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Tools'));
   const toolsRow = el('div', { class: 'sp-drawer-tools-row' });
@@ -6882,7 +6507,6 @@ function buildUI(): void {
   });
   toolsRow.appendChild(drawerRefreshBtn);
 
-  // Group button mirrors the toolbar's sp-group-btn
   const drawerGroupBtn = el('button', {
     class: 'sp-drawer-tool-btn',
     id: 'sp-drawer-group-btn',
@@ -6906,9 +6530,6 @@ function buildUI(): void {
   });
   toolsRow.appendChild(drawerGroupBtn);
 
-  // EXT-07: manifest.json declares options_page, but nothing in the product
-  // ever called chrome.runtime.openOptionsPage(), so the settings page was
-  // reachable only via chrome://extensions → Details → Extension options.
   const drawerOptionsBtn = el('button', {
     class: 'sp-drawer-tool-btn',
     id: 'sp-drawer-options-btn',
@@ -6921,7 +6542,6 @@ function buildUI(): void {
       chrome.runtime.openOptionsPage();
       return;
     }
-    // Older hosts without openOptionsPage still resolve the manifest entry.
     void chrome.tabs.create({ url: chrome.runtime.getURL('src/options.html') });
   });
   toolsRow.appendChild(drawerOptionsBtn);
@@ -6929,7 +6549,6 @@ function buildUI(): void {
   toolsSection.appendChild(toolsRow);
   drawerBody.appendChild(toolsSection);
 
-  // ── Section 3: Connection / Pairing ───────────────────────────────────────
   const pairingSection = el('div', { class: 'sp-drawer-section' });
   pairingSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Desktop Pairing'));
 
@@ -7034,7 +6653,6 @@ function buildUI(): void {
     applyDrawerPairingState(state);
   }
 
-  // ── Section 4: In-Page Panel toggle ───────────────────────────────────────
   const inPageSection = el('div', { class: 'sp-drawer-section' });
   inPageSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'In-Page Panel'));
   const inPageRow = el('div', { class: 'sp-drawer-toggle-row' });
@@ -7047,7 +6665,7 @@ function buildUI(): void {
     id: 'sp-drawer-in-page-toggle',
     'aria-label': t('spPageAssistantToggleAria'),
   }) as HTMLInputElement;
-  inPageToggle.checked = true; // default on
+  inPageToggle.checked = true;
   chrome.storage.local.get(SP_IN_PAGE_PANEL_ENABLED_KEY, (result) => {
     if (chrome.runtime.lastError) return;
     const val = result[SP_IN_PAGE_PANEL_ENABLED_KEY] as boolean | undefined;
@@ -7085,7 +6703,6 @@ function buildUI(): void {
   inPageSection.appendChild(inPageToggleStatus);
   drawerBody.appendChild(inPageSection);
 
-  // ── Section 5: Site Allowlist ──────────────────────────────────────────────
   const allowlistSection = el('div', { class: 'sp-drawer-section' });
   allowlistSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));
   allowlistSection.appendChild(
@@ -7162,15 +6779,6 @@ function buildUI(): void {
     cleaned.sort();
     await chrome.storage.local.set({ [SP_SITE_ALLOWLIST_KEY]: cleaned });
   }
-  /**
-   * Origin of the active tab, or null when there is nothing allowlistable.
-   *
-   * The allowlist governs which sites may run AGI automation in their tab, and
-   * automation needs a content script. Browser-internal pages cannot host one,
-   * so their origin is not a candidate — this used to return
-   * `chrome-extension://<32-char id>` and offer an "Add" button for it, which
-   * would have written a permanently inert entry.
-   */
   function drawerCurrentTabOrigin(): Promise<string | null> {
     return new Promise((resolve) => {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -7224,8 +6832,6 @@ function buildUI(): void {
   }
   async function refreshDrawerAllowlist(): Promise<void> {
     const [list, origin] = await Promise.all([drawerReadAllowlist(), drawerCurrentTabOrigin()]);
-    // Distinguish "no tab" from "this tab can never be automated"; both
-    // disable the button, but only one of them is the user's mistake.
     allowlistOriginLabel.textContent = origin ?? t('spAllowlistNoSite');
     (allowlistToggleBtn as HTMLButtonElement).disabled = !origin;
     if (origin) {
@@ -7252,7 +6858,6 @@ function buildUI(): void {
     }
   });
 
-  // ── Section 6: Memory ──────────────────────────────────────────────────────
   const DRAWER_DELETE_CONFIRM_MS = 3000;
   const memorySection = el('div', { class: 'sp-drawer-section' });
   memorySection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Memory'));
@@ -7476,7 +7081,6 @@ function buildUI(): void {
     }
   });
 
-  // ── Section 7: Bridge URL ──────────────────────────────────────────────────
   const bridgeSection = el('div', { class: 'sp-drawer-section' });
   bridgeSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Bridge URL'));
   const drawerBridgeInput = el('input', {
@@ -7525,7 +7129,6 @@ function buildUI(): void {
     chrome.runtime
       .sendMessage({ type: 'BRIDGE_URL_CHANGED', url: raw })
       .catch((err: unknown) => console.warn('[SidePanel] drawer bridge notify failed:', err));
-    // Also sync the old settings-bar input so both stay in sync
     const oldInput = document.getElementById('sp-bridge-url-input') as HTMLInputElement | null;
     if (oldInput) oldInput.value = raw;
   }
@@ -7534,14 +7137,11 @@ function buildUI(): void {
     if (e.key === 'Enter') drawerSaveBridgeUrl();
   });
 
-  // ── Section 8: AGI Cloud (sign-in + free-trial quota) ────────────────────
   const cloudSection = el('div', { class: 'sp-drawer-section' });
   cloudSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'AGI Cloud'));
 
-  // Container that swaps between signed-in and signed-out views
   const cloudAccountEl = el('div', { class: 'sp-cloud-account', id: 'sp-cloud-account' });
 
-  // ── Signed-out view ──────────────────────────────────────────────────────
   const signinPrompt = el('div', {
     class: 'sp-cloud-signin-prompt',
     id: 'sp-cloud-signin-prompt',
@@ -7577,7 +7177,6 @@ function buildUI(): void {
   });
   signinPrompt.appendChild(signinBtn);
 
-  // ── Signed-in view ───────────────────────────────────────────────────────
   const signedInView = el('div', {
     class: 'sp-cloud-signed-in',
     id: 'sp-cloud-signed-in',
@@ -7607,7 +7206,6 @@ function buildUI(): void {
   signedInView.appendChild(userInfoEl);
   signedInView.appendChild(signoutBtn);
 
-  // ── Shared AGI account plan and usage ────────────────────────────────────
   const quotaWrap = el('div', {
     class: 'sp-quota-bar-wrap',
     id: 'sp-quota-bar-wrap',
@@ -7616,7 +7214,6 @@ function buildUI(): void {
   const quotaLabelEl = el('span', { id: 'sp-quota-label' }, t('spQuotaPaidPlanRequired'));
   quotaWrap.appendChild(quotaLabelEl);
 
-  // Upgrade row (shown when quota exhausted)
   const quotaUpgradeRow = el('div', {
     class: 'sp-quota-upgrade-row',
     id: 'sp-quota-upgrade-row',
@@ -7673,9 +7270,6 @@ function buildUI(): void {
   cloudSection.appendChild(cloudAccountEl);
   drawerBody.appendChild(cloudSection);
 
-  // ── "Redeem a code" button — secondary to sign-in. AGI Cloud is public alpha
-  // (open by default once signed in); this drawer only redeems an optional promo/
-  // invite code for plan credits and offers a product-updates opt-in. ─────────────
   let drawerCloudModal: ReturnType<typeof mountInviteCodeModal> | null = null;
   const inviteCodeSection = el('div', { class: 'sp-drawer-section' });
   const drawerCloudBtn = el(
@@ -7701,8 +7295,6 @@ function buildUI(): void {
   inviteCodeSection.appendChild(drawerCloudBtn);
   drawerBody.appendChild(inviteCodeSection);
 
-  // ── Quota badge in header (click opens drawer to cloud section) ──────────
-  // Insert into the slot reserved in the header above.
   const quotaBadgeEl = el('button', {
     id: 'sp-quota-badge',
     type: 'button',
@@ -7710,21 +7302,12 @@ function buildUI(): void {
     'aria-label': 'AGI Cloud plan and usage — open menu',
   });
   quotaBadgeEl.addEventListener('click', () => {
-    // Route through openDrawer rather than toggling classes by hand. The manual
-    // version skipped the drawer's refresh calls AND its inert handling, so the
-    // drawer opened stale and — once closed drawers became inert — completely
-    // unusable. It also never recorded a focus-return target, stranding keyboard
-    // users when the drawer closed.
     openDrawer(quotaBadgeEl);
   });
-  // Attach to the slot created in the header section above
   const quotaSlot = document.getElementById('sp-quota-badge-slot');
   if (quotaSlot) quotaSlot.replaceWith(quotaBadgeEl);
   else document.body.appendChild(quotaBadgeEl);
 
-  // ── Cloud UI state helpers ───────────────────────────────────────────────
-  // Wire the module-level placeholder to the real implementation (which closes
-  // over signinPrompt, signedInView, quotaWrap, quotaBadgeEl, etc.).
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
     let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
@@ -7763,7 +7346,6 @@ function buildUI(): void {
         ? accountProfile
         : null;
     if (!token) {
-      // Signed out
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
       _ctx.currentModelKey = undefined;
@@ -7848,7 +7430,6 @@ function buildUI(): void {
     }
     refreshModelPickerUI();
 
-    // Signed in with server-verified admission.
     signinPrompt.style.display = 'none';
     signedInView.style.display = '';
     cloudLinkHint.style.display = '';
@@ -7895,10 +7476,6 @@ function buildUI(): void {
 
     if (canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
       quotaWrap.style.display = '';
-      // Shared vocabulary: web and mobile state what is LEFT, this panel stated
-      // what was USED — the same number reading as its own opposite depending on
-      // which surface you looked at. The reset was a bare date here and a
-      // relative countdown elsewhere. Both now come from @agiworkforce/types.
       const usage =
         typeof access.usagePercentage === 'number'
           ? formatUsageRemaining(100 - access.usagePercentage)
@@ -7925,8 +7502,6 @@ function buildUI(): void {
       quotaUpgradeRow.style.display = 'none';
       quotaBadgeEl.classList.add('visible', 'has-prompts');
       quotaBadgeEl.classList.remove('exhausted');
-      // Canonical catalog label, not the raw tier id upper-cased — that printed
-      // "MAX_15X" where every other surface says "Max 15x".
       quotaBadgeEl.textContent = getBillingPlanPricing(access.subscriptionTier).label;
       setManagedCloudChatState('ready');
       refreshPageHostname();
@@ -7957,17 +7532,13 @@ function buildUI(): void {
     });
   };
 
-  // Sign-out handler
   signoutBtn.addEventListener('click', async () => {
     await transitionManagedCloudOwner(null);
     await clearAuthToken();
     await refreshCloudAccountUI();
   });
 
-  // Upgrade button — open agiworkforce.com pricing
   quotaUpgradeBtn.addEventListener('click', () => {
-    // The destination is read from the state that set the label, not from the
-    // label itself: a translated catalog would never match an English literal.
     const url =
       quotaUpgradeBtn.dataset['destination'] === 'billing'
         ? 'https://agiworkforce.com/settings/billing?from=chrome-extension'
@@ -7988,12 +7559,10 @@ function buildUI(): void {
     signinBtn.setAttribute('disabled', '');
   }
 
-  // Initial load
   initialCloudAccountRefresh = refreshCloudAccountUI();
 
   drawer.appendChild(drawerBody);
 
-  // ── Drawer footer: stats + about ───────────────────────────────────────────
   const drawerFooter = el('div', { id: 'sp-drawer-footer' });
   const statsRow = el('div', { class: 'sp-drawer-stats-row' });
   const tabCountStat = el('div', { class: 'sp-drawer-stat' });
@@ -8025,9 +7594,6 @@ function buildUI(): void {
   aboutRow.appendChild(el('span', {}, `v${chrome.runtime.getManifest().version}`));
   const aboutUrlSpan = el('span', { class: 'sp-drawer-about-url', id: 'sp-drawer-about-url' }, '—');
   aboutRow.appendChild(aboutUrlSpan);
-  // The Chrome-internal tab id used to render here as "#1873492". It is a
-  // process-local integer with no meaning to a user and no way to act on it —
-  // debug telemetry in a shipped surface.
   drawerFooter.appendChild(aboutRow);
   drawer.appendChild(drawerFooter);
 
@@ -8050,8 +7616,6 @@ function buildUI(): void {
         try {
           const url = new URL(tab.url);
           if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-            // Browser-internal pages have no hostname worth showing; `hostname`
-            // is the raw extension id there. Same reason as pageChipLabel().
             aboutUrlSpan.textContent = t('spAboutBrowserPage');
             aboutUrlSpan.removeAttribute('title');
           } else {
@@ -8069,7 +7633,6 @@ function buildUI(): void {
     }
   }
 
-  // Session timer for drawer stats footer
   function startDrawerSessionTimer(): void {
     if (_drawerSessionTimer !== null) return;
     _drawerSessionStart = Date.now();
@@ -8087,11 +7650,6 @@ function buildUI(): void {
 
   document.body.appendChild(drawerOverlay);
   document.body.appendChild(drawer);
-
-  // Phase 3: #sp-settings-bar removed; bridge URL is managed exclusively via the
-  // drawer's Bridge URL section (drawerSaveBridgeUrl). The hidden bridgeUrlInput
-  // element is kept in the DOM so that the drawer's sync line (oldInput?.value = raw)
-  // remains a silent no-op rather than a querySelector miss.
 
   const statusPill = el('div', { id: 'sp-status-pill', class: 'disconnected' });
   const statusDot0 = document.createElement('span');
@@ -8147,7 +7705,6 @@ function buildUI(): void {
   tabBar.appendChild(cuTabBtn);
   document.body.appendChild(tabBar);
 
-  // Build computer-use panel (kept in module scope so event handlers can reach it)
   const cuPanel: ComputerUsePanelAPI = buildComputerUsePanel();
   cuPanel.panelEl.setAttribute('role', 'tabpanel');
   cuPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-computer-use');
@@ -8175,7 +7732,6 @@ function buildUI(): void {
     cuPanel.panelEl.setAttribute('aria-hidden', String(tab !== 'computer-use'));
     if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
     if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
-    // Only route back to chat from Workflows / Computer Use.
     tabBar.classList.toggle('sp-tab-bar-exit', tab !== 'chat');
     if (tab === 'workflows') {
       refreshWorkflowsShortcuts();
@@ -8219,10 +7775,8 @@ function buildUI(): void {
     'aria-live': 'polite',
     'aria-relevant': 'additions',
   });
-  // #sp-empty: composer-first empty state (design-spec §8); hidden when messages present
   const emptyState = el('div', { id: 'sp-empty' });
   const emptyIcon = el('div', { id: 'sp-empty-icon' });
-  // L-11 audit 2026-05-19: see logo SVG above.
   const emptyIconSvg = `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" aria-hidden="true">
     <circle cx="24" cy="24" r="4" fill="var(--agi-ext-brand)" opacity="0.2"/>
     <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -8354,11 +7908,6 @@ function buildUI(): void {
     recordStatus.setAttribute('data-kind', kind);
   }
 
-  // Value-capture opt-in. The content script fully supports recording typed
-  // values (password/cc/OTP fields redacted, API-key-shaped tokens scrubbed —
-  // C-05), but the toggle to enable it was never built, so recordings were
-  // selector-only and replayed shortcuts typed nothing into forms. This wires
-  // the extension-page-only SET_RECORDING_VALUE_CAPTURE message.
   const captureRow = el('label', { class: 'sp-wf-capture-values' });
   const captureToggle = el('input', {
     type: 'checkbox',
@@ -8469,8 +8018,6 @@ function buildUI(): void {
         setRecordingStatus('Open an approved web page before starting a recording.', 'error');
         return;
       }
-      // Sync the value-capture choice to the active tab's content script before
-      // recording begins (the toggle may have been set on a different tab).
       if (!(await syncCaptureValues())) {
         recordingStartUrl = null;
         setRecordingStatus(t('spRecordingPrivacySaveFailed'), 'error');
@@ -8594,7 +8141,6 @@ function buildUI(): void {
   shortcutsSection.appendChild(wfShortcutsList);
   workflowsPanel.appendChild(shortcutsSection);
 
-  /* ── Create-shortcut modal overlay ── */
   const createShortcutOverlay = el('div', {
     class: 'sp-create-shortcut-overlay',
     id: 'sp-create-shortcut-overlay',
@@ -8933,11 +8479,8 @@ function buildUI(): void {
   workflowsPanel.appendChild(groupsSection);
   document.body.appendChild(workflowsPanel);
 
-  // Computer Use panel — append after workflows; shown/hidden by switchTab()
   document.body.appendChild(cuPanel.panelEl);
 
-  // Wire escalation events from content scripts / background into the panel UI.
-  // The background relays 'agi:escalate' CustomEvents as runtime messages.
   chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (!msg || typeof msg !== 'object') return;
     const m = msg as Record<string, unknown>;
@@ -8961,12 +8504,9 @@ function buildUI(): void {
       if (!cuPanel.ownsRun(runId)) return;
       const step = m['step'] as Parameters<ComputerUsePanelAPI['appendStep']>[0];
       cuPanel.appendStep(step);
-      // Auto-switch to Computer Use tab when the agent starts
       switchTab('computer-use');
     } else if (m['type'] === 'AGI_CU_USAGE') {
       if (!cuPanel.ownsRun(runId)) return;
-      // Live step/token counts from the background agent loop. Guard the shape so
-      // a malformed message can never render NaN into the usage meter.
       const usage = m['usage'] as Parameters<ComputerUsePanelAPI['updateUsageMeter']>[0];
       if (
         usage &&
@@ -8983,8 +8523,6 @@ function buildUI(): void {
       switchTab('computer-use');
     } else if (m['type'] === 'AGI_CU_APPROVE_REQUEST') {
       if (!cuPanel.ownsRun(runId)) return;
-      // Background is asking the panel to show an approval card for an action.
-      // The panel resolves the card and replies with AGI_CU_APPROVE_RESPONSE.
       const requestId = typeof m['requestId'] === 'string' ? m['requestId'] : '';
       const toolName = typeof m['toolName'] === 'string' ? m['toolName'] : 'action';
       const description = typeof m['description'] === 'string' ? m['description'] : '';
@@ -8999,18 +8537,6 @@ function buildUI(): void {
     }
   });
 
-  // ── "Run Autofill" button orchestration ───────────────────────────────────
-  // Message flow (secure 3-context design):
-  //   1. User clicks "Run Autofill" in the Computer Use tab controls bar.
-  //   2. Side panel sends AGI_RUN_AUTOFILL to the content script of the
-  //      active tab (DOM work only — no CDP).
-  //   3. Content script returns { success, platform, autofill, escalation }.
-  //   4. If escalation.shouldEscalate, side panel:
-  //      a. Shows the handoff banner.
-  //      b. Switches to the Computer Use tab.
-  //      c. Sends AGI_START_COMPUTER_USE to the BACKGROUND (CDP-capable).
-  //   5. Background validates the tab's origin against siteAllowlistCache,
-  //      then starts runAgentLoop() and streams AGI_CU_STEP events back.
   cuPanel.onRunAutofill(() => {
     void (async () => {
       const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -9042,13 +8568,11 @@ function buildUI(): void {
         | undefined;
 
       if (!escalation?.shouldEscalate) {
-        // Fast-path completed cleanly — no agent loop needed.
         cuPanel.showHandoffBanner('No agent escalation needed.', 'success');
         switchTab('computer-use');
         return;
       }
 
-      // Fast-path stalled → hand off to the computer-use agent loop.
       const goal = typeof escalation.agentGoal === 'string' ? escalation.agentGoal : '';
       cuPanel.showHandoffBanner(
         `Fast-path autofill stalled (${String(escalation.triggers?.length ?? 0)} trigger(s)). ` +
@@ -9056,14 +8580,10 @@ function buildUI(): void {
       );
       switchTab('computer-use');
 
-      // Persist the "ask before acting" preference so the background can read it.
       await chrome.storage.local.set({
         agi_cu_ask_before_acting: cuPanel.isAskBeforeActing(),
       });
 
-      // Bind the pending admission to an exact run id before sending. Stop,
-      // Clear, and pagehide can now invalidate the start even while the worker
-      // is still awaiting tab/auth/storage checks.
       const requestedRunId = `cu_run_${crypto.randomUUID()}`;
       cuPanel.setRunState(true, requestedRunId);
 
@@ -9089,8 +8609,6 @@ function buildUI(): void {
         return;
       }
 
-      // A Stop/Clear/pagehide during admission tombstoned this exact intent.
-      // Its eventual response must not revive the controls or show a stale error.
       if (!cuPanel.ownsRun(requestedRunId)) return;
       if (startResponse?.success === true && startResponse.runId === requestedRunId) {
         cuPanel.setRunState(true, startResponse.runId, startResponse.runGeneration);
@@ -9105,9 +8623,6 @@ function buildUI(): void {
   });
 
   const toolbar = el('div', { id: 'sp-toolbar' });
-
-  // Context button is now rendered as a persistent chip in the composer bar (see below).
-  // The toolbar slot is intentionally empty for context; the chip is built inside inputArea.
 
   const micBtn = el('button', {
     class: 'sp-tool-btn',
@@ -9244,9 +8759,6 @@ function buildUI(): void {
     'aria-label': 'Message AGI',
   }) as HTMLTextAreaElement;
 
-  // ── Slash-command autocomplete ────────────────────────────────────────────
-  // Registered BEFORE the send handler below so an open menu consumes Enter
-  // instead of dispatching the raw "/su" text as a message.
   const slashMenu = el('div', {
     id: 'sp-slash-menu',
     role: 'listbox',
@@ -9274,7 +8786,6 @@ function buildUI(): void {
       });
       item.appendChild(el('span', { class: 'sp-slash-name' }, name));
       item.appendChild(el('span', { class: 'sp-slash-hint' }, meta.hint));
-      // mousedown, not click: click fires after the textarea blurs.
       item.addEventListener('mousedown', (ev: Event) => {
         ev.preventDefault();
         acceptSlash(i);
@@ -9294,7 +8805,6 @@ function buildUI(): void {
   function acceptSlash(index: number): void {
     const picked = slashMatches[index];
     if (!picked) return;
-    // Trailing space so an argument can follow, e.g. "/translate to French".
     inputEl.value = `${picked[0]} `;
     closeSlashMenu();
     inputEl.focus();
@@ -9322,7 +8832,7 @@ function buildUI(): void {
       renderSlashMenu();
     } else if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
-      e.stopImmediatePropagation(); // keep the send handler below from firing
+      e.stopImmediatePropagation();
       acceptSlash(slashActive);
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -9332,9 +8842,6 @@ function buildUI(): void {
 
   inputEl.addEventListener('input', () => {
     autoResizeInput(inputEl);
-    // The click target is stateful: without recomputing here, typing enabled
-    // Enter-to-send but left the visible Send button in its empty disabled
-    // state until some unrelated chat/account update happened.
     updateSendButton();
   });
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -9348,11 +8855,6 @@ function buildUI(): void {
     }
   });
 
-  // 2026-05-21 — paste-image support on the textarea. Captures clipboard image
-  // items (screenshots, copied images) so users don't have to round-trip
-  // through the +menu. Mirrors `packages/ui/unified-chat/ChatInput.tsx` and the
-  // VS Code webview composer wire. Image-only kind, single readAsDataURL per
-  // file; acceptIncomingComposerFiles applies the transport caps on append.
   inputEl.addEventListener('paste', (e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -9390,7 +8892,6 @@ function buildUI(): void {
     sendMessage(text);
   });
 
-  // + attachment button and 2-item popup menu
   const attachWrapper = el('div', { class: 'sp-attach-wrapper' });
 
   const attachBtn = el('button', {
@@ -9455,7 +8956,6 @@ function buildUI(): void {
   fileItem.appendChild(document.createTextNode('Add an image'));
   const fileInput = el('input', {
     type: 'file',
-    // Narrower than image/* so the picker offers only what the wire accepts.
     accept: COMPOSER_ATTACHMENT_ACCEPT,
     class: 'sp-attach-file-input',
     id: 'sp-attach-file-input',
@@ -9518,17 +9018,14 @@ function buildUI(): void {
     }
   });
 
-  // Attachment preview bar (hidden until an attachment is added)
   const attachmentBar = el('div', { id: 'sp-attachment-bar' });
   attachmentBar.style.display = 'none';
 
   inputRow.appendChild(inputEl);
 
-  // Above the input row: the panel is short, so a downward menu would clip.
   composerShell.appendChild(slashMenu);
   composerShell.appendChild(inputRow);
 
-  // Persistent page-context chip in the composer bottom bar
   const composerBar = el('div', { id: 'sp-composer-bar' });
   const composerBarStart = el('div', { class: 'sp-composer-controls-start' });
   const composerBarEnd = el('div', { class: 'sp-composer-controls-end' });
@@ -9564,12 +9061,6 @@ function buildUI(): void {
   });
   composerBarStart.appendChild(contextBtn);
 
-  // ── Autonomy chip (EXT-11) ────────────────────────────────────────────────
-  // The panel had no visible autonomy control: the ask-before-acting gate lived
-  // only in the Computer Use tab, so from the composer there was no way to see
-  // — let alone change — whether the agent would act without asking. This chip
-  // reports and toggles the same `agi_cu_ask_before_acting` pref that
-  // background.ts treats as authoritative; it does not own the gate.
   const autonomyChip = el('button', {
     class: 'sp-autonomy-chip',
     id: 'sp-autonomy-chip',
@@ -9638,8 +9129,6 @@ function buildUI(): void {
     fullAccessOption.classList.toggle('selected', !askFirst);
   }
 
-  // Default to the safe state until storage answers, matching the rule
-  // background.ts applies: only an explicit stored `false` disables the gate.
   renderAutonomyChip(true);
   chrome.storage.local.get('agi_cu_ask_before_acting', (items) => {
     if (chrome.runtime.lastError) return;
@@ -9672,8 +9161,6 @@ function buildUI(): void {
     closeAutonomyPopover(true);
   });
   fullAccessOption.addEventListener('click', () => {
-    // Full access is deliberately an explicit menu choice. Clicking the status
-    // chip itself never crosses the approval boundary.
     renderAutonomyChip(false);
     void chrome.storage.local.set({ agi_cu_ask_before_acting: false });
     closeAutonomyPopover(true);
@@ -9688,8 +9175,6 @@ function buildUI(): void {
     if (!autonomyControl.contains(event.target as Node)) closeAutonomyPopover();
   });
 
-  // Keep the chip and the Computer Use checkbox from drifting apart — they are
-  // two views of one stored value.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     const change = changes['agi_cu_ask_before_acting'];
@@ -9697,10 +9182,6 @@ function buildUI(): void {
     renderAutonomyChip(change.newValue !== false);
   });
 
-  // ── Catalog-driven reasoning effort ─────────────────────────────────────
-  // Auto and Quick do not claim a provider effort ladder before the router has
-  // returned a concrete model. The control remains openable in that state so
-  // its disabled explanation is visible instead of presenting a dead mystery.
   const effortControl = el('div', { id: 'sp-effort-control' });
   const effortButton = el('button', {
     id: 'sp-effort-btn',
@@ -9818,7 +9299,6 @@ function buildUI(): void {
   renderEffortControl();
   composerBarEnd.appendChild(effortControl);
 
-  // W5-06: per-turn Auto Economy override for lower-latency replies.
   const quickModeToggle = el('button', {
     id: 'sp-quick-mode-toggle',
     title: 'Quick mode: prioritize lower latency for each reply',
@@ -9858,9 +9338,6 @@ function buildUI(): void {
   });
   effortPopover.appendChild(quickModeToggle);
 
-  // Visible persistence policy label. It describes what happens to the current
-  // transcript without claiming that a best-effort network write has already
-  // completed.
   const persistencePill = el('span', { class: 'sp-persistence-pill', 'data-state': 'local' });
   const persistencePillIcon = el('span', { class: 'sp-persistence-pill-icon' });
   const persistencePillText = el('span');
@@ -9905,9 +9382,6 @@ function buildUI(): void {
   composerShell.appendChild(composerBar);
   composerShell.appendChild(trustStrip);
 
-  // Bridge-offline notice — shown at the top of the input area when the
-  // desktop bridge is not connected. Includes a reconnect button that
-  // triggers the same flow as the popup's manual reconnect.
   const bridgeNotice = el('div', { id: 'sp-bridge-notice' });
   const bridgeNoticeDot = el('span', { id: 'sp-bridge-notice-dot' });
   const bridgeNoticeText = el(
@@ -9940,19 +9414,10 @@ function buildUI(): void {
     actionLabel: managedCloudGateActionLabel,
   });
 
-  // First-run onboarding carousel overlay — built hidden; revealed after the
-  // async agi_onboarding_completed storage check in the boot Promise.all.
-  // Callback re-runs probeBridgeStatus() so the correct post-onboarding state
-  // (offline or connected) is shown as soon as the carousel is dismissed.
   buildOnboardingOverlay(() => {
     void probeBridgeStatus();
   });
 
-  // 2026-05-21 — drag-drop image attachments onto the composer. Highlights
-  // the shell while a Files drag is in flight; on drop we route through
-  // acceptIncomingComposerFiles which handles the size cap, the image-type
-  // filter and the transport's count and byte ceilings. Matches the VS Code
-  // webview behaviour shipped in this same session.
   composerShell.addEventListener('dragover', (event: DragEvent) => {
     const types = event.dataTransfer?.types;
     if (!types) return;
@@ -9982,9 +9447,6 @@ function buildUI(): void {
   setupVoiceInput(micBtn, inputEl, autoResizeInput);
   renderMessages();
 
-  // Claude-style front door: default to Chat. The panel is now the extension's
-  // primary surface (opened on toolbar click), so it must read as a chat first.
-  // Computer-Use still auto-activates when a CU event actually arrives.
   switchTab('chat');
 }
 
@@ -10014,11 +9476,6 @@ function refreshShortcuts(): void {
       if (!dropdown) return;
       clearChildren(dropdown);
 
-      // Every control in this dropdown previously returned silently on failure:
-      // replay discarded its callback entirely, delete only acted on success,
-      // and Save had three separate silent returns — including the common case
-      // of pressing Save with nothing recorded. A click that does nothing and
-      // says nothing is indistinguishable from a dead control.
       const statusEl = el('div', { class: 'sp-shortcuts-status', role: 'status' });
       const setStatus = (message: string, kind: 'error' | 'success'): void => {
         statusEl.textContent = message;
@@ -10090,7 +9547,6 @@ function refreshShortcuts(): void {
           nameInput.focus();
           return;
         }
-        // Get recorded actions from content script
         chrome.runtime.sendMessage(
           { type: 'GET_RECORDED_ACTIONS' },
           (recResponse: { success?: boolean; actions?: unknown[] } | undefined) => {
@@ -10105,8 +9561,6 @@ function refreshShortcuts(): void {
             }
             const recActions = recResponse.actions ?? [];
             if (recActions.length === 0) {
-              // The most common silent failure: Save was pressed before
-              // anything was recorded, and the row simply did nothing.
               setStatus('Nothing recorded yet — start a recording first.', 'error');
               return;
             }
@@ -10186,8 +9640,6 @@ function refreshWorkflowsShortcuts(): void {
         });
         return;
       }
-      // A prompt shortcut's answer is filed under a shortcut-scoped
-      // conversation. Only offer "View last result" where one actually exists.
       const owner = _ctx.managedCloudOwner;
       void (owner ? listConversations(owner) : Promise.resolve([] as ConversationEntry[]))
         .catch(() => [] as ConversationEntry[])
@@ -10227,9 +9679,6 @@ function renderShortcutRows(
       month: 'short',
       day: 'numeric',
     });
-    // Legacy records may still carry `scheduled`, but shortcut scheduling
-    // never had an executor. Do not present that dormant bit as a live state;
-    // actual scheduled work is managed in the Scheduled Tasks section below.
     const metaText = isPromptBased
       ? `prompt shortcut · ${dateStr}`
       : `${actionsCount} actions · ${dateStr}`;
@@ -10251,9 +9700,6 @@ function renderShortcutRows(
         (resp: { success?: boolean } | undefined) => {
           playBtn.textContent = t('spShortcutPlay');
           playBtn.disabled = false;
-          // A prompt shortcut produces an answer rather than a page effect.
-          // Show it here instead of leaving the user with a spinner that
-          // finished and nothing to read.
           if (chrome.runtime.lastError || !resp?.success) {
             announceWorkflowMutation(t('spWorkflowRunFailed', [sc.name]), 'error');
             return;
@@ -10346,10 +9792,6 @@ function refreshWorkflowsTasks(): void {
         setChild(list, { tag: 'div', className: 'sp-wf-empty', text: 'No scheduled tasks' });
         return;
       }
-      // A scheduled run files its answer under a task-scoped conversation id.
-      // Look up which of those exist so "View result" is only rendered when it
-      // has something to open — an always-on button would be the dead control
-      // this fix is closing.
       const owner = request.owner;
       void (owner ? listConversations(owner) : Promise.resolve([] as ConversationEntry[]))
         .catch(() => [] as ConversationEntry[])
@@ -10477,8 +9919,6 @@ function renderTaskRows(
 chrome.runtime.onMessage.addListener((msg: unknown) => {
   const envelope = msg as { type: string };
 
-  // A completion notification for a scheduled task / shortcut was clicked while
-  // this panel was already open. Open the conversation holding its answer.
   if (envelope.type === OPEN_BROWSER_CONVERSATION_MESSAGE) {
     const request = msg as { owner?: unknown; conversationId?: unknown };
     const owner = normalizeManagedCloudOwner(request.owner);
@@ -10489,17 +9929,12 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       request.conversationId.length > 0
     ) {
       void openStoredConversation(request.conversationId).then((opened) => {
-        // The boot-time pointer is the fallback for a panel that was not yet
-        // listening; consume it here so the result is not opened twice.
         if (opened) void takePendingResultConversation(owner);
       });
     }
     return;
   }
 
-  // Live connection-status updates from the background service worker.
-  // Background now also broadcasts these via chrome.runtime.sendMessage so
-  // extension views (side panel, popup) receive them — not just content scripts.
   if (envelope.type === 'CONNECTION_STATUS_CHANGED') {
     const statusMsg = msg as { connected?: boolean; status?: string };
     const nowConnected = statusMsg.connected === true;
@@ -10530,16 +9965,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   armManagedStreamInactivityWatchdog(chunk.id);
   const streamUsedQuick = quickModeByStreamId.get(chunk.id) === true;
   const routeStamped = captureResolvedRoute(chunk.id, chunk.routing);
-  // Quick is a request-only overlay. Its resolved economy route must not
-  // replace the conversation's durable Auto/manual route or effort.
   const continuationChanged = !streamUsedQuick && applyRoutingContinuation(chunk.routing);
   if (routeStamped || continuationChanged) saveMessages();
 
   if (chunk.error) {
-    // Cloud free-trial sentinels: show actionable UI instead of a generic error
-    // bubble.  The background sets these when the gateway returns a 403 quota
-    // response or a 401 auth failure so we can guide the user to upgrade/sign-in
-    // rather than surfacing a confusing "request failed" message.
     if (chunk.error === '__QUOTA_EXCEEDED__') {
       void refreshCloudAccountUI();
       handleStreamError(
@@ -10565,16 +9994,12 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       if (streamUsedQuick) existing.managedQuickMode = true;
       stampResolvedRoute(chunk.id, existing);
     } else {
-      // The gateway publishes its durable run handle before the first text
-      // frame. Persist an invisible placeholder immediately so closing the
-      // panel in that gap still leaves enough state to resume.
       _ctx.messages.push({
         id: chunk.id,
         role: 'assistant',
         content: '',
         streaming: true,
         timestamp: Date.now(),
-        // Every CHAT_CHUNK originates from a Managed Cloud stream.
         runtime: 'managed-cloud',
         cloudAgentRun: { ...chunk.cloudRun },
         ...(streamUsedQuick ? { managedQuickMode: true } : {}),
@@ -10600,9 +10025,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       before.cloudApprovalError = undefined;
     }
     const assistant = applyCanonicalAgentEvent(_ctx.messages, chunk.id, chunk.agentEvent);
-    // `applyCanonicalAgentEvent` can be the first thing to materialize the
-    // assistant turn (an agent event can precede any text frame), so stamp
-    // provenance here too — an unstamped turn would disqualify the thread.
     assistant.runtime = 'managed-cloud';
     if (streamUsedQuick) assistant.managedQuickMode = true;
     stampResolvedRoute(chunk.id, assistant);
@@ -10668,7 +10090,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       content: chunk.text,
       streaming: true,
       timestamp: Date.now(),
-      // Every CHAT_CHUNK originates from a Managed Cloud stream.
       runtime: 'managed-cloud',
       ...(streamUsedQuick ? { managedQuickMode: true } : {}),
       ...(cloudRunsByStreamId.get(chunk.id)
@@ -10727,26 +10148,13 @@ chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
     refreshPageHostname();
   }
 });
-// Populate hostname chip as soon as UI is available
 refreshPageHostname();
 
-// ── First-run onboarding gate ─────────────────────────────────────────────
-// isOnboardingComplete() reads agi_onboarding_completed from chrome.storage.local
-// (defined in features/side-panel/onboarding.ts and covered by unit tests).
-// We check it BEFORE probing bridge status so we don't surface the offline-
-// onboarding screen underneath the carousel (double-overlay bug).
-// probeBridgeStatus() is called by the carousel's onComplete callback; and
-// also in the returning-user branch below.
-// The storage key literal lives only in features/side-panel/onboarding.ts;
-// isOnboardingComplete() encapsulates the read so the key is a single source
-// of truth shared with the unit tests.
 void (async () => {
   const onboardingDone = await isOnboardingComplete();
   if (!onboardingDone) {
     showOnboardingOverlay();
     void checkPendingContextHandoff();
-    // Defer bridge status until onboarding carousel is dismissed.
-    // probeBridgeStatus() is invoked by the onComplete callback in buildUI().
     initialCloudAccountRefresh
       .then(() => {
         if (_ctx.messages.length > 0) renderMessages();
@@ -10754,39 +10162,25 @@ void (async () => {
       .catch(() => {});
     return;
   }
-  // Onboarding already complete — normal boot.
   Promise.all([
     initialCloudAccountRefresh.then(() => {
       if (_ctx.messages.length > 0) {
         renderMessages();
       }
     }),
-    // Probe bridge status on init — updates connection pill if desktop is running
     probeBridgeStatus(),
   ])
     .then(() => {
-      // Check for pending chat from context menu (selection, summarize, explain, translate)
       checkPendingChat();
       void checkPendingContextHandoff();
-      // A notification click opens the panel without being able to pass a
-      // payload, so the conversation it pointed at is parked in session storage.
       void checkPendingBackgroundResult();
     })
     .catch((err) => {
-      // Boot errors must not surface to the user, but log for debugging.
       console.error('[SidePanel] Boot initialization failed:', err);
     });
 })();
 
 async function probeBridgeStatus(): Promise<void> {
-  // Ask the background service worker for the live native-connection status.
-  // This is the only authoritative source: the desktop `:8787` server only
-  // serves `POST /pair` and WebSocket upgrades — a direct HTTP GET to
-  // `/v1/status` always fails (404 or ECONNREFUSED), so the side panel used
-  // to permanently show "Offline" even when the desktop app was running.
-  //
-  // GET_CONNECTION_STATUS also triggers a fresh native ping in background
-  // (background.ts:1033) so the status it returns is up-to-date.
   try {
     const result = (await chrome.runtime.sendMessage({
       type: 'GET_CONNECTION_STATUS',
@@ -10798,8 +10192,6 @@ async function probeBridgeStatus(): Promise<void> {
       updateConnectionStatus();
     }
     if (connected) {
-      // Mark ever-connected so the onboarding screen is not shown on future
-      // opens even if the desktop is temporarily closed.
       chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
     }
   } catch {
@@ -10807,12 +10199,6 @@ async function probeBridgeStatus(): Promise<void> {
   }
 }
 
-/**
- * Open the background result a notification click pointed at.
- *
- * The pointer is consumed unconditionally so a stale id (its conversation was
- * deleted, or aged out of the 30-day store) cannot re-fire on every boot.
- */
 async function checkPendingBackgroundResult(): Promise<void> {
   const owner = _ctx.managedCloudOwner;
   if (!owner) return;
@@ -10829,7 +10215,6 @@ function checkPendingChat(): void {
       | undefined;
     if (!pending || Date.now() - pending.timestamp > 30_000) return;
 
-    // Clear immediately so it doesn't re-fire
     chrome.storage.session.remove('agi_pending_chat').catch(() => {});
 
     let prompt = '';
@@ -10844,7 +10229,6 @@ function checkPendingChat(): void {
         prompt = `Translate the following to English (or if already English, to Spanish):\n\n"${pending.text}"`;
         break;
       case 'summarize':
-        // Auto-capture page context then send
         capturePageContext()
           .then((ctx) => {
             if (ctx) _ctx.pendingPageContext = ctx;

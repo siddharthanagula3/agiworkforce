@@ -1,24 +1,3 @@
-/**
- * Project row mapping.
- *
- * Maps a `public.user_projects` row (snake_case Postgres) into the canonical
- * `ProjectRecord` shape from `@agiworkforce/types`, while tolerating
- * pre-migration column states. The round-10 schema migration
- * (`0053_projects_managed_cloud_contract.sql`) adds:
- *   - default_privacy_mode (NOT NULL default 'managed')
- *   - default_provider_mode (NOT NULL default 'ManagedGateway')
- *   - allowed_surfaces (NOT NULL default ['web','desktop','mobile'])
- *   - icon_emoji, accent_color, imported_from, organization_id,
- *     default_model_id, last_used_at (all nullable)
- *
- * Until that migration applies, the columns are absent and the mapper
- * defaults them. Once applied, the mapper passes them through. Either
- * way callers get the same canonical shape.
- *
- * The legacy `color` field (free-form CSS) is preserved separately from
- * the canonical `accentColor` enum · they are different concepts and
- * existing clients depend on `color`.
- */
 
 import {
   SYNCED_APP_SURFACES,
@@ -50,7 +29,6 @@ export interface MappedProject {
   name: string;
   description: string | null;
   instructions: string | null;
-  /** Legacy CSS color, preserved for backward-compat. */
   color: string | null;
   isArchived: boolean;
   metadata: Record<string, unknown> | null;
@@ -65,13 +43,6 @@ export interface MappedProject {
   importedFrom: ProjectImportSource | null;
   createdAt: string;
   updatedAt: string;
-  /**
-   * True when the caller reaches this project through an organization share
-   * (migration 0086) rather than owning it. Read-only for the caller: the
-   * update/delete handlers still match on `user_id`, so a shared project is
-   * openable but not editable by a member. Surfaced so a client can say so
-   * instead of rendering edit controls that will 404.
-   */
   isOrgShared: boolean;
 }
 
@@ -137,12 +108,6 @@ export function mapKnowledgeFileRow(row: Record<string, unknown>): ProjectKnowle
   };
 }
 
-/**
- * Map a raw `user_projects` row from Neon into the canonical
- * project shape. Tolerant of missing columns when the round-10
- * migration hasn't been applied yet · defaults are derived from the
- * canonical `PrivacyMode`/`ProviderMode`/`SourceSurface` types.
- */
 export function mapProjectRow(row: Record<string, unknown>): MappedProject {
   return {
     id: String(row['id'] ?? ''),
@@ -166,8 +131,6 @@ export function mapProjectRow(row: Record<string, unknown>): MappedProject {
     importedFrom: asImportSource(row['imported_from']),
     createdAt: String(row['created_at'] ?? ''),
     updatedAt: String(row['updated_at'] ?? ''),
-    // Absent on every pre-0086 read path, which is exactly right: a row with no
-    // `is_org_shared` column is a personal project.
     isOrgShared: asBool(row['is_org_shared'], false),
   };
 }

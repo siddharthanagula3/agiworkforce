@@ -1,16 +1,3 @@
-/**
- * @file MCP Proxy API Routes
- * @security
- * - Authentication: JWT required for all endpoints (via authenticateToken middleware)
- * - Rate limiting: 30/min for list operations, 20/min for tool calls
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Audit logging: All tool calls are logged with user ID, server ID, tool name
- *
- * Routes:
- * - GET  /api/mcp/servers                         — List available MCP servers
- * - GET  /api/mcp/servers/:serverId/tools          — List tools for a server
- * - POST /api/mcp/servers/:serverId/tools/:toolName/call — Call a tool
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -23,18 +10,10 @@ import { getServerEntry, loadMcpConfig } from './mcpConfig';
 
 const router: Router = Router();
 
-// All MCP routes require authentication
 router.use(authenticateToken);
 
-// SECURITY: Baseline rate limit on all MCP routes to prevent abuse.
-// Individual routes apply stricter per-endpoint limits below.
 router.use(createRateLimiter('mcp-list'));
 
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
-
-// SECURITY: .strict() rejects unexpected fields to prevent mass assignment
 const toolCallBodySchema = z
   .object({
     arguments: z.record(z.string(), z.unknown()).optional().default({}),
@@ -43,10 +22,6 @@ const toolCallBodySchema = z
 
 const serverIdParamSchema = z.string().min(1).max(100);
 const toolNameParamSchema = z.string().min(1).max(200);
-
-// =============================================================================
-// HELPERS
-// =============================================================================
 
 function validateServerId(serverId: string | undefined): string {
   const parsed = serverIdParamSchema.safeParse(serverId);
@@ -64,16 +39,6 @@ function validateToolName(toolName: string | undefined): string {
   return parsed.data;
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
-/**
- * List all available MCP servers
- * GET /api/mcp/servers
- *
- * SECURITY: Rate limited to 30/min (read-only list operation)
- */
 router.get('/servers', createRateLimiter('mcp-list'), async (_req: Request, res: Response) => {
   try {
     const catalog = await getSharedMcpCatalog();
@@ -94,19 +59,12 @@ router.get('/servers', createRateLimiter('mcp-list'), async (_req: Request, res:
   }
 });
 
-/**
- * List tools available on a specific MCP server
- * GET /api/mcp/servers/:serverId/tools
- *
- * SECURITY: Rate limited to 30/min (read-only list operation)
- */
 router.get(
   '/servers/:serverId/tools',
   createRateLimiter('mcp-list'),
   async (req: Request<{ serverId: string }>, res: Response) => {
     const serverId = validateServerId(req.params.serverId);
 
-    // Verify server exists in config
     const entry = getServerEntry(serverId);
     if (!entry) {
       throw new AppError(`Server "${serverId}" not found`, 404);
@@ -136,15 +94,6 @@ router.get(
   },
 );
 
-/**
- * Call a specific tool on a specific MCP server
- * POST /api/mcp/servers/:serverId/tools/:toolName/call
- *
- * SECURITY:
- * - Rate limited to 20/min (tool execution is resource-intensive)
- * - Input validated against tool schema before forwarding
- * - All calls are audit-logged with user ID, server ID, tool name
- */
 router.post(
   '/servers/:serverId/tools/:toolName/call',
   createRateLimiter('mcp-call'),
@@ -157,16 +106,13 @@ router.post(
       throw new AppError('Unauthorized', 401);
     }
 
-    // Validate request body
     const body = toolCallBodySchema.parse(req.body);
 
-    // Verify server exists
     const entry = getServerEntry(serverId);
     if (!entry) {
       throw new AppError(`Server "${serverId}" not found`, 404);
     }
 
-    // Verify tool exists on this server
     const catalog = await getSharedMcpCatalog();
     const serverCatalog = catalog.servers[serverId];
     if (!serverCatalog) {
@@ -178,7 +124,6 @@ router.post(
       throw new AppError(`Tool "${toolName}" not found on server "${serverId}"`, 404);
     }
 
-    // Validate arguments against tool's input schema (if available)
     if (toolDef.inputSchema && Object.keys(toolDef.inputSchema).length > 0) {
       const schemaValidation = validateToolArguments(body.arguments, toolDef.inputSchema);
       if (!schemaValidation.valid) {
@@ -186,7 +131,6 @@ router.post(
       }
     }
 
-    // SECURITY: Audit log before execution
     logger.info(
       {
         event: 'mcp_tool_call',
@@ -204,7 +148,6 @@ router.post(
       const result = await callSharedMcpTool(serverId, toolName, body.arguments);
       const durationMs = Date.now() - startTime;
 
-      // SECURITY: Audit log after execution
       logger.info(
         {
           event: 'mcp_tool_call_complete',
@@ -252,19 +195,10 @@ router.post(
   },
 );
 
-// =============================================================================
-// HELPERS
-// =============================================================================
-
-/**
- * Basic validation of tool arguments against a JSON Schema-like input schema.
- * Checks required fields and top-level types.
- */
 function validateToolArguments(
   args: Record<string, unknown>,
   schema: Record<string, unknown>,
 ): { valid: boolean; error?: string } {
-  // Check required properties
   const required = schema['required'] as string[] | undefined;
   if (Array.isArray(required)) {
     for (const field of required) {
@@ -274,7 +208,6 @@ function validateToolArguments(
     }
   }
 
-  // Check property types (basic top-level check only)
   const properties = schema['properties'] as Record<string, { type?: string }> | undefined;
   if (properties) {
     for (const [key, value] of Object.entries(args)) {
@@ -283,9 +216,7 @@ function validateToolArguments(
         const expectedType = propSchema.type;
         const actualType = Array.isArray(value) ? 'array' : typeof value;
 
-        // Allow null for any type (MCP tools may accept null)
         if (value !== null && expectedType !== actualType) {
-          // Allow number where integer is expected
           if (expectedType === 'integer' && actualType === 'number') continue;
           return {
             valid: false,

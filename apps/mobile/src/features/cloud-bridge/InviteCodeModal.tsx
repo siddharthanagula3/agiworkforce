@@ -42,10 +42,6 @@ function friendlyInviteError(code?: InviteCodeError): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// InviteTab
-// ---------------------------------------------------------------------------
-
 type InviteState = 'idle' | 'loading' | 'success' | 'error';
 
 interface InviteTabProps {
@@ -219,10 +215,6 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
     </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// WaitlistTab — preserves mobile rank+country UX from CloudWaitlistSheet
-// ---------------------------------------------------------------------------
 
 type WaitlistState = 'idle' | 'submitting' | 'confirmed' | 'error';
 
@@ -431,15 +423,7 @@ function WaitlistTab({ onWaitlisted, onClose, confirmedBody }: WaitlistTabProps)
   );
 }
 
-// ---------------------------------------------------------------------------
-// InviteCodeModal
-// ---------------------------------------------------------------------------
-
 const DEFAULT_TITLE = 'Early access';
-// PUBLIC ALPHA (founder 2026-06-27, PA-2): Managed Cloud itself is open by
-// sign-in — no invite/waitlist. This modal now only gates individual
-// unshipped features, so the default copy must not claim "AGI Cloud" broadly
-// is invite-only. Callers pass a feature-specific title/body when possible.
 const DEFAULT_BODY =
   'This feature isn’t available on mobile yet. Join the waitlist to get notified, or enter your invitation code if you have early access.';
 

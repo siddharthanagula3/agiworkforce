@@ -1,10 +1,3 @@
-/**
- * OpenAI Chat Completions wire types — the subset we use.
- *
- * Hand-typed instead of importing the full `openai` SDK type tree, so we
- * stay decoupled from minor SDK shape churn. The SDK is still used for the
- * actual HTTP/SSE transport.
- */
 
 export type OpenAIChatToolChoice =
   | 'none'
@@ -90,20 +83,12 @@ export interface OpenAIChatCompletionCreateParams {
   service_tier?: 'auto' | 'default' | 'flex';
 }
 
-/** Single SSE chunk from `chat.completions.stream`. */
 export interface OpenAIChatCompletionChunk {
   id: string;
   object: 'chat.completion.chunk';
   created: number;
   model: string;
-  /** Present on real OpenAI responses when the request set `service_tier`
-   *  (or by server default) -- the openai SDK's own `ChatCompletionChunk`
-   *  type declares this; added here so `translateOpenAIStream` can read it
-   *  for `StreamChunkResponseMeta` (task #34's OpenAI slice). */
   service_tier?: string;
-  /** Present on every real OpenAI chunk; identifies the backend
-   *  configuration that generated the response. Same rationale as
-   *  `service_tier` above. */
   system_fingerprint?: string;
   choices: Array<{
     index: number;
@@ -118,11 +103,6 @@ export interface OpenAIChatCompletionChunk {
         function?: { name?: string; arguments?: string };
       }>;
     };
-    /** Per-token logprob data for this chunk's delta, present when the
-     *  request set `logprobs: true` (we never do today, so this is `null`
-     *  in every real response `translateChatRequest` produces -- declared
-     *  and read anyway for full passthrough fidelity, see
-     *  StreamChunkText.logprobs's docstring in @agiworkforce/types). */
     logprobs?: unknown;
     finish_reason?: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call' | null;
   }>;

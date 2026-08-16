@@ -29,7 +29,7 @@ function updateParticle(particle: ParticleData, canvasWidth: number, canvasHeigh
 }
 
 function drawParticle(particle: ParticleData, ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = 'rgba(139, 92, 246, 0.5)'; // primary color with opacity
+  ctx.fillStyle = 'rgba(139, 92, 246, 0.5)';
   ctx.beginPath();
   ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
   ctx.fill();
@@ -90,7 +90,6 @@ export const Particles: React.FC<ParticlesProps> = ({
     initParticles();
     animate();
 
-    // Create named handler for proper cleanup
     const handleResize = () => {
       resizeCanvas();
       initParticles();

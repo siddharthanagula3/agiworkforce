@@ -1,12 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Mobile GeneratedFileCard tests.
- *
- * Pin the cross-surface contract Mobile mirrors from the shared web
- * GeneratedFileCard: status-badge selection (running/failed/complete/pending),
- * chip surfacing (privacy/provider/source), local-only note, preview-thumbnail
- * vs kind-icon fallback, and source-session jump.
- */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -212,8 +204,6 @@ describe('Mobile GeneratedFileCard', () => {
   });
 
   it('hides the source-session jump when no callback is provided', () => {
-    // sourceSessionLabel only renders inside the Pressable jump button, which
-    // only appears when onOpenSourceSession is supplied. Verify it's absent.
     const { queryByText } = render(<GeneratedFileCard presentation={basePresentation()} />);
     expect(queryByText('Session sess-1')).toBeNull();
   });

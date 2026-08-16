@@ -1,11 +1,3 @@
-/**
- * ToolTimeline — vertical timeline for agent execution steps.
- *
- * Props: { steps: StatusStep[] }
- *
- * Layout per row:
- *   [time label] | [vertical line + status dot] | [step content]
- */
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, {
@@ -21,11 +13,6 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import type { StatusStep, StepIcon } from '@/types/chat';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Return a compact relative time label such as "2m ago", "just now". */
 function relativeLabel(isoDate: string | undefined): string {
   if (!isoDate) return '';
   try {
@@ -42,7 +29,6 @@ function relativeLabel(isoDate: string | undefined): string {
   }
 }
 
-/** Map StepIcon to a Lucide icon component. */
 function StepIconComponent({ icon, color }: { icon: StepIcon; color: string }) {
   const size = 12;
   switch (icon) {
@@ -62,10 +48,6 @@ function StepIconComponent({ icon, color }: { icon: StepIcon; color: string }) {
       return <Brain size={size} color={color} />;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Pulsing dot for running steps
-// ---------------------------------------------------------------------------
 
 function PulsingDot({ color }: { color: string }) {
   const opacity = useSharedValue(0.3);
@@ -111,15 +93,10 @@ function PulsingDot({ color }: { color: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Timeline Row
-// ---------------------------------------------------------------------------
-
 interface TimelineRowProps {
   step: StatusStep;
   index: number;
   isLast: boolean;
-  /** Optional ISO timestamp stored on the step (may not exist in base type). */
   timestamp?: string;
 }
 
@@ -231,10 +208,6 @@ function TimelineRow({ step, index, isLast, timestamp }: TimelineRowProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// ToolTimeline (named export)
-// ---------------------------------------------------------------------------
-
 export interface ToolTimelineProps {
   steps: StatusStep[];
 }
@@ -250,9 +223,6 @@ export function ToolTimeline({ steps }: ToolTimelineProps) {
           step={step}
           index={i}
           isLast={i === steps.length - 1}
-          // StatusStep does not carry a timestamp field in the base type —
-          // we read it defensively via type cast so the timeline degrades
-          // gracefully if the field is absent.
           timestamp={(step as StatusStep & { timestamp?: string }).timestamp}
         />
       ))}

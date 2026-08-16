@@ -1,10 +1,5 @@
-/**
- * Browser Extension Bridge API — typed wrappers for extension bridge commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface PageContext {
   url: string;
@@ -33,11 +28,6 @@ export interface TaskResultResponse {
   acknowledged: boolean;
 }
 
-/**
- * Diagnostics payload returned by the Tauri `extension_status` command.
- * Used by Desktop surfaces to render Chrome + VS Code bridge health
- * (PLAN section 6: "Add Chrome and VS Code bridge status to connector hub").
- */
 export interface ExtensionStatusDiagnostics {
   status?: string;
   version?: string;
@@ -67,8 +57,6 @@ export interface ExtensionStatusDiagnostics {
   };
   commands?: string[];
 }
-
-// ---- Commands ----
 
 export async function extensionPageContext(context: PageContext): Promise<PageContextResponse> {
   return command<PageContextResponse>('extension_page_context', { context });

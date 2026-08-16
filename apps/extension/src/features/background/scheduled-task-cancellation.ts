@@ -53,11 +53,6 @@ interface ActiveScheduledTaskCancellation {
   promise: Promise<boolean>;
 }
 
-/**
- * Coalesce equivalent cancellation attempts without discarding stronger late
- * authority. A credential-less teardown may start first; a captured token or
- * run handle arriving behind it must get one follow-up attempt if needed.
- */
 export class ScheduledTaskCancellationAttemptCoordinator {
   private readonly active = new Map<string, ActiveScheduledTaskCancellation>();
 
@@ -92,11 +87,6 @@ export interface ScheduledTaskCancellationCredential {
   owner: ManagedCloudOwner;
 }
 
-/**
- * Scheduled cancellation may use a replacement session for the same account,
- * but never an ambient credential from another account. A captured credential
- * wins because it is the closest authority to the admitted run.
- */
 export function selectScheduledTaskCancellationCredential(
   expectedOwner: ManagedCloudOwner,
   captured: ScheduledTaskCancellationCredential | null | undefined,
@@ -156,12 +146,6 @@ export function isScheduledCancellationRetryDue(
   return now - journal.cancellationLastAttemptAt >= delay;
 }
 
-/**
- * Persist cancellation intent before touching the server and retain it until
- * lookup or cancellation proves the run is terminal. A replacement session
- * may use a same-account credential for cancellation only; callers must never
- * use this grant to resume, render, or persist the prior incarnation's output.
- */
 export async function requestScheduledTaskCancellation(
   initialJournal: ScheduledTaskRunJournal,
   credential?: ScheduledTaskCancellationCredential | null,
@@ -177,8 +161,6 @@ export async function requestScheduledTaskCancellation(
       ...(knownRun ? { cloudRun: knownRun } : {}),
     })) ?? initialJournal;
 
-  // No request was handed to the transport, so this tombstone can converge
-  // without a credential or network lookup.
   if (journal.dispatchPreparedAt !== undefined && journal.dispatchStartedAt === undefined) {
     await resolved.removeJournal(journal.taskId, journal.requestId);
     return true;
@@ -238,11 +220,6 @@ export async function requestScheduledTaskCancellation(
           ),
         })) ?? journal;
     }
-    // Once the exact request-id lookup has remained empty beyond the
-    // consistency grace window and several independently journaled successful
-    // observations, the request is proven absent for this tenant. Transport or
-    // authentication failures are deliberately not absence evidence; the
-    // already-aborted local fetch cannot create a run after this window.
     const possibleDispatchAt = journal.dispatchStartedAt ?? journal.createdAt;
     if (
       exactAbsenceObserved &&

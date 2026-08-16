@@ -1,11 +1,3 @@
-/**
- * SendPreview tests.
- *
- * Pin the surface contract of the shared "what will be sent" disclosure:
- * destination labelling per provider mode, privacy-positive banner copy
- * for Local turns, expand/collapse details block, and accent class
- * selection across Local / DirectByok / Managed.
- */
 
 import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';

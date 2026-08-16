@@ -1,19 +1,3 @@
-/**
- * ConversationExportSheet
- *
- * A bottom sheet that presents export options for an entire conversation.
- * Options: PDF, Text, Markdown, Copy All.
- * Each option generates the export and opens the native share sheet.
- *
- * Regression: this previously used @gorhom/bottom-sheet's plain (non-modal)
- * BottomSheet. There is no BottomSheetModalProvider in this app, so a plain
- * BottomSheet renders inline rather than in a native modal window layer —
- * the four export options were visible on screen but completely absent from
- * the accessibility tree (confirmed live: VoiceOver, and any accessibility-
- * driven automation, could not find "Export as Text" etc. at all). Same root
- * cause and same proven fix as FileExportButton.tsx in this directory: a
- * native Modal, which renders through its own window and is immune to this.
- */
 
 import React, { useCallback, useState } from 'react';
 import { View, Pressable, ActivityIndicator, Alert, Modal, StyleSheet } from 'react-native';
@@ -31,18 +15,10 @@ import {
 } from '@/services/fileCreation';
 import type { ChatMessage } from '@/types/chat';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface ConversationExportSheetProps {
-  /** Whether the sheet is visible. */
   visible: boolean;
-  /** Called when the sheet should close. */
   onClose: () => void;
-  /** All messages in the conversation to export. */
   messages: ChatMessage[];
-  /** Conversation title used as the document heading and file name. */
   title: string;
 }
 
@@ -54,10 +30,6 @@ interface ExportOption {
   description: string;
   Icon: React.ComponentType<{ size: number; color: string }>;
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const EXPORT_OPTIONS: ExportOption[] = [
   {
@@ -85,10 +57,6 @@ const EXPORT_OPTIONS: ExportOption[] = [
     Icon: Copy,
   },
 ];
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function ConversationExportSheet({
   visible,
@@ -134,7 +102,6 @@ export function ConversationExportSheet({
         } else if (key === 'text') {
           result = await exportConversationToText(filtered, title);
         } else {
-          // markdown — format the full conversation and export as .md file
           const md = formatConversationAsMarkdown(filtered, title);
           result = await exportToMarkdown(md, title);
         }
@@ -166,10 +133,6 @@ export function ConversationExportSheet({
         onPress={handleClose}
         accessibilityLabel="Dismiss export menu"
         accessibilityRole="button"
-        // accessible=false: without this, this Pressable becomes a leaf
-        // accessibility element and swallows every descendant, exactly the
-        // bug being fixed here — see FileExportButton.tsx for the same
-        // pattern and rationale.
         accessible={false}
       >
         <SafeAreaView edges={['bottom']} style={styles.safeArea}>
@@ -225,12 +188,6 @@ export function ConversationExportSheet({
                     : colors.teal;
 
                 return (
-                  // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
-                  // (docs/agent-context/known-flaws.md): a function-style `style`
-                  // prop silently drops flexDirection/alignItems/padding in this
-                  // stack, which would stack the icon above the label instead of
-                  // beside it. `children`-as-function keeps pressed state while
-                  // every real style lives on a plain View.
                   <Pressable
                     key={option.key}
                     onPress={() => {

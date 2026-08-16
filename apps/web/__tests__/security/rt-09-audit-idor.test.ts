@@ -1,12 +1,3 @@
-/**
- * RT-09: AuditService.getOrganizationLogs — IDOR via missing membership check
- *
- * Tests that getOrganizationLogs:
- * - Requires callerUserId parameter
- * - Rejects callers who are not org members (throws 403-shaped error)
- * - Returns logs when caller IS a member
- * - Does not leak email addresses of non-members to unauthorized callers
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -15,18 +6,12 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-// ─── Neon DB mock ─────────────────────────────────────────────────────────────
-// AuditService.getOrganizationLogs accepts a DatabaseAdapter and calls
-// db.query(sql, params) twice: once for membership check, once for audit logs.
-// We control per-test behavior by setting mockMembershipRows / mockLogsRows.
-
 let mockMembershipRows: unknown[] = [];
 let mockLogsRows: unknown[] = [];
 let mockMembershipThrows: unknown = null;
 
 const mockQuery = vi.fn();
 
-// Mock client passed explicitly to getOrganizationLogs.
 const mockClient = {
   query: mockQuery,
 } as unknown as import('@agiworkforce/data-layer').DatabaseAdapter;
@@ -65,7 +50,7 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
   });
 
   it('throws 403 error when caller is not a member of the org', async () => {
-    mockMembershipRows = []; // No membership row returned
+    mockMembershipRows = [];
     setupMocks();
 
     await expect(
@@ -82,7 +67,6 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
   });
 
   it('throws when caller_id is for a different org than requested', async () => {
-    // Caller is member of org-2 but requests org-1 logs — membership check returns no row
     mockMembershipRows = [];
     setupMocks();
 
@@ -117,7 +101,6 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
   });
 
   it('does not return any logs for unauthorized callers (no side channel)', async () => {
-    // Even if the DB had logs, an unauthorized caller sees nothing
     mockMembershipRows = [];
     setupMocks();
 
@@ -147,7 +130,6 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
 
     await AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-1');
 
-    // Verify db.query was called with both org and user params
     const membershipCall = mockQuery.mock.calls.find(
       (args: unknown[]) => typeof args[0] === 'string' && args[0].includes('organization_members'),
     ) as [string, unknown[]] | undefined;

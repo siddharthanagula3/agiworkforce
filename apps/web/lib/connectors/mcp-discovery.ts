@@ -1,16 +1,3 @@
-/**
- * @file The two halves of a discovery-based connector authorization.
- *
- * `beginMcpAuthorization` runs discovery and produces the URL to send the user
- * to; `completeMcpAuthorization` redeems the code that comes back. Between them
- * sits one row in `connector_oauth_authorizations` holding the PKCE verifier and
- * the endpoints discovery settled on.
- *
- * Both delegate the protocol to `auth()` from `@modelcontextprotocol/client` and
- * confine themselves to storage, user identity, and translating failures into
- * outcomes a route can render. See `mcp-oauth-provider.ts` for why the SDK
- * drives rather than this module.
- */
 
 import 'server-only';
 
@@ -46,7 +33,6 @@ export type McpAuthorizationStart =
   | { status: 'error'; reason: McpAuthorizationFailure; message: string };
 
 export type McpAuthorizationFailure =
-  /** The MCP server published no usable protected-resource / AS metadata. */
   | 'discovery-failed'
   /** No client identity could be obtained (no CIMD here, no DCR there). */
   | 'no-client-identity'
@@ -85,34 +71,20 @@ function describeFailure(error: unknown): {
   };
 }
 
-/**
- * Does this MCP server require authorization at all?
- *
- * Asked before starting a flow because an open server has no protected-resource
- * metadata and no `WWW-Authenticate` challenge; running `auth()` at one would
- * fail in a way that reads like a broken connector rather than "no login
- * needed". Returns false only on a clean "no authorization advertised" answer.
- */
 export async function mcpServerRequiresAuthorization(mcpUrl: string): Promise<boolean> {
   try {
     const info = await discoverOAuthServerInfo(mcpUrl);
     return Boolean(info.resourceMetadata ?? info.authorizationServerMetadata);
   } catch {
-    // Discovery failing is NOT evidence the server is open — a network fault
-    // looks identical here. Assume authorization is required and let the real
-    // flow produce a specific error.
     return true;
   }
 }
 
 export interface BeginMcpAuthorizationParams {
   userId: string;
-  /** Catalog id, custom-connector id, or any stable per-server identifier. */
   connectorId: string;
   mcpUrl: string;
-  /** Same-origin path to send the browser back to after the callback. */
   returnPath: string;
-  /** Extra scopes to request beyond what the resource advertises. */
   scope?: string;
 }
 
@@ -139,9 +111,6 @@ export async function beginMcpAuthorization(
   }
 
   if (result === 'AUTHORIZED') {
-    // `auth()` reports AUTHORIZED without a redirect only when it already had a
-    // usable token. This provider starts with none, so reaching here means the
-    // server asked for nothing.
     return { status: 'no-authorization-required' };
   }
 
@@ -170,8 +139,6 @@ export async function beginMcpAuthorization(
     connectorId,
     state: draft.state,
     codeVerifier: draft.codeVerifier,
-    // The SDK always uses S256; `plain` exists in the column only for the
-    // registry path's older descriptors.
     codeChallengeMethod: 'S256',
     redirectUri: String(redirectUri),
     requestedScopes: [],
@@ -182,9 +149,6 @@ export async function beginMcpAuthorization(
     resourceUrl: draft.resourceUrl,
     mcpUrl,
     clientId: draft.clientId,
-    // Persisted so the callback leg can replay it. `auth()` refuses to redeem
-    // an authorization code when it cannot read the issuer recorded here, so
-    // omitting this fails every connector at the callback rather than at start.
     discoveryState: provider.discoverySnapshot,
   });
 
@@ -200,27 +164,15 @@ export type McpAuthorizationCompletion =
   | { status: 'connected'; connectorId: string; grantedScopes: string[] }
   | { status: 'error'; reason: McpAuthorizationFailure; message: string };
 
-/**
- * Redeem the authorization code for a discovered connector.
- *
- * Takes an ALREADY-CONSUMED pending row rather than consuming one itself. The
- * callback route owns that claim — it is where single-use is enforced and where
- * the row is checked against the signed-in account — and doing it twice would
- * either fail or, worse, split those checks across two places that could drift.
- */
 export async function completeMcpAuthorization(input: {
   pending: PendingAuthorization;
   state: string;
   code: string;
-  /** RFC 9207 `iss` from the callback query, when the server sent one. */
   iss?: string | undefined;
 }): Promise<McpAuthorizationCompletion> {
   const { pending } = input;
   const mcpUrl = pending.mcpUrl;
   if (!mcpUrl) {
-    // A pending row with no MCP URL belongs to the registry-configured broker,
-    // not to discovery. Routing it here would exchange the code against the
-    // wrong endpoints.
     return {
       status: 'error',
       reason: 'unexpected',
@@ -234,9 +186,6 @@ export async function completeMcpAuthorization(input: {
     | undefined;
 
   if (!discoveryState) {
-    // Pre-0116 rows carry no discovery state, and `auth()` will not redeem a
-    // code without it. Saying so plainly beats surfacing the SDK's internal
-    // "provider is broken" error to someone who just clicked Connect.
     return {
       status: 'error',
       reason: 'unexpected',
@@ -255,18 +204,11 @@ export async function completeMcpAuthorization(input: {
     await auth(provider, {
       serverUrl: mcpUrl,
       authorizationCode: input.code,
-      // Passed through to RFC 9207 §2.4 validation, which runs BEFORE the code
-      // is redeemed. Omitting it would skip the authorization-server mix-up
-      // defense entirely.
       ...(input.iss ? { iss: input.iss } : {}),
     });
   } catch (error) {
     const described = describeFailure(error);
     if (described.reason === 'registration-rejected' && pending.issuer) {
-      // The client we presented is no longer recognised — most often a
-      // dynamically registered client the vendor garbage-collected. Dropping it
-      // makes the next attempt register afresh instead of failing identically
-      // forever.
       await deleteMcpOAuthClient(pending.issuer).catch(() => undefined);
     }
     logger.warn(
@@ -300,14 +242,11 @@ export async function completeMcpAuthorization(input: {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token ?? null,
     tokenType: tokens.token_type ?? 'Bearer',
-    // The scopes the server GRANTED, which may be narrower than requested.
     grantedScopes,
     accessTokenExpiresAt:
       typeof tokens.expires_in === 'number'
         ? new Date(Date.now() + tokens.expires_in * 1000)
         : null,
-    // Pinned from the start leg, not from a fresh discovery call: the endpoint
-    // that issued this token is the only one a refresh may be sent to.
     tokenEndpoint: pending.tokenEndpoint ?? '',
     issuer: provider.issuer ?? pending.issuer ?? null,
     resourceUrl: pending.resourceUrl ?? null,
@@ -340,15 +279,6 @@ export type McpRefreshOutcome =
   | { status: 'authorization-server-changed' }
   | { status: 'failed'; message: string };
 
-/**
- * Refresh a grant that was obtained through discovery.
- *
- * The registry path cannot do this: `refreshAccessToken` needs a provider
- * descriptor with a client id and secret, and a discovered connector has
- * neither — its client identity lives in `mcp_oauth_clients`, keyed by issuer.
- * Delegating to `auth()` means the refresh reuses exactly the client and issuer
- * the grant was created with, and gets the issuer-mismatch check for free.
- */
 export async function refreshDiscoveredGrant(input: {
   mcpUrl: string;
   issuer: string | null;
@@ -358,8 +288,6 @@ export async function refreshDiscoveredGrant(input: {
 }): Promise<McpRefreshOutcome> {
   const provider = new McpOAuthClientProvider({
     mcpUrl: input.mcpUrl,
-    // No redirect happens on a refresh, so this state is never presented
-    // anywhere; it exists only to satisfy the provider's contract.
     state: generateOAuthState(),
     seed: {
       issuer: input.issuer,

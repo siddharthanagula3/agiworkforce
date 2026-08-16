@@ -97,11 +97,11 @@ describe('organization invitation lifecycle routes', () => {
   describe('POST /api/settings/team/invitations (invite)', () => {
     it('persists a pending invitation and returns the link exactly once, without claiming an email was sent', async () => {
       mockQuery
-        .mockResolvedValueOnce([adminMembership]) // requireOrgAdmin
-        .mockResolvedValueOnce([]) // advisory lock
-        .mockResolvedValueOnce([]) // already-member probe
-        .mockResolvedValueOnce([]) // pending probe
-        .mockResolvedValueOnce([invitation()]); // insert returning
+        .mockResolvedValueOnce([adminMembership])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([invitation()]);
 
       const response = await POST(
         jsonRequest('http://localhost:3000/api/settings/team/invitations', 'POST', {
@@ -120,8 +120,6 @@ describe('organization invitation lifecycle routes', () => {
 
       expect(body.invitation['status']).toBe('pending');
       expect(body.inviteToken).toMatch(/^[A-Za-z0-9_-]{20,}$/);
-      // The response must never carry the stored hash, and must never claim an
-      // email was queued — there is no email provider in this repo.
       expect(body.invitation).not.toHaveProperty('tokenHash');
       expect(body.delivery.emailSent).toBe(false);
       expect(body.delivery.reason).toMatch(/no transactional email provider/i);
@@ -129,7 +127,6 @@ describe('organization invitation lifecycle routes', () => {
       const insert = mockQuery.mock.calls.find(([sql]) =>
         String(sql).includes('insert into public.organization_invitations'),
       );
-      // The hash is stored, the raw token is not.
       expect((insert?.[1] as unknown[])[3]).toBe(hashInvitationToken(body.inviteToken));
       expect(insert?.[1]).not.toContain(body.inviteToken);
     });
@@ -143,13 +140,12 @@ describe('organization invitation lifecycle routes', () => {
         }),
       );
 
-      // Ownership moves only through the transfer flow.
       expect(response.status).toBe(400);
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
     it('refuses to invite into an organization the caller does not administer', async () => {
-      mockQuery.mockResolvedValueOnce([]); // no membership in ORG_B
+      mockQuery.mockResolvedValueOnce([]);
 
       const response = await POST(
         jsonRequest('http://localhost:3000/api/settings/team/invitations', 'POST', {
@@ -280,12 +276,11 @@ describe('organization invitation lifecycle routes', () => {
       );
       expect(String(update?.[0])).toContain('resend_count = resend_count + 1');
       expect((update?.[1] as unknown[])[0]).toBe(hashInvitationToken(body.inviteToken));
-      // Resend is an UPDATE, so the seat count does not move.
       expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
     });
 
     it('refuses to resend an invitation that belongs to another organization', async () => {
-      mockQuery.mockResolvedValueOnce([]); // no membership in ORG_B
+      mockQuery.mockResolvedValueOnce([]);
 
       const response = await RESEND(
         jsonRequest(`http://localhost:3000/api/settings/team/invitations/${INVITE_ID}`, 'POST', {
@@ -318,14 +313,13 @@ describe('organization invitation lifecycle routes', () => {
         String(sql).includes('update public.organization_invitations'),
       );
       expect(String(update?.[0])).toContain("set status = 'revoked'");
-      // Both predicates, so an id alone can never revoke across organizations.
       expect(update?.[1]).toEqual([INVITE_ID, ORG_A]);
     });
 
     it('reports the real status instead of pretending a used invitation was revoked', async () => {
       mockQuery
         .mockResolvedValueOnce([adminMembership])
-        .mockResolvedValueOnce([]) // update matched nothing
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([{ status: 'accepted' }]);
 
       const response = await REVOKE(
@@ -347,11 +341,11 @@ describe('organization invitation lifecycle routes', () => {
 
     it('accepts by token and binds membership to the authenticated user', async () => {
       mockQuery
-        .mockResolvedValueOnce([{ id: 'invitee-user', email: 'invitee@example.com' }]) // profile
-        .mockResolvedValueOnce([invitation()]) // token lookup
-        .mockResolvedValueOnce([]) // user advisory lock
-        .mockResolvedValueOnce([]) // organization advisory lock
-        .mockResolvedValueOnce([]) // existing membership probe
+        .mockResolvedValueOnce([{ id: 'invitee-user', email: 'invitee@example.com' }])
+        .mockResolvedValueOnce([invitation()])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
           invitation({ status: 'accepted', accepted_by_user_id: 'org-a-admin' }),
         ]);
@@ -366,7 +360,6 @@ describe('organization invitation lifecycle routes', () => {
       expect(response.status).toBe(200);
       const lookup = mockQuery.mock.calls.find(([sql]) => String(sql).includes('token_hash = $1'));
       expect(lookup?.[1]).toEqual([hashInvitationToken(token)]);
-      // The organization is never taken from the client on this path.
       expect(String(lookup?.[0])).not.toContain('organization_id = $2');
 
       expect(mockExecute).toHaveBeenCalledWith(
@@ -435,7 +428,7 @@ describe('organization invitation lifecycle routes', () => {
     it('404s an expired or already-used token', async () => {
       mockQuery
         .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'invitee@example.com' }])
-        .mockResolvedValueOnce([]); // no pending, unexpired row
+        .mockResolvedValueOnce([]);
 
       const response = await ACCEPT(
         jsonRequest('http://localhost:3000/api/settings/team/invitations/accept', 'POST', {

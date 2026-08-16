@@ -12,20 +12,6 @@ const UpgradePreviewTokenPayloadSchema = z
     plan: z.enum(SELF_SERVE_PAID_PLAN_TIERS),
     billingInterval: z.enum(['monthly', 'yearly']),
     stripeSubscriptionId: z.string().regex(/^sub_[A-Za-z0-9]+$/),
-    /**
-     * Line-item quantity the preview was computed for. Bound into the HMAC
-     * because the proration figure the customer confirmed is quantity-dependent:
-     * without it, a client could preview 2 seats and apply the same token with
-     * 50, and be charged the 2-seat proration for a 50-seat subscription.
-     * Always 1 for per-account plans.
-     *
-     * The floor is 1, NOT `MIN_PURCHASABLE_SEATS`. This is a quantity, not a
-     * purchasable seat count: per-account plans legitimately carry 1 here.
-     * Binding it to the seat floor 400s every Pro/Max/Basic upgrade preview the
-     * moment that floor rises above 1 — which is exactly what happened when it
-     * moved to 2 on 2026-08-08. The purchasable-seat minimum is enforced where
-     * seats are actually chosen (CheckoutRequestSchema), not on this envelope.
-     */
     seats: z.number().int().min(1).max(MAX_PURCHASABLE_SEATS),
     prorationDate: z.number().int().positive(),
     expiresAt: z.number().int().positive(),

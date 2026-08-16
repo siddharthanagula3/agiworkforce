@@ -1,15 +1,3 @@
-/**
- * icon-vocabulary.test.ts — EXT-06 / EXT-07.
- *
- * EXT-06: emoji literals ("✕", "▶", "▾", "✓", "🎤") sat beside stroke-only
- * Lucide SVGs. Emoji render in the system emoji font — different weight,
- * different colour (they ignore currentColor), different baseline — so a single
- * toolbar row showed two icon vocabularies.
- *
- * EXT-07: manifest.json declared options_page but nothing ever called
- * chrome.runtime.openOptionsPage(), so settings were reachable only through
- * chrome://extensions → Details → Extension options.
- */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -20,8 +8,6 @@ const read = (rel: string): string => readFileSync(resolve(here, '..', rel), 'ut
 
 const SOURCES = ['src/side_panel.ts', 'src/features/side-panel/voice.ts'] as const;
 
-// Pictographic glyphs used as UI affordances. Deliberately excludes arrows and
-// box-drawing: "Chrome → Desktop" in a comment is prose, not an icon.
 const ICON_EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{25A0}-\u{25FF}]/u;
 
 describe('icon vocabulary', () => {
@@ -53,7 +39,6 @@ describe('options page reachability', () => {
   });
 
   it('has an in-product entry point', () => {
-    // The regression: declared but unreachable from the extension's own UI.
     const panel = read('src/side_panel.ts');
     expect(panel).toContain('chrome.runtime.openOptionsPage()');
     expect(panel).toContain("id: 'sp-drawer-options-btn'");

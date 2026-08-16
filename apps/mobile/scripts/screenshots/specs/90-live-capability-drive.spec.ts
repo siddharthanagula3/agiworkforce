@@ -1,22 +1,10 @@
-/**
- * Live capability drive — exercises the app on a simulator against a real
- * Metro bundle and reports, per capability, whether the UI actually reaches it.
- *
- * This is a DIAGNOSTIC spec, not a pass/fail gate: several of these paths need
- * a signed-in Cloud account, and the point is to find out which ones a fresh
- * install can and cannot reach, with screenshots as the evidence. Each step
- * records what it observed rather than asserting a happy path, so a capability
- * that is gated reports *why* instead of failing the run and hiding the rest.
- */
 
 import { device, element, by, waitFor } from 'detox';
 
 const SHORT = 6000;
 const LONG = 30000;
-/** First paint has to wait on a cold Metro bundle download (~29MB in dev). */
 const LAUNCH = 180000;
 
-/** Did an element matching `matcher` become visible within `timeout`? */
 async function present(matcher: Detox.NativeMatcher, timeout = SHORT): Promise<boolean> {
   try {
     await waitFor(element(matcher)).toBeVisible().withTimeout(timeout);
@@ -44,15 +32,6 @@ describe('Live capability drive', () => {
     await device.terminateApp();
   });
 
-  /**
-   * Clear first-run before anything else.
-   *
-   * Terminating and relaunching the app during a session can drop its MMKV
-   * state, which drops the user back to the age gate. Earlier runs of this
-   * spec reported BLOCKED for every capability for exactly that reason — the
-   * harness was sitting on first-run, not hitting a product defect. Walking
-   * the gate here makes the report describe the app instead of the fixture.
-   */
   it('clears first-run if the app is showing it', async () => {
     const onAgeGate = await present(by.id('age-gate-root'), 20000);
     if (onAgeGate) {
@@ -63,7 +42,6 @@ describe('Live capability drive', () => {
 
     const onOnboarding = await present(by.id('onboarding-root'), 15000);
     if (onOnboarding) {
-      // Start chatting -> device tier -> skip the model download.
       if (await present(by.id('hero-start-chatting-btn'), 8000)) {
         await element(by.id('hero-start-chatting-btn')).tap();
       }
@@ -98,13 +76,6 @@ describe('Live capability drive', () => {
   });
 
   it('opens the + sheet and reports the capability rows it offers', async () => {
-    /**
-     * ChatInput renders TWO controls labelled "Add to chat" — the pill variant
-     * and the stacked-card variant — and only one is mounted at a time. A bare
-     * `.atIndex(0)` tapped whichever Detox enumerated first, which was the
-     * hidden one, so the sheet never opened and every later step reported
-     * BLOCKED. Try each index and keep the one that actually opens the sheet.
-     */
     let sheetOpened = false;
     for (const index of [0, 1]) {
       try {
@@ -166,7 +137,6 @@ describe('Live capability drive', () => {
     );
 
     if (streaming) {
-      // tok/s chip only renders for a completed LOCAL reply with a measured rate
       const perf = await present(by.id('performance-chip'), LONG);
       record(
         'performance chip',
@@ -177,8 +147,6 @@ describe('Live capability drive', () => {
   });
 
   it('reports whether web search / tool activity surfaced in the turn', async () => {
-    // Neither the timeline nor citation chips carry a testID, so match the
-    // approval controls the timeline renders and the sources disclosure.
     const toolTimeline = await present(by.text('Sources'), SHORT);
     const citation = await present(by.label('View full output'), 2000);
     record(
@@ -189,8 +157,6 @@ describe('Live capability drive', () => {
   });
 
   it('reports whether an artifact rendered in the transcript', async () => {
-    // InlineArtifactCard has no testID; its accessibility label is
-    // `${kindLabel}: ${title}`, so match the artifact viewer entry point.
     const inline = await present(by.text('View'), SHORT);
     record(
       'artifact rendering',

@@ -1,29 +1,13 @@
-/**
- * EditableMessage Component
- *
- * A textarea-based edit mode component for user messages.
- * Features:
- * - Auto-resizing textarea
- * - Keyboard shortcuts (Ctrl/Cmd+Enter to save, Escape to cancel)
- * - Character count indicator
- * - Save/Cancel action buttons
- */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface EditableMessageProps {
-  /** The initial content to edit */
   initialContent: string;
-  /** Called when the user saves the edited message */
   onSave: (newContent: string) => void;
-  /** Called when the user cancels editing */
   onCancel: () => void;
-  /** Optional maximum character limit */
   maxLength?: number;
-  /** Optional class name for the container */
   className?: string;
-  /** Whether to auto-focus the textarea */
   autoFocus?: boolean;
 }
 
@@ -39,28 +23,22 @@ export const EditableMessage: React.FC<EditableMessageProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Auto-resize textarea based on content
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (textarea) {
-      // Reset height to auto to get the correct scrollHeight
       textarea.style.height = 'auto';
-      // Set height to scrollHeight, with min and max constraints
       const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 400);
       textarea.style.height = `${newHeight}px`;
     }
   }, []);
 
-  // Adjust height on content change
   useEffect(() => {
     adjustTextareaHeight();
   }, [content, adjustTextareaHeight]);
 
-  // Auto-focus and adjust height on mount
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
       textareaRef.current.focus();
-      // Move cursor to end
       textareaRef.current.setSelectionRange(content.length, content.length);
     }
     adjustTextareaHeight();
@@ -72,24 +50,20 @@ export const EditableMessage: React.FC<EditableMessageProps> = ({
       setIsSaving(true);
       onSave(trimmedContent);
     } else if (!trimmedContent) {
-      // Empty content, cancel instead
       onCancel();
     } else {
-      // No changes, just cancel
       onCancel();
     }
   }, [content, initialContent, onSave, onCancel]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Ctrl/Cmd + Enter to save
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         handleSave();
         return;
       }
 
-      // Escape to cancel
       if (e.key === 'Escape') {
         e.preventDefault();
         onCancel();

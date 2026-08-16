@@ -1,13 +1,3 @@
-/**
- * Desktop adapter for the shared Tasks surface.
- *
- * The view lives in `@agiworkforce/unified-chat` and is shared with web, so
- * both list Cloud agent runs from one implementation. Only the host parts are
- * here: the desktop run client (bearer token + guarded egress), opening a
- * conversation inside the shell rather than pushing a route, and toasts.
- *
- * Tasks are durable Managed Cloud runs, so this is a Cloud-only surface.
- */
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 import { TasksPage, type TasksTransport } from '@agiworkforce/unified-chat';
@@ -15,10 +5,7 @@ import { createDesktopCloudAgentRunClient } from '@/api/cloudApi';
 import { selectHasCloudAccountSession, useAuthStore } from '@/stores/auth';
 
 export interface DesktopTasksProps {
-  /** Switch the shell to a conversation. Desktop has no router to push to. */
   onOpenConversation: (conversationId: string) => void;
-  /** Start a new chat from the empty state — the shell owns conversation
-   *  creation, so it supplies the action. */
   onStartChat?: () => void;
 }
 

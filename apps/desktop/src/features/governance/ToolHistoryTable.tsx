@@ -1,9 +1,3 @@
-/**
- * ToolHistoryTable
- *
- * Displays recent tool execution history with filtering by tool name,
- * status, and date range. Sources data from chat/toolStore's actionLog.
- */
 import React, { useMemo, useState, useCallback } from 'react';
 import { Download, Filter, Search, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -83,7 +77,6 @@ export const ToolHistoryTable: React.FC<ToolHistoryTableProps> = ({ className })
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState('all');
 
-  // Derive distinct types from the log
   const distinctTypes = useMemo(() => {
     const types = new Set(actionLog.map((e) => e.type));
     return ['all', ...Array.from(types)];

@@ -1,36 +1,5 @@
 'use client';
 
-/**
- * Drift resolution: classified 'drifted' — biggest divergence in the batch,
- * combining an API regression, a visual regression, and a stacking-order bug.
- * Resolved as a deliberate merge rather than picking one side:
- *
- * 1. API — kept web's richer `DialogContent` surface: `closeLabel` (customizable
- *    aria-label/sr-only text on the close button) and `overlayProps` (pass-through
- *    props to the overlay). Desktop had silently dropped both; any caller relying on
- *    them would regress. Ported forward so no functionality is lost.
- * 2. Visual — kept web's glassmorphic redesign: viewport-height-clamped content
- *    (`max-h-[calc(100vh-2rem)] overflow-hidden`) with a soft glass backdrop
- *    (`bg-black/70 backdrop-blur-sm` overlay, `bg-background/95 backdrop-blur-xl`
- *    content). Desktop's plain shadcn defaults have no height clamp, so a tall
- *    dialog can overflow the viewport with no scroll affordance — a real
- *    correctness bug that web's version doesn't have. Also restored web's
- *    `DialogHeader` `pr-10` (keeps long titles clear of the close button) and
- *    `DialogFooter`'s `border-t` divider, both dropped on desktop.
- * 3. Stacking bug — desktop migrated Dialog's z-index to a CSS-variable token
- *    (`--z-modal`, 300 in apps/desktop's globals.css) but companion overlay
- *    components (AlertDialog, Select, DropdownMenu, ContextMenu, HoverCard,
- *    Tooltip) were left hardcoded at `z-50`, and Popover only reached `--z-sticky`
- *    (100) — both below the new modal layer, so those components render behind an
- *    open Dialog. Fixed here by adopting the token *name* `--z-modal` with an
- *    inline numeric fallback (`z-[var(--z-modal,300)]`) so the component works
- *    correctly even in apps (web) that don't yet define the CSS variable, and by
- *    keeping the same fallback value desktop already uses. AlertDialog in this
- *    package is intentionally pinned to the same `--z-modal` layer (see
- *    AlertDialog.tsx) and Popover is intentionally given a fallback *above* modal
- *    (see Popover.tsx) so popovers/comboboxes opened from inside an open Dialog
- *    remain visible — restoring the invariant web already had (modal < popover).
- */
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
@@ -44,7 +13,6 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface DialogOverlayProps extends React.ComponentPropsWithoutRef<
   typeof DialogPrimitive.Overlay
 > {
@@ -73,17 +41,7 @@ interface DialogContentProps extends React.ComponentPropsWithoutRef<
 > {
   ref?: React.Ref<React.ElementRef<typeof DialogPrimitive.Content>>;
   closeLabel?: string;
-  /**
-   * Hides the built-in close button (e.g. for dialogs that supply their own
-   * dismiss affordance). Additive and opt-in: defaults to `false`, so existing
-   * callers keep the close button.
-   */
   hideCloseButton?: boolean;
-  /**
-   * Renders the modal immediately without entry/exit keyframes. This is useful
-   * for critical native WebView surfaces where a suspended animation frame can
-   * otherwise leave the dialog at its invisible first keyframe.
-   */
   disableAnimation?: boolean;
   overlayProps?: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> &
     React.HTMLAttributes<HTMLDivElement> & {

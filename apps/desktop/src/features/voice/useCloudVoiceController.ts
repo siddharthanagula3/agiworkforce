@@ -346,9 +346,6 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
 
   const cancelAction = useCallback(async () => {
     if (opaExecutionIdRef.current !== null || cancellingOpaExecutionId !== null) {
-      // Invalidate the approval continuation before awaiting native Stop so a
-      // cancelled execution cannot publish a late success or error into this
-      // voice workflow.
       workflowGenerationRef.current += 1;
       setError(null);
       setWorkflowState('stopping');

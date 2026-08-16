@@ -1,9 +1,3 @@
-/**
- * BackgroundTasksPanel Component
- *
- * A panel that displays all background tasks with their status, progress,
- * and elapsed time. Provides cancel functionality for active tasks.
- */
 import React, { useMemo } from 'react';
 import { Clock, X, AlertCircle, CheckCircle2, Pause, Loader2, XCircle } from 'lucide-react';
 import { cn, formatDuration } from '../../lib/utils';
@@ -20,9 +14,6 @@ interface BackgroundTasksPanelProps {
   maxHeight?: string;
 }
 
-/**
- * Get the status icon for a task
- */
 function TaskStatusIcon({ status }: { status: BackgroundTaskStatus }) {
   switch (status) {
     case 'running':
@@ -42,9 +33,6 @@ function TaskStatusIcon({ status }: { status: BackgroundTaskStatus }) {
   }
 }
 
-/**
- * Get the status badge variant
- */
 function getStatusBadgeVariant(
   status: BackgroundTaskStatus,
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
@@ -63,21 +51,16 @@ function getStatusBadgeVariant(
   }
 }
 
-/**
- * Format elapsed time from start date to now (or completion)
- */
 function formatElapsedTime(startedAt?: Date, completedAt?: Date): string {
   if (!startedAt) return '--';
 
   const endTime = completedAt ? new Date(completedAt) : new Date();
   const elapsedMs = endTime.getTime() - new Date(startedAt).getTime();
 
-  // Use formatDuration from utils if available, otherwise fallback
   if (typeof formatDuration === 'function') {
     return formatDuration(elapsedMs);
   }
 
-  // Fallback formatting
   const seconds = Math.floor(elapsedMs / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -91,9 +74,6 @@ function formatElapsedTime(startedAt?: Date, completedAt?: Date): string {
   return `${seconds}s`;
 }
 
-/**
- * Individual task item component
- */
 interface TaskItemProps {
   task: BackgroundTask;
   onCancel: (taskId: string) => void;
@@ -174,9 +154,6 @@ function TaskItem({ task, onCancel, isCancelling }: TaskItemProps) {
   );
 }
 
-/**
- * Empty state when no tasks exist
- */
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -191,9 +168,6 @@ function EmptyState() {
   );
 }
 
-/**
- * BackgroundTasksPanel - displays all background tasks
- */
 export function BackgroundTasksPanel({
   className,
   onClose,
@@ -203,17 +177,14 @@ export function BackgroundTasksPanel({
 
   const [cancellingTaskId, setCancellingTaskId] = React.useState<string | null>(null);
 
-  // Sort tasks: active first, then by creation date (newest first)
   const sortedTasks = useMemo(() => {
     return [...tasks].sort((a, b) => {
-      // Active tasks first
       const aActive = a.status === 'running' || a.status === 'queued';
       const bActive = b.status === 'running' || b.status === 'queued';
 
       if (aActive && !bActive) return -1;
       if (!aActive && bActive) return 1;
 
-      // Then by creation date (newest first)
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [tasks]);

@@ -1,9 +1,3 @@
-/**
- * Shared signaling client — inbound message dispatch.
- *
- * Both the desktop and mobile companions drive this class, so a message type
- * that falls through to `default: break` here is invisible on every surface.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SignalingEvent } from '@agiworkforce/types';
@@ -32,7 +26,6 @@ class FakeWebSocket {
     this.readyState = 3;
   }
 
-  /** Deliver a server frame exactly as the WebSocket would. */
   receive(message: unknown) {
     this.onmessage?.({ data: JSON.stringify(message) });
   }

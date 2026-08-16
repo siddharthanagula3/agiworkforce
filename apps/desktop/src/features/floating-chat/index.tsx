@@ -5,10 +5,6 @@ import { useUnifiedChatStore, uuidToDbId } from '../../stores/unifiedChatStore';
 import { cn } from '../../lib/utils';
 import { Send, X, Maximize2, Loader2 } from 'lucide-react';
 
-/**
- * FloatingChat - A compact chat interface for the floating window mode
- * Provides quick access to AGI Workforce from anywhere on the desktop
- */
 export const FloatingChat = () => {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -22,17 +18,14 @@ export const FloatingChat = () => {
   const ensureActiveConversation = useUnifiedChatStore((state) => state.ensureActiveConversation);
   const userId = useAuthStore((state) => state.user?.id ?? null);
 
-  // Initialize conversation on mount - run once, ensureActiveConversation is stable
   useEffect(() => {
     ensureActiveConversation();
   }, [ensureActiveConversation]);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -47,13 +40,11 @@ export const FloatingChat = () => {
       setIsSending(true);
 
       try {
-        // Add user message to UI immediately
         addMessage({
           role: 'user',
           content: trimmed,
         });
 
-        // Create assistant placeholder with a known ID for stream event coordination
         const assistantMessageId = crypto.randomUUID();
         addMessage({
           id: assistantMessageId,
@@ -66,7 +57,6 @@ export const FloatingChat = () => {
           throw new Error('No authenticated user is available for floating chat');
         }
 
-        // Send to backend with frontendMessageId for stream event matching
         await invoke('chat_send_message', {
           request: {
             content: trimmed,
@@ -74,9 +64,6 @@ export const FloatingChat = () => {
             attachments: [],
             conversationId: activeConversationId ? uuidToDbId(activeConversationId) : null,
             stream: true,
-            // Floating chat has no tool-scope/approval control. Keep it a
-            // capability-honest text chat instead of silently advertising the
-            // entire native tool registry.
             enableTools: false,
             frontendMessageId: assistantMessageId,
           },
@@ -121,7 +108,6 @@ export const FloatingChat = () => {
     }
   }, []);
 
-  // Get last few messages for display
   const recentMessages = messages.slice(-10);
   const isProcessing = isStreaming || isSending;
 

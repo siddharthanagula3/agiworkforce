@@ -116,8 +116,6 @@ export default function DownloadPage() {
                 'Scheduled work with AGI Work',
               ],
               platforms: 'Linux x64 package assets · verified installer status below',
-              // Surface state comes from the registry; the per-PLATFORM detail
-              // above is resolved live below by DesktopDownloadAvailability.
               status: SURFACE_STATUS.desktop,
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Desktop', badge: 'Local' },
@@ -149,8 +147,6 @@ export default function DownloadPage() {
                 'Hooks, skills & MCP',
                 'Offline with local models',
               ],
-              // The v1.0.0 release carries darwin arm64/x64, linux x64, and
-              // win32 arm64/x64 archives.
               platforms: 'macOS · Linux · Windows',
               status: SURFACE_STATUS.cli,
               href: '/cli',

@@ -1,13 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-/**
- * Restoring a soft-deleted conversation. The interesting cases are the ones
- * that must NOT succeed: restoring someone else's conversation, and restoring
- * one that was never deleted (which would otherwise report success for a no-op
- * and let the UI claim it put something back).
- */
-
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   requireUser: vi.fn(async (..._args: unknown[]) => 'user-1'),
@@ -81,8 +74,6 @@ describe('POST /api/chat/conversations/[id]/restore', () => {
     const body = (await response.json()) as { conversation: { id: string; archived: boolean } };
 
     expect(body.conversation.id).toBe(CONVERSATION_ID);
-    // Restoring preserves the previous archived state rather than dumping the
-    // conversation into the main list.
     expect(body.conversation.archived).toBe(true);
   });
 
@@ -90,14 +81,10 @@ describe('POST /api/chat/conversations/[id]/restore', () => {
     await POST(request(), context);
 
     const [sql] = mocks.query.mock.calls[0]!;
-    // `updated_at` orders the sidebar; touching it would jump an old restored
-    // conversation to the top as if it had new activity.
     expect(sql).not.toContain('updated_at = now()');
   });
 
   it('404s when nothing was restored', async () => {
-    // Covers both "not yours" and "was not deleted" — the statement is
-    // conditional on both, and the response must not distinguish them.
     mocks.query.mockResolvedValue([]);
 
     const response = await POST(request(), context);

@@ -1,23 +1,3 @@
-/**
- * Cross-device cloud chat sync — Phase 0 (delta sync).
- * Design: docs/plans/cross-device-cloud-sync-design-2026-06-20.md
- *
- *   GET  /api/chat/sync?since=<server_version cursor>
- *        → conversations + messages + artifacts with server_version > cursor (incl.
- *          tombstones), scoped to the authenticated user, plus the next cursor.
- *   POST /api/chat/sync  { protocolVersion: 2, conversations, messages, artifacts }
- *        → server-version compare-and-swap for mutable rows and identity-based
- *          idempotency for append-only messages. user_id is set SERVER-SIDE from the
- *          verified session (never from the body); RLS WITH CHECK is the backstop.
- *          The server owns update/deletion timestamps; messages are append-only (only a
- *          deleted_at tombstone may change an existing message).
- *          Artifacts (0039) are the third synced entity — managed-only; the cloud row's
- *          id is the deterministic derived_id for derived artifacts. See
- *          docs/plans/artifact-cloud-sync-design-2026-06-21.md.
- *
- * Trust boundary: this endpoint is the Managed-Cloud store. Local/BYOK conversations
- * have no cloud_id and are never pushed/pulled (enforced client-side per the matrix).
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
@@ -77,16 +57,10 @@ async function assertProjectsBelongToActiveWorkspace(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Pull
-// ---------------------------------------------------------------------------
-
 async function handlePull(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-scoped: every query runs as app_rls with request.jwt.claim.sub bound, so
-  // the DB's WITH CHECK policies enforce isolation (not just the user_id filters).
   const { db, userId } = await getUserScopedDb(request);
 
   const url = new URL(request.url);
@@ -124,8 +98,6 @@ async function handlePull(request: NextRequest) {
       [userId, since],
     );
 
-    // Artifacts: the third synced entity (managed-only). user_id is denormalized on
-    // web_artifacts (like web_conversations) so the filter is direct.
     const artifacts = await db.query<ArtifactDelta>(
       `
         select id, conversation_id, message_id, title, artifact_type, language, content,
@@ -141,7 +113,6 @@ async function handlePull(request: NextRequest) {
     const convSaturated = conversations.length >= MAX_CONVERSATIONS_PULL;
     const msgSaturated = messages.length >= MAX_MESSAGES_PULL;
     const artSaturated = artifacts.length >= MAX_ARTIFACTS_PULL;
-    // hasMore: a full page on any table means the client should pull again.
     const hasMore = convSaturated || msgSaturated || artSaturated;
     const cursor = computePullCursor(
       since,
@@ -168,10 +139,6 @@ async function handlePull(request: NextRequest) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Push
-// ---------------------------------------------------------------------------
-
 type BatchRow<T> = {
   kind: 'applied' | 'conflict';
   id: string;
@@ -188,8 +155,6 @@ async function handlePush(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-scoped: writes run as app_rls with request.jwt.claim.sub bound, so the
-  // WITH CHECK policies reject any row whose user_id != the authenticated subject.
   let rawBody: unknown;
   try {
     rawBody = await request.json();
@@ -213,9 +178,6 @@ async function handlePush(request: NextRequest) {
   }
   const { conversations = [], messages = [], artifacts = [] } = parsed.data;
 
-  // A conversation and its project are one workspace-scoped aggregate. RLS
-  // isolates the conversation row, but a foreign key alone cannot prove that a
-  // client-supplied project belongs to this owner in this exact active scope.
   await assertProjectsBelongToActiveWorkspace(db, userId, organizationId, conversations);
 
   const applied = {
@@ -598,17 +560,6 @@ function syncProtocolUpgradeRequired(): NextResponse {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * node-postgres returns `timestamptz` columns as JS `Date`, but the wire schema
- * (and the JSON the client receives) require ISO strings. A non-empty pull page
- * therefore fails `ChatSyncPullResponseSchema.parse` with "expected string,
- * received date" (empty pages have no Date to reject — hence the intermittency).
- * Normalize the three timestamp columns before validating/serializing.
- */
 function withIsoTimestamps<T>(rows: T[]): T[] {
   return rows.map((row) => {
     const out = { ...(row as Record<string, unknown>) };
@@ -662,7 +613,6 @@ export function computePullCursor(
   return frontiers.reduce((min, v) => (bigintGreater(min, v) ? v : min), frontiers[0]!);
 }
 
-/** Max of a set of bigint-as-string server_versions (compares numerically by length then lexicographically). */
 function maxServerVersion(
   base: string,
   ...lists: Array<Array<{ server_version: string }>>
@@ -676,7 +626,6 @@ function maxServerVersion(
   return max;
 }
 
-/** Compare two non-negative integer strings without precision loss. */
 function bigintGreater(a: string, b: string): boolean {
   const na = a.replace(/^0+/, '') || '0';
   const nb = b.replace(/^0+/, '') || '0';

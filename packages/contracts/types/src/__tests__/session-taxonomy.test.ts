@@ -1,12 +1,3 @@
-/**
- * Session-taxonomy contract tests (`../sessions/taxonomy`).
- *
- * Covers the eleven CC §4.2 `SessionKind` discriminants: every kind has a
- * well-formed fixture that satisfies `validateSessionInvariants`, every
- * cross-field invariant has a dedicated violation test, and the sync-policy
- * rules are proven to compose with (not fork) the `../suite-contracts`
- * kernel guard `assertSurfaceCanSyncChats`.
- */
 import { describe, expect, it } from 'vitest';
 import {
   assertSurfaceCanSyncChats,
@@ -269,13 +260,6 @@ describe('SESSION_KINDS', () => {
   });
 });
 
-// `getSessionKindDefaults` returns the general `SessionKindDefaults` type (not
-// per-kind narrowed), so neither the compiler nor an invariant check catches
-// a wrong-but-plausible value (e.g. a `cloud_chat` case accidentally
-// returning `storageScope: 'local_device'` would still typecheck and pass
-// every invariant). This block deep-equals every kind's actual output
-// against the CC §4.1/§4.2/§4.3/§5 mapping from the module doc comment, so a
-// value regression here fails a test even though nothing else would catch it.
 const EXPECTED_SESSION_KIND_DEFAULTS: Record<SessionKind, SessionKindDefaults> = {
   cloud_chat: {
     executionLocation: 'managed-cloud',
@@ -442,9 +426,6 @@ describe('validateSessionInvariants — sync-eligible-kind-not-allowed', () => {
   });
 
   it('flags a remote_projection session hosted on a normally-synced desktop surface that claims sync eligibility', () => {
-    // CC §4.3: `desktop` IS sync-eligible for consumer chat, but remote_projection
-    // must never sync regardless — this is the case the kind allowlist catches
-    // that a surface-only check would miss (see the next describe block).
     const valid = makeRemoteProjectionSession();
     expect(valid.originSurface).toBe('desktop');
     const tampered = { ...valid, syncPolicy: { syncEligible: true } } as unknown as AppSession;

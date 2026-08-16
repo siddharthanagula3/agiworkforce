@@ -20,8 +20,6 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ─── Chrome API stub ──────────────────────────────────────────────────────────
-
 const storageMock = vi.hoisted(() => {
   let store: Record<string, unknown> = {};
 
@@ -37,7 +35,6 @@ const storageMock = vi.hoisted(() => {
       _reset: () => {
         store = {};
         mock.local._store = store;
-        // Rebind closures
         mock.local.get = vi.fn(async (key: string) => {
           return { [key]: store[key] };
         });
@@ -51,8 +48,6 @@ const storageMock = vi.hoisted(() => {
   return mock;
 });
 
-// ─── Import after chrome stub ─────────────────────────────────────────────────
-
 import {
   memoryList,
   memoryAdd,
@@ -63,16 +58,10 @@ import {
   MAX_CONTENT_CHARS,
 } from '../src/background/memory-bridge.ts';
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
-
 beforeEach(() => {
   storageMock.local._reset();
   vi.clearAllMocks();
 });
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// memoryList
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('memoryList', () => {
   it('returns [] when storage is empty', async () => {
@@ -124,10 +113,6 @@ describe('memoryList', () => {
     expect(result.map((m) => m.id)).toEqual(['x1', 'x2']);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// memoryAdd
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('memoryAdd', () => {
   it('creates an item with id, content, createdAt, updatedAt', async () => {
@@ -186,10 +171,6 @@ describe('memoryAdd', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// memoryUpdate
-// ═══════════════════════════════════════════════════════════════════════════════
-
 describe('memoryUpdate', () => {
   it('updates content for existing id', async () => {
     const item = await memoryAdd('Original content');
@@ -201,11 +182,9 @@ describe('memoryUpdate', () => {
 
   it('updates updatedAt but preserves createdAt', async () => {
     const item = await memoryAdd('Original');
-    // Brief wait so timestamps differ
     await new Promise((r) => setTimeout(r, 5));
     const updated = await memoryUpdate(item!.id, 'Changed');
     expect(updated!.createdAt).toBe(item!.createdAt);
-    // updatedAt should be a valid ISO string (may or may not differ in fast tests)
     expect(typeof updated!.updatedAt).toBe('string');
   });
 
@@ -235,10 +214,6 @@ describe('memoryUpdate', () => {
     expect(updated!.content.length).toBe(MAX_CONTENT_CHARS);
   });
 });
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// memoryDelete
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('memoryDelete', () => {
   it('returns true and removes the item', async () => {
@@ -272,9 +247,7 @@ describe('memoryDelete', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // Exported constants
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('exported constants', () => {
   it('MEMORY_STORAGE_KEY is "agi_memories"', () => {

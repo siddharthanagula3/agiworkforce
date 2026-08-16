@@ -1,25 +1,3 @@
-/**
- * Cross-device cloud SETTINGS sync — single-document delta (mirrors the sync family).
- * Design: docs/plans/shared-cloud-state-2026-06-22.md
- *
- *   GET  /api/settings/sync?since=<server_version cursor>
- *        → the user's CLOUD-SAFE settings subset IF its row server_version > cursor,
- *          plus the cursor. Otherwise an empty doc (nothing new).
- *   POST /api/settings/sync  { settings: {<namespace>: {...}}, baseVersion }
- *        → merges ONLY when baseVersion matches the server-owned revision.
- *          user_id is server-side; RLS WITH CHECK is the backstop.
- *
- * TRUST BOUNDARY — THE WHOLE POINT OF THIS FILE:
- * `user_settings.settings` is one JSONB doc keyed by namespace and it can hold
- * SECRETS (BYOK / provider API keys, local model paths, device/push config,
- * providerMode). A wholesale settings sync would LEAK credentials across devices /
- * the trust boundary. So sync is enforced SERVER-SIDE through a **fail-closed
- * namespace ALLOWLIST** (an allowlist, not a denylist: an incomplete list merely
- * under-syncs a preference — it can never leak a secret) PLUS a recursive secret-key
- * scrubber as defense-in-depth. Enforcement is on the server, never trusting the
- * client. Both PULL (don't emit secret namespaces) and PUSH (don't store via sync)
- * are filtered.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ServerVersionSchema, SettingsSyncPushRequestSchema } from '@agiworkforce/cloud-contracts';
@@ -31,36 +9,19 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
-/**
- * Cloud-safe settings namespaces — device-agnostic UI/personalization prefs that are
- * safe to share across a single account's devices. FAIL-CLOSED: any namespace NOT in
- * this set (incl. unknown/new ones) is never pulled or pushed. Expand only with a
- * namespace proven to contain no secrets/device-specific values. NEVER add: byok,
- * apiKeys, providers, models (local paths), device, security, credentials, account.
- */
 export const CLOUD_SAFE_SETTINGS_NAMESPACES: readonly string[] = [
   'appearance',
   'personalization',
   'profile',
-  // PER-9: `general` is the namespace Settings → General ACTUALLY writes
-  // (display/preferred name, work description, custom instructions, chat font).
-  // It was missing here, so `filterCloudSafeSettings` silently dropped
-  // it in BOTH directions while the UI said "Synced to your account". Nothing
-  // in it is a secret or device-specific: it is the profile identity every
-  // surface reads via `lib/server/user-identity.ts`. The fail-closed design was
-  // right; the list just did not match the writer.
   'general',
   'notifications',
   'language',
   'accessibility',
-  // Account memory policy contains booleans only and must remain identical on
-  // Web and Desktop Managed Cloud. It carries no device path or credential.
   'capabilities',
   'chat',
   'editor',
 ];
 
-/** Namespaces that must NEVER sync — asserted in tests as a tripwire on the allowlist. */
 export const FORBIDDEN_SETTINGS_NAMESPACES: readonly string[] = [
   'byok',
   'apiKeys',
@@ -74,15 +35,10 @@ export const FORBIDDEN_SETTINGS_NAMESPACES: readonly string[] = [
   'account',
 ];
 
-/** Key substrings that signal a secret; scrubbed even inside an allowed namespace. */
 const SECRET_KEY_PATTERN =
   /(api[-_]?key|secret|token|password|passwd|credential|bearer|authorization|private[-_]?key|access[-_]?key|client[-_]?secret)/i;
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
-/**
- * Recursively drop any object key that looks like a secret. Defense-in-depth on top
- * of the namespace allowlist: even a "safe" namespace can't carry a stray token.
- */
 export function scrubSecrets(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(scrubSecrets);
   if (value && typeof value === 'object') {
@@ -113,10 +69,6 @@ export function filterCloudSafeSettings(
   }
   return out;
 }
-
-// ---------------------------------------------------------------------------
-// Pull
-// ---------------------------------------------------------------------------
 
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-activity');
@@ -151,10 +103,6 @@ async function handleGet(request: NextRequest) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Push
-// ---------------------------------------------------------------------------
-
 async function handlePost(request: NextRequest) {
   const { db, userId } = await getUserScopedDb(request);
 
@@ -175,14 +123,9 @@ async function handlePost(request: NextRequest) {
     throw createError.validation('Invalid settings sync payload', parsed.error);
   }
 
-  // SERVER-SIDE enforcement: only cloud-safe namespaces, scrubbed, ever get stored
-  // through sync. A client cannot push a secret namespace into the synced surface.
   const safeIncoming = filterCloudSafeSettings(parsed.data.settings);
 
   try {
-    // Compare-and-swap on the server-owned revision. Client clocks never
-    // participate in conflict resolution. Existing non-synced namespaces and
-    // sibling keys inside an allowed namespace remain intact.
     const rows = await db.query<{ server_version: string }>(
       `
         with updated as (
@@ -227,8 +170,6 @@ async function handlePost(request: NextRequest) {
     if (rows[0]) {
       return NextResponse.json({ applied: true, cursor: rows[0].server_version });
     }
-    // Revision conflict: return the current revision, but the client must retain
-    // its pre-push cursor and pull the server winner before attempting another push.
     const [current] = await db.query<{ server_version: string }>(
       `select server_version from user_settings where user_id = $1 limit 1`,
       [userId],
@@ -240,11 +181,6 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Compare two non-negative integer strings without precision loss. */
 function bigintGreater(a: string, b: string): boolean {
   const na = (a ?? '0').replace(/^0+/, '') || '0';
   const nb = (b ?? '0').replace(/^0+/, '') || '0';

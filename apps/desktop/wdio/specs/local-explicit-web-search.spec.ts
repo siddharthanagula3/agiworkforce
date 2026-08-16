@@ -59,8 +59,6 @@ describe('AGI Desktop explicit Local web search', () => {
     expect(await searchToggle.getAttribute('aria-pressed')).toBe('true');
     await browser.saveScreenshot(`${SCREEN_DIR}/02-local-search-on.png`);
 
-    // Radix keeps the toggle menu open so the checked state remains visible.
-    // Escape deliberately closes it and must return focus to the composer trigger.
     await browser.keys(['Escape']);
     await browser.waitUntil(async () => (await plus.getAttribute('aria-expanded')) === 'false', {
       timeout: 5_000,
@@ -125,8 +123,6 @@ describe('AGI Desktop explicit Local web search', () => {
 
     await browser.saveScreenshot(`${SCREEN_DIR}/04-local-search-terminal.png`);
 
-    // Search is intentionally one-turn. It must not remain enabled for the next
-    // prompt or silently grant ongoing network access.
     await clickElement(plus);
     const resetToggle = await $('button=Search the web');
     await resetToggle.waitForDisplayed({ timeout: 5_000 });

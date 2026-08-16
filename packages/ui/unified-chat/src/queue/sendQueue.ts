@@ -1,19 +1,3 @@
-/**
- * `sendQueue` — surface-agnostic wrapper around `messageQueueManager` that
- * the chat hooks (`useChat`, mobile send pipeline, etc.) route every send
- * through. The queue is the single point of entry for any prompt destined
- * for the LLM runtime, and it provides:
- *
- *   - FIFO-within-priority ordering across `now > next > later` lanes
- *   - Cancellation via AbortSignal
- *   - Backpressure (lane cap) via `QueueFullError`
- *   - Persistence of `next` and `later` lanes across surface restart
- *
- * Each surface creates exactly one instance via `getSendQueue(surfaceId)`,
- * passing its own storage adapter. The queue does NOT share state across
- * surfaces — the desktop and web instances are independent (per Task 1.4
- * §"Cross-surface state").
- */
 
 import {
   createMessageQueue,
@@ -26,10 +10,6 @@ import {
 const queues = new Map<string, MessageQueue>();
 
 export interface GetSendQueueOptions extends CreateMessageQueueOptions {
-  /**
-   * Override an existing queue for the given surfaceId. Useful for tests that
-   * need a fresh queue between cases.
-   */
   reset?: boolean;
 }
 
@@ -53,12 +33,6 @@ export function getSendQueue(surfaceId: string, options?: GetSendQueueOptions): 
   return queue;
 }
 
-/**
- * Default localStorage-backed storage adapter for browser-like surfaces
- * (web, desktop renderer, Chrome extension popup). Returns null when
- * `localStorage` is unavailable (SSR, locked storage), so the caller can
- * fall back to a volatile queue without branching.
- */
 export function defaultBrowserStorage(surfaceId: string): QueueStorageAdapter | null {
   if (typeof globalThis === 'undefined') return null;
   const storage = (globalThis as { localStorage?: Storage }).localStorage;
@@ -66,14 +40,6 @@ export function defaultBrowserStorage(surfaceId: string): QueueStorageAdapter | 
   return createWebStorageAdapter(`agiworkforce.queue.${surfaceId}`, storage);
 }
 
-/**
- * Convenience: enqueue a string prompt and immediately resolve with the
- * QueuedCommand. The caller is responsible for calling `dequeue()` (or
- * `dequeueIf` with the returned id) when ready to send to the LLM runtime.
- *
- * The mode defaults to `'prompt'` so it round-trips through `popAllEditable`
- * if the user pushes ESC mid-stream.
- */
 export function enqueuePrompt(
   queue: MessageQueue,
   text: string,
@@ -98,10 +64,6 @@ export function enqueuePrompt(
   );
 }
 
-/**
- * Reset all queue caches. Used by tests to ensure isolation between cases.
- * Production code should never call this.
- */
 export function __resetAllSendQueuesForTests(): void {
   queues.clear();
 }

@@ -1,13 +1,3 @@
-/**
- * AdminConsolePage — managed-compute honesty regression tests.
- *
- * Managed compute has been public alpha (open by default) since 2026-06-27;
- * AGI_MANAGED_COMPUTE_PRIVATE_BETA is an incident-response kill-switch only
- * (apps/web/lib/managed-compute-gate.ts). Every managed-compute status
- * element on this page must agree with that reality and must never regress
- * to the retired "launch gate" / "private beta" / "waitlisted" framing
- * (CLAUDE.md's fake-availability-badge / stale-provider-label rule).
- */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import AdminConsolePage from './AdminConsolePage';
@@ -42,7 +32,6 @@ describe('AdminConsolePage — managed compute status honesty', () => {
     expect(screen.getByText('Managed compute: public alpha, open by default')).toBeInTheDocument();
     expect(screen.getByText('Managed Compute Access')).toBeInTheDocument();
     expect(screen.getByText('Open (public alpha)')).toBeInTheDocument();
-    // The readiness ledger row's status badge for the "Managed compute" area.
     expect(screen.getByText('Public alpha')).toBeInTheDocument();
   });
 
@@ -61,11 +50,6 @@ describe('AdminConsolePage — managed compute status honesty', () => {
     },
   );
 
-  // The Identity tile used to say SSO sign-in and SCIM "remain intentionally
-  // deferred" while the readiness row on the SAME page said both were
-  // implemented. Both cannot be true, and the code says implemented:
-  // apps/web/lib/server/sso/clerk-enterprise-connections.ts provisions Clerk
-  // enterprise connections and apps/web/app/api/scim/v2/** serves SCIM 2.0.
   it('does not describe implemented identity capabilities as deferred', () => {
     const { container } = render(<AdminConsolePage />);
     const text = container.textContent ?? '';

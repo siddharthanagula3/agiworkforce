@@ -76,13 +76,9 @@ describe('withSseHeartbeat', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(chunks).toEqual(['data: {"a":1}\n\n']);
 
-    // 15s of silence -> exactly one heartbeat, not a flood of them.
     await vi.advanceTimersByTimeAsync(15_000);
     expect(chunks).toEqual(['data: {"a":1}\n\n', ': keepalive\n\n']);
 
-    // Real data arrives -> resets the idle clock; no heartbeat at the old
-    // 15s mark relative to the FIRST heartbeat (i.e. at +5s more, total
-    // elapsed since the last heartbeat is only 5s, well under the interval).
     source.push('data: {"b":2}\n\n');
     await vi.advanceTimersByTimeAsync(5_000);
     expect(chunks).toEqual(['data: {"a":1}\n\n', ': keepalive\n\n', 'data: {"b":2}\n\n']);
@@ -90,8 +86,6 @@ describe('withSseHeartbeat', () => {
     source.close();
     await readLoop;
 
-    // No further heartbeats fire once the stream has closed, even if more
-    // wall-clock time passes (the interval is cleared on close).
     await vi.advanceTimersByTimeAsync(30_000);
     expect(chunks).toEqual(['data: {"a":1}\n\n', ': keepalive\n\n', 'data: {"b":2}\n\n']);
   });
@@ -112,9 +106,6 @@ describe('withSseHeartbeat', () => {
     const reader = wrapped.getReader();
     await reader.cancel('client disconnected');
 
-    // If the interval weren't cleared, this would eventually throw trying
-    // to enqueue on a released controller -- an unhandled rejection here
-    // (not caught by this await) is the regression signal.
     await vi.advanceTimersByTimeAsync(60_000);
   });
 });

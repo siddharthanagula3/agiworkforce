@@ -1,18 +1,7 @@
-/**
- * @file Request Validation Middleware
- * @security
- * - Content-Type validation prevents content-sniffing attacks (OWASP)
- * - Security header monitoring detects potential injection attempts
- * - Strict body validation prevents mass assignment vulnerabilities
- */
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { logger } from '../lib/logger';
 
-/**
- * Allowed Content-Types for requests with bodies.
- * Only JSON is accepted for API requests to prevent content-type confusion attacks.
- */
 const ALLOWED_CONTENT_TYPES = ['application/json'];
 
 /**
@@ -31,11 +20,9 @@ export const validateContentType: RequestHandler = (
   res: Response,
   next: NextFunction,
 ): void => {
-  // Only check for methods that typically have request bodies
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
     const contentLength = req.headers['content-length'];
 
-    // Allow requests without body (Content-Length: 0 or undefined)
     if (!contentLength || contentLength === '0') {
       next();
       return;
@@ -51,7 +38,6 @@ export const validateContentType: RequestHandler = (
       return;
     }
 
-    // Extract the media type (ignore charset and other parameters)
     const mediaType = contentType.split(';')[0].trim().toLowerCase();
 
     if (!ALLOWED_CONTENT_TYPES.includes(mediaType)) {
@@ -66,10 +52,6 @@ export const validateContentType: RequestHandler = (
   next();
 };
 
-/**
- * Headers that may indicate injection attempts or proxy manipulation.
- * These are logged for security monitoring but don't block requests.
- */
 const SUSPICIOUS_HEADERS = [
   'x-forwarded-host', // Potential host header injection
   'x-original-url', // Potential path traversal (IIS)
@@ -91,7 +73,6 @@ export const validateSecurityHeaders: RequestHandler = (
   res: Response,
   next: NextFunction,
 ): void => {
-  // Only log in production to avoid noise in development
   if (process.env.NODE_ENV === 'production') {
     const foundHeaders = SUSPICIOUS_HEADERS.filter((header) => req.headers[header]);
 
@@ -134,7 +115,6 @@ export function createStrictBodyValidator(allowedFields: string[]): RequestHandl
       const unexpectedFields = bodyKeys.filter((key) => !allowedFields.includes(key));
 
       if (unexpectedFields.length > 0) {
-        // Log the attempt for security monitoring
         if (process.env.NODE_ENV === 'production') {
           logger.warn(
             {
@@ -183,15 +163,8 @@ export const requireBody: RequestHandler = (
   next();
 };
 
-/**
- * HTTP methods that modify state and require CSRF protection.
- */
 const CSRF_PROTECTED_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
 
-/**
- * Path prefixes that are exempt from CSRF checks because they use
- * their own authentication (e.g., HMAC signatures for webhooks).
- */
 const CSRF_EXEMPT_PATHS = ['/api/webhooks/', '/health', '/ready', '/api/v1/status'];
 
 /**
@@ -220,7 +193,6 @@ export const validateCsrf: RequestHandler = (
     return;
   }
 
-  // Skip CSRF check for webhook and monitoring endpoints
   if (CSRF_EXEMPT_PATHS.some((prefix) => req.path.startsWith(prefix))) {
     next();
     return;

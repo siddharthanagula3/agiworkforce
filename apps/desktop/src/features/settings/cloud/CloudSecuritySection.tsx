@@ -1,17 +1,3 @@
-/**
- * Cloud security posture, rendered inline from Desktop's own Cloud session.
- *
- * `GET /api/settings/2fa` and `GET /api/settings/activity` both authenticate
- * through `getClerkAuthUser`, so the read side works with the device bearer.
- * Enrolling in two-factor is a Clerk-owned credential flow with no bearer API,
- * so that half stays bridged — with the explicit re-auth affordance rather than
- * a button that can silently land on `/login`.
- *
- * The presentation-mode control lives here because it decides whether the
- * credential windows this app opens are excluded from screen capture. It is a
- * DEVICE preference and is labelled as one: it is never synced to the Cloud
- * account and never leaves this machine.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 

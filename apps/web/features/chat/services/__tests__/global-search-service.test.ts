@@ -70,19 +70,15 @@ describe('globalSearchService.search — project surfacing', () => {
 
     const project = results.find((r) => r.type === 'project');
     expect(project).toBeDefined();
-    // sessionId carries the project id so the dialog routes to /projects/${id}.
     expect(project?.sessionId).toBe('proj-42');
     expect(project?.sessionTitle).toBe('Launch Plan');
 
-    // File matches surface too, keyed for /library navigation.
     const file = results.find((r) => r.type === 'file');
     expect(file?.sessionId).toBe('file-7');
     expect(file?.sessionTitle).toBe('launch-deck.pdf');
 
-    // Conversation results are preserved alongside projects + files.
     expect(results.some((r) => r.type === 'session' && r.sessionId === 'sess-1')).toBe(true);
 
-    // Stats fold projects + files into the visible total so "Found N" matches rendered rows.
     expect(stats.projectMatches).toBe(1);
     expect(stats.fileMatches).toBe(1);
     expect(stats.totalResults).toBe(3);

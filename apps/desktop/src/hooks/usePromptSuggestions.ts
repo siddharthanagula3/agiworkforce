@@ -1,9 +1,3 @@
-/**
- * usePromptSuggestions Hook
- *
- * Generates context-aware prompt suggestions similar to Gemini CLI.
- * Analyzes user input and provides helpful continuation suggestions.
- */
 
 import { useMemo } from 'react';
 
@@ -205,7 +199,6 @@ const SUGGESTION_PATTERNS = [
   },
 ];
 
-// General suggestions based on input length and context
 const GENERAL_SUGGESTIONS = [
   {
     text: 'with examples',
@@ -251,7 +244,6 @@ export function usePromptSuggestions(input: string): PromptSuggestion[] {
       return [];
     }
 
-    // Check pattern-based suggestions first
     for (const { pattern, suggestions } of SUGGESTION_PATTERNS) {
       const match = input.match(pattern);
       if (match) {
@@ -259,13 +251,10 @@ export function usePromptSuggestions(input: string): PromptSuggestion[] {
       }
     }
 
-    // For short, simple inputs, suggest continuations
     if (input.length < 20 && !input.includes('?')) {
-      // Return top 3 general suggestions
       return GENERAL_SUGGESTIONS.slice(0, 3);
     }
 
-    // For longer inputs or questions, suggest refinements
     if (input.includes('?')) {
       return [
         {

@@ -12,7 +12,6 @@ export type InviteCodeSource =
 
 export type InviteCodeTab = 'invite' | 'waitlist';
 
-/** Typed error codes returned by the web API invite-code boundary. Cross-surface contract. */
 export type InviteCodeError =
   | 'invalid_code'
   | 'expired'

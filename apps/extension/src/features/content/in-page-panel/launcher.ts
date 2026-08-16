@@ -14,7 +14,6 @@
 
 import { getExtensionTokensCssAuto } from '../../../tokens';
 
-/** Bottom and right offsets in px. */
 export interface LauncherPosition {
   bottom: number;
   right: number;
@@ -72,10 +71,6 @@ export function buildLauncherStyles(): string {
   `;
 }
 
-/**
- * Persist position to chrome.storage.local.
- * Silently swallows errors (unavailable in tests / non-extension contexts).
- */
 export async function savePosition(pos: LauncherPosition): Promise<void> {
   try {
     await chrome.storage.local.set({ [STORAGE_KEY]: pos });
@@ -84,9 +79,6 @@ export async function savePosition(pos: LauncherPosition): Promise<void> {
   }
 }
 
-/**
- * Load persisted position from storage, falling back to DEFAULT_POS.
- */
 export async function loadPosition(): Promise<LauncherPosition> {
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -106,9 +98,6 @@ export async function loadPosition(): Promise<LauncherPosition> {
   return { ...DEFAULT_POS };
 }
 
-/**
- * Apply a LauncherPosition object to the host element's inline style.
- */
 export function applyPosition(host: HTMLElement, pos: LauncherPosition): void {
   host.style.bottom = `${pos.bottom}px`;
   host.style.right = `${pos.right}px`;
@@ -127,7 +116,6 @@ export function createLauncher(onOpen: () => void): {
   host: HTMLElement;
   button: HTMLButtonElement;
 } {
-  // ── Host element (fixed-position wrapper) ──────────────────────────────────
   const host = document.createElement('div');
   host.setAttribute('data-agi-launcher', 'true');
   host.style.cssText = [
@@ -142,18 +130,15 @@ export function createLauncher(onOpen: () => void): {
 
   const shadow = host.attachShadow({ mode: 'closed' });
 
-  // ── Styles ─────────────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = buildLauncherStyles();
 
-  // ── Button ─────────────────────────────────────────────────────────────────
   const button = document.createElement('button');
   button.className = 'agi-launcher-btn';
   button.setAttribute('aria-label', 'Open AGI');
   button.setAttribute('type', 'button');
   button.textContent = 'A';
 
-  // ── Tooltip ────────────────────────────────────────────────────────────────
   const tooltip = document.createElement('div');
   tooltip.className = 'agi-tooltip';
   tooltip.textContent = 'Ask AGI';
@@ -167,12 +152,6 @@ export function createLauncher(onOpen: () => void): {
   return { host, button };
 }
 
-/**
- * Attach scroll-hide / scroll-show behaviour to the launcher host element.
- * Hides when the user scrolls down more than 80px, re-shows on scroll-up.
- *
- * Returns a cleanup function that removes the scroll listener.
- */
 export function attachScrollBehaviour(host: HTMLElement): () => void {
   const THRESHOLD = 80;
   let lastY = window.scrollY;
@@ -186,18 +165,13 @@ export function attachScrollBehaviour(host: HTMLElement): () => void {
       hidden = true;
       host.style.opacity = '0';
       host.style.transform = 'translateY(16px)';
-      // `pointer-events:none` on the host does NOT block the button: it lives in
-      // a closed shadow root and sets `pointer-events:all`, which re-enables hit
-      // testing on itself regardless of the host. `visibility:hidden` removes the
-      // whole subtree (button included) from hit testing, so the invisible FAB is
-      // not a clickable target while hidden.
       host.style.pointerEvents = 'none';
       host.style.visibility = 'hidden';
     } else if (hidden && delta < -20) {
       hidden = false;
       host.style.opacity = '1';
       host.style.transform = 'translateY(0)';
-      host.style.pointerEvents = 'none'; // pointer-events on host stays none; button has 'all'
+      host.style.pointerEvents = 'none';
       host.style.visibility = 'visible';
     }
 

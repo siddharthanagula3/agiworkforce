@@ -1,8 +1,3 @@
-/**
- * Contract tests for the tracked iOS Share Extension inputs. The generated
- * ios/ project is gitignored; these files and the config plugin are the only
- * durable source of the target across clean prebuild/EAS builds.
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import fs from 'fs';

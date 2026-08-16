@@ -1,26 +1,9 @@
 import { agiExtensionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 
-/**
- * Emit one fixed palette for tests or deliberately fixed-theme consumers.
- * User-facing extension surfaces should normally use the automatic helper
- * below so they match Chrome's current colour scheme.
- */
 export function getExtensionTokensCss(mode: 'dark' | 'light' = 'dark'): string {
   return `:root {\n${cssVarsToString(agiExtensionCssVars[mode])}\n}`;
 }
 
-/**
- * Emit both palettes, with the light set applied under `prefers-color-scheme:
- * light`, so the surface follows the user's system theme.
- *
- * The side panel and options page shipped `getExtensionTokensCss('dark')`
- * hardcoded even though a complete light set has always existed in the same
- * package — on a light-mode machine the panel was a dark slab beside light
- * browser chrome. Dark stays the default so a browser without the media query
- * lands on the previous appearance rather than an unstyled one.
- *
- * `selector` lets a shadow-DOM surface swap `:root` for `:host`.
- */
 export function getExtensionTokensCssAuto(selector = ':root'): string {
   return [
     `${selector} {`,

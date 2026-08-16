@@ -12,10 +12,6 @@ export interface OcrResult {
   regions: OcrRegion[];
 }
 
-// Wraps platform OCR:
-//   iOS  → Apple Vision VNRecognizeTextRequest (AGIVisionOCR native module)
-//   Android → ML Kit Text Recognition (AGIVisionOCR native module)
-// Both are fully on-device — no network.
 export async function recognizeText(imageUri: string): Promise<OcrResult> {
   const mod = NativeModules.AGIVisionOCR as
     | { recognizeText: (uri: string) => Promise<OcrResult> }

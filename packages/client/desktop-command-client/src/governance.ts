@@ -1,10 +1,5 @@
-/**
- * Governance & Privacy API — typed wrappers for audit, approval, and privacy commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface AuditFilters {
   userId?: string;
@@ -56,8 +51,6 @@ export interface PrivacyPreferences {
   usageDataCollection: boolean;
 }
 
-// ---- Audit ----
-
 export async function getAuditEvents(filters: AuditFilters): Promise<AuditEvent[]> {
   return command<AuditEvent[]>('get_audit_events', { filters });
 }
@@ -85,8 +78,6 @@ export async function logWorkflowExecution(
 ): Promise<void> {
   return command<void>('log_workflow_execution', { userId, teamId, workflowId, status, metadata });
 }
-
-// ---- Approvals ----
 
 export async function createApprovalRequest(
   requesterId: string,
@@ -137,8 +128,6 @@ export async function getApprovalStatistics(teamId?: string): Promise<ApprovalSt
 export async function expireTimedOutRequests(): Promise<number> {
   return command<number>('expire_timed_out_requests');
 }
-
-// ---- Privacy ----
 
 export async function settingsUpdatePrivacy(preferences: PrivacyPreferences): Promise<void> {
   return command<void>('settings_update_privacy', { preferences });

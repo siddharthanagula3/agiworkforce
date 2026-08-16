@@ -1,12 +1,3 @@
-/**
- * Computer-use model selection.
- *
- * Chrome previously pinned the tier-agnostic `computer_use` routing slot for
- * every account, so a Max/Enterprise plan entitled to `computer_use_premium`
- * silently ran browser automation on the balanced model instead. Selection now
- * goes through the canonical catalog helper, which intersects the
- * computer-use slot preference with the tier's allowedSlots.
- */
 
 import { describe, expect, it } from 'vitest';
 import { getDefaultModelFor, getRoutingSlotModel } from '@agiworkforce/types';

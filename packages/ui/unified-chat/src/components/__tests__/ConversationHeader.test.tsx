@@ -38,7 +38,6 @@ describe('ConversationHeader', () => {
   it('renders only the actions the host can perform', () => {
     render(<ConversationHeader onRename={vi.fn()} />);
     expect(screen.getByLabelText('Rename conversation')).toBeTruthy();
-    // Share was not supplied, so it must not appear as a dead control.
     expect(screen.queryByLabelText('Share conversation')).toBeNull();
   });
 
@@ -62,7 +61,6 @@ describe('ConversationHeader', () => {
     fireEvent.click(screen.getByLabelText('Rename conversation'));
     fireEvent.keyDown(screen.getByLabelText('Conversation title'), { key: 'Enter' });
 
-    // A no-op rename should not produce a network write.
     expect(onRename).not.toHaveBeenCalled();
   });
 

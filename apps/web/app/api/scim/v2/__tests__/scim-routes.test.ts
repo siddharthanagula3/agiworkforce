@@ -6,8 +6,6 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-// Rate limiting is exercised by its own suite; these tests are about the
-// credential and entitlement boundaries behind it.
 const mockWithRateLimit = vi.fn(async () => null);
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: (...args: unknown[]) => mockWithRateLimit(...(args as [])),
@@ -163,10 +161,6 @@ beforeEach(() => {
   mockWithRateLimit.mockResolvedValue(null);
 });
 
-// ---------------------------------------------------------------------------
-// 1. Authentication
-// ---------------------------------------------------------------------------
-
 describe('SCIM authentication', () => {
   it('refuses a request with no Authorization header', async () => {
     await harness();
@@ -228,7 +222,7 @@ describe('SCIM authentication', () => {
 
     expect(response.status).toBe(401);
     expect(state.scim_provisioned_users).toHaveLength(0);
-    expect(state.organization_members).toHaveLength(1); // just the seeded admin
+    expect(state.organization_members).toHaveLength(1);
   });
 
   it('gates the discovery documents on the same credential', async () => {
@@ -245,10 +239,6 @@ describe('SCIM authentication', () => {
     await expect(ok.json()).resolves.toMatchObject({ patch: { supported: true } });
   });
 });
-
-// ---------------------------------------------------------------------------
-// 2. Entitlement gate
-// ---------------------------------------------------------------------------
 
 describe('SCIM entitlement gate', () => {
   it.each([
@@ -283,7 +273,6 @@ describe('SCIM entitlement gate', () => {
 
     expect((await usersGet(scimRequest('/Users', { token: rawToken }))).status).toBe(200);
 
-    // No token change, no revocation — only the plan status moves.
     state.subscriptions[0]!['status'] = 'canceled';
 
     expect((await usersGet(scimRequest('/Users', { token: rawToken }))).status).toBe(403);
@@ -330,16 +319,11 @@ describe('SCIM entitlement gate', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. Provision -> update -> deprovision round trip
-// ---------------------------------------------------------------------------
-
 describe('SCIM provision -> update -> deprovision', () => {
   it('grants a real organization membership when the person already has an account', async () => {
     const { rawToken, state } = await harness();
     state.profiles.push({ id: 'clerk_ada', email: 'Ada@Example.com' });
 
-    // --- provision -------------------------------------------------------
     const created = await usersPost(
       scimRequest('/Users', { method: 'POST', token: rawToken, body: userPayload() }),
     );
@@ -358,7 +342,6 @@ describe('SCIM provision -> update -> deprovision', () => {
       membershipGranted: true,
     });
 
-    // The membership is REAL, attributed to SCIM, and not an owner.
     const membership = state.organization_members.find((row) => row['user_id'] === 'clerk_ada');
     expect(membership).toMatchObject({
       organization_id: ORG,
@@ -369,7 +352,6 @@ describe('SCIM provision -> update -> deprovision', () => {
 
     const scimUserId = String(createdBody['id']);
 
-    // --- the existence probe an IdP runs before every create --------------
     const probe = await usersGet(
       scimRequest(`/Users?filter=${encodeURIComponent('userName eq "ada@example.com"')}`, {
         token: rawToken,
@@ -382,7 +364,6 @@ describe('SCIM provision -> update -> deprovision', () => {
       itemsPerPage: 1,
     });
 
-    // --- update (PATCH on a profile attribute) ---------------------------
     const patched = await userPatch(
       scimRequest(`/Users/${scimUserId}`, {
         method: 'PATCH',
@@ -399,10 +380,8 @@ describe('SCIM provision -> update -> deprovision', () => {
       name: { familyName: 'Byron' },
       active: true,
     });
-    // A profile edit must not disturb access.
     expect(state.organization_members.some((row) => row['user_id'] === 'clerk_ada')).toBe(true);
 
-    // --- deprovision (Okta: replace active=false) ------------------------
     const deactivated = await userPatch(
       scimRequest(`/Users/${scimUserId}`, {
         method: 'PATCH',
@@ -417,12 +396,9 @@ describe('SCIM provision -> update -> deprovision', () => {
     expect(deactivated.status).toBe(200);
     await expect(deactivated.json()).resolves.toMatchObject({ active: false });
 
-    // Access is actually gone.
     expect(state.organization_members.some((row) => row['user_id'] === 'clerk_ada')).toBe(false);
-    // The SCIM resource still exists — the IdP can still read it.
     expect(state.scim_provisioned_users).toHaveLength(1);
 
-    // --- reactivate ------------------------------------------------------
     const reactivated = await userPatch(
       scimRequest(`/Users/${scimUserId}`, {
         method: 'PATCH',
@@ -437,7 +413,6 @@ describe('SCIM provision -> update -> deprovision', () => {
     expect(reactivated.status).toBe(200);
     expect(state.organization_members.some((row) => row['user_id'] === 'clerk_ada')).toBe(true);
 
-    // --- hard delete -----------------------------------------------------
     const deleted = await userDelete(
       scimRequest(`/Users/${scimUserId}`, { method: 'DELETE', token: rawToken }),
       { params: Promise.resolve({ userId: scimUserId }) },
@@ -446,7 +421,6 @@ describe('SCIM provision -> update -> deprovision', () => {
     expect(state.scim_provisioned_users).toHaveLength(0);
     expect(state.organization_members.some((row) => row['user_id'] === 'clerk_ada')).toBe(false);
 
-    // The whole lifecycle is on the record.
     expect(state.directory_sync_events.map((row) => row['event_type'])).toEqual([
       'user.provisioned',
       'user.updated',
@@ -455,7 +429,6 @@ describe('SCIM provision -> update -> deprovision', () => {
       'user.deprovisioned',
     ]);
 
-    // --- and it is gone --------------------------------------------------
     const gone = await userGet(scimRequest(`/Users/${scimUserId}`, { token: rawToken }), {
       params: Promise.resolve({ userId: scimUserId }),
     });
@@ -475,15 +448,13 @@ describe('SCIM provision -> update -> deprovision', () => {
 
     expect(created.status).toBe(201);
     const body = (await created.json()) as Record<string, any>;
-    // The resource is real; access is not granted and the response says so.
     expect(body['urn:agiworkforce:params:scim:schemas:extension:2.0:Provisioning']).toEqual({
       linked: false,
       membershipGranted: false,
     });
     expect(state.scim_provisioned_users).toHaveLength(1);
-    expect(state.organization_members).toHaveLength(1); // seeded admin only
+    expect(state.organization_members).toHaveLength(1);
 
-    // Deprovisioning still works on a pending resource.
     const scimUserId = String(body['id']);
     const deleted = await userDelete(
       scimRequest(`/Users/${scimUserId}`, { method: 'DELETE', token: rawToken }),
@@ -509,7 +480,6 @@ describe('SCIM provision -> update -> deprovision', () => {
     const scimUserId = String(((await created.json()) as Record<string, any>)['id']);
     expect(state.organization_members).toHaveLength(1);
 
-    // The person signs up; a profile row appears.
     state.profiles.push({ id: 'clerk_late', email: 'late@example.com' });
 
     const replaced = await userPut(
@@ -562,10 +532,8 @@ describe('SCIM provision -> update -> deprovision', () => {
     );
     const scimUserId = String(((await created.json()) as Record<string, any>)['id']);
 
-    // The owner's role survives provisioning...
     expect(state.organization_members[0]).toMatchObject({ user_id: ADMIN, role: 'owner' });
 
-    // ...and survives a deprovision. Losing the only owner would orphan the org.
     await userDelete(scimRequest(`/Users/${scimUserId}`, { method: 'DELETE', token: rawToken }), {
       params: Promise.resolve({ userId: scimUserId }),
     });
@@ -597,15 +565,10 @@ describe('SCIM provision -> update -> deprovision', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Tenant isolation (RLS cannot cover SCIM — the application must)
-// ---------------------------------------------------------------------------
-
 describe('SCIM tenant isolation', () => {
   it('cannot read or mutate another tenant’s resource by id', async () => {
     const { rawToken, state } = await harness();
 
-    // A resource that belongs to the other tenant's connection.
     const foreignId = '99999999-9999-4999-8999-999999999999';
     state.scim_provisioned_users.push({
       id: foreignId,
@@ -645,7 +608,6 @@ describe('SCIM tenant isolation', () => {
     );
     expect(destroy.status).toBe(404);
 
-    // The other tenant's member is untouched.
     expect(state.organization_members.some((row) => row['user_id'] === 'clerk_victim')).toBe(true);
     expect(state.scim_provisioned_users).toHaveLength(1);
   });
@@ -675,10 +637,6 @@ describe('SCIM tenant isolation', () => {
     await expect(response.json()).resolves.toMatchObject({ totalResults: 0, Resources: [] });
   });
 });
-
-// ---------------------------------------------------------------------------
-// 5. Listing, filtering, pagination
-// ---------------------------------------------------------------------------
 
 describe('SCIM listing', () => {
   it('paginates with 1-based startIndex and reports the full total', async () => {
@@ -725,10 +683,6 @@ describe('SCIM listing', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 6. Groups and role mapping
-// ---------------------------------------------------------------------------
-
 describe('SCIM groups', () => {
   it('promotes a member when they join a group mapped to admin, and demotes on removal', async () => {
     const { rawToken, state } = await harness();
@@ -752,8 +706,6 @@ describe('SCIM groups', () => {
     expect(createdGroup.status).toBe(201);
     const groupId = String(((await createdGroup.json()) as Record<string, any>)['id']);
 
-    // The role mapping is an AGI-side admin decision, not something the IdP
-    // can set by naming a group.
     state.scim_groups[0]!['mapped_role'] = 'admin';
 
     const added = await groupPatch(
@@ -784,8 +736,6 @@ describe('SCIM groups', () => {
       { params: Promise.resolve({ groupId }) },
     );
     expect(removed.status).toBe(200);
-    // The membership was provisioned by SCIM, so the IdP is authoritative for
-    // its role: leaving the admin-mapped group actually demotes.
     expect(state.organization_members.find((row) => row['user_id'] === 'clerk_ada')?.['role']).toBe(
       'member',
     );
@@ -814,8 +764,6 @@ describe('SCIM groups', () => {
       }),
     );
 
-    // Turning on directory sync must not strip the admins an organization
-    // already appointed by hand.
     expect(
       state.organization_members.find((row) => row['user_id'] === 'clerk_manual')?.['role'],
     ).toBe('admin');

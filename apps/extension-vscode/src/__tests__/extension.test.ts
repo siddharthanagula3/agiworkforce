@@ -1,9 +1,3 @@
-/**
- * extension.test.ts — Tests for extension activation/deactivation logic
- *
- * Tests the pure helper functions and activation behavior patterns.
- * Full integration tests require @vscode/test-electron.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
@@ -11,8 +5,6 @@ import * as path from 'path';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { MODEL_PICKER_OPTIONS } from '../features/model-picker/modelConstants';
 import { buildExtensionStatusBarText } from '../core/statusBar';
-
-// ── commandLabel helper ──────────────────────────────────────────────────────
 
 function commandLabel(command: string): string {
   const labels: Record<string, string> = {
@@ -66,14 +58,10 @@ describe('buildStatusBarText', () => {
   });
 });
 
-// ── Port reachability pattern ────────────────────────────────────────────────
-
 describe('isLocalPortReachable pattern', () => {
   it('resolves to a boolean', async () => {
-    // We cannot test real TCP connections in unit tests, but we validate the pattern
     const mockReachable = (port: number, timeoutMs: number): Promise<boolean> => {
       return new Promise((resolve) => {
-        // In real code this opens a TCP socket
         resolve(port > 0 && timeoutMs > 0 ? false : false);
       });
     };
@@ -83,12 +71,6 @@ describe('isLocalPortReachable pattern', () => {
   });
 });
 
-// ── Activation commands registration ─────────────────────────────────────────
-
-/**
- * Derive the command list dynamically from package.json so this test never
- * goes stale when commands are added or removed.
- */
 function getPackageJsonCommands(): string[] {
   const pkgPath = path.resolve(__dirname, '../../package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as {
@@ -141,8 +123,6 @@ describe('extension command registration', () => {
   });
 });
 
-// ── Model quick pick items ───────────────────────────────────────────────────
-
 describe('model selection', () => {
   const MODELS = MODEL_PICKER_OPTIONS.map((option) => option.id);
   const MANUAL_MODELS = MODELS.filter((model) => !model.startsWith('auto'));
@@ -177,8 +157,6 @@ describe('model selection', () => {
   });
 });
 
-// ── API key validation pattern ───────────────────────────────────────────────
-
 describe('API key validation', () => {
   function validateApiKey(value: string): string | undefined {
     if (value.trim() === '') return 'API key cannot be empty.';
@@ -198,8 +176,6 @@ describe('API key validation', () => {
   });
 });
 
-// ── Feature flag validation patterns ─────────────────────────────────────────
-
 describe('feature flag validation', () => {
   it('warns when inline completions enabled without API key', () => {
     const inlineEnabled = true;
@@ -215,8 +191,6 @@ describe('feature flag validation', () => {
     expect(shouldWarn).toBe(false);
   });
 });
-
-// ── Configuration change detection ───────────────────────────────────────────
 
 describe('configuration change detection', () => {
   const STATUS_BAR_CONFIGS = [
@@ -244,13 +218,6 @@ describe('configuration change detection', () => {
   });
 });
 
-// ── Inline completions first-run notice logic ────────────────────────────────
-
-/**
- * Pure helper that mirrors the logic in checkInlineCompletionsFirstRun().
- * We test the decision logic here; the vscode API interactions are covered by
- * the integration-style tests below using the mock context.
- */
 function shouldShowInlineFirstRunNotice(
   alreadyShown: boolean | undefined,
   globalValueSet: boolean,
@@ -261,7 +228,6 @@ function shouldShowInlineFirstRunNotice(
 }
 
 describe('inline completions first-run notice', () => {
-  // ── mock context wiring ──────────────────────────────────────────────────────
 
   interface MockGlobalState {
     store: Map<string, unknown>;
@@ -292,8 +258,6 @@ describe('inline completions first-run notice', () => {
     vi.clearAllMocks();
   });
 
-  // ── decision-logic unit tests ────────────────────────────────────────────────
-
   it('shows notice on first run when user has not set global preference', () => {
     expect(shouldShowInlineFirstRunNotice(undefined, false)).toBe(true);
   });
@@ -310,11 +274,8 @@ describe('inline completions first-run notice', () => {
     expect(shouldShowInlineFirstRunNotice(false, false)).toBe(true);
   });
 
-  // ── state-mutation tests ─────────────────────────────────────────────────────
-
   it('sets firstRunNoticeShown flag after "Got it" click', async () => {
     const ctx = makeContext();
-    // Simulate clicking "Got it"
     if (
       shouldShowInlineFirstRunNotice(
         ctx.globalState.get('inlineCompletions.firstRunNoticeShown'),

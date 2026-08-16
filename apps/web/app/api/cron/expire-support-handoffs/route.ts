@@ -1,23 +1,3 @@
-/**
- * GET /api/cron/expire-support-handoffs
- *
- * The enforcer that works when the browser is gone.
- *
- * The client honours `waitExpiresAt` — until the tab is backgrounded. The status
- * poll performs the transition — until the user closes the tab. Neither covers
- * the case that matters most: a user who asks for a human, gets no answer, and
- * walks away. Without this sweep their escalation would sit in `waiting`
- * forever and nobody would ever read it.
- *
- * It shares the same conditional UPDATE as the poll path, so the two compose:
- * whichever gets the row sends the email, the other sends nothing.
- *
- * Also closes `connected` sessions idle past AGI_SUPPORT_HANDOFF_IDLE_TIMEOUT_SECONDS
- * (a user who closed the tab mid-chat leaves a human talking to nobody) and
- * purges transcripts past AGI_SUPPORT_HANDOFF_RETENTION_DAYS.
- *
- * Registered in vercel.json at every 5 minutes.
- */
 
 import 'server-only';
 

@@ -2,49 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Guards for the DPDP migrations.
- *
- * ── READ THIS BEFORE TRUSTING A GREEN RUN ────────────────────────────────────
- *
- * Every assertion in this file is a TEXT MATCH over a `.sql` file. That is
- * enough to catch a property being deleted from a migration, and it is NOT
- * enough to prove the database agrees. This file already demonstrated the
- * difference the expensive way:
- *
- *   0113 issues `grant select, insert ... to app_rls`, and the original version
- *   of this test asserted exactly that and called the table append-only. It
- *   passed. The table was mutable anyway — `0037:83` sets ALTER DEFAULT
- *   PRIVILEGES granting UPDATE and DELETE on every future table in the schema,
- *   so the additive grant prevented nothing. Measured on a real branch,
- *   `app_rls` held INSERT, SELECT, UPDATE and DELETE.
- *
- * `0116_consent_ledger_append_only.sql` is the repair, and
- * `scripts/verify-dpdp-schema.mjs` is what actually proves it — run that
- * against a Neon branch. The assertions here are the cheap regression net
- * underneath it, not the proof.
- * ─────────────────────────────────────────────────────────────────────────────
- *
- * Each assertion corresponds to a property that, if quietly dropped, would turn
- * a working compliance surface into one that only looks like it works without
- * failing any other test in the repository:
- *
- *  - If the REVOKE or the trigger in 0116 goes, a withdrawal can overwrite the
- *    grant it withdraws, and the ledger stops being able to show that consent
- *    was ever held. That is the one property the whole design rests on.
- *  - If `user_id` becomes NOT NULL, the anonymous waitlist intake — the largest
- *    unconsented collection point in the product, and the reason the ledger
- *    exists — can no longer record consent at all.
- *  - If the subject constraint is dropped, rows can accumulate that belong to
- *    nobody: unexportable, unerasable, and useless as evidence.
- *  - If RLS or FORCE RLS is dropped, one user can read another's consent and
- *    grievance history on the scoped handle.
- *
- * 0113 and 0114 are APPLIED to production. Do not edit them — the migration
- * runner checksums applied files and an edit shows up as drift. Corrections go
- * in a new migration, which is why 0116 exists.
- */
-
 const CONSENT = 'db/neon/0113_dpdp_consent_records.sql';
 const REQUESTS = 'db/neon/0114_data_rights_requests.sql';
 const APPEND_ONLY = 'db/neon/0116_consent_ledger_append_only.sql';
@@ -53,7 +10,6 @@ async function readMigration(relativePath: string): Promise<string> {
   return readFile(join(process.cwd(), relativePath), 'utf8');
 }
 
-/** Migration text with SQL comments removed, so prose cannot satisfy a guard. */
 function statementsOf(sql: string): string {
   return sql.replace(/--[^\n]*/g, '');
 }
@@ -66,8 +22,6 @@ describe('0113 — DPDP consent ledger', () => {
     expect(grant).toBeDefined();
     expect(grant).toMatch(/select/i);
     expect(grant).toMatch(/insert/i);
-    // Necessary but NOT sufficient: 0037's ALTER DEFAULT PRIVILEGES grants
-    // UPDATE/DELETE on every new table regardless. 0116 is what removes them.
     expect(grant).not.toMatch(/update/i);
     expect(grant).not.toMatch(/delete/i);
   });
@@ -90,8 +44,6 @@ describe('0113 — DPDP consent ledger', () => {
 
   it('stores a notice revision and a surface with every decision', async () => {
     const sql = statementsOf(await readMigration(CONSENT));
-    // Both NOT NULL: a consent that cannot name the text shown, or the flow it
-    // came from, is not evidence of anything.
     expect(sql).toMatch(/notice_version\s+text not null/i);
     expect(sql).toMatch(/surface\s+text not null/i);
     expect(sql).toMatch(/granted\s+boolean not null/i);
@@ -107,7 +59,6 @@ describe('0113 — DPDP consent ledger', () => {
 
   it('never stores a plaintext email in the ledger', async () => {
     const sql = statementsOf(await readMigration(CONSENT));
-    // The address lives in cloud_managed_waitlist; this table holds a digest.
     expect(sql).toMatch(/subject_email_sha256\s+text/i);
     expect(sql).not.toMatch(/^\s*email\s+text/im);
   });
@@ -173,8 +124,6 @@ describe('0116 — what actually makes the ledger append-only', () => {
 
   it('guards on the table OWNER, so a new application role is refused by default', async () => {
     const sql = statementsOf(await readMigration(APPEND_ONLY));
-    // Deliberately not `current_user = 'app_rls'`: that would admit any role
-    // added later without anyone deciding to admit it.
     expect(sql).toMatch(/pg_get_userbyid\(relowner\)/i);
     expect(sql).toMatch(/current_user is distinct from table_owner/i);
     expect(sql).toMatch(/raise exception/i);
@@ -182,15 +131,11 @@ describe('0116 — what actually makes the ledger append-only', () => {
 
   it('still lets the owner mutate, so account erasure keeps working', async () => {
     const sql = await readMigration(APPEND_ONLY);
-    // The owner path is how lib/server/account-erasure.ts deletes consent rows.
-    // If this guarantee is ever removed, erasure silently stops erasing them.
     expect(sql).toMatch(/account erasure/i);
     expect(statementsOf(sql)).not.toMatch(/revoke[^;]*from\s+(current_user|neondb_owner)/i);
   });
 
   it('does not edit an already-applied migration to fix the defect', async () => {
-    // 0113/0114 are applied to production; the runner checksums applied files,
-    // so a correction has to be a NEW migration or it shows up as drift.
     const consent = await readMigration(CONSENT);
     expect(consent).not.toMatch(/revoke update, delete/i);
     expect(consent).not.toMatch(/create trigger/i);

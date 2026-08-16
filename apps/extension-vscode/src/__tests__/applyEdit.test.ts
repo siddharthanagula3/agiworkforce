@@ -1,10 +1,6 @@
-/**
- * applyEdit.test.ts — Tests for extractCodeBlock and applyLlmEdit utilities
- */
 
 import { describe, it, expect } from 'vitest';
 
-// Replicate extractCodeBlock for testing (original imports vscode)
 function extractCodeBlock(text: string, lang: string): string | undefined {
   const langPattern = new RegExp('```(?:' + lang + ')\\s*\\n([\\s\\S]*?)```', 'i');
   const langMatch = langPattern.exec(text);

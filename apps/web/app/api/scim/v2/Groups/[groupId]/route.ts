@@ -18,7 +18,6 @@ export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: Promise<{ groupId: string }> };
 
-/** GET /api/scim/v2/Groups/{id} */
 export async function GET(request: NextRequest, routeContext: RouteContext): Promise<Response> {
   const { groupId } = await routeContext.params;
   return withScim(request, async (context, baseUrl) => {
@@ -29,7 +28,6 @@ export async function GET(request: NextRequest, routeContext: RouteContext): Pro
   });
 }
 
-/** PUT /api/scim/v2/Groups/{id} — replaces the member set wholesale. */
 export async function PUT(request: NextRequest, routeContext: RouteContext): Promise<Response> {
   const { groupId } = await routeContext.params;
   return withScim(request, async (context, baseUrl) => {
@@ -41,13 +39,6 @@ export async function PUT(request: NextRequest, routeContext: RouteContext): Pro
   });
 }
 
-/**
- * PATCH /api/scim/v2/Groups/{id}.
- *
- * `add`/`remove` on `members` is how every IdP moves a person between groups,
- * and each affected member is re-reconciled against `organization_members`
- * afterwards so a role mapping change takes effect immediately.
- */
 export async function PATCH(request: NextRequest, routeContext: RouteContext): Promise<Response> {
   const { groupId } = await routeContext.params;
   return withScim(request, async (context, baseUrl) => {
@@ -59,8 +50,6 @@ export async function PATCH(request: NextRequest, routeContext: RouteContext): P
   });
 }
 
-/** DELETE /api/scim/v2/Groups/{id} — members keep their accounts; only the
- * group and any role it mapped go away. */
 export async function DELETE(request: NextRequest, routeContext: RouteContext): Promise<Response> {
   const { groupId } = await routeContext.params;
   return withScim(request, async (context) => {

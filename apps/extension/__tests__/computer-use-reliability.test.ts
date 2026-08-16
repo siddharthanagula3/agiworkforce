@@ -20,12 +20,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ─── Default CDP sendCommand implementation factory ──────────────────────────
-//
-// Defined BEFORE the hoisted chrome shim so it can be referenced there and
-// re-installed in beforeEach without vi.clearAllMocks() wiping it.
-//
-// Stable DOM hash — satisfies waitForStable in 2 polls (same hash twice).
 const STABLE_HASH = 'complete|2|buttonSubmit,inputemail';
 
 function defaultSendCommandImpl(
@@ -43,13 +37,11 @@ function defaultSendCommandImpl(
     const p = params as { expression?: string } | undefined;
     const expr = p?.expression ?? '';
 
-    // waitForStable hash poll — expression contains readyState but NOT indexMap
     if (expr.includes('document.readyState') && !expr.includes('indexMap')) {
       callback({ result: { type: 'string', value: STABLE_HASH } });
       return;
     }
 
-    // getPageContent — expression builds indexMap object
     if (expr.includes('indexMap')) {
       const summary = [
         'URL: https://example.com',
@@ -76,13 +68,11 @@ function defaultSendCommandImpl(
       return;
     }
 
-    // getFieldValue — expression reads .value from querySelector
     if (expr.includes('.value') && expr.includes('querySelector')) {
       callback({ result: { type: 'string', value: 'typed-value' } });
       return;
     }
 
-    // Runtime.evaluate for objectId lookup (selectorToCoords step 1)
     callback({ result: { type: 'object', objectId: 'obj-1' } });
     return;
   }
@@ -97,11 +87,9 @@ function defaultSendCommandImpl(
     return;
   }
 
-  // Default: return empty object (Input.*, Page.navigate, etc.)
   callback({});
 }
 
-// ─── Chrome API shim ─────────────────────────────────────────────────────────
 const chromeMock = vi.hoisted(() => {
   const localStore: Record<string, unknown> = {
     agi_dev_bearer_token: 'test-token-reliability',
@@ -117,7 +105,6 @@ const chromeMock = vi.hoisted(() => {
     detach: vi.fn((_target: unknown, callback: () => void) => {
       callback();
     }),
-    // Implementation will be reinstalled in beforeEach to survive vi.clearAllMocks()
     sendCommand: vi.fn(),
     onDetach: {
       addListener: vi.fn((listener: (source: { tabId?: number }, reason: string) => void) => {
@@ -125,7 +112,6 @@ const chromeMock = vi.hoisted(() => {
       }),
       removeListener: vi.fn(),
     },
-    /** Test helper: fire the onDetach event. */
     _fireDetach: (tabId: number, reason: string): void => {
       for (const l of detachListeners) l({ tabId }, reason);
     },
@@ -161,11 +147,9 @@ const chromeMock = vi.hoisted(() => {
   return mock;
 });
 
-// ─── Fetch mock ──────────────────────────────────────────────────────────────
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
-// ─── SSE helpers ─────────────────────────────────────────────────────────────
 function makeSseStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
@@ -221,7 +205,6 @@ function makeUsageSseStream(
   return makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']);
 }
 
-// ─── Imports (after mocks are installed) ─────────────────────────────────────
 import {
   waitForStable,
   getPageContent,
@@ -247,20 +230,13 @@ import {
   BROWSER_TOOL_DEFINITIONS,
 } from '../src/features/computer-use/cloudAgentClient';
 
-// ─── Shared reset ─────────────────────────────────────────────────────────────
-//
-// IMPORTANT: vi.clearAllMocks() resets vi.fn() implementations back to no-op.
-// We explicitly reinstall the default sendCommand implementation after clearing
-// so every test gets a working CDP mock without needing per-test setup.
 beforeEach(() => {
   vi.clearAllMocks();
   chromeMock.runtime.lastError = null;
   fetchMock.mockReset();
 
-  // Reinstall stable default sendCommand after vi.clearAllMocks() wiped it
   chromeMock.debugger.sendCommand.mockImplementation(defaultSendCommandImpl);
 
-  // Reinstall attach/detach callbacks (cleared by vi.clearAllMocks())
   chromeMock.debugger.attach.mockImplementation(
     (_target: unknown, _version: unknown, callback: () => void) => callback(),
   );
@@ -268,7 +244,6 @@ beforeEach(() => {
     callback(),
   );
 
-  // Reinstall tabs.get mock
   chromeMock.tabs.get.mockImplementation((tabId: number) =>
     Promise.resolve({ id: tabId, url: 'https://example.com/page' }),
   );
@@ -278,12 +253,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// P1-1: waitForStable gate
-// ═══════════════════════════════════════════════════════════════════════════════
 describe('P1-1: waitForStable gate', () => {
   it('resolves when DOM hash is stable across stableCount polls', async () => {
-    // defaultSendCommandImpl always returns STABLE_HASH → resolves after 2 polls
     await expect(
       waitForStable(99, { timeoutMs: 2_000, pollIntervalMs: 50, stableCount: 2 }),
     ).resolves.toBeUndefined();
@@ -301,14 +272,12 @@ describe('P1-1: waitForStable gate', () => {
         }
       },
     );
-    // Should resolve (not reject) even when DOM never stabilises
     await expect(
       waitForStable(99, { timeoutMs: 150, pollIntervalMs: 50 }),
     ).resolves.toBeUndefined();
   });
 
   it('uses waitForStable before getPageContent in agentLoop (read_dom path)', async () => {
-    // Track stable-hash calls
     const stableHashCalls: number[] = [];
     chromeMock.debugger.sendCommand.mockImplementation(
       (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
@@ -354,7 +323,6 @@ describe('P1-1: waitForStable gate', () => {
 
     await runAgentLoop('Test stable gate', 42, { maxSteps: 5 });
 
-    // waitForStable was called (at least once for the initial snapshot, and once before read_dom)
     expect(stableHashCalls.length).toBeGreaterThan(0);
   });
 
@@ -374,7 +342,6 @@ describe('P1-1: waitForStable gate', () => {
 
     await runAgentLoop('Navigate test', 42, { maxSteps: 3 });
 
-    // No setTimeout(fn, 800) — the static 800ms delay is gone
     const staticWaits = setTimeoutSpy.mock.calls.filter((c) => c[1] === 800);
     expect(staticWaits.length).toBe(0);
     setTimeoutSpy.mockRestore();
@@ -407,9 +374,6 @@ describe('computer-use cancellation reaches CDP action internals', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// P1-2: Index-based targeting
-// ═══════════════════════════════════════════════════════════════════════════════
 describe('P1-2: index-based targeting', () => {
   it('getPageContent builds an integer-keyed index map', async () => {
     await getPageContent(42);
@@ -427,7 +391,7 @@ describe('P1-2: index-based targeting', () => {
   });
 
   it('resolveIndexedSelector returns selector for a known index', async () => {
-    await getPageContent(42); // populate the map
+    await getPageContent(42);
     const sel = resolveIndexedSelector(42, 1);
     expect(sel).not.toBeNull();
     expect(typeof sel).toBe('string');
@@ -439,12 +403,10 @@ describe('P1-2: index-based targeting', () => {
   });
 
   it('resolveIndexedSelector returns null for a tab with no snapshot', () => {
-    // Use a tabId that has never had getPageContent called
     expect(resolveIndexedSelector(0, 1)).toBeNull();
   });
 
   it('click tool dispatches DOM.getBoxModel when model uses {index}', async () => {
-    // First populate the index map so resolveIndexedSelector(42, 1) returns 'button'
     await getPageContent(42);
 
     fetchMock
@@ -491,9 +453,6 @@ describe('P1-2: index-based targeting', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// P1-3: Post-action verification
-// ═══════════════════════════════════════════════════════════════════════════════
 describe('P1-3: post-action verification', () => {
   it('getFieldValue returns the committed field value', async () => {
     const value = await getFieldValue(42, 'input[name="email"]');
@@ -514,12 +473,7 @@ describe('P1-3: post-action verification', () => {
     expect(value).toBeNull();
   });
 
-  // ── MEDIUM finding fix (audit 2026-07-19): getFieldValue must never ship a
-  // raw password/hidden field value into a cloud tool result. ─────────────
   it('getFieldValue Runtime.evaluate expression substitutes the placeholder for password/hidden types, not el.value', async () => {
-    // Regression guard on the expression *construction* itself: if the
-    // in-page type check for password/hidden is ever removed, this fails
-    // even though the (mocked) CDP transport can't run the real DOM code.
     let capturedExpr = '';
     chromeMock.debugger.sendCommand.mockImplementation(
       (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
@@ -542,7 +496,6 @@ describe('P1-3: post-action verification', () => {
     chromeMock.debugger.sendCommand.mockImplementation(
       (_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
-          // Simulates the in-page branch already having substituted the placeholder.
           cb({ result: { type: 'string', value: REDACTED_FIELD_PLACEHOLDER } });
           return;
         }
@@ -554,10 +507,7 @@ describe('P1-3: post-action verification', () => {
   });
 
   it('getFieldValue redacts secret-shaped text in an ordinary (non-password) field value', async () => {
-    // A token typed into a normal text box must still be scrubbed by
-    // sanitizePageText before it reaches the model — the in-page check only
-    // covers password/hidden *field types*, not field *content*.
-    const rawAwsKey = 'AKIAABCDEFGHIJKLMNOP'; // AKIA + 16 chars matches the aws-access-key pattern
+    const rawAwsKey = 'AKIAABCDEFGHIJKLMNOP';
     chromeMock.debugger.sendCommand.mockImplementation(
       (_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
         if (method === 'Runtime.evaluate') {
@@ -603,7 +553,6 @@ describe('P1-3: post-action verification', () => {
   });
 
   it('click tool result contains URL verification feedback', async () => {
-    // Ensure index 1 is in the map so {index:1} click resolves
     await getPageContent(42);
 
     let capturedMessages: Array<{ role: string; content: unknown }> = [];
@@ -633,13 +582,9 @@ describe('P1-3: post-action verification', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// P1-4: MV3 service-worker auto-reattach
-// ═══════════════════════════════════════════════════════════════════════════════
 describe('P1-4: debugger auto-reattach on eviction', () => {
   it('registerActiveTab + unregisterActiveTab manage the registry', () => {
     registerActiveTab(55);
-    // After unregister, the index map is cleared
     unregisterActiveTab(55);
     expect(resolveIndexedSelector(55, 1)).toBeNull();
   });
@@ -648,7 +593,6 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
     const callsBefore = chromeMock.debugger.onDetach.addListener.mock.calls.length;
     ensureOnDetachListener();
     ensureOnDetachListener();
-    // At most 1 new call (or 0 if already installed by a prior test)
     const callsAfter = chromeMock.debugger.onDetach.addListener.mock.calls.length;
     expect(callsAfter - callsBefore).toBeLessThanOrEqual(1);
   });
@@ -664,7 +608,6 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
       }
     )._fireDetach(77, 'target_closed');
 
-    // attach should have been called for re-attachment
     expect(chromeMock.debugger.attach.mock.calls.length).toBeGreaterThan(attachCallsBefore);
     unregisterActiveTab(77);
   });
@@ -685,7 +628,7 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
 
   it('onDetach for unregistered tab does NOT trigger re-attach', () => {
     ensureOnDetachListener();
-    unregisterActiveTab(99); // ensure not registered
+    unregisterActiveTab(99);
     const attachCallsBefore = chromeMock.debugger.attach.mock.calls.length;
 
     (
@@ -702,14 +645,10 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
 
     await runAgentLoop('Tab lifecycle test', 42, { maxSteps: 1 });
 
-    // After the loop completes, tab 42 should be unregistered (index map cleared)
     expect(resolveIndexedSelector(42, 1)).toBeNull();
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// P2-5: Approval gate — fail-CLOSED
-// ═══════════════════════════════════════════════════════════════════════════════
 describe('P2-5: approval gate — fail-CLOSED on timeout', () => {
   it('skips action when onBeforeAction callback returns false (explicit deny)', async () => {
     fetchMock
@@ -752,7 +691,6 @@ describe('P2-5: approval gate — fail-CLOSED on timeout', () => {
     });
 
     expect(allowAll).toHaveBeenCalledWith('read_dom', {});
-    // CDP should have been called for the read_dom action
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
       expect.anything(),
       'Runtime.evaluate',
@@ -763,8 +701,6 @@ describe('P2-5: approval gate — fail-CLOSED on timeout', () => {
   });
 
   it('fail-CLOSED: timeout resolves DENY not ALLOW (Promise.race behaviour)', async () => {
-    // Test the Promise.race logic: a 30s timeout resolves false (DENY)
-    // when the callback never resolves.
     vi.useFakeTimers();
 
     fetchMock
@@ -782,30 +718,22 @@ describe('P2-5: approval gate — fail-CLOSED on timeout', () => {
       onBeforeAction: neverResolves,
     });
 
-    // Fast-forward past the 30s approval timeout
     await vi.advanceTimersByTimeAsync(31_000);
     vi.useRealTimers();
 
     const result = await runPromise;
 
-    // Callback was called
     expect(neverResolves).toHaveBeenCalled();
-    // Action was skipped (fail-CLOSED), the "skipped" message was fed to the model
     const secondBody = JSON.parse(
       (fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string,
     ) as { messages: Array<{ role: string; content: unknown }> };
     const toolMsg = secondBody.messages.find((m) => m.role === 'tool');
     expect(toolMsg?.content as string).toContain('skipped');
-    // Loop completes
     expect(result.finalMessage).toContain('Task complete');
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// P2-6: Content fencing + injection heuristic
-// ═══════════════════════════════════════════════════════════════════════════════
 describe('P2-6: content fencing + injection heuristic', () => {
-  // ── Pure unit tests for scanForInjection (no mocks needed) ─────────────────
 
   it('scanForInjection returns null for clean content', () => {
     expect(scanForInjection('Welcome to our job board. Apply today!')).toBeNull();
@@ -848,8 +776,6 @@ describe('P2-6: content fencing + injection heuristic', () => {
     for (const p of INJECTION_PATTERNS) expect(p).toBeInstanceOf(RegExp);
   });
 
-  // ── CDP-level content fencing ───────────────────────────────────────────────
-
   it('getPageContent wraps visible text in UNTRUSTED DATA fence', async () => {
     const content = await getPageContent(42);
     expect(content).toContain('--- BEGIN UNTRUSTED PAGE CONTENT');
@@ -861,8 +787,6 @@ describe('P2-6: content fencing + injection heuristic', () => {
     expect(content).not.toContain('SECURITY WARNING');
   });
 
-  // HIGH finding fix (audit 2026-07-19): computer-use previously shipped raw
-  // page text straight to the cloud gateway with no redaction pass at all.
   it('getPageContent redacts secret-shaped text found in the page body before returning', async () => {
     const rawAwsKey = 'AKIAABCDEFGHIJKLMNOP';
     const summaryWithSecret = [
@@ -938,7 +862,6 @@ describe('P2-6: content fencing + injection heuristic', () => {
   });
 
   it('agentLoop throws InjectionDetectedError when read_dom detects injection', async () => {
-    // The injected summary STARTS with SECURITY WARNING (set by getPageContent when injection found)
     const injectedSummary =
       'SECURITY WARNING: Possible prompt injection detected in page content.\n' +
       'Pattern matched: "ignore previous instructions"\n\n' +
@@ -956,8 +879,6 @@ describe('P2-6: content fencing + injection heuristic', () => {
           if (expr.includes('document.readyState') && !expr.includes('indexMap')) {
             cb({ result: { type: 'string', value: STABLE_HASH } });
           } else if (expr.includes('indexMap')) {
-            // Return a pre-built summary that starts with SECURITY WARNING
-            // (this is what getPageContent returns when injection is detected)
             cb({
               result: {
                 type: 'string',
@@ -999,9 +920,6 @@ describe('P2-6: content fencing + injection heuristic', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// P2-7: Screenshot discipline + usage meter
-// ═══════════════════════════════════════════════════════════════════════════════
 describe('P2-7: screenshot discipline + usage tracking', () => {
   it('initial turn attaches exactly ONE screenshot', async () => {
     fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
@@ -1027,7 +945,6 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
     const screenshotCalls = chromeMock.debugger.sendCommand.mock.calls.filter(
       (c: unknown[]) => c[1] === 'Page.captureScreenshot',
     );
-    // Only the initial context screenshot — NOT one per step
     expect(screenshotCalls.length).toBe(1);
   });
 
@@ -1172,7 +1089,6 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
       onUsageUpdate: (u) => usageUpdates.push({ ...u }),
     });
 
-    // 100 + 150 = 250 total
     expect(result.totalTokens).toBe(250);
     expect(usageUpdates.length).toBeGreaterThanOrEqual(2);
     expect(usageUpdates[usageUpdates.length - 1]?.totalTokens).toBe(250);
@@ -1213,15 +1129,11 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// P3-8: allowSubmitWithMissingRequired defaults to BLOCK
-// ═══════════════════════════════════════════════════════════════════════════════
 describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     window.history.replaceState({}, '', '/');
 
-    // jsdom returns zero-rect by default; override to make elements "visible"
     Object.defineProperty(Element.prototype, 'getBoundingClientRect', {
       configurable: true,
       writable: true,
@@ -1240,21 +1152,14 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
       }),
     });
 
-    // jsdom does not implement requestSubmit — mock it to prevent crashes
-    // in the "all required filled" test where the button is actually clicked
     Object.defineProperty(HTMLFormElement.prototype, 'requestSubmit', {
       configurable: true,
       writable: true,
       value: vi.fn(),
     });
 
-    // jsdom does not provide CSS.escape. Polyfill it so jobAutofill's
-    // getFieldLabelText (line 259) can look up label[for="..."] without
-    // throwing when an element has an id but no aria-label.
     if (typeof CSS === 'undefined' || typeof CSS.escape !== 'function') {
       (globalThis as Record<string, unknown>).CSS = {
-        // Deliberate control-char fixture: CSS.escape must escape C0 controls
-        // (U+0000-U+001F) and DEL (U+007F) like the real implementation.
         escape: (s: string) =>
           // eslint-disable-next-line no-control-regex
           String(s).replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~\x00-\x1f\x7f])/g, '\\$1'),
@@ -1274,13 +1179,11 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
         <button type="submit">Submit Application</button>
       </form>
     `;
-    // Use explicit platform to avoid URL-based detection issues in jsdom
     const result = (await runPlatformJobAutofill(
       { firstName: 'Ada' },
       { delayMs: 0, autoSubmit: true, platform: 'greenhouse' },
     )) as Record<string, unknown>;
 
-    // email is empty and required → guard fires → submitted=false
     expect(result['submitted']).toBe(false);
     const missing = result['missingRequiredFields'] as string[];
     expect(Array.isArray(missing)).toBe(true);
@@ -1303,12 +1206,8 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
       { delayMs: 0, autoSubmit: true, platform: 'greenhouse' },
     )) as Record<string, unknown>;
 
-    // With firstName filled, no required fields remain empty
     const missing = result['missingRequiredFields'] as string[];
     expect(Array.isArray(missing)).toBe(true);
-    // Guard should not block (missing is empty or guard passes)
-    // submitted may be false if button click doesn't trigger real navigation
-    // but missingRequiredFields should be empty
     expect(missing.length).toBe(0);
   });
 
@@ -1322,7 +1221,6 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
       </form>
     `;
 
-    // missing email, but opt-in allows guard bypass
     const result = (await runPlatformJobAutofill(
       {},
       {
@@ -1333,11 +1231,7 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
       },
     )) as Record<string, unknown>;
 
-    // Function should complete without throwing
     expect(typeof result['success']).toBe('boolean');
-    // The guard was bypassed — it ran past the missing-required check
-    // submitted might be false (form didn't actually submit in jsdom) but
-    // the result object has the correct shape
     expect(Object.prototype.hasOwnProperty.call(result, 'submitted')).toBe(true);
   });
 
@@ -1351,13 +1245,11 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
       </form>
     `;
 
-    // No profile data → all required fields empty; no allowSubmitWithMissingRequired
     const result = (await runPlatformJobAutofill(
       {},
       { delayMs: 0, autoSubmit: true, platform: 'greenhouse' },
     )) as Record<string, unknown>;
 
-    // Guard fires: submitted=false, missingRequiredFields non-empty
     expect(result['submitted']).toBe(false);
     expect((result['missingRequiredFields'] as string[]).length).toBeGreaterThan(0);
   });

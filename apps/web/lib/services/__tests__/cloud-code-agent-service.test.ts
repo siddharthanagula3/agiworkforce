@@ -41,14 +41,8 @@ import {
 import type { CloudCodeTurnUsage } from '@/lib/services/cloud-code-agent-loop';
 import { startCloudCodeAgentTurn } from '@/lib/services/cloud-code-agent-service';
 
-/** The turn cost that the flat-rate defect billed for every turn regardless of usage. */
 const FLAT_RESERVATION_CENTS = 25;
 
-/**
- * Real catalog IDs, read from the slot registry rather than typed in, so the
- * test fails when a model release moves the flagship slot instead of silently
- * asserting against a model the catalog no longer routes to.
- */
 const FLAGSHIP_MODEL = SLOT_REGISTRY.flagship_coding.modelId;
 const STANDARD_MODEL = SLOT_REGISTRY.coding_balanced.modelId;
 const TIERED_MODEL = (() => {
@@ -77,8 +71,6 @@ async function runTurn(options: {
   steps?: number;
 }) {
   vi.mocked(runCloudCodeAgentTurn).mockImplementation(async (input) => {
-    // Exercise the lease extension the way the loop does, so the per-step
-    // reservation is observable from these tests.
     await input.onStepCommitted?.(0);
     return {
       stopReason: options.stopReason ?? 'done',

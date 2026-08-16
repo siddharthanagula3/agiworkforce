@@ -1,10 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Custom Agents Store
- *
- * Manages CRUD operations for custom agent configurations backed by
- * .md files in ~/.claude/agents/ (global) or .claude/agents/ (project).
- */
 
 import { create } from 'zustand';
 import { invoke } from '../lib/tauri-mock';
@@ -47,7 +41,6 @@ export const useCustomAgentsStore = create<CustomAgentsState>()((set) => ({
     set({ isLoading: true, error: null });
     try {
       await invoke('save_custom_agent', { config });
-      // Re-fetch to get the authoritative list from disk
       const agents = await invoke<CustomAgentConfig[]>('list_custom_agents');
       set({ agents: agents ?? [], isLoading: false });
     } catch (err) {

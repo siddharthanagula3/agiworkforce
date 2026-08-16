@@ -1,12 +1,3 @@
-/**
- * OrganizationSharingSection — the org admin view of what is shared.
- *
- * The claims this file guards are honesty claims. A sharing screen that shows
- * mutation controls to a member who cannot use them, or that says a project is
- * "visible to N members" while N of them are explicitly denied, is the class of
- * dead-control / false-availability defect that must be caught here rather than
- * in production.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -105,7 +96,6 @@ beforeEach(() => {
         JSON.stringify({
           projects: [
             { id: 'own-project', name: 'My notes', isOrgShared: false },
-            // A project reached THROUGH a share is not the caller's to re-share.
             { id: PROJECT, name: 'Roadmap', isOrgShared: true },
           ],
         }),
@@ -131,8 +121,6 @@ describe('OrganizationSharingSection', () => {
 
     expect(screen.getByText('Roadmap')).toBeInTheDocument();
     expect(screen.getByText(/Read-only · visible to 2 of 2 members/)).toBeInTheDocument();
-    // The connector's chat-facing id is surfaced so an admin can recognise it
-    // in a transcript.
     expect(screen.getByText(/orgmcp-a1b2c3d4e5/)).toBeInTheDocument();
   });
 
@@ -161,14 +149,11 @@ describe('OrganizationSharingSection', () => {
     mockOverview.mockReturnValue(overview({ currentUserRole: 'member', canManageSharing: false }));
     renderSection();
 
-    // A dead control is worse than no control: a member who clicks "Stop
-    // sharing" would get a 403 from a button the product offered them.
     expect(screen.queryByRole('button', { name: /stop sharing/i })).toBeNull();
     expect(screen.queryByRole('combobox', { name: /project to share/i })).toBeNull();
     expect(
       screen.getByText(/Only an owner or admin can change what is shared/i),
     ).toBeInTheDocument();
-    // The read view still renders — that is the point of a shared surface.
     expect(screen.getByText('Roadmap')).toBeInTheDocument();
   });
 
@@ -181,7 +166,6 @@ describe('OrganizationSharingSection', () => {
       expect(screen.getByRole('option', { name: 'My notes' })).toBeInTheDocument(),
     );
 
-    // 'Roadmap' is already shared AND is not the caller's own row.
     expect(screen.queryByRole('option', { name: 'Roadmap' })).toBeNull();
     expect(picker).toBeInTheDocument();
   });

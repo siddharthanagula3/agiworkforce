@@ -23,10 +23,6 @@ interface ScheduleCardProps {
   onDelete: (id: string) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function formatTime(timeOfDay: string): string {
@@ -136,10 +132,6 @@ function getStatusBadge(status: Schedule['lastRunStatus']): {
       return { label: 'Never', color: 'gray' };
   }
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: ScheduleCardProps) {
   const colors = useThemeColors();

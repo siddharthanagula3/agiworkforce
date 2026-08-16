@@ -80,10 +80,6 @@ describe('toCanonicalChatRequest', () => {
     expect(chatRequest.system).toBe('You are helpful.');
     expect(chatRequest.messages).toEqual([
       { role: 'user', content: 'hi' },
-      // openAIWireRequestToChatRequest always block-wraps assistant text
-      // (only `user` content stays a plain string) -- see its role==='assistant'
-      // branch: a text block is pushed whenever text is truthy, independent of
-      // tool_calls, so `blocks.length > 0` is always true here.
       { role: 'assistant', content: [{ type: 'text', text: 'hello' }] },
     ]);
   });
@@ -312,11 +308,6 @@ describe('toCanonicalGoogleThinking', () => {
   });
 
   it('maps low/medium/high to the fixed legacy GOOGLE_THINKING_BUDGET values, with includeThoughts explicitly suppressed', () => {
-    // includeThoughts:false is load-bearing here, not incidental -- it's
-    // what makes translateChatRequest omit the includeThoughts key entirely
-    // (see the 'buildGoogleChatRequest -> translateChatRequest wire' suite
-    // below), holding byte-stability with legacy google.ts, which never sent
-    // that key.
     expect(toCanonicalGoogleThinking('google', 'low')).toEqual({
       type: 'enabled',
       budgetTokens: 1024,
@@ -349,13 +340,6 @@ describe('toCanonicalGoogleThinking', () => {
 });
 
 describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
-  // Drives the REAL packages/ai/providers/google translateChatRequest, not just
-  // the canonical ChatRequest this file produces -- the request-direction gap
-  // this pins (includeThoughts defaulting to true in translateChatRequest,
-  // which legacy google.ts never sent) only shows up at the actual Gemini
-  // wire body, one layer past ChatRequest.thinking itself. If either
-  // toCanonicalGoogleThinking's includeThoughts:false or translate.ts's
-  // includeThoughts handling ever regresses, this fails.
   it('sends thinkingBudget only, with NO includeThoughts key, for an effort-tier request (byte-matches legacy, which only ever sent thinkingBudget)', () => {
     const processed = makeProcessed(
       {

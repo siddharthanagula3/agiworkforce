@@ -2,17 +2,6 @@
 
 import { useEffect } from 'react';
 
-/**
- * GOV-25: the primary chat surface had no `error.tsx`, no `loading.tsx` and no
- * `not-found.tsx` while 24 marketing/auth segments had them, and no
- * `<ErrorBoundary>` wrapped it. One render exception therefore unwound past the
- * whole segment to the GLOBAL error page — losing the conversation the user was
- * in the middle of, and offering no way back into chat.
- *
- * This boundary keeps the failure inside /chat: `reset()` re-renders the
- * segment (the store still holds the conversation), and the fallback links
- * back into chat rather than to the marketing home page.
- */
 export default function ChatError({
   error,
   reset,
@@ -21,8 +10,6 @@ export default function ChatError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Next.js already reports this to the configured error sink; log locally so
-    // the failure is visible in the browser console during development too.
     console.error('[chat] render error', error);
   }, [error]);
 

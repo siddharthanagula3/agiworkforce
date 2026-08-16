@@ -1,7 +1,3 @@
-/**
- * Avatar Utilities
- * Provides deterministic DiceBear avatar URLs with graceful fallbacks.
- */
 
 const DICEBEAR_BASE_URL = 'https://api.dicebear.com/7.x';
 const DEFAULT_COLLECTION = 'bottts';
@@ -32,18 +28,10 @@ function buildDiceBearUrl(seed: string): string {
   return `${DICEBEAR_BASE_URL}/${DEFAULT_COLLECTION}/svg?${query}`;
 }
 
-/**
- * Get a deterministic DiceBear avatar URL for a given seed.
- */
 export function getFallbackAvatar(seed: string): string {
   return buildDiceBearUrl(seed);
 }
 
-/**
- * Primary avatar helper used across the app.
- * When `useFallback` is true we still return a DiceBear URL so existing callers
- * can continue to serve the same asset while we track the intent flag.
- */
 export function getAvatarUrl(seed: string, useFallback: boolean = false): string {
   if (useFallback) {
     return getFallbackAvatar(seed);
@@ -52,9 +40,6 @@ export function getAvatarUrl(seed: string, useFallback: boolean = false): string
   return buildDiceBearUrl(seed);
 }
 
-/**
- * Deterministic avatar for AI employees.
- */
 export function getAIEmployeeAvatar(employeeName: string, useFallback: boolean = false): string {
   const normalised = employeeName
     .toLowerCase()
@@ -64,17 +49,10 @@ export function getAIEmployeeAvatar(employeeName: string, useFallback: boolean =
   return getAvatarUrl(normalised || DEFAULT_SEED, useFallback);
 }
 
-/**
- * Basic DiceBear URL detection.
- */
 export function isDiceBearUrl(url: string): boolean {
   return DICEBEAR_URL_REGEX.test(url);
 }
 
-/**
- * Extracts the original seed (if present) and produces a DiceBear URL so the UI
- * can gracefully recover from slow or failed image fetches.
- */
 export function getFallbackForDiceBear(originalUrl: string): string {
   try {
     const sourceUrl = new URL(originalUrl);

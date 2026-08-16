@@ -1,28 +1,8 @@
-/**
- * ComposerFooter · environment-gating tests (Phase A)
- *
- * Verifies:
- *   (a) A model WITHOUT requiresEnvironment is unaffected by the env check —
- *       it remains selectable and shows no env-lock indicator.
- *   (b) A model WITH requiresEnvironment: 'e2b' is locked even when the user's
- *       tier would otherwise allow it; it shows the reason from
- *       evaluateModelEnvironment and uses the env-lock badge/styling (not the
- *       tier-upgrade badge).
- *
- * Phase A: environmentAvailability() returns { configured: false } for all
- * environments, so all env-gated models are unconditionally locked.
- *
- * These tests use the popover-always-open pattern (PopoverContent always
- * renders) so model rows are visible without simulating a click event.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 
-// ── Mocks ─────────────────────────────────────────────────────────────────────
-
-// AVAILABLE_MODELS: one normal model, one env-gated model.
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (
     selector: (s: {
@@ -39,8 +19,6 @@ vi.mock('@shared/stores/model-store', () => ({
     }) => unknown,
   ) => {
     const state = {
-      // Select the env-gated model so it appears in selectedInMore, forcing
-      // showMore=true and making the env-locked row visible in the picker.
       selectedModelId: 'hypothetical-e2b-model',
       setSelectedModelId: vi.fn(),
       getSelectedModel: () => ({
@@ -55,7 +33,6 @@ vi.mock('@shared/stores/model-store', () => ({
     return selector(state);
   },
   AVAILABLE_MODELS: [
-    // Case (a): normal model — no requiresEnvironment
     {
       id: 'fixture-standard-model',
       name: 'Standard Model',
@@ -64,7 +41,6 @@ vi.mock('@shared/stores/model-store', () => ({
       description: 'Fast and capable',
       // requiresEnvironment absent
     },
-    // Case (b): env-gated model — requiresEnvironment set
     {
       id: 'hypothetical-e2b-model',
       name: 'E2B Sandbox Model',
@@ -76,8 +52,6 @@ vi.mock('@shared/stores/model-store', () => ({
   ],
 }));
 
-// Billing store: return 'max' tier so both models pass the TIER check.
-// The env-gated model must still be locked by the env check alone.
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (
     selector: (s: {
@@ -95,7 +69,6 @@ vi.mock('@shared/stores/web-auth-store', () => ({
   },
 }));
 
-// LLM constants: make both models pass the tier-selectable check.
 vi.mock('@shared/config/llm', () => ({
   getAllowedAutoModesForTier: () => ['auto-economy', 'auto-balanced', 'auto-premium'],
   getBestAutoModeForTier: () => 'auto-premium',
@@ -117,11 +90,7 @@ vi.mock('@shared/config/llm', () => ({
     }
     return null;
   },
-  // isModelAllowedForTier: both models pass on max tier
   isModelAllowedForTier: (_id: string, _tier: string) => true,
-  // Reasoning-effort-capability wave: ComposerFooter now reads the per-model
-  // reasoning block to drive the effort flyout. These env-gating fixtures are
-  // non-reasoning, so the flyout stays hidden (irrelevant to env-lock assertions).
   getModelReasoning: (_id: string) => ({ capable: false, control: 'none' }),
   FREE_TRIAL_MODELS: [],
   normalizeModelId: (id: string) => id,
@@ -140,16 +109,11 @@ vi.mock('../StyleSelector', () => ({
   StyleSelector: () => <div data-testid="style-selector" />,
 }));
 
-// Thinking store stub
 vi.mock('@shared/stores/thinking-store', () => ({
   useThinkingStore: (selector: (s: { enabled: boolean; effort: string }) => unknown) =>
     selector({ enabled: false, effort: 'medium' }),
 }));
 
-// ComposerFooter imports Popover, Switch, Tooltip and AlertDialog from the
-// @agiworkforce/ui barrel (migrated off the @shared/ui forks). Stub the whole
-// barrel: Popover always renders content (simulates open state); AlertDialog is
-// open-gated so it stays closed by default (matching the real primitive).
 vi.mock('@agiworkforce/ui', () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
@@ -195,11 +159,7 @@ vi.mock('zustand/middleware', async () => {
   };
 });
 
-// ── Subject ───────────────────────────────────────────────────────────────────
-
 import { ComposerFooter } from '../ComposerFooter';
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ComposerFooter · environment gating (Phase A)', () => {
   beforeEach(() => {
@@ -209,22 +169,15 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
   it('(a) normal model without requiresEnvironment is selectable — no env-lock indicator', () => {
     render(<ComposerFooter />);
 
-    // Standard Model is in the recommended section (no requiresEnvironment, passes env check).
-    // Its row aria-label should be just the model name, with no lock indicator and
-    // no aria-disabled attribute.
     const gptRow = screen.getByRole('button', { name: 'Standard Model' });
     expect(gptRow).toBeInTheDocument();
     expect(gptRow).not.toHaveAttribute('aria-disabled', 'true');
-    // Confirm no "environment not available" text in the aria-label
     expect(gptRow.getAttribute('aria-label')).toBe('Standard Model');
   });
 
   it('(b) env-gated model is locked and carries the evaluateModelEnvironment reason', () => {
     render(<ComposerFooter />);
 
-    // evaluateModelEnvironment(e2b, {configured:false}) returns:
-    //   { selectable: false, reason: 'Requires managed compute — currently in private beta' }
-    // The row aria-label must embed this reason.
     const envLockedRow = screen.getByRole('button', {
       name: /e2b sandbox model.*requires managed compute/i,
     });
@@ -235,12 +188,8 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
   it('(b) env-gated model shows "Beta" badge, not "Pro" or "Upgrade"', () => {
     render(<ComposerFooter />);
 
-    // Env-locked models use the "Beta" badge (not an upgrade path)
     expect(screen.getByText('Beta')).toBeInTheDocument();
 
-    // No Pro/Upgrade badge should be present — both models pass the tier check
-    // (mocked isModelAllowedForTier returns true for all), so the only locked
-    // model is locked by env, not tier.
     expect(screen.queryByText(/^(Upgrade|Pro)$/i)).not.toBeInTheDocument();
   });
 

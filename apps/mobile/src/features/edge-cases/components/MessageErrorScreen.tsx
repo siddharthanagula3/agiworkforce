@@ -1,10 +1,3 @@
-/**
- * MessageErrorScreen — full-screen error states for the chat surface when the
- * message list can't render: a missing local model, no disk space, or a network
- * failure. Unlike the edge-case Modals, these are inline screens meant to fill
- * the message area (render in place of <MessageList />). Each shows an icon,
- * title, body, a primary retry CTA, and an optional dismiss.
- */
 import { View, Pressable } from 'react-native';
 import { CloudOff, HardDrive, PackageOpen, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';

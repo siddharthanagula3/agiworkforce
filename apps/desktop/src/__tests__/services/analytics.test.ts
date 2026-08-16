@@ -11,8 +11,6 @@ vi.mock('uuid', () => ({
   v4: vi.fn(() => 'test-uuid-123'),
 }));
 
-// Default: cloud mode so existing tests are unaffected.
-// vi.mock is hoisted; factory must not reference external variables.
 vi.mock('../../stores/appModeStore', () => ({
   useAppModeStore: {
     getState: vi.fn(() => ({ mode: 'cloud' as const })),

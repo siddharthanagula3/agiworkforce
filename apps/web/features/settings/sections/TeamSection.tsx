@@ -876,8 +876,6 @@ export function TeamSection() {
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div
-                    // A long display name had no truncation at all and collided
-                    // with the Role select to its right.
                     style={{
                       color: 'var(--text-1)',
                       fontSize: 13,
@@ -894,9 +892,6 @@ export function TeamSection() {
                     ) : null}
                   </div>
                   <div
-                    // whiteSpace: nowrap is what makes textOverflow work at all —
-                    // ellipsis only applies to a single non-wrapping line, so
-                    // without it the email simply wrapped and was cut mid-address.
                     style={{
                       color: 'var(--text-3)',
                       fontSize: 12,
@@ -921,8 +916,6 @@ export function TeamSection() {
                           role: event.target.value as MemberRole,
                         })
                       }
-                      // flexShrink: 0 so the role control keeps its width; the
-                      // name/email column beside it is min-width:0 and truncates.
                       style={{ ...controlStyle, width: 135, flexShrink: 0 }}
                     >
                       <option value="viewer">Viewer role</option>

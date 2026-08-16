@@ -44,7 +44,6 @@ function toWebProject(project: ManagedCloudProject): Project {
   };
 }
 
-/** Web view-model adapter; transport paths and validation stay in services. */
 export const webManagedCloudProjects = {
   async listProjects(query?: ManagedCloudProjectListQuery): Promise<Project[]> {
     return (await client.listProjects(query)).map(toWebProject);

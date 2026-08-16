@@ -1,10 +1,5 @@
-/**
- * Teams API — typed wrappers for team management, members, resources, billing, and subscription commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface Team {
   id: string;
@@ -43,7 +38,6 @@ export interface TeamActivity {
   details?: string;
   timestamp: string;
 }
-// ---- Team CRUD ----
 
 export async function createTeam(
   name: string,
@@ -88,8 +82,6 @@ export async function transferTeamOwnership(
   return command<void>('transfer_team_ownership', { teamId, newOwnerId, transferredBy });
 }
 
-// ---- Members ----
-
 export async function inviteMember(
   teamId: string,
   email: string,
@@ -122,8 +114,6 @@ export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
 export async function getTeamInvitations(teamId: string): Promise<TeamInvitation[]> {
   return command<TeamInvitation[]>('get_team_invitations', { teamId });
 }
-
-// ---- Resources ----
 
 export async function shareResource(
   teamId: string,
@@ -159,8 +149,6 @@ export async function getTeamResourcesByType(
 ): Promise<TeamResource[]> {
   return command<TeamResource[]>('get_team_resources_by_type', { teamId, resourceType });
 }
-
-// ---- Activity ----
 
 export async function getTeamActivity(
   teamId: string,

@@ -30,9 +30,6 @@ const allowedRootLibModules = new Set([
   'deviceId',
   'dispatchAgentValidator',
   'dispatchHmac',
-  // Shared fail-closed egress chokepoint (Tranche-1). A cross-cutting security
-  // utility that every network-touching service must route through, so it is a
-  // sanctioned frozen-root-lib module.
   'egressGuard',
   'markdown',
   'mmkv',
@@ -72,20 +69,11 @@ const uiDirectIoBaseline = new Set([
 const serviceStoreImportBaseline = new Set([
   'apps/mobile/lib/dispatchAgentValidator.ts',
   'apps/mobile/services/backgroundFetch.ts',
-  // The cloud sync engine's job IS to reconcile the cloud chat + sidecar stores with
-  // the server, so it necessarily reads/writes those Zustand stores. (P2 sync.)
   'apps/mobile/services/cloudSyncEngine.ts',
-  // cloudSettingsMapping is the settings half of the same cloud-sync subsystem
-  // (cloudSyncEngine calls its applyCloudSettings): it applies server-pulled settings
-  // into the shared settings store, so it reads/writes that Zustand store by design.
   'apps/mobile/services/cloudSettingsMapping.ts',
   'apps/mobile/services/companion.ts',
   'apps/mobile/services/companionNotifications.ts',
   'apps/mobile/services/realtime.ts',
-  // The notification gate's job IS to read the user's notification preferences before
-  // delivering a push. It already keeps the coupling out of the early notification
-  // module's load graph by lazy-`require`ing the prefs store at call time and failing
-  // open, which is the hygienic shape this rule wants — baseline it explicitly.
   'apps/mobile/services/notificationGate.ts',
 ]);
 

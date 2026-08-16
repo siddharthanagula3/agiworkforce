@@ -1,41 +1,3 @@
-/**
- * Orchestrator API
- *
- * TypeScript wrappers for the AGI orchestrator Tauri commands.
- * The orchestrator manages multi-agent spawning, lifecycle control,
- * and parallel execution of agent goals.
- *
- * Covered commands (sys/commands/agi.rs):
- *   orchestrator_init_default      — init with defaults (max_agents=4)
- *   orchestrator_init              — init with custom config
- *   orchestrator_spawn_agent       — spawn a single agent
- *   orchestrator_spawn_parallel    — spawn multiple agents in parallel
- *   orchestrator_get_agent_status  — get status of a specific agent
- *   orchestrator_list_agents       — list all active agents
- *   orchestrator_cancel_agent      — cancel a specific agent
- *   orchestrator_cancel_all        — cancel all agents
- *   orchestrator_wait_all          — wait for all agents to finish
- *   orchestrator_cleanup           — clean up completed agents
- *   pause_agent                    — pause a running agent
- *   resume_agent                   — resume a paused agent
- *   cancel_agent                   — cancel agent (alternate entry point)
- *
- * Covered commands (sys/commands/orchestration.rs):
- *   create_workflow               — create a workflow definition
- *   update_workflow               — update an existing workflow
- *   delete_workflow               — delete a workflow
- *   get_workflow                  — get a workflow by ID
- *   get_user_workflows            — list workflows for a user
- *   execute_workflow              — execute a workflow with inputs
- *   pause_workflow                — pause a running execution
- *   resume_workflow               — resume a paused execution
- *   cancel_workflow               — cancel a running execution
- *   get_workflow_status           — get execution status
- *   get_execution_logs            — get logs for an execution
- *   schedule_workflow             — schedule a workflow via cron
- *   trigger_workflow_on_event     — trigger a workflow from an event
- *   get_next_execution_time       — get next scheduled run time
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
@@ -57,7 +19,6 @@ interface SpawnParallelAgentsResponse {
   agentIds: string[];
 }
 
-/** Agent status as returned by the orchestrator. */
 export interface OrchestratorAgentStatus {
   id: string;
   status: string;
@@ -68,7 +29,6 @@ export interface OrchestratorAgentStatus {
   error?: string;
 }
 
-/** Result from waiting for all agents to complete. */
 export interface AgentResult {
   agentId: string;
   success: boolean;
@@ -77,7 +37,6 @@ export interface AgentResult {
   durationMs?: number;
 }
 
-/** AGI configuration for custom orchestrator init. */
 export interface AGIConfig {
   maxIterations?: number;
   timeoutSecs?: number;
@@ -100,10 +59,6 @@ async function ensureInit() {
   orchestratorInitialized = true;
 }
 
-/**
- * Initialize the orchestrator with custom configuration.
- * Use this instead of ensureInit() when you need non-default settings.
- */
 export async function orchestratorInit(maxAgents: number, config?: AGIConfig): Promise<void> {
   if (!isTauri) {
     console.debug('[orchestrator] orchestratorInit (mock)', { maxAgents, config });
@@ -141,10 +96,6 @@ export async function spawnAgent(payload: SpawnAgentPayload): Promise<string> {
   return response.agentId;
 }
 
-/**
- * Spawn multiple agents in parallel, each with its own goal.
- * Returns an array of agent IDs for tracking.
- */
 export async function spawnParallelAgents(goals: SpawnAgentPayload[]): Promise<string[]> {
   await ensureInit();
 
@@ -168,9 +119,6 @@ export async function spawnParallelAgents(goals: SpawnAgentPayload[]): Promise<s
   return response.agentIds;
 }
 
-/**
- * Get the status of a specific agent by ID.
- */
 export async function getAgentStatus(agentId: string): Promise<OrchestratorAgentStatus | null> {
   if (!isTauri) {
     console.debug('[orchestrator] getAgentStatus (mock)', agentId);
@@ -189,9 +137,6 @@ export async function cancelAgent(agentId: string): Promise<void> {
   await invoke('orchestrator_cancel_agent', { agentId });
 }
 
-/**
- * Cancel all running agents managed by the orchestrator.
- */
 export async function cancelAllAgents(): Promise<void> {
   if (!isTauri) {
     console.debug('[orchestrator] cancelAllAgents (mock)');
@@ -201,10 +146,6 @@ export async function cancelAllAgents(): Promise<void> {
   await invoke('orchestrator_cancel_all');
 }
 
-/**
- * Wait for all agents to complete and return their results.
- * This blocks until every agent finishes (success or failure).
- */
 export async function waitForAllAgents(): Promise<AgentResult[]> {
   if (!isTauri) {
     console.debug('[orchestrator] waitForAllAgents (mock)');
@@ -214,10 +155,6 @@ export async function waitForAllAgents(): Promise<AgentResult[]> {
   return invoke<AgentResult[]>('orchestrator_wait_all');
 }
 
-/**
- * Clean up completed/failed agents from the orchestrator.
- * Returns the number of agents removed.
- */
 export async function cleanupAgents(): Promise<number> {
   if (!isTauri) {
     console.debug('[orchestrator] cleanupAgents (mock)');
@@ -235,9 +172,6 @@ export async function listAgents(): Promise<OrchestratorAgentStatus[]> {
   return invoke<OrchestratorAgentStatus[]>('orchestrator_list_agents');
 }
 
-/**
- * Pause a running agent by ID.
- */
 export async function pauseAgent(agentId: string): Promise<void> {
   if (!isTauri) {
     console.debug('[orchestrator] pauseAgent (mock)', agentId);
@@ -247,9 +181,6 @@ export async function pauseAgent(agentId: string): Promise<void> {
   await invoke('pause_agent', { agentId });
 }
 
-/**
- * Resume a paused agent by ID.
- */
 export async function resumeAgent(agentId: string): Promise<void> {
   if (!isTauri) {
     console.debug('[orchestrator] resumeAgent (mock)', agentId);
@@ -258,14 +189,6 @@ export async function resumeAgent(agentId: string): Promise<void> {
 
   await invoke('resume_agent', { agentId });
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Workflow Orchestration (sys/commands/orchestration.rs)
-// ═══════════════════════════════════════════════════════════════════════════
-
-// ---------------------------------------------------------------------------
-// Types (mirror Rust structs from core/orchestration/workflow_engine.rs)
-// ---------------------------------------------------------------------------
 
 export interface NodePosition {
   x: number;
@@ -364,11 +287,6 @@ export interface WorkflowExecutionLog {
   timestamp: number;
 }
 
-// ---------------------------------------------------------------------------
-// Workflow CRUD
-// ---------------------------------------------------------------------------
-
-/** Create a new workflow definition. Returns the workflow ID. */
 export async function createWorkflow(definition: WorkflowDefinition): Promise<string> {
   try {
     return await invoke<string>('create_workflow', { definition });
@@ -377,7 +295,6 @@ export async function createWorkflow(definition: WorkflowDefinition): Promise<st
   }
 }
 
-/** Update an existing workflow definition by ID. */
 export async function updateWorkflow(id: string, definition: WorkflowDefinition): Promise<void> {
   try {
     await invoke('update_workflow', { id, definition });
@@ -386,7 +303,6 @@ export async function updateWorkflow(id: string, definition: WorkflowDefinition)
   }
 }
 
-/** Delete a workflow by ID. */
 export async function deleteWorkflow(id: string): Promise<void> {
   try {
     await invoke('delete_workflow', { id });
@@ -395,7 +311,6 @@ export async function deleteWorkflow(id: string): Promise<void> {
   }
 }
 
-/** Get a workflow definition by ID. */
 export async function getWorkflow(id: string): Promise<WorkflowDefinition> {
   try {
     return await invoke<WorkflowDefinition>('get_workflow', { id });
@@ -404,7 +319,6 @@ export async function getWorkflow(id: string): Promise<WorkflowDefinition> {
   }
 }
 
-/** List all workflows for a given user. */
 export async function getUserWorkflows(userId: string): Promise<WorkflowDefinition[]> {
   try {
     return await invoke<WorkflowDefinition[]>('get_user_workflows', { userId });
@@ -413,14 +327,6 @@ export async function getUserWorkflows(userId: string): Promise<WorkflowDefiniti
   }
 }
 
-// ---------------------------------------------------------------------------
-// Workflow Execution
-// ---------------------------------------------------------------------------
-
-/**
- * Execute a workflow with the provided input values.
- * Returns the execution ID for tracking.
- */
 export async function executeWorkflow(
   workflowId: string,
   inputs: Record<string, unknown>,
@@ -432,7 +338,6 @@ export async function executeWorkflow(
   }
 }
 
-/** Pause a running workflow execution. */
 export async function pauseWorkflow(executionId: string): Promise<void> {
   try {
     await invoke('pause_workflow', { executionId });
@@ -441,7 +346,6 @@ export async function pauseWorkflow(executionId: string): Promise<void> {
   }
 }
 
-/** Resume a paused workflow execution. */
 export async function resumeWorkflow(executionId: string): Promise<void> {
   try {
     await invoke('resume_workflow', { executionId });
@@ -450,7 +354,6 @@ export async function resumeWorkflow(executionId: string): Promise<void> {
   }
 }
 
-/** Cancel a running workflow execution. */
 export async function cancelWorkflow(executionId: string): Promise<void> {
   try {
     await invoke('cancel_workflow', { executionId });
@@ -459,7 +362,6 @@ export async function cancelWorkflow(executionId: string): Promise<void> {
   }
 }
 
-/** Get the status of a workflow execution. */
 export async function getWorkflowStatus(executionId: string): Promise<WorkflowExecution> {
   try {
     return await invoke<WorkflowExecution>('get_workflow_status', { executionId });
@@ -468,7 +370,6 @@ export async function getWorkflowStatus(executionId: string): Promise<WorkflowEx
   }
 }
 
-/** Get the execution logs for a workflow execution. */
 export async function getExecutionLogs(executionId: string): Promise<WorkflowExecutionLog[]> {
   try {
     return await invoke<WorkflowExecutionLog[]>('get_execution_logs', { executionId });
@@ -476,10 +377,6 @@ export async function getExecutionLogs(executionId: string): Promise<WorkflowExe
     throw new Error(`Failed to get execution logs: ${error}`);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Workflow Scheduling
-// ---------------------------------------------------------------------------
 
 /**
  * Schedule a workflow to run on a cron expression.
@@ -499,10 +396,6 @@ export async function scheduleWorkflow(
   }
 }
 
-/**
- * Trigger a workflow in response to an event.
- * Returns the execution ID.
- */
 export async function triggerWorkflowOnEvent(
   workflowId: string,
   eventType: string,
@@ -519,7 +412,6 @@ export async function triggerWorkflowOnEvent(
   }
 }
 
-/** Get the next scheduled execution time for a cron expression (epoch seconds). */
 export async function getNextExecutionTime(cronExpr: string): Promise<number> {
   try {
     return await invoke<number>('get_next_execution_time', { cronExpr });

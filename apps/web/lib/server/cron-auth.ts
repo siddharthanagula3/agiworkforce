@@ -2,7 +2,6 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 
-/** Fail-closed authorization shared by every privileged cron route. */
 export function verifyCronRequest(request: Pick<Request, 'headers'>): boolean {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env['CRON_SECRET'];

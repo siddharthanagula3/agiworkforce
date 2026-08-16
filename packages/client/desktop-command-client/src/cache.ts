@@ -1,10 +1,5 @@
-/**
- * Cache API — typed wrappers for cache_* and codebase_cache_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface CacheTypeStats {
   entries: number;
@@ -47,8 +42,6 @@ export interface DependencyGraph {
   [key: string]: unknown;
 }
 
-// ---- LLM/Tool Cache ----
-
 export async function cacheGetStats(): Promise<CacheStats> {
   return command<CacheStats>('cache_get_stats');
 }
@@ -88,8 +81,6 @@ export async function cacheGetAnalytics(): Promise<CacheAnalytics> {
 export async function cachePruneExpired(): Promise<number> {
   return command<number>('cache_prune_expired');
 }
-
-// ---- Codebase Cache ----
 
 export async function codebaseCacheGetStats(): Promise<CacheStats> {
   return command<CacheStats>('codebase_cache_get_stats');

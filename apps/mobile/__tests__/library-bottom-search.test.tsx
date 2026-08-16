@@ -1,13 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M31 — Library search is bottom-anchored, not wedged between the filter
- * chips and the grid.
- *
- * Both references float search as a pill under the thumb (IMG_0690, IMG_0753)
- * and the chats list already shipped that treatment, so the static field here
- * both cost ~56pt of first-screen grid and made two sibling list screens
- * contradict each other. Library now renders the shared `BottomSearchBar`.
- */
 import React from 'react';
 import { fireEvent, render, within } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
@@ -15,15 +6,9 @@ import type { ReactTestInstance } from 'react-test-renderer';
 const mockInsetBottom = 34;
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -136,7 +121,6 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => ({
 
 import { LibraryScreen } from '../src/features/library';
 
-/** testIDs in rendered document order — cheap proof of vertical placement. */
 function testIDsInOrder(root: ReactTestInstance): string[] {
   const ids: string[] = [];
   const walk = (node: ReactTestInstance) => {
@@ -164,7 +148,6 @@ describe('Library bottom-anchored search', () => {
     const screen = render(<LibraryScreen />);
 
     expect(within(screen.getByTestId('library-grid')).queryByTestId('library-search')).toBeNull();
-    // Same shared pill as Chats and Projects: it owns the home-indicator gap.
     expect(screen.getByTestId('library-search').props.style.marginBottom).toBe(
       mockInsetBottom + 10,
     );

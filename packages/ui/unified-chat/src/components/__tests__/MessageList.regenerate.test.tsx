@@ -5,12 +5,6 @@ import type { ChatMessage } from '../../lib/types';
 import { useChatStore } from '../../stores/chatStore';
 import { MessageList } from '../MessageList';
 
-/**
- * DES-C04 — one omitted prop at the ChatInterface -> MessageList boundary
- * killed THREE affordances at once: the mid-stream-error Retry, the
- * per-message Retry in ActionBar, and the resend on an expired tool-approval
- * card. This pins the whole prop chain.
- */
 const CONVERSATION_ID = 'conv-list-regenerate';
 
 function seed(messages: ChatMessage[], streaming = false): void {
@@ -39,7 +33,6 @@ const completedExchange: ChatMessage[] = [
 
 describe('MessageList — regenerate prop chain (DES-C04)', () => {
   beforeEach(() => {
-    // jsdom does not implement scrollIntoView; MessageList calls it on mount.
     Element.prototype.scrollIntoView = vi.fn();
     seed(completedExchange);
   });

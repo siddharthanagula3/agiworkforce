@@ -21,12 +21,6 @@ import {
   reserveManagedUsage,
 } from '../../src/services/managedUsageBilling';
 
-/**
- * The catalog lookup is mocked only to ADD a synthetic scheduled model used to
- * prove the dated-window mechanism on arbitrary dates. Every real model still
- * resolves through the real catalog, so the founder pin below stays a pin on
- * shipped data.
- */
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
   const fixture = {
@@ -245,8 +239,6 @@ describe('managed usage input-length pricing tiers', () => {
   it('uses the same strict threshold for preflight reservation estimates', () => {
     const candidate = requireCatalogMultiBandModel();
     const threshold = candidate.inputTokenPricingTiers![0]!.thresholdTokens;
-    // Mirrors the gateway's conservative 3.5 characters/token estimator:
-    // JSON string quotes add two characters and each message adds four tokens.
     const contentAtThreshold = 'x'.repeat((threshold - 4) * 3.5 - 2);
     const atThreshold = {
       model: candidate.id,
@@ -357,14 +349,6 @@ describe('managed usage registry-driven cost accounting', () => {
   });
 });
 
-/**
- * Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed
- * 2026-08-05). The managed ledger bills the catalog-selected Anthropic
- * workhorse at its founder-selected standard rates on every date. Provider
- * promotional costs recorded in verification notes are not product prices.
- * The ledger must resolve the same catalog rate for the same date that the Web
- * calculator does, so every case passes a fixed date.
- */
 describe('managed usage catalog-selected Anthropic workhorse pricing', () => {
   const MODEL = STANDARD_ANTHROPIC_MODEL;
   const BEFORE_RETIRED_BOUNDARY = new Date('2026-08-30T23:59:59.999Z');
@@ -501,12 +485,6 @@ describe('managed usage catalog-selected Anthropic workhorse pricing', () => {
   });
 });
 
-/**
- * The dated-pricing MECHANISM, proved against the synthetic fixture registered
- * above rather than against any shipped price. `effectiveFrom`/`effectiveUntil`
- * are UTC calendar days, inclusive on both sides; the changeover happens at UTC
- * midnight. Fixed dates sit on both sides of the synthetic boundary.
- */
 describe('managed usage dated pricing mechanism (synthetic fixture)', () => {
   const MODEL = 'fixture-scheduled-model';
   const INSIDE_FIRST_WINDOW = new Date('2030-02-15T00:00:00.000Z');
@@ -514,7 +492,6 @@ describe('managed usage dated pricing mechanism (synthetic fixture)', () => {
   const FIRST_DAY_OF_SECOND_WINDOW = new Date('2030-04-01T00:00:00.000Z');
 
   it('bills the covering window for input and cache reads', () => {
-    // First window: $2/M input, $0.2/M cache read.
     expect(
       calculateManagedUsageCostCents(
         MODEL,
@@ -556,9 +533,7 @@ describe('managed usage dated pricing mechanism (synthetic fixture)', () => {
       cacheWriteTokens: 1_000_000,
     };
 
-    // First window: $2 + $10 + $0.2 + $2.5 = $14.70.
     expect(calculateManagedUsageCostCents(MODEL, usage, INSIDE_FIRST_WINDOW)).toBe(1470);
-    // Second window inherits the top-level rates: $3 + $15 + $0.3 + $3.75 = $22.05.
     expect(calculateManagedUsageCostCents(MODEL, usage, FIRST_DAY_OF_SECOND_WINDOW)).toBe(2205);
   });
 
@@ -574,10 +549,6 @@ describe('managed usage dated pricing mechanism (synthetic fixture)', () => {
   });
 });
 
-/**
- * The catalog may publish an OpenAI cache-write rate distinct from uncached
- * input. The ledger bills that declared rate without embedding a model ID.
- */
 describe('managed usage OpenAI cache-write billing', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
 
@@ -660,10 +631,6 @@ describe('managed usage durable lifecycle client', () => {
       estimatedCostCents: 2,
       requestStatus: 'reserved',
     });
-    // `_with_limits`, with the ceilings actually present. The legacy
-    // eight-argument function does no rolling accounting at all, so asserting
-    // it passed for as long as this path enforced no five-hour, weekly or
-    // flagship window on desktop, CLI and VS Code traffic.
     expect(rpc).toHaveBeenCalledWith(
       'reserve_managed_usage_request_with_limits',
       expect.objectContaining({
@@ -672,8 +639,6 @@ describe('managed usage durable lifecycle client', () => {
         p_provider: 'anthropic',
         p_model: FLAGSHIP_MODEL,
         p_lease_token: 'lease-1',
-        // Pro: 100 five-hour units and 500 weekly units at two units per cent,
-        // flagship weekly at 30% of the weekly ceiling.
         p_session_cap_cents: 50,
         p_weekly_cap_cents: 250,
         p_flagship_weekly_cap_cents: 75,
@@ -682,28 +647,16 @@ describe('managed usage durable lifecycle client', () => {
     );
   });
 
-  /**
-   * Every tier the billing catalog admits to managed compute, with the
-   * ceilings `apps/web/lib/server/managed-usage-policy.ts` resolves for it.
-   * The gateway mirrors that table by hand because the canonical module is
-   * `server-only` and lives in the Next app, so the pin below — every admitted
-   * tier must appear here — is what turns a tenth tier added to
-   * `billing-catalog.ts` into a red gateway suite instead of a silent cap of 0,
-   * i.e. an unconditional 429 for a paying customer on desktop, CLI and VS Code.
-   */
   const EXPECTED_TIER_CAP_CENTS: Record<
     string,
     [session: number | null, weekly: number | null, flagshipWeekly: number | null]
   > = {
-    // Free is metered in the micro-USD trial ledger, so its PAID ceiling is 0.
     free: [0, 0, 0],
     basic: [10, 50, 15],
     pro: [50, 250, 75],
     max: [250, 1_250, 375],
     max_15x: [750, 3_750, 1_125],
     team: [50, 250, 75],
-    // A tier that declares no ceiling passes null, which migration 0070 reads
-    // as uncapped; every other tier passes a number, and 0 denies.
     enterprise: [null, null, null],
   };
 
@@ -719,7 +672,6 @@ describe('managed usage durable lifecycle client', () => {
     ...Object.entries(EXPECTED_TIER_CAP_CENTS).map(
       ([tier, [session, weekly, flagship]]) => [tier, session, weekly, flagship] as const,
     ),
-    // An unrecognised tier must fail closed rather than reserve uncapped.
     ['not-a-plan', 0, 0, 0] as const,
   ])(
     'resolves the %s rolling ceilings from the plan, not from the request',
@@ -789,8 +741,6 @@ describe('managed usage durable lifecycle client', () => {
       });
     }
 
-    // A model shared by multiple flagship slots must still be tagged even when
-    // a first-slot lookup returns a different flagship slot.
     expect(rpc).toHaveBeenNthCalledWith(
       1,
       'reserve_managed_usage_request_with_limits',

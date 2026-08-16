@@ -1,11 +1,3 @@
-/**
- * ProvenanceFooter — auto-routing trace + Pin-to-model button.
- *
- * Manual-source messages render only the existing model/provider/tools row.
- * Auto-source messages additionally render the routing trace and (when a
- * `pinModel` and `onPinModel` callback are provided) a "Pin to <model>" button
- * that fires the callback with the full routing payload.
- */
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 

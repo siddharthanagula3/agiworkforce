@@ -1,33 +1,24 @@
-/**
- * Design Tokens for AGI
- * Production-grade design system tokens for consistent theming
- */
 
 export const designTokens = {
   colors: {
-    // Primary brand colors
     primary: 'hsl(200, 98%, 39%)',
     primaryForeground: 'hsl(0, 0%, 98%)',
     primaryGlow: 'hsl(200, 100%, 80%)',
     primaryMuted: 'hsl(200, 50%, 20%)',
 
-    // Agent/Employee colors
     agent: 'hsl(280, 60%, 50%)',
     agentForeground: 'hsl(0, 0%, 98%)',
     agentGlow: 'hsl(280, 100%, 85%)',
 
-    // Workforce colors
     workforce: 'hsl(45, 93%, 47%)',
     workforceForeground: 'hsl(30, 10%, 9%)',
     workforceGlow: 'hsl(45, 100%, 85%)',
 
-    // System colors
     background: 'hsl(240, 10%, 3.9%)',
     foreground: 'hsl(0, 0%, 98%)',
     surface: 'hsl(240, 9%, 6%)',
     surfaceElevated: 'hsl(240, 8%, 9%)',
 
-    // State colors
     success: 'hsl(120, 60%, 50%)',
     successForeground: 'hsl(0, 0%, 98%)',
     error: 'hsl(0, 84%, 60%)',
@@ -35,7 +26,6 @@ export const designTokens = {
     warning: 'hsl(38, 92%, 50%)',
     warningForeground: 'hsl(0, 0%, 98%)',
 
-    // UI components
     card: 'hsl(240, 8%, 9%)',
     cardForeground: 'hsl(0, 0%, 98%)',
     border: 'hsl(240, 6%, 15%)',
@@ -98,7 +88,6 @@ export const designTokens = {
     xl: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
     '2xl': '0 25px 50px -12px rgb(0 0 0 / 0.25)',
 
-    // Custom glow shadows
     glowPrimary: '0 4px 20px hsl(200 98% 39% / 0.25)',
     glowAgent: '0 4px 20px hsl(280 60% 50% / 0.25)',
     glowWorkforce: '0 4px 20px hsl(45 93% 47% / 0.25)',
@@ -106,7 +95,6 @@ export const designTokens = {
   },
 
   animation: {
-    // Durations
     duration: {
       fast: '150ms',
       normal: '300ms',
@@ -114,7 +102,6 @@ export const designTokens = {
       slower: '750ms',
     },
 
-    // Easing curves
     easing: {
       linear: 'linear',
       in: 'cubic-bezier(0.4, 0, 1, 1)',
@@ -142,13 +129,11 @@ export const designTokens = {
   // the defect ExecutionPlan #99 describes; it was deleted rather than renumbered.
 } as const;
 
-// Type definitions for design tokens
 export type DesignTokens = typeof designTokens;
 export type ColorTokens = keyof typeof designTokens.colors;
 export type SpacingTokens = keyof typeof designTokens.spacing;
 export type TypographyTokens = keyof typeof designTokens.typography.fontSize;
 
-// Utility functions for accessing tokens
 export const getColor = (token: ColorTokens): string => {
   return designTokens.colors[token];
 };
@@ -157,7 +142,6 @@ export const getSpacing = (token: SpacingTokens): string => {
   return designTokens.spacing[token];
 };
 
-// Theme variants for different contexts
 export const themeVariants = {
   chat: {
     user: {
@@ -208,7 +192,6 @@ export const themeVariants = {
   },
 } as const;
 
-// Responsive design utilities
 export const breakpointValues = {
   sm: 640,
   md: 768,
@@ -222,7 +205,6 @@ export const isBreakpoint = (breakpoint: keyof typeof breakpointValues): boolean
   return window.innerWidth >= breakpointValues[breakpoint];
 };
 
-// Animation presets
 export const animationPresets = {
   fadeIn: 'animate-in fade-in duration-300',
   fadeOut: 'animate-out fade-out duration-300',

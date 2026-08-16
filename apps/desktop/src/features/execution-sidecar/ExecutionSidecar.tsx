@@ -19,11 +19,6 @@ function ContextView({ context }: { context: string }) {
       return <ExecutionSidecarTimeline />;
     case 'screenshot':
       return <ExecutionSidecarScreenView />;
-    // Browser gets its own view rather than the generic screen view: the
-    // sidecar's screen view only renders the latest screenshot, while
-    // `BrowserVisualization` pairs the live frame with the action log of what
-    // the agent actually clicked and typed. Both read the same `browserStore`
-    // that the 500ms `browser_get_screenshot_stream` poll populates.
     case 'browser':
       return <BrowserVisualization className="flex-1 min-h-0" />;
     case 'terminal':
@@ -44,7 +39,6 @@ export function ExecutionSidecar() {
   const setWidth = useExecutionSidecarStore((s) => s.setWidth);
   const expand = useExecutionSidecarStore((s) => s.expand);
 
-  // Auto-detect context
   useExecutionSidecarContext();
 
   if (!isOpen) {
@@ -53,7 +47,6 @@ export function ExecutionSidecar() {
 
   const displayedContext = userOverrideContext ?? activeContext;
 
-  // Collapsed state: thin strip
   if (isCollapsed) {
     return (
       <div
@@ -80,7 +73,6 @@ export function ExecutionSidecar() {
     );
   }
 
-  // Full panel
   return (
     <div
       className={cn(

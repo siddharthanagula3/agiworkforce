@@ -1,12 +1,3 @@
-/**
- * Dependency-free byte codecs shared by the container layer.
- *
- * These avoid `Buffer` / `atob` so the exact same code runs under Node (web,
- * tests), Expo/React Native (mobile), and any bundler without a Node polyfill.
- * Standard base64 (RFC 4648, with `=` padding) is the on-wire encoding for the
- * container `payload` and `signature` fields and for public keys — chosen so
- * the future Rust `agiworkforce-licensing` crate encodes/decodes identically.
- */
 
 const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const B64_LOOKUP: Record<string, number> = (() => {
@@ -20,20 +11,14 @@ const B64_LOOKUP: Record<string, number> = (() => {
 const utf8Encoder = new TextEncoder();
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 
-/** UTF-8 encode a string to bytes. */
 export function utf8ToBytes(value: string): Uint8Array {
   return utf8Encoder.encode(value);
 }
 
-/**
- * Strictly UTF-8 decode bytes to a string. Throws on invalid UTF-8 (callers
- * translate the throw into a `malformed` verdict — verification never leaks it).
- */
 export function bytesToUtf8(bytes: Uint8Array): string {
   return utf8Decoder.decode(bytes);
 }
 
-/** Standard base64 encode (with padding). */
 export function bytesToBase64(bytes: Uint8Array): string {
   let out = '';
   for (let i = 0; i < bytes.length; i += 3) {
@@ -48,11 +33,6 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return out;
 }
 
-/**
- * Strict standard base64 decode. Returns `null` on any malformed input
- * (invalid character, bad length, misplaced padding) rather than throwing, so
- * container verification can map it to a `malformed` verdict without a try/catch.
- */
 export function base64ToBytes(value: string): Uint8Array | null {
   if (value.length % 4 !== 0) return null;
 

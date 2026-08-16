@@ -1,22 +1,5 @@
-/**
- * Chat API — typed wrappers for all chat_*, conversation_*, and search_* Tauri commands.
- *
- * Shape note: `Conversation`, `Message`, and friends here are the **Tauri wire shapes**
- * — they mirror exactly what the Rust SQLite-backed handlers return (numeric `id`,
- * snake-cased `user_id` → camelCase `userId`, ISO-string timestamps). They are
- * intentionally **siblings**, not subtypes, of the canonical cross-surface
- * `Conversation` and `ChatMessage` in `@agiworkforce/types` (which use branded
- * IDs and a richer cross-surface contract). Conversion between the two happens
- * in the consumer (typically the chat stores in `apps/desktop/src/stores`).
- *
- * Do not "unify" these into `@agiworkforce/types::Conversation` without also
- * updating every Rust handler return shape and migrating consumers — that's
- * a structural refactor (Phase 5+), not a Phase 4 normalization.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface Conversation {
   id: number;
@@ -167,8 +150,6 @@ export interface PopPendingMessageRequest {
   pendingMessageId?: string;
 }
 
-// ---- Conversation CRUD ----
-
 export async function chatCreateConversation(title: string, userId: string): Promise<Conversation> {
   return command<Conversation>('chat_create_conversation', { title, userId });
 }
@@ -196,8 +177,6 @@ export async function chatDeleteConversation(id: number, userId: string): Promis
   return command<void>('chat_delete_conversation', { id, userId });
 }
 
-// ---- Message CRUD ----
-
 export async function chatCreateMessage(request: CreateMessageRequest): Promise<Message> {
   return command<Message>('chat_create_message', { request });
 }
@@ -222,15 +201,11 @@ export async function syncConversationsToCloud(userId: string): Promise<unknown>
   return command<unknown>('sync_conversations_to_cloud', { userId });
 }
 
-// ---- Send Message (Streaming) ----
-
 export async function chatSendMessage(
   request: ChatSendMessageRequest,
 ): Promise<ChatSendMessageResponse> {
   return command<ChatSendMessageResponse>('chat_send_message', { request });
 }
-
-// ---- Generation Control ----
 
 export async function chatStopGeneration(conversationId?: number): Promise<void> {
   return command<void>('chat_stop_generation', { conversationId });
@@ -243,8 +218,6 @@ export async function cancelToolExecution(toolId: string): Promise<boolean> {
 export async function chatHandleStop(): Promise<boolean> {
   return command<boolean>('chat_handle_stop');
 }
-
-// ---- Branching ----
 
 export async function conversationFork(
   conversationId: number,
@@ -283,8 +256,6 @@ export async function conversationDeleteBranch(
   return command<void>('conversation_delete_branch', { conversationId, branchId, userId });
 }
 
-// ---- Cost Analytics ----
-
 export async function chatGetCostOverview(userId: string): Promise<CostOverviewResponse> {
   return command<CostOverviewResponse>('chat_get_cost_overview', { userId });
 }
@@ -306,8 +277,6 @@ export async function chatGetCostAnalytics(
 export async function chatSetMonthlyBudget(amount?: number): Promise<void> {
   return command<void>('chat_set_monthly_budget', { amount });
 }
-
-// ---- Search ----
 
 export async function searchChatHistory(
   query: string,
@@ -339,8 +308,6 @@ export async function getRecentConversations(limit?: number): Promise<Conversati
   return command<ConversationSummary[]>('get_recent_conversations', { limit });
 }
 
-// ---- Export / Share ----
-
 export async function conversationExport(conversationId: string, format: string): Promise<string> {
   return command<string>('conversation_export', { conversationId, format });
 }
@@ -356,8 +323,6 @@ export async function conversationShare(conversationId: string): Promise<ShareRe
   return command<ShareResult>('conversation_share', { conversationId });
 }
 
-// ---- Context Compaction ----
-
 export async function chatCompactContext(
   conversationId: number,
   userId: string,
@@ -369,8 +334,6 @@ export async function chatCompactContext(
     userId,
   });
 }
-
-// ---- Pending Messages ----
 
 export async function chatAddPendingMessage(
   request: AddPendingMessageRequest,
@@ -391,8 +354,6 @@ export async function chatPopPendingMessage(
 ): Promise<PendingUserMessage | null> {
   return command<PendingUserMessage | null>('chat_pop_pending_message', { request });
 }
-
-// ---- Chat Memory Integration ----
 
 export async function chatLoadProjectMemories(): Promise<unknown> {
   return command<unknown>('chat_load_project_memories');
@@ -446,8 +407,6 @@ export async function chatSearchMemories(query: string, limit?: number): Promise
   return command<unknown[]>('chat_search_memories', { query, limit });
 }
 
-// ---- Conversation Checkpoints ----
-
 export interface CheckpointData {
   id: string;
   conversationId: number;
@@ -490,8 +449,6 @@ export async function checkpointDelete(checkpointId: string): Promise<void> {
 export async function checkpointList(conversationId: number): Promise<CheckpointData[]> {
   return command<CheckpointData[]>('checkpoint_list', { conversationId });
 }
-
-// ---- Database Maintenance ----
 
 export async function clearLocalDatabase(): Promise<void> {
   return command<void>('clear_local_database');

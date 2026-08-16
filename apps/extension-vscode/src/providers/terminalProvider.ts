@@ -1,24 +1,3 @@
-/**
- * terminalProvider.ts — Terminal integration for AGI Workforce VS Code extension
- *
- * Provides:
- *   - A dedicated "AGI Workforce" terminal instance (created or reused)
- *   - runCommand(): send arbitrary commands to the AGI terminal
- *   - captureAndExplain(): replay the last shell execution captured from the
- *     shell-integration events and send it to the LLM for explanation
- *   - suggestCommand(): ask the LLM to suggest a terminal command based on
- *     workspace context, present via QuickPick, and run on confirmation
- *
- * Shell integration note (SIX-15): this file used to declare its own
- * `TerminalShellIntegration { executions: readonly TerminalShellExecution[] }`
- * and branch on `shellIntegration.executions`. No such property exists on the
- * real API — `vscode.TerminalShellIntegration` carries only `cwd` and
- * `executeCommand`, and executions are delivered through
- * `window.onDidStartTerminalShellExecution` /
- * `onDidEndTerminalShellExecution`. The branch was therefore always undefined
- * and every capture fell through to "Shell integration is not available", which
- * was false whenever it was in fact active.
- */
 
 import * as vscode from 'vscode';
 import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
@@ -28,25 +7,12 @@ import {
   getWorkspaceDisplayName,
 } from '../platform/workspaceFolders';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
 const TERMINAL_NAME = 'AGI Workforce';
 
-/**
- * Maximum number of characters to capture from terminal output before
- * truncating. Prevents excessively large LLM requests.
- */
 const MAX_CAPTURE_CHARS = 8000;
 
 // ─── Command safety (VSCODE-04) ───────────────────────────────────────────────
 
-/**
- * PR-3B (F-14): allowlist of permitted first-token commands. Switched from
- * a blocklist (incomplete by construction — missed `git reset --hard`,
- * `find -delete`, zero-width unicode bypasses, etc.) to a positive
- * allowlist of common build/test/VCS commands. LLM-suggested commands
- * whose first token is not in this set are refused outright.
- */
 const ALLOWED_COMMAND_FIRST_TOKENS = new Set([
   'git',
   'npm',
@@ -76,7 +42,6 @@ const ALLOWED_COMMAND_FIRST_TOKENS = new Set([
   'rake',
 ]);
 
-/** Patterns that are destructive even within an allowed-tool invocation. */
 const DESTRUCTIVE_INNER_PATTERNS = [
   /\b--force\b/i,
   /\b-f\b/i, // `git checkout -f`, `git push -f`
@@ -87,53 +52,26 @@ const DESTRUCTIVE_INNER_PATTERNS = [
   /\b-delete\b/, // find -delete
 ];
 
-/**
- * Zero-width / invisible Unicode characters used to hide commands.
- * Stripped before allowlist matching so a zero-width-space-prefixed
- * `rm -rf /` cannot bypass the check.
- *
- * Built via `new RegExp(...)` with `\u` escapes so the source file does
- * not contain literal invisible chars (which `no-irregular-whitespace`
- * would flag — and which would also be invisible to code reviewers).
- *
- * Ranges covered:
- *   U+200B–U+200F  (zero-width space, ZWNJ, ZWJ, LTR/RTL marks)
- *   U+202A–U+202E  (LTR/RTL embedding / override)
- *   U+2060–U+206F  (word joiner, invisible separators)
- *   U+FEFF         (zero-width no-break space / BOM)
- */
 const INVISIBLE_UNICODE_CHARS = new RegExp(
   '[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\uFEFF]',
   'g',
 );
 
-/**
- * ANSI escape code pattern — strip before displaying or executing.
- * Constructed via RegExp() to avoid the no-control-regex lint rule on \x1b.
- */
 // eslint-disable-next-line no-control-regex
 const ANSI_ESCAPE = /\x1b\[[0-9;]*[mGKHF]/g;
 
-/**
- * Validate that an LLM-suggested command is safe to present/run.
- * Returns an error string if the command is rejected, or undefined if it's ok.
- */
 export function validateSuggestedCommand(cmd: string): string | undefined {
   if (cmd.trim().length === 0) {
     return 'Command is empty.';
   }
 
-  // Strip ANSI + invisible unicode before checking.
   const clean = cmd.replace(ANSI_ESCAPE, '').replace(INVISIBLE_UNICODE_CHARS, '').trim();
 
-  // Refuse shell metacharacters that allow chaining or substitution.
-  // Even within an allowed first token, $(...) or ; can run anything.
   const SHELL_META = /[$`;|&<>]|&&|\|\|/;
   if (SHELL_META.test(clean)) {
     return 'Command rejected: contains shell metacharacters ($, `, ;, &, |, <, >).';
   }
 
-  // PR-3B (F-14): allowlist-first by first token.
   const firstToken = clean.split(/\s+/)[0]?.toLowerCase() ?? '';
   if (!ALLOWED_COMMAND_FIRST_TOKENS.has(firstToken)) {
     return `Command rejected: "${firstToken}" is not in the AI-suggestion allowlist. Allowed: ${[...ALLOWED_COMMAND_FIRST_TOKENS].sort().join(', ')}.`;
@@ -148,17 +86,6 @@ export function validateSuggestedCommand(cmd: string): string | undefined {
   return undefined;
 }
 
-// ─── TerminalProvider ────────────────────────────────────────────────────────
-
-/**
- * The most recent shell execution seen in a terminal, with whatever output has
- * been streamed so far.
- *
- * `TerminalShellExecution.read()` only yields data written *after* the first
- * call, so the stream has to be drained from the
- * `onDidStartTerminalShellExecution` handler. Reading it later — which is what
- * "look up the last execution when the user asks" would mean — returns nothing.
- */
 interface CapturedExecution {
   readonly execution: vscode.TerminalShellExecution;
   output: string;
@@ -184,8 +111,6 @@ export class TerminalProvider implements vscode.Disposable {
     this._secrets = secrets;
 
     this._disposables.push(
-      // Listen for terminal close events so we clear our reference if the user
-      // manually closes the AGI terminal.
       vscode.window.onDidCloseTerminal((closed) => {
         if (closed === this._terminal) {
           this._terminal = undefined;
@@ -212,16 +137,8 @@ export class TerminalProvider implements vscode.Disposable {
     );
   }
 
-  // ─── Terminal lifecycle ──────────────────────────────────────────────────
-
-  /**
-   * Returns the existing AGI Workforce terminal or creates a new one.
-   * The terminal is shown automatically.
-   */
   getOrCreateTerminal(): vscode.Terminal {
-    // Try to reuse an existing terminal with our name
     if (this._terminal !== undefined) {
-      // VS Code can dispose terminals externally — check by scanning active terminals
       const stillAlive = vscode.window.terminals.find((t) => t === this._terminal);
       if (stillAlive !== undefined) {
         this._terminal.show(/* preserveFocus */ true);
@@ -230,7 +147,6 @@ export class TerminalProvider implements vscode.Disposable {
       this._terminal = undefined;
     }
 
-    // Check if someone else created a terminal with our name
     const existing = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME);
     if (existing !== undefined) {
       this._terminal = existing;
@@ -238,7 +154,6 @@ export class TerminalProvider implements vscode.Disposable {
       return this._terminal;
     }
 
-    // Create a new terminal
     const workspaceUri = getActiveWorkspaceFolderSync()?.uri;
     this._terminal = vscode.window.createTerminal(
       workspaceUri !== undefined
@@ -249,19 +164,6 @@ export class TerminalProvider implements vscode.Disposable {
     return this._terminal;
   }
 
-  // ─── runCommand ──────────────────────────────────────────────────────────
-
-  /**
-   * Send a command string to the AGI Workforce terminal.
-   * Creates the terminal if it does not exist.
-   *
-   * EXTV-3 (audit 2026-05-03): refuse silently in untrusted workspaces.
-   * The integrated terminal inherits the workspace shell config — an
-   * untrusted workspace's `terminal.integrated.shellArgs` or
-   * `package.json` script can contain shell metacharacters that
-   * execute when sendText runs. Force the user to trust the
-   * workspace first.
-   */
   runCommand(command: string): void {
     if (!vscode.workspace.isTrusted) {
       vscode.window.showWarningMessage(
@@ -274,19 +176,7 @@ export class TerminalProvider implements vscode.Disposable {
     terminal.sendText(command);
   }
 
-  // ─── captureAndExplain ───────────────────────────────────────────────────
-
-  /**
-   * Explain the most recent shell execution in the active terminal.
-   *
-   * The output comes from the shell-integration executions this provider
-   * drained live (see the constructor). Falls back to asking the user to paste
-   * the output only when this terminal genuinely has nothing captured — and the
-   * prompt then states which of the two reasons applies.
-   */
   async captureAndExplain(cancellationToken: vscode.CancellationToken): Promise<string> {
-    // Explain the terminal the user is actually looking at. Falling straight to
-    // the AGI terminal would explain a shell the user never ran anything in.
     const terminal = vscode.window.activeTerminal ?? this.getOrCreateTerminal();
     const output = await this._captureOutput(terminal);
 
@@ -315,15 +205,6 @@ export class TerminalProvider implements vscode.Disposable {
     return explanation;
   }
 
-  // ─── suggestCommand ──────────────────────────────────────────────────────
-
-  /**
-   * Ask the LLM to suggest a terminal command based on the given context
-   * string (e.g., current workspace, file, error). Shows the suggestion as
-   * a QuickPick and runs it on confirmation.
-   *
-   * Returns the chosen command string, or undefined if the user cancelled.
-   */
   async suggestCommand(
     context: string,
     cancellationToken: vscode.CancellationToken,
@@ -353,12 +234,9 @@ export class TerminalProvider implements vscode.Disposable {
 
     const response = await chatCompletion(this._secrets, messages, cancellationToken);
 
-    // Parse response into individual command suggestions.
-    // Take only the first (non-comment, non-empty) line of each LLM output line
-    // to prevent multi-line compound commands from sneaking through.
     const suggestions = response
       .split('\n')
-      .map((line) => line.replace(ANSI_ESCAPE, '').trim()) // strip ANSI escapes
+      .map((line) => line.replace(ANSI_ESCAPE, '').trim())
       .filter((line) => line !== '' && !line.startsWith('#') && !line.startsWith('//'));
 
     if (suggestions.length === 0) {
@@ -366,7 +244,6 @@ export class TerminalProvider implements vscode.Disposable {
       return undefined;
     }
 
-    // Validate each suggestion — keep valid ones, annotate rejected ones.
     type SuggestionItem = vscode.QuickPickItem & { _cmd: string; _valid: boolean };
     const items: SuggestionItem[] = suggestions.map((cmd) => {
       const err = validateSuggestedCommand(cmd);
@@ -396,7 +273,6 @@ export class TerminalProvider implements vscode.Disposable {
       return undefined;
     }
 
-    // Reject commands that failed validation.
     if (!picked._valid) {
       vscode.window.showErrorMessage(
         `AGI Workforce: Refused to run command — ${picked.description ?? 'safety check failed'}`,
@@ -406,7 +282,6 @@ export class TerminalProvider implements vscode.Disposable {
 
     const cmd = picked._cmd;
 
-    // VSCODE-04: require explicit confirmation showing the exact command text.
     const confirmed = await vscode.window.showWarningMessage(
       `Run the following command in your terminal?\n\n${cmd}\n\nThis command was suggested by AI. Review it carefully before proceeding.`,
       { modal: true },
@@ -421,17 +296,6 @@ export class TerminalProvider implements vscode.Disposable {
     return cmd;
   }
 
-  // ─── Output capture (private) ────────────────────────────────────────────
-
-  /**
-   * Capture recent output from the terminal.
-   *
-   * Strategy:
-   *   1. Replay the execution this provider drained from
-   *      `onDidStartTerminalShellExecution` for this terminal.
-   *   2. Otherwise, prompt the user to paste output — and say truthfully *why*
-   *      we are asking, which depends on whether shell integration is active.
-   */
   private async _captureOutput(terminal: vscode.Terminal): Promise<string | undefined> {
     const captured = this._lastExecutions.get(terminal);
     if (captured !== undefined) {
@@ -442,16 +306,9 @@ export class TerminalProvider implements vscode.Disposable {
     return this._askUserForOutput(terminal);
   }
 
-  /**
-   * Drain a live execution's output stream into its capture record.
-   *
-   * Runs for the whole life of the command, so a capture requested while the
-   * command is still running sees the partial output rather than nothing.
-   */
   private async _drainExecution(captured: CapturedExecution): Promise<void> {
     try {
       for await (const data of captured.execution.read()) {
-        // The stream carries raw terminal data, escape sequences included.
         const text = stripTerminalControlSequences(typeof data === 'string' ? data : String(data));
         const remaining = MAX_CAPTURE_CHARS - captured.output.length;
         if (remaining <= 0) {
@@ -471,13 +328,6 @@ export class TerminalProvider implements vscode.Disposable {
     }
   }
 
-  /**
-   * Prompt the user to paste terminal output manually.
-   *
-   * Reached when this terminal has no captured execution. The prompt names the
-   * real reason: shell integration inactive, or active but with no command run
-   * since the extension started listening.
-   */
   private async _askUserForOutput(terminal: vscode.Terminal): Promise<string | undefined> {
     const reason =
       terminal.shellIntegration === undefined
@@ -498,8 +348,6 @@ export class TerminalProvider implements vscode.Disposable {
     return pastedOutput;
   }
 
-  // ─── Dispose ─────────────────────────────────────────────────────────────
-
   dispose(): void {
     for (const d of this._disposables) {
       d.dispose();
@@ -510,14 +358,6 @@ export class TerminalProvider implements vscode.Disposable {
   }
 }
 
-// ─── Capture formatting ──────────────────────────────────────────────────────
-
-/**
- * Terminal control sequences the raw execution stream carries: CSI (colours,
- * cursor moves), OSC (window title, hyperlinks, shell-integration markers) and
- * the single-character escapes around them. Stripped before the text is shown
- * or sent so the explanation is about the output, not about the escape codes.
- */
 const TERMINAL_CONTROL_SEQUENCES = new RegExp(
   [
     '\\u001B\\][^\\u0007\\u001B]*(?:\\u0007|\\u001B\\\\)', // OSC ... BEL | ST
@@ -532,13 +372,6 @@ function stripTerminalControlSequences(text: string): string {
   return text.replace(TERMINAL_CONTROL_SEQUENCES, '').replace(/\r\n?/g, '\n');
 }
 
-/**
- * Render a captured execution for the model.
- *
- * The command line is included only at High confidence — at Low/Medium VS Code
- * reconstructs it from the terminal buffer and it may be wrong, and a wrong
- * command line would be a fabricated premise for the explanation.
- */
 function formatCapturedExecution(captured: CapturedExecution): string {
   const { commandLine } = captured.execution;
   const parts: string[] = [];
@@ -556,21 +389,9 @@ function formatCapturedExecution(captured: CapturedExecution): string {
   if (!captured.ended) parts.push('[command is still running]');
   else if (captured.exitCode !== undefined) parts.push(`[exit code ${captured.exitCode}]`);
 
-  // A run that produced no output at all is still worth explaining when we know
-  // its exit code, but never claim there was output when there was none.
   return output === '' && captured.exitCode === undefined ? '' : parts.join('\n');
 }
 
-// ─── Activation ──────────────────────────────────────────────────────────────
-
-/**
- * Register terminal-related commands with VS Code.
- *
- * Commands:
- *   - `agi-workforce.runCommand`      — prompt for a command and run it
- *   - `agi-workforce.explainTerminal` — capture & explain terminal output
- *   - `agi-workforce.suggestCommand`  — LLM-suggested command via QuickPick
- */
 export function activateTerminal(
   context: vscode.ExtensionContext,
   secrets: vscode.SecretStorage,
@@ -578,7 +399,6 @@ export function activateTerminal(
   const provider = new TerminalProvider(secrets);
   context.subscriptions.push(provider);
 
-  // ── agi-workforce.runCommand ───────────────────────────────────────────
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.runCommand', async () => {
       const command = await vscode.window.showInputBox({
@@ -605,7 +425,6 @@ export function activateTerminal(
     }),
   );
 
-  // ── agi-workforce.explainTerminal ──────────────────────────────────────
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.explainTerminal', async () => {
       await vscode.window.withProgress(
@@ -626,7 +445,6 @@ export function activateTerminal(
               return;
             }
 
-            // Show the explanation in a new untitled Markdown document
             const doc = await vscode.workspace.openTextDocument({
               content: `# Terminal Output Explanation\n\n${explanation}`,
               language: 'markdown',
@@ -649,26 +467,21 @@ export function activateTerminal(
     }),
   );
 
-  // ── agi-workforce.suggestCommand ───────────────────────────────────────
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.suggestCommand', async () => {
-      // Build context from the current workspace state
       const contextParts: string[] = [];
 
-      // Active file info
       const editor = vscode.window.activeTextEditor;
       if (editor !== undefined) {
         const fileName = vscode.workspace.asRelativePath(editor.document.uri);
         contextParts.push(`Current file: ${fileName} (${editor.document.languageId})`);
       }
 
-      // Workspace folder (active editor's folder, not silently the first root)
       const workspaceFolder = getActiveWorkspaceFolderSync();
       if (workspaceFolder !== undefined) {
         contextParts.push(`Workspace: ${workspaceFolder.name}`);
       }
 
-      // Let the user add their own context / intent
       const userContext = await vscode.window.showInputBox({
         title: 'AGI Workforce — Suggest Command',
         prompt:

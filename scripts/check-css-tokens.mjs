@@ -1,63 +1,22 @@
 #!/usr/bin/env node
-/**
- * CSS custom-property gate.
- *
- * A `var(--thing)` that is never defined does not throw, does not fail a test,
- * and does not show up in typecheck. The declaration is simply dropped and the
- * element renders unstyled — inheriting whatever the parent had. That is
- * invisible in code review and invisible in CI, and it is only caught by a human
- * looking at the screen.
- *
- * It shipped exactly that way: apps/desktop's account/plan popover styled itself
- * with `--text-1`, `--text-2`, `--text-3`, `--bg-soft` and `--mono`, none of
- * which are defined anywhere in the repo. Dividers never drew, hover produced no
- * feedback, and text colour fell back to inherited — directly beside a sidebar
- * using the correct `--chat-*` family.
- *
- * There is a second, subtler failure this catches. Some tokens hold a raw HSL
- * channel triplet (`--border: 214.3 31.8% 91.4%`) and are only valid wrapped in
- * `hsl(...)`. Using one bare — `1px solid var(--border)` — expands to an invalid
- * shorthand and the whole declaration is dropped.
- *
- * Usage: node scripts/check-css-tokens.mjs
- * Exit:  0 = every referenced token resolves · 1 = at least one dangling token
- */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
 
-/**
- * Each surface declares the stylesheets it actually loads at runtime. A token is
- * only "defined" for that surface if one of these files declares it — which is
- * the point: a token defined in apps/web does nothing for apps/desktop.
- */
 const SURFACES = [
   {
     name: 'desktop',
-    // packages/ui is scanned under BOTH desktop and web: a shared component
-    // must resolve against every surface that renders it, and the two surfaces
-    // load different stylesheets. A --chat-surface typo (the family is
-    // --chat-surface-base/-elevated/-overlay/-hover) shipped here unnoticed.
     source: ['apps/desktop/src', 'packages/ui'],
     stylesheets: ['apps/desktop/src/styles/globals.css', 'packages/ui/design-tokens/src/chat.css'],
   },
   {
     name: 'web',
-    // Whole surface, not just features/: the first pass scanned features/ only,
-    // which left app/ and shared/ unguarded — and two live `1px solid
-    // var(--border)` borders were silently dropped there (--border is an HSL
-    // triplet, valid only as hsl(var(--border))).
     source: ['apps/web', 'packages/ui'],
     stylesheets: ['apps/web/app/globals.css', 'packages/ui/design-tokens/src/chat.css'],
   },
   {
-    // Chrome is the odd surface: almost none of its CSS is a stylesheet. The
-    // side panel builds its token block at runtime from `agiExtensionCssVars`
-    // and adopts it via Constructable Stylesheets (CSP forbids <style>), so the
-    // TS token source IS the stylesheet here. Listing it keeps the 863 var()
-    // references in side_panel.ts/options.ts guarded instead of unverifiable.
     name: 'chrome',
     source: 'apps/extension/src',
     stylesheets: [
@@ -67,25 +26,15 @@ const SURFACES = [
     ],
   },
   {
-    // VS Code's webview has no stylesheet either: getWebviewContent emits an
-    // inline <style nonce> block, so that TS file IS the stylesheet. Its own
-    // --agi-vscode-* / --bg-* / --text-* families are defined there; the
-    // --vscode-* family is injected by the host and is in EXTERNALLY_PROVIDED.
     name: 'vscode',
     source: 'apps/extension-vscode/src',
     stylesheets: [
       'apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts',
-      // `${cssVarsToString(agiVsCodeCssVars)}` interpolated into that :root
-      // block — the --agi-vscode-* values live here, exactly as Chrome's do.
       'packages/ui/design-tokens/src/index.ts',
     ],
   },
 ];
 
-/**
- * Properties supplied by the browser, a framework, or set imperatively at
- * runtime rather than declared in a stylesheet.
- */
 const EXTERNALLY_PROVIDED = [
   /^--vscode-/, // VS Code injects its theme tokens into the webview
   /^--tw-/, // Tailwind internals
@@ -93,7 +42,6 @@ const EXTERNALLY_PROVIDED = [
   /^--shiki-/, // syntax highlighter
 ];
 
-/** Tokens holding a bare HSL channel triplet — only valid inside hsl(). */
 const HSL_TRIPLET_RE = /^\s*[\d.]+\s+[\d.]+%\s+[\d.]+%\s*$/;
 
 function walk(dir, out = []) {
@@ -133,11 +81,6 @@ function walkTailwindSources(dir, out = []) {
   return out;
 }
 
-/**
- * Font variables declared through next/font (`variable: '--font-x'`) are injected
- * onto the document element at runtime, so they are defined even though no
- * stylesheet declares them.
- */
 function nextFontTokens() {
   const found = new Set();
   for (const rel of ['apps/web/app/layout.tsx']) {
@@ -149,7 +92,6 @@ function nextFontTokens() {
   return found;
 }
 
-/** Custom properties DECLARED by a stylesheet, plus which hold HSL triplets. */
 function declaredTokens(files) {
   const declared = new Set();
   const hslTriplets = new Set();
@@ -157,12 +99,6 @@ function declaredTokens(files) {
     const abs = path.join(root, file);
     if (!fs.existsSync(abs)) continue;
     const css = fs.readFileSync(abs, 'utf8');
-    // The optional quote before `:` lets one regex read both a CSS declaration
-    // (`--x: value;`) and a TS token-map entry (`'--x': value,`). Chrome's
-    // tokens only exist in the latter form.
-    // Value capture is newline-bounded. Unbounded `[^;}]+` was greedy across
-    // lines in a TS token map (entries end in `,`, not `;`), so one match
-    // swallowed the next several tokens and they read as undeclared.
     for (const m of css.matchAll(/(--[a-zA-Z0-9-]+)["'`]?\s*:\s*([^;}\n]+)/g)) {
       declared.add(m[1]);
       if (HSL_TRIPLET_RE.test(m[2])) hslTriplets.add(m[1]);
@@ -171,26 +107,6 @@ function declaredTokens(files) {
   return { declared, hslTriplets };
 }
 
-/**
- * Overlays that render through a Portal are appended to <body>, so they are
- * siblings in one stacking context and their z-index values are compared against
- * each other — not against the subtree they were written in. A raw literal there
- * is therefore a silent claim about every other overlay in the app, and it is
- * wrong as soon as one of them moves: `z-50` on Select, DropdownMenu, ContextMenu,
- * Menubar, HoverCard and Tooltip put them all underneath a Dialog after Dialog
- * moved to `--z-modal` (300), so the Select inside GlobalSearchDialog's
- * DialogContent rendered behind the dialog that owned it.
- *
- * These files must express their layer as `z-[var(--z-<layer>,<fallback>)]`, in a
- * class or in an inline style. The list is the set of primitives that are on the
- * shared scale today, not every portalled component: it exists to stop these
- * regressing to a literal. Sheet.tsx and Drawer.tsx are deliberately absent —
- * they still carry `z-50` and have no render path in any app, so nothing has
- * established where they belong (see ExecutionPlan #99 notes). NavigationMenu's
- * `z-[1]` indicator and Calendar's `z-20` nav are local to their own stacking
- * context and are fine. A missing file is an error, so a rename cannot quietly
- * drop a file from the gate.
- */
 const PORTAL_OVERLAYS = [
   'packages/ui/ui/src/primitives/AlertDialog.tsx',
   'packages/ui/ui/src/primitives/ContextMenu.tsx',
@@ -204,23 +120,13 @@ const PORTAL_OVERLAYS = [
   'packages/ui/ui/src/primitives/Tooltip.tsx',
 ];
 
-/**
- * Both ways a component can hardcode a layer:
- *  - a Tailwind utility carrying a literal — `z-50`, `z-[100]`, `-z-10`;
- *  - an inline style — `style={{ zIndex: 50 }}`, `zIndex: '50'`.
- * The second form bypassed the class-only version of this rule, and it is the
- * shape the untouched offenders use (GalleryClient.tsx, FilePreviewModal.tsx).
- * `zIndex: 'var(--z-modal, 300)'` is allowed, same as the class form.
- */
 const RAW_Z_INDEX_PATTERNS = [
   /(?<![\w-])-?z-(?:\d+|\[(?!var\()[^\]]*\])/g,
   /\bzIndex\s*:\s*(?!['"`]?\s*var\()['"`]?-?\d+/g,
 ];
 
-/** Where the `--z-*` layers referenced by those classes are declared. */
 const Z_SCALE_CSS = 'apps/web/app/globals.css';
 
-/** Blanks comments while preserving line numbers, so prose about `z-50` is not a hit. */
 function stripComments(source) {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
@@ -252,13 +158,6 @@ function checkPortalOverlays() {
   }
 }
 
-/**
- * Tailwind v4 scans raw source text, including comments. A prose placeholder
- * that still looks like an arbitrary utility is therefore executable input to
- * the CSS compiler. For example, a comment containing a z-index utility with
- * an angle-bracket placeholder produced `var(--z-<layer>,…)`, made globals.css
- * unparsable, and returned HTTP 500 before the sign-in screen rendered.
- */
 const INVALID_TAILWIND_ARBITRARY_CANDIDATE =
   /(?:[!@a-z0-9_:/.-]+)-\[[^\]\n]*(?:<[^>\n]+>|…)[^\]\n]*\]/gi;
 
@@ -300,16 +199,6 @@ for (const surface of SURFACES) {
     const source = fs.readFileSync(path.join(root, file), 'utf8');
     const lines = source.split('\n');
 
-    // Tokens this file sets imperatively at runtime (style.setProperty) are
-    // defined for its own use even though no stylesheet declares them. The MCP
-    // app host, for example, emits a sandboxed document and injects its own
-    // theme tokens into it. Skipping these keeps the gate honest — a gate that
-    // reports correct code gets switched off.
-    // Two ways a file can define a token for its own use without a stylesheet:
-    // `element.style.setProperty('--x', …)`, and a React inline style object
-    // (`style={{ '--x': value }}`) — the latter is how shadcn's sidebar sizes
-    // itself and how global-error.tsx themes the crash page, which replaces the
-    // root layout and therefore loads no stylesheet at all.
     const runtimeDefined = new Set([
       ...[...source.matchAll(/setProperty\(\s*["'`](--[a-zA-Z0-9-]+)/g)].map((m) => m[1]),
       ...[...source.matchAll(/["'`](--[a-zA-Z0-9-]+)["'`]\s*:/g)].map((m) => m[1]),
@@ -320,7 +209,6 @@ for (const surface of SURFACES) {
         const token = m[1];
         if (EXTERNALLY_PROVIDED.some((re) => re.test(token))) continue;
         if (runtimeDefined.has(token)) continue;
-        // A var() with a fallback still renders something; not a silent failure.
         if (m[0].includes(',')) continue;
         referenced += 1;
 
@@ -332,7 +220,6 @@ for (const surface of SURFACES) {
           continue;
         }
 
-        // Bare use of an HSL-triplet token outside hsl() is an invalid shorthand.
         const usedInsideHsl = new RegExp(`hsl\\(\\s*var\\(\\s*${token}\\b`).test(line);
         if (hslTriplets.has(token) && !usedInsideHsl) {
           errors.push(

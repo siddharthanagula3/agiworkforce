@@ -1,7 +1,3 @@
-/**
- * Media API Service
- * Handles real API calls to /api/media/image/generate and /api/media/video/generate.
- */
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@agiworkforce/utils';
@@ -10,10 +6,6 @@ import type {
   ManagedMediaVideoAspectRatio,
   ManagedMediaVideoResolution,
 } from '@agiworkforce/cloud-contracts';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface GeneratedImage {
   url?: string;
@@ -24,7 +16,6 @@ export interface ImageGenerationRequest {
   prompt: string;
   provider?: 'google' | 'openai' | 'stability';
   aspect_ratio?: ManagedMediaImageAspectRatio;
-  /** Legacy Mobile/Desktop compatibility; new Web callers prefer `aspect_ratio`. */
   size?: string;
   style?: string;
   quality?: 'standard' | 'hd';
@@ -45,24 +36,10 @@ export interface VideoGenerationRequest {
   prompt: string;
   duration_secs?: number;
   resolution?: ManagedMediaVideoResolution;
-  /**
-   * Landscape/portrait. The route has always read `aspect_ratio` and
-   * validated it against the model's published output sizes, but this
-   * contract never carried the field, so the composer had no way to send
-   * anything but the route's 16:9 default.
-   */
   aspect_ratio?: ManagedMediaVideoAspectRatio;
   provider?: 'runway' | 'google' | 'openrouter';
-  /**
-   * Catalog model id for the composer's video picker. The route validates it
-   * (must be `modelType: 'video'`, live, and owned by an executable provider)
-   * and falls back to the catalog's `video_generation` routing slot when
-   * omitted, so sending nothing preserves the previous behavior exactly.
-   */
   model?: string;
-  /** Persisted Web chat owner; both ids are required together by the route. */
   conversation_id?: string;
-  /** Pre-persisted assistant placeholder updated by the durable job owner. */
   assistant_message_id?: string;
 }
 
@@ -87,10 +64,6 @@ export interface VideoStatusResponse {
   error?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Auth helper
-// ---------------------------------------------------------------------------
-
 async function requireAuthToken(): Promise<string> {
   const token = await getAuthToken();
   if (!token) {
@@ -110,13 +83,6 @@ function createWebMediaIdempotencyKey(
   });
 }
 
-// ---------------------------------------------------------------------------
-// API functions
-// ---------------------------------------------------------------------------
-
-/**
- * Generate images via /api/media/image/generate
- */
 export async function generateImages(
   request: ImageGenerationRequest,
 ): Promise<ImageGenerationResponse> {
@@ -153,16 +119,6 @@ export async function generateImages(
   return data;
 }
 
-/**
- * Transport-level failure that KEEPS the API's structured error fields.
- *
- * The previous `throw new Error(data.error || ...)` stringified an error body
- * of the shape `{ error: { message, code } }` — which is exactly what the
- * video route's tier refusal returns — into the literal text
- * "[object Object]", destroying the `plan_upgrade_required` code the client's
- * paywall detection matches on. Classification stays in `useMediaGeneration`
- * (MediaGenerationApiError); this type only carries the fields there intact.
- */
 export class MediaApiError extends Error {
   readonly status: number | undefined;
   readonly code: string | undefined;
@@ -230,15 +186,9 @@ async function readApiError(response: Response, fallback: string): Promise<Media
   });
 }
 
-/**
- * Start video generation via /api/media/video/generate
- */
 export async function generateVideo(
   request: VideoGenerationRequest,
 ): Promise<VideoGenerationResponse> {
-  // The pre-persisted assistant UUID is the stable user-action identity. If a
-  // POST response is lost, retrying that same placeholder replays the durable
-  // job instead of creating a second paid provider task.
   const idempotencyKey = createWebMediaIdempotencyKey('video', request.assistant_message_id);
   const token = await requireAuthToken();
 
@@ -259,9 +209,6 @@ export async function generateVideo(
   return (await response.json()) as VideoGenerationResponse;
 }
 
-/**
- * Poll video generation status via /api/media/video/status
- */
 export async function getVideoStatus(taskId: string): Promise<VideoStatusResponse> {
   const token = await requireAuthToken();
 
@@ -279,10 +226,6 @@ export async function getVideoStatus(taskId: string): Promise<VideoStatusRespons
   return (await response.json()) as VideoStatusResponse;
 }
 
-/**
- * Get a displayable URL for a generated image.
- * If the image is base64-encoded, convert to a data URI.
- */
 export function getImageDisplayUrl(image: GeneratedImage): string {
   if (image.url) return image.url;
   if (image.b64_json) return `data:image/png;base64,${image.b64_json}`;

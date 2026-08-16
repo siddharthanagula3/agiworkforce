@@ -1,17 +1,9 @@
-/**
- * webviewContent.ts — Static HTML/CSS/JS template for the sidebar and chat-editor webviews.
- *
- * Extracted from sidebarProvider.ts so both SidebarProvider and ChatEditorPanel
- * can share the same rendering helpers without a circular dependency.
- */
 
 import * as vscode from 'vscode';
 import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker/modelConstants';
 import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { ComposerFollowUpBehavior } from '../../platform/config';
-
-// ─── HTML helpers ─────────────────────────────────────────────────────────────
 
 export function escapeHtml(value: string): string {
   return value
@@ -22,32 +14,12 @@ export function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-/**
- * Cryptographically-random nonce for the webview CSP.
- * Math.random() is a predictable PRNG — this uses Node's CSPRNG.
- * 24 bytes → 32 base64url chars.
- */
 export function getNonce(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { randomBytes } = require('crypto') as typeof import('crypto');
   return randomBytes(24).toString('base64url');
 }
 
-/**
- * Generates the webview HTML.
- *
- * COLOUR POLICY — geometry and the terra brand accent are AGI-owned; surfaces,
- * text, controls, focus, and state colours follow the host theme. The sidebar
- * sits directly above native History, Context, and Memory views, so pinning the
- * webview dark in a light or high-contrast host makes one product look like two
- * unrelated extensions. `agiVsCodeCssVars` remains the fallback for hosts that
- * omit a VS Code colour token.
- *
- * Stateful foreground/background pairs must still come from the same family.
- * Warning, error, diff, button, and focus colours therefore use matching host
- * tokens with complete AGI fallbacks rather than mixing a host background with
- * a fixed-palette foreground.
- */
 export function getWebviewContent(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
@@ -56,22 +28,11 @@ export function getWebviewContent(
   initialEffort: Effort,
   supportsEffort: boolean,
   meterCollapsed: boolean,
-  /**
-   * Active subscription tier. Omitted ⇒ no tier resolved, and every model
-   * renders reachable (pre-VSCODE-PICKER-TIER-01 behaviour).
-   */
   tier?: string,
   showOnboarding = false,
   initialFollowUpBehavior: ComposerFollowUpBehavior = 'queue',
 ): string {
-  // Build CSP-safe URIs for any local assets we might need
   const cspSource = webview.cspSource;
-  // Availability invariant: non-live catalog models (`coming_soon`/`unavailable`)
-  // render as disabled "Coming soon" rows — visible but never selectable,
-  // mirroring the web picker (getSelectableModels vs getDisplayModels).
-  // VSCODE-PICKER-TIER-01: rows the active tier cannot route render disabled,
-  // the same treatment non-live `coming_soon` rows already get, so a signed-out
-  // or Local-mode user no longer sees the managed-cloud catalog as selectable.
   const modelOptionsHtml = getModelPickerOptionsForTier(tier)
     .map((option) => {
       const displayLabel = escapeHtml(option.label);
@@ -88,14 +49,10 @@ export function getWebviewContent(
   const effortLabel = escapeHtml(EFFORT_LABEL[initialEffort]);
   const followUpBehaviorLiteral = initialFollowUpBehavior === 'steer' ? 'steer' : 'queue';
 
-  // Codicon font — copied to out/codicons/ by esbuild.js so it's included in the VSIX.
   const codiconCssUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, 'out', 'codicons', 'codicon.css'),
   );
 
-  // Markdown rendering bundle (markdown-it + DOMPurify) — built by esbuild.js
-  // into out/webview/render.js. Loaded via CSP-allowed <script src> tag and
-  // exposes window.agiRender(text). Audit PR-2A (F-02, F-10).
   const renderJsUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, 'out', 'webview', 'render.js'),
   );

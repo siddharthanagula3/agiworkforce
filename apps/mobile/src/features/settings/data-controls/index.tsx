@@ -51,12 +51,6 @@ export default function DataControlsScreen() {
     }
   };
 
-  /**
-   * PERMITTED-SYNC: the ONLY allowed Local→Cloud data crossing.
-   * Requires explicit user confirmation via a two-step alert before any data
-   * leaves the device. This is a one-time, manual, additive operation —
-   * never automatic, never background.
-   */
   const handleSyncToCloud = () => {
     if (!cloudUnlocked) {
       Alert.alert('AGI Cloud required', 'Sign in to AGI Cloud to sync local chats to the cloud.');
@@ -97,11 +91,6 @@ export default function DataControlsScreen() {
     );
   };
 
-  /**
-   * Bulk chat actions run against Managed Cloud. Refuse before the request when
-   * there is no account or chat is pinned to Local Mode, instead of letting the
-   * egress guard's developer-facing refusal reach the user.
-   */
   const requireCloudChats = useCallback((): boolean => {
     if (!cloudUnlocked) {
       Alert.alert(
@@ -126,8 +115,6 @@ export default function DataControlsScreen() {
       const request = action === 'archive' ? archiveAllConversations() : deleteAllConversations();
       request
         .then(async (affectedCount) => {
-          // The Cloud chat list is server-owned, so re-read it rather than
-          // guessing locally which conversations survived.
           await loadConversations();
           const noun = affectedCount === 1 ? 'chat' : 'chats';
           Alert.alert(
@@ -138,8 +125,6 @@ export default function DataControlsScreen() {
           );
         })
         .catch(() => {
-          // Deliberately generic: transport and egress-guard messages are
-          // developer copy and must never render as screen text.
           Alert.alert(
             action === 'archive' ? 'Could not archive chats' : 'Could not delete chats',
             'AGI could not reach your AGI Cloud chat history. Check your connection and try again.',
@@ -150,7 +135,6 @@ export default function DataControlsScreen() {
     [loadConversations],
   );
 
-  /** Two-step destructive confirmation, matching app/(app)/settings/storage.tsx. */
   const handleArchiveAll = useCallback(() => {
     if (!requireCloudChats()) return;
     Alert.alert(

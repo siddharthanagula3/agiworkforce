@@ -1,29 +1,14 @@
 #!/usr/bin/env node
-// AGI repo cleanup — remove stale reports / working notes / caches.
-//
-// Conservative + explicit: it only touches a hard-coded STALE allowlist and
-// refuses to touch anything in KEEP. SAFE BY DEFAULT (lists the plan and
-// exits). Pass --apply to execute. Tracked dirs are removed with `git rm -r`
-// (recoverable from history); gitignored caches with `rm -rf`.
-//
-// Must run in a git environment (NOT the Cowork sandbox, which blocks git
-// writes and file removal). Review the dry-run, then --apply, then commit.
-//
-//   node scripts/clean-repo.mjs            # dry-run (default)
-//   node scripts/clean-repo.mjs --apply    # execute
 
 import { existsSync, statSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Tracked, stale → git rm -r (kept in history, recoverable).
 export const TRACKED_STALE = ['reports', 'tasks', '_archive', 'docs/archive'];
 
-// Gitignored caches / scratch → rm -rf.
 const CACHE_STALE = ['.tmp', '.tmp_capture', '.playwright-mcp', '.remember', '.firecrawl'];
 
-// Never touch these (canonical sources of truth + product code).
 export const KEEP = [
   'AGENTS.md',
   'CLAUDE.md',

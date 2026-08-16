@@ -1,17 +1,3 @@
-/**
- * Regression for the silent cloud-reply failure on real devices.
- *
- * React Native's global `fetch` (whatwg-fetch) does NOT expose a streaming
- * response body — `response.body` is `null`. The completions stream path read
- * `response.body?.getReader()` and, finding no reader, called
- * `onError('No response body')`, so EVERY cloud chat reply silently failed even
- * though the HTTP request returned 200.
- *
- * The original provider-stream test never caught this because it mocked `body`
- * as a Node `ReadableStream` — i.e. it tested a world that doesn't exist on the
- * device. These tests reproduce the REAL RN condition (`body: null`, full SSE
- * available only via `text()`) and assert the reply still renders.
- */
 
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
@@ -35,8 +21,6 @@ const SSE = [
 
 async function loadStreamingService() {
   jest.resetModules();
-  // Leave the gateway flag unset → streamChat goes straight to the completions
-  // path (attemptStream), which is the path that breaks on real devices.
   delete process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM;
 
   guardedFetchMock.mockReset();
@@ -94,8 +78,6 @@ describe('completions stream fallback (RN null response.body)', () => {
 
   it('renders the reply via response.text() when body is null (the real RN fetch)', async () => {
     const { streamChat } = await loadStreamingService();
-    // RN global fetch: 200 OK, but NO streamable body — text() returns the
-    // whole SSE buffer once the stream closes.
     guardedFetchMock.mockResolvedValue({
       ok: true,
       status: 200,
@@ -116,7 +98,6 @@ describe('completions stream fallback (RN null response.body)', () => {
       callbacks,
     );
 
-    // The exact bug: onError('No response body') must NOT fire on a 200.
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(deltas.join('')).toBe('2 plus 2 = 4.');
     expect(callbacks.onDone).toHaveBeenCalledTimes(1);

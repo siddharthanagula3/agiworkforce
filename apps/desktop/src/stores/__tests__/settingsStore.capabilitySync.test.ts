@@ -1,10 +1,3 @@
-/**
- * settingsStore capability-sync enforcement.
- *
- * `sync_capabilities` is the only input to backend tool gating, so a failed
- * sync means a capability the user turned off is still executable. These tests
- * pin that neither save nor load may report success over an unenforced toggle.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invoke = vi.fn();
@@ -23,7 +16,6 @@ vi.mock('../../lib/tauri-mock', () => ({
 
 const { useSettingsStore } = await import('../settingsStore');
 
-/** Minimal payload shaped like the `settings_load_from_disk` command result. */
 const DISK_SETTINGS = {
   llmConfig: undefined,
   windowPreferences: undefined,
@@ -81,8 +73,6 @@ describe('settingsStore — capability sync failures are not reported as success
     await expect(useSettingsStore.getState().saveSettings()).rejects.toThrow(
       'capability sync failed',
     );
-    // Persisting an opt-out the backend is not enforcing is the fail-open case:
-    // disk says disabled, the tool stays live for the rest of the session.
     expect(invoke).not.toHaveBeenCalledWith('settings_save', expect.anything());
 
     consoleErrorSpy.mockRestore();

@@ -16,12 +16,7 @@ import { MarkdownContent } from './markdown/MarkdownContent';
 import { buildCompactSummary } from '../lib/compactToolSummary';
 import type { ThinkingBlock as ThinkingBlockType, ThinkingStep } from '../lib/types';
 
-// ─── Constants ─────────────────────────────────────────────────────────────────
-
-/** Auto-compact when there are more than this many steps and none is running. */
 const COMPACT_THRESHOLD = 3;
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 interface StepIconProps {
   type: ThinkingStep['type'];
@@ -83,8 +78,6 @@ function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
 }
-
-// ─── Timeline (full expanded view) ────────────────────────────────────────────
 
 interface TimelineProps {
   steps: ThinkingStep[];
@@ -157,33 +150,20 @@ function Timeline({ steps, isRunning }: TimelineProps) {
   );
 }
 
-// ─── Main component ────────────────────────────────────────────────────────────
-
 export interface ThinkingBlockProps {
   block: ThinkingBlockType;
-  /**
-   * Override compact mode behaviour.
-   * - `true`  → always use compact single-line summary (unless streaming)
-   * - `false` → always show full expanded timeline
-   * - omitted → auto: compact when steps > 3 and no step is actively running
-   */
   compact?: boolean;
 }
 
 export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProps) {
-  // Whether the outer block accordion is open (the summary-bar toggle)
   const [expanded, setExpanded] = useState(!block.collapsed);
-  // Whether the user has clicked through from compact → full view
   const [compactExpanded, setCompactExpanded] = useState(false);
 
   const isDone = block.steps.some((s) => s.type === 'done' || s.type === 'complete');
   const isStreamingActive = !isDone;
 
-  // A step is "running" if the whole block has no terminal 'done'/'complete' step.
-  // The presence of any running indicator is the absence of a done step.
   const isRunning = isStreamingActive;
 
-  // Auto-compact: more than threshold steps AND not streaming
   const autoCompact = block.steps.length > COMPACT_THRESHOLD && !isStreamingActive;
   const useCompact = compactProp !== undefined ? compactProp && !isStreamingActive : autoCompact;
   const reasoningStep = block.steps.find((step) => step.type === 'thinking');
@@ -194,7 +174,6 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
     );
   const summaryIncludesDuration = block.summary?.startsWith('Thought for') ?? false;
 
-  // ── Compact mode: single summary line ──────────────────────────────────────
   if (useCompact && !compactExpanded) {
     const summary = buildCompactSummary(block.steps);
     return (
@@ -230,7 +209,6 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
     );
   }
 
-  // ── Full view (expanded or streaming) ──────────────────────────────────────
   return (
     <div className="my-3">
       {/* Header */}
@@ -238,7 +216,6 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
         type="button"
         onClick={() => {
           if (useCompact && compactExpanded) {
-            // In compact-originated full view, "collapse" means back to compact pill
             setCompactExpanded(false);
           } else {
             setExpanded((e) => !e);

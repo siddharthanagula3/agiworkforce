@@ -74,7 +74,7 @@ describe('POST /api/settings/organization/transfer-ownership', () => {
 
   it('demotes the outgoing owner BEFORE promoting the successor, inside one transaction', async () => {
     mockQuery
-      .mockResolvedValueOnce([]) // advisory lock
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([member('current-owner', 'owner')])
       .mockResolvedValueOnce([member('successor', 'admin')]);
 
@@ -83,9 +83,6 @@ describe('POST /api/settings/organization/transfer-ownership', () => {
     expect(response.status).toBe(200);
     expect(mockTransaction).toHaveBeenCalledOnce();
 
-    // The single-owner unique index is IMMEDIATE, so promote-then-demote would
-    // abort. Demote must come first; the at-least-one-owner trigger is deferred
-    // so the transient ownerless state inside the transaction is legal.
     const [demote, promote] = mockExecute.mock.calls;
     expect(String(demote?.[0])).toContain('set role = $1');
     expect(demote?.[1]).toEqual(['admin', ORG_A, 'current-owner']);
@@ -124,7 +121,7 @@ describe('POST /api/settings/organization/transfer-ownership', () => {
     mockQuery
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([member('current-owner', 'owner')])
-      .mockResolvedValueOnce([]); // not in ORG_A
+      .mockResolvedValueOnce([]);
 
     const response = await POST(transferRequest({ organizationId: ORG_A, toUserId: 'stranger' }));
 
@@ -140,8 +137,6 @@ describe('POST /api/settings/organization/transfer-ownership', () => {
     );
 
     expect(response.status).toBe(403);
-    // Both predicates on the membership read, so an owner of org A cannot
-    // reach into org B by naming its id.
     expect(mockQuery.mock.calls[1]?.[1]).toEqual([ORG_B, 'current-owner']);
     expect(mockExecute).not.toHaveBeenCalled();
   });
@@ -187,7 +182,7 @@ describe('sole-owner protection on the member routes', () => {
   it('refuses to promote a second owner and names the transfer flow instead', async () => {
     const memberId = `${ORG_A}:successor`;
     mockQuery
-      .mockResolvedValueOnce([]) // advisory lock
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([member('current-owner', 'owner')]);
 
     const response = await PATCH(
@@ -199,9 +194,6 @@ describe('sole-owner protection on the member routes', () => {
       { params: Promise.resolve({ memberId }) },
     );
 
-    // Previously an OWNER was allowed to mint a second owner here. 0085's
-    // single-owner unique index makes that impossible, so the route now points
-    // at the only lawful path rather than failing on a constraint name.
     expect(response.status).toBe(409);
     const body = (await response.json()) as { error: { message: string } };
     expect(body.error.message).toMatch(/transfer-ownership/i);
@@ -211,9 +203,9 @@ describe('sole-owner protection on the member routes', () => {
   it('refuses to remove the last owner', async () => {
     const memberId = `${ORG_A}:current-owner-2`;
     mockQuery
-      .mockResolvedValueOnce([]) // advisory lock
-      .mockResolvedValueOnce([member('current-owner', 'owner')]) // requester
-      .mockResolvedValueOnce([member('current-owner-2', 'owner')]) // target
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member('current-owner', 'owner')])
+      .mockResolvedValueOnce([member('current-owner-2', 'owner')])
       .mockResolvedValueOnce([{ owner_count: '1' }]);
 
     const response = await DELETE(

@@ -1,21 +1,9 @@
-/**
- * contentFilter — unit tests
- *
- * Verifies that minor-safe mode correctly allows benign prompts and refuses
- * age-inappropriate content requests.
- *
- * No mocks required — contentFilter is pure logic with no I/O.
- */
 
 import {
   checkContentFilter,
   MINOR_SAFE_REFUSAL,
   REDUCED_SENSITIVE_CONTENT_REFUSAL,
 } from '../lib/contentFilter';
-
-// ---------------------------------------------------------------------------
-// Adult-mode pass-through
-// ---------------------------------------------------------------------------
 
 describe('checkContentFilter — isMinor=false (adult mode)', () => {
   it('allows any prompt in adult mode', () => {
@@ -24,10 +12,6 @@ describe('checkContentFilter — isMinor=false (adult mode)', () => {
     expect(checkContentFilter('Show me porn', false)).toEqual({ allowed: true });
   });
 });
-
-// ---------------------------------------------------------------------------
-// Minor mode — benign prompts allowed
-// ---------------------------------------------------------------------------
 
 describe('checkContentFilter — isMinor=true, benign prompts', () => {
   it('allows school homework questions', () => {
@@ -68,10 +52,6 @@ describe('checkContentFilter — isMinor=true, benign prompts', () => {
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// Minor mode — blocked prompts return refusal
-// ---------------------------------------------------------------------------
 
 describe('checkContentFilter — isMinor=true, blocked prompts', () => {
   it('blocks explicit sexual content request', () => {
@@ -164,10 +144,6 @@ describe('checkContentFilter — isMinor=true, blocked prompts', () => {
     expect(checkContentFilter('How To Make Meth', true).allowed).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Edge cases
-// ---------------------------------------------------------------------------
 
 describe('checkContentFilter — edge cases', () => {
   it('handles empty prompt gracefully (allowed in minor mode)', () => {

@@ -53,8 +53,6 @@ describe('ModeToggle', () => {
   });
 
   it('does not frame locked cloud access with a waitlist rank (public alpha = sign in)', () => {
-    // Legacy cloudJoined / waitlistRank props no longer drive the label: a signed-out
-    // user is prompted to sign in, not to join a list.
     const { getByTestId } = render(<ModeToggle cloudJoined waitlistRank={42} />);
 
     expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityLabel).toBe(

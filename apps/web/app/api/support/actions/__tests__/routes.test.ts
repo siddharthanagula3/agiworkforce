@@ -1,14 +1,3 @@
-/**
- * The HTTP surface of the action layer.
- *
- * What these prove that the service tests cannot:
- *   - the caller identity comes from the session, so a body that names a user
- *     id changes nothing
- *   - the confirm body has no field for an action or its parameters, so a
- *     retargeting attempt is dropped before it reaches the service
- *   - CSRF and rate limiting run before anything is proposed or executed
- *   - a refusal is a structured 4xx a UI can render, not a 500
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -151,7 +140,6 @@ describe('POST /api/support/actions/confirm', () => {
       post('/api/support/actions/confirm', {
         proposalId: PROPOSAL_ID,
         confirmationToken: TOKEN,
-        // A retargeting attempt. There is no field for these.
         actionId: 'regenerate_api_key',
         params: { keyId: '88888888-8888-4888-8888-888888888888' },
       }),

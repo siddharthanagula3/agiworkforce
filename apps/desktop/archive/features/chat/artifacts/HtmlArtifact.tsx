@@ -7,20 +7,6 @@ import type { Artifact } from '../../../types/chat';
 import { Button } from '@/components/ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 
-/**
- * Sandboxed iframe-based runtime for HTML/JavaScript artifacts.
- * Provides a CodePen/JSFiddle-like live preview experience.
- *
- * Security measures:
- * - Uses strict sandbox attributes to prevent:
- *   - Top-level navigation (allow-top-navigation disabled)
- *   - Form submissions to external URLs (allow-forms disabled by default)
- *   - Access to parent window (allow-same-origin disabled)
- *   - Popups and modal dialogs (allow-popups disabled)
- * - CSP meta tag injected into the HTML to restrict external resources
- * - Console output is captured and displayed for debugging
- * - Errors are caught and displayed gracefully
- */
 export function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isRunning, setIsRunning] = useState(true);
@@ -34,11 +20,9 @@ export function HtmlArtifact({ artifact }: { artifact: Artifact }) {
 
   const channelId = useRef(crypto.randomUUID());
 
-  // AUDIT-005-004 fix: Ref to track reload timeout for cleanup
   const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
-  // AUDIT-005-004 fix: Cleanup on unmount
   React.useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -50,26 +34,9 @@ export function HtmlArtifact({ artifact }: { artifact: Artifact }) {
     };
   }, []);
 
-  // Build the sandboxed HTML document with security headers and console capture
   const buildSandboxedHtml = useCallback((content: string): string => {
     const isFullDocument = /<html[\s>]/i.test(content) || /<!doctype/i.test(content);
 
-    // Content Security Policy for the interactive HTML/JS execution sandbox.
-    // This component is intentionally permissive for script execution — it is a
-    // CodePen/JSFiddle-style live preview where users run their own JavaScript.
-    //
-    // script-src 'unsafe-inline':
-    //   Required — the console-capture bootstrap is injected as an inline <script>
-    //   block. Removing this would silently break all console output forwarding.
-    //
-    // script-src 'unsafe-eval':
-    //   Required for full JavaScript sandbox parity. Users may legitimately write
-    //   artifacts that call eval(), new Function(), or pass strings to setTimeout().
-    //   TRADE-OFF: Acceptable because iframe sandbox="allow-scripts" (no allow-same-origin)
-    //   prevents access to parent window, localStorage, and cookies; connect-src 'none'
-    //   blocks all network exfiltration; frame-src 'none' blocks nested iframe attacks.
-    //
-    // connect-src 'none': blocks ALL fetch(), XMLHttpRequest, WebSocket calls.
     const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline' *; img-src * data: blob:; font-src * data:; connect-src 'none'; frame-src 'none'; object-src 'none';">`;
 
     const consoleCapture = `
@@ -214,9 +181,6 @@ export function HtmlArtifact({ artifact }: { artifact: Artifact }) {
         }
         modifiedContent = modifiedContent.replace(headOpen, `<head$1>\n${consoleCapture}`);
       } else {
-        // Full document (has <html> or a doctype) but NO <head>: the .replace above
-        // would silently no-op and leave the document with NO CSP. Synthesize a
-        // <head> so the CSP + console-capture are actually applied.
         const headBlock = `<head>\n${hasCsp ? '' : cspMeta}\n${consoleCapture}\n</head>`;
         modifiedContent = /<html[^>]*>/i.test(modifiedContent)
           ? modifiedContent.replace(/(<html[^>]*>)/i, `$1\n${headBlock}`)
@@ -284,7 +248,6 @@ ${content}
     setConsoleOutput([]);
     setError(null);
     setIsRunning(false);
-    // AUDIT-005-004 fix: Clear previous timeout and store new one for cleanup
     if (reloadTimeoutRef.current) {
       clearTimeout(reloadTimeoutRef.current);
     }
@@ -470,10 +433,6 @@ ${content}
                   srcDoc={srcDoc}
                   title={artifact.title || 'HTML Preview'}
                   className="w-full h-full border-0"
-                  // allow-scripts: Allow JavaScript execution (required for interactivity)
-                  // allow-modals: Allow alert(), confirm(), prompt() dialogs
-                  // NOT included: allow-same-origin, allow-top-navigation, allow-forms,
-                  // allow-popups, allow-pointer-lock, allow-downloads
                   sandbox="allow-scripts allow-modals"
                   referrerPolicy="no-referrer"
                 />

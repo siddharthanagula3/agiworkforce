@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-/**
- * EU AI Act Article 50(2) for a durably delivered generated video.
- */
-
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -122,12 +118,8 @@ describe('Article 50(2) — generated video provenance', () => {
     expect(body.status).toBe('completed');
     expect(hasAiGeneratedProvenance(body.provenance)).toBe(true);
     expect(body.provenance.kind).toBe('video');
-    // The model comes from the durable tenant-owned job, never from a provider
-    // response or a process-local fallback.
     expect(body.provenance.model).toBe(PROVENANCE_MODEL_ID);
     expect(response.headers.get(AI_GENERATED_HEADER)).toBe('true');
-    // One artefact per response, so the whole claim rides in the header too —
-    // a download tool that never reads the JSON body still sees the mark.
     expect(
       hasAiGeneratedProvenance(
         JSON.parse(response.headers.get(AI_GENERATED_PROVENANCE_HEADER) ?? 'null'),

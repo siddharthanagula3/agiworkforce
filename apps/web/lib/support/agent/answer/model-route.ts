@@ -1,25 +1,5 @@
 import 'server-only';
 
-/**
- * The support agent's one bounded model call.
- *
- * Reuses the product's existing model access verbatim — the same primitives
- * `lib/services/scheduled-agent-executor.ts` calls, in the same order. No second
- * provider integration, no HTTP round trip through the LLM route, no model id
- * literal from anywhere: the id comes from `resolveAutoRoute`.
- *
- * One call. No tool loop, no streaming, `maxOutputTokens` capped. A support turn
- * is bounded by construction.
- *
- * COST NOTE (real, unresolved): the marketing widget serves signed-out visitors,
- * so there is no user id and therefore no managed-usage reservation the way the
- * scheduled executor has one. Every anonymous question that clears the relevance
- * floor is an unmetered managed-provider call. Mitigations that live here: a
- * hard output cap, a single non-streaming call, and `SUPPORT_AGENT_ENABLED`
- * defaulting OFF. Rate limiting is the caller's responsibility (the route layer)
- * and is NOT implemented in this module.
- */
-
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
@@ -42,12 +22,6 @@ export type SupportModelResult =
       route: { provider: string; modelKey: string } | null;
     };
 
-/**
- * Kill switch. NEW ENV VAR — it does not exist in any deployment today and must
- * be added to the deploy environment before the agent can answer anything.
- * Default OFF so an unconfigured deploy degrades to an abstention plus a human
- * handoff rather than burning provider spend.
- */
 export function isSupportAgentEnabled(): boolean {
   const raw = getOptionalEnv('SUPPORT_AGENT_ENABLED');
   if (raw === undefined) return false;
@@ -80,8 +54,6 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
   const routeInfo = { provider: route.provider, modelKey: route.modelKey };
   const system = buildSupportSystemPrompt();
 
-  // Last line of defence before anything leaves the process: the rendered prompt
-  // must not carry secret-shaped material. A hit fails the turn closed.
   try {
     assertNoLeaks('support-agent-prompt', { system, user: input.userMessage });
   } catch {

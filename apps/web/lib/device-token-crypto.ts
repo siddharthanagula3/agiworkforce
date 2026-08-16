@@ -5,18 +5,9 @@ import crypto from 'node:crypto';
 const { createCipheriv, createDecipheriv, randomBytes } = crypto;
 
 const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12; // 96-bit IV for GCM
-const AUTH_TAG_LENGTH = 16; // 128-bit auth tag
+const IV_LENGTH = 12;
+const AUTH_TAG_LENGTH = 16;
 
-/**
- * Derives a 32-byte AES-256 key for device token encryption.
- *
- * Requires `DEVICE_TOKEN_ENCRYPTION_KEY` (hex-encoded 32-byte key).
- * In development without the key set, throws an error with instructions.
- *
- * Generate a key with:
- *   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
- */
 function getEncryptionKey(): Buffer {
   const keyEnv = process.env['DEVICE_TOKEN_ENCRYPTION_KEY'];
   if (keyEnv) {
@@ -35,11 +26,6 @@ function getEncryptionKey(): Buffer {
   );
 }
 
-/**
- * Encrypts a plaintext string using AES-256-GCM.
- *
- * Returns a base64-encoded string containing: IV || ciphertext || authTag
- */
 export function encryptToken(plaintext: string): string {
   const key = getEncryptionKey();
   const iv = randomBytes(IV_LENGTH);
@@ -48,16 +34,10 @@ export function encryptToken(plaintext: string): string {
   const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   const authTag = cipher.getAuthTag();
 
-  // Pack: IV (12) + ciphertext (variable) + authTag (16)
   const combined = Buffer.concat([iv, encrypted, authTag]);
   return combined.toString('base64');
 }
 
-/**
- * Decrypts a token previously encrypted with `encryptToken`.
- *
- * Expects a base64-encoded string containing: IV || ciphertext || authTag
- */
 export function decryptToken(encoded: string): string {
   const key = getEncryptionKey();
   const combined = Buffer.from(encoded, 'base64');

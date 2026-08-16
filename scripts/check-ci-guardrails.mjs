@@ -110,9 +110,6 @@ requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/ci.yml', '--filter=agi-workforce');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter agi-workforce package');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/extension package');
-// Rust dependency policy moved from cargo-audit to cargo-deny (2026-07-16):
-// bans/sources/licenses gate merges; advisories report against the triaged
-// RUST-DEPENDENCY-ADVISORIES-01 entry in docs/agent-context/known-flaws.md.
 requireIncludes('.github/workflows/ci.yml', 'cargo deny check bans sources licenses');
 requireIncludes('.github/workflows/ci.yml', 'cargo deny check advisories');
 requireIncludes(
@@ -256,17 +253,6 @@ if (repositoryFiles.status !== 0) {
 
 requireIncludes('.github/workflows/ci.yml', 'Semgrep (security audit)');
 
-// These two used to pin the phrases "TEMPORARY revert to advisory mode" and
-// "proper drive-to-zero", so the advisory state could not be dropped without
-// someone noticing. That guarded the wrong thing. The scanner was CRASHING —
-// semgrep 1.36.0 in the pinned 2023 action image rejects the `MEDIUM` severity
-// that registry rules now use — and `continue-on-error: true` swallowed it, so
-// the tracked "41 findings" backlog was never being counted. A comment
-// describing a backlog stayed truthfully in place while the scan it described
-// ran zero rules.
-//
-// What must not regress is the distinction the old step could not make: a
-// scanner that FAILED TO RUN must never report the same as a clean scan.
 requireIncludes('.github/workflows/ci.yml', 'This is a broken scanner, not a clean scan');
 requireIncludes('.github/workflows/ci.yml', 'semgrep==');
 
@@ -485,16 +471,10 @@ requireNotIncludes('scripts/release.sh', 'gh release create');
 requireIncludes('scripts/release.sh', 'v-desktop-${VERSION}');
 
 requireIncludes('vercel.json', '"path": "/api/cron/reset-credits"');
-// API-host aliases are owned by one contract shared by Next rewrites and
-// Proxy pass-through. Root vercel.json rewrites are ignored for this Next
-// project and must not become a second, inert route table.
 requireIncludes('apps/web/lib/api-host-route-contract.ts', "source: '/v1/chat/completions'");
 requireIncludes('apps/web/next.config.ts', 'API_HOST_REWRITE_ROUTES.map');
 requireNotIncludes('vercel.json', '"source": "/v1/chat/completions"');
 requireIncludes('vercel.json', 'pnpm install --frozen-lockfile');
-// The Vercel project's Root Directory is the repo root, so the ROOT
-// vercel.json is the only one Vercel reads (apps/web/vercel.json was dead
-// config and was deleted 2026-07-17 — see WEB-API-HOST-REWRITES-INERT-01).
 requireIncludes('vercel.json', 'pnpm install --frozen-lockfile');
 requireNotIncludes('vercel.json', '--no-frozen-lockfile');
 requireIncludes('apps/web/scripts/build-with-chat.sh', 'SCRIPT_DIR=');

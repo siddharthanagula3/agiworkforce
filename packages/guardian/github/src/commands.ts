@@ -1,9 +1,3 @@
-/**
- * `/agi ...` command parsing.
- *
- * Comment bodies are untrusted; parsing is strictly allowlisted — an unknown
- * command never becomes an action, and arguments are validated per command.
- */
 export const AGI_COMMANDS = [
   'help',
   'review',

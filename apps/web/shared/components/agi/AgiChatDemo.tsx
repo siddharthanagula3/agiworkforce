@@ -3,11 +3,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { AgiMark } from './AgiMark';
 
-/*
- * The hero product preview: a scripted chat panel showing the route label change
- * without claiming a live model call or a completed code execution.
- */
-
 type Step =
   | { kind: 'user'; text: string; model: string }
   | { kind: 'assistant'; text: string; model: string }
@@ -73,7 +68,6 @@ export function AgiChatDemo() {
 
   const visible = reduced ? SCRIPT : SCRIPT.slice(0, i);
 
-  // Find the most-recent message's model to display in the header.
   const firstStep = SCRIPT[0]!;
   let currentModel = firstStep.kind === 'switch' ? firstStep.from : firstStep.model;
   for (let idx = visible.length - 1; idx >= 0; idx--) {

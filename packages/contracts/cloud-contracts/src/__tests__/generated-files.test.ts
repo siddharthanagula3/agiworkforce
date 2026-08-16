@@ -1,8 +1,3 @@
-/**
- * Tests for the x_generated_files cloud contract: wire parsing (per-file
- * salvage, malformed payloads) and uri resolution for non-same-origin
- * surfaces (desktop Tauri / mobile).
- */
 
 import { describe, expect, it } from 'vitest';
 import {

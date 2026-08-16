@@ -1,11 +1,3 @@
-/**
- * Canonical wire contract for the authenticated Managed Cloud Skills directory.
- *
- * Skills are server-owned capabilities. A directory entry being visible does
- * not make it executable: `lifecycle: 'included'` is the admission signal,
- * while `draft` entries are catalog previews only. `downloadable` is narrower
- * still and is currently limited to included first-party bundles.
- */
 
 import { z } from 'zod';
 

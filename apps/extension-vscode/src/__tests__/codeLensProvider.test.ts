@@ -1,13 +1,5 @@
-/**
- * codeLensProvider.test.ts — Tests for AgiCodeLensProvider logic
- *
- * Validates that computeLenses surfaces the correct lenses for each
- * language and that the Refactor lens is present alongside Ask AI / Tests / Docs.
- */
 
 import { describe, it, expect } from 'vitest';
-
-// Replicate the pure logic under test (no vscode dependency).
 
 function isFunctionOrClassLine(line: string, languageId: string): boolean {
   const trimmed = line.trimStart();
@@ -121,8 +113,6 @@ function computeLenses(lines: string[], languageId: string): MockLens[] {
   }
   return lenses;
 }
-
-// ── isFunctionOrClassLine ─────────────────────────────────────────────────────
 
 describe('isFunctionOrClassLine — TypeScript', () => {
   const lang = 'typescript';
@@ -245,8 +235,6 @@ describe('isFunctionOrClassLine — Ruby', () => {
   });
 });
 
-// ── computeLenses — lens set per declaration ──────────────────────────────────
-
 describe('computeLenses lens set', () => {
   const lines = [
     'export async function fetchUsers(): Promise<User[]> {',
@@ -303,7 +291,6 @@ describe('computeLenses lens set', () => {
       '}',
     ];
     const lenses = computeLenses(multiLines, 'typescript');
-    // 4 lenses × 2 declarations
     expect(lenses).toHaveLength(8);
   });
 
@@ -318,8 +305,6 @@ describe('computeLenses lens set', () => {
     ]);
   });
 });
-
-// ── Python computeLenses ──────────────────────────────────────────────────────
 
 describe('computeLenses — Python source', () => {
   const pyLines = [
@@ -338,7 +323,6 @@ describe('computeLenses — Python source', () => {
 
   it('emits 4 lenses per Python declaration', () => {
     const lenses = computeLenses(pyLines, 'python');
-    // 3 declarations × 4 lenses
     expect(lenses).toHaveLength(12);
   });
 });

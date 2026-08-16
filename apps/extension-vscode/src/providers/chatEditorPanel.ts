@@ -1,4 +1,3 @@
-/** Main-editor host for the same local developer-session controller as the sidebar. */
 
 import * as vscode from 'vscode';
 import { Config } from '../platform/config';
@@ -28,7 +27,6 @@ export class ChatEditorPanel {
     ChatEditorPanel.nextPanelNumber = 1;
   }
 
-  /** Create an independent developer conversation in a new editor tab. */
   static createNew(
     extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
@@ -59,7 +57,6 @@ export class ChatEditorPanel {
     return instance;
   }
 
-  /** Reveal the most recently active editor chat, creating one when none exists. */
   static revealMostRecentOrCreate(
     extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
@@ -111,7 +108,6 @@ export class ChatEditorPanel {
       Config.agentEffort(),
       this.stateManager.modelSupportsEffort(model),
       this.stateManager.meterCollapsed,
-      // VSCODE-PICKER-TIER-01: gate the <select> roster on the resolved tier.
       resolveTierSync(context),
       false,
       Config.composerFollowUpBehavior(),
@@ -147,14 +143,12 @@ export class ChatEditorPanel {
     this.disposables.length = 0;
   }
 
-  /** Keep every live editor composer aligned with the user-scoped default. */
   static pushFollowUpBehavior(): void {
     for (const instance of ChatEditorPanel.instances) {
       instance.stateManager.pushFollowUpBehavior();
     }
   }
 
-  /** Keep every open editor chat aligned with the latest account entitlement. */
   static refreshAccountPresentation(): void {
     for (const instance of ChatEditorPanel.instances) {
       void instance.stateManager.refreshAccountPresentation();

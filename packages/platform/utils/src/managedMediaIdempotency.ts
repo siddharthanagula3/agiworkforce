@@ -1,10 +1,3 @@
-/**
- * Stable client identity for one billable Managed Cloud media operation.
- *
- * Callers create `operationId` once at the user-action boundary and reuse the
- * resulting key for every transport retry. Operation ids are deliberately
- * path-free so client identity can never be mistaken for a host file path.
- */
 
 export type ManagedMediaSurface = 'web' | 'mobile' | 'desktop';
 export type ManagedMediaOperation = 'image' | 'video';

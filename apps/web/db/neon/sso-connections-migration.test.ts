@@ -22,8 +22,6 @@ describe('sso connections clerk link migration', () => {
       expect(sql).toMatch(new RegExp(`add column if not exists ${column}\\b`, 'i'));
     }
 
-    // The OIDC client secret is forwarded to Clerk and must never gain a column
-    // here; a local copy would be a credential to leak with no upside.
     expect(sql).not.toMatch(/add column if not exists oidc_client_secret/i);
   });
 
@@ -68,7 +66,6 @@ describe('sso connections clerk link migration', () => {
       'utf8',
     );
 
-    // 0076 is applied. The new columns must arrive via 0083 only.
     expect(original).not.toMatch(/clerk_connection_id/i);
     expect(original).not.toMatch(/domain_verified_at/i);
   });

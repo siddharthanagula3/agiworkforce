@@ -1,17 +1,3 @@
-/**
- * A completed generated video in the transcript.
- *
- * INLINE PLAYBACK IS NOT AVAILABLE YET. The app has no video playback
- * dependency — `expo-video`, `expo-av`, and `react-native-video` are all absent
- * from package.json — and adding one is a native module, so it needs a new
- * dev-client/EAS build rather than a JS change. Until that ships this renders
- * the provider's poster frame (or a placeholder) and opens the video in the
- * in-app browser on tap.
- *
- * The card says "Opens in browser" out loud rather than showing a play triangle
- * that silently does something else — a fake inline player is exactly the kind
- * of dead control the repo's rules forbid.
- */
 
 import { View, Pressable } from 'react-native';
 import { Image } from 'expo-image';
@@ -29,8 +15,6 @@ export interface GeneratedVideoProps {
 
 export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: GeneratedVideoProps) {
   const colors = useThemeColors();
-  // 16:9 is the shape every supported provider returns; the poster is letterboxed
-  // into it with contentFit="cover" rather than distorting a different ratio.
   const height = Math.round(width * (9 / 16));
 
   return (
@@ -80,9 +64,6 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
             paddingHorizontal: 10,
             paddingVertical: 6,
             borderRadius: 999,
-            // Sits on top of an arbitrary poster frame, so it needs the same
-            // over-media treatment the camera overlays use rather than a
-            // surface token meant for the app background.
             backgroundColor: colors.cameraOverlaySurfaceStrong,
           }}
         >

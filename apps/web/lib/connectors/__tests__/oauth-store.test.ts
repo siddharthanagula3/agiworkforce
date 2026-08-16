@@ -1,10 +1,3 @@
-/**
- * Persistence rules the broker's security rests on:
- *   - the raw `state` is never written, only its SHA-256;
- *   - the PKCE verifier and both tokens are stored as ciphertext;
- *   - single-use is a conditional UPDATE, not a read-then-write;
- *   - revocation drops the ciphertext in the same statement that flags the row.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 
@@ -64,7 +57,6 @@ describe('pending authorizations', () => {
     expect(params).toContain(STATE_HASH);
     expect(params).not.toContain(STATE);
     expect(params).not.toContain('verifier-value');
-    // The verifier is present, but only as ciphertext.
     const ciphertext = params[3] as string;
     expect(ciphertext).toMatch(/^[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/);
   });
@@ -240,7 +232,6 @@ describe('grants', () => {
       grantedScopes: ['read'],
       connectedAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-01T00:00:00.000Z',
-      // Expired with no refresh token: honestly flagged as needing reconnection.
       needsReauthorization: true,
     });
     expect(JSON.stringify(summaries)).not.toMatch(/token_enc|accessToken|refreshToken/);

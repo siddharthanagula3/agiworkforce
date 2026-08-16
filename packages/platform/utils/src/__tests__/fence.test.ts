@@ -46,9 +46,9 @@ describe('fenceUntrustedContent', () => {
   });
 
   it('NFC normalizes content', () => {
-    const nfd = 'café'; // e + combining accent (NFD)
+    const nfd = 'café';
     const result = fenceUntrustedContent(nfd, 'tag', 'sentinel');
-    expect(result).toContain('café'); // precomposed e-acute (NFC)
+    expect(result).toContain('café');
   });
 });
 

@@ -12,21 +12,10 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Shared enums
-// ============================================================================
-
-/** Valid roles for a chat message across all message tables. */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
-/** Source platform that created a conversation. */
 export type ConversationSource = 'desktop' | 'web' | 'mobile' | 'extension' | 'vscode';
 
-// ============================================================================
-// conversations (20260308120001)
-// ============================================================================
-
-/** Row shape for public.conversations. */
 export interface ConversationRow {
   id: string;
   user_id: string;
@@ -41,7 +30,6 @@ export interface ConversationRow {
   source: ConversationSource;
 }
 
-/** Payload for inserting a new conversation. */
 export type ConversationInsert = Omit<
   ConversationRow,
   'id' | 'created_at' | 'updated_at' | 'last_message_at' | 'message_count'
@@ -49,11 +37,6 @@ export type ConversationInsert = Omit<
   id?: string;
 };
 
-// ============================================================================
-// messages (20260308120002)
-// ============================================================================
-
-/** Row shape for public.messages. */
 export interface MessageRow {
   id: string;
   conversation_id: string;
@@ -70,18 +53,12 @@ export interface MessageRow {
   created_at: string;
 }
 
-/** Payload for inserting a new message. */
 export type MessageInsert = Omit<MessageRow, 'id' | 'created_at'> & {
   id?: string;
 };
 
-// ============================================================================
-// workforce_tasks (20260308100003)
-// ============================================================================
-
 export type WorkforceTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
-/** Row shape for public.workforce_tasks. */
 export interface WorkforceTaskRow {
   id: string;
   user_id: string;
@@ -98,13 +75,8 @@ export interface WorkforceTaskRow {
   error: string | null;
 }
 
-// ============================================================================
-// workforce_executions (20260308100004)
-// ============================================================================
-
 export type WorkforceExecutionStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
-/** Row shape for public.workforce_executions. */
 export interface WorkforceExecutionRow {
   id: string;
   task_id: string;
@@ -121,11 +93,6 @@ export interface WorkforceExecutionRow {
   updated_at: string;
 }
 
-// ============================================================================
-// shared_sessions (20260307000001)
-// ============================================================================
-
-/** Row shape for public.shared_sessions. */
 export interface SharedSessionRow {
   id: string;
   token: string;
@@ -139,20 +106,14 @@ export interface SharedSessionRow {
   created_at: string;
 }
 
-// ============================================================================
-// github_installations (20260307000002)
-// ============================================================================
-
 export type GithubAccountType = 'User' | 'Organization';
 
-/** Row shape for public.github_installations. */
 export interface GithubInstallationRow {
   id: string;
   user_id: string;
   installation_id: number;
   account_login: string;
   account_type: GithubAccountType;
-  /** Encrypted access token — never expose to the frontend. */
   access_token_enc: string | null;
   access_token_expires_at: string | null;
   pr_review_enabled: boolean;

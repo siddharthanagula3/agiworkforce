@@ -18,23 +18,6 @@ export const metadata = buildMetadata({
   path: '/press',
 });
 
-/**
- * PRESS FACT SHEET — every row must be literally true and checkable.
- *
- * This page exists to be quoted verbatim, so it is held to a stricter standard
- * than the rest of the marketing site. Two structural rules:
- *
- * 1. NO UNDATED MUTABLE FACTS. The previous version asserted launch status,
- *    surface list and pricing posture with no "as of" date. That is the exact
- *    failure that produced a hardcoded launch date going stale across ~25 pages
- *    (see the incident recorded in `marketing-constants.ts`). Anything that can
- *    change carries `CATALOG_AS_OF` or a version.
- *
- * 2. BUILT ≠ RELEASED. The previous row read "Product surfaces: Desktop · Web ·
- *    Mobile · CLI · Chrome ext · VS Code ext", which a journalist would fairly
- *    read as six shipping products. Three of them have no published release at
- *    all. Availability is therefore split into two rows that cannot be conflated.
- */
 const PRODUCT_FACTS: { k: string; v: string }[] = [
   {
     k: 'What it is',
@@ -42,8 +25,6 @@ const PRODUCT_FACTS: { k: string; v: string }[] = [
   },
   {
     k: 'Available now',
-    // Versions come from SURFACE_STATUS, which is sourced
-    // from the release tags themselves, so this row cannot drift from them.
     v: `AGI Web, in any browser · AGI Desktop, ${SURFACE_STATUS.desktop.toLowerCase()}, with installability verified per platform · AGI CLI, ${SURFACE_STATUS.cli.toLowerCase()}, macOS, Linux and Windows`,
   },
   {
@@ -75,20 +56,12 @@ const PRODUCT_FACTS: { k: string; v: string }[] = [
 const COMPANY_FACTS: { k: string; v: string }[] = [
   { k: 'Legal entity', v: `${LEGAL_ENTITY}, ${LEGAL_ENTITY_DESCRIPTOR}` },
   { k: 'Notice address', v: NOTICE_ADDRESS },
-  // Derived, not retyped: the notice address and governing law are the two
-  // facts a journalist is most likely to get wrong, and both already have a
-  // single source in `legal-constants.ts` after /terms, /privacy and
-  // /mobile/legal were found publishing two different addresses.
   { k: 'Governing law', v: GOVERNING_LAW.replace(/^the /, '') },
   { k: 'Founder', v: 'Siddhartha Nagula' },
   { k: 'Ownership', v: 'Independent and privately held. No outside funding is announced.' },
   { k: 'Press contact', v: CONTACT_EMAIL },
 ];
 
-/**
- * Stating the absence is stronger than leaving a silence a reporter fills with
- * a question — and it is the only honest answer while these things are true.
- */
 const NOT_CLAIMED: string[] = [
   'No security certifications. SOC 2 and ISO 27001 are planned with no audit report and no date; HIPAA workflows are not offered. The trust page carries the qualified status.',
   'No named customers, logos, or testimonials, and no case studies. We publish those only with written permission, and we have none cleared to publish.',

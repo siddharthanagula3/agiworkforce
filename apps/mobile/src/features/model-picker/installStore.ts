@@ -35,11 +35,6 @@ export interface ModelInstallJob {
 interface ModelInstallState {
   installedModelIds: string[];
   readySystemModelIds: string[];
-  /**
-   * Device RAM from the native capability probe, captured on hydrate.
-   * `null` until detection has run; treated as 0 (fail-closed) by the
-   * multimodal RAM gate, matching the package's default-deny posture.
-   */
   totalRAMMB: number | null;
   jobs: Record<string, ModelInstallJob>;
   hydrateInstalledModels: () => Promise<void>;
@@ -47,19 +42,9 @@ interface ModelInstallState {
   statusForModel: (model: ModelDef) => ModelInstallJob;
 }
 
-/**
- * Honest disabled-state reason for the tier-3 multimodal RAM gate
- * (restructure §8 device gates). Shown instead of hiding the row.
- */
 export const MULTIMODAL_RAM_LOCK_REASON =
   'This device needs at least 3.5 GB of RAM to run on-device vision models.';
 
-/**
- * RAM gate for tier-3 llama.rn multimodal rows (base GGUF + mmproj loaded
- * together). Applies only to mmproj-backed vision models — text-only and
- * tier-2 rows are governed by their own runtime gates. Fail-closed on an
- * unknown RAM reading.
- */
 function multimodalRamLock(model: ModelDef, totalRAMMB: number | null): ModelInstallJob | null {
   const catalogModel = getCatalogModelById(model.id);
   if (!catalogModel || !isMultimodalModel(catalogModel)) return null;
@@ -86,9 +71,6 @@ function defaultStatusForModel(
   if (model.availability === 'locked') {
     return { status: 'locked', progress: 0, error: model.lockReason };
   }
-  // Device RAM gate before install/ready states: an under-provisioned device
-  // sees an honest disabled row (with the reason), never a download button
-  // for a model it cannot load.
   const ramLock = multimodalRamLock(model, totalRAMMB);
   if (ramLock) return ramLock;
   if (installedModelIds.includes(model.id)) {
@@ -119,12 +101,6 @@ function defaultStatusForModel(
   return { status: model.availability, progress: 0 };
 }
 
-/**
- * Download + verify a llama-rn GGUF model (base weights and, for vision models,
- * the side-by-side mmproj projector) through services/modelDownload — resumable,
- * checksum-verified, Wi-Fi-gated, and recorded in installed_models with a real
- * local_path so the tier-3 runtime can load it.
- */
 async function installGgufModel(
   catalogModel: OnDeviceModel,
   onProgress: (fraction: number) => void,
@@ -192,9 +168,6 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
   },
 
   prepareModel: async (model) => {
-    // Authoritative RAM re-check (not just the hydrate-time snapshot) so a
-    // below-threshold device can never start a multimodal download even if
-    // the UI raced hydration.
     if (getCatalogModelById(model.id) && isMultimodalModel(getCatalogModelById(model.id)!)) {
       const caps = await getCapabilities().catch(() => null);
       const ramLock = multimodalRamLock(model, caps?.totalRAMMB ?? get().totalRAMMB);
@@ -277,12 +250,9 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
     try {
       if (preset) {
         await tier2LoadModel(preset, reportProgress);
-        // The ExecuTorch module manages the files itself — record local_path null.
         const record = installedRecordFor(model);
         await recordInstalledModel(record);
       } else {
-        // llama-rn GGUF path — downloadModel verifies checksums and writes the
-        // installed_models record (with a real local_path) itself.
         await installGgufModel(catalogModel!, reportProgress);
       }
 
@@ -291,9 +261,6 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
         jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
       }));
     } catch (err) {
-      // Log the real failure (e.g. expo-sqlite's "Calling the 'execAsync'
-      // function has failed" from the encrypted metadata write) for
-      // diagnostics, but never show internal driver errors to the user.
       console.error(`[installStore] prepareModel(${model.id}) failed:`, err);
       set((state) => ({
         jobs: {

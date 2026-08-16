@@ -1,7 +1,6 @@
 import { invoke } from '../lib/tauri-mock';
 import type { CacheAnalytics, CacheSettings, CacheStats, CacheType } from '../types/cache';
 
-// Default cache type stats for when operations fail
 const DEFAULT_CACHE_TYPE_STATS = {
   hits: 0,
   misses: 0,
@@ -11,7 +10,6 @@ const DEFAULT_CACHE_TYPE_STATS = {
   savings_usd: 0,
 };
 
-// Default stats to return when cache operations fail
 const DEFAULT_CACHE_STATS: CacheStats = {
   llm_cache: { ...DEFAULT_CACHE_TYPE_STATS },
   tool_cache: { ...DEFAULT_CACHE_TYPE_STATS },
@@ -20,7 +18,6 @@ const DEFAULT_CACHE_STATS: CacheStats = {
   total_savings_usd: 0,
 };
 
-// Default analytics to return when cache operations fail
 const DEFAULT_CACHE_ANALYTICS: CacheAnalytics = {
   most_cached_queries: [],
   provider_breakdown: [],
@@ -86,7 +83,6 @@ export async function warmupCache(queries: string[]): Promise<void> {
   try {
     return await invoke('cache_warmup', { queries });
   } catch (error) {
-    // Warmup failure is non-critical, just log a warning
     console.warn('[CacheService] Failed to warmup cache:', error);
   }
 }

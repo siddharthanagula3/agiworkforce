@@ -1,21 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * ChatEmptyState — component tests
- *
- * Covers:
- *   - Shows "Ask anything" headline when no display name
- *   - Shows personalized "Hi, {name}" when name is set
- *   - Shows "How can I help you?" subtitle only when no display name
- *   - Does not render duplicate prompt chips
- *   - Does NOT show suggestion-style cards or multi-step wizard content
- *   - Shows and dismisses the Desktop pairing banner while companion is available
- */
 
 import { fireEvent, render } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks — must be before component import
-// ---------------------------------------------------------------------------
 
 const mockClerkState: {
   user: null | {
@@ -40,7 +25,6 @@ jest.mock('react-native-reanimated', () => {
     },
     FadeIn: { duration: () => ({ delay: () => ({}) }) },
     FadeInDown: { duration: () => ({ delay: () => ({}) }) },
-    // useReducedMotion was added to ChatEmptyState.tsx — stub it for tests.
     useReducedMotion: () => false,
   };
 });
@@ -94,18 +78,10 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import { ChatEmptyState } from '../src/features/chat/components/ChatEmptyState';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const defaultPersonalization = {
   fullName: '',
@@ -119,18 +95,11 @@ const defaultPersonalization = {
   emoji: 50,
 };
 
-// ChatEmptyState reads personalization from the active mode's store.
-// Tests run in local mode (useChatAppModeStore defaults to 'local'), so
-// seed useLocalSettingsStore.
 function resetSettingsStore() {
   useLocalSettingsStore.setState({ personalization: defaultPersonalization });
   useCloudSettingsStore.setState({ personalization: defaultPersonalization });
   useChatAppModeStore.setState({ appMode: 'local' });
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('ChatEmptyState', () => {
   beforeEach(() => {

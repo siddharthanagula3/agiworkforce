@@ -1,31 +1,3 @@
-/**
- * @file handoff-service.ts
- *
- * Orchestration for "talk to a human". The in-process entry point is
- * `escalateToHuman`, so the support agent's escalate tool does not have to
- * round-trip through HTTP.
- *
- * # The three promises this module keeps
- *
- * 1. NEVER PROMISE A HUMAN WHO IS NOT THERE. Availability is re-resolved at
- *    write time with the cache bypassed — the client's earlier availability read
- *    is advisory only. `mode: 'live'` is returned only after a row has been
- *    persisted WITH a deadline. There is no `connecting` mode in the type, in
- *    the database CHECK, or in this file.
- *
- * 2. NO WAITING STATE OUTLIVES ITS DEADLINE. Three independent enforcers, each
- *    covering the others' blind spot:
- *      - the client honours `waitExpiresAt` (fails if the tab is backgrounded);
- *      - `getHandoffStatusForOwner` performs the transition on poll (fails if
- *        the user closes the tab);
- *      - the cron sweep does it server-side (works when the browser is gone).
- *    All three go through the same conditional UPDATE, so they compose: exactly
- *    one of them sends the email.
- *
- * 3. EVERY MODE RETURNS A REFERENCE ID AND A NEXT STEP. Including the fully
- *    degraded mode where no email could be sent — the row exists, so a human
- *    sweeping the table can still find what the user is quoting.
- */
 
 import 'server-only';
 
@@ -64,11 +36,8 @@ import type {
 } from './types';
 
 export interface EscalateInput extends HandoffCreateRequest {
-  /** Verified Clerk user id, or null when signed out. NEVER from the request body. */
   ownerUserId: string | null;
-  /** Verified owner key: the Clerk user id, or the `__Host-anon-session-id` value. */
   ownerSessionKey: string;
-  /** Verified email from the session, when the identity provider supplied one. */
   verifiedEmail?: string | null;
 }
 
@@ -87,11 +56,6 @@ function mailtoHref(address: string, referenceId: string, summary: string): stri
   return `mailto:${address}?subject=${subject}&body=${body}`;
 }
 
-/**
- * A signed-in user's verified address always wins. A client-supplied address is
- * accepted ONLY when there is no signed-in identity to read one from — otherwise
- * a signed-in caller could redirect their own support mail somewhere unexpected.
- */
 function resolveContactEmail(input: EscalateInput): string {
   if (input.ownerUserId && isValidEmail(input.verifiedEmail)) {
     return input.verifiedEmail.trim();
@@ -106,10 +70,6 @@ function emailNextStep(): HandoffNextStep {
   return { kind: 'email_sent', label: 'Close this and watch your inbox' };
 }
 
-/**
- * THE ENTRY POINT. Decides live vs email SERVER-SIDE and re-checks availability
- * at write time.
- */
 export async function escalateToHuman(input: EscalateInput): Promise<HandoffCreateResponse> {
   const config = getHandoffConfig();
   const contactEmail = resolveContactEmail(input);
@@ -117,9 +77,6 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
   const { turns, droppedTurns } = normalizeTranscript(input.transcript);
   const accountContext = await buildHandoffAccountContext(input.ownerUserId);
 
-  // Re-resolve with the cache bypassed. The client may have read availability
-  // 30 seconds ago; the only read that may commit a user to a waiting state is
-  // this one.
   const availability = await resolveHumanAvailability({ skipCache: true });
 
   const referenceId = generateReferenceId();
@@ -146,13 +103,9 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
   });
 
   if (!row) {
-    // The insert is the thing that makes any promise real. Without a row we
-    // cannot claim a live wait and cannot claim an email was queued.
     throw new Error('Failed to persist support handoff session');
   }
 
-  // ── LIVE ───────────────────────────────────────────────────────────────────
-  // Reachable only with BOTH a persisted row and a deadline.
   if (availability.live && waitExpiresAt) {
     return {
       mode: 'live',
@@ -172,7 +125,6 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
     };
   }
 
-  // ── EMAIL FALLBACK (the common case) ───────────────────────────────────────
   const send = await sendEscalationEmail(row, { droppedTurns });
 
   if (send.delivered) {
@@ -197,9 +149,6 @@ export async function escalateToHuman(input: EscalateInput): Promise<HandoffCrea
     };
   }
 
-  // ── FULLY DEGRADED ─────────────────────────────────────────────────────────
-  // Email is unconfigured or the provider refused. Say so plainly; do not claim
-  // anything was sent. The row still exists under this reference id.
   await recordEmailOutcome({
     sessionId: row.id,
     status: 'undeliverable',
@@ -304,14 +253,6 @@ function toStatusResponse(
   };
 }
 
-/**
- * Ownership-scoped status read that ALSO enforces the deadline.
- *
- * This is not a passive read on purpose: the poll is the moment we know the
- * user is still there, so it is the cheapest place to convert an expired wait
- * into a sent email. The conditional UPDATE inside
- * `claimExpiredWaitingSession` guarantees exactly one sender.
- */
 export async function getHandoffStatusForOwner(
   sessionId: string,
   ownerSessionKey: string,
@@ -332,8 +273,6 @@ export async function getHandoffStatusForOwner(
 
   const claimed = await claimExpiredWaitingSession(sessionId);
   if (!claimed) {
-    // Someone else won the transition (another poll, the cron, or an agent
-    // claiming it). Re-read and report whatever actually happened.
     const fresh = await getSessionForOwner(sessionId, ownerSessionKey);
     return fresh ? toStatusResponse(fresh, config) : null;
   }
@@ -343,7 +282,6 @@ export async function getHandoffStatusForOwner(
   return toStatusResponse(settled ?? { ...claimed, status: 'timed_out_emailed' }, config);
 }
 
-/** Shared by the poll path and the cron sweep. Assumes the row is already claimed. */
 async function deliverTimeoutEmail(row: HandoffSessionRow): Promise<void> {
   const send = await sendEscalationEmail(row, { timedOut: true });
   if (send.delivered) {
@@ -390,13 +328,6 @@ export async function getWaitingQueue(limit = 50): Promise<HandoffQueueEntry[]> 
   }));
 }
 
-/**
- * Claim a waiting session for a human. Losing the race yields null (the route
- * returns 409) so two agents cannot both be talking to one user.
- *
- * The response carries the whole context. That is what makes "the user never
- * repeats themselves" true rather than aspirational.
- */
 export async function claimHandoffForAgent(
   sessionId: string,
   agentUserId: string,
@@ -404,8 +335,6 @@ export async function claimHandoffForAgent(
   const row = await claimSessionForAgent(sessionId, agentUserId);
   if (!row) return null;
   clearAvailabilityCache();
-  // AUDIT-DEP: record `support_handoff_claimed` (session id, agent id) once the
-  // concurrent audit-logging service lands.
   return {
     sessionId: row.id,
     referenceId: row.reference_id,
@@ -428,10 +357,6 @@ export interface HandoffSweepResult {
   purged: number;
 }
 
-/**
- * The enforcer that works when the browser is gone. Without this, a user who
- * closes the tab mid-wait leaves an escalation nobody ever sees.
- */
 export async function sweepExpiredHandoffs(batchLimit = 25): Promise<HandoffSweepResult> {
   const config = getHandoffConfig();
   const expired = await claimExpiredWaitingBatch(batchLimit);

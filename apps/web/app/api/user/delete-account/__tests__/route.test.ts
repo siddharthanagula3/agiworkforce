@@ -135,9 +135,6 @@ describe('DELETE /api/user/delete-account', () => {
     const response = await DELETE(deleteRequest());
     const body = await response.json();
 
-    // The purge cron reads its queue from `profiles`; a schedule stored nowhere
-    // would never be acted on, so a 200 with `scheduledFor` would be a promise
-    // no job can keep.
     expect(response.status).toBe(500);
     expect(body.scheduledFor).toBeUndefined();
     expect(mockEraseUserAccountData).not.toHaveBeenCalled();

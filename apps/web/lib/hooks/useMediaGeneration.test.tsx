@@ -210,10 +210,6 @@ describe('useMediaGeneration', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  /**
-   * Video is asynchronous: POST returns a task id and the status route is
-   * polled. Fake timers drive the poll so the test does not sleep 5s per tick.
-   */
   describe('generateVideo', () => {
     it('serializes the complete catalog-backed output tuple', async () => {
       const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
@@ -400,12 +396,6 @@ describe('useMediaGeneration', () => {
       }
     });
 
-    /**
-     * The regression this guards: the route's 403 body nests the sentinel at
-     * `error.code`, and the old client threw `new Error(data.error)` — i.e.
-     * "[object Object]" — so `isPaywall` was false and a Basic/Pro user got a
-     * generic failure instead of the InlinePaywallCard.
-     */
     it('classifies the route 403 as a paywall so the caller can render the upgrade card', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: false,

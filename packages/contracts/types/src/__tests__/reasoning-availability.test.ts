@@ -50,12 +50,6 @@ const nonReasoningSearchModelId = requireCatalogValue(
   'a non-reasoning search model',
 );
 
-/**
- * Reasoning-effort-capability wave (2026-07-10). Covers:
- *  - the additive per-model `reasoning` blocks (control + supportedEfforts),
- *  - the `availability` axis + getDisplayModels/getSelectableModels split,
- *  - the live/selectable split and non-live non-routability invariant.
- */
 describe('per-model reasoning capability', () => {
   it('exposes the fast Google route effort set and minimal default', () => {
     const r = getModelReasoning(googleFastModelId);
@@ -104,10 +98,6 @@ describe('per-model reasoning capability', () => {
   });
 
   it('has no model left using the classic thinking_budget control', () => {
-    // Haiku 4.5 was the only one, and it was retired 2026-07-27. Asserting the
-    // absence rather than deleting the test: `thinking_budget` is still a
-    // supported control in code, so this records that nothing exercises it and
-    // fails — prompting a real test — as soon as a model adopts it again.
     const withBudgetControl = Object.values(modelsCatalog.models)
       .map((m) => m.id)
       .filter((id) => getModelReasoning(id).control === 'thinking_budget');

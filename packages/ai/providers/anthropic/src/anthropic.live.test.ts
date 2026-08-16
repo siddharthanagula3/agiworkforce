@@ -1,14 +1,3 @@
-/**
- * Anthropic adapter live smoke test.
- *
- * Hits api.anthropic.com with a tiny prompt and asserts the stream produces
- * the canonical chunks (text-delta, usage, stop). Skipped unless both
- * `AGIWORKFORCE_LIVE_TEST=1` and `ANTHROPIC_API_KEY` are set.
- *
- * Run: `pnpm --filter @agiworkforce/providers-anthropic test:live`
- *
- * Cost: ~5-50 tokens per invocation (tiny prompt + 32 token cap).
- */
 
 import { describe, expect, it } from 'vitest';
 import { requireProviderDefaultModel, type StreamChunk } from '@agiworkforce/types';
@@ -20,7 +9,6 @@ const apiKey = process.env['ANTHROPIC_API_KEY'];
 const skip = !liveEnabled || !apiKey;
 const LIVE_MODEL_ID = requireProviderDefaultModel('anthropic');
 
-// llm-guardrail-allow: env-gated live-provider test; makes real paid API calls, deliberately skipped without keys
 describe.skipIf(skip)('Anthropic adapter live', () => {
   it('streams a tiny completion end-to-end', async () => {
     const adapter = createAnthropicAdapter({ apiKey });
@@ -36,7 +24,6 @@ describe.skipIf(skip)('Anthropic adapter live', () => {
       ctrl.signal,
     )) {
       chunks.push(chunk);
-      // Hard cap on chunks to prevent runaway tests.
       if (chunks.length > 200) {
         ctrl.abort();
         break;
@@ -66,7 +53,6 @@ describe.skipIf(skip)('Anthropic adapter live', () => {
   });
 });
 
-// llm-guardrail-allow: visible placeholder row so skipped live suites stay discoverable in test output
 describe.skipIf(!skip)('Anthropic adapter live (skipped)', () => {
   it.skip('set AGIWORKFORCE_LIVE_TEST=1 + ANTHROPIC_API_KEY to run', () => {});
 });

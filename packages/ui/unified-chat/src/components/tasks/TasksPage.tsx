@@ -1,14 +1,3 @@
-/**
- * TasksPage — the `/tasks` page body: the user's Cloud task (agent-run) history
- * and active work. AGI Work / Research / Chat turns that run as durable Managed
- * Cloud agent runs (`cloud_agent_runs`) are listed here from
- * `GET /api/llm/v1/chat/completions/runs` via the shared run client. Active runs
- * can be stopped; every run links back to its conversation.
- *
- * The durable run domain + list/cancel API already existed; this page is the
- * missing web consumer that turns AGI Work from a composer toggle into a
- * visible, browsable work surface (Cowork "Active task list" parity).
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
@@ -76,13 +65,6 @@ export async function readTaskJournal(
   client: ManagedCloudAgentRunClient,
   runId: string,
   signal?: AbortSignal,
-  /**
-   * Resume point for an incremental re-read. A live run is polled every few
-   * seconds; without this, each poll would re-download every event the run has
-   * ever emitted (up to 8 pages of 500) to learn about the one that is new.
-   * The returned snapshot then contains ONLY the events after this sequence —
-   * the caller owns stitching them onto what it already had.
-   */
   options?: { afterSequence?: number },
 ): Promise<TaskJournalSnapshot> {
   let afterSequence =
@@ -112,11 +94,6 @@ export async function readTaskJournal(
   return { ...latest, events, truncated: afterSequence < latest.run.lastEventSequence };
 }
 
-/**
- * Turn a resume failure into something the person can act on. "Already being
- * resumed" and "expired" are ordinary outcomes of answering an approval from a
- * second device, not errors the user did anything to cause.
- */
 function approvalFailureMessage(error: unknown): string {
   const name = error instanceof Error ? error.name : '';
   if (name === 'ManagedCloudAgentRunAlreadyResumingError') {
@@ -128,30 +105,11 @@ function approvalFailureMessage(error: unknown): string {
   return 'Could not send your decision. Check the task activity before retrying.';
 }
 
-/**
- * What this surface cannot decide for itself.
- *
- * The run client is already shared (createManagedCloudAgentRunClient in
- * cloud-contracts); what differs per host is how it is authenticated and what
- * "open this conversation" means — a Next.js route push on web, a panel switch
- * inside the desktop shell.
- */
 export interface TasksTransport {
-  /** Authenticated Cloud agent-run client for this host. */
   client: ManagedCloudAgentRunClient;
-  /** Navigate to the conversation a run belongs to. */
   openConversation(conversationId: string): void;
-  /** Report a non-fatal failure to the user. */
   notifyError(message: string): void;
-  /** Optional way out of the empty state: start a new AGI Work run. Hosts that
-   *  have no such action omit it. */
   startWork?: () => void;
-  /**
-   * Re-run an AGI Work task from its original goal (CAP-048 gap-4). The host
-   * re-sends it through the NORMAL billed send path — a fresh idempotency key,
-   * a brand-new run — so this is a new charge, never a replay of the old
-   * reservation. Hosts that cannot start a run from this surface omit it.
-   */
   rerunWork?(goal: AgiWorkRerunGoal): void;
 }
 
@@ -168,7 +126,6 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
   const [journal, setJournal] = useState<TaskJournalSnapshot | null>(null);
   const [journalLoading, setJournalLoading] = useState(false);
   const [journalError, setJournalError] = useState<string | null>(null);
-  /** Mirrors `journal` for readers that must not take it as a dependency. */
   const journalRef = useRef<TaskJournalSnapshot | null>(null);
 
   const getClient = useCallback(() => transport.client, [transport.client]);
@@ -181,8 +138,6 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       setError(null);
       try {
         const page = await getClient().listRuns({
-          // "Active" omits states so the server applies its DEFAULT_ACTIVE_STATES;
-          // "All" passes every state explicitly.
           states: nextFilter === 'all' ? ALL_STATES : undefined,
           cursor: cursor ?? undefined,
           limit: PAGE_SIZE,
@@ -206,15 +161,10 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
 
   const loadJournal = useCallback(
     async (runId: string, signal?: AbortSignal, options?: { background?: boolean }) => {
-      // A background refresh must not blank the panel into a spinner every few
-      // seconds; it replaces the content only once the new snapshot has landed.
       const background = options?.background === true;
       if (!background) setJournalLoading(true);
       setJournalError(null);
       try {
-        // Read through a ref, not through `journal`: making this callback depend
-        // on the journal it produces would change its identity on every poll and
-        // re-fire the selection effect that owns the initial load.
         const previous = journalRef.current;
         const resumable =
           background && previous !== null && previous.run.id === runId && !previous.truncated
@@ -232,8 +182,6 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
           : page;
         journalRef.current = next;
         setJournal(next);
-        // The polled snapshot carries the authoritative run state. Push it into
-        // the list too, so the row badge cannot disagree with the open panel.
         setRuns((prev) => prev.map((r) => (r.id === next.run.id ? next.run : r)));
       } catch (err) {
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) return;
@@ -258,9 +206,6 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       setJournalLoading(false);
       return;
     }
-    // Drop the previous run's events before loading another one — stitching an
-    // incremental page onto a different run's journal would be a data leak
-    // between rows.
     journalRef.current = null;
     setJournal(null);
     const controller = new AbortController();
@@ -290,15 +235,6 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
     [getClient, transport],
   );
 
-  /**
-   * Answer a run's outstanding approval from the list.
-   *
-   * This is the payoff of a durable session: the run is blocked on a human, and
-   * the device that started it may be closed. One decision is applied to every
-   * pending call because the server requires a complete decision set — a
-   * partial answer is rejected outright — and a per-call UI here would invite
-   * users to build one.
-   */
   const handleApproval = useCallback(
     async (run: CloudAgentRun, decision: 'approved' | 'rejected') => {
       const pending = run.pendingApproval;
@@ -314,9 +250,6 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       } catch (err) {
         console.error('[Tasks] Failed to resolve task approval:', err);
         transport.notifyError(approvalFailureMessage(err));
-        // Whatever went wrong, the list is now stale: another surface may have
-        // claimed this approval, or it expired. Re-read rather than leaving a
-        // button that no longer means anything.
         await load(filter, null);
       } finally {
         setResolvingApprovalId(null);
@@ -336,15 +269,6 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
     journal?.run ?? runs.find((candidate) => candidate.id === selectedRunId) ?? null;
   const autoRefreshing = selectedRun !== null && isLiveTaskState(selectedRun.state);
 
-  /**
-   * Keep an in-flight run's journal current.
-   *
-   * Self-rescheduling rather than a fixed interval: each successful poll
-   * replaces `journal`, which re-runs this effect and arms the next timer. That
-   * makes overlapping requests structurally impossible, and it makes a failed
-   * poll stop the loop on its own — the failure is surfaced by `journalError`
-   * instead of being retried silently forever behind the user's back.
-   */
   useEffect(() => {
     if (!selectedRunId || !autoRefreshing || journalError || journalLoading) return;
     const controller = new AbortController();

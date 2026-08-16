@@ -41,7 +41,6 @@ export default function CreateScheduleScreen() {
     clearError,
   } = useScheduleStore();
 
-  // Determine if editing
   const existingSchedule = useMemo(
     () => (params.id ? schedules.find((s) => s.id === params.id) : undefined),
     [params.id, schedules],

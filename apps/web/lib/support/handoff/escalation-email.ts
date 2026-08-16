@@ -1,24 +1,3 @@
-/**
- * @file escalation-email.ts
- *
- * Builds the escalation email — the asynchronous channel that has to actually
- * work, because in an unstaffed deployment it is the ONLY channel.
- *
- * Ordering is deliberate and is the whole point of the feature: the reference
- * id, then why the agent escalated, then the one-line summary, then WHAT THE
- * AGENT ALREADY TRIED, then its citations, then server-derived account context,
- * then the full transcript oldest-first. A human should be able to act from the
- * top of the mail without reading to the bottom, and should never redo
- * something the agent already did.
- *
- * `Reply-To` is the user's address. Without it the "asynchronous channel that
- * DOES get read" is only half-built — a human would read the escalation and have
- * no way to answer it.
- *
- * Everything user-derived arrives here ALREADY REDACTED (transcript.ts). This
- * module HTML-escapes on top of that so a pasted `<script>` cannot execute in a
- * mail client that renders HTML.
- */
 
 import 'server-only';
 
@@ -144,18 +123,12 @@ export function buildEscalationEmail(
   return { subject, text, html, replyTo: session.contact_email };
 }
 
-/**
- * Build + send. Never throws — a provider failure is a returned value so the
- * caller can downgrade the response mode instead of losing the escalation.
- */
 export async function sendEscalationEmail(
   session: HandoffSessionRow,
   options: { droppedTurns?: number; timedOut?: boolean } = {},
 ): Promise<SendEmailResult> {
   const config = getHandoffConfig();
   const content = buildEscalationEmail(session, options);
-  // AUDIT-DEP: record `support_escalation_emailed` (reference id, outcome, no
-  // transcript body) once the concurrent audit-logging service lands.
   return sendSupportEmail({
     to: config.fallbackEmail,
     subject: content.subject,

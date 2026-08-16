@@ -1,24 +1,9 @@
-/**
- * PaywallBottomSheet — unit tests
- *
- * Verifies:
- *  - Renders the correct feature name, tier label, and reason
- *  - Renders honest "not available yet" copy instead of a purchase CTA
- *  - Hands sales-assisted Team and Enterprise plans to Contact Sales
- *  - "Try later" Pressable does not throw
- *  - Renders without reason when reason is omitted
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
-// @gorhom/bottom-sheet — expose children so we can query them
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
   const mockBottomSheet = React.forwardRef(
@@ -34,13 +19,11 @@ jest.mock('@gorhom/bottom-sheet', () => {
   };
 });
 
-// lucide-react-native icons
 jest.mock('lucide-react-native', () => ({
   ArrowUpCircle: jest.fn().mockReturnValue(null),
   X: jest.fn().mockReturnValue(null),
 }));
 
-// NativeWind / theme
 jest.mock('../src/ui/theme', () => {
   const { colors } = jest.requireActual('../src/ui/theme/tokens');
   return {
@@ -54,7 +37,6 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-// Button component — render a Pressable so action tests can use it.
 jest.mock('../components/ui/button', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
@@ -79,7 +61,6 @@ jest.mock('../components/ui/button', () => {
   };
 });
 
-// Text component
 jest.mock('../components/ui/text', () => {
   const React = require('react');
   const { Text } = require('react-native');
@@ -94,16 +75,8 @@ jest.mock('../lib/safeOpenURL', () => ({
   openExternalUrl: jest.fn().mockResolvedValue(true),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports
-// ---------------------------------------------------------------------------
-
 import { PaywallBottomSheet } from '../src/features/chat/components/PaywallBottomSheet';
 import { openExternalUrl } from '../lib/safeOpenURL';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const defaultProps = {
   feature: 'token_cap',
@@ -112,17 +85,12 @@ const defaultProps = {
   onDismiss: jest.fn(),
 };
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('PaywallBottomSheet rendering', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('renders at least one element with the tier label text', () => {
-    // Both the header title and the informational copy may contain the tier label.
     const { getAllByText } = render(<PaywallBottomSheet {...defaultProps} />);
     expect(getAllByText('Upgrade to Basic').length).toBeGreaterThanOrEqual(1);
   });
@@ -220,7 +188,7 @@ describe('PaywallBottomSheet interactions', () => {
     const onDismiss = jest.fn();
     const { getByText } = render(<PaywallBottomSheet {...defaultProps} onDismiss={onDismiss} />);
     expect(() => fireEvent.press(getByText('Try later'))).not.toThrow();
-    expect(onDismiss).not.toHaveBeenCalled(); // handleDismiss calls sheetRef.close(), not onDismiss directly
+    expect(onDismiss).not.toHaveBeenCalled();
     // The onDismiss is called via BottomSheet.onChange(-1) which is mocked away.
     // What we CAN verify is that pressing "Try later" doesn't throw.
   });

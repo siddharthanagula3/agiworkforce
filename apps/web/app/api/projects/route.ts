@@ -1,9 +1,3 @@
-/**
- * Projects API
- *
- * GET /api/projects - List all projects for the authenticated user
- * POST /api/projects - Create a new project
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -47,21 +41,6 @@ async function handleGetProjects(request: NextRequest) {
   const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
   const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
 
-  // Projects the caller's ORGANIZATION shares with them (migration 0086).
-  //
-  // TENANCY. This route runs on the privileged `getNeonDb()` connection, which
-  // has BYPASSRLS, so the id set below IS the tenant boundary — not merely a
-  // filter. It is resolved entirely server-side from `organization_members`
-  // plus `organization_shared_projects`, honouring an explicit per-member
-  // `access = 'none'` denial. Nothing on the wire influences it, and
-  // `__tests__/route.org-shared.test.ts` fails if the scope is dropped or the
-  // predicate stops binding it. (The similarly named
-  // `settings/organization/shared/__tests__/route.cross-org-isolation.test.ts`
-  // fences the share-management routes, not this read.)
-  //
-  // Shared projects are ADDITIVE to the caller's own. Conversations stay
-  // personal: `conversation_count` still binds `c.user_id = $1`, so a member
-  // opening a shared project sees their own threads in it and nobody else's.
   const sharedScope = await resolveSharedProjectScope(db, userId);
   const sharedProjectIds =
     sharedScope?.organizationId === organizationId ? sharedScope.projectIds : [];
@@ -69,7 +48,6 @@ async function handleGetProjects(request: NextRequest) {
   let data: Record<string, unknown>[];
   try {
     data = await db.query<Record<string, unknown>>(
-      // Hide soft-deleted projects (deleted_at tombstones from cross-device sync, 0041).
       `select p.*,
               (p.user_id <> $1) as is_org_shared,
               (select count(*)::int
@@ -99,7 +77,6 @@ async function handleGetProjects(request: NextRequest) {
 async function handleCreateProject(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
 
-  // CSRF protection for state-changing POST endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
 
@@ -123,7 +100,6 @@ async function handleCreateProject(request: NextRequest) {
     throw createError.validation(getProjectLimitErrorMessage(planTier));
   }
 
-  // Build columns/values for the insert, optionally including round-10 fields
   const baseColumns = [
     'user_id',
     'organization_id',
@@ -141,7 +117,6 @@ async function handleCreateProject(request: NextRequest) {
     body.color?.trim() || '#3b82f6',
   ];
 
-  // Round-10 fields · only included when present in the request body
   const round10Columns: string[] = [];
   const round10Values: unknown[] = [];
   if (body.iconEmoji !== undefined) {

@@ -1,16 +1,3 @@
-/**
- * ReactPreview — sandboxed iframe that live-renders JSX/TSX artifact code.
- *
- * Surface-agnostic: no Tauri imports. Uses standard <iframe sandbox="allow-scripts">
- * browser sandboxing. The deeper desktop-specific webview sandbox (Tauri webview
- * isolation) is deferred to Slice 6.
- *
- * Security notes:
- * - sandbox="allow-scripts" only — no allow-same-origin, no allow-forms, no allow-popups
- * - CDN scripts (Babel, React, ReactDOM) load inside the iframe; no CSP token exposure
- * - User code is transpiled by Babel inside the sandbox, not on the host page
- * - referrerPolicy="no-referrer" prevents Referer header leakage
- */
 
 import { AlertTriangle, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,17 +12,7 @@ import { ArtifactSandboxFrame } from './ArtifactSandboxFrame';
 export interface ReactPreviewProps {
   code: string;
   className?: string;
-  /**
-   * DES-C15. Whether a same-document (`srcdoc`) preview may execute scripts
-   * here, as measured by `lib/artifact-preview-capability.ts`. A React preview
-   * is 100% script-dependent — the module graph, Babel and React itself all
-   * arrive as scripts — so when this is `'blocked'` the iframe would sit blank
-   * with the toolbar spinning "Loading..." forever, because the `ready`
-   * postMessage it waits for can never be sent. Render an honest explanation
-   * instead. Omit (default `'unknown'`) to keep the previous behaviour.
-   */
   scriptSupport?: ArtifactPreviewScriptSupport;
-  /** Switch the host panel to its source view. Omit to hide the affordance. */
   onViewSource?: () => void;
 }
 
@@ -192,11 +169,6 @@ export function ReactPreview({
   scriptSupport = 'unknown',
   onViewSource,
 }: ReactPreviewProps) {
-  // DES-C15, second half. When a dedicated artifact ORIGIN exists the preview is
-  // not a same-document frame: it is a cross-origin document with its own CSP, so
-  // `scriptSupport` (which measures the SRCDOC path) does not describe it and the
-  // "can't run here" notice would be false. `sandboxDegraded` flips that back the
-  // moment the sandbox fails its handshake and we fall back to srcdoc.
   const sandboxOrigin = getArtifactSandboxOrigin();
   const [sandboxDegraded, setSandboxDegraded] = useState(false);
   const sandboxActive = sandboxOrigin !== null && !sandboxDegraded;
@@ -204,8 +176,6 @@ export function ReactPreview({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Nullable element type so the box can be handed to `ArtifactSandboxFrame`,
-  // which owns the iframe now and writes whichever frame it mounted back here.
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const channelId = useRef(crypto.randomUUID());
   const isMountedRef = useRef(true);
@@ -235,7 +205,6 @@ export function ReactPreview({
   }, [code, buildDocument, reloadKey]);
   const { srcDoc, buildError } = previewDocument;
 
-  // Reset loading/error state whenever code or reloadKey changes.
   useEffect(() => {
     if (buildError) {
       setError(buildError);
@@ -246,11 +215,9 @@ export function ReactPreview({
     setIsLoading(true);
   }, [code, reloadKey, buildError]);
 
-  // Listen for messages from the iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
-      // sandboxed iframes post from origin "null"
       if (event.origin !== 'null') return;
       if (event.data?.channelId !== channelId.current) return;
       if (!isMountedRef.current) return;
@@ -267,14 +234,6 @@ export function ReactPreview({
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  /**
-   * Wire payload for the shared cross-origin renderer.
-   *
-   * The SAME shape web builds (`ArtifactPreview.tsx`): raw source under `code`.
-   * `infrastructure/sandbox/index.html` `renderReact()` drops it straight into a
-   * `text/babel` script, so it must NOT be sanitized or HTML-escaped on the way
-   * in — the origin is the boundary, not an escape pass (AUDIT-FIX ART-1).
-   */
   const sandboxPayload = useMemo<ArtifactRenderPayload>(
     () => ({ type: 'render', kind: 'react', code }),
     [code],
@@ -292,9 +251,6 @@ export function ReactPreview({
     setError(message);
   }, []);
 
-  // The sandbox origin never answered. Fall back to the same-document document,
-  // and let `scriptSupport` speak again — on desktop that means the honest
-  // "scripts are blocked here" notice instead of a permanently blank frame.
   const handleSandboxFallback = useCallback(() => {
     if (!isMountedRef.current) return;
     setSandboxDegraded(true);
@@ -383,16 +339,6 @@ export function ReactPreview({
           </div>
         ) : null}
         {srcDoc && !scriptsBlocked && (
-          // Prefers the dedicated artifact ORIGIN and the shared renderer
-          // (`infrastructure/sandbox/index.html`), which is the only place a
-          // React artifact can load Babel/React at all inside the packaged
-          // desktop app. Falls back to the same-document document built above —
-          // byte-for-byte the previous behaviour — wherever no such origin
-          // exists, so web and browser dev are unchanged.
-          //
-          // Security: the fallback keeps `allow-scripts` ONLY. No
-          // allow-same-origin, so it stays isolated from this window,
-          // localStorage and cookies.
           <ArtifactSandboxFrame
             key={reloadKey}
             payload={sandboxPayload}

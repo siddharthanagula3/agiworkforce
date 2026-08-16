@@ -1,14 +1,5 @@
-/**
- * Shared adapter contracts.
- *
- * Adapters are pure parsers: raw tool output in, RawFinding[] + ScannerRun
- * out. They never talk to the network or filesystem, which keeps them fully
- * testable from recorded fixtures. Finalization (ids, fingerprints,
- * timestamps) happens in builder.ts with an explicit RunContext.
- */
 import type { DeterministicEvidence, FindingCategory, Severity, SourceType } from '../schema.js';
 
-/** Adapter-produced finding before run-level finalization. */
 export interface RawFinding {
   rule_id: string;
   source: string;
@@ -32,15 +23,9 @@ export interface RawFinding {
 export interface AdapterOutcome {
   status: 'clean' | 'findings' | 'scanner-failed';
   findings: RawFinding[];
-  /** Present when status is scanner-failed. */
   error?: string;
 }
 
-/**
- * Redact anything that looks like a credential from text destined for
- * findings, logs, or models. Intentionally aggressive: false redaction is
- * cheap, a leaked secret is not.
- */
 export function redactSecrets(text: string): string {
   return text
     .replace(/(gh[pousr]_[A-Za-z0-9]{20,})/g, '[REDACTED]')
@@ -57,7 +42,6 @@ export function redactSecrets(text: string): string {
     );
 }
 
-/** Clamp arbitrary tool text to a bounded, single-line evidence string. */
 export function toEvidence(text: string, maxLength = 500): string {
   const collapsed = redactSecrets(text).replace(/\s+/g, ' ').trim();
   return collapsed.length > maxLength ? `${collapsed.slice(0, maxLength - 1)}…` : collapsed;

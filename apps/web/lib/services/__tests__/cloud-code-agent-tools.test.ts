@@ -7,12 +7,6 @@ import {
   cloudCodeAgentToolDefs,
 } from '../cloud-code-agent-tools';
 
-/**
- * The approval boundary is the security-critical half of the Cloud Code agent:
- * it decides what a model may do to a workspace with no human in the loop.
- * These tests are written adversarially — the interesting cases are the ones
- * where a dangerous command is dressed up to look safe.
- */
 describe('classifyCommandRisk', () => {
   it('allows read-only, workspace-scoped commands to run unattended', () => {
     for (const command of ['ls -la', 'cat src/index.ts', 'grep -rn TODO src', 'pwd']) {
@@ -21,8 +15,6 @@ describe('classifyCommandRisk', () => {
   });
 
   it('never classifies on the first token when shell operators are present', () => {
-    // The whole reason this classifier does not tokenize-and-trust: each of
-    // these begins with a command from the read-only allowlist.
     const smuggled = [
       'echo hi && rm -rf build',
       'ls; rm important.txt',
@@ -77,8 +69,6 @@ describe('classifyCommandRisk', () => {
   });
 
   it('fails closed on anything it does not positively recognize', () => {
-    // A classifier that defaults to safe would launder unreviewed commands
-    // through an approval UI that always says yes.
     const result = classifyCommandRisk('some-unknown-binary --do-a-thing');
     expect(result.risk).toBe('requires_approval');
     expect(result.reason).toContain('some-unknown-binary');
@@ -91,7 +81,6 @@ describe('classifyCommandRisk', () => {
   });
 
   it('lets denial win over approval when a command matches both', () => {
-    // `rm` alone is approvable; `sudo rm` must not be downgraded to a prompt.
     expect(classifyCommandRisk('sudo rm file.txt').risk).toBe('denied');
   });
 
@@ -115,9 +104,6 @@ describe('cloudCodeAgentToolDefs', () => {
   });
 
   it('does not redeclare tools owned by the shared execution tool set', () => {
-    // write_file / create_folder / execute_code have one owner
-    // (lib/e2b/execution-tools.ts); duplicating them here would fork the
-    // sandbox tool contract.
     const names = cloudCodeAgentToolDefs().map((t) => t.function.name);
     expect(names).not.toContain('write_file');
     expect(names).not.toContain('create_folder');
@@ -128,7 +114,6 @@ describe('cloudCodeAgentToolDefs', () => {
     const byName = new Map(cloudCodeAgentToolDefs().map((t) => [t.function.name, t.function]));
     expect(byName.get(CLOUD_CODE_READ_FILE_TOOL)?.parameters['required']).toEqual(['path']);
     expect(byName.get(CLOUD_CODE_RUN_COMMAND_TOOL)?.parameters['required']).toEqual(['command']);
-    // list_files defaults to the workspace root, so nothing is required.
     expect(byName.get(CLOUD_CODE_LIST_FILES_TOOL)?.parameters['required']).toEqual([]);
   });
 

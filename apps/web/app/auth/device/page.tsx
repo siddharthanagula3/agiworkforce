@@ -30,8 +30,6 @@ function formatUserCode(value: string): string {
   return clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
 }
 
-// `fallback` is passed in rather than baked in because this runs at module
-// scope, outside any component, where the active locale's `t` is unavailable.
 function getErrorMessage(body: unknown, fallback: string): string {
   if (!body || typeof body !== 'object') return fallback;
   const error = (body as { error?: unknown }).error;
@@ -131,15 +129,6 @@ function DeviceForm() {
     null;
   const hasCompleteCode = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code);
 
-  // Error copy here is read through `i18n.t`, not the `t` from useTranslation,
-  // and `i18n` (the instance, stable for the life of the tree) is what the dep
-  // array carries. `t` gets a new identity on every `languageChanged`, and
-  // app/i18n/index.ts fires one on every page load (the post-hydration
-  // `changeLanguage()`); depending on it would abort the in-flight lookup, reset
-  // the card back to "Verifying the requesting app…", and issue a second
-  // GET /api/auth/device/code on a screen where the user is making a trust
-  // decision. `i18n.t` resolves against the active language when it is called,
-  // so the message is still localized.
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !hasCompleteCode) {
       setDetails(null);

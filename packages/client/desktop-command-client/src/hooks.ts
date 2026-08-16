@@ -1,10 +1,5 @@
-/**
- * Hooks API — typed wrappers for hooks_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface Hook {
   name: string;
@@ -20,8 +15,6 @@ export interface HookStats {
   avgDuration: number;
   lastExecution: string | null;
 }
-
-// ---- Commands ----
 
 export async function hooksInitialize(): Promise<string> {
   return command<string>('hooks_initialize');

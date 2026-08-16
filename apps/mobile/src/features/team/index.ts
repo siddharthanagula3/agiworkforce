@@ -1,7 +1,3 @@
-/**
- * team — the Cloud workspace this account belongs to, its members, and the
- * server-computed entitlement that decides whether they can be managed.
- */
 export {
   WORKSPACE_ROLES,
   addWorkspaceMember,

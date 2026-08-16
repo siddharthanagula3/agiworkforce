@@ -106,11 +106,6 @@ describe('suite contracts — trust boundaries', () => {
   });
 
   it('throws when assertSurfaceCanSyncChats receives a developer-session surface', async () => {
-    // Round-2 audit (2026-05-21): the runtime guard fails fast when a
-    // CLI / VS Code / Chrome surface is wired into the synced-app chat
-    // pipeline. Type-only enforcement isn't enough at boundaries that
-    // take a raw SourceSurface from external input (gateway query param,
-    // sync channel id, deserialized telemetry).
     const { assertSurfaceCanSyncChats } = await import('../suite-contracts');
 
     expect(() => assertSurfaceCanSyncChats('web')).not.toThrow();

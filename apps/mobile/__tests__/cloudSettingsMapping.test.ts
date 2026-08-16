@@ -1,14 +1,3 @@
-/**
- * Cloud settings mapping — `language` namespace key ownership.
- *
- * `language.locale` is the INTERFACE locale: Desktop pushes
- * `windowPreferences.language` into it and feeds a pulled value straight into
- * i18n (apps/desktop/src/services/managedCloudSettingsSync.ts). Mobile used to
- * bind the same key to `speechLanguage`, the tag its TTS voices are filtered
- * by, so an account with both surfaces signed in retuned one from the other on
- * every sync cycle. These tests pin the split: mobile owns
- * `language.speechLocale` and must not read or write `language.locale`.
- */
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
@@ -25,7 +14,6 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// Stub uuidv7 (imported transitively through the store chain).
 jest.mock('@agiworkforce/utils', () => ({
   uuidv7: jest.fn(() => `00000000-0000-7000-8000-${Date.now().toString(16).padStart(12, '0')}`),
   isUuidV7: jest.fn(() => true),

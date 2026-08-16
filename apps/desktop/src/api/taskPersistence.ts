@@ -1,33 +1,5 @@
-/**
- * Task Persistence API
- *
- * TypeScript wrappers for the persistent task manager and cross-app
- * coordination state exposed by sys/commands/task_persistence.rs.
- *
- * Task commands:
- *   task_create           - create a new persistent task
- *   task_get_status       - get full task state by ID
- *   task_update_progress  - update progress and current step
- *   task_pause            - pause a running task
- *   task_resume           - resume a paused task
- *   task_cancel           - cancel a task
- *   task_list             - list all tasks
- *   task_list_by_status   - list tasks filtered by status
- *   task_complete         - mark a task as completed with optional result
- *   task_save_context     - save key/value context on a task
- *   task_get_resumable    - get tasks eligible for auto-resume
- *
- * Coordination commands:
- *   coord_update_app_state      - update tracked application state
- *   coord_request_approval      - queue an approval request
- *   coord_get_pending_approvals - list pending approval requests
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// ---------------------------------------------------------------------------
-// Types (mirror Rust structs -- field names are camelCase for IPC)
-// ---------------------------------------------------------------------------
 
 export type TaskStatus = 'Pending' | 'Running' | 'Paused' | 'Completed' | 'Failed' | 'Cancelled';
 export type TaskPriority = 'Critical' | 'High' | 'Normal' | 'Low';
@@ -73,11 +45,6 @@ export interface ApprovalRequest {
   autoApproveSafe: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Task Management
-// ---------------------------------------------------------------------------
-
-/** Create a new persistent task and return its ID. */
 export async function taskCreate(
   name: string,
   description: string,
@@ -91,7 +58,6 @@ export async function taskCreate(
   }
 }
 
-/** Get the full state of a task by ID. */
 export async function taskGetStatus(taskId: string): Promise<PersistedTask> {
   try {
     return await invoke<PersistedTask>('task_get_status', { taskId });
@@ -100,7 +66,6 @@ export async function taskGetStatus(taskId: string): Promise<PersistedTask> {
   }
 }
 
-/** Update a task's progress percentage and current step index. */
 export async function taskUpdateProgress(
   taskId: string,
   progress: number,
@@ -113,7 +78,6 @@ export async function taskUpdateProgress(
   }
 }
 
-/** Pause a running task. */
 export async function taskPause(taskId: string): Promise<void> {
   try {
     await invoke('task_pause', { taskId });
@@ -122,7 +86,6 @@ export async function taskPause(taskId: string): Promise<void> {
   }
 }
 
-/** Resume a paused task. */
 export async function taskResume(taskId: string): Promise<void> {
   try {
     await invoke('task_resume', { taskId });
@@ -131,7 +94,6 @@ export async function taskResume(taskId: string): Promise<void> {
   }
 }
 
-/** Cancel a task. */
 export async function taskCancel(taskId: string): Promise<void> {
   try {
     await invoke('task_cancel', { taskId });
@@ -140,7 +102,6 @@ export async function taskCancel(taskId: string): Promise<void> {
   }
 }
 
-/** List all persistent tasks. */
 export async function taskList(): Promise<PersistedTask[]> {
   try {
     return await invoke<PersistedTask[]>('task_list');
@@ -149,10 +110,6 @@ export async function taskList(): Promise<PersistedTask[]> {
   }
 }
 
-/**
- * List tasks filtered by status.
- * Valid values: "pending", "running", "paused", "completed", "failed", "cancelled".
- */
 export async function taskListByStatus(status: string): Promise<PersistedTask[]> {
   try {
     return await invoke<PersistedTask[]>('task_list_by_status', { status });
@@ -161,7 +118,6 @@ export async function taskListByStatus(status: string): Promise<PersistedTask[]>
   }
 }
 
-/** Mark a task as completed, optionally attaching a result payload. */
 export async function taskComplete(taskId: string, result?: unknown): Promise<void> {
   try {
     await invoke('task_complete', { taskId, result: result ?? null });
@@ -170,7 +126,6 @@ export async function taskComplete(taskId: string, result?: unknown): Promise<vo
   }
 }
 
-/** Save arbitrary key/value context data on a task. */
 export async function taskSaveContext(
   taskId: string,
   context: Record<string, unknown>,
@@ -182,7 +137,6 @@ export async function taskSaveContext(
   }
 }
 
-/** Get all tasks that are eligible for auto-resume (paused or running with autoResume flag). */
 export async function taskGetResumable(): Promise<PersistedTask[]> {
   try {
     return await invoke<PersistedTask[]>('task_get_resumable');
@@ -191,11 +145,6 @@ export async function taskGetResumable(): Promise<PersistedTask[]> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Cross-App Coordination
-// ---------------------------------------------------------------------------
-
-/** Update the tracked state of an external application. */
 export async function coordUpdateAppState(
   appName: string,
   status: string,
@@ -208,10 +157,6 @@ export async function coordUpdateAppState(
   }
 }
 
-/**
- * Queue an approval request for a task action.
- * Returns the approval request ID.
- */
 export async function coordRequestApproval(
   taskId: string,
   action: string,
@@ -230,7 +175,6 @@ export async function coordRequestApproval(
   }
 }
 
-/** Get all pending approval requests. */
 export async function coordGetPendingApprovals(): Promise<ApprovalRequest[]> {
   try {
     return await invoke<ApprovalRequest[]>('coord_get_pending_approvals');

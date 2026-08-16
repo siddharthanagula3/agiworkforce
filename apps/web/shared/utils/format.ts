@@ -7,7 +7,6 @@
  * @module format
  */
 
-// Re-export from shared utils package
 export {
   formatDate,
   formatDateTime,

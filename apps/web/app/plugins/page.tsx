@@ -13,21 +13,6 @@ import {
 } from '@agiworkforce/types';
 import { WaitlistForm } from '../byok/WaitlistForm';
 
-/**
- * The plugin catalogue (CAP-046 slice 3).
- *
- * This page used to render a TypeScript fixture. It now renders the hosted
- * registry (`public.plugin_registry_entries`), so the catalogue is real data
- * with real failure modes — hence the explicit unavailable/empty branches
- * below and `loading.tsx` alongside this file.
- *
- * The copy tracks the DATA rather than a hardcoded launch claim: entries carry
- * a status, and only a `published` entry with a real artifact is installable.
- * Today every row is `preview`, so the page says installation is not open — but
- * it says it because the read came back with rows and none of them were
- * installable, not because a sentence was pasted in. See `availabilityClaim`.
- */
-
 export const metadata = buildMetadata({
   title: 'Plugins',
   description:
@@ -35,8 +20,6 @@ export const metadata = buildMetadata({
   path: '/plugins',
 });
 
-// The catalogue lives in the database, so this route cannot be baked at build
-// time. Requests render against the live registry.
 export const dynamic = 'force-dynamic';
 
 function sourceLabel(source: PluginRegistryEntry['source']): string {
@@ -52,22 +35,6 @@ function statusLabel(entry: PluginRegistryEntry): string {
   return 'Declared — not installable yet';
 }
 
-/**
- * The bolded availability claim under the lede, derived from the catalogue read
- * rather than from a row count.
- *
- * An unreachable registry (the table is missing, the database is down) yields no
- * rows, which is not evidence that nothing is installable — so the outage gets
- * its own sentence instead of borrowing the "every entry is declared" claim.
- *
- * This branches on `status !== 'ok'`, and so does the catalogue section below,
- * deliberately: both sites treat any non-`ok` read as "we could not look", so a
- * third union member added to `PluginCatalogResult` later cannot make the hero
- * report an outage while the section falls through to its empty-registry copy.
- * That contradiction is the bug this function exists to prevent, and matching
- * on `=== 'unavailable'` in one place and `!== 'ok'` in the other would let it
- * back in the moment the union grows.
- */
 function availabilityClaim(catalog: PluginCatalogResult, installableCount: number): string {
   if (catalog.status !== 'ok') {
     return 'The registry is unreachable right now, so this page cannot say which packs are installable.';

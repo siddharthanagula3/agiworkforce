@@ -1,18 +1,3 @@
-/**
- * MemoryManager Component
- *
- * Comprehensive memory management interface with project-specific
- * filtering, search, viewing, editing, and deletion capabilities.
- *
- * Features:
- * - Display all memories for current project
- * - Search memories by content, topic, and category
- * - Filter by memory type (preference, fact, decision, context)
- * - View detailed memory information
- * - Edit memory importance and content
- * - Delete memories with confirmation
- * - Import/export memories
- */
 import { memo, useCallback, useMemo, useState } from 'react';
 import { ArrowUpDown, Brain, Clock, Download, Import, Plus, RefreshCw, Star } from 'lucide-react';
 
@@ -55,9 +40,6 @@ const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[
   { value: 'topic-asc', label: 'Alphabetical', icon: <Brain className="h-4 w-4" /> },
 ];
 
-/**
- * Sort memories based on selected option
- */
 function sortMemories(memories: MemoryEntry[], sortBy: SortOption): MemoryEntry[] {
   const sorted = [...memories];
 
@@ -81,9 +63,6 @@ function sortMemories(memories: MemoryEntry[], sortBy: SortOption): MemoryEntry[
   }
 }
 
-/**
- * Filter memories by category
- */
 function filterByCategory(memories: MemoryEntry[], category: TabValue): MemoryEntry[] {
   if (category === 'all') {
     return memories;
@@ -92,13 +71,9 @@ function filterByCategory(memories: MemoryEntry[], category: TabValue): MemoryEn
 }
 
 export interface MemoryManagerProps {
-  /** Additional class names */
   className?: string;
-  /** Maximum height for scroll area */
   maxHeight?: string;
-  /** Show create memory button */
   showCreateButton?: boolean;
-  /** Show import/export buttons */
   showImportExport?: boolean;
 }
 
@@ -123,14 +98,12 @@ export const MemoryManager = memo(function MemoryManager({
     })),
   );
 
-  // Process and display memories
   const displayedMemories = useMemo(() => {
     const baseMemories = searchQuery.trim() ? searchResults : memories;
     const filtered = filterByCategory(baseMemories, activeTab);
     return sortMemories(filtered, sortBy);
   }, [memories, searchResults, searchQuery, activeTab, sortBy]);
 
-  // Category counts — derived from memories array to avoid new-array-per-render selectors
   const categoryCounts = useMemo(() => {
     let preference = 0,
       fact = 0,
@@ -331,9 +304,6 @@ export const MemoryManager = memo(function MemoryManager({
   );
 });
 
-/**
- * Empty state component
- */
 function EmptyState({
   hasMemories,
   query,

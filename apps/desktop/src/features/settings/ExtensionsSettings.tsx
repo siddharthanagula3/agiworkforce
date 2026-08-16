@@ -1,9 +1,3 @@
-/**
- * Extensions Settings Component
- *
- * UI component for managing MCP extensions in the Settings panel.
- * Allows users to install, uninstall, enable, and disable extensions.
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -25,7 +19,6 @@ import { Badge } from '@/ui/Badge';
 import { ScrollArea } from '@/ui/ScrollArea';
 import { useConfirm } from '@/ui/ConfirmDialog';
 
-// Types matching the Rust backend
 type ExtensionStatus =
   | 'disabled'
   | 'enabled'
@@ -70,7 +63,6 @@ export function ExtensionsSettings() {
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
 
-  // Load extensions list
   const loadExtensions = useCallback(async () => {
     try {
       setLoading(true);
@@ -86,23 +78,19 @@ export function ExtensionsSettings() {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     void loadExtensions();
   }, [loadExtensions]);
 
-  // Listen for extension events
   useEffect(() => {
     const unlisteners: Promise<() => void>[] = [];
 
-    // Listen for install progress
     unlisteners.push(
       listen<InstallProgress>('extension:install_progress', (event) => {
         setInstallProgress(event.payload);
       }),
     );
 
-    // Listen for install completed
     unlisteners.push(
       listen<{ extensionId: string; name: string }>('extension:install_completed', (event) => {
         toast.success('Extension installed', {
@@ -114,7 +102,6 @@ export function ExtensionsSettings() {
       }),
     );
 
-    // Listen for install failed
     unlisteners.push(
       listen<{ error: string }>('extension:install_failed', (event) => {
         toast.error('Installation failed', {
@@ -125,14 +112,12 @@ export function ExtensionsSettings() {
       }),
     );
 
-    // Listen for uninstall
     unlisteners.push(
       listen<{ extensionId: string }>('extension:uninstalled', () => {
         void loadExtensions();
       }),
     );
 
-    // Listen for enable/disable
     unlisteners.push(
       listen<{ extensionId: string }>('extension:enabled', () => {
         void loadExtensions();
@@ -152,7 +137,6 @@ export function ExtensionsSettings() {
     };
   }, [loadExtensions]);
 
-  // Handle install button click
   const handleInstall = async () => {
     try {
       setInstalling(true);
@@ -162,7 +146,6 @@ export function ExtensionsSettings() {
         percentage: 0,
       });
 
-      // Open file picker for .agiext files
       const filePath = await invoke<string | null>('extension_select_package');
 
       if (!filePath) {
@@ -177,7 +160,6 @@ export function ExtensionsSettings() {
         percentage: 10,
       });
 
-      // Install the extension
       await invoke<ExtensionInfo>('extension_install', { filePath });
       // Success handled by event listener
     } catch (err) {
@@ -190,7 +172,6 @@ export function ExtensionsSettings() {
     }
   };
 
-  // Handle uninstall
   const handleUninstall = async (extension: ExtensionInfo) => {
     const confirmed = await confirm({
       title: 'Uninstall Extension',
@@ -219,7 +200,6 @@ export function ExtensionsSettings() {
     }
   };
 
-  // Handle enable/disable
   const handleToggleEnabled = async (extension: ExtensionInfo) => {
     const isEnabled = extension.status === 'enabled' || extension.status === 'running';
 
@@ -252,7 +232,6 @@ export function ExtensionsSettings() {
     }
   };
 
-  // Get status badge variant
   const getStatusBadge = (status: ExtensionStatus) => {
     switch (status) {
       case 'running':
@@ -302,7 +281,6 @@ export function ExtensionsSettings() {
     }
   };
 
-  // Format date
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString(undefined, {

@@ -1,10 +1,5 @@
-/**
- * Security API — typed wrappers for auth_login, secret_manager_*, and master_password_* commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface AuthToken {
   token: string;
@@ -22,13 +17,9 @@ export interface MasterPasswordStatus {
   needsMigration: boolean;
 }
 
-// ---- Auth Login ----
-
 export async function authLogin(email: string, password: string): Promise<AuthToken> {
   return command<AuthToken>('auth_login', { email, password });
 }
-
-// ---- Secret Manager ----
 
 export async function secretManagerHas(key: string): Promise<boolean> {
   return command<boolean>('secret_manager_has', { key });
@@ -41,8 +32,6 @@ export async function secretManagerSet(key: string, value: string): Promise<void
 export async function secretManagerDelete(key: string): Promise<void> {
   return command<void>('secret_manager_delete', { key });
 }
-
-// ---- Master Password ----
 
 export async function masterPasswordIsConfigured(): Promise<boolean> {
   return command<boolean>('master_password_is_configured');

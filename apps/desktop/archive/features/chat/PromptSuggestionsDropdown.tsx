@@ -1,9 +1,3 @@
-/**
- * PromptSuggestionsDropdown Component
- *
- * Displays prompt continuation suggestions like Gemini CLI.
- * Shows contextual suggestions as user types.
- */
 
 import React, { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

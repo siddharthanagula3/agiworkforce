@@ -1,9 +1,3 @@
-/**
- * ProjectGallery tests — pin the create-UX contract introduced by the
- * pixel-parity slice (matches ChatGPT's project-create modal pattern).
- *
- * Round-10 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -42,7 +36,6 @@ describe('ProjectGallery — enhanced create UX', () => {
     expect(options.length).toBeGreaterThan(0);
     await userEvent.click(options[1]!);
     expect(screen.queryByTestId('project-create-emoji-picker')).toBeNull();
-    // The trigger now shows the selected emoji.
     expect(screen.getByTestId('project-create-emoji-trigger').textContent).toBe('💻');
   });
 
@@ -61,7 +54,6 @@ describe('ProjectGallery — enhanced create UX', () => {
     await userEvent.click(screen.getByTestId('project-create-preset-research'));
     const form = screen.getByTestId('project-create-form');
     fireEvent.submit(form);
-    // After submit the form closes and the project lands in the store.
     const projects = useProjectStore.getState().projects;
     expect(projects.length).toBe(1);
     expect(projects[0]!.name).toBe('Research');
@@ -119,9 +111,7 @@ describe('ProjectGallery — enhanced create UX', () => {
     const projects = useProjectStore.getState().projects;
     expect(projects.length).toBe(1);
     expect(projects[0]!.name).toBe('Generic project');
-    // Default starting emoji is the folder.
     expect(projects[0]!.iconEmoji).toBe('📁');
-    // Default accent color is zinc.
     expect(projects[0]!.accentColor).toBe('zinc');
   });
 
@@ -130,7 +120,6 @@ describe('ProjectGallery — enhanced create UX', () => {
     await userEvent.click(screen.getByRole('button', { name: /new/i }));
     await userEvent.click(screen.getByTestId('project-create-preset-writing'));
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
-    // Re-open — the form should be back to defaults.
     await userEvent.click(screen.getByRole('button', { name: /new/i }));
     const input = screen.getByTestId('project-create-name-input') as HTMLInputElement;
     expect(input.value).toBe('');

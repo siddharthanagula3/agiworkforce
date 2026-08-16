@@ -6,12 +6,6 @@ import { Image, Mic, GitCompare, Download } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
-/**
- * Slash-command palette shown above the chat input when the user types "/".
- * Displays a short list of available commands with icons and descriptions.
- * Tapping a command calls onSelectCommand with the command string (e.g. "/image").
- */
-
 export type ChatCommand = '/image' | '/voice' | '/compare' | '/export';
 
 interface Command {
@@ -19,11 +13,6 @@ interface Command {
   command: ChatCommand;
   description: string;
   Icon: typeof Image;
-  /**
-   * Trust boundary the command leaves the device through. Rendered as a pill
-   * so a command that is only reachable in AGI Cloud says so before it is
-   * tapped, instead of the user discovering it on a refused request.
-   */
   boundary?: 'cloud';
 }
 
@@ -45,8 +34,6 @@ const COMMANDS: Command[] = [
     command: '/compare',
     description: 'Compare model responses',
     Icon: GitCompare,
-    // Both panes stream through the managed-cloud gateway; there is no
-    // on-device comparison path. Hosts only offer it in Cloud mode.
     boundary: 'cloud',
   },
   {

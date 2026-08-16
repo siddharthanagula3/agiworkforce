@@ -1,35 +1,16 @@
-// packages/ui/unified-chat/src/components/WebSearchCard.tsx
-//
-// Inline web-search result card — matches Claude's image 06 pattern:
-//   - Header row: search-glass icon + query text + "{N} results" badge on right
-//   - Expanded: CARD with rows of (favicon | title | domain)
-//   - "Show more" link when results > showMoreThreshold
-//   - Click row: opens url in new tab (noopener, no internal network call)
-//
-// LOCKED (v1 LOCAL ONLY): this component renders results passed via props only.
-// The parent is responsible for fetching; no fetch/XHR inside this component.
 
 import { useState } from 'react';
 import { Globe, ChevronDown } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { WebSearchResultItem } from '../lib/types';
 
-// Re-export so callers can import the result item type from the card module.
 export type { WebSearchResultItem } from '../lib/types';
 
 export interface WebSearchCardProps {
   query: string;
   resultCount: number;
   results: WebSearchResultItem[];
-  /**
-   * How many rows to show before collapsing behind "Show more".
-   * Defaults to 4 (matches Claude's visual).
-   */
   showMoreThreshold?: number;
-  /**
-   * Whether the results panel starts expanded.
-   * Defaults to true to match Claude inline behavior.
-   */
   defaultOpen?: boolean;
   className?: string;
 }
@@ -159,11 +140,6 @@ export function WebSearchCard({
     </div>
   );
 }
-
-// ─── Legacy alias — keeps old WebSearchResult prop shape working ──────────────
-// The old WebSearchCard accepted a `search: WebSearchResult` prop. Surface code
-// that still uses that shape can import this adapter. New code should use the
-// named exports above.
 
 import type { WebSearchResult } from '../lib/types';
 

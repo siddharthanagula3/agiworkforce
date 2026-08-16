@@ -8,10 +8,6 @@ import {
   type UIPlanTier,
 } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// Per-tier static content
-// ---------------------------------------------------------------------------
-
 interface TierContent {
   price: string;
   priceNote?: string;
@@ -20,8 +16,6 @@ interface TierContent {
   ctaVariant: 'primary' | 'current';
 }
 
-// Partial: only the tiers actually shown as desktop plan cards need static
-// content here. Enterprise and Team stay sales/admin-led.
 const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   local: {
     price: 'Free forever',
@@ -56,8 +50,6 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaLabel: 'Current plan',
     ctaVariant: 'current',
   },
-  // Basic ($7/mo, ₹399) is cross-surface (PLAN_SURFACE_VISIBILITY.basic =
-  // ['web','desktop','mobile']) — it renders in the desktop plan list.
   basic: {
     price: `$${getPublishedPlanPriceUsd('basic', 'monthly')} / mo`,
     bullets: [
@@ -105,26 +97,14 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 export interface PlanCardProps {
   tier: UIPlanTier;
-  /** Whether this is the user's currently active plan. */
   isCurrentPlan: boolean;
-  /** A paid tier below the active tier is changed through Stripe Billing. */
   isLowerPaidTier?: boolean;
-  /** Called when the user clicks the CTA. */
   onCtaClick: (tier: UIPlanTier) => void;
-  /** Paid-plan action is unavailable because this subscription has another owner. */
   actionDisabled?: boolean;
   actionDisabledReason?: string;
 }
-
-// ---------------------------------------------------------------------------
-// PlanCard
-// ---------------------------------------------------------------------------
 
 export function PlanCard({
   tier,
@@ -135,8 +115,6 @@ export function PlanCard({
   actionDisabledReason,
 }: PlanCardProps) {
   const content = TIER_CONTENT[tier];
-  // Tiers without desktop card content are filtered out of VISIBLE_TIERS upstream; guard
-  // anyway so an unexpected tier renders nothing instead of crashing on content.price.
   if (!content) return null;
   const label = PLAN_LABEL[tier];
   const description = PLAN_DESCRIPTION[tier];
@@ -213,10 +191,6 @@ export function PlanCard({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// CTA button sub-component
-// ---------------------------------------------------------------------------
 
 interface PlanCardCtaProps {
   tier: UIPlanTier;

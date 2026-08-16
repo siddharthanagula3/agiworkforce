@@ -1,9 +1,3 @@
-/**
- * FileUnreadableModal — shown when a file parse attempt fails (wrong format
- * or corrupt file).
- *
- * Lists the supported formats. Single dismiss CTA.
- */
 import { Modal, View, Pressable } from 'react-native';
 import { FileWarning } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';

@@ -25,10 +25,6 @@ export interface TokenCounterProps {
 
   className?: string;
 
-  /**
-   * When provided, a "Compact" button is shown when context usage exceeds 95%.
-   * The button is also shown as a warning action at >80% in full mode.
-   */
   onCompact?: () => void;
 }
 

@@ -1,19 +1,3 @@
-/**
- * Shared Links screen.
- *
- * Lists the conversations this account has published and lets them be revoked.
- * This shipped as a "Coming soon" placeholder, which was wrong twice: sharing
- * has been live on web (/share/[token], /api/share) for some time, and the
- * invite gate it referenced was removed by the 2026-06-27 public-alpha
- * decision. The only piece genuinely missing was a list endpoint — now
- * GET /api/share.
- *
- * The list is Managed Cloud data, so in Local Mode the egress guard refuses
- * the request before any network I/O. That refusal carries a developer-facing
- * explanation which must never reach the screen: this file renders the shared
- * CloudSyncBlockedBanner for that case and a plain sentence for everything
- * else, so no transport string is ever shown to a user.
- */
 import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, Share, RefreshControl, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -44,10 +28,6 @@ function formatDate(value: string): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString();
 }
 
-/**
- * Structural check rather than an `instanceof` import: pulling the egress
- * guard into a screen would drag its network dependencies along with it.
- */
 function isEgressBlocked(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -101,8 +81,6 @@ export default function SharedLinksScreen() {
 
   const handleRevoke = useCallback(
     (link: SharedLink) => {
-      // Revoking breaks a URL other people may already hold, so it is confirmed
-      // rather than immediate.
       Alert.alert(
         'Revoke this link?',
         `"${link.title}" will stop opening for anyone who has the URL.`,

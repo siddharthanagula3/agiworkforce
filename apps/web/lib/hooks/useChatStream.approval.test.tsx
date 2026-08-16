@@ -1,10 +1,3 @@
-/**
- * Client wiring for the manual tool-approval → resume flow (fixes the client
- * half of MCP-APPROVAL-RESUME): an x_tool_approval_request event surfaces an
- * awaiting_approval card + registers the suspended turn; resolveToolApproval
- * dispatches only the durable run id + per-tool decisions to the approval
- * endpoint, then streams the server-owned continuation into the SAME message.
- */
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -124,14 +117,12 @@ describe('useChatStream — tool approval → resume', () => {
 
     const assistantId = assistantMessage()!.id;
 
-    // Resume continuation: the model answers after the approved tool runs.
     mockSseStream([{ choices: [{ delta: { content: 'The PR renames a function.' } }] }]);
 
     await act(async () => {
       await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
     });
 
-    // The resume hit the approve endpoint with the right body.
     const approveCall = vi
       .mocked(fetch)
       .mock.calls.find((c) => String(c[0]).includes('/api/llm/v1/chat/completions/approve'));
@@ -142,7 +133,6 @@ describe('useChatStream — tool approval → resume', () => {
     expect(body).not.toHaveProperty('messages');
     expect(body).not.toHaveProperty('model');
 
-    // Continuation streamed into the same assistant message.
     expect(assistantMessage()?.content).toContain('The PR renames a function.');
   });
 
@@ -158,9 +148,6 @@ describe('useChatStream — tool approval → resume', () => {
 
     const REAL_RESULT = '# My Project\n\nThis project does X, Y, and Z.';
 
-    // First resume (approving call_1): the tool actually runs and reports
-    // its real output via x_tool_result, then the turn suspends AGAIN on a
-    // second tool.
     mockSseStream([
       {
         choices: [
@@ -190,8 +177,6 @@ describe('useChatStream — tool approval → resume', () => {
       await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
     });
 
-    // Second resume (approving call_2): the browser sends no transcript. The
-    // server-owned checkpoint already contains call_1's real result.
     mockSseStream([{ choices: [{ delta: { content: 'done' } }] }]);
     await act(async () => {
       await result.current.resolveToolApproval(assistantId, 'call_2', 'approved');
@@ -230,8 +215,6 @@ describe('useChatStream — tool approval → resume', () => {
     expect(body.tool_approvals).toEqual([{ tool_call_id: 'call_1', decision: 'rejected' }]);
 
     const card = assistantMessage()?.metadata?.tools?.find((t) => t.toolCallId === 'call_1');
-    // The denied card ends failed (the continuation's denial result may also land
-    // by name; either way it is not a successful execution).
     expect(['failed', 'completed']).toContain(card?.status);
     expect(assistantMessage()?.content).toContain('Understood, skipping.');
   });
@@ -246,9 +229,6 @@ describe('useChatStream — tool approval → resume', () => {
     });
     const assistantId = assistantMessage()!.id;
 
-    // The resume's fetch never resolves on its own -- captures the signal it
-    // was called with and hangs, so we can abort it mid-flight and observe
-    // the SAME AbortController stopGeneration operates on.
     let capturedSignal: AbortSignal | undefined;
     vi.mocked(fetch).mockImplementationOnce((_url, init) => {
       capturedSignal = (init as RequestInit | undefined)?.signal ?? undefined;
@@ -256,10 +236,6 @@ describe('useChatStream — tool approval → resume', () => {
     });
 
     await act(async () => {
-      // Fire and forget: this promise never settles because the mocked
-      // fetch above never resolves. Awaiting waitFor inside this act() lets
-      // React flush the state updates resolveToolApproval makes on its way
-      // to the (permanently pending) fetch call.
       void result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
       await vi.waitFor(() => expect(capturedSignal).toBeDefined());
     });
@@ -273,7 +249,6 @@ describe('useChatStream — tool approval → resume', () => {
   });
 
   it('does not resume until every pending tool is decided', async () => {
-    // Suspend on TWO tools.
     mockSseStream([
       approvalEvent,
       {
@@ -293,13 +268,11 @@ describe('useChatStream — tool approval → resume', () => {
     const assistantId = assistantMessage()!.id;
     const fetchCountAfterSend = vi.mocked(fetch).mock.calls.length;
 
-    // Decide only ONE — no resume should fire yet.
     await act(async () => {
       await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
     });
     expect(vi.mocked(fetch).mock.calls.length).toBe(fetchCountAfterSend);
 
-    // Decide the second — now the resume fires exactly once.
     mockSseStream([{ choices: [{ delta: { content: 'done' } }] }]);
     await act(async () => {
       await result.current.resolveToolApproval(assistantId, 'call_2', 'approved');
@@ -396,10 +369,6 @@ describe('useChatStream — tool approval → resume', () => {
   });
 
   it('fires exactly one resume when two decisions complete the batch concurrently', async () => {
-    // Persisted conversation: each decision parks at `await saveMessageToDb` with
-    // `resolving` still false, so two near-simultaneous completing clicks (here, the two
-    // calls approved concurrently) both re-pass the top guard. The atomic check-and-set
-    // at the resume claim must let only ONE dispatch the /approve POST.
     useChatStore.setState({
       activeConversationId: PERSISTED_CONVERSATION_ID,
       conversations: [
@@ -453,8 +422,6 @@ describe('useChatStream — tool approval → resume', () => {
     });
     __resetPendingTurnsForTests();
 
-    // Route persists (/messages) to a resolved JSON and the resume (/approve) to a
-    // minimal SSE stream, so both concurrent decisions can park at their save await.
     vi.mocked(fetch).mockImplementation(async (url) => {
       if (String(url).includes('/approve')) {
         const stream = new ReadableStream({
@@ -528,8 +495,6 @@ describe('useChatStream — tool approval → resume', () => {
   });
 });
 
-// ─── isApprovalTurnLive (Finding 1: dead buttons after reload/restart) ──────
-
 describe('isApprovalTurnLive', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
@@ -595,7 +560,6 @@ describe('isApprovalTurnLive', () => {
     const assistantId = assistantMessage()!.id;
     expect(isApprovalTurnLive(assistantId)).toBe(true);
 
-    // Simulate a reload: only the persisted message metadata remains.
     __resetPendingTurnsForTests();
 
     const stillAwaiting = assistantMessage()?.metadata?.tools?.find(

@@ -1,12 +1,3 @@
-/**
- * org-shared-connector-service contract tests.
- *
- * A shared connector hands every member the EFFECT of one admin's bearer
- * token, so the invariants below are security invariants, not conveniences:
- * only the OWNER's connector can be shared, the credential never appears on any
- * wire shape, the org namespace cannot collide with the personal one, and the
- * org-wide ceiling is enforced by the database rather than by a read-then-write.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -56,7 +47,6 @@ const SHARED_ROW = {
   url: 'https://mcp.example.com/sse',
   transport: 'sse',
   user_id: 'admin-1',
-  // Deliberately present on the raw row: the mapper must not carry it out.
   auth_header_enc: 'ENCRYPTED-SECRET',
 };
 
@@ -74,8 +64,6 @@ describe('org-shared connector namespace', () => {
   it('is distinct from the personal custom- namespace', () => {
     expect(ORG_SHARED_CONNECTOR_PREFIX).toBe('orgmcp-');
     expect(orgSharedConnectorServerId('a1b2c3d4e5')).toBe('orgmcp-a1b2c3d4e5');
-    // The serverId is embedded in `mcp__<serverId>__<tool>`, whose parser
-    // requires the server segment to contain no underscore.
     expect(orgSharedConnectorServerId('a1b2c3d4e5')).not.toContain('_');
   });
 
@@ -95,7 +83,6 @@ describe('listSharedConnectors', () => {
 
     expect(issued[0]!.sql).toMatch(/where s\.organization_id = \$1/i);
     expect(issued[0]!.params).toEqual([ORG]);
-    // The SELECT list must not even ask for the credential column.
     expect(issued[0]!.sql).not.toMatch(/auth_header_enc/);
 
     expect(shared).toHaveLength(1);
@@ -132,8 +119,6 @@ describe('shareConnector', () => {
       /insert into public\.organization_shared_connectors/i.test(sql),
     );
     expect(insert).toBeDefined();
-    // Ownership: an admin must not be able to publish another member's
-    // credential to the whole organization.
     expect(insert!.sql).toMatch(
       /from public\.user_custom_connectors\s+where id = \$2\s+and user_id = \$3/i,
     );

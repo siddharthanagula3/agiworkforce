@@ -1,18 +1,5 @@
 'use client';
 
-/**
- * ErrorCard · consistent error state with optional retry button.
- *
- * Matches the glassmorphism card style used across the web dashboard.
- *
- * Usage:
- *   <ErrorCard
- *     title="Failed to load data"
- *     description={error.message}
- *     onRetry={() => void fetchData()}
- *   />
- */
-
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 

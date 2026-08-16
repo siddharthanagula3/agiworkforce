@@ -1,19 +1,3 @@
-/**
- * Prompt injection: retrieved document text is untrusted and must not be able to
- * change the agent's instructions, its abstention rules, or its allowlist.
- *
- * The guarantees asserted here are STRUCTURAL, not instructional — each one
- * holds even if the model obeys the injected document completely:
- *
- *   - a billing question still refuses, because on a hard-abstain category no
- *     document is retrieved and no model runs at all;
- *   - a citation URL is built from SITE_URL + a corpus path, so an attacker URL
- *     in document text can never appear in one;
- *   - a chunk id the model invented is dropped, and zero survivors yields
- *     `unverifiable_citation`;
- *   - a `proposedActionId` the caller did not offer is dropped;
- *   - the system prompt never receives document or user text.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -58,8 +42,6 @@ describe('prompt injection resistance', () => {
   });
 
   it('a billing question still refuses, even though the injected doc says billing is allowed', async () => {
-    // The injected document explicitly instructs the agent to discuss billing.
-    // It never gets the chance: hard-abstain runs before retrieval.
     expect(INJECTED_CHUNK.text).toContain('discuss billing');
 
     const result = await answerSupportQuestion(ask('why was I charged twice this month'));
@@ -115,8 +97,6 @@ describe('prompt injection resistance', () => {
     for (const citation of result.citations) {
       expect(new URL(citation.url).origin).toBe(new URL(SITE_URL).origin);
     }
-    // The model's prose is still returned verbatim; what it CANNOT do is make
-    // that URL a citation. Rendering surfaces must not auto-link answer text.
     expect(result.citations.some((c) => c.url.includes('evil.example'))).toBe(false);
   });
 
@@ -154,8 +134,6 @@ describe('prompt injection resistance', () => {
     });
     expect(rendered).toContain('UNTRUSTED REFERENCE MATERIAL');
     expect(rendered).toContain('[id: injected#0]');
-    // Exactly one opening and one closing fence: the document could not close
-    // its own fence and pose as prompt-level text.
     expect(rendered.match(/<<<AGI_SUPPORT_DOC>>>/g)).toHaveLength(1);
     expect(rendered.match(/<<<AGI_SUPPORT_DOC_END>>>/g)).toHaveLength(1);
   });
@@ -174,7 +152,6 @@ describe('prompt injection resistance', () => {
     const request = modelMocks.streamedRequests.at(-1) as { system?: string };
     expect(request.system).toBe(SUPPORT_SYSTEM_PROMPT);
     expect(request.system).not.toContain('anthropic api key');
-    // The documents and the question live in the user message only.
     expect(lastUserPrompt()).toContain('how do I add my anthropic api key');
   });
 });

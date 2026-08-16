@@ -2,17 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { printConversation } from './print-conversation';
 
-/**
- * Printing had no action and no stylesheet. The browser's own Ctrl+P printed
- * the app chrome plus a VIRTUALIZED transcript — only the rows in the DOM — so
- * a long conversation printed as a few pages with the middle silently missing.
- * A partial printout that looks complete is the failure worth guarding.
- */
 describe('printConversation', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal('print', vi.fn());
-    // jsdom has no rAF scheduling by default in this config.
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);
       return 0;
@@ -51,7 +44,6 @@ describe('printConversation', () => {
 
     await printConversation({ onExpand });
 
-    // Printing before expansion is the bug this exists to prevent.
     expect(order).toEqual(['expand', 'print']);
   });
 
@@ -63,8 +55,6 @@ describe('printConversation', () => {
   });
 
   it('clears the scope even when afterprint never fires', async () => {
-    // Not every browser fires afterprint, and some never do on cancel. Leaving
-    // the attribute set would hide the sidebar on screen.
     await printConversation();
     expect(document.documentElement.getAttribute('data-print-scope')).toBe('transcript');
 

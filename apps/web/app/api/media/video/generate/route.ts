@@ -89,17 +89,13 @@ import {
  * Requires Max 15x or an Enterprise subscription.
  */
 
-// Next.js route configuration - video task creation can take up to 30s
-// (the actual generation is async, so we just need time for the task-creation call).
 export const maxDuration = 60;
 export const runtime = 'nodejs';
 
-// Provider type
 type VideoProvider = ManagedMediaVideoProvider;
 type VideoResolution = ManagedMediaVideoResolution;
 type VideoAspectRatio = ManagedMediaVideoAspectRatio;
 
-// Response types
 interface VideoGenerationResponse {
   success: boolean;
   task_id: string;
@@ -111,11 +107,6 @@ interface VideoGenerationResponse {
   error?: string;
 }
 
-/**
- * Web chat adds an owner-scoped transcript binding to the shared managed-media
- * request. The pair is optional so Mobile/Desktop and the standalone media
- * surface retain their existing contract; supplying only one id fails closed.
- */
 const VideoGenerationRouteRequestSchema = ManagedMediaVideoGenerationRequestSchema.extend({
   conversation_id: z.string().uuid().optional(),
   assistant_message_id: z.string().uuid().optional(),
@@ -259,7 +250,6 @@ async function recoverKnownProviderTaskAttachment(input: {
   return null;
 }
 
-// Runway task creation response
 interface RunwayTaskResponse {
   id: string;
   status?: string;
@@ -268,7 +258,6 @@ interface RunwayTaskResponse {
   failureCode?: string;
 }
 
-// Google Veo long-running operation response
 interface GoogleVeoResponse {
   name: string;
   metadata?: {
@@ -298,15 +287,6 @@ function managedUsageErrorResponse(
   );
 }
 
-/**
- * Google credential names, in priority order.
- *
- * This route read `GOOGLE_API_KEY` alone while the rest of the stack resolves
- * Google through `PROVIDER_API_KEY_ENV_KEYS.google` in
- * `lib/services/provider-adapter-service.ts`. On a deployment that sets only
- * `GEMINI_API_KEY` the Google branch below could never be taken. Keep in sync
- * with that map so catalog selection cannot silently cross providers.
- */
 const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
 
 function getGoogleApiKey(): string | undefined {
@@ -317,9 +297,6 @@ function getGoogleApiKey(): string | undefined {
   return undefined;
 }
 
-/**
- * Determine which provider to use
- */
 function requireVideoProviderConfigured(provider: VideoProvider): void {
   const configured =
     provider === 'google'
@@ -419,8 +396,6 @@ function validateProviderVideoRequest(
         `${model.name} does not support ${resolution} output at ${aspectRatio}.`,
       );
     }
-    // A size may permit fewer durations than the model overall — Veo allows
-    // 4/6/8s at 720p but only 8s at 1080p and 4k.
     if (outputSize.durationSecs && !outputSize.durationSecs.includes(durationSecs)) {
       throw createError.validation(
         `${model.name} ${resolution} output requires duration_secs to be ${outputSize.durationSecs.join(' or ')}.`,
@@ -477,23 +452,9 @@ function getVideoCostCents(
     }
     throw createError.serviceUnavailable(`Pricing is not configured for ${model.name}`);
   }
-  // Normalize binary floating-point noise before rounding up to whole cents
-  // (for example, 0.40 * 6 * 100 must reserve 240, not 241).
   return Math.ceil(Number((pricePerSecond * durationSecs * 100).toFixed(8)));
 }
 
-/**
- * Generate video using the current catalog-backed Runway text-to-video model.
- *
- * API reference: https://docs.dev.runwayml.com/api/
- * Base URL: https://api.dev.runwayml.com/v1/
- * Endpoint: POST /v1/text_to_video
- * Auth: Authorization: Bearer {RUNWAY_API_KEY}
- * Required header: X-Runway-Version: 2024-11-06
- *
- * Duration: 2–10 seconds (integer)
- * Task status: GET /v1/tasks/{id}
- */
 async function generateWithRunway(
   prompt: string,
   durationSecs: number,
@@ -522,15 +483,6 @@ async function generateWithRunway(
         model: model.apiModelId ?? model.id,
         promptText: prompt,
         duration: durationSecs,
-        // Landscape, unconditionally. The wire contract
-        // (ManagedMediaVideoGenerationRequestSchema) carries a RESOLUTION —
-        // '720p' | '1080p' | '4k' — and no aspect-ratio field at all, so no
-        // caller can request portrait. This read `resolution === '9:16' ? '9:16'
-        // : '16:9'`, comparing a resolution against an aspect ratio: the portrait
-        // arm was unreachable, and the comment above it claimed a 4K-to-1080p
-        // fallback that the request body never expressed. Give Runway a portrait
-        // option only together with a real aspect-ratio field on the contract and
-        // a control that produces it.
         ratio: '1280:720',
       }),
       signal: AbortSignal.timeout(30_000),
@@ -573,18 +525,6 @@ async function generateWithRunway(
   };
 }
 
-/**
- * Generate video using Google Veo via Gemini API (async long-running operation)
- *
- * API reference: https://ai.google.dev/gemini-api/docs/video
- * Base URL: canonical validated GOOGLE_BASE_URL (vendor default is v1beta)
- * Endpoint: POST /models/{model}:predictLongRunning
- * Auth: x-goog-api-key header
- *
- * Model selection is resolved from the shared catalog's video-generation slot.
- * Duration: "4", "6", or "8" (string seconds - Veo does not accept arbitrary integers)
- * Polling: GET /v1beta/{operation_name} until done === true
- */
 async function generateWithGoogleVeo(
   prompt: string,
   durationSecs: 4 | 6 | 8,
@@ -618,13 +558,6 @@ async function generateWithGoogleVeo(
       ],
       parameters: {
         aspectRatio: '16:9',
-        // NUMBER, not a string. This was `String(durationSecs)`, and the live
-        // API rejects that outright:
-        //   400 INVALID_ARGUMENT — "The value type for `durationSeconds` needs
-        //   to be a number. Please adjust your request accordingly."
-        // Verified against the catalog-selected live Google video model on
-        // 2026-08-06: the string form 400s, while the numeric form returns an
-        // operation name. Every Google video generation failed before this.
         durationSeconds: durationSecs,
         resolution,
         // This catalog-selected REST endpoint returns one video. It rejects
@@ -667,7 +600,6 @@ async function generateWithGoogleVeo(
           throw createError.validation(`Google rejected the video request: ${safeProviderMessage}`);
         }
       } catch (parseErr) {
-        // Re-throw only if it is an AppError from createError
         if (parseErr && typeof parseErr === 'object' && 'statusCode' in parseErr) {
           throw parseErr;
         }
@@ -688,9 +620,6 @@ async function generateWithGoogleVeo(
   }
 
   return {
-    // Keep the exact provider operation name. The reconciler accepts only the
-    // documented `operations/<opaque-id>` shape and never interpolates an
-    // arbitrary path.
     taskId: result.name,
   };
 }
@@ -736,25 +665,12 @@ async function generateWithOpenRouter(
   }
 }
 
-/**
- * Main handler for video generation
- */
 async function handleVideoGeneration(request: NextRequest): Promise<NextResponse> {
-  // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
     return preflightResponse;
   }
 
-  // Rate limiting: Video generation is expensive; use strict limits
-
-  // AUDIT-FIX BUG-21: enforce CSRF on this state-changing, credit-spending
-  // endpoint. getClerkAuthUser accepts a browser __session cookie, so without
-  // this a cross-origin POST rode the victim's ambient session and burned their
-  // managed-compute balance. The sibling /api/media/image/generate route has
-  // always had this check — the omission here was an inconsistency, not a design
-  // decision. requireCsrfToken bypasses only on a cryptographically verified
-  // Bearer, so programmatic API callers are unaffected.
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
@@ -765,7 +681,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     return rateLimitResponse;
   }
 
-  // Authentication
   const { userId } = await getClerkAuthUser(request);
 
   const managedGateResponse = buildManagedComputeGateResponse(
@@ -782,7 +697,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   );
   if (managedGateResponse) return managedGateResponse;
 
-  // Get subscription and check tier
   const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
@@ -823,15 +737,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   const userTier = subscription.plan_tier?.toLowerCase() || 'free';
   if (!canUseBillingPlanCapability(userTier, 'video_generation')) {
-    /**
-     * Returned as an explicit body rather than `createError.forbidden`, which
-     * emits `ErrorCode.FORBIDDEN`. The client's paywall detection
-     * (`lib/hooks/useMediaGeneration.ts` PAYWALL_ERROR_CODES / _TYPES) matches
-     * on `plan_upgrade_required`, so a bare FORBIDDEN fell through to the
-     * generic error path and a Basic/Pro user asking for a video saw "Forbidden"
-     * instead of the upgrade prompt. The sibling image route has always
-     * returned this shape; video was the inconsistency.
-     */
     return NextResponse.json(
       {
         error: {
@@ -853,7 +758,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Parse and validate request body
   let body: unknown;
   try {
     body = await request.json();
@@ -934,9 +838,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       }
     }
 
-    // A retry with the same body recovers the original durable job before
-    // provider configuration, reservation, or egress. Changed bodies fail
-    // closed under the same key.
     const existing = await findMatchingReplay({
       db: scopedDb,
       userId,
@@ -957,9 +858,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   }
 
   // Always-on platform safety floor before admission, billing reservation, or
-  // provider egress. Provider moderation remains defense in depth; it cannot
   // be the first control because Runway charges safety-moderated generations
-  // and repeated violations can jeopardize the managed provider account.
   const moderation = moderateManagedPrompt({
     userId,
     segments: [prompt],
@@ -1004,8 +903,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const billableDurationSecs = duration_secs;
   const estimatedDuration = estimateVideoDuration(provider, billableDurationSecs);
 
-  // A provider task without durable AGI storage can never produce a usable
-  // result. Fail before reserving credits or making provider egress.
   const estimatedCostCents = getVideoCostCents(
     model,
     resolution,
@@ -1060,9 +957,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       estimatedCostCents,
       planTier: subscription.plan_tier,
       isFlagship: false,
-      // The durable Workflow renews this lease on every claim. Start with the
-      // maximum supported window so a cold scheduler cannot race the generic stale-
-      // request recovery immediately after task submission.
       leaseSeconds: 3600,
     });
   } catch (error) {
@@ -1192,8 +1086,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     }).catch((releaseError) => {
       logger.error({ error: releaseError, userId }, 'Video generation admission release failed');
     });
-    // The INSERT may have committed even if its response was lost. Recover the
-    // stable row before releasing the reservation or creating another job.
     let recovered: VideoGenerationJob | null = null;
     let recoveryError: unknown;
     try {
@@ -1210,10 +1102,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       if (recovered.status !== 'submitting') return replayResponse(request, recovered);
       job = recovered;
     } else if (recoveryError) {
-      // The Workflow was durably started before INSERT and already owns this
-      // exact opaque job id. Do not cancel it or release billing while the DB
-      // commit outcome is ambiguous; a same-key retry recovers the row, and a
-      // truly missing row ages out through managed-usage stale recovery.
       logger.error(
         { error, recoveryError, userId, jobId },
         'Video job INSERT outcome is ambiguous; durable Workflow retained',
@@ -1316,7 +1204,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     'Starting video generation task',
   );
 
-  // Create video generation task based on provider
   let providerTaskId: string | undefined;
   const submissionClaimToken = randomUUID();
 
@@ -1331,9 +1218,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     if (!begun) return replayResponse(request, job);
     job = begun;
   } catch (error) {
-    // No provider egress happens unless the atomic billing/job boundary returns
-    // successfully. A concurrent retry may own the claim; both callers recover
-    // the same opaque job rather than starting a second provider task.
     logger.warn({ error, jobId: job.id }, 'Video provider submission claim was not acquired');
     const current = await findMatchingReplay({
       db: scopedDb,
@@ -1346,8 +1230,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   try {
     if (provider === 'runway') {
-      // No `resolution` argument: the current Runway body carries none. Catalog
-      // pricing already rejected unsupported output values before provider work.
       const result = await generateWithRunway(prompt, billableDurationSecs, model);
       providerTaskId = result.taskId;
     } else if (provider === 'google') {
@@ -1407,10 +1289,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     }
   } catch (error) {
     if (error instanceof VideoProviderTaskAttachmentUnavailableError) {
-      // Both direct DB attachment and the separate durable recovery start
-      // failed. Record the known provider identity as outcome_unknown while
-      // the submission claim is still held; do not claim that a later worker
-      // can recover an id that was never persisted anywhere durable.
       logger.error(
         { error, jobId: job.id, providerTaskId },
         'Accepted video provider task could not enter durable recovery',
@@ -1473,7 +1351,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     }
     logger.warn({ userId: userId, provider }, 'Video task creation failed');
 
-    // Re-throw AppError instances (from createError.*)
     if (!ambiguous && error && typeof error === 'object' && 'statusCode' in error) {
       throw error;
     }

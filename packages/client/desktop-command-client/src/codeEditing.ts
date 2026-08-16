@@ -1,10 +1,5 @@
-/**
- * Code Editing & Search API — typed wrappers for code_*, composer_*, grep_*, glob_*, format_* commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface CodeEdit {
   id: string;
@@ -55,8 +50,6 @@ export interface FormatterInfo {
   available: boolean;
 }
 
-// ---- Code Editing ----
-
 export async function codeGenerateEdit(
   filePath: string,
   selection: string,
@@ -99,8 +92,6 @@ export async function revertChanges(filePaths: string[]): Promise<RevertResult> 
   return command<RevertResult>('revert_changes', { filePaths });
 }
 
-// ---- Code Search ----
-
 export async function grepSearch(
   pattern: string,
   root?: string,
@@ -131,8 +122,6 @@ export async function formatFile(path: string, projectRoot?: string): Promise<Fo
 export async function formatDetect(path: string, projectRoot?: string): Promise<FormatterInfo> {
   return command<FormatterInfo>('format_detect', { path, projectRoot });
 }
-
-// ---- Coding Checkpoints (Undo/Rewind) ----
 
 export interface CodingCheckpoint {
   id: string;

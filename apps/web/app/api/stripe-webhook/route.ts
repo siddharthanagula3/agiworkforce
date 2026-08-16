@@ -3,12 +3,6 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-// WEB-4 audit fix (2026-05-03): pin to Node runtime so the Stripe SDK's
-// HMAC verification (stripe.webhooks.constructEvent) has access to Node
-// crypto. Edge runtime would silently fail signature checks. Also marks
-// this route as dynamic so Next.js doesn't try to pre-render or cache it.
-// Pairs with the proxy.ts matcher exclusion that keeps middleware off this
-// route entirely.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -35,15 +29,6 @@ const stripe = STRIPE_SECRET_KEY
     })
   : null;
 
-/**
- * Stripe webhook ingress.
- *
- * This route does not go through `withErrorHandler`, so the `billing` span here
- * is what establishes the trace context (SCALE-VER-006): every `logger.*` line
- * below — and every span inside `dispatchStripeEvent` — shares one `trace_id`,
- * which is how a disputed charge is traced from Stripe's event id to the credit
- * grant it produced.
- */
 export async function POST(request: NextRequest) {
   return withSpan('stripe.webhook', { kind: 'server', domain: 'billing' }, (span) =>
     handleStripeWebhook(request, span),
@@ -51,7 +36,6 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleStripeWebhook(request: NextRequest, span: ActiveSpan) {
-  // H5: Rate limit webhook endpoint to prevent abuse (generous limit for legitimate Stripe traffic)
   const rateLimitResponse = await checkRateLimit(request);
   if (rateLimitResponse) {
     span.setAttributes({ 'stripe.webhook.outcome': 'rate_limited' });
@@ -91,9 +75,6 @@ async function handleStripeWebhook(request: NextRequest, span: ActiveSpan) {
   }
 
   try {
-    // Financial state changes and the durable succeeded marker share one
-    // transaction. If either fails, Neon rolls back both so a Stripe retry
-    // cannot double-apply credits or permanently acknowledge partial state.
     await db.transaction(async (tx) => {
       await dispatchStripeEvent(tx, stripe, event);
       await markEventSucceeded(tx, event.id);
@@ -113,11 +94,6 @@ async function handleStripeWebhook(request: NextRequest, span: ActiveSpan) {
     await markEventFailed(db, event.id, errorMessage);
     span.setAttributes({ 'stripe.webhook.outcome': 'dispatch_failed' });
 
-    // WEB-7 (audit 2026-05-03): return a generic body. The previous
-    // `errorMessage` interpolation leaked internal details (column names,
-    // SQL constraint names, stack traces) to anyone able to forge a webhook
-    // signature, AND surfaced the same string in Stripe's dashboard on
-    // retries. Server-side `logger.error` above already captured the full error.
     return new NextResponse(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
     });

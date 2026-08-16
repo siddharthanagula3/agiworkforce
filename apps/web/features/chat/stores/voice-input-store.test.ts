@@ -1,16 +1,3 @@
-/**
- * Tests for voice-input-store (Zustand store)
- *
- * Tests cover:
- * - Initial state shape
- * - Action: clearTranscript resets transcript
- * - Action: clearError resets error and mode
- * - Action: setLanguage persists language setting
- * - Action: setPreferServerTranscription persists preference
- * - startListening / stopListening Web Speech path (mocked)
- * - startListening / stopListening MediaRecorder path (mocked)
- * - Error handling for denied permission
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -24,8 +11,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 }));
 
 import { useVoiceInputStore, _resetRuntimeRefs } from './voice-input-store';
-
-// ─── Mock SpeechRecognition ───────────────────────────────────────────────────
 
 class MockSpeechRecognition {
   continuous = false;
@@ -42,23 +27,17 @@ class MockSpeechRecognition {
   abort = vi.fn();
 }
 
-// Module-level reference to the current mock instance · updated in beforeEach
 let currentMockRecognition: MockSpeechRecognition;
 
-// Must be a regular `function` (not arrow) so it can be used with `new`
 function SpeechRecognitionCtor(this: MockSpeechRecognition) {
-  // Return the pre-created instance so tests can control it
   return currentMockRecognition;
 }
-
-// ─── Mock MediaRecorder ───────────────────────────────────────────────────────
 
 class MockMediaRecorder {
   ondataavailable: ((e: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
 
   start = vi.fn((_timeslice?: number) => {
-    // Emit one chunk immediately
     this.ondataavailable?.({ data: new Blob(['audio'], { type: 'audio/webm' }) });
   });
   stop = vi.fn(() => {
@@ -78,8 +57,6 @@ function MediaRecorderCtor(this: MockMediaRecorder) {
 (MediaRecorderCtor as unknown as { isTypeSupported: (t: string) => boolean }).isTypeSupported =
   MockMediaRecorder.isTypeSupported;
 
-// ─── Store reset helpers ──────────────────────────────────────────────────────
-
 function resetStore() {
   useVoiceInputStore.setState({
     mode: 'idle',
@@ -90,8 +67,6 @@ function resetStore() {
   });
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
-
 describe('voiceInputStore', () => {
   beforeEach(() => {
     resetStore();
@@ -101,8 +76,6 @@ describe('voiceInputStore', () => {
   afterEach(() => {
     resetStore();
   });
-
-  // ── Initial state ──────────────────────────────────────────────────────────
 
   describe('initial state', () => {
     it('starts in idle mode', () => {
@@ -128,8 +101,6 @@ describe('voiceInputStore', () => {
     });
   });
 
-  // ── clearTranscript ────────────────────────────────────────────────────────
-
   describe('clearTranscript', () => {
     it('resets the transcript to empty string', () => {
       useVoiceInputStore.setState({ transcript: 'hello world' });
@@ -143,8 +114,6 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().mode).toBe('idle');
     });
   });
-
-  // ── clearError ─────────────────────────────────────────────────────────────
 
   describe('clearError', () => {
     it('resets error to null', () => {
@@ -160,8 +129,6 @@ describe('voiceInputStore', () => {
     });
   });
 
-  // ── setLanguage ────────────────────────────────────────────────────────────
-
   describe('setLanguage', () => {
     it('updates the language setting', () => {
       useVoiceInputStore.getState().setLanguage('fr-FR');
@@ -173,8 +140,6 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().language).toBe('ja-JP');
     });
   });
-
-  // ── setPreferServerTranscription ───────────────────────────────────────────
 
   describe('setPreferServerTranscription', () => {
     it('enables server transcription preference', () => {
@@ -188,8 +153,6 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().preferServerTranscription).toBe(false);
     });
   });
-
-  // ── startListening (Web Speech path) ──────────────────────────────────────
 
   describe('startListening · Web Speech API path', () => {
     beforeEach(() => {
@@ -250,24 +213,18 @@ describe('voiceInputStore', () => {
     });
   });
 
-  // ── stopListening (Web Speech path) ───────────────────────────────────────
-
   describe('stopListening · mode guard', () => {
     it('returns immediately if not in listening mode', async () => {
       useVoiceInputStore.setState({ mode: 'idle' });
       await expect(useVoiceInputStore.getState().stopListening()).resolves.toBeUndefined();
-      // Mode remains idle
       expect(useVoiceInputStore.getState().mode).toBe('idle');
     });
   });
-
-  // ── startListening (MediaRecorder / server path) ───────────────────────────
 
   describe('startListening · MediaRecorder path', () => {
     let mockStream: MediaStream;
 
     beforeEach(() => {
-      // No SpeechRecognition available → MediaRecorder path
       Object.defineProperty(window, 'SpeechRecognition', {
         value: undefined,
         writable: true,
@@ -341,17 +298,12 @@ describe('voiceInputStore', () => {
     });
   });
 
-  // ── transcribeViaServer posts to /api/voice/transcribe ────────────────────
-
   describe('transcribeViaServer · correct endpoint URL', () => {
     let mockStream: MediaStream;
 
     beforeEach(() => {
-      // Reset module-level runtime refs so rt.recognition from any prior Web
-      // Speech test does not cause stopListening to take Path A instead of B.
       _resetRuntimeRefs();
 
-      // Disable Web Speech API so the MediaRecorder (server-transcription) path is taken.
       Object.defineProperty(window, 'SpeechRecognition', {
         value: undefined,
         writable: true,
@@ -403,18 +355,13 @@ describe('voiceInputStore', () => {
       await useVoiceInputStore.getState().startListening();
       await useVoiceInputStore.getState().stopListening();
 
-      // fetch must have been called at least once (the transcription request)
       expect(fetchMock).toHaveBeenCalled();
-      // The first positional argument of the first call must be the correct route.
-      // Non-null assertion is safe: the toHaveBeenCalled() above guarantees calls[0] exists.
 
       expect(fetchMock.mock.calls[0]![0]).toBe('/api/voice/transcribe');
       const request = fetchMock.mock.calls[0]![1] as RequestInit;
       expect((request.body as FormData).get('model')).toBe(canonicalVoiceModel);
     });
   });
-
-  // ── Error state management ─────────────────────────────────────────────────
 
   describe('error state management', () => {
     it('error mode persists until clearError is called', () => {
@@ -426,14 +373,11 @@ describe('voiceInputStore', () => {
     });
   });
 
-  // ── State immutability ─────────────────────────────────────────────────────
-
   describe('state immutability', () => {
     it('language change produces updated state without mutating the previous snapshot', () => {
       const snapshot = { ...useVoiceInputStore.getState() };
       useVoiceInputStore.getState().setLanguage('ko-KR');
       expect(useVoiceInputStore.getState().language).toBe('ko-KR');
-      // Previous snapshot language should not have changed
       expect(snapshot.language).toBe('en-US');
     });
   });

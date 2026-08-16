@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// saveMessageToDb / notifyPersistenceFailure live in useChatStream.ts. We only
-// exercise those two helpers, so stub the heavy sibling imports the module
-// pulls in at load time (Clerk, zustand stores) and the two deps the helpers
-// actually use (csrf header builder, sonner toast).
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
@@ -14,9 +10,7 @@ vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: async () => 'tok' 
 import { saveMessageToDb, notifyPersistenceFailure } from '../useChatStream';
 
 const MSG = { id: 'client-id-1', role: 'assistant', content: 'hi', model: 'm' };
-const FAST = { retryDelayMs: 0 }; // no real backoff in tests
-// saveMessageToDb now takes a token PROVIDER (fetched fresh at save time so a
-// long stream cannot outlive it), not a captured string.
+const FAST = { retryDelayMs: 0 };
 const TOK = async () => 'tok';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -45,8 +39,6 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
   });
 
   it('falls back to the SENT id (not a random uuid) on a 200 with no body', async () => {
-    // The route is idempotent on the sent id; on a bodyless 200 the row was
-    // still saved, so the store id must stay in sync — never invent a uuid.
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, {})));
 
     const saved = await saveMessageToDb('conv-1', MSG, TOK, FAST);
@@ -58,9 +50,6 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
   });
 
   it('surfaces a 429 (rate-limited persist = turn not saved) by throwing, without retrying', async () => {
-    // A 429 means the persist was rate-limited and the turn was NOT saved.
-    // Retrying in-request is futile (the window outlasts it), so it throws once
-    // so the caller surfaces it rather than silently dropping the turn.
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(429, { error: 'rate limited' }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -86,7 +75,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(/save message to DB/i);
-    expect(fetchMock).toHaveBeenCalledTimes(3); // default maxAttempts = 3
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it('THROWS immediately on a non-retryable 4xx (e.g. 404) — no retry', async () => {

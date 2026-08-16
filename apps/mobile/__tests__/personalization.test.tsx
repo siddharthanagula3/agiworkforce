@@ -1,20 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Personalization Page — component tests
- *
- * Covers:
- *   - Renders 4 text inputs (Full Name, Nickname, Occupation, Custom Instructions)
- *   - Renders 4 sliders (Warmth, Enthusiasm, Headers/Lists, Emoji)
- *   - Save button commits to settingsStore
- *   - Pre-fills values from settingsStore
- */
 
 import { Alert } from 'react-native';
 import { act, render, fireEvent } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks — must be before component import
-// ---------------------------------------------------------------------------
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
@@ -82,18 +69,10 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import PersonalizationScreen from '../app/(app)/settings/personalization';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useAuthStore } from '../src/features/auth/store';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const defaultPersonalization = {
   fullName: '',
@@ -107,9 +86,6 @@ const defaultPersonalization = {
   emoji: 50,
 };
 
-// PersonalizationScreen reads from the active mode's store.
-// Tests run in local mode (appModeStore defaults to 'local'), so seed both
-// but primary reads come from useLocalSettingsStore.
 function resetSettingsStore() {
   useLocalSettingsStore.setState({ personalization: defaultPersonalization });
   useCloudSettingsStore.setState({
@@ -117,10 +93,6 @@ function resetSettingsStore() {
     settingsUpdatedAt: null,
   });
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Personalization page', () => {
   beforeEach(() => {
@@ -157,19 +129,15 @@ describe('Personalization page', () => {
   it('renders slider range labels', () => {
     const { getByText } = render(<PersonalizationScreen />);
 
-    // Warmth slider
     expect(getByText('Cold')).toBeTruthy();
     expect(getByText('Warm')).toBeTruthy();
 
-    // Enthusiasm slider
     expect(getByText('Neutral')).toBeTruthy();
     expect(getByText('Enthusiastic')).toBeTruthy();
 
-    // Headers/Lists slider
     expect(getByText('Prose')).toBeTruthy();
     expect(getByText('Structured')).toBeTruthy();
 
-    // Emoji slider
     expect(getByText('None')).toBeTruthy();
     expect(getByText('Frequent')).toBeTruthy();
   });
@@ -200,21 +168,15 @@ describe('Personalization page', () => {
   it('Save button commits text changes to settingsStore', () => {
     const { getByPlaceholderText, getByLabelText } = render(<PersonalizationScreen />);
 
-    // Type into the Full Name field using its placeholder
     const nameInput = getByPlaceholderText('Your full name');
     fireEvent.changeText(nameInput, 'Alice Wonder');
 
-    // Tap Save
     fireEvent.press(getByLabelText('Save personalization settings'));
 
-    // Verify the store was updated (local mode → useLocalSettingsStore)
     const { personalization } = useLocalSettingsStore.getState();
     expect(personalization.fullName).toBe('Alice Wonder');
   });
 
-  // PAR-M15 family. `replace('/(app)/(tabs)/settings')` discarded both the
-  // entry point and the back entry, so a user who opened Personalization from
-  // Profile or from a chat landed on the Settings root with no way back.
   it('Save pops back to whichever screen pushed it', () => {
     mockCanGoBack.mockReturnValue(true);
     const { getByLabelText } = render(<PersonalizationScreen />);
@@ -262,9 +224,6 @@ describe('Personalization page', () => {
     expect(getByDisplayValue('Local Name')).toBeTruthy();
     expect(getByText('Personalization')).toBeTruthy();
 
-    // Simulate Expo Router reusing this screen instance for a navigation to
-    // the Cloud-scoped row — the resync effect must repopulate fields from
-    // cloudPersonalization instead of leaving the stale "Local Name" text.
     mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
     rerender(<PersonalizationScreen />);
 
@@ -328,15 +287,6 @@ describe('Personalization page', () => {
   });
 });
 
-/**
- * PAR-M46 — Appearance is owned by the Settings root row alone.
- *
- * This screen commits every field through the header Save and offers
- * "Discard changes?" on back, but the theme card it used to render wrote
- * straight to the store on tap and was never part of `hasChanges`. Discarding
- * therefore reverted the text fields while silently keeping the theme change it
- * had implicitly promised to revert.
- */
 describe('Personalization theme card removal', () => {
   beforeEach(() => {
     resetSettingsStore();
@@ -378,8 +328,6 @@ describe('Personalization theme card removal', () => {
       act(() => discard?.onPress?.());
 
       expect(mockBack).toHaveBeenCalledTimes(1);
-      // Nothing on this screen can write the theme any more, so "Discard"
-      // really does revert everything the screen showed.
       expect(setThemeMode).not.toHaveBeenCalled();
       expect(useLocalSettingsStore.getState().themeMode).toBe('dark');
       expect(useLocalSettingsStore.getState().personalization.fullName).toBe('');

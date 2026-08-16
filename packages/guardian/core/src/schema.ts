@@ -1,12 +1,3 @@
-/**
- * AGI Guardian normalized finding schema, v1.
- *
- * Every analyzer — deterministic scanner, repo-owned check, or LLM reviewer —
- * must emit findings in this shape before anything downstream (verification,
- * deduplication, ranking, policy, publishing) touches them. The schema is
- * versioned: breaking changes bump SCHEMA_VERSION and require a migration
- * covered by tests in __tests__/schema-migration.test.ts.
- */
 import { z } from 'zod';
 
 export const SCHEMA_VERSION = 1;
@@ -14,7 +5,6 @@ export const SCHEMA_VERSION = 1;
 export const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
-/** Numeric weight used for ranking; higher is worse. */
 export const SEVERITY_WEIGHT: Record<Severity, number> = {
   critical: 5,
   high: 4,
@@ -85,7 +75,6 @@ export type Suppression = z.infer<typeof SuppressionSchema>;
 export const DeterministicEvidenceSchema = z.object({
   source_type: z.enum(SOURCE_TYPES),
   rule_id: z.string().min(1),
-  /** Raw single-line summary from the deterministic tool, secret-redacted. */
   summary: z.string(),
 });
 export type DeterministicEvidence = z.infer<typeof DeterministicEvidenceSchema>;
@@ -93,7 +82,6 @@ export type DeterministicEvidence = z.infer<typeof DeterministicEvidenceSchema>;
 export const FindingSchema = z.object({
   schema_version: z.literal(SCHEMA_VERSION),
   finding_id: z.uuid(),
-  /** Stable across commits; excludes SHAs. See fingerprint.ts. */
   fingerprint: z.string().regex(/^[0-9a-f]{64}$/),
   repository_id: z.number().int().nonnegative(),
   installation_id: z.number().int().nonnegative(),
@@ -137,10 +125,6 @@ export const FindingSchema = z.object({
 export type Finding = z.infer<typeof FindingSchema>;
 export type FindingInput = z.input<typeof FindingSchema>;
 
-/**
- * Scanner execution record. `status` is the load-bearing field: a scanner that
- * crashed, timed out, or was skipped must never be reported as "clean".
- */
 export const SCANNER_STATUSES = [
   'clean',
   'findings',
@@ -153,13 +137,11 @@ export type ScannerStatus = (typeof SCANNER_STATUSES)[number];
 export const ScannerRunSchema = z.object({
   scanner_id: z.string().min(1),
   source_type: z.enum(SOURCE_TYPES),
-  /** Exact pinned version of the tool, or "repo" for repository-owned scripts. */
   version: z.string().min(1),
   status: z.enum(SCANNER_STATUSES),
   exit_code: z.number().int().nullable(),
   duration_ms: z.number().nonnegative(),
   finding_count: z.number().int().nonnegative(),
-  /** Populated only when status is scanner-failed or timeout; secret-redacted. */
   error: z.string().nullable().default(null),
 });
 export type ScannerRun = z.infer<typeof ScannerRunSchema>;
@@ -188,12 +170,10 @@ export const ReviewRunSchema = z.object({
 });
 export type ReviewRun = z.infer<typeof ReviewRunSchema>;
 
-/** Parse and validate an unknown value into a Finding, applying defaults. */
 export function parseFinding(value: unknown): Finding {
   return FindingSchema.parse(value);
 }
 
-/** Non-throwing variant used at trust boundaries (scanner/LLM output). */
 export function safeParseFinding(
   value: unknown,
 ): { ok: true; finding: Finding } | { ok: false; error: string } {

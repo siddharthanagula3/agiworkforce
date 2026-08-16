@@ -51,10 +51,6 @@ describe('persistPurchasedSeatsOnOrganization', () => {
   });
 
   it('never writes seats_consumed, which membership triggers own', async () => {
-    // Billing records what was BOUGHT; membership records what is USED. If this
-    // statement ever set seats_consumed, the trigger-maintained counter would
-    // drift and the seats_consumed <= licensed_seats CHECK would stop meaning
-    // anything.
     const { db, calls } = makeDb({ update: () => [{ id: 'org_1', licensed_seats: 25 }] });
 
     await persistPurchasedSeatsOnOrganization(db, INPUT);
@@ -72,9 +68,6 @@ describe('persistPurchasedSeatsOnOrganization', () => {
   });
 
   it('guards the seat ceiling in the WHERE clause rather than tripping the CHECK', async () => {
-    // The webhook runs in ONE Postgres transaction. A raised 23514 aborts it
-    // and cannot be recovered in JS, so the event would retry forever and the
-    // entitlement would never provision.
     const { db, calls } = makeDb({ update: () => [{ id: 'org_1', licensed_seats: 25 }] });
 
     await persistPurchasedSeatsOnOrganization(db, INPUT);
@@ -122,17 +115,6 @@ describe('persistPurchasedSeatsOnOrganization', () => {
 
 describe('cancel then re-subscribe', () => {
   it('reports subscription_mismatch while the organization still holds a dead binding', () => {
-    // THE BUG, stated as the behaviour that motivated the fix.
-    //
-    // `customer.subscription.deleted` used to update `subscriptions` only, so
-    // the organization kept the cancelled subscription's id forever. The
-    // update in persistPurchasedSeatsOnOrganization requires
-    //
-    //     stripe_subscription_id is null OR $3 is null OR stripe_subscription_id = $3
-    //
-    // so a customer who re-subscribed to Team matched zero rows, fell into the
-    // diagnostic branch, and had NONE of their purchased seats attach. It was
-    // silent to them — the only signal was a CRITICAL log line.
     const boundToDeadSubscription = makeDb({
       update: () => [],
       select: () => [{ id: 'org-1', seats_consumed: 1, stripe_subscription_id: 'sub_cancelled' }],
@@ -151,11 +133,6 @@ describe('cancel then re-subscribe', () => {
   });
 
   it('attaches the new seats once the dead binding has been released', async () => {
-    // What the cancellation handler now guarantees: `stripe_subscription_id`
-    // is null by the time the next purchase arrives, so the same WHERE clause
-    // matches and the seats land. The guard against a genuinely CONFLICTING
-    // active subscription is unaffected — that case still has a non-null,
-    // different id and still reports a mismatch, as the test above shows.
     const released = makeDb({
       update: (params) => [{ id: 'org-1', licensed_seats: params[0] }],
     });
@@ -172,7 +149,6 @@ describe('cancel then re-subscribe', () => {
     const update = released.calls.find((c) => c.sql.includes('update public.organizations'));
     expect(update?.params[0]).toBe(5);
     expect(update?.params[2]).toBe('sub_new');
-    // seats_consumed stays trigger-maintained; billing never writes it.
     expect(update?.sql).not.toContain('seats_consumed =');
   });
 });

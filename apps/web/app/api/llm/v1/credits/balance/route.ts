@@ -12,16 +12,7 @@ import { toPublicUsagePercentage } from '@/lib/server/managed-usage-policy';
 import type { ManagedUsageBalanceResponse } from '@agiworkforce/types';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 
-/**
- * Credits Balance API
- * Endpoint: GET /v1/credits/balance (via api.agiworkforce.com)
- *
- * Returns percentage-only managed-usage status. Private allocations, ledger
- * units, and conversion math must never cross this API boundary.
- */
-
 async function handleGetBalance(request: NextRequest) {
-  // Handle CORS preflight
   if (request.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,
@@ -29,7 +20,6 @@ async function handleGetBalance(request: NextRequest) {
     });
   }
 
-  // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'credits-balance');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -42,11 +32,9 @@ async function handleGetBalance(request: NextRequest) {
     CreditService.getBalance(userId),
   ]);
 
-  // Extract results, providing null for rejected promises
   const subscription = subscriptionResult.status === 'fulfilled' ? subscriptionResult.value : null;
   const balance = balanceResult.status === 'fulfilled' ? balanceResult.value : null;
 
-  // Log any errors that occurred
   if (subscriptionResult.status === 'rejected') {
     logger.error(
       { error: subscriptionResult.reason, userId: userId },
@@ -106,10 +94,6 @@ async function handleGetBalance(request: NextRequest) {
           : (subscription.current_period_end ?? null),
     },
     credits: {
-      // Free's allowance is an internal cost control, not a published quantity
-      // (2026-08-08). It still meters and still refuses when exhausted; it just
-      // does not disclose how much is left. Withheld here rather than in the UI
-      // because this response is readable in devtools.
       usage_percentage: isFreePlan ? null : toPublicUsagePercentage(used, allocated),
       usage_visible: !isFreePlan,
       reset_at: resetAt,

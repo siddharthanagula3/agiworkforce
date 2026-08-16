@@ -3,7 +3,6 @@ import { isSensitiveFile, matchSensitivePattern } from '../sensitiveFiles';
 
 describe('isSensitiveFile', () => {
   it.each([
-    // dotenv
     ['.env'],
     ['.env.local'],
     ['.env.production'],
@@ -11,7 +10,6 @@ describe('isSensitiveFile', () => {
     ['/home/u/proj/.env'],
     ['.envrc'],
 
-    // secrets files
     ['secrets.json'],
     ['secret.yaml'],
     ['secrets.yml'],
@@ -22,13 +20,11 @@ describe('isSensitiveFile', () => {
     ['secret.ts'],
     ['/home/u/proj/secrets.json'],
 
-    // credentials
     ['.aws/credentials'],
     ['/home/u/.aws/credentials'],
     ['credentials.txt'],
     ['my-credential.json'],
 
-    // dotfile credentials
     ['.netrc'],
     ['.npmrc'],
     ['.pypirc'],
@@ -39,7 +35,6 @@ describe('isSensitiveFile', () => {
     ['.github_token'],
     ['.gitlab_token'],
 
-    // SSH / GPG
     ['.ssh/id_rsa'],
     ['.ssh/id_ed25519.pub'],
     ['id_dsa'],
@@ -48,7 +43,6 @@ describe('isSensitiveFile', () => {
     ['.ssh/known_hosts'],
     ['.gnupg/secring.gpg'],
 
-    // Cert / key extensions
     ['cert.pem'],
     ['cert.p12'],
     ['cert.pfx'],
@@ -58,14 +52,12 @@ describe('isSensitiveFile', () => {
     ['file.gpg'],
     ['signed.asc'],
 
-    // Cloud vendor dirs
     ['.aws/config'],
     ['.gcloud/credentials.db'],
     ['.config/gcloud/active_config'],
     ['.azure/something'],
     ['.kube/config'],
 
-    // Windows paths (backslash)
     ['C:\\Users\\me\\.aws\\credentials'],
     ['Users\\me\\.env'],
   ])('flags %s as sensitive', (p) => {
@@ -73,7 +65,6 @@ describe('isSensitiveFile', () => {
   });
 
   it.each([
-    // Non-sensitive files
     ['README.md'],
     ['src/index.ts'],
     ['package.json'],
@@ -82,7 +73,6 @@ describe('isSensitiveFile', () => {
     ['envoy.yaml'], // not .env
     ['environment.md'],
     ['credit.txt'], // not credential
-    // Empty / invalid
     [''],
   ])('does NOT flag %s', (p) => {
     expect(isSensitiveFile(p)).toBe(false);

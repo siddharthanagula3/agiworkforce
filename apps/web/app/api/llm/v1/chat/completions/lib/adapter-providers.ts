@@ -35,43 +35,6 @@ import {
 import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
 
-/**
- * One entry per provider wired onto the `packages/ai/providers/*` adapter path.
- * Keeps the streaming/non-streaming branches in route.ts identical in shape
- * for every adapter-backed provider instead of duplicating a provider-
- * specific try/catch block per provider (Anthropic's was hand-duplicated for
- * Google when this table didn't exist yet -- pulled out here so a third
- * provider is one entry, not another duplicated block).
- *
- * Moved out of route.ts (restructure Wave 2, task #34's tool-loop slice):
- * Next.js route handler files may only export the reserved route-segment
- * symbols (GET/POST/OPTIONS/config exports), so a second consumer --
- * tool-loop-anthropic.ts's generalized, table-driven per-step dispatch --
- * could not import this table while it lived in route.ts. A lib-sibling
- * (alongside adapter-factory.ts/canonical-request.ts/adapter-errors.ts,
- * which this table already composes) is the established home for exactly
- * this kind of cross-consumer reuse; route.ts now imports it from here too,
- * so there is exactly one table, not a second copy that can drift.
- *
- * `wireMode` (task #34's OpenAI slice): Anthropic/Google's legacy providers
- * reshape their vendor's native wire into an OpenAI-like shape, so
- * `OpenAIWireAssembler`'s `wireMode: 'legacy-web'` -- reverse-engineered from
- * that hand-built shape -- reproduces both. OpenAI's legacy provider does no
- * such reshaping (near-verbatim real upstream SSE passthrough, confirmed via
- * stream-transform.openai-byte-parity.test.ts), so it needs the DIFFERENT
- * `'openai-passthrough'` mode (team-lead RULING: Option B, preserve
- * fidelity). The 8 openai-compat providers join OpenAI on the same
- * `'openai-passthrough'` mode: each `packages/ai/providers/{provider}` package
- * is a thin config wrapper around the SAME `@agiworkforce/providers-openai`
- * translate/stream layer (see adapter-factory.ts's `buildCompatAdapter`
- * docstring), and none of their legacy files reshape their vendor's own
- * near-OpenAI-shaped wire any more than `openai.ts` does (confirmed by
- * reading each legacy provider file directly). None of the 8 need a
- * `buildChatRequest` wrapper either -- none set `effort`/`reasoning_effort`
- * or `thinking` in any form (grepped every legacy compat file), so the base
- * `toCanonicalChatRequest` (no thinking/effort folded in) already reproduces
- * their exact request shape.
- */
 export const ADAPTER_PROVIDERS: Record<
   string,
   {

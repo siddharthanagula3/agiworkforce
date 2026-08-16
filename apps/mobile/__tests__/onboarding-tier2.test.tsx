@@ -1,25 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Onboarding → ExecuTorch tier2 download → first offline response.
- *
- * Verifies LAUNCH-SLICE-2c requirement:
- *   A clean install reaches ONE real on-device generated response via the
- *   ExecuTorch path (mocked react-native-executorch LLMModule via
- *   _setLLMModuleForTesting), NOT the dead-end finishOnboarding() fall-through.
- *
- * Test architecture:
- *   - onboarding.tsx mocked at module boundary except for the real
- *     tier2LoadModel + recordInstalledModel (also mocked to avoid SQLite).
- *   - The local-llm module is partially mocked: catalog + detectCapabilities
- *     come from the mock; tier2LoadModel is the real export but with
- *     react-native-executorch replaced via _setLLMModuleForTesting.
- */
 
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks — must be before component import
-// ---------------------------------------------------------------------------
 
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
@@ -114,13 +95,6 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// tier2LoadModel mock — we replace the whole @agiworkforce/local-llm mock
-// with a selective version: real tier2LoadModel is simulated by capturing
-// the progressCallback and resolving after we drive it, so we can assert
-// progress updates before finishOnboarding fires.
-// ---------------------------------------------------------------------------
-
 const mockTier2LoadModel = jest.fn();
 const mockTier2Generate = jest.fn();
 const DEFAULT_MODEL_ID = 'fixture-default-local-model';
@@ -129,8 +103,6 @@ const IOS_SYSTEM_MODEL_ID = 'fixture-ios-system-model';
 const ANDROID_SYSTEM_MODEL_ID = 'fixture-android-system-model';
 
 jest.mock('@agiworkforce/local-llm', () => {
-  // Define mock catalog rows inside the hoisted factory so no clean checkout
-  // depends on module-scope initialization order.
   const defaultModelWithPreset = {
     id: 'fixture-default-local-model',
     displayName: 'AGI Standard',
@@ -201,7 +173,6 @@ jest.mock('@agiworkforce/local-llm', () => {
   };
 });
 
-// Mock recordInstalledModel so we don't need a real SQLite DB.
 const mockRecordInstalledModel = jest.fn().mockResolvedValue(undefined);
 jest.mock('../storage/installedModels', () => ({
   recordInstalledModel: (...args: unknown[]) => mockRecordInstalledModel(...args),
@@ -211,20 +182,11 @@ jest.mock('../storage/installedModels', () => ({
   markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import OnboardingScreen from '../app/(public)/onboarding';
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Onboarding → tier2 ExecuTorch download flow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default: tier2LoadModel resolves immediately (model already cached or fast download)
     mockTier2LoadModel.mockResolvedValue(undefined);
   });
 
@@ -254,7 +216,6 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
   });
 
   it('shows the download screen (progress ring) while tier2LoadModel is pending', async () => {
-    // Hold the download open until we check
     let resolveTier2: () => void;
     mockTier2LoadModel.mockImplementation(
       () =>
@@ -271,7 +232,6 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
 
     await waitFor(() => expect(getByTestId('onboarding-download-screen')).toBeTruthy());
 
-    // Resolve so the component doesn't leak timers / state updates after test
     await act(async () => {
       resolveTier2();
       await Promise.resolve();
@@ -297,17 +257,14 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     });
     await waitFor(() => getByTestId('onboarding-download-screen'));
 
-    // Drive progress to 50%
     await act(async () => {
       capturedProgressCb?.(0.5);
     });
-    // percent label should show 50
     await waitFor(() => {
       const label = getByTestId('download-percent');
       expect(label.props.accessibilityLabel).toBe('50 percent downloaded');
     });
 
-    // Resolve tier2 so the component cleans up
     await act(async () => {
       resolveTier2();
       await Promise.resolve();
@@ -370,7 +327,6 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
   });
 
   it('does NOT silently fall through to finishOnboarding when no preset and no downloadUrl', async () => {
-    // Simulate a catalog entry that has neither executorchPreset nor downloadUrl
     const { getDefaultModel } = require('@agiworkforce/local-llm');
     const currentDefaultModel = (getDefaultModel as jest.Mock)();
     (getDefaultModel as jest.Mock).mockReturnValue({
@@ -387,7 +343,6 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
       await Promise.resolve();
     });
 
-    // Should show an error, NOT navigate to app
     await waitFor(() => {
       const errEl = getByTestId('download-error');
       expect(errEl.props.children).toContain('cannot be downloaded yet');

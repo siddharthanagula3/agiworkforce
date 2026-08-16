@@ -120,9 +120,6 @@ describe('managed usage request service', () => {
         250,
         75,
         true,
-        // Overage headroom. 0 because this fixture has no `overage_enabled`
-        // account, which is exactly the default: an account that has not opted
-        // in is metered against its plan caps alone, as before 0118.
         0,
       ],
     );

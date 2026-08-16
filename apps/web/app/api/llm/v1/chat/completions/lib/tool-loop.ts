@@ -146,50 +146,17 @@ import {
   nestedDeadlineMs,
 } from '@/lib/deadline-policy';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-/** Ordinary chat stays deliberately conservative: it is still a chat turn. */
 const DEFAULT_CHAT_MAX_STEPS = 10;
-/** Paid AGI Work is the deep agent surface and must not inherit chat's cap. */
 const DEFAULT_AGI_WORK_MAX_STEPS = 100;
-// Both product modes share ONE wall-clock budget, `CHAT_TOOL_LOOP_BUDGET_MS`,
-// derived in `lib/deadline-policy.ts` from this route's `maxDuration` minus the
-// teardown reserve. They used to be two separately-declared constants that
-// happened to hold the same number — the shape this finding is about.
-//
-// AUDIT-FIX SYS-26: ordinary chat used to get NO wall-clock budget at all
-// (`maxDurationMs: undefined`). Ten steps at the 120 s per-tool cap plus ten
-// provider calls comfortably exceeds `export const maxDuration = 300`, so the
-// platform SIGKILLed the function -- skipping the generator `finally` that
-// disposes/pauses the E2B sandbox (which keeps billing) and settles managed
-// usage. The reserve buys file harvest, durable usage settlement, and response
 // teardown; it is a safety boundary, not restart-safe background execution.
 
-/**
- * Bound accumulation from the (untrusted) provider stream within one step:
- * total argument JSON per tool call, and the number of tool calls accepted.
- * A buggy/compromised provider emitting unbounded `arguments` fragments or a
- * flood of tool_calls would otherwise grow server memory without limit.
- */
 const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
 const MAX_TOOL_CALLS_PER_STEP = 32;
 
-/** Max read-only tool calls run concurrently in one step (bounds outbound fan-out). */
 const MAX_PARALLEL_TOOL_CALLS = 4;
 
-/**
- * Total budget for accumulated tool-RESULT content across the whole loop. Tool results
- * (search dumps, file reads, sandbox stdout) can each be large and there can be up to
- * `maxSteps` of them, so without a bound a long agentic run overflows the model context
- * window mid-loop. Old results beyond this budget are shrunk to a marker before each
- * provider call — never removed, which would desync an assistant tool_call from its
- * result. ~200K chars ≈ 50K tokens, leaving room for the system prompt, transcript, and
- * the next completion on every current managed/BYOK model.
- */
 const MAX_TOOL_RESULT_HISTORY_CHARS = 200_000;
-/** The N most-recent tool results are always kept verbatim (recent context matters most). */
 const KEEP_RECENT_TOOL_RESULTS = 6;
-/** Replaces an old tool result's content once it's trimmed for context budget. */
 const TRUNCATED_TOOL_RESULT_MARKER =
   '[earlier tool result omitted to keep the conversation within the model context window]';
 
@@ -218,48 +185,28 @@ export function isReadOnlyTool(toolName: string): boolean {
   return isParallelSafeTool(toolName);
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 export type ApprovalMode = 'auto' | 'manual';
 
-/**
- * Per-user connector tool executor (see lib/user-connector-tools.ts). Called
- * before the operator MCP dispatch for every tool: returns `handled: true` for
- * connector-owned tools (first-party github built-in / operator-mapped remote
- * connectors) and `handled: false` otherwise so the loop falls through to the
- * operator MCP executor. Bound to the authenticated userId by the caller;
- * authorization is re-validated inside.
- */
 export type ConnectorToolExecutor = (
   serverId: string,
   toolName: string,
   args: Record<string, unknown>,
 ) => Promise<{ handled: boolean; content: string; isError: boolean }>;
 
-/** One per-tool_call approval decision carried on a resume request. */
 export interface ToolApprovalDecision {
-  /** The exact tool_call_id the user is deciding on. */
   toolCallId: string;
   decision: 'approved' | 'rejected';
 }
 
-/**
- * Resume decisions for the manual-approval flow. The suspended assistant
- * tool_call turn is loaded from the server-owned checkpoint into
- * `processed.llmRequest.messages`; this object contains decisions only.
- */
 export interface ResumeApproval {
   approvals: ToolApprovalDecision[];
 }
 
-/** Trusted loop state persisted before an approval prompt reaches a client. */
 export interface ToolLoopApprovalCheckpoint {
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
-  /** Provider steps completed across every bounded invocation of this run. */
   completedSteps: number;
-  /** Canonical approval events committed atomically with the checkpoint. */
   events: AgentEventEnvelope[];
   messages: ProcessedRequest['llmRequest']['messages'];
   pendingToolCalls: Array<{
@@ -269,7 +216,6 @@ export interface ToolLoopApprovalCheckpoint {
   }>;
 }
 
-/** State carried from one bounded Workflow invocation into the next. */
 export interface ToolLoopInvocationCheckpoint {
   sessionId: string;
   turnId: string;
@@ -321,91 +267,32 @@ export interface ToolLoopToolExecution {
 export type ToolLoopToolExecutor = (input: ToolLoopToolExecution) => Promise<ToolLoopToolResult>;
 
 export interface ToolLoopOptions {
-  /** Maximum number of model re-invocations. Defaults by product work mode. */
   maxSteps?: number;
   /** Optional wall-clock safety budget for this invocation. Defaults by work mode. */
   maxDurationMs?: number;
-  /** Injectable monotonic-enough clock for deterministic policy tests. */
   now?: () => number;
-  /** 'auto' = execute without prompting; 'manual' = gate on user approval. */
   approvalMode?: ApprovalMode;
-  /** Resolved MCP tool defs to inject (fetched once by the caller). */
   mcpTools?: WebMcpToolDef[];
-  /**
-   * Manual-approval resume payload. When present, the loop runs the resume
-   * preamble (execute approved+pending tool calls, deny the rest) BEFORE the
-   * first provider call, then continues the normal loop. Only meaningful with
-   * `approvalMode: 'manual'`.
-   */
   resume?: ResumeApproval;
-  /** Durable event identity restored when a suspended run continues. */
   eventSessionId?: string;
-  /** Durable turn identity restored when a suspended run continues. */
   eventTurnId?: string;
-  /** Next canonical event sequence restored from the approval checkpoint. */
   initialEventSequence?: number;
-  /**
-   * Persists trusted execution state before approval events are yielded. If
-   * persistence fails, no actionable approval UI is sent to the client.
-   */
   onApprovalCheckpoint?: (checkpoint: ToolLoopApprovalCheckpoint) => Promise<void>;
-  /** Persist state and return without `[DONE]` when this function invocation expires. */
   onInvocationCheckpoint?: (checkpoint: ToolLoopInvocationCheckpoint) => Promise<void>;
-  /** Number of provider steps completed by preceding durable invocations. */
   initialCompletedSteps?: number;
-  /** Suppress duplicate lifecycle events on an invocation continuation. */
   invocationContinuation?: boolean;
-  /** Wrap provider calls with a durable replay receipt. */
   providerExecutor?: ToolLoopProviderExecutor;
-  /** Wrap tool calls with a durable replay receipt. */
   toolExecutor?: ToolLoopToolExecutor;
-  /** Let durable-runtime lease/fatal errors escape instead of becoming chat output. */
   shouldPropagateExecutionError?: (error: unknown) => boolean;
-  /**
-   * Authenticated user id — required for the generated-file harvest (files the
-   * model writes in the E2B sandbox are persisted to the user's media library
-   * and emitted as an `x_generated_files` delta). Without it, harvest is skipped.
-   */
   userId?: string;
-  /**
-   * Optional per-user connector executor. When provided, connector-namespaced
-   * tool calls (from the user's connected connectors) execute through it before
-   * falling back to the operator MCP dispatcher. See ConnectorToolExecutor.
-   */
   connectorExecutor?: ConnectorToolExecutor;
-  /** Canonical usage accumulated across every provider call in this loop. */
   usage?: ObservedProviderUsage;
-  /** Durable cancellation check evaluated before provider and tool side effects. */
   isCancellationRequested?: () => Promise<boolean>;
-  /**
-   * AUDIT-FIX BUG-1: the client's AbortSignal. The tool loop never received
-   * one, so `buildToolLoopStream` handed the adapter a fresh, never-triggered
-   * controller and a client cancel billed a full generation nobody saw. Threaded
-   * into every provider call and checked before each step.
-   */
   signal?: AbortSignal;
-  /**
-   * AUDIT-FIX CON-1: the user's saved connector tool verdicts. `deny` never
-   * executes, `allow` auto-approves, `ask` uses the approval path. Absent means
-   * "no saved verdicts" — every tool falls back to `approvalMode`.
-   */
   connectorPermissions?: ConnectorToolPermissions;
-  /**
-   * AUDIT-FIX SYS-21: the caller's managed-failover rotation state (built by
-   * `createFailoverPlan`, lib/managed-failover.ts). Passed IN rather than
-   * constructed here so this module keeps its narrow import graph: the failover
-   * planner reaches into model-tier admission and provider resolution, which the
-   * loop itself has no business depending on. Absent means no rotation, which is
-   * the previous behaviour exactly.
-   */
   failover?: ToolLoopFailoverPlan;
 }
 
-/**
- * Minimal view of `createFailoverPlan`'s return value (lib/managed-failover.ts).
- * `next(error)` returns the next admissible attempt view, or null when rotation
- * is not permitted (ineligible failure class, aborted, or plan exhausted).
- */
 export interface ToolLoopFailoverPlan {
   next: (error: unknown) => { provider: string; processed: ProcessedRequest } | null;
 }
@@ -415,11 +302,6 @@ export interface ToolLoopPolicy {
   maxDurationMs: number | undefined;
 }
 
-/**
- * Resolve execution depth from the product mode, never from a provider or
- * client-controlled model hint. Explicit options are reserved for internal
- * callers and deterministic tests.
- */
 export function resolveToolLoopPolicy(
   processed: ProcessedRequest,
   options: Pick<ToolLoopOptions, 'maxSteps' | 'maxDurationMs'>,
@@ -427,13 +309,10 @@ export function resolveToolLoopPolicy(
   const isAgiWork = processed.chatRequest?.work_mode === 'agiwork';
   return {
     maxSteps: options.maxSteps ?? (isAgiWork ? DEFAULT_AGI_WORK_MAX_STEPS : DEFAULT_CHAT_MAX_STEPS),
-    // Step DEPTH differs by product mode; the wall clock does not — both modes
-    // run in the same function under the same `maxDuration`.
     maxDurationMs: options.maxDurationMs ?? CHAT_TOOL_LOOP_BUDGET_MS,
   };
 }
 
-/** Shape of a parsed tool_call from the provider stream. */
 export interface PendingToolCall {
   id: string;
   qualifiedName: string;
@@ -442,10 +321,6 @@ export interface PendingToolCall {
 
 export type CloudAgentToolRetrySafety = 'safe' | 'unsafe';
 
-/**
- * Only local, read-only platform operations are replay-safe. Search is paid,
- * and MCP, connector, and sandbox tools can mutate despite a read-looking name.
- */
 export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySafety {
   return isUrlFetchTool(toolName) || isMapSearchTool(toolName) || toolName === SKILL_TOOL_NAME
     ? 'safe'
@@ -465,10 +340,7 @@ function isForcedSkillToolChoice(value: unknown): boolean {
   );
 }
 
-/** One SSE line ready to be flushed to the client. */
 type SseLine = string;
-
-// ─── SSE helpers ──────────────────────────────────────────────────────────────
 
 function sseData(payload: unknown): SseLine {
   return `data: ${JSON.stringify(payload)}\n\n`;
@@ -478,11 +350,6 @@ function sseDone(): SseLine {
   return `data: [DONE]\n\n`;
 }
 
-/**
- * Short action phrases shown in the timeline running-state header while a tool
- * is executing. Matched by tool name prefix (lowercase). Falls back to undefined
- * (the timeline renders its default "Running tools..." label).
- */
 const TOOL_STATUS_PHRASES: [pattern: RegExp, phrase: string][] = [
   [/\bweb_search|search_web|browser_search|perplexity/i, 'Searching the web'],
   [/\bweb_fetch|url_fetch|fetch_url|http_request/i, 'Fetching page'],
@@ -499,7 +366,6 @@ const TOOL_STATUS_PHRASES: [pattern: RegExp, phrase: string][] = [
   [/\bsearch_maps\b/i, 'Preparing map'],
 ];
 
-/** Derive a playful status phrase for a tool name, or return undefined. */
 export function toolStatusPhrase(toolName: string): string | undefined {
   for (const [pattern, phrase] of TOOL_STATUS_PHRASES) {
     if (pattern.test(toolName)) return phrase;
@@ -518,11 +384,6 @@ function humanizeIdentifier(value: string): string {
 function mcpServerLabel(toolName: string): string | null {
   const parsed = parseQualifiedToolName(toolName);
   if (!parsed) return null;
-  // A user's custom remote connector has an opaque `custom-<hex>` serverId that
-  // carries no human name; humanizing it leaks an internal id ("Custom A1b2c3")
-  // into the activity feed. Return null so the summary uses generic connector
-  // phrasing. Surfacing the real name needs the connector display name threaded
-  // onto the tool def / event — tracked as CONNECTOR-BADGE-CUSTOM-NAME.
   if (/^custom-/i.test(parsed.serverId)) return null;
   return humanizeIdentifier(parsed.serverId);
 }
@@ -585,12 +446,6 @@ function canonicalApprovalSummary(
   return `Review ${humanizeIdentifier(toolName)} action`;
 }
 
-/**
- * The connector's human display name from the offered tool defs, if present.
- * Only custom connectors carry a `serverLabel` (their opaque `custom-<hex>`
- * serverId has no name); returns undefined for everything else, so the summary
- * falls back to serverId humanization.
- */
 function offeredServerLabel(toolName: string, offeredTools: WebMcpToolDef[]): string | undefined {
   return offeredTools.find((t) => t.qualifiedName === toolName)?.serverLabel;
 }
@@ -614,10 +469,6 @@ function validCanonicalSources(sources: FetchedSource[]): FetchedSource[] {
   });
 }
 
-/**
- * For url_fetch running events, upgrade the generic "Fetching page" phrase to
- * "Fetching <domain>" (ChatGPT/Claude-style) when the args carry a parseable URL.
- */
 function urlFetchDomainPhrase(args: Record<string, unknown> | undefined): string | undefined {
   const raw = args?.['url'];
   if (typeof raw !== 'string') return undefined;
@@ -651,7 +502,6 @@ export function toolStatusEvent(
     name: toolName,
     status,
   };
-  // Only attach status_phrase and args on the running event to keep payloads small.
   if (status === 'running') {
     const phrase =
       (isUrlFetchTool(toolName) ? urlFetchDomainPhrase(args) : undefined) ??
@@ -672,10 +522,6 @@ export function toolStatusEvent(
   });
 }
 
-/**
- * Emit an `x_tool_approval_request` SSE event when a tool is pending user
- * approval (manual mode, default).
- */
 function toolApprovalRequestEvent(
   toolId: string,
   toolName: string,
@@ -706,11 +552,6 @@ function interactiveCardEvent(card: InteractiveCard, responseModel: string): Sse
   });
 }
 
-/**
- * Emit an `x_generated_files` SSE event carrying durable descriptors for files
- * the model created in the E2B sandbox this turn. Clients render these as
- * downloadable file cards (mobile GeneratedFileCard / web equivalent).
- */
 function generatedFilesEvent(files: GeneratedFileWire[], responseModel: string): SseLine {
   return sseData({
     choices: [
@@ -755,10 +596,6 @@ export function toolResultEvent(
   });
 }
 
-/** A citation source captured from a successful url_fetch or web_search call.
- * `snippet` is url_fetch's permanent absence (a fetched page has no separate
- * snippet, it IS the content) vs web_search's populated field (mapped to
- * `encrypted_content` on the wire — see `searchResultsEvent`). */
 export interface FetchedSource {
   url: string;
   title: string;
@@ -844,21 +681,9 @@ export function searchResultsEvent(sources: FetchedSource[], responseModel: stri
   });
 }
 
-// ─── Stream collector ─────────────────────────────────────────────────────────
-
-/**
- * Consume a ReadableStream of SSE bytes, collecting:
- *   - The raw SSE lines (to pass through to the client).
- *   - Any tool_calls accumulation (streamed argument JSON fragments).
- *   - The finish_reason.
- *
- * Returns everything needed to decide what to do next.
- */
 export const TOOL_LOOP_STREAM_LIMITS = {
   maxToolArgsJsonChars: MAX_TOOL_ARGS_JSON_CHARS,
   maxToolCallsPerStep: MAX_TOOL_CALLS_PER_STEP,
-  /** The PREFERRED per-call cap; the effective one is clamped to the loop's
-   *  remaining budget by `nestedDeadlineMs` at the call site. */
   toolCallTimeoutMs: TOOL_CALL_DEADLINE_MS,
   maxParallelToolCalls: MAX_PARALLEL_TOOL_CALLS,
   maxToolResultHistoryChars: MAX_TOOL_RESULT_HISTORY_CHARS,
@@ -869,12 +694,6 @@ export const TOOL_LOOP_STREAM_LIMITS = {
  * Bound a tool-call promise: resolve to an error result if it exceeds
  * `timeoutMs` (a hung tool can't wedge the turn) or if it rejects (one tool
  * can't crash the whole batch). Never rejects. Exported for unit tests.
- */
-/**
- * Run `fn` over `items` with at most `limit` in flight at once, preserving input
- * order in the results. Bounds parallel tool fan-out so a model emitting many
- * read-only calls can't flood outbound requests / provider rate limits. Exported
- * for unit tests.
  */
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
@@ -918,8 +737,6 @@ export function trimToolResultHistory(
   for (const i of toolIdx) total += len(i);
   if (total <= maxChars) return 0;
 
-  // Never truncate the most-recent results — that's the context the model is actively
-  // reasoning over. Trim older ones oldest-first until back under budget.
   const truncatable = toolIdx.slice(0, Math.max(0, toolIdx.length - keepRecent));
   let truncated = 0;
   for (const i of truncatable) {
@@ -961,13 +778,6 @@ export function withToolTimeout(
   });
 }
 
-/**
- * The provider stream outlived what was left of the loop's wall-clock budget
- * and was aborted. Distinguished from every other provider failure because the
- * response is different: rotating to another provider or retrying cannot help
- * when the budget itself is gone, and the turn must end while there is still
- * teardown time (sandbox pause/dispose, managed-usage settlement, `[DONE]`).
- */
 export class ProviderStreamDeadlineError extends Error {
   readonly deadlineMs: number;
 
@@ -1018,15 +828,10 @@ export function withProviderStreamDeadline<T>(
   return new Promise<T>((resolve, reject) => {
     timer = setTimeout(() => {
       const expired = new ProviderStreamDeadlineError(deadlineMs);
-      // Abort BEFORE rejecting: the upstream connection must be released even
-      // though the loop is about to stop reading from it.
       controller.abort(expired);
       cleanup();
       reject(expired);
     }, deadlineMs);
-    // Settling twice is a no-op, so a late rejection from the aborted run
-    // cannot surface as an unhandled rejection — this handler is attached
-    // whether or not the deadline already fired.
     run(controller.signal).then(
       (value) => {
         cleanup();
@@ -1058,9 +863,6 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
   let textContent = '';
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
 
-  // Accumulate streamed tool call fragments by index.
-  // OpenAI streaming: tool_calls[i].function.name comes first, then
-  // tool_calls[i].function.arguments arrives as partial_json fragments.
   const toolCallAccum: Map<number, { id: string; name: string; argsJson: string }> = new Map();
 
   while (true) {
@@ -1082,7 +884,6 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
 
       const jsonStr = line.slice(6);
       if (jsonStr === '[DONE]') {
-        // Don't forward [DONE] yet -- we may need to continue the loop.
         continue;
       }
 
@@ -1091,19 +892,14 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
         collectGeneratedFileRefs(event, generatedFileRefs);
         let publicTextDelta: string | undefined;
 
-        // Accumulate text content.
         const textDelta = event?.choices?.[0]?.delta?.content;
         if (typeof textDelta === 'string') {
           textContent += textDelta;
           publicTextDelta = publicTextProjector.push(textDelta) || undefined;
         }
 
-        // Pass through the provider line first. Its matching canonical public
-        // text event follows immediately, so clients can render the legacy
-        // content wire while the durable journal records the same chunk.
         lines.push({ line: raw + '\n', publicTextDelta });
 
-        // Accumulate tool_call fragments.
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
         if (Array.isArray(toolCallDeltas)) {
           for (const tc of toolCallDeltas) {
@@ -1137,28 +933,20 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
           }
         }
 
-        // Capture finish_reason.
         const fr = event?.choices?.[0]?.finish_reason;
         if (typeof fr === 'string' && fr) {
           finishReason = fr;
         }
       } catch {
-        // Ignore parse errors for incomplete chunks.
         lines.push({ line: raw + '\n' });
       }
     }
   }
 
-  // Flush any remaining buffer.
   if (buffer.trim()) {
     lines.push({ line: buffer });
   }
 
-  // Build pending tool call list. Cap the number accepted from one step and
-  // de-dupe provider tool_call ids: a provider that repeats an id would produce
-  // two role:'tool' messages sharing one id (the next turn's request may be
-  // rejected 400) and, in manual mode, two approval cards with an ambiguous
-  // tool_call_id. A repeated id is re-minted so every accepted call is unique.
   const pendingToolCalls: PendingToolCall[] = [];
   const seenToolCallIds = new Set<string>();
   for (const [, tc] of toolCallAccum) {
@@ -1186,17 +974,6 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
   };
 }
 
-// ─── MCP tool execution ───────────────────────────────────────────────────────
-
-/**
- * Execute a single MCP tool call.
- * Returns the text content of the result and whether it was an error.
- *
- * `e2bExecutor` is resolved ONCE per tool loop (see `runToolLoop`'s `resolveE2BExecutor`)
- * and reused across every execution-tool call in the turn/conversation -- this function
- * does not create or dispose it, so state (variables/imports in a code context) persists
- * across calls instead of being torn down after each one.
- */
 async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutor | null>,
@@ -1273,11 +1050,6 @@ async function runMcpTool(
       : { content: outcome.content, isError: true };
   }
 
-  // Platform url_fetch: read-only page fetch, SSRF-guarded (see lib/url-fetch/).
-  // Executes on the auto path like E2B tools — no manual approval gate needed
-  // because it cannot mutate anything and every failure mode returns a
-  // structured error the model can react to. Successful fetches also return a
-  // `source` so the loop can emit it into the cumulative citations list.
   if (isUrlFetchTool(toolCall.qualifiedName)) {
     const outcome = await executeUrlFetch(toolCall.args);
     if (!outcome.ok) {
@@ -1290,15 +1062,6 @@ async function runMcpTool(
     };
   }
 
-  // WP4 generic web_search: platform-executed search (Perplexity Search API today
-  // — see lib/web-search/web-search-tool.ts) for every provider with no working
-  // native search path on this route. Same treatment as url_fetch: read-only, no
-  // approval gate, every failure mode is a structured tool-result error the model
-  // can react to and recover from — NOT routed through the provider-call
-  // x_stream_error path above (that path is turn-terminating; a single failed
-  // search should not end the whole agentic turn, any more than a failed
-  // url_fetch or E2B call does). Successful searches return `sources` (plural —
-  // a search returns many results per call, unlike url_fetch's one page).
   if (isWebSearchTool(toolCall.qualifiedName)) {
     const outcome = await executeWebSearch(toolCall.args, {
       maxResults: executionContext?.webSearchMaxResults,
@@ -1310,26 +1073,7 @@ async function runMcpTool(
     };
   }
 
-  // E2B execution interception: if a code/file/folder execution tool is ever invoked, it
-  // runs in the E2B sandbox (gated, fail-closed), never as a generic MCP tool.
-  //
-  // ACTIVE when AGI_E2B_EXECUTION=1 AND the provider routes to E2B (not anthropic/google):
-  //   - request-processor offers e2bExecutionToolDefs() on streaming non-free-trial requests.
-  //   - route.ts enters the loop in 'auto' mode (no resume endpoint needed; isolated sandbox).
-  //   - getE2BExecutor() returns null when E2B_API_KEY is absent → explicit "unavailable" error.
-  //
-  // DORMANT when AGI_E2B_EXECUTION=0 (default): resolveCodeExecutionTools() is native-always
-  // and never emits these tool names, so this branch is never reached. Zero regression.
-  //
-  // FAIL-CLOSED: a null/erroring executor surfaces an explicit error to the model — never a
-  // silent no-op, never a provider-native fallback.
   if (isExecutionTool(toolCall.qualifiedName)) {
-    // Reachability gate: execution tools may run ONLY when the explicit cut-over
-    // flag is on. getE2BExecutor() is (by design) constructable on key presence
-    // alone for operator verification, so without this check a loop entered for
-    // OTHER reasons (connectors / AGI-Work) plus a model-emitted execute_code
-    // would silently run managed compute whenever E2B_API_KEY is set but the
-    // cut-over flag is off. Fail closed as unavailable in that case.
     if (!e2bCutoverEnabled()) {
       return {
         content: `Tool ${toolCall.qualifiedName} is not available.`,
@@ -1353,10 +1097,6 @@ async function runMcpTool(
     };
   }
 
-  // Per-user connector tools (github built-in / operator-mapped remote MCP
-  // connectors) execute through the bound connector executor first. It returns
-  // `handled: false` for anything it does not own, so operator MCP tools keep
-  // their existing dispatch path unchanged.
   if (connectorExecutor) {
     try {
       const connectorResult = await connectorExecutor(
@@ -1385,8 +1125,6 @@ async function runMcpTool(
       })
       .filter(Boolean)
       .join('\n');
-    // Cap MCP tool output too (design doc §4.3: unbounded MCP output is a memory-exhaustion
-    // risk) — reuses the same byte cap as the E2B execution-tool path.
     return { content: capOutput(text || '(no output)'), isError: result.isError === true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1394,13 +1132,6 @@ async function runMcpTool(
   }
 }
 
-/**
- * Parse the `tool_calls` array from a client-supplied assistant message (the
- * suspended turn replayed on a resume request) into PendingToolCall[]. Mirrors
- * the accumulation in `collectProviderStream` but reads the already-complete
- * OpenAI tool_call shape: `{ id, type:'function', function:{ name, arguments } }`
- * where `arguments` is a JSON-encoded string.
- */
 function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
   const out: PendingToolCall[] = [];
   for (const tc of toolCalls) {
@@ -1428,16 +1159,6 @@ function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
   return out;
 }
 
-/**
- * True when a tool name was actually OFFERED on this request — i.e. it is in the
- * freshly-loaded per-request `mcpTools` catalog (operator MCP + the user's
- * connected connectors), or it is present in the current request's normalized
- * tool offerings. Used by the resume
- * preamble as a fail-closed gate: an approval for a tool the model was never
- * offered (a hallucinated/forged qualified name) is NOT executed. This is a
- * defense-in-depth layer ON TOP of the per-tool guards inside runMcpTool
- * (connector re-gate, SSRF, unknown-server rejection).
- */
 export function isToolOffered(
   qualifiedName: string,
   mcpTools: WebMcpToolDef[],
@@ -1458,23 +1179,8 @@ export function isToolOffered(
   return mcpTools.some((t) => t.qualifiedName === qualifiedName);
 }
 
-/** Text appended as the tool result when a user rejects (or does not approve) a tool. */
 const TOOL_DENIED_MESSAGE = 'The user denied permission to run this tool.';
 
-// ─── Main loop ────────────────────────────────────────────────────────────────
-
-/**
- * Run the agentic tool loop, yielding SSE chunks.
- *
- * Usage (from route.ts):
- * ```ts
- * const toolStream = runToolLoop(processed, { approvalMode: 'manual' });
- * return buildToolLoopStreamResponse(request, toolStream, processed, userId, token);
- * ```
- *
- * The generator yields Uint8Array chunks ready for a TransformStream or
- * ReadableStream constructor.
- */
 export async function* runToolLoop(
   processed: ProcessedRequest,
   options: ToolLoopOptions = {},
@@ -1494,11 +1200,6 @@ export async function* runToolLoop(
     initialSequence: options.initialEventSequence,
   });
   const showWorkPhases = processed.chatRequest?.work_mode === 'agiwork';
-  // CAP-048 AGI Work goal + plan. The goal is stored on the run's journal and
-  // threaded into a tool-free planning turn; the resulting plan is surfaced live
-  // (`x_agiwork_plan`) and durably (progress events). Plan is visibility-only —
-  // it never gates tool execution. Held in loop scope so the terminal path can
-  // re-emit the plan's final status.
   const agiWorkGoal = showWorkPhases ? processed.chatRequest?.agi_work_goal : undefined;
   let agiWorkPlan: AgiWorkPlanStep[] = [];
   const taskId = turnId;
@@ -1520,7 +1221,6 @@ export async function* runToolLoop(
     });
   }
 
-  // Inject MCP tool defs into the llmRequest.
   const mcpTools = options.mcpTools ?? [];
   const openAiTools: unknown[] = mcpTools.map(toOpenAiToolDef);
   const availableTools = new Set([
@@ -1533,52 +1233,15 @@ export async function* runToolLoop(
       openAiTools.length > 0
         ? [...(processed.llmRequest.tools ?? []), ...openAiTools]
         : processed.llmRequest.tools,
-    // Ensure streaming for the loop.
     stream: true,
   };
-  // A map card is already the complete user-facing result of search_maps.
-  // Keep the tool available for the model's first batch (which may contain
-  // multiple distinct map requests), then withdraw it from later provider
-  // steps after any successful card. Otherwise some providers repeatedly call
-  // the same read-only tool until the global agent-step limit is exhausted.
   let mapSearchBatchCompleted = false;
   const observedUsage = options.usage ?? createObservedProviderUsage();
 
-  // Mutable message thread for re-invocations.
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
-  // ── Server-side permission + lethal-trifecta state ────────────────────────
-  //
-  // AUDIT-FIX CON-1: the user's saved allow/ask/deny verdicts were persisted in
-  // `connector_tool_permissions` and read by NOTHING on the server — enforcement
-  // lived entirely in the browser, so a hand-rolled POST executed a tool the
-  // user had Blocked. They are now consulted before every execution, on this
-  // loop AND on the /approve resume path below.
   const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
 
-  // AUDIT-FIX CON-19 — lethal-trifecta mitigation.
-  //
-  // The classic prompt-injection escalation needs three things at once:
-  //   U  untrusted content has entered the model context,
-  //   S  a sensitive (private, authenticated) source is reachable,
-  //   E  the call about to run can move bytes out of the trust boundary.
-  // With all three, an injected instruction can read private data and post it
-  // somewhere the attacker controls. When the triple holds we ESCALATE to a
-  // human approval instead of auto-approving.
-  //
-  // THIS IS A MITIGATION, NOT A PROOF. Honest limits:
-  //   - U is raised by tool-fetched third-party content (web pages, search
-  //     results, PR diffs) — in THIS turn, or in a prior turn still present in
-  //     the replayed thread. Content the USER pasted or attached is not counted;
-  //     that is a real injection vector this heuristic does not see.
-  //   - S is derived from the OFFERED catalog, not from what was actually read,
-  //     so it over-triggers (a connector being available counts) rather than
-  //     under-triggers. Deliberate: over-triggering costs a click.
-  //   - E is per-tool metadata, so a tool that exfiltrates through an
-  //     undeclared channel (an MCP server that phones home on a "read") is
-  //     invisible here — which is exactly why an UNDECLARED tool is classified
-  //     as having egress by default.
-  //   - The check gates AUTO-approval only. It cannot stop a user who approves.
   const sensitiveSourceAvailable =
     mcpTools.some((def) => isSensitiveSourceTool(def)) ||
     [...availableTools].some((name) => isSensitiveSourceTool({ qualifiedName: name }));
@@ -1590,10 +1253,8 @@ export async function* runToolLoop(
       ),
   );
 
-  /** Verdict for one pending tool call, before any side effect. */
   type ToolCallGate = {
     verdict: 'allow' | 'ask' | 'deny';
-    /** Stable machine reason, used for server logs and escalation telemetry. */
     reason:
       | 'blocked_by_user_permission'
       | 'always_allow'
@@ -1605,8 +1266,6 @@ export async function* runToolLoop(
 
   function resolveToolCallGate(toolCall: PendingToolCall): ToolCallGate {
     const saved = connectorPermissions.levelFor(toolCall.qualifiedName);
-    // A Block is absolute: it outranks approval mode, an approving client, and
-    // the model's own insistence.
     if (saved === 'deny') return { verdict: 'deny', reason: 'blocked_by_user_permission' };
 
     const trifecta =
@@ -1626,7 +1285,6 @@ export async function* runToolLoop(
       : { verdict: 'allow', reason: 'auto_approval_mode' };
   }
 
-  /** Honest, model-readable explanation for a call the server refused to run. */
   function blockedToolResultMessage(qualifiedName: string): string {
     return (
       `Tool "${qualifiedName}" is blocked by this account's connector permissions and was not ` +
@@ -1634,26 +1292,6 @@ export async function* runToolLoop(
     );
   }
 
-  // ── Managed failover for the tool loop (AUDIT-FIX SYS-21) ─────────────────
-  //
-  // `createFailoverPlan` was wired only into route.ts's two SINGLE-TURN
-  // branches; the tool loop and the research loop — the two paths that dominate
-  // paid agentic usage — never rotated at all, so one overloaded upstream
-  // failed the whole turn.
-  //
-  // The rotation point is the same as route.ts's: `startProviderStream`'s
-  // first-chunk peek inside `buildToolLoopStream`, which throws BEFORE any byte
-  // is enqueued for this step. A rotated attempt has therefore delivered
-  // nothing, so no failed-attempt text can leak into the transcript. Because
-  // the loop always carries tool definitions, `createFailoverPlan` restricts
-  // rotation to the SAME provider (provider-native tool shapes cannot transfer)
-  // — a deliberate, documented narrowing, not an oversight.
-  /**
-   * AUDIT-FIX BUG-1: a client disconnect now stops the loop at the next
-   * boundary as well as aborting the in-flight upstream request. Previously the
-   * only cancellation signal was the durable `isCancellationRequested` poll, so
-   * a plain browser abort kept generating (and billing) until the turn ended.
-   */
   async function shouldStopForCancellation(): Promise<boolean> {
     if (options.signal?.aborted) return true;
     return (await options.isCancellationRequested?.()) === true;
@@ -1667,8 +1305,6 @@ export async function* runToolLoop(
   ): Promise<ToolLoopProviderStepResult> {
     for (;;) {
       const attemptProcessed = servingProcessed;
-      // Carry the attempt view's model-shaped tuning onto this step's request;
-      // everything else (messages, tools, caps) is the primary's.
       const attemptRequest: ProcessedRequest['llmRequest'] = {
         ...stepRequest,
         model: attemptProcessed.llmRequest.model,
@@ -1682,13 +1318,6 @@ export async function* runToolLoop(
           text: '',
           usage: stepUsage,
         };
-        // HARD-008: the provider call is the OTHER child started right after
-        // the top-of-step budget check, and it used to have no wall-clock bound
-        // at all — only the optional client signal, which internal callers
-        // (durable workflow continuations) do not pass. Same clamp as the tool
-        // call below it: whatever is LEFT of this loop's budget, so a wedged
-        // upstream cannot push the invocation past `maxDuration` and skip the
-        // generator `finally` that pauses the sandbox and settles usage.
         const collected = await withProviderStreamDeadline(
           async (signal) => {
             const providerStream = await buildToolLoopStream(
@@ -1702,9 +1331,6 @@ export async function* runToolLoop(
             return collectProviderStream(providerStream);
           },
           nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, maxDurationMs, now() - startedAt),
-          // AUDIT-FIX BUG-1: the client's signal, forwarded onto the derived
-          // controller, so a cancel still aborts the in-flight upstream request
-          // instead of billing a full generation nobody will see.
           options.signal,
         );
         return {
@@ -1724,42 +1350,17 @@ export async function* runToolLoop(
             })
           : await executeProviderStep();
       } catch (err) {
-        // Durable-runtime lease/fatal errors are the caller's to handle and
-        // must never be rotated away.
         if (options.shouldPropagateExecutionError?.(err)) throw err;
-        // Nor is a spent budget a provider problem: rotating would start a
-        // fresh upstream call with (at most) `MIN_CHILD_DEADLINE_MS` to run in,
-        // burning the teardown reserve on attempts that cannot finish.
         if (err instanceof ProviderStreamDeadlineError) throw err;
         const nextAttempt = options.failover?.next(err);
         if (!nextAttempt) throw err;
-        // The caller's plan already re-checked tier admission, provider
-        // resolution, dispatchability and tool-transfer compatibility.
         servingProcessed = nextAttempt.processed;
       }
     }
   }
 
-  // Cumulative citation sources from url_fetch calls across ALL steps.
-  // Re-emitted in full whenever a new source lands so client positions stay stable.
   const fetchedSources: FetchedSource[] = [];
-  // Cumulative citation sources from web_search calls across ALL steps. Kept
-  // SEPARATE from fetchedSources (not merged into one list): the two emitters
-  // produce different wire shapes (fetchSourcesEvent's `tool:'url_fetch'` tag
-  // vs searchResultsEvent's tag-absent + snippet shape), so a turn using both
-  // tools needs two independently-emitted cumulative lists, not one merged
-  // list with an ambiguous tag.
   const searchedSources: FetchedSource[] = [];
-  /**
-   * Web searches this turn has spent, against the budget below.
-   *
-   * An ordinary question is not a research run. Nothing used to bound how many
-   * times the model could call `web_search` inside one turn, so a single
-   * question could search on step after step and pile up dozens of citations —
-   * a deep-research-sized source list for a two-line answer. The budget forces
-   * the intended shape: search once, read the results, and search again only
-   * when that pass genuinely left the question open.
-   */
   let webSearchCallsUsed = 0;
   const webSearchCallBudget =
     processed.chatRequest?.work_mode === 'agiwork'
@@ -1767,13 +1368,6 @@ export async function* runToolLoop(
       : WEB_SEARCH_MAX_CALLS_PER_TURN;
   const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
-  // Conversation-scoped E2B executor: resolved (created, or resumed from a paused
-  // session) at most ONCE per loop invocation and reused across every execution-tool
-  // call in every step of this turn, so a code context's variables/imports persist
-  // instead of being torn down after each call. Cleaned up in the `finally` below --
-  // paused (not killed) only when both an owned `conversationId` and authenticated
-  // `userId` are known so the NEXT turn's loop can resume it; killed immediately
-  // otherwise (a conversation id alone is never a sandbox authorization token).
   const conversationId = processed.conversationId;
   const e2bSessionScope =
     conversationId && options.userId
@@ -1781,13 +1375,8 @@ export async function* runToolLoop(
       : undefined;
   let e2bExecutor: E2BExecutor | null = null;
   let e2bExecutorResolved = false;
-  // Generated-file harvest state: the workspace is snapshotted once, when the
-  // executor first resolves (BEFORE any execution tool runs), so the turn-end
-  // diff only surfaces files created/changed THIS turn — a resumed sandbox may
-  // still hold files from previous turns.
   let e2bBaseline: SandboxSnapshot | null = null;
   let executionToolRan = false;
-  /** Base64 chart PNGs surfaced by runCode this turn (E2B rich results). */
   const turnPngResults: string[] = [];
   async function resolveE2BExecutor(): Promise<E2BExecutor | null> {
     if (!e2bExecutorResolved) {
@@ -1799,15 +1388,6 @@ export async function* runToolLoop(
     return e2bExecutor;
   }
 
-  /**
-   * Harvest files the model created in the sandbox this turn (disk files via
-   * the workspace diff, plus runCode chart PNGs that never touch the disk) and
-   * return the SSE lines announcing them. Called at the terminal points of the
-   * loop, before the final [DONE].
-   *
-   * Honest states: when a generated file could not be retrieved/persisted, an
-   * inline note is emitted alongside today's log warn — never silence.
-   */
   async function harvestGeneratedFilesEvents(): Promise<SseLine[]> {
     if (!options.userId) return [];
     const lines: SseLine[] = [];
@@ -1848,7 +1428,6 @@ export async function* runToolLoop(
       }
     }
 
-    // Chart PNGs from runCode rich results (execution.results[].png).
     for (const [index, png] of turnPngResults.entries()) {
       try {
         const outcome = await persistGeneratedFileBytes({
@@ -1860,18 +1439,11 @@ export async function* runToolLoop(
           provider: 'e2b',
           origin: 'e2b-execution-result',
           model: responseModel,
-          // Provenance for the Library (migration 0081). Deleting the
-          // conversation nulls this; it never removes the file.
           ...(conversationId ? { conversationId } : {}),
         });
         if (outcome.ok) {
           files.push(outcome.file);
         } else {
-          // Count `not_configured` the same as any other persist failure so the
-          // honest "could not be retrieved" note below fires for it too --
-          // matches the disk-file harvest's semantics in generated-files.ts,
-          // where storage-not-configured is also a counted failure, not a
-          // silent drop.
           failedCount += 1;
         }
       } catch (err) {
@@ -1914,23 +1486,12 @@ export async function* runToolLoop(
     return lines;
   }
 
-  /**
-   * Terminal-flush: harvest generated files (if any execution ran) and close
-   * the stream with `[DONE]`. Invoked from every loop exit EXCEPT the
-   * manual-approval suspend (which must not flush/close -- the turn resumes
-   * later, and files are harvested when it eventually reaches a real terminal
-   * state). Callers must `return` immediately after exhausting this generator
-   * so exactly one flush -- and one `[DONE]` -- happens per invocation.
-   */
   async function* flushTerminal(
     reason: AgentEventStopReason = 'end-turn',
   ): AsyncGenerator<Uint8Array> {
     for (const line of await harvestGeneratedFilesEvents()) {
       yield encoder.encode(line);
     }
-    // CAP-048: close out the live plan queue honestly. `tool-use` is a mid-loop
-    // suspend (approval), not a terminal state, so the plan keeps its in-flight
-    // status; every real terminal resolves it.
     if (agiWorkPlan.length > 0 && reason !== 'tool-use') {
       const transition =
         reason === 'cancelled'
@@ -1954,23 +1515,10 @@ export async function* runToolLoop(
     yield encoder.encode(sseDone());
   }
 
-  /**
-   * Execute a batch of tool calls and stream their status/result events, then
-   * append each `role: 'tool'` result message to the thread. Shared by the
-   * auto-mode loop body and the manual-approval resume preamble so both paths
-   * run IDENTICAL execution + guard logic (runMcpTool re-runs the connector
-   * gate, SSRF, and unknown-server rejection on every call). Read-only tools run
-   * concurrently; mutating tools serialize (mirrors Codex parallel.rs).
-   */
   async function* runAndStreamToolCalls(calls: PendingToolCall[]): AsyncGenerator<Uint8Array> {
     const readOnly = calls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
 
-    // Emit "running" status for all tools. Include tc.args so the client can
-    // render a syntax-highlighted Request block in ToolCallCard (detectCodeBlock).
-    // Named apart from the loop-level `startedAt` it used to shadow: the tool
-    // timeout below is clamped against the LOOP's elapsed time, so the two
-    // clocks must stay distinguishable inside this scope.
     const toolStartedAt = new Map<string, number>();
     for (const tc of calls) {
       yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
@@ -2005,11 +1553,6 @@ export async function* runToolLoop(
     }[] = [];
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
-      // Spend the turn's search budget BEFORE dispatching. Over-budget calls
-      // resolve to a plain (non-error) tool result telling the model to answer
-      // from what it already read: an exhausted budget is an expected state,
-      // not a failure to retry, and returning `isError` would invite exactly
-      // the retry loop the budget exists to stop.
       if (isWebSearchTool(tc.qualifiedName)) {
         webSearchCallsUsed += 1;
         if (webSearchCallsUsed > webSearchCallBudget) {
@@ -2034,14 +1577,6 @@ export async function* runToolLoop(
             execute,
           })
         : execute();
-      // Bound the call: a hung tool resolves to an error result instead of
-      // wedging the turn (which would SIGKILL the fn and skip sandbox cleanup).
-      //
-      // The cap is clamped to what is LEFT of the loop's own budget. The loop
-      // only checks `maxDurationMs` at the top of a step, so a tool admitted
-      // with seconds to spare used to run a further 120 s and push the
-      // invocation past `export const maxDuration = 300` — the SIGKILL this
-      // timeout exists to prevent.
       return withToolTimeout(
         run,
         tc.qualifiedName,
@@ -2049,8 +1584,6 @@ export async function* runToolLoop(
       );
     };
 
-    // Execute read-only tools concurrently, but bounded — a model emitting many
-    // read-only calls must not flood outbound requests / provider rate limits.
     const parallelResults = await mapWithConcurrency(
       readOnly,
       MAX_PARALLEL_TOOL_CALLS,
@@ -2061,19 +1594,15 @@ export async function* runToolLoop(
     );
     results.push(...parallelResults);
 
-    // Execute mutating tools serially.
     for (const tc of mutating) {
       const result = await executeTool(tc);
       results.push({ tc, ...result });
     }
 
-    // Collect runCode chart PNGs (rich results that never touch the sandbox
-    // disk) for the end-of-turn generated-file persistence.
     for (const r of results) {
       if (r.pngResults && r.pngResults.length > 0) turnPngResults.push(...r.pngResults);
     }
 
-    // Emit status + result events, and append tool result messages.
     let sourcesAdded = false;
     let searchSourcesAdded = false;
     for (const {
@@ -2085,9 +1614,6 @@ export async function* runToolLoop(
       generatedFiles,
       interactiveCard,
     } of results) {
-      // AUDIT-FIX CON-19: a SUCCESSFUL call to a tool that returns third-party
-      // content has just put attacker-authorable text into the model context.
-      // Raise the `U` term for every later call in this turn.
       if (!isError && toolAcceptsUntrustedContent(tc.qualifiedName)) {
         untrustedContentInContext = true;
       }
@@ -2147,16 +1673,11 @@ export async function* runToolLoop(
         );
       }
 
-      // Fetched pages join the citations flow (dedupe by URL, stable positions).
       if (source && !fetchedSources.some((s) => s.url === source.url)) {
         fetchedSources.push(source);
         sourcesAdded = true;
       }
 
-      // Search results join the SEPARATE web_search citations flow (same
-      // dedupe-by-URL, stable-positions treatment, own cumulative list — see
-      // searchedSources' declaration for why these don't merge with
-      // fetchedSources).
       for (const s of sources ?? []) {
         if (!searchedSources.some((existing) => existing.url === s.url)) {
           searchedSources.push(s);
@@ -2206,13 +1727,6 @@ export async function* runToolLoop(
       return;
     }
 
-    // ── AGI Work goal + planning turn (CAP-048) ──────────────────────────────
-    // Runs once, at the start of a FRESH AGI Work run (never on a resume or a
-    // durable-invocation continuation, which already carry the plan in their
-    // replayed journal). The goal is stored on the journal; a tool-free model
-    // call then commits to the plan the user watches. Both are additive and
-    // visibility-only — a failed or empty plan is NEVER fatal and NEVER gates
-    // tool execution, so the run proceeds exactly as it does today.
     if (showWorkPhases && agiWorkGoal && !options.resume && !options.invocationContinuation) {
       yield encoder.encode(eventStream.emit(agiWorkGoalProgressEvent(agiWorkGoal)));
 
@@ -2220,29 +1734,20 @@ export async function* runToolLoop(
         const planTurn = await runProviderStepWithFailover(0, {
           ...llmRequest,
           messages: [...messages, { role: 'user', content: agiWorkPlanningDirective(agiWorkGoal) }],
-          // A plan is a decision, not tool work: the model must answer with the
-          // step list, not start calling tools. Never appended to `messages`, so
-          // the run's real context is not polluted by the planning JSON.
           tools: undefined,
           tool_choice: undefined,
           stream: true,
         });
-        // The planning turn is a real billed provider call — meter it exactly
-        // like every loop step so its tokens are never free.
         mergeObservedProviderUsage(observedUsage, planTurn.usage);
         if (await shouldStopForCancellation()) {
           yield* flushTerminal('cancelled');
           return;
         }
-        // Prefer the thinking-stripped public text; fall back to the raw
-        // accumulated content when the provider adapter did not populate it.
         const planText = planTurn.canonicalText || planTurn.textContent || '';
         agiWorkPlan = buildAgiWorkPlan(parseAgiWorkPlanSteps(planText));
         if (agiWorkPlan.length > 0) {
-          // Live queue: whole plan, pending, then the first step in progress.
           agiWorkPlan = advanceAgiWorkPlan(agiWorkPlan, 'start');
           yield encoder.encode(agiWorkPlanEvent(agiWorkPlan, responseModel));
-          // Durable record: one progress event per committed step.
           for (const planEvent of agiWorkPlanProgressEvents(agiWorkPlan)) {
             yield encoder.encode(eventStream.emit(planEvent));
           }
@@ -2263,14 +1768,7 @@ export async function* runToolLoop(
       }
     }
 
-    // ── Manual-approval resume preamble ──────────────────────────────────────
-    // When resuming, the server-owned checkpoint supplies the suspended
-    // assistant tool_call turn as the last assistant message in `messages`.
-    // Execute only the exact approved calls and append a denial result for the
-    // rest, then re-invoke the model with the completed thread. No provider call
-    // precedes this — the model already produced the checkpointed tool calls.
     if (options.resume) {
-      // Locate the suspended assistant tool_call turn.
       let pending: PendingToolCall[] = [];
       for (let i = messages.length - 1; i >= 0; i--) {
         const m = messages[i]!;
@@ -2304,10 +1802,6 @@ export async function* runToolLoop(
 
       const pendingIds = new Set(pending.map((p) => p.id));
 
-      // SECURITY (defense-in-depth; approve/route.ts also rejects this early):
-      // every approval MUST reference a pending tool_call id. A decision for an
-      // id that is not actually pending is a forged/mismatched request — reject
-      // the whole resume and execute NOTHING.
       for (const a of options.resume.approvals) {
         if (!pendingIds.has(a.toolCallId)) {
           yield encoder.encode(
@@ -2334,14 +1828,6 @@ export async function* runToolLoop(
         }
       }
 
-      // NOTE: the resume endpoint (approve/route.ts) forces extended thinking OFF
-      // on the continuation, so a suspended Anthropic thinking turn resumes with
-      // thinking disabled — no signed-thinking-block requirement, no provider
-      // rejection (see known-flaw MCP-APPROVAL-RESUME for the stateless-resume
-      // rationale). The loop therefore needs no Anthropic-specific special case.
-
-      // Defense in depth: skip any pending call that already has a tool result
-      // in the server-owned checkpoint.
       const alreadyResolved = new Set(
         messages
           .filter((m) => m.role === 'tool' && typeof m.tool_call_id === 'string')
@@ -2365,10 +1851,6 @@ export async function* runToolLoop(
           );
         }
         if (decision === 'approved' && connectorPermissions.isDenied(p.qualifiedName)) {
-          // AUDIT-FIX CON-1: the resume path used to trust the client's decision
-          // alone, so POSTing {decision:"approved"} executed a tool the user had
-          // Blocked. A stored Block is re-checked here, after the checkpoint has
-          // been claimed and before any side effect.
           logger.warn(
             { tool: p.qualifiedName, requestId: processed.requestId },
             '[tool-loop] approval rejected: tool is blocked by the user permission store',
@@ -2384,17 +1866,12 @@ export async function* runToolLoop(
         ) {
           toRun.push(p);
         } else if (decision === 'approved') {
-          // Approved but the tool is not in the offered catalog (hallucinated /
-          // forged qualified name): fail-closed — append an error result, do not
-          // execute.
           const content = `Tool "${p.qualifiedName}" is not available and was not executed.`;
           yield encoder.encode(
             toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
           );
           messages.push({ role: 'tool', content, tool_call_id: p.id });
         } else {
-          // Rejected OR undecided (fail-closed default): append a denial result
-          // so the model can respond without the tool.
           yield encoder.encode(
             toolResultEvent(p.id, p.qualifiedName, TOOL_DENIED_MESSAGE, false, responseModel),
           );
@@ -2451,10 +1928,6 @@ export async function* runToolLoop(
       }
       step++;
 
-      // Bound accumulated tool-result history before every provider call so a long
-      // agentic loop (many large search/file/sandbox results) can't overflow the model
-      // context window mid-run. Truncates only old tool-result CONTENT in place — no
-      // message is dropped, so every assistant tool_call keeps its matching result.
       const trimmedResults = trimToolResultHistory(messages);
       if (trimmedResults > 0) {
         logger.info(
@@ -2463,9 +1936,6 @@ export async function* runToolLoop(
         );
       }
 
-      // Build the request for this step. Free turns re-fit at every provider
-      // boundary so earlier model/tool work cannot spend the same allowance
-      // again on a later step.
       const stepTools = mapSearchBatchCompleted
         ? llmRequest.tools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
         : llmRequest.tools;
@@ -2473,18 +1943,6 @@ export async function* runToolLoop(
         ...llmRequest,
         messages,
         ...(stepTools && stepTools.length > 0 ? { tools: stepTools } : { tools: undefined }),
-        // `required` is derived for the FIRST step of an explicit managed-code
-        // request or a live-search request the canonical classifier identifies
-        // as research. Once a tool has run, restore auto selection so the model
-        // can either call another tool or synthesize the final answer instead of
-        // being forced into an endless loop. Explicit API tool_choice values
-        // remain unchanged on every step.
-        // Optional-chained like every other `processed.chatRequest` read in this
-        // file (427, 1496, 1502, 1765, 2494). These three were the only plain
-        // accesses, so a caller that omits `chatRequest` — which the type allows
-        // and the rest of the file assumes — threw "Cannot read properties of
-        // undefined (reading 'tool_choice')" on the SECOND step, after a tool
-        // had already run and the turn looked healthy.
         ...(step > 1 &&
         processed.chatRequest?.tool_choice === undefined &&
         llmRequest.tool_choice === 'required' &&
@@ -2492,10 +1950,6 @@ export async function* runToolLoop(
           (processed.chatRequest?.web_search === true && processed.resolvedTaskType === 'research'))
           ? { tool_choice: 'auto' as const }
           : {}),
-        // A composer-selected Skill is forced only on the first provider step
-        // so the user's explicit selection cannot be ignored. Once the real
-        // Skill tool has run, restore automatic choice and allow a final answer
-        // or another user-enabled tool instead of repeatedly loading the Skill.
         ...(step > 1 &&
         processed.chatRequest?.skill_name &&
         isForcedSkillToolChoice(llmRequest.tool_choice)
@@ -2527,13 +1981,6 @@ export async function* runToolLoop(
         }
       }
 
-      // Paid Managed Cloud admission control: atomically extend the durable
-      // reservation before every provider turn. The first operation is covered
-      // by the initial request reservation; each later turn re-checks the
-      // rolling 5-hour, rolling weekly, flagship-week, and billing-period
-      // balance limits and FAILS CLOSED before any provider egress. The stable
-      // global `provider:<step>` operation key keeps a workflow replay
-      // idempotent, so a restart or reconnect never reserves or charges twice.
       if (processed.managedUsage) {
         try {
           await reserveManagedUsageProviderStep({
@@ -2560,12 +2007,6 @@ export async function* runToolLoop(
         }
       }
 
-      // Per-step continuity side-channel: captures the signed thinking blocks
-      // (text + Anthropic signature) and the tag-free assistant text from the
-      // underlying StreamChunks, which the OpenAI-shaped wire bytes
-      // collectProviderStream reads have already stripped/flattened. Fresh per
-      // step (like the assembler that fills it). Fixes known-flaw
-      // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
       const progressId = `provider-step:${step}`;
       if (showWorkPhases) {
         yield encoder.encode(
@@ -2587,20 +2028,12 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);
-        // A budget stop is not a provider fault, so it does not go through
-        // `classifyError` (which would read it as an unknown, non-retryable
-        // upstream failure). It is retryable in the only sense that matters to
-        // the client: continue the conversation and the next invocation gets a
-        // fresh budget.
         const classified: { message: string; retryable: boolean; status?: number } =
           err instanceof ProviderStreamDeadlineError
             ? { message: err.message, retryable: true }
             : classifyError(err);
         logger.error(
           {
-            // The SERVING provider/model: after a managed-failover rotation
-            // (SYS-21) this is the attempt that actually failed last, not the
-            // primary the request started on.
             provider: servingProcessed.provider,
             model: servingProcessed.chatRequest.model,
             step,
@@ -2620,14 +2053,6 @@ export async function* runToolLoop(
             }),
           );
         }
-        // AUDIT-FIX SYS-20: this used to emit `\n\nError: ${msg}` as an assistant
-        // CONTENT delta, so a raw upstream message ("Anthropic API error (500):
-        // {\"type\":\"error\"...}") rendered inside the chat bubble as if the model
-        // had said it — and was then persisted into the transcript by the
-        // client's save. The failure now travels ONLY on the structured channels
-        // below: the canonical `error` agent event and the `x_stream_error`
-        // delta, both of which every pinned consumer already reads
-        // (hasStreamError()). `msg` stays in the server log line above.
         yield encoder.encode(
           eventStream.emit({
             type: 'error',
@@ -2636,15 +2061,6 @@ export async function* runToolLoop(
             retryable: classified.retryable,
           }),
         );
-        // Additive x_stream_error marker (see openai-wire-compat.ts's
-        // sseChunks() 'error' case for the base-path twin of this) -- the
-        // tool-loop hand-rolls its own SSE emission (no OpenAIWireAssembler),
-        // so without this, tool-calling-path failures were invisible to the
-        // hasStreamError() check web/desktop/mobile use, even though the
-        // base path's failures were already detectable. `code` mirrors the
-        // provider adapters' own convention (String(status), not the
-        // semantic classifier code) so the field means the same thing
-        // regardless of which path produced it.
         yield encoder.encode(
           sseData({
             choices: [
@@ -2662,10 +2078,6 @@ export async function* runToolLoop(
             model: responseModel,
           }),
         );
-        // Terminal exit: a mid-loop provider error still owes the client any
-        // files generated by earlier steps' execution tools, plus a closing
-        // [DONE] -- previously this `break`d straight to the loop's exit,
-        // skipping both (harvest only ran on natural finish or maxSteps).
         yield* flushTerminal('error');
         return;
       }
@@ -2685,7 +2097,6 @@ export async function* runToolLoop(
         );
       }
 
-      // Forward all collected lines to the client.
       for (const entry of lines) {
         yield encoder.encode(entry.line);
         if (entry.publicTextDelta) {
@@ -2703,30 +2114,16 @@ export async function* runToolLoop(
         return;
       }
 
-      // If no tool calls, the model is done: harvest any sandbox-generated
-      // files (file cards need durable URLs before the stream closes), then
-      // emit [DONE] and exit.
       if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
         yield* flushTerminal(canonicalStopReason(finishReason));
         return;
       }
 
-      // Append the assistant's tool-use turn to the thread.
       const assistantToolCalls = pendingToolCalls.map((tc) => ({
         id: tc.id,
         type: 'function' as const,
         function: { name: tc.qualifiedName, arguments: JSON.stringify(tc.args) },
       }));
-      // Anthropic extended-thinking continuity (known-flaw
-      // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01): when this step produced
-      // signed thinking blocks, replay them on the assistant tool_use turn
-      // (via the internal `__canonicalThinking` field, reconstructed into real
-      // ThinkingBlocks before the tool_use blocks by openAIWireRequestToChat
-      // Request) and use the TAG-FREE assistant text so the follow-up request
-      // never double-represents reasoning as literal <thinking> tag text.
-      // Strictly gated on signed blocks being present: every other case (non-
-      // Anthropic providers, thinking-disabled Anthropic, or thinking without
-      // tool_use) sees the identical `content: textContent` push as before.
       const signedThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
       const assistantMessage: (typeof messages)[number] = {
         role: 'assistant',
@@ -2738,20 +2135,6 @@ export async function* runToolLoop(
       }
       messages.push(assistantMessage);
 
-      // ── Per-call server-side gate (CON-1, CON-19) ───────────────────────
-      //
-      // This used to be one all-or-nothing branch on `approvalMode`: manual
-      // suspended EVERY call, auto executed EVERY call, and the user's saved
-      // allow/ask/deny verdicts were never consulted at all. Now each call is
-      // resolved independently:
-      //   deny  -> never executed; an honest error result goes back to the model
-      //   allow -> executed immediately, even in manual mode (that is what
-      //            "Always allow" means), unless the lethal-trifecta check
-      //            escalates it
-      //   ask   -> the existing checkpoint + approval-card path
-      // Denials and auto-allowed executions are applied BEFORE any suspend, so
-      // their results are inside the checkpoint the resume replays; otherwise an
-      // auto-allowed call would come back as "undecided" and be denied.
       const gatedCalls = pendingToolCalls.map((tc) => ({ tc, gate: resolveToolCallGate(tc) }));
       const blockedCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'deny');
       const approvalCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'ask');
@@ -2766,9 +2149,6 @@ export async function* runToolLoop(
         );
         const content = blockedToolResultMessage(tc.qualifiedName);
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);
-        // Emit a matched start/end pair: the canonical activity stream (and the
-        // client timeline built from it) pairs tool-execution-end with its
-        // start, so a bare end would render an orphaned card.
         yield encoder.encode(
           eventStream.emit({
             type: 'tool-execution-start',
@@ -2806,10 +2186,6 @@ export async function* runToolLoop(
           mapSearchBatchCompleted &&
           autoRunCalls.every((call) => isMapSearchTool(call.qualifiedName))
         ) {
-          // search_maps already emitted the complete, validated result card.
-          // Asking the model for another step makes some providers repeatedly
-          // call search_maps or try to fetch its intentionally non-readable
-          // provider URL, leaving the composer locked until the step cap.
           yield* flushTerminal('end-turn');
           return;
         }
@@ -2880,8 +2256,6 @@ export async function* runToolLoop(
         });
 
         for (const chunk of approvalChunks) yield chunk;
-        // Emit [DONE] so the client knows the current stream is complete
-        // and the approval prompt is the terminal event for this turn.
         yield encoder.encode(sseDone());
         return;
       }
@@ -2892,11 +2266,6 @@ export async function* runToolLoop(
       // Continue to next step.
     }
 
-    // Falling out of the `while` (rather than hitting one of the `return`s
-    // above) means every step re-invoked the provider and never reached a
-    // terminal stop -- maxSteps exhausted. This is the only way execution
-    // reaches here, so the flush below is unconditional (no redundant
-    // `step >= maxSteps` re-check).
     logger.warn(
       { maxSteps, provider: processed.provider },
       '[tool-loop] max steps reached without terminal stop',
@@ -2911,38 +2280,20 @@ export async function* runToolLoop(
     );
     yield* flushTerminal('error');
   } finally {
-    // Lifecycle cleanup: only relevant if an E2B execution tool actually ran during this
-    // loop invocation. Runs on every `return` above (manual-approval suspend, provider
-    // error, natural finish, maxSteps exhaustion) AND on early `.return()` from the
-    // caller's `cancel()` (client disconnect / abort) -- generator `finally` blocks fire
-    // in all of these cases, closing the billing-leak gap of a mid-turn abort.
     if (e2bExecutor) {
       if (e2bSessionScope) {
-        // Pause (not kill): stops billing while preserving sandbox + context state so
-        // the NEXT turn's runToolLoop can resume it via the same authenticated scope.
-        // Pause via the executor's OWN live sandbox handle — NOT pauseE2BSession's
-        // Redis re-lookup, which fail-opens (a stale/absent mapping would leave this
-        // sandbox billing until its timeout). Fall back to the lookup only if the
-        // executor predates the pause() method.
         if (e2bExecutor.pause) {
           await e2bExecutor.pause();
         } else {
           await pauseE2BSession(e2bSessionScope);
         }
       } else {
-        // No conversation to resume into -- release the sandbox immediately.
         await e2bExecutor.dispose();
       }
     }
   }
 }
 
-// ─── Catalog warm-up helper ───────────────────────────────────────────────────
-
-/**
- * Load the MCP tool catalog and return the tool defs.
- * Returns an empty list when no servers are configured (graceful degradation).
- */
 export async function loadMcpToolDefs(): Promise<WebMcpToolDef[]> {
   try {
     const catalog = await getWebMcpCatalog();

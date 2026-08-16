@@ -1,11 +1,3 @@
-/**
- * The desktop shell translates through the shared `@agiworkforce/i18n` corpus,
- * while `apps/desktop/src/i18n/locales/` is an unloaded legacy copy. Keys added
- * only to the legacy copy render as raw `sidebar.noConversations`-style text in
- * the running app (found by the native WDIO run on 2026-08-01). This test walks
- * every literal `t('…')` key in the v3 feature components and asserts the
- * shared English corpus can resolve it, so the two corpora cannot drift again.
- */
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -38,10 +30,7 @@ describe('v3 namespace corpus coverage', () => {
     const missing: string[] = [];
     for (const file of sourceFiles(V3_FEATURES_DIR)) {
       const source = readFileSync(file, 'utf8');
-      // Only components translating the v3 namespace are in scope.
       if (!source.includes("useTranslation('v3')")) continue;
-      // Literal keys: t('a.b.c'), plus quoted dotted keys inside conditional
-      // expressions passed to t(cond ? 'a.b' : 'c.d').
       const keys: string[] = [
         ...[...source.matchAll(/\bt\(\s*'([a-zA-Z0-9]+(?:\.[a-zA-Z0-9_]+)+)'/g)].map(
           (m) => m[1] as string,
@@ -53,8 +42,6 @@ describe('v3 namespace corpus coverage', () => {
         ].flatMap((m) => [m[1] as string, m[2] as string]),
       ];
       for (const key of keys) {
-        // Conditional-expression capture can pick up non-i18n dotted literals;
-        // only treat it as a key when its top-level group exists in the corpus.
         const topLevel = key.split('.')[0] ?? '';
         const fromConditional = !source.includes(`t('${key}'`);
         if (fromConditional && ![...enV3].some((k) => k.startsWith(`${topLevel}.`))) continue;

@@ -1,35 +1,3 @@
-/**
- * DSAR (Data Subject Access Request) export — PRD-APPENDIX-D §D.4.
- *
- * Implements the "device-side readable export" layer: collects all user data
- * from the local SQLCipher database and MMKV store, serialises to a structured
- * JSON payload, writes to a temp file, and invokes the system share sheet.
- *
- * Per §D.4 two-layer architecture:
- *   (a) Server-side export  — /api/user/export (server handles this layer)
- *   (b) Device-side export  — THIS service
- *
- * What is included:
- *   - Conversations + messages from SQLCipher
- *   - Memory facts from SQLCipher
- *   - Custom instructions from SQLCipher
- *   - Settings from SQLCipher (key-value pairs)
- *   - Installed models manifest (metadata only — not the model weights)
- *   - Compliance ledger (disclosure + consent records from MMKV)
- *   - Export metadata (timestamp, app version, schema version)
- *
- * What is NOT included:
- *   - Model weight files (upstream-distributed, not user data)
- *   - Provider API keys (keychain-only, never exposed in export)
- *   - Telemetry queue (operational metadata, not user content)
- *
- * EU AI Act Article 50(2): if @agiworkforce/compliance exports
- * `wrapTextExportWithMarker`, AI-generated message content is wrapped before
- * serialisation. The import is guarded so the export works even if the
- * compliance package does not yet implement this export.
- *
- * No network calls. Fully on-device.
- */
 
 import {
   cacheDirectory,
@@ -57,11 +25,6 @@ import type {
   InstalledModel,
 } from '@/storage/types';
 
-// ---------------------------------------------------------------------------
-// Article 50(2) marker — optional, guarded import
-// ---------------------------------------------------------------------------
-
-// Matches the actual signature from @agiworkforce/compliance
 type WrapMarkerFn = (opts: {
   text: string;
   provider: string;
@@ -83,14 +46,6 @@ try {
   // Package not yet available — degrade gracefully
 }
 
-/**
- * Render a conversation's messages as a plain-text transcript, then wrap the
- * whole transcript with the Article 50(2) marker per compliance-engineer guidance:
- * the marker must be on the AI-generated *content* string, not the JSON container.
- *
- * Uses the provider/model from the last assistant message in the conversation
- * (most representative for a mixed-provider thread).
- */
 export function buildMarkedTranscript(
   messages: Array<{
     role: string;
@@ -109,17 +64,12 @@ export function buildMarkedTranscript(
 
   if (typeof _compliance.wrapTextExportWithMarker !== 'function') return transcript;
 
-  // Use provider/model from the last assistant turn (best representative for the thread)
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
   const provider = lastAssistant?.provider ?? 'unknown';
   const model = lastAssistant?.model ?? 'unknown';
 
   return _compliance.wrapTextExportWithMarker({ text: transcript, provider, model });
 }
-
-// ---------------------------------------------------------------------------
-// Export schema types
-// ---------------------------------------------------------------------------
 
 const DSAR_SCHEMA_VERSION = 1;
 
@@ -133,7 +83,7 @@ export interface DsarMessage {
   tokens_in: number | null;
   tokens_out: number | null;
   duration_ms: number | null;
-  created_at: string; // ISO-8601
+  created_at: string;
 }
 
 export interface DsarConversation {
@@ -147,7 +97,6 @@ export interface DsarConversation {
   archived_at: string | null;
   pinned: boolean;
   messages: DsarMessage[];
-  /** Plain-text transcript with EU AI Act Article 50(2) provenance markers on AI turns */
   marked_transcript: string;
 }
 
@@ -220,7 +169,6 @@ interface DsarInstalledModel {
 
 interface DsarComplianceLedger {
   disclosure: unknown;
-  /** keyed by providerId */
   consents: Record<string, unknown>;
 }
 
@@ -260,10 +208,6 @@ export interface WipeAllLocalDataOptions {
   afterPersistentWipe?: () => Promise<void> | void;
 }
 
-// ---------------------------------------------------------------------------
-// Progress callback type
-// ---------------------------------------------------------------------------
-
 export interface DsarExportProgress {
   stage:
     | 'conversations'
@@ -280,10 +224,6 @@ export interface DsarExportProgress {
 
 export type DsarProgressCallback = (progress: DsarExportProgress) => void;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function tsToIso(ms: number): string {
   return new Date(ms).toISOString();
 }
@@ -299,10 +239,6 @@ function getPlatform(): 'ios' | 'android' | 'unknown' {
 function getAppVersion(): string | null {
   return Constants.expoConfig?.version ?? null;
 }
-
-// ---------------------------------------------------------------------------
-// Export stages
-// ---------------------------------------------------------------------------
 
 async function collectConversations(): Promise<DsarConversation[]> {
   const convs = await listConversations({ limit: 10_000 });
@@ -327,8 +263,6 @@ async function collectConversations(): Promise<DsarConversation[]> {
       }),
     );
 
-    // Article 50(2): wrap the whole conversation transcript (not per-message content)
-    // so the marker survives the JSON container and is readable as a text artifact.
     const marked_transcript = buildMarkedTranscript(dsarMessages);
 
     result.push({
@@ -380,8 +314,6 @@ async function collectInstalledModels(): Promise<DsarInstalledModel[]> {
 function collectComplianceLedger(): DsarComplianceLedger {
   const disclosure = mmkvDisclosureLedger.read();
 
-  // Enumerate consents for all Chinese-HQ providers via the canonical ID list.
-  // ConsentLedger has no listAll — must enumerate by known provider IDs.
   const chineseHqIds: string[] = Array.isArray(_compliance.CHINESE_HQ_PROVIDER_IDS)
     ? _compliance.CHINESE_HQ_PROVIDER_IDS
     : [];
@@ -397,10 +329,6 @@ function collectComplianceLedger(): DsarComplianceLedger {
     consents,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Main export function
-// ---------------------------------------------------------------------------
 
 const EXPORT_DIR = `${cacheDirectory}dsar_exports/`;
 const EXPORT_FILE = `${EXPORT_DIR}agi_data_export.json`;
@@ -422,7 +350,6 @@ export async function exportAllUserData(
   const notify = (stage: DsarExportProgress['stage'], done: number, total: number) =>
     onProgress?.({ stage, done, total });
 
-  // Conversations + messages (most time-consuming)
   notify('conversations', 0, 1);
   const conversations = mergeSupplementalConversations(
     await collectConversations(),
@@ -430,17 +357,14 @@ export async function exportAllUserData(
   );
   notify('conversations', 1, 1);
 
-  // Memory facts
   notify('memory', 0, 1);
   const memory_facts = await collectMemoryFacts();
   notify('memory', 1, 1);
 
-  // Custom instructions
   notify('instructions', 0, 1);
   const custom_instructions = await listCustomInstructions(false);
   notify('instructions', 1, 1);
 
-  // Settings
   notify('settings', 0, 1);
   const settings = await getAllSettings();
   const local_projects = supplemental.local_projects ?? [];
@@ -448,17 +372,14 @@ export async function exportAllUserData(
   const local_artifacts = supplemental.local_artifacts ?? [];
   notify('settings', 1, 1);
 
-  // Installed models manifest
   notify('models', 0, 1);
   const installed_models_manifest = await collectInstalledModels();
   notify('models', 1, 1);
 
-  // Compliance ledger
   notify('compliance', 0, 1);
   const compliance_ledger = collectComplianceLedger();
   notify('compliance', 1, 1);
 
-  // Assemble payload
   const payload: DsarExportPayload = {
     _meta: {
       schema_version: DSAR_SCHEMA_VERSION,
@@ -484,7 +405,6 @@ export async function exportAllUserData(
     compliance_ledger,
   };
 
-  // Write to temp file
   notify('writing', 0, 1);
   const info = await getInfoAsync(EXPORT_DIR);
   if (!info.exists) {
@@ -495,7 +415,6 @@ export async function exportAllUserData(
   });
   notify('writing', 1, 1);
 
-  // Share via native share sheet
   notify('sharing', 0, 1);
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {
@@ -508,20 +427,14 @@ export async function exportAllUserData(
   });
   notify('sharing', 1, 1);
 
-  // Clean up temp file after sharing dialog is dismissed
   await deleteAsync(EXPORT_FILE, { idempotent: true });
 }
-
-// ---------------------------------------------------------------------------
-// Wipe all local user data (Settings → Privacy → Delete everything)
-// ---------------------------------------------------------------------------
 
 export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): Promise<void> {
   const { closeDb, getDb } = await import('@/storage/db');
 
   const db = await getDb();
 
-  // Delete all user data in one transaction (CASCADE handles messages, doc_chunks)
   await db.withTransactionAsync(async () => {
     await db.execAsync('DELETE FROM telemetry_queue;');
     await db.execAsync('DELETE FROM memory_facts;');
@@ -533,7 +446,7 @@ export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): P
       // Older private builds had this table. Current Mobile builds do not create it.
     }
     await db.execAsync('DELETE FROM settings;');
-    await db.execAsync('DELETE FROM conversations;'); // cascades to messages + doc_chunks
+    await db.execAsync('DELETE FROM conversations;');
     try {
       await db.execAsync('DELETE FROM memory_vectors;');
     } catch {
@@ -543,19 +456,15 @@ export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): P
 
   await closeDb();
 
-  // Wipe MMKV
   const { storage } = await import('@/lib/mmkv');
   storage.clearAll();
 
   await options.afterPersistentWipe?.();
 
-  // Delete downloaded model files
   await deleteAsync(`${documentDirectory}models/`, { idempotent: true });
 
-  // Delete any cached DSAR exports
   await deleteAsync(EXPORT_DIR, { idempotent: true });
 
-  // Delete user-initiated chat exports (PDF/TXT/MD) — "Delete everything" must
   // not leave exported conversation content on disk.
   const { EXPORTS_DIR } = await import('@/services/fileCreation');
   await deleteAsync(EXPORTS_DIR, { idempotent: true });

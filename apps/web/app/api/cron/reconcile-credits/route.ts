@@ -9,49 +9,13 @@ import { deliverDueVideoIncidentAlerts } from '@/lib/services/video-incident-ale
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
-/**
- * GET /api/cron/reconcile-credits
- *
- * Drains the durable credit settlement queue (0055) and, when a settlement dies
- * permanently, tells a human.
- *
- * A `terminal` job is money that was spent and will never be debited: the
- * provider call already ran, the reservation delta is known, and the queue has
- * given up (`RETRY_EXHAUSTED`, a non-retryable SQLSTATE, or a deduction the
- * ledger refused). That is ledger drift — the balance a user sees and the usage
- * they actually consumed have parted company — and until now it left one
- * `logger.info` line and an HTTP 200, which nothing reads.
- *
- * The alert reuses the delivery path the health probe already proved out: the
- * Resend transport addressed to the support fallback mailbox, which
- * `lib/support/handoff/config.ts` requires to be MONITORED. No new environment
- * variable and no vendor decision (the pager is still an open founder gap —
- * docs/runbooks/incident-response.md §Open gaps).
- *
- * # Why this cannot become a daily nag
- *
- * `process_credit_settlement_queue()` scans `status = 'pending'` rows only, so a
- * job is reported in the single run that flips it to terminal and never again.
- * The alert is edge-triggered by construction, and at most one mail leaves per
- * invocation regardless of batch size.
- *
- * # Undeliverable is a failed run
- *
- * Same rule as the health probe: an alert that was OWED and could not be sent
- * makes the run a failure, so the Vercel cron log carries the last remaining
- * signal that drift went unread. The settlement work itself is already
- * committed and is idempotent, so a 500 here cannot double-charge anyone.
- */
-
 interface ReconcileSummary {
   processed: number;
   succeeded: number;
   pending: number;
   terminal: number;
-  /** Whether this run owed anyone an alert at all. */
   alerted: boolean;
   delivery: 'not_needed' | 'delivered' | 'undeliverable';
-  /** Why delivery failed. Never carries user, amount, or credential detail. */
   reason?: string;
 }
 
@@ -67,11 +31,6 @@ function escapeHtml(value: string): string {
     .replace(/"/gu, '&quot;');
 }
 
-/**
- * Counts only. Job ids, user ids and amounts stay in the database: the mailbox
- * is a support inbox, not a financial record, and the operator's next step is a
- * query against `credit_settlement_jobs`, not a reply to this message.
- */
 function buildDriftAlert(summary: {
   processed: number;
   succeeded: number;

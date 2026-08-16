@@ -27,8 +27,6 @@ describe('published artifacts migration', () => {
   });
 
   it('constrains the token to the 24-char base64url shape the routes validate', () => {
-    // The API and the public page both gate on /^[A-Za-z0-9_-]{24}$/; the
-    // database must not accept a shape those paths would refuse to serve.
     expect(migration).toContain("check (token ~ '^[A-Za-z0-9_-]{24}$')");
   });
 
@@ -36,8 +34,6 @@ describe('published artifacts migration', () => {
     expect(migration).toContain(
       "kind in ('html', 'react', 'svg', 'mermaid', 'markdown', 'text', 'code')",
     );
-    // Binary/document kinds have no safe public serving path yet and must not
-    // be storable as rows the page cannot honour.
     for (const unsupported of ["'pdf'", "'docx'", "'image'", "'spreadsheet'", "'presentation'"]) {
       expect(migration).not.toContain(unsupported);
     }
@@ -52,8 +48,6 @@ describe('published artifacts migration', () => {
   });
 
   it('ships no TTL column, because no TTL policy has been approved', () => {
-    // TTL/quota are founder-pending for CAP-015. A defaulted expiry column
-    // would silently start deleting live public pages on an unapproved policy.
     expect(migration).not.toMatch(/^\s*expires_at\s/m);
     expect(migration).not.toMatch(/\bdelete from\b/i);
   });

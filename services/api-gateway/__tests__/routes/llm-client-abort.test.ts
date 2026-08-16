@@ -1,18 +1,3 @@
-/**
- * @file Managed gateway settlement when the client hangs up mid-stream.
- *
- * A disconnect used to reach `releaseFailedReservation`, which finalizes the
- * reservation as `failed` — a full refund that also erases the request from the
- * rolling five-hour / weekly windows. The provider had already generated the
- * tokens streamed up to that point, so every abandoned turn was free inference
- * and a caller could hang up one chunk before the end of every turn forever.
- *
- * These tests drive a real socket disconnect against the real billing service
- * over a fake RPC client that mirrors migration 0056's settlement arithmetic
- * (`reserve` deducts the estimate; `finalize` applies `actual - estimate` on
- * completion and refunds the estimate on failure), so "counts toward the
- * rolling window" is asserted as a ledger balance, not as a call shape.
- */
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -30,17 +15,10 @@ type AdapterMode = 'stream-then-hang' | 'hang-before-token' | 'flood' | 'tool-ca
 const state = vi.hoisted(() => ({
   adapterMode: 'stream-then-hang' as AdapterMode,
   rpcCalls: [] as Array<{ fn: string; args: Record<string, unknown> }>,
-  /** Net managed-usage deduction the rolling windows would sum, in cents. */
   ledgerCents: 0,
-  /** Stands in for the route's 10-minute provider deadline. */
   deadlineMs: 30_000,
 }));
 
-/**
- * Keep the REAL stream lifecycle — its abort wiring and `StreamDeadlineError`
- * are what the stalled-client branch keys on — and only shorten the deadline so
- * a test can reach it. The route is exercised unmodified.
- */
 vi.mock('../../src/lib/streamLifecycle', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/lib/streamLifecycle')>();
   return {
@@ -133,8 +111,6 @@ vi.mock('../../src/lib/providerAdapters', () => ({
   buildProviderAdapter: () => ({
     async *stream(_chatRequest: ChatRequest, signal?: AbortSignal): AsyncIterable<StreamChunk> {
       if (state.adapterMode === 'flood') {
-        // Enough output to overrun the response socket's write buffer while the
-        // client refuses to read, which is what parks the route in waitForDrain.
         for (let block = 0; block < 96; block += 1) {
           if (signal?.aborted) throw signal.reason;
           yield { type: 'text-delta', delta: 'x'.repeat(64 * 1024) };
@@ -144,11 +120,8 @@ vi.mock('../../src/lib/providerAdapters', () => ({
         yield { type: 'text-delta', delta: 'the provider already generated this sentence' };
       }
       if (state.adapterMode === 'tool-call-then-hang') {
-        // Output the provider was paid for that carries no delta text.
         yield { type: 'tool-use-start', toolUseId: 'call_1', name: 'search_repository_files' };
       }
-      // Bounded stand-in for a provider that keeps generating after the client
-      // walks away; the gateway's abort-aware read ends it, not this loop.
       for (let tick = 0; tick < 100; tick += 1) {
         await new Promise((resolve) => setTimeout(resolve, 20));
         if (signal?.aborted) throw signal.reason;
@@ -184,11 +157,6 @@ async function startServer(): Promise<number> {
   return (server.address() as AddressInfo).port;
 }
 
-/**
- * POST a completion and destroy the socket on the first byte the gateway
- * writes. When no byte is coming — a non-streaming request, or a provider that
- * never produced output — the hang-up is unprompted instead.
- */
 async function postAndHangUp(
   port: number,
   options: { maxTokens?: number; stream?: boolean } = {},
@@ -229,11 +197,6 @@ async function postAndHangUp(
   });
 }
 
-/**
- * POST a streaming completion and then never read the response body, leaving
- * the socket open. Node keeps the response paused until something consumes it,
- * so the server's writes back up and park in `waitForDrain`.
- */
 async function postAndStall(port: number): Promise<http.ClientRequest> {
   const request = http.request({
     host: '127.0.0.1',
@@ -243,7 +206,6 @@ async function postAndStall(port: number): Promise<http.ClientRequest> {
     headers: { 'content-type': 'application/json', 'idempotency-key': 'stall-turn-12345678' },
   });
   request.on('error', () => undefined);
-  // Deliberately no 'response' data listener: the body is never consumed.
   request.on('response', (response) => {
     response.on('error', () => undefined);
   });
@@ -285,11 +247,7 @@ describe('Managed gateway — client disconnect mid-stream', () => {
 
     expect(finalize['p_outcome']).toBe('completed');
     expect(finalize['p_actual_cost_cents']).toBeGreaterThan(0);
-    // The tokens the provider generated stay deducted, so the request counts
-    // against the rolling five-hour and weekly windows like any served turn.
     expect(state.ledgerCents).toBeGreaterThan(0);
-    // The client never received a terminated response, so the delivery marker
-    // must stay unset even though billing settled.
     expect(state.rpcCalls.map((call) => call.fn)).not.toContain(
       'mark_managed_usage_client_delivered',
     );
@@ -316,10 +274,6 @@ describe('Managed gateway — client disconnect mid-stream', () => {
   });
 
   it('settles a client that stalls the socket instead of closing it', async () => {
-    // The sibling of a hang-up: the client stops reading and never sends FIN,
-    // so req.aborted and res.destroyed both stay false and only the gateway
-    // deadline ends the turn. Without the stalled-reader branch this refunds in
-    // full after the provider generated megabytes of output.
     state.adapterMode = 'flood';
     state.deadlineMs = 400;
     const port = await startServer();
@@ -336,8 +290,6 @@ describe('Managed gateway — client disconnect mid-stream', () => {
   });
 
   it('settles a disconnect that lands right after a tool call opened', async () => {
-    // `tool-use-start` carries the tool name and no delta, so counting only
-    // deltas would leave this turn at zero served output and refund it in full.
     state.adapterMode = 'tool-call-then-hang';
     const port = await startServer();
     await postAndHangUp(port);

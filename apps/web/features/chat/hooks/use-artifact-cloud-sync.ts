@@ -10,13 +10,6 @@ import { useArtifactsStore } from '../stores/artifacts-store';
 const SYNC_INTERVAL_MS = 30_000;
 const MAX_RETRY_DELAY_MS = 5 * 60_000;
 
-/**
- * Keep the Web artifact overlay current with first-class Managed Cloud
- * artifacts created or edited on Desktop. The overlay is intentionally
- * memory-only and starts from cursor zero for each authenticated mount, so a
- * reload or account switch can never retain a cursor without its matching
- * per-user data snapshot.
- */
 export function useArtifactCloudSync(): void {
   const { getToken, isLoaded, userId } = useAuth();
   const applyCloudArtifactDeltas = useArtifactsStore((state) => state.applyCloudArtifactDeltas);

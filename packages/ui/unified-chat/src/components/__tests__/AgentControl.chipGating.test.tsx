@@ -52,8 +52,6 @@ describe('AgentControl chip gating', () => {
   it('renders effort without the mode chip — the desktop case', () => {
     renderControl({ showMode: false, showEffort: true });
     expect(screen.getByLabelText('Reasoning effort')).toBeTruthy();
-    // The permission control must stay absent: advertising Bypass on a surface
-    // whose runtime ignores agentMode would promise a guarantee we do not keep.
     expect(screen.queryByLabelText(/^Agent mode/)).toBeNull();
   });
 

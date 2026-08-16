@@ -26,13 +26,6 @@ export function functionToolName(tool: unknown): string {
   return typeof candidate.function?.name === 'string' ? candidate.function.name : '';
 }
 
-/**
- * Classify the server-executed tools on one managed-cloud request.
- *
- * Provider-native tools are intentionally ignored: their provider owns those
- * calls. MCP and AGI's platform tools must enter `runToolLoop`, otherwise the
- * model can emit a function call that no runtime ever executes.
- */
 export function classifyToolLoopInputs(
   mcpTools: WebMcpToolDef[],
   requestTools: unknown[] | undefined,
@@ -62,8 +55,6 @@ export function classifyToolLoopInputs(
       hasSkillTools ||
       hasOfficeFileTools ||
       hasMapSearchTools,
-    // MCP tools may cross an external or mutating boundary and remain
-    // approval-gated. The built-in search/fetch/sandbox tools execute inside
     // their existing read-only or isolated safety boundaries.
     approvalMode: hasMcpTools ? 'manual' : 'auto',
   };

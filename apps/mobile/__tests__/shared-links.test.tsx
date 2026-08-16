@@ -1,14 +1,5 @@
-/**
- * shared-links.test.tsx — MOBCLOUD-04.
- *
- * The screen shipped a "Coming soon" card behind an invite gate. Both claims
- * were wrong: sharing has been live on web (/share/[token], /api/share), and
- * the invite gate was removed by the 2026-06-27 public-alpha decision. What was
- * genuinely missing was a list endpoint.
- */
 import { fetchSharedLinks, revokeSharedLink } from '@/src/features/shared-links/service';
 
-// Jest only permits `mock`-prefixed names inside a module factory.
 const mockGet = jest.fn();
 const mockDelete = jest.fn();
 
@@ -48,8 +39,6 @@ describe('shared links service', () => {
   });
 
   it('drops rows that cannot be opened or revoked', async () => {
-    // A row with no token has no usable action attached to it; rendering it
-    // would produce a card whose buttons do nothing.
     mockGet.mockResolvedValue({ shares: [row(), { title: 'broken' }, row({ token: '' })] });
 
     const links = await fetchSharedLinks();

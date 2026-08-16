@@ -15,12 +15,6 @@ import {
 } from '@/lib/server/managed-usage-policy';
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 
-/**
- * Private free-plan usage policy. This module is server-only, so the exact
- * ceiling and reset window cannot leak into browser bundles or response copy.
- * The values are deliberately centralized for operational adjustment without
- * changing the client contract.
- */
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
   unitMicrousd: getInternalUsageUnitMicrousd(),
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
@@ -34,7 +28,6 @@ export type FreeTrialReservation = {
   kind: 'free_trial';
   userId: string;
   requestId: string;
-  /** Server-only provider-cost ceiling reserved under the rolling-window lock. */
   reservedMicrousd: number;
 };
 
@@ -69,12 +62,6 @@ export type FreeTrialPublicUsage = {
   hasUsageRemaining: boolean;
 };
 
-/**
- * One reservation row is the authoritative Free ledger entry. Unsettled work
- * counts at its full reservation; settlement replaces that estimate with the
- * actual charge. The account month is anchored to profiles.created_at, with
- * month-end anniversaries naturally clamped by PostgreSQL interval arithmetic.
- */
 const FREE_USAGE_SNAPSHOT_SQL = `
   with account_anchor as (
     select created_at,
@@ -138,12 +125,6 @@ type FreeTrialBudgetResult =
   | { ok: true; maxOutputTokens: number }
   | { ok: false; code: 'budget_reached' };
 
-/**
- * Bound provider input without trusting tokenizer heuristics. UTF-8 bytes are
- * a conservative ceiling for text tokens. Vision tokenization is provider-
- * specific, so an image reserves the model's full declared input window until
- * a verified per-provider image estimator exists.
- */
 export function estimateConservativeFreeInputTokens(input: {
   model: string;
   messages: unknown;
@@ -158,14 +139,12 @@ export function estimateConservativeFreeInputTokens(input: {
   return Math.max(serializedBytes + 64, modelInputCeiling ?? 1_000_000);
 }
 
-/** Fit one provider invocation inside its immutable private reservation. */
 export function fitFreeTrialOutputBudget(input: {
   reservation: FreeTrialReservation;
   provider: string;
   model: string;
   estimatedInputTokens: number;
   requestedMaxOutputTokens: number;
-  /** Exact cost of earlier provider calls in this reservation. */
   priorCostDollars?: number;
 }): FreeTrialBudgetResult {
   const promptTokens = toNonNegativeInteger(input.estimatedInputTokens);
@@ -205,7 +184,6 @@ export function fitFreeTrialOutputBudget(input: {
   return { ok: true, maxOutputTokens: low };
 }
 
-/** Apply the private Free allowance to the exact request crossing provider egress. */
 export function applyFreeTrialProviderBudget(input: {
   reservation: FreeTrialReservation;
   provider: string;
@@ -268,7 +246,6 @@ export function isFreeTrialRequest(params: {
   );
 }
 
-/** Read all three Free windows and discard their private operands. */
 export async function getFreeTrialPublicUsage(userId: string): Promise<FreeTrialPublicUsage> {
   const {
     fiveHourBudgetMicrousd,
@@ -313,10 +290,6 @@ export async function getFreeTrialPublicUsage(userId: string): Promise<FreeTrial
   };
 }
 
-/**
- * Atomically reserve the smallest allowance remaining across the rolling
- * five-hour, rolling seven-day, and account-anniversary month windows.
- */
 export async function beginFreeTrialRequest(params: {
   userId: string;
   requestId: string;
@@ -345,8 +318,6 @@ export async function beginFreeTrialRequest(params: {
       [params.userId],
     );
 
-    // This row is the per-user transaction mutex. Every admission decision is
-    // serialized before reading or inserting reservation-ledger rows.
     const [lockedUsage] = await tx.query<{ user_id: string }>(
       `select user_id
        from public.website_auto_economy_trial_usage
@@ -402,22 +373,12 @@ export async function beginFreeTrialRequest(params: {
   });
 }
 
-/**
- * Reconcile a Free reservation with observed provider cost. A completed
- * response consumes at least one internal unit, so the rolling limits remain
- * meaningful even for tiny greetings while more expensive work can consume
- * multiple units.
- * Repeated settlement is a no-op, and zero-usage failures still release their
- * reservation. Best-effort persistence preserves an already-produced provider
- * response if the accounting database is temporarily unavailable.
- */
 export async function settleFreeTrialRequest(params: {
   reservation: FreeTrialReservation;
   outcome: FreeTrialSettlementOutcome;
   provider?: string;
   model?: string;
   usage?: TokenUsage;
-  /** Exact sum of already request-tiered provider costs. */
   measuredCostDollars?: number;
 }): Promise<void> {
   const usage = params.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };

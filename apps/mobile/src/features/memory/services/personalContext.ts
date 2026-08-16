@@ -1,15 +1,3 @@
-/**
- * buildPersonalContextBlocks — composes the per-turn "who you are talking to"
- * system blocks from the user's personalization settings and the memories
- * retrieved for this turn.
- *
- * Pure + composable (no store / IO access): the chat action resolves the inputs
- * and decides WHEN to inject; this only decides the block content + order. Used
- * by both the local and cloud paths, so the name avoids "local".
- *
- * Order returned: [persona, memory]. The caller unshifts them so the final
- * system-message order ends up [persona, memory, …project, …turns].
- */
 import type { Personalization } from '@/stores/settingsStore';
 import type { MemoryFact } from '@/storage/types';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils/fence';

@@ -9,13 +9,6 @@ import { z } from 'zod';
 import { sanitizeUserInput, sanitizeURL } from '@shared/utils/html-sanitizer';
 import { API_KEY_SCOPE_VALUES } from '@/lib/api-key-scopes';
 
-// ============================================================================
-// XSS SANITIZATION TRANSFORMERS
-// ============================================================================
-
-/**
- * Transform that sanitizes and validates URLs
- */
 const sanitizedUrl = z
   .string()
   .optional()
@@ -24,10 +17,6 @@ const sanitizedUrl = z
     const sanitized = sanitizeURL(val);
     return sanitized || undefined;
   });
-
-// ============================================================================
-// PROFILE SETTINGS SCHEMA
-// ============================================================================
 
 export const profileSettingsSchema = z.object({
   name: z
@@ -42,7 +31,6 @@ export const profileSettingsSchema = z.object({
     .optional()
     .transform((val) => {
       if (!val || val.trim() === '') return undefined;
-      // Remove any HTML/script attempts and validate phone format
       const sanitized = sanitizeUserInput(val, 20);
       return sanitized;
     })
@@ -81,18 +69,6 @@ export const profileSettingsSchema = z.object({
 
 export type ProfileSettingsFormData = z.infer<typeof profileSettingsSchema>;
 
-// ============================================================================
-// SECURITY SETTINGS SCHEMA
-// ============================================================================
-
-/**
- * Password requirements:
- * - Minimum 8 characters
- * - At least one uppercase letter
- * - At least one lowercase letter
- * - At least one number
- * - At least one special character
- */
 export const passwordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
@@ -124,10 +100,6 @@ export const securitySettingsSchema = z.object({
 
 export type SecuritySettingsFormData = z.infer<typeof securitySettingsSchema>;
 
-// ============================================================================
-// NOTIFICATION PREFERENCES SCHEMA
-// ============================================================================
-
 export const notificationPreferencesSchema = z.object({
   email_notifications: z.boolean(),
   push_notifications: z.boolean(),
@@ -141,10 +113,6 @@ export const notificationPreferencesSchema = z.object({
 
 export type NotificationPreferencesFormData = z.infer<typeof notificationPreferencesSchema>;
 
-// ============================================================================
-// APPEARANCE SETTINGS SCHEMA
-// ============================================================================
-
 export const appearanceSettingsSchema = z.object({
   theme: z.enum(['dark', 'light', 'auto']),
   auto_save: z.boolean(),
@@ -153,10 +121,6 @@ export const appearanceSettingsSchema = z.object({
 });
 
 export type AppearanceSettingsFormData = z.infer<typeof appearanceSettingsSchema>;
-
-// ============================================================================
-// ADVANCED SETTINGS SCHEMA
-// ============================================================================
 
 export const advancedSettingsSchema = z.object({
   cache_size: z.enum(['256MB', '512MB', '1GB', '2GB', '4GB']),
@@ -175,10 +139,6 @@ export const advancedSettingsSchema = z.object({
 
 export type AdvancedSettingsFormData = z.infer<typeof advancedSettingsSchema>;
 
-// ============================================================================
-// API KEY SCHEMA
-// ============================================================================
-
 export const createApiKeySchema = z.object({
   name: z
     .string()
@@ -194,20 +154,11 @@ export const createApiKeySchema = z.object({
 
 export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>;
 
-// ============================================================================
-// COMBINED SYSTEM SETTINGS SCHEMA
-// ============================================================================
-
 export const systemSettingsSchema = appearanceSettingsSchema.merge(advancedSettingsSchema);
 
 export type SystemSettingsFormData = z.infer<typeof systemSettingsSchema>;
 
-// ============================================================================
-// FULL USER SETTINGS SCHEMA (for complete settings update)
-// ============================================================================
-
 export const fullUserSettingsSchema = z.object({
-  // Notification preferences
   email_notifications: z.boolean().optional(),
   push_notifications: z.boolean().optional(),
   workflow_alerts: z.boolean().optional(),
@@ -217,17 +168,14 @@ export const fullUserSettingsSchema = z.object({
   weekly_reports: z.boolean().optional(),
   instant_alerts: z.boolean().optional(),
 
-  // Security
   two_factor_enabled: z.boolean().optional(),
   session_timeout: z.number().int().min(15).max(1440).optional(),
 
-  // Appearance
   theme: z.enum(['dark', 'light', 'auto']).optional(),
   auto_save: z.boolean().optional(),
   debug_mode: z.boolean().optional(),
   analytics_enabled: z.boolean().optional(),
 
-  // Advanced
   cache_size: z.enum(['256MB', '512MB', '1GB', '2GB', '4GB']).optional(),
   backup_frequency: z.enum(['hourly', 'daily', 'weekly', 'monthly']).optional(),
   retention_period: z.number().int().min(1).max(365).optional(),
@@ -236,14 +184,6 @@ export const fullUserSettingsSchema = z.object({
 
 export type FullUserSettingsFormData = z.infer<typeof fullUserSettingsSchema>;
 
-// ============================================================================
-// VALIDATION UTILITIES
-// ============================================================================
-
-/**
- * Validate form data against a schema with detailed error messages
- * Compatible with Zod v4
- */
 export function validateFormData<T>(
   schema: z.ZodSchema<T>,
   data: unknown,
@@ -255,7 +195,6 @@ export function validateFormData<T>(
   }
 
   const errors: Record<string, string> = {};
-  // Zod v4 uses issues property
   const issues =
     (result.error as { issues?: Array<{ path: (string | number)[]; message: string }> }).issues ||
     [];
@@ -267,7 +206,6 @@ export function validateFormData<T>(
     }
   }
 
-  // If no path-based errors found, add a root error
   if (Object.keys(errors).length === 0 && issues.length > 0) {
     errors['_root'] = issues[0]!.message;
   }
@@ -275,18 +213,11 @@ export function validateFormData<T>(
   return { success: false, errors };
 }
 
-/**
- * Get first error message from Zod error
- * Compatible with Zod v4
- */
 export function getFirstError(error: z.ZodError): string {
   const issues = (error as { issues?: Array<{ message: string }> }).issues || [];
   return issues[0]?.message || 'Validation failed';
 }
 
-/**
- * Transform Zod errors to react-hook-form format
- */
 export function zodErrorsToFormErrors(error: z.ZodError): Record<string, { message: string }> {
   const formErrors: Record<string, { message: string }> = {};
 

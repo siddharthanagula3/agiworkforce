@@ -19,20 +19,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Chrome API shim — hoisted so module-level code in policy.ts / client finds it
-// ---------------------------------------------------------------------------
 const chromeMock = vi.hoisted(() => {
-  // Minimal debugger shim
   const debuggerCallbacks: Record<string, (() => void) | undefined> = {};
 
-  // Default sendCommand implementation — reinstalled in beforeEach after vi.clearAllMocks/resetAllMocks.
-  // Returns:
-  //   - Page.captureScreenshot → base64 PNG
-  //   - Runtime.evaluate (pollDomHash/waitForStable): stable hash starting with 'complete|'
-  //   - Runtime.evaluate (getPageContent/indexMap): JSON { summary, indexMap }
-  //   - DOM.requestNode / DOM.getBoxModel → for click coordinate resolution
-  //   - everything else → {}
   const defaultSendCommandImpl = (
     _target: unknown,
     method: string,
@@ -46,12 +35,10 @@ const chromeMock = vi.hoisted(() => {
     if (method === 'Runtime.evaluate') {
       const p = params as { expression?: string } | undefined;
       const expr = p?.expression ?? '';
-      // waitForStable hash poll (document.readyState, but not indexMap)
       if (expr.includes('document.readyState') && !expr.includes('indexMap')) {
         callback({ result: { type: 'string', value: 'complete|1|buttonSubmit' } });
         return;
       }
-      // getPageContent (contains indexMap object)
       if (expr.includes('indexMap')) {
         const summary =
           'URL: https://example.com\nTITLE: Example\n\nINTERACTABLE ELEMENTS (1):\n' +
@@ -67,12 +54,10 @@ const chromeMock = vi.hoisted(() => {
         });
         return;
       }
-      // getFieldValue
       if (expr.includes('.value') && expr.includes('querySelector')) {
         callback({ result: { type: 'string', value: '' } });
         return;
       }
-      // objectId lookup for click
       callback({ result: { type: 'object', objectId: 'obj-1' } });
       return;
     }
@@ -102,13 +87,10 @@ const chromeMock = vi.hoisted(() => {
     },
   };
 
-  // Store default impl reference so beforeEach can reinstall after resets
   (debuggerMock as Record<string, unknown>)._defaultSendCommandImpl = defaultSendCommandImpl;
 
   const localStore: Record<string, unknown> = {
-    // Pre-seed a dev bearer token so getAuthToken() succeeds
     agi_dev_bearer_token: 'test-bearer-token-for-vitest',
-    // Site allowlist so navigate/click URL checks pass
     agi_site_allowlist: ['https://example.com'],
   };
 
@@ -145,17 +127,9 @@ const chromeMock = vi.hoisted(() => {
   return mock;
 });
 
-// ---------------------------------------------------------------------------
-// Fetch mock — set up per-test
-// ---------------------------------------------------------------------------
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
-// ---------------------------------------------------------------------------
-// SSE helpers
-// ---------------------------------------------------------------------------
-
-/** Build a ReadableStream that emits the given SSE lines then closes. */
 function makeSseStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
@@ -168,10 +142,6 @@ function makeSseStream(lines: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-/**
- * First gateway call: returns a tool_call for `read_dom`.
- * Uses a unique tool call id so the loop can match it.
- */
 function makeToolCallSseStream(): ReadableStream<Uint8Array> {
   const chunk = JSON.stringify({
     choices: [
@@ -194,9 +164,6 @@ function makeToolCallSseStream(): ReadableStream<Uint8Array> {
   return makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']);
 }
 
-/**
- * Second gateway call: returns a final text message (no tool calls).
- */
 function makeFinalSseStream(): ReadableStream<Uint8Array> {
   const chunk = JSON.stringify({
     choices: [
@@ -211,44 +178,30 @@ function makeFinalSseStream(): ReadableStream<Uint8Array> {
   return makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']);
 }
 
-// ---------------------------------------------------------------------------
-// Imports — after mocks are installed
-// ---------------------------------------------------------------------------
 import { runAgentLoop } from '../src/features/computer-use/agentLoop';
 import { COMPUTER_USE_MODEL } from '../src/features/computer-use/cloudAgentClient';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 describe('computer-use agent loop — one round-trip', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset lastError
     chromeMock.runtime.lastError = null;
 
-    // Reinstall sendCommand after vi.clearAllMocks() wiped it.
-    // This must come AFTER vi.clearAllMocks() so the call count is clean.
     const defaultImpl = (chromeMock.debugger as Record<string, unknown>)
       ._defaultSendCommandImpl as Parameters<
       typeof chromeMock.debugger.sendCommand.mockImplementation
     >[0];
     chromeMock.debugger.sendCommand.mockImplementation(defaultImpl);
 
-    // Reinstall attach/detach callbacks
     chromeMock.debugger.attach.mockImplementation((_t: unknown, _v: unknown, cb: () => void) =>
       cb(),
     );
     chromeMock.debugger.detach.mockImplementation((_t: unknown, cb: () => void) => cb());
 
-    // Reinstall tabs.get
     chromeMock.tabs.get.mockImplementation((tabId: number) =>
       Promise.resolve({ id: tabId, url: 'https://example.com/page' }),
     );
 
-    // Wire up the two-call fetch sequence:
-    //   Call 1 (initial turn + first tool_call): returns tool_call SSE
-    //   Call 2 (after tool result): returns final text SSE
     fetchMock
       .mockResolvedValueOnce({
         ok: true,
@@ -263,7 +216,7 @@ describe('computer-use agent loop — one round-trip', () => {
   });
 
   afterEach(() => {
-    vi.clearAllMocks(); // Use clearAllMocks (not resetAllMocks) to preserve mock implementations
+    vi.clearAllMocks();
   });
 
   it('calls the gateway, dispatches the CDP action, feeds result back, and returns final message', async () => {
@@ -271,10 +224,8 @@ describe('computer-use agent loop — one round-trip', () => {
       maxSteps: 10,
     });
 
-    // ── Gateway was called twice ────────────────────────────────────────────
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    // ── First call: correct endpoint + model + tools ────────────────────────
     const firstCallArgs = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(firstCallArgs[0]).toBe('https://api.agiworkforce.com/api/llm/v1/chat/completions');
     const firstBody = JSON.parse(firstCallArgs[1].body as string) as {
@@ -288,7 +239,6 @@ describe('computer-use agent loop — one round-trip', () => {
     expect(firstBody.tools.map((t) => t.function.name)).toContain('screenshot');
     expect(firstBody.tools.map((t) => t.function.name)).toContain('click');
 
-    // ── CDP was invoked for the screenshot (initial context capture) ─────────
     expect(chromeMock.debugger.attach).toHaveBeenCalled();
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 42 },
@@ -297,7 +247,6 @@ describe('computer-use agent loop — one round-trip', () => {
       expect.any(Function),
     );
 
-    // ── CDP was invoked for read_dom (Runtime.evaluate) ───────────────────────
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 42 },
       'Runtime.evaluate',
@@ -305,7 +254,6 @@ describe('computer-use agent loop — one round-trip', () => {
       expect.any(Function),
     );
 
-    // ── Second gateway call includes the tool result ──────────────────────────
     const secondCallArgs = fetchMock.mock.calls[1] as [string, RequestInit];
     const secondBody = JSON.parse(secondCallArgs[1].body as string) as {
       messages: Array<{ role: string; content: unknown; tool_call_id?: string }>;
@@ -313,60 +261,42 @@ describe('computer-use agent loop — one round-trip', () => {
     const toolResultMsg = secondBody.messages.find((m) => m.role === 'tool');
     expect(toolResultMsg).toBeDefined();
     expect(toolResultMsg?.tool_call_id).toBe('call_abc123');
-    // The tool result contains the DOM summary text
     expect(typeof toolResultMsg?.content).toBe('string');
     expect(toolResultMsg?.content).toContain('Hello World');
 
-    // ── Bearer token is sent ──────────────────────────────────────────────────
     const firstHeaders = firstCallArgs[1].headers as Record<string, string>;
     expect(firstHeaders['Authorization']).toBe('Bearer test-bearer-token-for-vitest');
 
-    // ── Gateway billing contract: Idempotency-Key is required on every send ──
-    // services/api-gateway rejects the request with 400 IDEMPOTENCY_KEY_REQUIRED
-    // before any provider work otherwise; the key must match the gateway's
-    // accepted charset/length.
     expect(firstHeaders['Idempotency-Key']).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
     const secondHeaders = (fetchMock.mock.calls[1] as [string, RequestInit])[1].headers as Record<
       string,
       string
     >;
     expect(secondHeaders['Idempotency-Key']).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
-    // Each send is its own billed request (no retry semantics in callCloud),
-    // so the durable-reservation identity must not be reused across sends.
     expect(secondHeaders['Idempotency-Key']).not.toBe(firstHeaders['Idempotency-Key']);
 
-    // ── Explicit selection never carries a managed-failover plan ─────────────
-    // COMPUTER_USE_MODEL is a pinned catalog routing slot, not a
-    // resolveAutoRoute() auto plan: the x-agi-fallback-models header must be
-    // absent so the gateway treats this as an explicit selection it never
-    // rotates cross-provider.
     for (const headers of [firstHeaders, secondHeaders]) {
       expect(Object.keys(headers).map((name) => name.toLowerCase())).not.toContain(
         'x-agi-fallback-models',
       );
     }
 
-    // ── Final result ──────────────────────────────────────────────────────────
     expect(result.finalMessage).toContain('Task complete');
-    expect(result.stepsUsed).toBe(2); // step 1 = tool_call, step 2 = final
+    expect(result.stepsUsed).toBe(2);
     expect(result.cappedAtMaxSteps).toBe(false);
     expect(result.history.length).toBeGreaterThan(2);
   });
 
   it('respects onBeforeAction — skips the tool if the callback returns false', async () => {
-    // Only one gateway call here: first returns tool_call, second returns final
-    // but the action is skipped so CDP is not called for read_dom
-    const onBeforeAction = vi.fn().mockResolvedValue(false); // always deny
+    const onBeforeAction = vi.fn().mockResolvedValue(false);
 
     const result = await runAgentLoop('Read the page', 42, {
       maxSteps: 10,
       onBeforeAction,
     });
 
-    // onBeforeAction was called once (for the read_dom tool call)
     expect(onBeforeAction).toHaveBeenCalledWith('read_dom', {});
 
-    // The tool result message says "skipped"
     const secondCallArgs = fetchMock.mock.calls[1] as [string, RequestInit];
     const secondBody = JSON.parse(secondCallArgs[1].body as string) as {
       messages: Array<{ role: string; content: unknown }>;
@@ -374,7 +304,6 @@ describe('computer-use agent loop — one round-trip', () => {
     const toolResultMsg = secondBody.messages.find((m) => m.role === 'tool');
     expect(toolResultMsg?.content as string).toContain('skipped');
 
-    // Loop still completes with the final message
     expect(result.finalMessage).toContain('Task complete');
   });
 
@@ -387,21 +316,18 @@ describe('computer-use agent loop — one round-trip', () => {
       },
     });
 
-    // Expect at least: tool_call, tool_result, final
     expect(steps).toContain('tool_call');
     expect(steps).toContain('tool_result');
     expect(steps).toContain('final');
   });
 
   it('throws if no auth token is available', async () => {
-    // Override chrome.storage.local.get to return nothing
     chromeMock.storage.local.get = vi.fn().mockResolvedValue({});
 
     await expect(runAgentLoop('Do something', 42)).rejects.toThrow(
       /no authenticated AGI Cloud session is available/,
     );
 
-    // fetch should not have been called
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -469,9 +395,6 @@ describe('COMPUTER_USE_MODEL — sourced from models.json catalog', () => {
   });
 
   it("resolves to the canonical SLOT_REGISTRY 'computer_use' slot model", () => {
-    // managed_cloud.taskRouting was cleared in favour of SLOT_REGISTRY; the
-    // extension now reads getRoutingSlotModel('computer_use') directly, so no
-    // model ID literal exists in either the client or this assertion.
     expect(COMPUTER_USE_MODEL).toBe(getRoutingSlotModel('computer_use'));
     expect(COMPUTER_USE_MODEL.length).toBeGreaterThan(0);
   });

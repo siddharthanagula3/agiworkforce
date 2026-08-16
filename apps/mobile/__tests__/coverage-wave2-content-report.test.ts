@@ -1,24 +1,4 @@
-/**
- * coverage-wave2-content-report.test.ts
- *
- * Unit tests for apps/mobile/services/contentReport.ts.
- *
- * Exercises:
- *  - saveContentReport: MMKV persistence, contentExcerpt truncation at 500 chars
- *  - MAX_STORED_REPORTS (100) cap: oldest entry is evicted when limit exceeded
- *  - getContentReports: reads back the persisted array
- *  - clearContentReports: deletes the MMKV key
- *  - sendEmail=true: Linking.openURL called with a mailto: URL for support address
- *  - sendEmail=false: Linking.openURL NOT called
- *  - the returned delivery describes what actually happened, and the stored
- *    record never claims a mail hand-off that did not occur
- *
- * Google Play GenAI policy requires this in-app flagging mechanism.
- */
 
-// ---------------------------------------------------------------------------
-// MMKV mock — same Map-backed pattern used across the test suite
-// ---------------------------------------------------------------------------
 
 const mockStorage = new Map<string, string>();
 
@@ -34,20 +14,12 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
-// Server intake client. Default: reject (offline / Local Mode) so the on-device
-// fallback path is exercised; individual tests override for the online path.
 const mockApiPost = jest.fn();
 jest.mock('@/services/api', () => ({
   api: {
     post: (...args: unknown[]) => mockApiPost(...args),
   },
 }));
-
-// ---------------------------------------------------------------------------
-// Imports — jest-expo preset already stubs TurboModules so Linking works.
-// We spy on Linking methods after import rather than re-mocking all of
-// react-native (which triggers the TurboModule invariant).
-// ---------------------------------------------------------------------------
 
 import { Linking } from 'react-native';
 import {
@@ -58,10 +30,6 @@ import {
   type ContentReport,
   type ReportCategory,
 } from '../services/contentReport';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const MAX_EXCERPT_LEN = 500;
 const MAX_STORED_REPORTS = 100;
@@ -93,7 +61,6 @@ let openUrlSpy: jest.SpyInstance;
 
 beforeEach(() => {
   mockStorage.clear();
-  // Default to offline so existing on-device-fallback assertions hold.
   mockApiPost.mockReset();
   mockApiPost.mockRejectedValue(new Error('offline'));
   canOpenSpy = jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
@@ -105,10 +72,6 @@ afterEach(() => {
   openUrlSpy.mockRestore();
 });
 
-// ---------------------------------------------------------------------------
-// saveContentReport — basic persistence
-// ---------------------------------------------------------------------------
-
 describe('saveContentReport — persistence', () => {
   it('persists a report to MMKV and returns the saved record', async () => {
     const { report, delivery } = await saveContentReport(makeParams());
@@ -119,7 +82,6 @@ describe('saveContentReport — persistence', () => {
     expect(report.emailHandoffOpened).toBe(false);
     expect(report.id).toMatch(/^rpt_/);
     expect(report.createdAt).toBeTruthy();
-    // Nothing left the device, and the caller is told exactly that.
     expect(delivery).toEqual({ kind: 'stored-on-device' });
   });
 
@@ -141,10 +103,6 @@ describe('saveContentReport — persistence', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// saveContentReport — contentExcerpt truncation
-// ---------------------------------------------------------------------------
-
 describe('saveContentReport — contentExcerpt truncation', () => {
   it('truncates contentExcerpt to 500 characters', async () => {
     const longExcerpt = 'X'.repeat(MAX_EXCERPT_LEN + 100);
@@ -161,38 +119,25 @@ describe('saveContentReport — contentExcerpt truncation', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// saveContentReport — MAX_STORED_REPORTS cap
-// ---------------------------------------------------------------------------
-
 describe('saveContentReport — MAX_STORED_REPORTS cap (100)', () => {
   it('evicts the oldest report when the 101st is saved', async () => {
-    // Save 100 reports with distinguishable messageIds "0" through "99"
     for (let i = 0; i < MAX_STORED_REPORTS; i++) {
       await saveContentReport(makeParams({ messageId: String(i) }));
     }
 
-    // Confirm 100 stored
     expect(getContentReports().length).toBe(MAX_STORED_REPORTS);
 
-    // Save the 101st — should evict the oldest
     await saveContentReport(makeParams({ messageId: '100' }));
 
     const reports = getContentReports();
     expect(reports.length).toBe(MAX_STORED_REPORTS);
 
-    // Newest is at index 0
     expect(reports[0]?.messageId).toBe('100');
 
-    // Oldest ("0") must be gone — it was at position 99 before the 101st arrived
     const ids = reports.map((r: ContentReport) => r.messageId);
     expect(ids).not.toContain('0');
   });
 });
-
-// ---------------------------------------------------------------------------
-// getContentReports
-// ---------------------------------------------------------------------------
 
 describe('getContentReports', () => {
   it('returns empty array when no reports have been saved', () => {
@@ -211,10 +156,6 @@ describe('getContentReports', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// clearContentReports
-// ---------------------------------------------------------------------------
-
 describe('clearContentReports', () => {
   it('removes all stored reports from MMKV', async () => {
     await saveContentReport(makeParams());
@@ -230,10 +171,6 @@ describe('clearContentReports', () => {
     expect(() => clearContentReports()).not.toThrow();
   });
 });
-
-// ---------------------------------------------------------------------------
-// sendEmail=true — Linking.openURL called with mailto: URL
-// ---------------------------------------------------------------------------
 
 describe('saveContentReport — sendEmail=true', () => {
   it('calls Linking.openURL with a mailto: URL targeting support address', async () => {
@@ -260,8 +197,6 @@ describe('saveContentReport — sendEmail=true', () => {
 
     const { report, delivery } = await saveContentReport(makeParams({ sendEmail: true }));
 
-    // The report must survive a failed hand-off — but the record must not say
-    // the mail client opened when it did not.
     expect(report.emailHandoffOpened).toBe(false);
     expect(delivery).toEqual({ kind: 'email-unavailable' });
     expect(getContentReports().length).toBe(1);
@@ -278,10 +213,6 @@ describe('saveContentReport — sendEmail=true', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// sendEmail=false — Linking.openURL NOT called
-// ---------------------------------------------------------------------------
-
 describe('saveContentReport — sendEmail=false', () => {
   it('does not call Linking.openURL', async () => {
     await saveContentReport(makeParams({ sendEmail: false }));
@@ -293,15 +224,6 @@ describe('saveContentReport — sendEmail=false', () => {
     expect(report.emailHandoffOpened).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// openSupportEmail — the post-save hand-off offered from the confirmation
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Server intake — POST /api/mobile/content-report with on-device fallback
-// (MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01)
-// ---------------------------------------------------------------------------
 
 describe('saveContentReport — server intake', () => {
   it('POSTs the report to the intake route with the mobile-generated report id', async () => {
@@ -321,7 +243,6 @@ describe('saveContentReport — server intake', () => {
     });
     expect(delivery).toEqual({ kind: 'submitted-to-server' });
     expect(report.serverAcknowledged).toBe(true);
-    // Persisted copy records the server acknowledgement too.
     expect(getContentReports()[0]?.serverAcknowledged).toBe(true);
   });
 
@@ -330,7 +251,6 @@ describe('saveContentReport — server intake', () => {
 
     const { report, delivery } = await saveContentReport(makeParams({ sendEmail: false }));
 
-    // The report is still attempted against the server, then kept on device.
     expect(mockApiPost).toHaveBeenCalledTimes(1);
     expect(delivery).toEqual({ kind: 'stored-on-device' });
     expect(report.serverAcknowledged).toBe(false);

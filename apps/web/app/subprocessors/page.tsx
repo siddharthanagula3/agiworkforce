@@ -11,38 +11,6 @@ export const metadata = buildMetadata({
   path: '/subprocessors',
 });
 
-/*
- * RE-ADDED 2026-08-14 — "Resend". The 2026-08-05 removal was WRONG, and the way
- * it was wrong is worth keeping on the record.
- *
- * That removal reasoned from the dependency manifest: no resend/sendgrid/
- * postmark/nodemailer/SES package, therefore no email provider, therefore
- * delist. The premise was true and the conclusion was false.
- * `lib/support/handoff/resend-client.ts` calls `https://api.resend.com/emails`
- * over plain `fetch` — its own header explains that it deliberately avoided an
- * npm dependency because "one HTTP POST does not justify an SDK" and the repo's
- * hooks block lockfile edits. A grep for the package could never find it.
- *
- * The cost of that mistake was not one wrong row. Three pages went on to justify
- * NOT notifying users of anything — subprocessor changes, breach, policy
- * updates — on the strength of "there is no transactional email system in this
- * product". Personal data was leaving the product to an undisclosed recipient
- * the whole time, including full support transcripts.
- *
- * LESSON, for whoever audits this list next: verify a vendor by its EGRESS, not
- * by package.json. The enumeration that belongs in a review is
- *   grep -rn "https://api\.\|fetch('https://\|fetch(\`https://" apps/web/lib apps/web/app/api
- * and then read each hit.
- *
- * WHAT WAS CHECKED THIS TIME, and one finding that did NOT survive:
- * an audit reported that both Apple and Google receive purchase identifiers.
- * Google does — `lib/server/mobile-iap-store-verification.ts:254` POSTs the
- * purchase token to androidpublisher.googleapis.com. Apple does NOT: the same
- * module verifies Apple's signed notifications LOCALLY with
- * `SignedDataVerifier` from `@apple/app-store-server-library` against bundled
- * root certificates. Apple sends to us; nothing goes back. So Apple is not on
- * this list, and that asymmetry is deliberate rather than an omission.
- */
 const SUBS: { name: string; purpose: string; region: string }[] = [
   {
     name: 'Neon',
@@ -72,11 +40,6 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
       'Two roles. (1) Cloudflare R2 object storage: files you upload and files the model generates are stored here. AGI serves catalogued files through a signed-in, active-workspace-scoped app route and does not return raw storage URLs in normal responses. Generated videos use a private bucket; images and other non-video files remain in a public bucket and can be opened without AGI sign-in if their underlying URL is obtained. (2) Edge delivery and DDoS protection for the marketing site.',
     region: 'Global edge',
   },
-  //
-  // The five entries below were absent while the services were live in
-  // production. A subprocessor list that omits a processor of personal data is a
-  // compliance defect, not a documentation gap — each of these is wired today:
-  //
   {
     name: 'Sentry',
     purpose:
@@ -102,12 +65,6 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
     region: 'United States and other regions, per provider',
   },
   {
-    // CORRECTED 2026-08-14. The previous entry said MiniMax/Qwen/Zhipu only.
-    // lib/services/aggregator-routing.ts has TWO routes: those providers are
-    // permanently routed (isPermanentOpenRouterRoute), and
-    // `isOpenRouterFailoverRoute` additionally returns true for EVERY
-    // catalogued chat model that is not already routed. So any Managed Cloud
-    // chat model can reach OpenRouter on a failover, not just three.
     name: 'OpenRouter',
     purpose:
       'Inference routing on Managed Cloud, in two situations. (1) Always, for the MiniMax, Qwen and Zhipu models — prompt content for those passes through OpenRouter on its way to the model provider. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise.',
@@ -125,21 +82,11 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
     region: 'Global edge',
   },
   {
-    // Easy to miss because no AGI code runs at Expo, but two mobile paths
-    // terminate there. lib/services/push-notification-service.ts POSTs the
-    // notification title and body — which carry the names users give their
-    // scheduled tasks — to exp.host, and apps/mobile/app.config.js points
-    // `updates.url` at u.expo.dev, which every cold start requests.
     name: 'Expo',
     purpose:
       'Two roles for the iOS and Android apps. (1) Push delivery: notification titles and bodies — including the names you give scheduled tasks — are relayed through Expo on their way to Apple and Google. (2) Over-the-air updates: every app launch requests an update manifest from Expo, which sees the device IP and build fingerprint.',
     region: 'United States',
   },
-  //
-  // ── ADDED 2026-08-14 ────────────────────────────────────────────────────
-  // Six recipients that were live in production and absent from this page.
-  // Each one is cited to the call site so the row can be checked, not trusted.
-  //
   {
     name: 'Resend',
     purpose:

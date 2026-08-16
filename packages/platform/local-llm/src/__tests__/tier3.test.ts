@@ -129,17 +129,14 @@ describe('tier3 llama.rn multimodal (vision) path', () => {
       mmprojPath: '/models/vision.mmproj.gguf',
     });
 
-    // ctx_shift disabled for multimodal so media token positions stay valid.
     expect(initLlama).toHaveBeenCalledWith(
       expect.objectContaining({ model: '/models/vision.gguf', ctx_shift: false }),
     );
-    // mmproj projector attached via initMultimodal.
     expect(initMultimodal).toHaveBeenCalledWith(
       expect.objectContaining({ path: '/models/vision.mmproj.gguf' }),
     );
     expect(tier3IsMultimodalReady()).toBe(true);
 
-    // The current user turn carries a text+image_url content array.
     const sentMessages = completion.mock.calls[0]![0].messages;
     expect(sentMessages[sentMessages.length - 1]).toEqual({
       role: 'user',
@@ -168,7 +165,6 @@ describe('tier3 llama.rn multimodal (vision) path', () => {
     });
 
     expect(tier3IsMultimodalReady()).toBe(false);
-    // Vision unavailable -> user content is a plain string, never a broken image array.
     const sentMessages = completion.mock.calls[0]![0].messages;
     expect(sentMessages[sentMessages.length - 1]).toEqual({
       role: 'user',

@@ -43,10 +43,6 @@ const ProcessedRequestSchema = z
       .object({
         model: z.string().min(1),
         messages: z.array(z.unknown()),
-        // Durable execution is no longer AGI Work's alone: an ordinary chat
-        // that reaches for a tool starts a paid, resumable server-side run too,
-        // and that run must survive the client that started it. `work_mode` is
-        // absent entirely on plain OpenAI-compatible callers.
         work_mode: z.enum(['chat', 'agiwork']).optional(),
       })
       .passthrough(),
@@ -177,15 +173,10 @@ const CloudAgentWorkflowInputSchema = z
     }
   });
 
-/** Validate the only state shape that may cross into Vercel Workflow storage. */
 export function parseCloudAgentWorkflowInput(value: unknown): CloudAgentWorkflowInput {
   return CloudAgentWorkflowInputSchema.parse(value) as unknown as CloudAgentWorkflowInput;
 }
 
-/**
- * Build a JSON-stable workflow payload. Database adapters and free-tier state
- * are deliberately excluded because workflows may be persisted and replayed.
- */
 export function buildCloudAgentWorkflowInput(input: {
   runId: string;
   userId: string;
@@ -195,9 +186,6 @@ export function buildCloudAgentWorkflowInput(input: {
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
 }): CloudAgentWorkflowInput {
-  // The managed-usage reservation is the real admission control here, and it is
-  // kept deliberately: a free-trial turn has no reservation to replay billing
-  // against, so by construction it can never enter durable execution.
   if (!input.processed.managedUsage) {
     throw new Error('A managed usage reservation is required for durable AGI Work');
   }
@@ -216,6 +204,5 @@ export function buildCloudAgentWorkflowInput(input: {
     predecessorApproval: input.predecessorApproval,
   };
 
-  // Normalize away undefined object keys now so replayed input is byte-stable.
   return parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(candidate)));
 }

@@ -1,7 +1,3 @@
-/**
- * Memory facts plus a 768-dimensional sqlite-vec index.
- * Vector operations degrade gracefully when sqlite-vec is not loaded.
- */
 
 import { getDb } from './db';
 import type { MemoryFact } from './types';
@@ -117,8 +113,6 @@ export async function togglePinMemoryFact(id: string, pinned: boolean): Promise<
 
 export async function searchMemoryByText(query: string, k = 10): Promise<MemoryFact[]> {
   const db = await getDb();
-  // Escape LIKE metacharacters so user-typed `%`, `_`, or `\` match literally
-  // instead of acting as wildcards (correctness/relevance, not an injection risk).
   const escaped = query.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`);
   const q = `%${escaped}%`;
   const rows = await db.getAllAsync<Record<string, unknown>>(

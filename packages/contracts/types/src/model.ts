@@ -14,10 +14,6 @@
 
 import type { Provider } from './model-catalog';
 
-// ============================================================================
-// Model Provider
-// ============================================================================
-
 /**
  * An LLM provider with its configuration and status.
  *
@@ -36,34 +32,22 @@ import type { Provider } from './model-catalog';
  * ```
  */
 export interface ModelProvider {
-  /** Provider identifier (matches `Provider` from model-catalog). */
   id: Provider | string;
 
-  /** Human-readable provider name. */
   name: string;
 
-  /** Whether this provider is enabled in settings. */
   enabled: boolean;
 
-  /** Whether an API key has been configured for this provider. */
   apiKeyConfigured: boolean;
 
-  /** Base URL for the provider API (overridable for proxies/custom endpoints). */
   baseUrl?: string;
 
-  /** List of available model IDs for this provider. */
   models?: string[];
 
-  /** Provider-level status. */
   status?: 'connected' | 'error' | 'unchecked';
 
-  /** Error message if the provider is in error state. */
   error?: string;
 }
-
-// ============================================================================
-// Model Config
-// ============================================================================
 
 /**
  * Configuration for a specific model selection.
@@ -83,46 +67,30 @@ export interface ModelProvider {
  * ```
  */
 export interface ModelConfig {
-  /** Model identifier resolved from the canonical model catalog. */
   modelId: string;
 
-  /** Provider identifier. */
   provider: Provider | string;
 
-  /** Sampling temperature (0.0 to 2.0). */
   temperature?: number;
 
-  /** Maximum tokens to generate. */
   maxTokens?: number;
 
-  /** Top-p (nucleus) sampling parameter. */
   topP?: number;
 
-  /** Top-k sampling parameter. */
   topK?: number;
 
-  /** Frequency penalty (-2.0 to 2.0). */
   frequencyPenalty?: number;
 
-  /** Presence penalty (-2.0 to 2.0). */
   presencePenalty?: number;
 
-  /** Stop sequences that halt generation. */
   stopSequences?: string[];
 
-  /** Whether to enable extended thinking / chain-of-thought. */
   enableThinking?: boolean;
 
-  /** Whether to enable streaming responses. */
   streaming?: boolean;
 
-  /** System prompt override. */
   systemPrompt?: string;
 }
-
-// ============================================================================
-// Model Pricing
-// ============================================================================
 
 /**
  * Pricing information for a model.
@@ -142,27 +110,19 @@ export interface ModelConfig {
  * ```
  */
 export interface ModelPricing {
-  /** Model identifier. */
   modelId: string;
 
-  /** Cost per million input tokens in USD. */
   inputCostPerMillion: number;
 
-  /** Cost per million output tokens in USD. */
   outputCostPerMillion: number;
 
-  /** Cost per million cached input tokens in USD (if supported). */
   cachedInputCostPerMillion?: number;
 
-  /** Cost per million cache write/create tokens in USD (if reported separately). */
   cacheWriteCostPerMillion?: number;
 
-  /** Currency code (default: `"USD"`). */
   currency?: string;
 
-  /** Whether this model has a free tier. */
   hasFreeTier?: boolean;
 
-  /** Free tier token limit per month (if applicable). */
   freeMonthlyTokens?: number;
 }

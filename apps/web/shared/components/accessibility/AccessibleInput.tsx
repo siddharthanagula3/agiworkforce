@@ -36,18 +36,15 @@ const AccessibleInput = forwardRef<HTMLInputElement, AccessibleInputProps>(
     const errorId = `${inputId}-error`;
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      // Track interaction
       trackInteraction('input', 'text', {
         fieldName: label,
         value: event.target.value,
       });
 
-      // Announce changes to screen readers if requested
       if (announceChanges && event.target.value) {
         announce(`${label} updated to ${event.target.value}`);
       }
 
-      // Call original onChange handler
       onChange?.(event);
     };
 
@@ -63,7 +60,6 @@ const AccessibleInput = forwardRef<HTMLInputElement, AccessibleInputProps>(
       });
     };
 
-    // Build aria-describedby attribute
     const describedBy = [description && descriptionId, error && errorId, ariaDescribedBy]
       .filter(Boolean)
       .join(' ');

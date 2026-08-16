@@ -62,12 +62,9 @@ function executeWebviewScript(): void {
   );
   expect(inlineScript?.textContent).toBeTruthy();
 
-  // Parser/runtime coverage for the real nonce-authorized webview script.
-  // llm-guardrail-allow: executes repository-owned webview JavaScript in jsdom
   new Function(inlineScript?.textContent ?? '')();
 }
 
-/** Deliver a `usageMeter` message the same way the extension host does. */
 function postUsageMeter(source: string): void {
   window.dispatchEvent(
     new MessageEvent('message', {
@@ -139,7 +136,6 @@ describe('header trust-boundary pill', () => {
 
   it('does not ship a hardcoded "Local host" claim in the markup', () => {
     const html = renderWebview();
-    // The regression itself: a static label asserting a local runtime.
     expect(html).not.toContain('Local host');
     expect(html).not.toContain('title="Workspace-local runtime"');
   });
@@ -180,8 +176,6 @@ describe('header trust-boundary pill', () => {
     postSessionBoundary('local');
     expect(pill().label?.textContent).toBe('Local');
 
-    // The exact silent-reroute the old hardcoded pill could not represent. A
-    // usage/account refresh is not authority; the next CLI boundary is.
     postSessionBoundary('managed');
     expect(pill().label?.textContent).toBe('Managed Cloud');
     expect(pill().root?.dataset.boundary).toBe('cloud');

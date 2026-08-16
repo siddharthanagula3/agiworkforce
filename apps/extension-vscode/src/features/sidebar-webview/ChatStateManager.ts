@@ -1,10 +1,3 @@
-/**
- * ChatStateManager.ts — Message-protocol router and streaming state for the sidebar/chat-editor.
- *
- * Extracted from sidebarProvider.ts to isolate conversation persistence,
- * @file injection, usage-meter push, and provider-switch paywall guard
- * from the webview lifecycle (resolveWebviewView).
- */
 
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
@@ -26,7 +19,6 @@ import {
   type UsageMeter,
   type UserInput,
 } from '@agiworkforce/types';
-// AUDIT-FIX: vscode-reorg
 import { Config, type ComposerFollowUpBehavior } from '../../platform/config';
 import {
   LocalRuntimeProtocolError,
@@ -70,17 +62,10 @@ import {
 
 type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
 
-/**
- * Follow-ups retain prompt text and attachment data in extension-host memory
- * until the active turn completes. Keep that volatile ownership deliberately
- * small even if a buggy or compromised webview floods `sendMessage`.
- */
 const MAX_QUEUED_SENDS = 20;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const PRE_START_EVENT_OVERFLOW_MESSAGE =
   'The local runtime emitted too many events before confirming the turn. AGI interrupted the turn to avoid losing its completion state.';
-
-// ─── Message types (shared protocol) ─────────────────────────────────────────
 
 export type WebviewToExtMessage =
   | {
@@ -304,19 +289,12 @@ function hasVisibleReferenceToken(text: string, reference: WorkspaceFileReferenc
 
 export interface UsageMeterWebviewPayload {
   source: UsageMeter['source'];
-  /** 0–1 remaining fraction, null for non-managed plans */
   remaining: number | null;
-  /** Human-readable label e.g. "6.2k/50k tokens" */
   usageLabel: string | null;
-  /** "resets in Xd" string, null when not applicable */
   resetsIn: string | null;
-  /** Show upgrade CTA — only true when managed-plan + remaining < 0.20 */
   showUpgrade: boolean;
-  /** Whether the banner is collapsed (user dismissed it) */
   collapsed: boolean;
-  /** Signed-in AGI account plan, distinct from the active runtime boundary. */
   accountPlanTier?: string;
-  /** Whether that plan includes Managed Cloud developer surfaces. */
   managedDeveloperEligible?: boolean;
   subscriptionStatus?: string;
 }
@@ -337,7 +315,6 @@ interface PendingChatSend {
   attachments: PendingAttachment[];
 }
 
-/** Upgrade CTA threshold — mirrors the `showUpgrade` contract documented above. */
 const USAGE_METER_UPGRADE_THRESHOLD = 0.2;
 
 function formatResetsIn(resetsAt: string | null): string | null {
@@ -389,8 +366,6 @@ export function buildUsageMeterPayload(
   };
 }
 
-// ─── ChatStateManager ─────────────────────────────────────────────────────────
-
 export class ChatStateManager {
   private _thread?: {
     id: string;
@@ -409,40 +384,23 @@ export class ChatStateManager {
     isUiSettled: () => boolean;
   };
   private _cancelRequested = false;
-  /** Invalidates validation/start work when Clear or New Chat changes ownership. */
   private _conversationEpoch = 0;
-  /** Latest history-selection attempt; newer user intent invalidates older awaits. */
   private _resumeAttemptSeq = 0;
-  /** True from initial validation until every accepted next-turn message drains. */
   private _turnLifecycleActive = false;
-  /** Epoch owned by the current drainer; newer epochs wait for an explicit handoff. */
   private _turnLifecycleEpoch: number | undefined;
-  /** Controller-local, volatile FIFO. Prompt payloads never enter VS Code memento storage. */
   private readonly _queuedSends: PendingChatSend[] = [];
-  /** Request being prepared or executed; used so attachment removal keeps exact ownership. */
   private _inFlightSend?: PendingChatSend;
-  /** Steer RPCs awaiting input construction/acceptance, with exact request ownership. */
   private readonly _steeringSends = new Set<PendingChatSend>();
-  /** Retained so a session selected before the webview's `ready` can be replayed. */
   private _loadedConversation?: ConversationLoadedPayload;
-  /** Per-conversation mode override (falls back to workspace setting when undefined) */
   private _mode: AgentMode | undefined;
-  /** Per-conversation effort override (falls back to workspace setting when undefined) */
   private _effort: DeveloperReasoningEffort | undefined;
-  /** Whether the usage meter banner is collapsed — persisted via workspaceState */
   private _meterCollapsed = false;
-  /** Last model dispatched — used as the "previous" model for paywall guard comparisons */
   private _activeModel: string;
-  /** Invalidates account/plan refreshes when sign-in state changes mid-request. */
   private _accountPresentationSeq = 0;
-  /** Provider boundary the last pushed usage meter described (see pushUsageMeter). */
   private _lastMeterBoundary: string | undefined;
-  /** Data-URL/text attachments waiting for the next successfully-started turn. */
   private readonly _pendingAttachments: PendingAttachment[] = [];
-  /** Session-local sequence for pending-attachment ids (webview removal protocol). */
   private _attachmentSeq = 0;
   private _clientMessageSeq = 0;
-  /** Model ids admitted by the trusted workspace-scoped CLI discovery response. */
   private readonly _localModelProviders = new Map<string, LocalModelSummary['provider']>();
 
   constructor(
@@ -485,17 +443,11 @@ export class ChatStateManager {
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.type) {
       case 'ready': {
-        // Reconcile the durable host state after the webview is ready. VS Code
-        // can resolve a contributed view before its global memento snapshot has
-        // settled during window reload, which otherwise makes a completed
-        // first-run overlay flash and remain open again.
         if (this._context.globalState.get<boolean>(ONBOARDING_SEEN_KEY) === true) {
           this._post({ type: 'hideOnboarding' });
         }
         await this._discoverLocalModels(this._thread?.runtime);
         const model = this._thread?.model ?? this._normalizeModelSelection(Config.model());
-        // Local discovery has just run, so this is the first point at which the
-        // configured id can be classified against the trusted local model list.
         this._activeModel = model;
         this._post({ type: 'model', payload: { model } });
         this._postProviderBadge(model);
@@ -531,8 +483,6 @@ export class ChatStateManager {
       }
 
       case 'openWorkspace': {
-        // Official built-in command. With no URI, VS Code presents its native
-        // folder chooser and restarts the extension host on the chosen folder.
         await vscode.commands.executeCommand('vscode.openFolder');
         break;
       }
@@ -794,12 +744,9 @@ export class ChatStateManager {
         break;
       }
 
-      // ── v3: inline model popover ──────────────────────────────────────────────
       case 'openModelPopover': {
         const localModels = await this._discoverLocalModels();
         const currentModel = this._normalizeModelSelection(Config.model());
-        // VSCODE-PICKER-TIER-01: same tier gate as the QuickPick command, so the
-        // inline popover cannot present unreachable managed-cloud models.
         const tier = await resolveTier(this._context);
         const allItems = buildGroupedQuickPickItems(tier);
         const groups: Array<{
@@ -912,7 +859,6 @@ export class ChatStateManager {
         break;
       }
 
-      // ── v3: model selection from inline popover ───────────────────────────────
       case 'selectModel': {
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
         if (modelId === '__local_setup__') break;
@@ -943,13 +889,10 @@ export class ChatStateManager {
             supportsEffort: this.modelSupportsEffort(normalized),
           },
         });
-        // The header pill names the live trust boundary, so a model switch has
-        // to re-push it. Without this it only refreshed on a settings change.
         await this._pushUsageMeterOnBoundaryChange();
         break;
       }
 
-      // ── v3: open file picker to attach files ──────────────────────────────────
       case 'openFilePicker': {
         const uris = await vscode.window.showOpenDialog({
           canSelectMany: true,
@@ -966,12 +909,6 @@ export class ChatStateManager {
         break;
       }
 
-      // ── 2026-05-21: composer drag-drop + paste-image attachments ──────────────
-      // The webview composer reads dropped and pasted files into data URLs.
-      // Keep the bounded payload in memory until the next turn: images map to
-      // protocol image input, and text maps to explicitly untrusted text input.
-      // Persisting these under globalStorage and treating those paths as
-      // workspace context would cross the app-server's workspace boundary.
       case 'attachFiles': {
         const added: Array<{ id: string; name: string }> = [];
         const skipped: Array<{ name: string; reason: string }> = [];
@@ -982,7 +919,7 @@ export class ChatStateManager {
             skipped.push({ name: file.name, reason: 'malformed data URL' });
             continue;
           }
-          const meta = file.dataUrl.slice(5, commaIndex); // strip leading "data:"
+          const meta = file.dataUrl.slice(5, commaIndex);
           const body = file.dataUrl.slice(commaIndex + 1);
           const isBase64 = /;base64$/i.test(meta);
           let bytes: Uint8Array;
@@ -999,9 +936,6 @@ export class ChatStateManager {
             });
             continue;
           }
-          // Defence-in-depth: clamp persisted bytes to the protocol's payload
-          // cap. The Zod schema also enforces this, but a single sanity check
-          // keeps the on-disk write bounded if the cap ever drifts.
           if (bytes.byteLength > 10_000_000) {
             skipped.push({ name: file.name, reason: 'file too large (>10 MB)' });
             continue;
@@ -1046,8 +980,6 @@ export class ChatStateManager {
         break;
       }
 
-      // ── Attachment-chip removal: the webview X must delete the host-side
-      // pending file, not just the visual chip (frontend handoff §12) ─────────
       case 'removePendingAttachment': {
         const { id } = (msg as { type: 'removePendingAttachment'; payload: { id: string } })
           .payload;
@@ -1059,7 +991,6 @@ export class ChatStateManager {
         break;
       }
 
-      // ── v3: apply code block to active editor via diff decoration ─────────────
       case 'proposeDiff': {
         const { code, language } = (
           msg as { type: 'proposeDiff'; payload: { code: string; language: string } }
@@ -1082,7 +1013,7 @@ export class ChatStateManager {
           ? new vscode.Range(editor.selection.active, editor.selection.active)
           : selection;
         const originalText = selection.isEmpty ? '' : editor.document.getText(selection);
-        void language; // language recorded for future syntax-aware diffing
+        void language;
 
         try {
           const filePath = vscode.workspace.asRelativePath(editor.document.uri);
@@ -1132,7 +1063,6 @@ export class ChatStateManager {
     });
   }
 
-  /** Refresh account identity, entitlement-derived meter, and boundary as one epoch. */
   public async refreshAccountPresentation(): Promise<void> {
     const attempt = ++this._accountPresentationSeq;
     const isCurrent = () => attempt === this._accountPresentationSeq;
@@ -1152,14 +1082,6 @@ export class ChatStateManager {
     });
   }
 
-  /**
-   * Load an app-server-owned session into this live controller.
-   *
-   * The app-server remains authoritative for status, workspace ownership, and
-   * trust metadata. In particular, legacy `unknown` sessions are listable but
-   * never resumed: choosing a provider again in a new session is the only safe
-   * way to establish that boundary.
-   */
   public async resumeConversation(threadId: string): Promise<boolean> {
     const attempt = ++this._resumeAttemptSeq;
     const startingEpoch = this._conversationEpoch;
@@ -1231,9 +1153,6 @@ export class ChatStateManager {
           : { status: 'ready' },
       });
       const persistedModel = resumed.model ?? listed.model;
-      // A verified Local runtime is authoritative for its persisted model id,
-      // including custom localhost models that are temporarily absent from
-      // discovery. Catalog/BYOK/managed sessions still require a known model.
       const model =
         resumed.trustMode === 'local' && persistedModel !== undefined
           ? persistedModel
@@ -1292,8 +1211,6 @@ export class ChatStateManager {
         this._thread.runtime === resolved.runtime;
       await this.pushUsageMeter(isCommittedAttempt);
       if (!isCommittedAttempt()) return false;
-      // The usage meter also updates the header boundary from inferred account
-      // state. Re-assert the persisted session authority afterward.
       this._postSessionBoundary(resumed.trustMode, resumed.provider);
       return true;
     } catch (error) {
@@ -1337,14 +1254,6 @@ export class ChatStateManager {
     });
   }
 
-  /**
-   * Adopt an `agiWorkforce.model` setting that changed outside the webview.
-   *
-   * The configuration-change listener in extension.ts calls this before pushing
-   * a fresh usage meter: without it `_activeModel` — and therefore the header
-   * trust pill — keeps describing the previously dispatched provider boundary
-   * after the user edits the setting directly.
-   */
   public syncActiveModelFromConfiguration(): void {
     const model = this._normalizeModelSelection(Config.model());
     if (model === this._activeModel) return;
@@ -1384,15 +1293,9 @@ export class ChatStateManager {
       try {
         meter = await resolveUsageMeter(this._secrets, 0, {
           modelId,
-          // Only ever assert "local" from proof. `auto` and catalog models fall
-          // through to the account lookup, which decides managed-plan vs BYOK.
           ...(isLocalRuntimeModel ? { isLocalRuntimeModel: true } : {}),
         });
       } catch {
-        // Fail closed the same way the webview does for an unknown source: a
-        // boundary we could not confirm is reported as managed cloud, never as
-        // Local. Over-warning is recoverable; a false "nothing leaves this
-        // machine" is not.
         meter = { remaining: null, resetsAt: null, source: 'managed-plan' };
       }
 
@@ -1404,11 +1307,6 @@ export class ChatStateManager {
     });
   }
 
-  /**
-   * Re-push the meter only when the trust boundary moved. Selecting another
-   * model inside the same boundary cannot change the pill, and every push that
-   * leaves the Local boundary costs an account round-trip.
-   */
   private async _pushUsageMeterOnBoundaryChange(): Promise<void> {
     if (this._providerBoundaryForModel(this._activeModel) === this._lastMeterBoundary) return;
     await this.pushUsageMeter();
@@ -1509,10 +1407,6 @@ export class ChatStateManager {
     if (/\bENOENT\b|command not found|executable.*not found/i.test(message)) {
       return 'The AGI CLI executable was not found. Choose its installed path in Runtime settings.';
     }
-    // Initialization failures already use bounded, user-facing protocol and
-    // version copy in LocalRuntimeClient. Preserve that exact cause here so
-    // the persistent sidebar agrees with the notification instead of
-    // collapsing every failure into a generic installation prompt.
     return message.length <= 320 ? message : `${message.slice(0, 317)}…`;
   }
 
@@ -1658,9 +1552,6 @@ export class ChatStateManager {
       ...(model === undefined ? {} : { model }),
       browseWeb,
       references: Array.isArray(references) ? references.filter(isWorkspaceFileReference) : [],
-      // Transfer ownership out of the composer immediately so a second queued
-      // prompt cannot accidentally claim the same file. The webview keeps the
-      // chips visible until this exact request starts successfully.
       attachments: this._pendingAttachments.splice(0),
     };
 
@@ -1761,9 +1652,6 @@ export class ChatStateManager {
     const attachmentIds = request.attachments.map((entry) => entry.id);
     const message = `Follow-up capacity is full (${MAX_QUEUED_SENDS} pending). Try again after the active turn finishes.`;
     this._pendingAttachments.unshift(...request.attachments.splice(0));
-    // The status first transfers the exact attachment chips into queued
-    // ownership; the release immediately returns those same ids to the
-    // composer and mirrors the restored host-side ownership above.
     this._post({
       type: 'followUpStatus',
       payload: {
@@ -1789,8 +1677,6 @@ export class ChatStateManager {
         ? this._activeModel
         : request.model,
     );
-    // A same-turn steer cannot change provider/model ownership. Queue that
-    // request so the normal next-turn path can perform its boundary checks.
     if (requestedModel !== thread.model) return false;
 
     this._steeringSends.add(request);
@@ -1974,8 +1860,6 @@ export class ChatStateManager {
     const requestedProviderBoundary = samePersistedLocalModel
       ? (this._thread?.providerBoundary ?? this._providerBoundaryForModel(requestedModel))
       : this._providerBoundaryForRequestedModel(requestedModel, this._thread?.trustMode);
-    // The composer can dispatch a model the settings never saw; the pill has to
-    // describe the boundary this turn actually crosses before the turn starts.
     await this._pushUsageMeterOnBoundaryChange();
     const runtimeText = this._runtimeText(text, browseWeb);
     const visibleReferences = request.references.filter((reference) =>
@@ -2028,9 +1912,6 @@ export class ChatStateManager {
           ...(thread.provider === undefined ? {} : { provider: thread.provider }),
           runtime,
         };
-        // A newly established runtime thread owns a different transcript. Do
-        // not discard a resumed transcript until that boundary has actually
-        // been established; validation failures above must remain replayable.
         delete this._loadedConversation;
         this._postSessionBoundary(thread.trustMode, thread.provider);
         this._postProviderBadgeForSession(thread, requestedModel);
@@ -2146,8 +2027,6 @@ export class ChatStateManager {
           preStartOverflow.then(() => ({ kind: 'overflow' as const })),
         ]);
         if (startOutcome.kind === 'overflow') {
-          // `turn/start` may still complete after this request has visibly
-          // settled. Interrupt that authoritative turn id as soon as it does.
           void startTurn
             .then((turn) => {
               if (turn.id === preStartOverflowTurnId) return;
@@ -2218,7 +2097,6 @@ export class ChatStateManager {
     }
   }
 
-  /** Keep webview reload/reveal replay backed by the runtime-owned transcript. */
   private async _refreshLoadedConversation(
     runtime: LocalRuntimeClient,
     threadId: string,

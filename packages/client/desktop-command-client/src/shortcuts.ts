@@ -1,10 +1,5 @@
-/**
- * Shortcuts API — typed wrappers for shortcuts_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface Shortcut {
   id: string;
@@ -19,8 +14,6 @@ export interface QuickQueryHotkeyPreferences {
   enabled: boolean;
   combo: string;
 }
-
-// ---- Commands ----
 
 export async function shortcutsRegister(shortcut: Shortcut): Promise<void> {
   return command<void>('shortcuts_register', { shortcut });

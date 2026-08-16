@@ -26,15 +26,12 @@ import {
 export interface UpgradeConfirmRequest {
   plan: SelectablePaidPlan;
   billingInterval: 'monthly' | 'yearly';
-  /** Licensed seats; required for per-seat plans (Team), omitted otherwise. */
   seats?: number;
 }
 
 interface UpgradeConfirmDialogProps {
-  /** When non-null, the dialog is open and previews this upgrade. */
   request: UpgradeConfirmRequest | null;
   onCancel: () => void;
-  /** Called after the upgrade charge succeeds. */
   onConfirmed: () => void;
 }
 
@@ -45,13 +42,6 @@ function formatMoney(cents: number, currency: string): string {
   }).format(cents / 100);
 }
 
-/**
- * Mid-cycle upgrades charge the customer's already-saved card immediately (there
- * is no Stripe Checkout screen because the card is on file). This dialog closes
- * that UX gap: it fetches the exact prorated amount from `/api/upgrade/preview`
- * and requires an explicit confirmation showing that amount BEFORE
- * `upgradePlanMidCycle` performs the charge.
- */
 export function UpgradeConfirmDialog({
   request,
   onCancel,
@@ -122,28 +112,6 @@ export function UpgradeConfirmDialog({
 
   const display = getBillingPlanDisplay(request.plan);
   const planLabel = display.pricing.label;
-  // Per-seat plans renew at unit price x seats; showing the unit price as the
-  // renewal would understate a Team org's bill by the seat count.
-  //
-  // BIZ-020 made `BillingPlanPricing.monthlyPriceUsd/yearlyPriceUsd` optional so
-  // contract-priced Enterprise carries no amount, which means reading them off
-  // `display.pricing` no longer type-checks as a number. `SelectablePaidPlan` is
-  // `SelfServePaidPlanTier` (basic|pro|max|max_15x|team) and excludes Enterprise,
-  // so `getPublishedPlanPriceUsd` — the accessor typed for exactly the tiers that
-  // publish a price — supplies a plain number with no null branch to write.
-  //
-  // No `> 0` guard here either: every (plan, interval) pair this dialog can
-  // receive publishes a positive amount. Enumerated over every site that builds
-  // an UpgradeConfirmRequest:
-  //   - app/pricing/page.tsx:363 (route /pricing) — 'yearly' only for `pro` and
-  //     for `team`'s own interval; every other plan is hardcoded 'monthly'.
-  //   - features/chat/pages/WebChatPage.tsx:795 (route /chat) — fed by
-  //     UpgradePlanDialog, which passes `usesAnnual = annual &&
-  //     plan.annualAvailable`, and `annualAvailable` is itself
-  //     `yearlyPriceUsd > 0` (features/billing/lib/plan-display.ts:72).
-  // The catalog's `yearlyPriceUsd: 0` for basic/max/max_15x means "sells no
-  // annual subscription" and cannot arrive here; see the not-yet-closed note on
-  // `BillingPlanPricing` in packages/contracts/types/src/billing-catalog.ts.
   const unitPriceUsd = getPublishedPlanPriceUsd(request.plan, request.billingInterval);
   const recurringUsd = unitPriceUsd * (request.seats ?? 1);
   const intervalWord = request.billingInterval === 'yearly' ? 'year' : 'month';

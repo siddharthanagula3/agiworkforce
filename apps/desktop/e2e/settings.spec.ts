@@ -5,7 +5,6 @@ import { SettingsSnapshot } from './page-objects/SettingsPage';
 test.describe('Settings and Configuration', () => {
   let settingsSnapshot: SettingsSnapshot;
 
-  // Increase timeout for settings tests since they navigate to settings page
   test.setTimeout(60000);
 
   test.beforeEach(async ({ page }) => {
@@ -24,10 +23,8 @@ test.describe('Settings and Configuration', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    // Wait for React root to be attached instead of body visibility (headless CI compatibility)
     await page.locator('#root').waitFor({ state: 'attached', timeout: 10000 });
 
-    // Initialize empty snapshot - capture will happen in individual tests if needed
     settingsSnapshot = {};
   });
 
@@ -81,11 +78,8 @@ test.describe('Settings and Configuration', () => {
   test('should configure resource limits', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    // Use semantic locators for input
     const cpuInput = page.getByLabel(/cpu/i).or(page.getByTestId('cpu-limit')).first();
     const cpuVisible = await cpuInput.isVisible({ timeout: 2000 }).catch(() => false);
-
-    // llm-guardrail-allow: no cpu/memory limit control exists in apps/desktop/src; tracked under BASE-008 as a test for unbuilt UI.
 
     test.skip(!cpuVisible, 'Resource limits UI not present in current build');
     await settingsPage.setResourceLimit('cpu', '75');
@@ -99,14 +93,11 @@ test.describe('Settings and Configuration', () => {
   test('should toggle autonomous mode', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for checkbox
     const autonomousToggle = page
       .getByRole('checkbox', { name: /autonomous/i })
       .or(page.getByTestId('autonomous-toggle'))
       .first();
     const toggleVisible = await autonomousToggle.isVisible({ timeout: 2000 }).catch(() => false);
-
-    // llm-guardrail-allow: no autonomous-mode toggle exists in desktop settings; tracked under BASE-008 as a test for unbuilt UI.
 
     test.skip(!toggleVisible, 'Autonomous mode toggle not present in current build');
     await settingsPage.toggleAutonomousMode(true);
@@ -119,7 +110,6 @@ test.describe('Settings and Configuration', () => {
   test('should configure auto-approval settings', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for checkbox
     const autoApprovalCheckbox = page
       .getByRole('checkbox', { name: /auto.?approv/i })
       .or(page.getByTestId('auto-approve'))
@@ -127,8 +117,6 @@ test.describe('Settings and Configuration', () => {
     const checkboxVisible = await autoApprovalCheckbox
       .isVisible({ timeout: 2000 })
       .catch(() => false);
-
-    // llm-guardrail-allow: auto-approval is Local-only by design (DesktopCloudSettingsModal.tsx:641); this spec drives the cloud shell.
 
     test.skip(!checkboxVisible, 'Auto-approval checkbox not present in current build');
     await settingsPage.toggleAutoApproval(true);
@@ -145,8 +133,6 @@ test.describe('Settings and Configuration', () => {
     const resetButtonVisible = await settingsPage.resetButton
       .isVisible({ timeout: 2000 })
       .catch(() => false);
-
-    // llm-guardrail-allow: no settings reset control exists in desktop settings; tracked under BASE-008 as a test for unbuilt UI.
 
     test.skip(!resetButtonVisible, 'Reset button not present in current build');
 
@@ -165,7 +151,6 @@ test.describe('Settings and Configuration', () => {
     const errorHandler = createErrorHandler(page);
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for tab/button
     const keyboardTab = page
       .getByRole('tab', { name: /keyboard|shortcuts/i })
       .or(page.getByRole('button', { name: /keyboard|shortcuts/i }))
@@ -189,7 +174,6 @@ test.describe('Settings and Configuration', () => {
     const errorHandler = createErrorHandler(page);
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for tab/button
     const notificationsTab = page
       .getByRole('tab', { name: /notifications/i })
       .or(page.getByRole('button', { name: /notifications/i }))
@@ -198,7 +182,6 @@ test.describe('Settings and Configuration', () => {
     if (await errorHandler.isElementVisible(notificationsTab, 2000)) {
       await errorHandler.safeClick(notificationsTab);
 
-      // Use semantic role for checkbox
       const notificationToggle = page.getByRole('checkbox').first();
 
       if (await errorHandler.isElementVisible(notificationToggle, 2000)) {
@@ -216,7 +199,6 @@ test.describe('Settings and Configuration', () => {
     const errorHandler = createErrorHandler(page);
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for tab/button
     const privacyTab = page
       .getByRole('tab', { name: /privacy|data/i })
       .or(page.getByRole('button', { name: /privacy|data/i }))
@@ -225,7 +207,6 @@ test.describe('Settings and Configuration', () => {
     if (await errorHandler.isElementVisible(privacyTab, 2000)) {
       await errorHandler.safeClick(privacyTab);
 
-      // Use semantic role for combobox
       const retentionSelect = page
         .getByRole('combobox', { name: /retention/i })
         .or(page.getByTestId('retention-period'))
@@ -245,7 +226,6 @@ test.describe('Settings and Configuration', () => {
   test('should export settings configuration', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for button
     const exportButton = page
       .getByRole('button', { name: /export/i })
       .or(page.getByTestId('export-settings'))
@@ -260,7 +240,6 @@ test.describe('Settings and Configuration', () => {
   test('should import settings configuration', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for button
     const importButton = page
       .getByRole('button', { name: /import/i })
       .or(page.getByTestId('import-settings'))
@@ -274,7 +253,6 @@ test.describe('Settings and Configuration', () => {
   test('should validate settings before saving', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    // Use semantic locators for input
     const cpuInput = page.getByLabel(/cpu/i).or(page.getByTestId('cpu-limit')).first();
 
     if (await cpuInput.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -283,7 +261,6 @@ test.describe('Settings and Configuration', () => {
 
       await settingsPage.saveButton.click();
 
-      // Use semantic role for alert
       const errorMessage = page.getByRole('alert').or(page.locator('.error-message')).first();
 
       await page.waitForTimeout(1000);
@@ -298,7 +275,6 @@ test.describe('Settings and Configuration', () => {
   test('should display current version information', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for tab/button
     const aboutTab = page
       .getByRole('tab', { name: /about/i })
       .or(page.getByRole('button', { name: /about/i }))
@@ -319,7 +295,6 @@ test.describe('Settings and Configuration', () => {
   test('should check for updates', async ({ page, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
-    // Use semantic role for button
     const checkUpdatesButton = page
       .getByRole('button', { name: /check for updates/i })
       .or(page.getByTestId('check-updates'))

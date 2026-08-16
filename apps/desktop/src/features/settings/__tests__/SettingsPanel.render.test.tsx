@@ -113,9 +113,6 @@ function render(ui: ReactElement) {
 
 describe('SettingsPanel render stability', () => {
   beforeAll(async () => {
-    // Settings renders this mocked module through React.lazy. Resolve the module
-    // before assertions start so transform contention cannot strand Suspense on
-    // its fallback during a concurrent root Turbo run.
     await import('@/features/skill-marketplace/SkillMarketplace');
   });
 
@@ -298,17 +295,12 @@ describe('SettingsPanel render stability', () => {
   });
 
   it('labels the profile and response-style tab as Personalization', () => {
-    // This assertion covers the navigation shell, not GeneralTab. Start on a
-    // lightweight mocked section so the check stays deterministic when the
-    // complete Desktop suite is running many workers in parallel.
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="plugins" />);
 
     expect(screen.getByRole('button', { name: /Personalization/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Appearance$/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Customize')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Directory/i })).not.toBeInTheDocument();
-    // Skills now lives UNDER Capabilities (source-of-truth IA), so the top-level
-    // nav exposes Capabilities, not a standalone Skills entry.
     expect(screen.getByRole('button', { name: /^Capabilities$/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Skills$/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Connectors$/i })).toBeInTheDocument();
@@ -357,8 +349,6 @@ describe('SettingsPanel render stability', () => {
   });
 
   it('shows the backend-owned account plan in the mode summary', async () => {
-    // A real desktop Cloud session: tenant id + device bearer. The email claim
-    // is empty on purpose — that is what /api/auth/device/token mints.
     useAuthStore.setState({
       plan: 'max',
       planDisplayName: 'Max',
@@ -439,9 +429,6 @@ describe('SettingsPanel render stability', () => {
   it('renders Capabilities as a real section housing Skills + tool/computer-use (DESK-1)', async () => {
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="capabilities" />);
 
-    // Capabilities is now a canonical settings section (source-of-truth IA), not a
-    // legacy alias for Agents. It composes the (previously orphaned) computer-use
-    // controls + the Skill Marketplace.
     expect(await screen.findByText('Skill Marketplace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Capabilities$/i })).toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();

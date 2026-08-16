@@ -1,29 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock getAuthToken so SettingsService#setup2FA reaches the fetch call.
-// NOTE: vi.mock is hoisted to top of file by vitest; the factory runs once.
-// Do NOT call vi.resetModules() in beforeEach · it would clear the mock
-// registry and cause re-imports to fail to find the mock, making
-// getAuthToken return undefined instead of 'mock-token'.
 vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn().mockResolvedValue('mock-token'),
 }));
 
-// The 2FA routes call requireCsrfToken(); without this mock getCsrfToken would
-// consume the fetch mock's queued responses and make the assertions below lie.
 vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: vi.fn().mockResolvedValue('csrf-token'),
 }));
 
-// Mock fetch to intercept the /api/settings/2fa/setup call
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
 describe('settingsService 2FA security', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
-    // Re-apply default return value after any test that overrides it
-    // (vitest.config.ts sets mockReset, which clears factory-time defaults).
     const { getAuthToken } = await import('@shared/lib/get-auth-token');
     vi.mocked(getAuthToken).mockResolvedValue('mock-token');
     const { getCsrfToken } = await import('@/lib/client/csrf');
@@ -88,8 +78,6 @@ describe('settingsService 2FA security', () => {
   });
 
   it('reads the message out of the withErrorHandler envelope instead of stringifying it', async () => {
-    // lib/error-handler.ts responds with { error: { code, message } }. Reading
-    // `body.error` as a string rendered "[object Object]" to the user.
     fetchMock.mockResolvedValue({
       ok: false,
       status: 401,

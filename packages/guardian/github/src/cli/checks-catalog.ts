@@ -1,17 +1,6 @@
-/**
- * Curated repository-owned checks the Guardian runs as its fast deterministic
- * baseline. These reuse the repo's existing `check:*` scripts as first-class
- * analyzers instead of introducing parallel tooling.
- *
- * Selection criteria: static analysis only (no builds, no network), completes
- * in seconds, and guards a product invariant with a clear impact statement.
- * Expensive lanes (semgrep, clippy, full tests) stay in ci.yml; the Guardian
- * reads their results rather than re-running them.
- */
 import type { adapters } from '@agiworkforce/guardian-core';
 
 export type CatalogEntry = adapters.RepoCheckSpec & {
-  /** Category check-run this scanner's findings roll up into. */
   group: 'security' | 'correctness' | 'architecture' | 'technical-debt';
 };
 
@@ -77,10 +66,6 @@ export const FAST_CHECKS: CatalogEntry[] = [
   },
 ];
 
-/**
- * Heavy checks reserved for scheduled deep audits: they run real test suites
- * or full-graph analysis and take minutes, not seconds.
- */
 export const DEEP_CHECKS: CatalogEntry[] = [
   {
     script: 'check:trust-boundaries',
@@ -99,7 +84,5 @@ export const DEEP_CHECKS: CatalogEntry[] = [
   },
 ];
 
-/** Per-check wall-clock budget. A check that exceeds it is scanner-failed. */
 export const CHECK_TIMEOUT_MS = 300_000;
-/** Deep-audit checks get a larger budget. */
 export const DEEP_CHECK_TIMEOUT_MS = 900_000;

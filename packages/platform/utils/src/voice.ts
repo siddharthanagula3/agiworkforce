@@ -33,7 +33,6 @@ export function formatTranscriptionDuration(ms: number): string {
     return `${minutes}m ${seconds}s`;
   }
 
-  // For short durations, show one decimal place
   if (ms < 10000) {
     return `${(ms / 1000).toFixed(1)}s`;
   }
@@ -41,7 +40,6 @@ export function formatTranscriptionDuration(ms: number): string {
   return `${totalSeconds}s`;
 }
 
-/** Format a duration in milliseconds to a timer string (e.g., "1:23") */
 export function formatVoiceDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -101,10 +99,8 @@ export function normalizeTranscription(text: string): string {
   const trimmed = text.replace(/\s+/g, ' ').trim();
   if (!trimmed) return '';
 
-  // Capitalize the first character
   const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 
-  // Ensure the text ends with sentence-ending punctuation
   const lastChar = capitalized.charAt(capitalized.length - 1);
   if (/[.!?]/.test(lastChar)) {
     return capitalized;
@@ -113,10 +109,6 @@ export function normalizeTranscription(text: string): string {
   return `${capitalized}.`;
 }
 
-/**
- * Voice command prefixes that indicate the transcript should edit existing text
- * instead of being appended as fresh dictation.
- */
 export const VOICE_COMMAND_PREFIXES = [
   'make this more formal',
   'make this more casual',
@@ -151,28 +143,16 @@ export const VOICE_COMMAND_PREFIXES = [
 const FILLER_WORD_PATTERN =
   /\b(you know|sort of|kind of|basically|literally|actually|um+|uh+|er+|like)\b,?\s*/gi;
 
-/**
- * Returns true when the transcript is a voice command aimed at editing
- * existing text in the composer rather than adding fresh dictation.
- */
 export function detectVoiceCommand(text: string): boolean {
   const lower = text.toLowerCase().trim();
   return VOICE_COMMAND_PREFIXES.some((prefix) => lower.startsWith(prefix));
 }
 
-/**
- * Lightweight cross-surface cleanup for dictation transcripts.
- *
- * This intentionally avoids opinionated punctuation insertion so it stays safe
- * for command-mode phrases and partial dictation.
- */
 export function cleanupVoiceDictation(text: string): string {
   return text.replace(FILLER_WORD_PATTERN, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/** Convert decibel metering value to a normalized 0-1 amplitude */
 export function meteringToAmplitude(db: number): number {
-  // Typical range: -160 dB (silence) to 0 dB (max)
   const clamped = Math.max(-60, Math.min(0, db));
   return (clamped + 60) / 60;
 }

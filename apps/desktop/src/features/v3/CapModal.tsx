@@ -8,30 +8,6 @@ interface CapModalProps {
   onBuyTopUp?: () => void;
 }
 
-/**
- * Hard-stop cap modal — renders when the unified-chat budget snapshot is
- * enabled and usage reaches 100%.
- *
- * NOT A SPEND GUARD, and dormant today. Two things this does not do:
- *
- *   1. Nothing in production calls `useBudgetStore().setBudget`, so
- *      `budget.enabled` is always `false` and this overlay never renders.
- *      `UsageLimitBannerContainer` (the 70% soft warning this was written to
- *      pair with) is not mounted on any shipping surface either — only the
- *      archived desktop chat mounts it. Wiring a real budget snapshot from
- *      authoritative usage is ledger BIZ-027.
- *   2. It covers the composer while it is open, but it is only an overlay —
- *      no send path consults it, and dismissing it clears the block. The
- *      spend cap that actually stops managed-cloud requests is the desktop
- *      monthly budget in `provider_access.rs::check_billing_and_budget`,
- *      enforced in Rust before the request leaves the machine.
- *
- * The "Switch to Sonnet" and "Buy top-up" buttons are surfaced via
- * callbacks so the host (App.tsx) can wire them to its own model picker
- * and billing flow. Note that `onBuyTopUp` currently opens the billing
- * settings pane, which deliberately offers no top-up purchase — no checkout
- * route stamps `type: 'credit_topup'` yet (ledger BIZ-022).
- */
 export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
   const { t } = useTranslation('v3');
   const budget = useBudgetStore(selectBudget);

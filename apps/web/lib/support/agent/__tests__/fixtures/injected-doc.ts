@@ -1,10 +1,3 @@
-/**
- * A hostile document fixture: a retrieved chunk whose text tries to rewrite the
- * agent's instructions, its abstention rules, and its citations.
- *
- * Used by `injection.test.ts`. Kept out of the real corpus on purpose — the
- * corpus is a committed, reviewable artifact and this text has no business in it.
- */
 
 import type { CorpusChunk } from '../../types';
 

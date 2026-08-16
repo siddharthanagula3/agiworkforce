@@ -14,12 +14,6 @@ import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
-// Rate-limit BEFORE authentication so a flood of unauthenticated requests is
-// throttled before it reaches JWT verification + the per-route membership/DB
-// lookups. Registering the limiter ahead of `authenticateToken` also makes it
-// guard the authorization middleware (CodeQL js/missing-rate-limiting). The
-// per-route limiters below key by userId (post-auth); this router-level default
-// keys by IP since req.user is not yet populated here.
 router.use(createRateLimiter('default'));
 router.use(authenticateToken);
 
@@ -31,16 +25,6 @@ const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-/**
- * ENT-004 — audit export.
- *
- * `windowEnd` pins the upper bound of the export so OFFSET paging is stable:
- * `enterprise_audit_events` is append-only, so without a pinned end a row
- * inserted between page 1 and page 2 shifts every later offset by one and the
- * export silently drops a row. The first page echoes the bound it used in
- * `X-Audit-Export-Window-End`; a client paging further MUST send it back as
- * `to`. `X-Audit-Export-Next-Offset` is present only when more rows remain.
- */
 const auditExportQuerySchema = z.object({
   format: z.enum(['jsonl', 'csv']).default('jsonl'),
   from: z.string().datetime({ offset: true }).optional(),
@@ -77,14 +61,6 @@ interface AuditEventRow {
   created_at: string;
 }
 
-/**
- * Render one CSV cell.
- *
- * Neutralises spreadsheet formula injection: `actor_user_id`, `action` and
- * `metadata` are attacker-influenced strings, and a cell beginning `=`, `+`,
- * `-`, `@` or a control character is executed as a formula when the exported
- * file is opened in Excel/Sheets. A leading apostrophe forces the cell to text.
- */
 function csvCell(value: unknown): string {
   if (value === null || value === undefined) return '';
   const raw = typeof value === 'string' ? value : JSON.stringify(value);
@@ -98,7 +74,6 @@ function toCsv(rows: AuditEventRow[], includeHeader: boolean): string {
   for (const row of rows) {
     lines.push(AUDIT_EXPORT_COLUMNS.map((column) => csvCell(row[column])).join(','));
   }
-  // Trailing newline so concatenated pages stay valid CSV.
   return lines.length > 0 ? `${lines.join('\n')}\n` : '';
 }
 
@@ -180,11 +155,6 @@ function mapPolicy(row: EnterprisePolicyRow | null, organizationId: string) {
   };
 }
 
-/**
- * Read the org's admin policy row, or `null` when the org has never had one
- * written. Shared by GET /policy and the audit export so the export enforces
- * exactly the flag the policy endpoint reports.
- */
 async function fetchPolicyRow(
   db: CloudDbClient,
   organizationId: string,
@@ -264,12 +234,6 @@ router.get(
     const user = requireUser(req);
     const db = getUserScopedClient(user);
 
-    // P1-GW-ENT: the Neon query layer (lib/neonClients.assertColumnList)
-    // collapses any select containing `(` to `SELECT *`, so the PostgREST
-    // resource-embedding syntax `organization:organizations ( … )` never
-    // returns a joined `organization` object — every row was dropped by the
-    // downstream `.filter`. Fetch memberships, then the organizations they
-    // reference, in two explicit queries and stitch them in JS.
     const { data: membershipData, error: membershipError } = await db
       .from('organization_members')
       .select('organization_id, role, joined_at')
@@ -389,32 +353,8 @@ router.get(
   },
 );
 
-/**
- * GET /organizations/:orgId/audit-events/export
- *
- * ENT-004 — the export half of the enterprise audit trail. Before this route
- * existed, `organization_admin_policies.audit_export_enabled` (surfaced as
- * `policy.auditExportEnabled`, default `true`) was a flag nothing in the
- * repository read and nothing implemented: the product advertised an audit
- * export capability that had no code behind it. `mapPolicy` reported the flag;
- * this handler is the only place it is ENFORCED — turning it off here actually
- * refuses the export.
- *
- * Returns the org's `enterprise_audit_events` as NDJSON (default) or CSV, as a
- * file download, admin-only, over an inclusive `[from, to]` `created_at` window
- * (both bounds optional). Paging is by `offset` against the pinned `to` bound
- * (see auditExportQuerySchema).
- *
- * NOT covered here, and deliberately not claimed anywhere in this file:
- *  - SIEM push delivery (Splunk/Sentinel/S3 drops) — the org supplies transport
- *    and credentials, which is a product decision, not a defect.
- *  - trace correlation — the platform emits no spans yet (SCALE-VER-006), so
- *    there is no trace id to put in a column.
- */
 router.get(
   '/organizations/:orgId/audit-events/export',
-  // Shares the audit-events bucket on purpose: this is the heavier of the two
-  // reads, so it must not get a more generous ceiling than the list endpoint.
   createRateLimiter('enterprise-audit-events'),
   async (req: Request, res: Response) => {
     const user = requireUser(req);
@@ -433,8 +373,6 @@ router.get(
       return;
     }
 
-    // Pin the upper bound on the first page and echo it, so subsequent offsets
-    // address the same immutable set of rows.
     const windowEnd = query.to ?? new Date().toISOString();
 
     let builder = db
@@ -447,8 +385,6 @@ router.get(
       builder = builder.gte('created_at', query.from);
     }
 
-    // Fetch one extra row to learn whether another page exists without a
-    // second COUNT query.
     const { data, error } = await builder
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
@@ -477,9 +413,6 @@ router.get(
       res.setHeader('X-Audit-Export-Next-Offset', String(query.offset + rows.length));
     }
 
-    // Exporting the audit trail is itself an auditable administrative action.
-    // Swallowed on failure so a broken audit write cannot deny an admin their
-    // export — the failure is logged instead.
     try {
       const { error: auditError } = await db.rpc('record_enterprise_audit_event', {
         p_organization_id: orgId,

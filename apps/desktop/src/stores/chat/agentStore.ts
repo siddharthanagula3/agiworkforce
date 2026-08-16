@@ -1,14 +1,3 @@
-/**
- * Agent Store
- *
- * Manages agent status, background tasks, and agent-related operations.
- * Split from unifiedChatStore for better modularity.
- *
- * Zustand v5 best practices:
- * - Middleware composition: devtools(subscribeWithSelector(immer(...)))
- * - Export selectors for all state slices
- * - subscribeWithSelector for granular subscriptions
- */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -83,16 +72,10 @@ export type BackgroundTaskEventPayload =
   | BackgroundTaskSnapshotPayload
   | { task: BackgroundTaskSnapshotPayload };
 
-/** Number of milliseconds in 24 hours — used for stale background task eviction. */
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1_000;
 
-/** Maximum number of background tasks retained in the store. */
 const BACKGROUND_TASKS_LIMIT = 100;
 
-/**
- * Removes background tasks that completed or failed more than 24 hours ago.
- * Pure function — does not mutate the input array.
- */
 function evictStaleBackgroundTasks(tasks: BackgroundTask[]): BackgroundTask[] {
   const cutoff = Date.now() - TWENTY_FOUR_HOURS_MS;
   return tasks.filter((t) => {
@@ -119,28 +102,22 @@ export interface ActionTrailEntry {
 }
 
 export interface AgentState {
-  // Agent status
   agents: AgentStatus[];
   agentStatus: AgentStatus | null;
 
-  // Background tasks
   backgroundTasks: BackgroundTask[];
 
-  // Action trail
   actionTrail: ActionTrailEntry[];
   fadeTimers: Map<string, ReturnType<typeof setTimeout>>;
 
-  // Autonomous mode
   isAutonomousMode: boolean;
   missionControlOpen: boolean;
 
-  // Actions - Agent status
   updateAgentStatus: (id: string, status: Partial<AgentStatus>) => void;
   setAgentStatus: (status: AgentStatus | null) => void;
   addAgent: (agent: AgentStatus) => void;
   removeAgent: (id: string) => void;
 
-  // Actions - Agent lifecycle (orchestrator commands)
   pauseAgent: (agentId: string) => Promise<void>;
   resumeAgent: (agentId: string) => Promise<void>;
   cancelAgent: (agentId: string) => Promise<void>;
@@ -148,23 +125,19 @@ export interface AgentState {
   cleanupAgents: () => Promise<number>;
   refreshAgentStatuses: () => Promise<void>;
 
-  // Actions - Background tasks
   updateTaskProgress: (id: string, progress: number) => void;
   addBackgroundTask: (task: Omit<BackgroundTask, 'createdAt'>) => void;
   updateBackgroundTask: (id: string, updates: Partial<BackgroundTask>) => void;
   clearBackgroundTasks: () => void;
 
-  // Actions - Action trail
   addActionTrailEntry: (entry: Omit<ActionTrailEntry, 'id' | 'timestamp'>) => void;
   removeActionTrailEntry: (id: string) => void;
   clearActionTrail: () => void;
   getActiveActionTrail: (messageId?: string) => ActionTrailEntry[];
 
-  // Actions - Autonomous mode
   setAutonomousMode: (value: boolean) => void;
   setMissionControlOpen: (open: boolean) => void;
 
-  // Actions - Reset
   resetOnLogout: () => void;
 }
 
@@ -172,7 +145,6 @@ export const useAgentStore = create<AgentState>()(
   devtools(
     subscribeWithSelector(
       immer((set, get) => ({
-        // Initial state
         agents: [],
         agentStatus: null,
         backgroundTasks: [],
@@ -181,7 +153,6 @@ export const useAgentStore = create<AgentState>()(
         isAutonomousMode: false,
         missionControlOpen: false,
 
-        // Agent status actions
         updateAgentStatus: (id, status) =>
           set(
             (state) => {
@@ -221,7 +192,6 @@ export const useAgentStore = create<AgentState>()(
             'agent/removeAgent',
           ),
 
-        // Agent lifecycle actions (wired to orchestrator commands)
         pauseAgent: async (agentId) => {
           try {
             await invoke('pause_agent', { agentId });
@@ -337,7 +307,6 @@ export const useAgentStore = create<AgentState>()(
           }
         },
 
-        // Background task actions
         updateTaskProgress: (id, progress) =>
           set(
             (state) => {
@@ -357,7 +326,6 @@ export const useAgentStore = create<AgentState>()(
                 return;
               }
               state.backgroundTasks.push({ ...task, createdAt: new Date() });
-              // Evict stale completed/failed tasks, then cap total count
               state.backgroundTasks = evictStaleBackgroundTasks(state.backgroundTasks);
               if (state.backgroundTasks.length > BACKGROUND_TASKS_LIMIT) {
                 state.backgroundTasks = state.backgroundTasks.slice(-BACKGROUND_TASKS_LIMIT);
@@ -388,7 +356,6 @@ export const useAgentStore = create<AgentState>()(
             'agent/clearBackgroundTasks',
           ),
 
-        // Action trail actions
         addActionTrailEntry: (entry) =>
           set(
             (state) => {
@@ -399,9 +366,7 @@ export const useAgentStore = create<AgentState>()(
               };
               state.actionTrail.push(newEntry);
 
-              // STR-004 fix: Cap actionTrail at 5000 entries to prevent unbounded growth
               if (state.actionTrail.length > 5000) {
-                // Get IDs of entries being removed to clean up their timers
                 const entriesToRemove = state.actionTrail.slice(0, state.actionTrail.length - 5000);
                 for (const oldEntry of entriesToRemove) {
                   const timerId = state.fadeTimers.get(oldEntry.id);
@@ -461,7 +426,6 @@ export const useAgentStore = create<AgentState>()(
           return state.actionTrail.filter((entry) => entry.metadata?.['messageId'] === messageId);
         },
 
-        // Autonomous mode actions
         setAutonomousMode: (value) =>
           set(
             (state) => {
@@ -480,13 +444,9 @@ export const useAgentStore = create<AgentState>()(
             'agent/setMissionControlOpen',
           ),
 
-        // Reset
         resetOnLogout: () => {
           set(
             (state) => {
-              // Clear timers inside the set() callback to avoid a race where a concurrent
-              // addActionTrailEntry() call adds a new timer between the get() read and the
-              // set() commit, which would leak the timer.
               state.fadeTimers.forEach((timerId) => clearTimeout(timerId));
               state.agents = [];
               state.agentStatus = null;
@@ -506,7 +466,6 @@ export const useAgentStore = create<AgentState>()(
   ),
 );
 
-// Selectors
 export const selectAgents = (state: AgentState) => state.agents;
 export const selectAgentStatus = (state: AgentState) => state.agentStatus;
 export const selectBackgroundTasks = (state: AgentState) => state.backgroundTasks;
@@ -514,14 +473,12 @@ export const selectActionTrail = (state: AgentState) => state.actionTrail;
 export const selectIsAutonomousMode = (state: AgentState) => state.isAutonomousMode;
 export const selectMissionControlOpen = (state: AgentState) => state.missionControlOpen;
 
-// Derived selectors
 export const selectRunningAgents = (state: AgentState) =>
   state.agents.filter((a) => a.status === 'running');
 
 export const selectActiveBackgroundTasks = (state: AgentState) =>
   state.backgroundTasks.filter((t) => t.status === 'running' || t.status === 'queued');
 
-// Agent status listener types and helpers
 export type AgentStatusPayload = Partial<AgentStatus> & {
   id: string;
   status?: AgentStatus['status'] | string;
@@ -636,7 +593,6 @@ export function applyAgentStatusSnapshot(payloads: AgentStatusPayload[]) {
         return;
       }
 
-      // Defensive: filter out payloads without id
       const validPayloads = payloads.filter((p) => p.id);
       if (validPayloads.length === 0) {
         state.agents = [];
@@ -676,7 +632,6 @@ export function applyBackgroundTaskSnapshot(payloads: BackgroundTaskSnapshotPayl
 }
 
 function applyAgentStatusUpdate(payload: AgentStatusPayload) {
-  // Defensive: skip if no id provided
   if (!payload.id) {
     console.warn('[agentStore] applyAgentStatusUpdate called without id, skipping');
     return;

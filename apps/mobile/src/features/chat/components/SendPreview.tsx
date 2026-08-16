@@ -1,12 +1,3 @@
-/**
- * SendPreview (Mobile) — RN-native mirror of the shared web SendPreview.
- *
- * Both consume `SendPreviewPresentation` from `@agiworkforce/types` so the
- * destination/privacy semantics, banner copy, and detail labels stay aligned
- * across Web/Mobile without sharing JSX (React DOM vs React Native).
- *
- * Round-8 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -19,14 +10,6 @@ import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 export interface SendPreviewProps {
   presentation: SendPreviewPresentation;
   defaultExpanded?: boolean;
-  /**
-   * `card` is the full trust-boundary explainer (unchanged; snapshotted).
-   * `compact` is the composer-mounted form: a single low pill that keeps the
-   * destination permanently visible above the input without consuming a banner
-   * row, and expands in place to the same destination/privacy/banner/detail
-   * block. Mirrors the shared web component's `variant="compact"`, which the
-   * web composer renders at ChatComposerNew.tsx.
-   */
   variant?: 'card' | 'compact';
 }
 
@@ -170,10 +153,6 @@ export function SendPreview({
           accessibilityLabel={`${presentation.destinationLabel}. ${
             expanded ? 'Hide' : 'Show'
           } send details`}
-          // 10pt text in a ~16pt box is well under the tap-target minimum for a
-          // control that discloses WHERE a message is about to be sent — the one
-          // thing a user must be able to check before hitting send. hitSlop grows
-          // the touch area without changing the compact visual density.
           hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
           style={{
             alignSelf: 'flex-start',

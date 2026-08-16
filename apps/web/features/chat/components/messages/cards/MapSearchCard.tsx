@@ -18,17 +18,10 @@ interface MapSearchCardProps {
 
 const TILE_SIZE = 256;
 const FRAME_HEIGHT = 340;
-/**
- * Width assumed before the frame has been measured — SSR, the first paint, and
- * any environment without `ResizeObserver` (jsdom). Generous on purpose: a
- * too-small guess would leave a visible band of unpainted tiles for one frame.
- */
 const ASSUMED_FRAME_WIDTH = 5 * TILE_SIZE;
-/** Must match the `sm:w-64` panel and its `sm:right-3` gutter. */
 const PANEL_WIDTH = 256;
 const PANEL_GUTTER = 12;
 
-/** Web Mercator projection into world pixels at the given zoom. */
 function project(
   latitude: number,
   longitude: number,
@@ -50,23 +43,14 @@ function MapTiles({
 }: {
   view: MapSearchView;
   places: MapSearchPlace[];
-  /** Overlays painted above the tiles — title chip, place panel. */
   children?: React.ReactNode;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(ASSUMED_FRAME_WIDTH);
-  /**
-   * Viewer state layered ON TOP of the server's viewport. `view` stays the
-   * source of truth for where the answer pointed; `zoom` and `pan` are the
-   * user's exploration of it, which is why Reset restores the server value
-   * rather than some earlier interaction.
-   */
   const [zoom, setZoom] = useState(view.zoom);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
 
-  // A new card (or a re-resolved query) must not inherit the previous one's
-  // exploration state.
   useEffect(() => {
     setZoom(view.zoom);
     setPan({ x: 0, y: 0 });
@@ -83,12 +67,6 @@ function MapTiles({
     return () => observer.disconnect();
   }, []);
 
-  /**
-   * Zoom about the frame's centre. The pan offset is in PIXELS at the current
-   * zoom, so it has to be rescaled — doubling the zoom doubles the distance
-   * the same offset represents. Without this the map jumps to a different
-   * place every time the user zooms after panning.
-   */
   const changeZoom = useCallback((delta: number) => {
     setZoom((current) => {
       const next = Math.max(MAP_SEARCH_MIN_ZOOM, Math.min(MAP_SEARCH_MAX_ZOOM, current + delta));
@@ -105,7 +83,6 @@ function MapTiles({
   }, [view.zoom]);
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    // Left button / touch / pen only; a right-click must still open the menu.
     if (event.button !== 0) return;
     dragRef.current = {
       pointerId: event.pointerId,
@@ -129,7 +106,6 @@ function MapTiles({
     }
   };
 
-  // Keyboard panning, so the map is not mouse-only.
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const step = event.shiftKey ? 120 : 40;
     const moves: Record<string, { x: number; y: number }> = {
@@ -153,25 +129,14 @@ function MapTiles({
     }
   };
 
-  /**
-   * On desktop the place panel floats over the right of the map, so the
-   * geometric centre of the card is NOT the centre of what the reader can
-   * see. Centring on the card put the eastern pin of a route underneath the
-   * panel — observed with Dallas hidden behind the list. Shift the view right
-   * by half the panel's footprint so the content centres in the visible strip.
-   * Mobile stacks the panel along the bottom instead, so no shift applies.
-   */
   const panelOccludesRight = places.length > 0 && width >= 640;
   const centreShiftX = panelOccludesRight ? (PANEL_WIDTH + PANEL_GUTTER) / 2 : 0;
 
-  // Centre of the frame, in world pixels at the current zoom.
   const anchor = project(view.latitude, view.longitude, zoom);
   const centreX = anchor.pixelX - pan.x + centreShiftX;
   const centreY = anchor.pixelY - pan.y;
   const tileCount = 2 ** zoom;
 
-  // Only the tiles the frame can actually show, plus one row/column of margin
-  // so a drag reveals painted tiles rather than blank space.
   const firstX = Math.floor((centreX - width / 2) / TILE_SIZE) - 1;
   const lastX = Math.floor((centreX + width / 2) / TILE_SIZE) + 1;
   const firstY = Math.floor((centreY - FRAME_HEIGHT / 2) / TILE_SIZE) - 1;
@@ -180,9 +145,6 @@ function MapTiles({
   const tiles: Array<{ key: string; src: string; left: number; top: number }> = [];
   for (let y = firstY; y <= lastY; y++) {
     for (let x = firstX; x <= lastX; x++) {
-      // Off-grid tiles are skipped rather than wrapped or clamped: wrapping x
-      // would paint the far side of the world beside the target, and clamping
-      // y would repeat a polar row. A gap is the honest rendering.
       if (x < 0 || y < 0 || x >= tileCount || y >= tileCount) continue;
       tiles.push({
         key: `${zoom}-${x}-${y}`,
@@ -298,8 +260,6 @@ function MapTiles({
 export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
   const view = body.view;
   const places = body.places ?? [];
-  // Google Maps is the primary action when present — it is the one people
-  // actually navigate with. The full provider list stays below.
   const primaryAction =
     body.actions.find((action) => action.provider === 'google_maps') ?? body.actions[0];
 
@@ -322,8 +282,6 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
           </div>
 
           {places.length > 0 && (
-            /* Right-hand panel on desktop, horizontal carousel on mobile —
-               the same information architecture at both sizes. */
             <div className="absolute inset-x-0 bottom-0 p-3 sm:inset-x-auto sm:bottom-auto sm:right-3 sm:top-14 sm:w-64 sm:p-0">
               <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-col sm:overflow-visible sm:pb-0">
                 {primaryAction && (
@@ -361,8 +319,6 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
           )}
         </MapTiles>
       ) : (
-        /* No viewport means geocoding failed. Keep the decorative header
-           rather than painting a map of somewhere never resolved. */
         <div className="relative flex min-h-28 items-end overflow-hidden bg-[radial-gradient(circle_at_20%_30%,color-mix(in_srgb,hsl(var(--primary))_18%,transparent)_0_2px,transparent_3px),linear-gradient(120deg,color-mix(in_srgb,hsl(var(--muted))_82%,transparent),color-mix(in_srgb,hsl(var(--background))_92%,transparent))] p-4">
           <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(var(--chat-border)_1px,transparent_1px),linear-gradient(90deg,var(--chat-border)_1px,transparent_1px)] [background-size:24px_24px]" />
           <div className="relative flex items-center gap-3">

@@ -5,10 +5,6 @@ import type { NextRequest } from 'next/server';
 import { getClerkAuthUser, type AuthResult } from './api-auth';
 import { createError } from './errors';
 
-/**
- * Fetch the role from Clerk's publicMetadata for the given userId.
- * Returns undefined if the user has no role set.
- */
 async function getUserRole(userId: string): Promise<string | undefined> {
   try {
     const { clerkClient } = await import('@clerk/nextjs/server');

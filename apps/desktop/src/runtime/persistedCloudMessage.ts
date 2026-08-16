@@ -281,7 +281,6 @@ export function persistedAttachmentMetadata(attachments: ManagedCloudChatAttachm
   }));
 }
 
-/** Restore one normalized managed message into the shared transcript DTO. */
 export function mapPersistedCloudMessage(
   raw: PersistedCloudMessageInput,
   apiBaseUrl: string,

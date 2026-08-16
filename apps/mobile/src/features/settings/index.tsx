@@ -183,7 +183,6 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
   );
 }
 
-/** Avatar geometry for the settings header. */
 const PROFILE_AVATAR_SIZE = 88;
 const PROFILE_PHOTO_BADGE_SIZE = 30;
 const PROFILE_CARD_PADDING_TOP = 20;
@@ -199,12 +198,6 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
   const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
   const personalization = isCloudMode ? cloudPersonalization : localPersonalization;
   const [savingPhoto, setSavingPhoto] = useState(false);
-  // A name the USER typed (nickname / fullName in personalization) is rendered
-  // exactly as typed — their casing is a deliberate choice. Only the values
-  // that come from the identity provider go through the shared normaliser,
-  // because Clerk stores whatever the signup form captured and "SIDDHARTHA
-  // NAGULA" shouting from the settings header reads as a bug (see
-  // @agiworkforce/utils/display-name).
   const providerName =
     clerkUser?.fullName ||
     clerkUser?.firstName ||
@@ -220,9 +213,6 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
     ? clerkUser?.primaryEmailAddress?.emailAddress ||
       (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
     : personalization.occupation || 'Local mode active';
-  // Local mode has no account that owns a photo, so there is nothing to write
-  // a picked image to — the edit affordance is not rendered there at all
-  // rather than rendered and then failing.
   const canEditPhoto = isCloudMode && isClerkSignedIn && Boolean(clerkUser);
 
   const handleEditPhoto = useCallback(async () => {
@@ -233,8 +223,6 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
         quality: 0.85,
-        // Clerk's setProfileImage takes a Blob/File/string; a base64 data URL
-        // is the only one of the three React Native can produce here.
         base64: true,
         exif: false,
       });
@@ -376,10 +364,6 @@ export default function SettingsTabScreen() {
     [router],
   );
   const closeSettings = useCallback(() => {
-    // Settings is opened over whatever the user was reading (a conversation,
-    // the drawer, a tab), so closing must pop back to it. `replace` used to
-    // discard that entry point *and* the back entry, stranding the user on a
-    // blank new chat. The chat tab stays as the deep-link/no-history fallback.
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -387,9 +371,6 @@ export default function SettingsTabScreen() {
     }
   }, [router]);
 
-  // Every account-backed Cloud row shares one auth boundary. During Clerk's
-  // short pending window taps are ignored; once resolved, signed-out users go
-  // to login and signed-in users reach the requested real screen.
   const openCloudRoute = useCallback(
     (path: string) => () => {
       if (!isClerkLoaded) return;
@@ -449,11 +430,6 @@ export default function SettingsTabScreen() {
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/shared-links'),
           },
-          // Always listed. Whether the account can actually administer a
-          // workspace is decided by the server (`access.canManageTeam`) and
-          // explained on the screen itself. The row used to be hidden behind a
-          // local plan check — a second copy of a rule only the server owns,
-          // and a hidden row cannot explain why the option is missing.
           {
             key: 'workspace',
             label: 'Workspace',
@@ -481,9 +457,6 @@ export default function SettingsTabScreen() {
             value: formatAccent(accentColor),
             onPress: push('/(app)/settings/accent-color'),
           },
-          // No value: General owns haptics, temporary chat, language, models,
-          // performance and storage — not the model. The model name now sits on
-          // the "Models" row inside General, the row that actually changes it.
           {
             key: 'general',
             label: 'General',
@@ -558,9 +531,6 @@ export default function SettingsTabScreen() {
       {
         title: 'Cloud',
         rows: [
-          // Account is promoted to the root "Account" section (email + subscription
-          // + restore with live values), so the duplicate Cloud → Account row is
-          // removed (ponytail: one entry point to the account screen).
           {
             key: 'cloud-personalization',
             label: 'Cloud Personalization',
@@ -656,8 +626,6 @@ export default function SettingsTabScreen() {
             label: 'Help Center',
             icon: CircleHelp,
             onPress: () => {
-              // In-app sheet (PAR-M39): Help is read mid-task, so dismissing
-              // it must land back on Settings rather than cold-starting the app.
               void openInAppBrowser('https://agiworkforce.com/help');
             },
           },
@@ -670,11 +638,6 @@ export default function SettingsTabScreen() {
           },
         ],
       },
-      // Log Out is terminal, so it is last and alone in an untitled card rather
-      // than the 10th row of "Cloud" — where it read as a cloud feature and
-      // pushed Support below the visual end of the list. Gated on the resolved
-      // `isClerkSignedIn` boolean, not on the `clerkUser` object, which is null
-      // during Clerk's loading window and made the row flicker in and out.
       ...(isClerkSignedIn
         ? [
             {

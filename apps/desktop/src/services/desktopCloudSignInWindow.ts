@@ -22,19 +22,6 @@ function trustedDesktopSignInUrl(rawUrl: string): string {
   return url.toString();
 }
 
-/**
- * Opens Clerk/device approval inside an owned AGI Desktop window.
- *
- * The remote webview owns account credentials and Clerk cookies. The main
- * Desktop webview receives only the short-lived device credential through the
- * existing polling contract, preserving the Local/Cloud trust boundary.
- *
- * This window is capturable. It used to set `contentProtected`, which renders it
- * black to every screen recorder and conferencing app — so the first step of a
- * screen-shared demo or a remote support session was invisible, with no way to
- * turn it off (the presentation preference lives behind a Cloud session the
- * user does not have yet). See `ownedWindowPresentation.ts` for the full policy.
- */
 export async function openDesktopCloudSignInWindow(
   rawUrl: string,
   { onUserClosed }: DesktopCloudSignInWindowOptions,
@@ -79,10 +66,6 @@ export async function openDesktopCloudSignInWindow(
   const unlistenClose = await authWindow.onCloseRequested(() => {
     notifyUserClosed();
   });
-  // Native title-bar closes normally emit close-requested first, but direct
-  // destruction (including WebDriver and some OS teardown paths) may only emit
-  // the terminal window event. Listen to both so the pending auth request
-  // cannot leave the main window stuck on its loading skeleton.
   const unlistenDestroyed = await authWindow.once('tauri://destroyed', notifyUserClosed);
 
   return {

@@ -1,10 +1,3 @@
-/**
- * apiFetch credential and gateway-resolution regression tests.
- *
- * `auth_token` is written as AES-GCM ciphertext by `APIClient.setToken`
- * (@shared/lib/api), and a relative `/api` base silently retargets gateway
- * calls at the web app's own route handlers.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -42,8 +35,6 @@ describe('apiFetch', () => {
     fetchMock = vi.fn(async () => jsonResponse());
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://gateway.example.com/api');
-    // Deterministic stand-in for AES-GCM: the writer persists ciphertext and
-    // caches the plaintext, so a correct reader must produce the plaintext.
     mocks.decryptAsync.mockImplementation(async (value: string) => {
       if (!value.startsWith('enc:')) throw new Error('Failed to decrypt data');
       return value.slice('enc:'.length);

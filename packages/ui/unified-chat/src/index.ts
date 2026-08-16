@@ -1,4 +1,3 @@
-// Lib
 export * from './lib/tokens';
 export * from './lib/types';
 export * from './lib/runtime';
@@ -94,7 +93,6 @@ export type {
   SlashCommandDefinition,
   SlashCommandIconName,
 } from './lib/slashCommands';
-// Stores — prefixed to avoid collisions with host-app store names
 export { useChatStore } from './stores/chatStore';
 export { useModelStore as useChatModelStore } from './stores/modelStore';
 export { useUIStore as useChatUIStore } from './stores/uiStore';
@@ -103,7 +101,6 @@ export { useSettingsStore as useChatSettingsStore } from './stores/settingsStore
 export { useArtifactStore as useChatArtifactStore } from './stores/artifactStore';
 export { useAgentControlStore as useChatAgentControlStore } from './stores/agentControlStore';
 
-// Send pipeline queue (per-surface; see packages/client/client-runtime for primitives)
 export {
   getSendQueue,
   enqueuePrompt,
@@ -112,7 +109,6 @@ export {
 } from './queue/sendQueue';
 export type { GetSendQueueOptions } from './queue/sendQueue';
 
-// Hooks
 export { useChat } from './hooks/useChat';
 export { useTheme } from './hooks/useTheme';
 export { useSidebar } from './hooks/useSidebar';
@@ -121,37 +117,23 @@ export { useSameDocumentScriptSupport } from './hooks/useSameDocumentScriptSuppo
 export { useKeyboard } from './hooks/useKeyboard';
 export { useModel } from './hooks/useModel';
 
-// UI Primitives
 export { Button, type ButtonProps, ScrollArea } from '@agiworkforce/ui';
 export { Tooltip } from './components/ui/Tooltip';
 export { ChatBadge } from './components/ui/ChatBadge';
 
-// Markdown renderer (canonical chain: react-markdown + remark-gfm/math/breaks
-// + rehype-highlight/katex/raw+sanitize). Source of truth ported from
-// apps/web/features/chat/components/messages/.
 export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
 export { MARKDOWN_SANITIZE_SCHEMA } from './components/markdown/markdownSanitizeSchema';
 export { preprocessMath } from './components/markdown/preprocessMath';
 
-// Local-to-BYOK handoff ceremony dialog (founder decision 2026-07-08)
 export {
   LocalByokHandoffDialog,
   type LocalByokHandoffDialogProps,
   type HandoffContextCandidate,
 } from './components/LocalByokHandoffDialog';
 
-// Top-level orchestrator
-//
-// `ChatInterface` is the shipping shared Desktop chat orchestrator. It owns
-// the shared model-selector/send path while the host supplies the active
-// conversation boundary and a platform-specific `ChatRuntime`. Web still
-// uses its surface-specific page/orchestrator. Do not remove this export until
-// Desktop has deliberately migrated to another shared owner and the host
-// bridge has no live consumers.
 export { ChatInterface, useRuntime } from './components/ChatInterface';
 export type { ChatInterfaceProps } from './components/ChatInterface';
 
-// Components
 export { EmptyState } from './components/EmptyState';
 export type { EmptyStateProps } from './components/EmptyState';
 export { ChatInput } from './components/ChatInput';
@@ -174,12 +156,10 @@ export { SendButton } from './components/SendButton';
 export type { SendButtonProps, SendButtonMode } from './components/SendButton';
 export { Disclaimer } from './components/Disclaimer';
 
-// Sidebar components
 export { Sidebar } from './components/Sidebar';
 export { ConversationItem } from './components/ConversationItem';
 export { UserProfile } from './components/UserProfile';
 
-// Chat area components
 export { MessageList } from './components/MessageList';
 export { MessageBubble, MarkdownLite } from './components/MessageBubble';
 export {
@@ -196,7 +176,6 @@ export { ActionBar } from './components/ActionBar';
 export { ConversationHeader } from './components/ConversationHeader';
 export type { ConversationHeaderProps } from './components/ConversationHeader';
 
-// Rich message components
 export { ThinkingBlock } from './components/ThinkingBlock';
 export { CitationPill } from './components/CitationPill';
 export { WebSearchCard, LegacyWebSearchCard } from './components/WebSearchCard';
@@ -208,7 +187,6 @@ export type {
 export { ProvenanceFooter } from './components/ProvenanceFooter';
 export type { ProvenanceFooterProps } from './components/ProvenanceFooter';
 
-// Artifact and media components
 export { ArtifactPanel } from './components/ArtifactPanel';
 export type {
   ArtifactPanelProps,
@@ -253,7 +231,6 @@ export type { ImageGenCardProps } from './components/ImageGenCard';
 export { VideoGenCard } from './components/VideoGenCard';
 export type { VideoGenCardProps } from './components/VideoGenCard';
 
-// Modal overlays
 export { SettingsModal } from './components/SettingsModal';
 export { SettingsShell, DEFAULT_SETTINGS_SECTIONS } from './components/SettingsShell';
 export type { SettingsSection, SettingsShellProps } from './components/SettingsShell';
@@ -273,7 +250,6 @@ export { useMemoryStore, selectMemoryFacts, selectMemoryCount } from './stores/m
 export type { MemoryFact } from './stores/memoryStore';
 export { CommandPalette } from './components/CommandPalette';
 
-// Phase A Slice 1 — Budget + agentic-loop status (ported from UAC)
 export { BudgetTracker } from './components/BudgetTracker';
 export { BudgetAlertsPanel } from './components/BudgetAlertsPanel';
 export { TokenCounter } from './components/TokenCounter';
@@ -300,7 +276,6 @@ export type {
   ActionTrailEntryType,
 } from './stores/budgetStore';
 
-// Phase A Slice 2 — Agentic-loop visualizers (ported from UAC)
 export { AgenticLoopStatusBar } from './components/AgenticLoopStatusBar';
 export { AgentStepTimeline } from './components/AgentStepTimeline';
 export type {
@@ -340,8 +315,6 @@ export {
 export type { AgentActivityTimelineProps } from './components/AgentActivityTimeline';
 export { ToolCallCard, detectCodeBlock } from './components/ToolCallCard';
 export type { ToolCallCardProps, ToolCallStatus } from './components/ToolCallCard';
-// Lazy authentication: the inline Connect card and the trusted-path reader that
-// decides when one may be rendered.
 export { ConnectorConnectCard } from './components/ConnectorConnectCard';
 export type { ConnectorConnectCardProps } from './components/ConnectorConnectCard';
 export {
@@ -387,7 +360,6 @@ export type {
 } from './stores/agentLoopStore';
 export { useReducedMotion } from './hooks/useReducedMotion';
 
-// Phase A Slice 3 — Checkpoints + branches (ported from UAC)
 export { CheckpointManager } from './components/CheckpointManager';
 export type { CheckpointManagerProps, ManagerCheckpoint } from './components/CheckpointManager';
 export { BranchNavigator, BranchNavigatorContainer } from './components/BranchNavigator';
@@ -406,7 +378,6 @@ export {
 } from './stores/checkpointStore';
 export type { Checkpoint, Branch } from './stores/checkpointStore';
 
-// Phase A Slice 4 — Artifacts + sidecar (ported from UAC, covers Task #16)
 export { ArtifactRenderer, isTabularType } from './components/ArtifactRenderer';
 export type { ArtifactRendererProps } from './components/ArtifactRenderer';
 export { ArtifactsSidebar } from './components/ArtifactsSidebar';
@@ -446,10 +417,8 @@ export {
   numericValue,
 } from './lib/tabular';
 export type { TabularData } from './lib/tabular';
-// Store selectors for the conversation-keyed artifact map
 export { selectArtifacts, selectActiveArtifact, selectArtifactById } from './stores/artifactStore';
 
-// Phase A Slice 5 — Chat UX shell (ported from UAC)
 export { BrandedGreeting } from './components/BrandedGreeting';
 export type { BrandedGreetingProps } from './components/BrandedGreeting';
 export { AdvancedEmptyState } from './components/AdvancedEmptyState';
@@ -501,7 +470,6 @@ export type {
   PromptSuggestion,
   PromptSuggestionType,
 } from './components/PromptSuggestionsDropdown';
-// New stores
 export {
   useMentionStore,
   selectActiveMentionTrigger,
@@ -515,14 +483,12 @@ export {
   selectPromptStashCount,
 } from './stores/promptStashStore';
 export type { PromptStashEntry } from './stores/promptStashStore';
-// Re-export plan-mode store selectors (added in Slice 3, referenced by Task #18)
 export {
   selectPlanMode,
   selectPendingPlan,
   selectHasPendingApproval,
 } from './stores/planModeStore';
 
-// Max tier gating (Task #17 — multi-provider in-thread switch)
 export { MaxUpgradePrompt } from './components/MaxUpgradePrompt';
 export type { MaxUpgradePromptProps } from './components/MaxUpgradePrompt';
 export {

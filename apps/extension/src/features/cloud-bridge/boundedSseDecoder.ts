@@ -5,14 +5,6 @@ export class SseFrameLimitError extends Error {
   }
 }
 
-/**
- * Incremental, bounded Server-Sent Events decoder.
- *
- * It supports LF, CRLF, and CR framing and joins repeated `data:` fields using
- * a newline as required by the SSE wire format. It intentionally returns only
- * data payloads; event names, ids, retry hints, comments, and unknown fields do
- * not affect the Managed Chat protocol.
- */
 export class BoundedSseDecoder {
   private buffer = '';
   private dataLines: string[] = [];
@@ -26,9 +18,6 @@ export class BoundedSseDecoder {
 
   push(text: string): string[] {
     this.buffer += text;
-    // Drain complete lines before enforcing the per-frame limit. A single
-    // network read may legitimately contain many small SSE events whose total
-    // byte count is larger than one frame.
     const events = this.drain(false);
     this.assertWithinLimit();
     return events;

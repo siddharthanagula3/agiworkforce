@@ -220,7 +220,6 @@ function getRiskLevel(stats: { additions: number; deletions: number; filesChange
   const warnings: string[] = [];
   let level: 'low' | 'medium' | 'high' = 'low';
 
-  // Check file count
   if (stats.filesChanged > 10) {
     warnings.push('Large number of files changed');
     level = 'high';
@@ -229,7 +228,6 @@ function getRiskLevel(stats: { additions: number; deletions: number; filesChange
     level = 'medium';
   }
 
-  // Check total changes
   const totalChanges = stats.additions + stats.deletions;
   if (totalChanges > 500) {
     warnings.push('Extensive code modifications');
@@ -239,7 +237,6 @@ function getRiskLevel(stats: { additions: number; deletions: number; filesChange
     if (level !== 'high') level = 'medium';
   }
 
-  // Check deletion ratio
   if (stats.deletions > 0 && stats.deletions > stats.additions) {
     warnings.push('More deletions than additions');
     if (level !== 'high') level = 'medium';

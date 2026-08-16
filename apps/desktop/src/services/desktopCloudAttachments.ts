@@ -34,14 +34,8 @@ export async function uploadDesktopCloudAttachments(
       assertBoundary();
       return headers;
     },
-    // Resolve the live same-account credential again at the final transport
-    // boundary. An account/session switch fails before a queued presign or
-    // completion body can leave the renderer.
     fetchImpl: (input, init) =>
       accountBoundCloudFetch(input, init, boundary.accountId, assertBoundary),
-    // The presigned destination is intentionally supplied by the authenticated
-    // AGI endpoint. It receives only the selected bytes and signed upload
-    // headers; the account Bearer token is never attached to that URL.
     uploadFetchImpl: (input, init) => {
       assertBoundary();
       return guardedFetch(input, init).then((response) => {

@@ -1,10 +1,3 @@
-/**
- * ToolCallCard — web adapter over the canonical @agiworkforce/unified-chat
- * ToolCallCard. Preserves this file's existing `ToolCall` object-shaped API
- * (used by ToolTimeline.tsx) while delegating all rendering to the shared
- * package component. Approve/reject/cancel stay callback props here — web
- * has no built-in transport of its own to inject, callers wire their own.
- */
 
 import { ToolCallCard as PackageToolCallCard, detectCodeBlock } from '@agiworkforce/unified-chat';
 
@@ -24,7 +17,6 @@ export interface ToolCall {
   description?: string;
   parameters?: Record<string, unknown>;
   result?: string;
-  /** Failure reason, shown in a dedicated "Error" section when status === 'error'. */
   error?: string;
   status: ToolCallStatus;
   createdAt?: string;
@@ -42,7 +34,6 @@ interface ToolCallCardProps {
   onCancel?: (id: string) => void;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
-  /** See the package ToolCallCard's own doc comment -- renders an expired notice instead of live approve/reject buttons. */
   expired?: boolean;
   onResend?: (id: string) => void;
   showParameters?: boolean;

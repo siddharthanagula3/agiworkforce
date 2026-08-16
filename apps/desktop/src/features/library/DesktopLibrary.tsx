@@ -1,15 +1,3 @@
-/**
- * Desktop adapter for the shared Library surface.
- *
- * The view lives in `@agiworkforce/unified-chat` and is shared with web, so
- * Desktop shows the same Library rather than a second implementation that
- * would drift. This file supplies only what differs here: absolute Cloud URLs,
- * an account-pinned bearer transport (which also invalidates the session on 401),
- * and an in-app preview built from authenticated response bytes.
- *
- * Library is a Managed Cloud surface — the files live in cloud storage — so it
- * asks for sign-in rather than pretending to be empty when signed out.
- */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, FileQuestion, Loader2, RotateCcw } from 'lucide-react';
 import { LibraryView, type LibraryTransport } from '@agiworkforce/unified-chat';
@@ -38,7 +26,6 @@ type PreviewState =
   | { status: 'ready'; kind: Exclude<PreviewKind, 'unsupported'>; content: string }
   | { status: 'error'; error: string };
 
-/** Resolve a server-supplied uri, which may be relative, against Cloud. */
 function absoluteCloudUrl(uri: string): string {
   return uri.startsWith('http://') || uri.startsWith('https://')
     ? uri
@@ -71,8 +58,6 @@ async function authenticatedCloudFetch(
 function previewKindFor(mimeType: string): PreviewKind {
   const normalized = mimeType.toLowerCase().split(';', 1)[0]?.trim() ?? '';
   if (normalized === 'application/pdf') return 'pdf';
-  // SVG and every text-like type render as inert source. They must never be
-  // loaded into an image/frame where active content could execute.
   if (normalized === 'image/svg+xml') return 'text';
   if (normalized.startsWith('image/')) return 'image';
   if (
@@ -94,10 +79,7 @@ function truncateTextPreview(text: string): string {
 }
 
 export interface DesktopLibraryProps {
-  /** Start a new chat from the empty state — the shell owns conversation
-   *  creation, so it supplies the action. */
   onStartChat?: () => void;
-  /** Deep-link the shared Library view from Desktop global search. */
   initialQuery?: string;
 }
 
@@ -177,8 +159,6 @@ function AuthenticatedDesktopLibrary({
       listPage: (params) =>
         authenticatedCloudFetch(request, `${CLOUD_API_BASE_URL}/api/library?${params.toString()}`),
       fetchAsset,
-      // Deletion is owner-scoped, bearer-authenticated, and recoverable from
-      // Recently deleted for the server's retention window.
       deleteItem: (id) =>
         authenticatedCloudFetch(
           request,
@@ -191,16 +171,12 @@ function AuthenticatedDesktopLibrary({
           `${CLOUD_API_BASE_URL}/api/media?id=${encodeURIComponent(id)}&permanent=true`,
           { method: 'DELETE' },
         ),
-      // The owner-scoped restore is both bearer-authenticated and
-      // account-pinned at the final transport boundary.
       restoreItem: (id) =>
         authenticatedCloudFetch(
           request,
           `${CLOUD_API_BASE_URL}/api/media?id=${encodeURIComponent(id)}`,
           { method: 'POST' },
         ),
-      // LibraryView invokes this synchronously from the card gesture. The
-      // effect above fetches the protected bytes before rendering anything.
       openPreview: (uri) => {
         setPreviewAttempt(0);
         setPreviewUri(uri);

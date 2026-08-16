@@ -1,11 +1,3 @@
-/**
- * Schema-correctness tests for the `/api/me` cloud contract.
- *
- * The golden fixture is the cross-surface handshake: the web route contract
- * test asserts the live server output matches `MeResponseSchema`, and client
- * suites (mobile tier store) parse this same fixture. If the schema and the
- * fixture ever disagree, this test fails before any client does.
- */
 
 import { describe, it, expect } from 'vitest';
 import { MeResponseSchema, parseMeResponse } from '../me';
@@ -93,8 +85,6 @@ describe('MeResponseSchema', () => {
   });
 
   it('rejects the legacy nested user envelope mobile used to assume', () => {
-    // Regression guard: mobile's old private interface expected
-    // `{ user: { id, email } }`, which the server never returned.
     const nested = {
       ...golden,
       id: undefined,
@@ -154,8 +144,6 @@ describe('MeResponseSchema — capability_handshake (six-app finding A)', () => 
       capability_handshake: {
         ...golden.capability_handshake,
         sources: { ...golden.capability_handshake.sources, tier: 'tier:free' },
-        // A real free-tier document (see apps/web capability-handshake-service
-        // tests): search/deep-research/voice/connectors are tier-denied.
         granted: [
           'canChat',
           'canUseImages',

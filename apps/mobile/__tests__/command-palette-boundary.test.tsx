@@ -1,12 +1,3 @@
-/**
- * SIX-23 — the slash-command palette must disclose which commands leave the
- * device, and must not list a command the host has withheld.
- *
- * `/compare` streams both panes through the managed-cloud gateway. Hosts pass
- * `onOpenCompare` only inside the Cloud boundary; `ChatInput` turns that into
- * the `availableCommands` array this palette filters on. The Cloud pill states
- * the boundary before the command is tapped.
- */
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import { readFileSync } from 'fs';
@@ -79,8 +70,6 @@ describe('CommandPalette boundary disclosure', () => {
 });
 
 describe('conversation screen withholds /compare outside the Cloud boundary', () => {
-  // The conversation screen is not renderable in isolation (expo-router params,
-  // ~40 stores). Assert the wiring at source level instead of not asserting it.
   const source = readFileSync(join(__dirname, '..', 'app', '(app)', 'chat', '[id].tsx'), 'utf8');
 
   it('derives the compare action from conversationExecutionMode', () => {

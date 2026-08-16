@@ -26,17 +26,12 @@ async function getAuthToken(): Promise<string> {
 }
 
 export interface GenerateVideoOptions {
-  /** Seconds of footage. The route defaults to the cheapest valid Google duration (4s). */
   durationSecs?: number;
   resolution?: ManagedMediaVideoResolution;
-  /** Landscape/portrait, validated by the route against the model. */
   aspectRatio?: ManagedMediaVideoAspectRatio;
   provider?: 'runway' | 'google' | 'openrouter';
-  /** Catalog model id chosen in the composer's video picker; see VideoGenerationRequest.model. */
   modelId?: string;
-  /** Persisted Web conversation; paired with assistantMessageId. */
   conversationId?: string;
-  /** Pre-persisted assistant placeholder and stable idempotency identity. */
   assistantMessageId?: string;
 }
 
@@ -74,30 +69,20 @@ export type VideoWatchResult =
   | PendingVideoGeneration
   | FailedVideoGeneration;
 
-/**
- * Poll cadence for /api/media/video/status. The route's own doc comment
- * specifies "every 3–5 seconds … maximum poll window: 5 minutes"; these are
- * that contract, not invented numbers.
- */
 const VIDEO_POLL_INTERVAL_MS = 5_000;
 const VIDEO_POLL_TIMEOUT_MS = 5 * 60_000;
 
 export interface GenerateImageOptions {
-  /** Exact provider-native shape used by new Web callers. */
   aspectRatio?: ManagedMediaImageAspectRatio;
-  /** Legacy compatibility for older callers; prefer `aspectRatio` on Web. */
   size?: '1024x1024' | '1792x1024' | '1024x1792';
   provider?: 'google' | 'openai';
-  /** Catalog model id chosen by the picker. The route resolves the provider wire id. */
   model?: string;
-  /** Persisted Web conversation owner. Temporary chats deliberately omit it. */
   conversationId?: string;
 }
 
 export interface GeneratedImageResult {
   imageUrl: string;
   provider: 'google' | 'openai';
-  /** Canonical catalog identity returned by the authenticated generation route. */
   model: string;
 }
 
@@ -108,7 +93,6 @@ export type MediaPaywallRecoveryAction =
   | 'view_usage'
   | 'top_up';
 
-/** Error codes/types the media-generation API uses to signal a billing recovery path. */
 const PAYWALL_ERROR_RECOVERY: Readonly<Record<string, MediaPaywallRecoveryAction>> = {
   insufficient_credits: 'upgrade',
   plan_upgrade_required: 'upgrade',
@@ -139,19 +123,10 @@ function mediaPaywallRecoveryAction(input: {
   if (codeRecovery) return codeRecovery;
   if (classifyManagedQuotaErrorCode(input.code)) return 'view_usage';
   if (input.type && PAYWALL_ERROR_TYPES.has(input.type)) return 'upgrade';
-  // HTTP 402 is intrinsically a payment/usage refusal. HTTP 403 is not: it is
-  // also used for ordinary authorization failures, which must never be turned
-  // into a misleading sales prompt without a recognized server code.
   if (input.status === 402) return 'upgrade';
   return null;
 }
 
-/**
- * Structured error thrown by media-generation requests. Preserves the API's
- * error shape (status/code/type + a resolved `isPaywall` flag) instead of
- * collapsing everything into a plain Error message, so callers can render a
- * PaywallCard / upgrade prompt instead of a raw error bubble.
- */
 export class MediaGenerationApiError extends Error {
   status: number | undefined;
   code: string | undefined;
@@ -186,24 +161,6 @@ export class MediaGenerationApiError extends Error {
   }
 }
 
-/**
- * PER-4 — the client half of "never a data URL".
- *
- * This hook used to build `data:image/png;base64,${b64_json}` whenever the
- * route returned inline bytes. That 1.4-4 MB string went into
- * `metadata.imageUrl` and was POSTed inside the message metadata, blowing the
- * request body cap: `saveMessageToDb` threw, the "Couldn't save this response"
- * toast fired, and the message was never persisted.
- *
- * The route now returns an authenticated `/api/files/{id}` URL whenever object
- * storage is configured, which is every real deployment. Inline bytes only
- * occur on a dev branch without R2 credentials; there we mint a short-lived
- * `blob:` object URL so the image still renders, the metadata written to the
- * database stays a few dozen characters, and nothing multi-megabyte can reach
- * the message body. A `blob:` URL does not survive a reload — that is an
- * honest consequence of running without durable storage, and the warning below
- * says so.
- */
 function objectUrlFromBase64(b64: string | undefined): string | undefined {
   if (!b64) return undefined;
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return undefined;
@@ -220,12 +177,6 @@ function objectUrlFromBase64(b64: string | undefined): string | undefined {
   }
 }
 
-/**
- * Re-key a transport error onto the classifier the UI conditions on, so a
- * video refusal reaches the same InlinePaywallCard path an image refusal does.
- * `MediaGenerationApiError` owns the paywall vocabulary (PAYWALL_ERROR_CODES /
- * PAYWALL_ERROR_TYPES above); `MediaApiError` only preserves the wire fields.
- */
 function toMediaGenerationError(err: unknown): unknown {
   if (!(err instanceof MediaApiError)) return err;
   return new MediaGenerationApiError(err.message, {
@@ -357,7 +308,6 @@ export function useMediaGeneration() {
     [addJob, updateJob],
   );
 
-  /** Start exactly one paid provider job after the caller's transcript commit. */
   const startVideo = useCallback(
     async (prompt: string, options: GenerateVideoOptions = {}): Promise<StartedVideoGeneration> => {
       const jobId = crypto.randomUUID();
@@ -415,12 +365,6 @@ export function useMediaGeneration() {
     [addJob, updateJob],
   );
 
-  /**
-   * Watch an existing durable task. This performs no POST and is therefore
-   * safe after reload. Reaching the client deadline pauses observation only;
-   * Workflow keeps the job queued/processing and the caller gets a resumable
-   * state instead of a false terminal failure.
-   */
   const watchVideo = useCallback(
     async (
       taskId: string,
@@ -473,7 +417,6 @@ export function useMediaGeneration() {
     [updateJob],
   );
 
-  /** Compatibility helper for callers that do not need the start/watch seam. */
   const generateVideo = useCallback(
     async (prompt: string, options: GenerateVideoOptions = {}): Promise<VideoWatchResult> => {
       const started = await startVideo(prompt, options);

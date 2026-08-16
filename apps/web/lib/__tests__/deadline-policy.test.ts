@@ -1,13 +1,3 @@
-/**
- * HARD-008 — the deadline hierarchy, asserted rather than described.
- *
- * These tests exist because the finding was not "the number 120000 appears in
- * six files". It was that no layer's deadline was related to the layer that
- * contains it, so a child could outlive its parent. Two properties are pinned
- * here: the static hierarchy (each child fits inside its parent at all), and
- * the dynamic clamp (each child keeps fitting once the parent has spent part
- * of its budget).
- */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -41,8 +31,6 @@ describe('deadline hierarchy', () => {
   });
 
   it("matches the chat route's declared maxDuration", () => {
-    // The policy mirrors a route segment config a plain module cannot read.
-    // Pinned against the source so the mirror cannot rot.
     const routeSource = readFileSync(
       join(__dirname, '../../app/api/llm/v1/chat/completions/route.ts'),
       'utf8',
@@ -61,7 +49,6 @@ describe('nestedDeadlineMs', () => {
   });
 
   it('shrinks the child to the parent budget that is actually left', () => {
-    // 235 s into a 240 s budget: the child gets 5 s, not another 120 s.
     expect(nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, CHAT_TOOL_LOOP_BUDGET_MS, 235_000)).toBe(5_000);
     expect(
       nestedDeadlineMs(CLOUD_CODE_COMMAND_DEADLINE_MS, CLOUD_CODE_TURN_BUDGET_MS, 590_000),

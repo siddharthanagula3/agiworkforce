@@ -1,7 +1,3 @@
-/**
- * Media generation types for the web app
- * Types for image and video generation providers and options
- */
 
 export type ImageProviderId = 'openai' | 'anthropic' | 'google' | 'stability' | 'replicate' | 'fal';
 

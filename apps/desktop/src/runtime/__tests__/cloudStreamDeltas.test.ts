@@ -1,21 +1,3 @@
-/**
- * cloudStreamDeltas unit tests — mock-only, no live backend.
- *
- * cloudStreamDeltas.ts previously had NO dedicated test file at all (only
- * WebRuntime.test.ts's x_generated_files case exercised it indirectly), which
- * is exactly why `x_code_result`/`x_research_status` could go unhandled for a
- * whole delta-type's worth of silent data loss without any test catching it
- * (see the module's own history: WebRuntime used to hand-roll parsing inline
- * and CloudRuntime implemented none of it before this sink existed).
- *
- * The `every x_* delta key the wire can emit` describe block below is the
- * pattern-guard for that whole class: the key list is sourced from a live
- * grep of apps/web/app/api/llm/v1/chat/completions/lib/*.ts (excluding
- * response-only fields like `x_agi_workforce`, which lives on the aggregated
- * non-streaming response object, never on a per-chunk `delta`) — if the
- * server starts emitting a new `x_*` delta key this list doesn't know about,
- * add it here AND to the sink, in the same change.
- */
 import { describe, it, expect } from 'vitest';
 import type { StreamEvent } from '@agiworkforce/unified-chat';
 import { createCloudStreamDeltaSink } from '../cloudStreamDeltas';
@@ -26,7 +8,6 @@ function makeSink() {
   return { sink, events };
 }
 
-/** Wrap a `delta` object in the OpenAI-wire `{choices: [{delta}]}` envelope the sink reads. */
 function payload(delta: Record<string, unknown>): Record<string, unknown> {
   return { choices: [{ delta, index: 0 }], model: 'fixture-stream-model' };
 }
@@ -80,8 +61,6 @@ describe('cloudStreamDeltas — every x_* delta key the wire can emit', () => {
 
   it('x_code_result: emits a code_execution_result event AND resolves the code_execution tool card', () => {
     const { sink, events } = makeSink();
-    // First open the card the way the server actually does (x_tool_status
-    // 'executing'), then close it — mirrors the real wire sequence.
     sink.onEvent(
       payload({
         x_tool_status: { type: 'server_tool_use', name: 'code_execution', status: 'executing' },
@@ -100,7 +79,6 @@ describe('cloudStreamDeltas — every x_* delta key the wire can emit', () => {
       type: 'code_execution_result',
       result: { stdout: '42\n', returnCode: 0 },
     });
-    // The card opened by x_tool_status must be resolved, not left spinning.
     const toolResult = events.find(
       (e) => e.type === 'tool_result' && e.toolCallId === 'status:code_execution',
     );

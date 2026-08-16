@@ -1,14 +1,3 @@
-/**
- * Tier-2 ExecuTorch vision plumbing (W10 residual, wired 2026-07-16):
- *  - VLM presets load with `capabilities:['vision']` + the model card's
- *    generation config, mirroring react-native-executorch's own exported
- *    preset constants;
- *  - the current turn's image rides `mediaPath` on the user message ONLY when
- *    the loaded model is vision-capable (capability honesty);
- *  - `effectiveTier2VisionIn` reports vision only for an INSTALLED tier-2 VLM
- *    — never from the catalog flag alone (both-tiers honesty rule);
- *  - the catalog-selected tier-2 vision row carries verified artifact fields.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ExecutorchPreset, OnDeviceModel } from '@agiworkforce/types';
 import {
@@ -57,7 +46,6 @@ describe('tier2 vision: VLM preset loading', () => {
       }),
       undefined,
     );
-    // Model card sampling settings — mirrors the package's own preset export.
     expect(mockInstance.configure).toHaveBeenCalledWith({
       generationConfig: VISION_PRESET.generationConfig,
     });
@@ -148,13 +136,10 @@ describe('catalog tier-2 vision entry (verified artifact fields)', () => {
   it('resolves with the verified checksum, size, and package-mirrored preset', () => {
     const model = requireExecutorchVisionModel();
 
-    // Verified 2026-07-16 against the HF LFS pointer AND x-linked-etag/size
-    // (two independent endpoints) for resolve/v0.8.0.
     expect(model.checksum).toMatch(/^[0-9a-f]{64}$/);
     expect(model.fileSizeBytes).toBeGreaterThan(0);
     expect(model.format).toBe('pte');
 
-    // Preset mirrors the catalog-owned react-native-executorch export.
     expect(model.executorchPreset).toMatchObject({
       capabilities: ['vision'],
       generationConfig: expect.any(Object),
@@ -162,7 +147,6 @@ describe('catalog tier-2 vision entry (verified artifact fields)', () => {
     expect(new URL(model.executorchPreset!.modelSource).protocol).toBe('https:');
     expect(model.downloadUrl).toBe(model.executorchPreset!.modelSource);
 
-    // Nominal vision + VLM runtime metadata; ship gate stays device QA.
     expect(model.capabilities.visionIn).toBe(true);
     expect(model.shipsInV1).toBe(false);
     expect(executorchVlmPresetInfo(model.executorchPreset!.modelName)?.capabilities).toEqual([

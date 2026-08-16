@@ -39,7 +39,6 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status }) 
 
   const data = result?.data as ScreenshotData | undefined;
 
-  // Show running state
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -49,7 +48,6 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status }) 
     );
   }
 
-  // Show error state if status indicates failure
   if (status === 'failed' || status === 'error') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -82,7 +80,6 @@ export const InlineScreenshot: React.FC<ToolResultProps> = ({ result, status }) 
 
   const imageSrc = imageBase64 ? `data:image/${format};base64,${imageBase64}` : imageUrl;
 
-  // Error state
   if (!success || error || !imageSrc) {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">

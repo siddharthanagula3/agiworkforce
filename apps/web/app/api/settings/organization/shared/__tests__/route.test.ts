@@ -1,11 +1,3 @@
-/**
- * GET /api/settings/organization/shared — the org view of what is shared.
- *
- * Companion to route.cross-org-isolation.test.ts, which owns the tenancy
- * assertions. This file owns the CONTRACT: the shape the client renders from,
- * and the read/manage split that decides whether the client is allowed to draw
- * mutation controls at all.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -29,12 +21,6 @@ const CONNECTOR = '44444444-4444-4444-8444-444444444444';
 
 function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
   mockQuery.mockImplementation(async (sql: string) => {
-    // resolveOrgMembership issues TWO statements: it first derives the active
-    // organization from the caller's own user_settings row (joined against
-    // organization_members so an id they do not belong to cannot be selected),
-    // then reads the role for that server-derived pair. A fake that answered
-    // only the old single query returned nothing for the first one, so
-    // membership resolved null and every route answered 403.
     if (/from public\.user_settings/i.test(sql) && /where s\.user_id = \$1/i.test(sql)) {
       return [{ organization_id: ORG }];
     }
@@ -117,8 +103,6 @@ describe('GET /api/settings/organization/shared', () => {
     expect(body.organizationId).toBe(ORG);
     expect(body.members.map((m) => m.userId)).toEqual(['user-owner', 'user-member']);
     expect(body.sharedProjects[0]!.projectId).toBe(PROJECT);
-    // The denial must reach the client, or the admin view would claim a member
-    // can see a project they cannot.
     expect(body.sharedProjects[0]!.memberGrants).toEqual([
       { userId: 'user-member', access: 'none' },
     ]);
@@ -144,7 +128,6 @@ describe('GET /api/settings/organization/shared', () => {
       sharedProjects: unknown[];
     };
     expect(body.currentUserRole).toBe('member');
-    // …but tells the client not to draw controls the mutation routes will 403.
     expect(body.canManageSharing).toBe(false);
     expect(body.sharedProjects).toHaveLength(1);
   });

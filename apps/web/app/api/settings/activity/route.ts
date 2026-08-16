@@ -16,7 +16,6 @@ const QuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-// Map security_audit_log event_type values to the UserActivity type enum.
 const EVENT_TYPE_MAP: Record<string, string> = {
   login: 'login',
   logout: 'logout',
@@ -30,11 +29,6 @@ function mapEventType(eventType: string): string {
   return EVENT_TYPE_MAP[eventType] ?? 'other';
 }
 
-/**
- * GET /api/settings/activity
- * User activity log · returns the current user's recent security audit events
- * mapped to the UserActivity shape the UI expects.
- */
 async function handleGetActivity(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-activity');
   if (rateLimitResponse) return rateLimitResponse;

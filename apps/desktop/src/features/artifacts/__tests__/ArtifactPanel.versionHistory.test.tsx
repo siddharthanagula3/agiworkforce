@@ -1,16 +1,6 @@
-/**
- * Regression test for the "View full diff history" trigger: it must mount
- * the real ArtifactVersionHistory (side-by-side DiffPanel) component with
- * the active artifact's real id/version, not the removed VersionHistoryDialog
- * stand-in.
- */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-// vi.mock factories run before this file's own top-level statements
-// (Vitest hoists them ahead of imports), so fixtures referenced inside must
-// be declared inline rather than as outer consts — matching the pattern
-// ArtifactSidebarParity.test.tsx already uses.
 vi.mock('@/stores/artifactStore', () => {
   const rendered = {
     id: 'art-1',
@@ -59,9 +49,6 @@ vi.mock('@/stores/artifactStore', () => {
     },
   ];
 
-  // Stable across renders (built once, outside the per-render selector call)
-  // — a fresh vi.fn() per render would change identity on every call, which
-  // retriggers the component's [..., getVersionHistory] effect forever.
   const state = {
     activeArtifactId: 'art-1',
     panelOpen: true,
@@ -94,8 +81,6 @@ vi.mock('@/lib/messageArtifactPanel', () => ({
   artifactToSummary: (a: unknown) => a,
 }));
 
-// NB: paths are relative to THIS file (in __tests__/), so they must climb up
-// one level to reach the sibling modules ArtifactPanel.tsx imports.
 vi.mock('../ArtifactRendererView', () => ({
   ArtifactRendererView: () => <div data-testid="artifact-renderer-view" />,
 }));
@@ -144,7 +129,6 @@ describe('ArtifactPanel version history trigger', () => {
       </Wrapper>,
     );
 
-    // Wait for the rendered artifact to load and the viewer toolbar to appear.
     fireEvent.click(await screen.findByRole('button', { name: 'Version history' }));
     fireEvent.click(await screen.findByText('View full diff history'));
 

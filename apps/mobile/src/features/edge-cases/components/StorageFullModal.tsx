@@ -1,12 +1,3 @@
-/**
- * StorageFullModal — shown when free disk space is <500MB at the moment a
- * model download is attempted.
- *
- * CTA "Open Storage Settings" links to the OS storage settings panel.
- * Cancel dismisses without action.
- *
- * Accessibility: modal trap, role="alertdialog".
- */
 import { Modal, View, Pressable, Linking, Platform } from 'react-native';
 import { HardDrive } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';

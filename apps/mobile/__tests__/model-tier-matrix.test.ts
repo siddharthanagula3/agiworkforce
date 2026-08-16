@@ -1,14 +1,3 @@
-/**
- * Exhaustive model × tier gating matrix for the mobile cloud picker.
- *
- * The requirement: the picker must NEVER show a model as selectable when the
- * account's tier can't use it — for EVERY model in the catalog against EVERY
- * tier, not just spot-checked pairs. The ground truth is the shared catalog
- * gate the server enforces (packages/contracts/types canAccessModelForSubscriptionTier)
- * plus the server's free-trial allowance for economy-list models
- * (apps/web/lib/free-trial-config.ts). Any drift between the mobile picker's
- * availability and that rule fails a specific cell here.
- */
 
 import {
   canAccessModelForSubscriptionTier,
@@ -17,16 +6,12 @@ import {
 } from '@agiworkforce/types';
 import { getModelListForCloudAccess } from '../src/features/model-picker/service';
 
-/** Every tier value the billing store can realistically hold. */
 const TIERS = ['free', 'basic', 'pro', 'max', 'team', 'enterprise'] as const;
 
 const ECONOMY_MODEL_IDS = new Set(getAllowedModelsForTier('economy'));
 
-/** The server-side access decision for a signed-in user on `tier`. */
 function serverAllows(modelId: string, tier: string): boolean {
   if (canAccessModelForSubscriptionTier(modelId, tier)) return true;
-  // Free-trial path: the server serves economy-list models to free accounts
-  // (usage-capped, not tier-locked).
   const canonical = normalizeModelId(modelId) ?? modelId;
   return ECONOMY_MODEL_IDS.has(canonical);
 }

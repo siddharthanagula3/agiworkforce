@@ -26,7 +26,6 @@ export class PresenceBridge {
   async connect(options: PresenceBridgeOptions): Promise<void> {
     this.activeOptions = options;
 
-    // Validate that backend has realtime server state ready and token available.
     await invoke<ConnectionInfo>('connect_websocket', {
       userId: options.userId,
       teamId: options.teamId ?? null,

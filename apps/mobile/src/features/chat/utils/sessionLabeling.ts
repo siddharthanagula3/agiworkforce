@@ -43,7 +43,6 @@ import type { ConversationExecutionMode } from './conversationMode';
 const PENDING_CAPABILITY_HANDSHAKE_VERSION = 'unversioned-pending-capability-handshake';
 
 export interface MobileSessionLabelInput {
-  /** The conversation id this session represents. */
   id: string;
   ownerUserId: string;
   executionMode: ConversationExecutionMode;
@@ -51,18 +50,9 @@ export interface MobileSessionLabelInput {
   updatedAt?: string;
 }
 
-/**
- * Builds and validates the `AppSession` record for a mobile conversation
- * from its real `ConversationExecutionMode`. Throws (via
- * `assertSessionInvariants`) if the constructed session violates a
- * cross-field invariant — call sites gate this on `__DEV__` so it never
- * changes production flow.
- */
 export function labelMobileSession(input: MobileSessionLabelInput): AppSession {
   const now = input.createdAt ?? new Date().toISOString();
   const updatedAt = input.updatedAt ?? now;
-  // See module doc "KNOWN GAP" — capabilityDocument is a REF, not the full
-  // handshake document, and mobile does not run the handshake yet.
   const policySnapshot = {
     capabilityDocument: {
       sessionId: input.id,
@@ -118,11 +108,6 @@ export function labelMobileSession(input: MobileSessionLabelInput): AppSession {
   return session;
 }
 
-/**
- * Resolves and validates the `ExecutionProfile` for a mobile conversation's
- * `ConversationExecutionMode`. No BYOK sub-mode on mobile, so `local` always
- * resolves the default on-device `Local` inference path.
- */
 export function mobileExecutionProfileFor(mode: ConversationExecutionMode): ExecutionProfile {
   const profile = resolveExecutionProfile({ toggle: mode === 'cloud' ? 'cloud' : 'local' });
   assertExecutionProfile(profile);

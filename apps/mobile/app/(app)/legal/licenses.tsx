@@ -1,11 +1,3 @@
-/**
- * Open source licenses.
- *
- * About linked to https://agiworkforce.com/licenses, a URL with no route
- * behind it — the row backgrounded the app to show a 404. Attribution is also
- * a store-review requirement, so the notice lives in the app, generated from
- * the installed dependency graph rather than written by hand.
- */
 import { useMemo } from 'react';
 import { Platform, View } from 'react-native';
 import { Text } from '@/components/ui/text';

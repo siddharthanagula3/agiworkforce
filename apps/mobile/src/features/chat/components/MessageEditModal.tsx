@@ -1,7 +1,3 @@
-/**
- * Standalone edit modal extracted from MessageBubble.
- * Allows users to edit a previously sent message.
- */
 
 import {
   View,
@@ -57,13 +53,6 @@ export function MessageEditModal({
           onPress={onClose}
           accessibilityLabel="Dismiss edit dialog"
           accessibilityRole="button"
-          // accessible=false: without this, a Pressable with a label/role becomes a
-          // leaf accessibility element and swallows every descendant — the text
-          // field and Cancel/Send buttons below would be invisible to VoiceOver,
-          // reachable only as one opaque "Dismiss edit dialog" node. Those two
-          // buttons are the dialog's actual accessible dismiss/confirm paths; this
-          // backdrop only needs to stay tappable for sighted users, which
-          // accessible=false does not affect.
           accessible={false}
         >
           <Pressable

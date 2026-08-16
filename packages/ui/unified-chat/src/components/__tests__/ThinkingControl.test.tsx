@@ -5,11 +5,6 @@ import { getModelReasoning, listCanonicalModels } from '@agiworkforce/types';
 import { useModelStore } from '../../stores/modelStore';
 import { ThinkingControl } from '../ThinkingControl';
 
-/**
- * DES-C03 — the composer had no thinking control at all, so `thinkingEnabled`
- * sat at its initial `false` and every managed request serialised
- * `thinking_mode: false`. Model ids come from the registry, never hardcoded.
- */
 function catalogModelIdWhere(predicate: (id: string) => boolean): string {
   const match = listCanonicalModels().find((model) => predicate(model.id));
   if (!match) throw new Error('No catalog model matches this reasoning shape');

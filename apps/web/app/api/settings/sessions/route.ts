@@ -1,20 +1,3 @@
-/**
- * GET    /api/settings/sessions · list this account's active Clerk sessions
- * DELETE /api/settings/sessions · end every active session ("log out everywhere")
- *
- * Callers of GET: the web Account section
- * (`apps/web/features/settings/sections/AccountSection.tsx`, Clerk cookie),
- * Mobile Account Security
- * (`apps/mobile/src/features/settings/account-security/service.ts`, Clerk
- * session JWT), and Desktop (`apps/desktop/src/api/cloudAccountSettings.ts`,
- * first-party HS256 device bearer). DELETE ("log out everywhere") is called by
- * web and Desktop only — Mobile revokes individual devices through
- * `./[sessionId]` and ends its own session through the Clerk sign-out flow.
- *
- * Identity and the current-session marker are resolved in `./session-principal`;
- * read that file for why a device-token caller is honestly told no listed row is
- * itself instead of having one guessed for it.
- */
 import 'server-only';
 
 import { clerkClient } from '@clerk/nextjs/server';
@@ -82,9 +65,6 @@ function serializeSession(session: ClerkSession, currentSessionId: string | null
     createdAt: toIsoTimestamp(session.createdAt),
     lastActiveAt: toIsoTimestamp(session.lastActiveAt),
     expiresAt: toIsoTimestamp(session.expireAt),
-    // `currentSessionId === null` means the caller holds a credential that is
-    // not a Clerk session (Desktop's device token), so nothing here is "this
-    // device" and nothing may claim to be.
     isCurrent: currentSessionId !== null && session.id === currentSessionId,
   };
 }
@@ -128,9 +108,6 @@ async function handleList(request: NextRequest) {
   return NextResponse.json({
     sessions: projected,
     totalCount: projected.length,
-    // Lets a client distinguish "none of these is you" from "we could not tell".
-    // The browser and Mobile always get true; Desktop's device token gets false
-    // and renders an explanation instead of a missing-row mystery.
     currentSessionKnown: currentSessionId !== null,
   });
 }
@@ -139,8 +116,6 @@ async function handleRevokeAll(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Credential verification runs BEFORE the CSRF helper is allowed to treat a
-  // Bearer request as safe — the ordering `lib/csrf.ts` documents as required.
   const { userId, currentSessionId } = await resolveSessionsPrincipal(request);
 
   const csrfError = await requireCsrfToken(request);
@@ -148,10 +123,6 @@ async function handleRevokeAll(request: NextRequest) {
 
   const client = await clerkClient();
   const sessions = await listActiveClerkSessions(client, userId);
-  // When the caller has no Clerk session of its own (Desktop device token),
-  // every listed session is "another device" and all of them are revoked. The
-  // caller's own credential is a developer token, revoked separately through
-  // POST /api/auth/logout when the client signs itself out.
   const currentSession = currentSessionId
     ? sessions.find((session) => session.id === currentSessionId)
     : undefined;
@@ -182,8 +153,6 @@ async function handleRevokeAll(request: NextRequest) {
 
   logger.info({ userId, revokedCount: result.revoked.length }, 'All active sessions revoked');
 
-  // Audit: "log out everywhere". Only the count is recorded — session ids are
-  // bearer-adjacent handles and stay out of the audit row.
   await recordAuditEvent({
     userId,
     eventType: 'logout',
@@ -199,8 +168,6 @@ async function handleRevokeAll(request: NextRequest) {
   return NextResponse.json({
     message: 'All active sessions revoked',
     revokedCount: result.revoked.length,
-    // false ⇒ the caller's own credential was not one of the revoked sessions
-    // and the client still has to end its own session locally.
     currentSessionRevoked: currentSession !== undefined,
   });
 }

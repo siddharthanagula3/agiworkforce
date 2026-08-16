@@ -1,9 +1,3 @@
-/**
- * CloudRuntime unit tests — mock-only, no live backend.
- *
- * Live E2E verification requires a signed Tauri build plus a real Cloud
- * account. Managed Cloud itself is public alpha and no longer waitlist-gated.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { StreamEvent } from '@agiworkforce/unified-chat';
 import type {
@@ -73,12 +67,9 @@ vi.mock('../../stores/auth', async (importOriginal) => {
     isAuthenticated: true,
     accessToken: 'desktop-cloud-token',
     cloudSessionEpoch: 1,
-    // Empty email claim: exactly what /api/auth/device/token mints for a
-    // browser-approved desktop device.
     user: { id: 'user-desktop', email: '' },
   };
   return {
-    // Keep the REAL cloud-session predicate so the boundary is exercised, not mocked.
     selectHasCloudAccountSession: actual.selectHasCloudAccountSession,
     useAuthStore: { getState: () => state },
     useUnifiedAuthStore: { getState: () => state },
@@ -99,7 +90,6 @@ const getRun = vi.fn();
 const createCleanupClient = vi.fn((_credential?: unknown) => ({ followRun, cancelRun, getRun }));
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
-  // Declared inside the factory: vi.mock is hoisted above module scope.
   CloudApiError: class CloudApiError extends Error {
     status: number;
     code: string | undefined;
@@ -200,8 +190,6 @@ describe('CloudRuntime', () => {
         workMode: 'agiwork',
         skillName: 'frontend-design',
         effort: 'high',
-        // DES-C24: always present so the server persists the assistant turn
-        // under the same row id the client upserts.
         assistantMessageId: expect.any(String),
       });
     });
@@ -218,8 +206,6 @@ describe('CloudRuntime', () => {
       expect(sendCloudMessage.mock.calls[0]?.[13]).toEqual({
         assistantMessageId: '0199c1f2-0000-7000-8000-00000000bbbb',
       });
-      // The durable user row uses the id the transcript already renders, so
-      // Regenerate can delete exactly the rows it removed from the view.
       expect(saveMessage).toHaveBeenCalledWith(
         'conv_ids',
         expect.objectContaining({ id: '0199c1f2-0000-7000-8000-00000000aaaa', role: 'user' }),
@@ -339,7 +325,6 @@ describe('CloudRuntime', () => {
 
       await runtime.sendMessage('conv_1', 'Hi there');
 
-      // User message saved before the stream call.
       expect(saveMessage).toHaveBeenNthCalledWith(
         1,
         'conv_1',
@@ -348,12 +333,9 @@ describe('CloudRuntime', () => {
       );
       expect(sendCloudMessage).toHaveBeenCalledTimes(1);
 
-      // Content events forwarded, done emitted.
       expect(events.filter((e) => e.type === 'content')).toHaveLength(2);
       expect(events.some((e) => e.type === 'done')).toBe(true);
 
-      // Assistant message saved with the accumulated content — fired async
-      // after 'done', so wait a tick.
       await vi.waitFor(() => {
         expect(saveMessage).toHaveBeenCalledTimes(2);
       });
@@ -473,8 +455,8 @@ describe('CloudRuntime', () => {
           await onDone();
         },
       );
-      saveMessage.mockResolvedValueOnce({ id: 'user-saved' }); // user save ok
-      saveMessage.mockRejectedValueOnce(new Error('save failed')); // assistant save fails
+      saveMessage.mockResolvedValueOnce({ id: 'user-saved' });
+      saveMessage.mockRejectedValueOnce(new Error('save failed'));
 
       await runtime.sendMessage('conv_1', 'Hi');
 
@@ -793,7 +775,6 @@ describe('CloudRuntime', () => {
           signal: AbortSignal,
         ) => {
           capturedSignal = signal;
-          // Simulate a long-running stream that never resolves within the test.
           await new Promise(() => {});
         },
       );
@@ -901,8 +882,6 @@ describe('CloudRuntime', () => {
       await runtime.dispose();
       await send;
 
-      // Closing the window, remounting, or signing out is not the user
-      // pressing Stop. The run keeps going server-side and is reattachable.
       expect(cancelRun).not.toHaveBeenCalled();
       expect(saveMessage).toHaveBeenCalledTimes(savesBeforeDispose);
       expect(events).toEqual(eventsBeforeDispose);
@@ -969,8 +948,6 @@ describe('CloudRuntime', () => {
       const events = collectEvents(runtime);
       await runtime.reattachConversation('conv_reattach', persisted);
 
-      // The cursor, not text comparison, is what prevents duplicate prose: the
-      // replay is only ever asked for events the stored message does not cover.
       expect(followRun).toHaveBeenCalledWith(
         MANAGED_RUN_ID,
         expect.objectContaining({ afterSequence: 4 }),
@@ -978,7 +955,6 @@ describe('CloudRuntime', () => {
       expect(events.filter((event) => event.type === 'content')).toEqual([
         expect.objectContaining({ content: ' Found three problems.' }),
       ]);
-      // The saved turn is the prose already stored plus only what was new.
       expect(saveMessage).toHaveBeenCalledWith(
         'conv_reattach',
         expect.objectContaining({
@@ -1026,9 +1002,6 @@ describe('CloudRuntime', () => {
       const events = collectEvents(runtime);
       await runtime.reattachConversation('conv_awaiting', persisted);
 
-      // Nothing was streamed to this client, so there is no persisted
-      // `cloudApproval` projection to hydrate from — the card is rebuilt from
-      // the server's own account of what it is blocked on.
       expect(events).toEqual([
         expect.objectContaining({
           type: 'tool_approval_request',
@@ -1080,7 +1053,6 @@ describe('CloudRuntime', () => {
 
       await runtime.reattachConversation('conv_live', persisted);
 
-      // Two writers of one assistant message is how a transcript forks.
       expect(getRun).not.toHaveBeenCalled();
       runtime.stopGeneration('conv_live');
       await send;
@@ -1511,8 +1483,6 @@ describe('CloudRuntime', () => {
       await runtime.dispose();
 
       await expect(resolution).rejects.toMatchObject({ name: 'AbortError' });
-      // The approved tools may already be executing server-side; tearing down
-      // this client must not retract a decision the user deliberately made.
       expect(cancelRun).not.toHaveBeenCalled();
     });
   });

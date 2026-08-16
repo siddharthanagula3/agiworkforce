@@ -1,16 +1,5 @@
 'use client';
 
-/**
- * ProjectsView — the ChatGPT project-folders view (list + detail pane), ported
- * from apps/desktop/src/features/chat/ProjectsView.tsx as pure presentation.
- *
- * Project DATA, linked conversations, knowledge files, and all mutations
- * (create / open / new-chat / rename / delete / archive / select) are injected
- * as props. NO store, NO IO, NO router. The desktop ProjectHeader /
- * summarizeProjectHeader (which live in @agiworkforce/unified-chat) are NOT
- * imported here to keep the pure-UI dependency budget — surfaces compose the
- * header above this view if they want it.
- */
 import { useMemo, useState } from 'react';
 import {
   Brain,
@@ -32,13 +21,11 @@ import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, MenuSeparator } from './Menu';
 import type { SidebarProject } from './types';
 
-/** A linked conversation chip in the project detail pane. */
 export interface ProjectViewConversation {
   id: string;
   title: string;
 }
 
-/** A file row in the project detail pane (project file or knowledge file). */
 export interface ProjectViewFile {
   id: string;
   name: string;
@@ -46,7 +33,6 @@ export interface ProjectViewFile {
   size?: number;
 }
 
-/** Extended project record the view renders in the detail pane. */
 export interface ProjectViewProject extends SidebarProject {
   archived?: boolean;
   customInstructions?: string;

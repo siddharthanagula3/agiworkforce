@@ -1,10 +1,5 @@
-/**
- * Templates & Tutorials API — typed wrappers for template and tutorial Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface AgentTemplate {
   id: string;
@@ -56,8 +51,6 @@ export interface SampleDataSummary {
   projects: number;
 }
 
-// ---- Templates ----
-
 export async function getAllTemplates(): Promise<AgentTemplate[]> {
   return command<AgentTemplate[]>('get_all_templates');
 }
@@ -88,8 +81,6 @@ export async function uninstallTemplate(templateId: string): Promise<void> {
 export async function getTemplateCategories(): Promise<string[]> {
   return command<string[]>('get_template_categories');
 }
-
-// ---- Tutorials ----
 
 export async function getTutorials(): Promise<Tutorial[]> {
   return command<Tutorial[]>('get_tutorials');

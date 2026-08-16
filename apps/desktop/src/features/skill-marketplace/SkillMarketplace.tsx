@@ -1,14 +1,3 @@
-/**
- * SkillMarketplace
- *
- * Full-panel browser for AGI Workforce skills.
- * Features: grid/list toggle, category filter tabs, debounced search,
- * expandable skill cards with active/inactive toggle.
- *
- * Data flows:
- *   mount → skill_list (invoke) → useSkillMarketplaceStore
- *   skill_reload (invoke) → re-fetch on manual reload
- */
 import { LayoutGrid, List, RefreshCw, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -19,8 +8,6 @@ import { SkillCard } from './SkillCard';
 import { SkillCategoryFilter } from './SkillCategoryFilter';
 import { SkillSearchBar } from './SkillSearchBar';
 import { selectFilteredSkills, useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
-
-// ── Skeleton placeholder grid ─────────────────────────────────────────────────
 
 function SkillCardSkeleton() {
   return (
@@ -46,8 +33,6 @@ function LoadingGrid() {
     </div>
   );
 }
-
-// ── Empty state ───────────────────────────────────────────────────────────────
 
 function EmptyState({ hasQuery }: { hasQuery: boolean }) {
   const setSearchQuery = useSkillMarketplaceStore((s) => s.setSearchQuery);
@@ -80,8 +65,6 @@ function EmptyState({ hasQuery }: { hasQuery: boolean }) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export function SkillMarketplace() {
   const isLoading = useSkillMarketplaceStore((s) => s.isLoading);
   const error = useSkillMarketplaceStore((s) => s.error);
@@ -94,10 +77,8 @@ export function SkillMarketplace() {
   const searchQuery = useSkillMarketplaceStore((s) => s.searchQuery);
   const selectedCategory = useSkillMarketplaceStore((s) => s.selectedCategory);
 
-  // Use the selector via the hook to stay reactive
   const filteredSkills = useSkillMarketplaceStore(useShallow(selectFilteredSkills));
 
-  // Load on mount — idempotent if already loaded
   useEffect(() => {
     if (!hasLoaded && !isLoading) {
       void fetchSkills();

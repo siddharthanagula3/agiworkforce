@@ -17,21 +17,14 @@ import type { ModelResponse, Responder } from './types';
 
 const MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 
-/** Wire version pinned by `crates/agiworkforce-llm/src/stream.rs`. */
 const ANTHROPIC_VERSION = '2023-06-01';
 
-/**
- * Per-request ceiling. Not configurable: every caller wants the same bound, and
- * a run that hangs on one row would stall the whole corpus behind it.
- */
 const REQUEST_TIMEOUT_MS = 60_000;
 
 const CATALOG_PATH = '../../../packages/contracts/types/src/models.json';
 
 export interface ResolvedModel {
-  /** Catalog key. */
   readonly id: string;
-  /** What goes on the wire. */
   readonly apiModelId: string;
 }
 
@@ -39,13 +32,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Pick the Anthropic model a live run measures.
- *
- * `providers.anthropic.defaultModel` is the catalog's own answer to "which
- * Claude does this product reach for", so the eval measures what users get
- * rather than a model chosen by whoever wrote the harness.
- */
 export function resolveAnthropicModel(catalog: unknown): ResolvedModel {
   if (!isRecord(catalog)) throw new Error('model catalog is not an object');
 
@@ -72,18 +58,10 @@ export function resolveAnthropicModel(catalog: unknown): ResolvedModel {
   return { id: defaultModel, apiModelId };
 }
 
-/** Read the committed model catalog. */
 export function readModelCatalog(): unknown {
   return JSON.parse(readFileSync(fileURLToPath(new URL(CATALOG_PATH, import.meta.url)), 'utf8'));
 }
 
-/**
- * Extract the answer from a Messages response.
- *
- * The payload is provider output, so nothing about its shape is assumed: a
- * response whose `content` is missing or holds no text block yields empty text,
- * which the graders score as a failure rather than crashing the run.
- */
 export function extractResponse(payload: unknown): ModelResponse {
   const record = isRecord(payload) ? payload : {};
   const blocks = Array.isArray(record['content']) ? record['content'] : [];
@@ -100,12 +78,10 @@ export function extractResponse(payload: unknown): ModelResponse {
 export interface AnthropicResponderOptions {
   readonly apiKey: string;
   readonly apiModelId: string;
-  /** Injected so the request shape can be asserted without a paid call. */
   readonly fetchImpl?: typeof fetch;
   readonly maxOutputTokens?: number;
 }
 
-/** Build a responder that answers each case with one Messages call. */
 export function anthropicResponder(options: AnthropicResponderOptions): Responder {
   const { apiKey, apiModelId, fetchImpl = fetch, maxOutputTokens = 512 } = options;
 
@@ -128,8 +104,6 @@ export function anthropicResponder(options: AnthropicResponderOptions): Responde
     });
 
     if (!response.ok) {
-      // Truncated: a provider error body can be long, and the failing status
-      // plus the case id is what identifies the problem.
       const body = (await response.text()).slice(0, 200);
       throw new Error(`anthropic ${response.status} for ${evalCase.id}: ${body}`);
     }

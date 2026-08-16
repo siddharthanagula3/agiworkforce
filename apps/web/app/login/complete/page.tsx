@@ -11,13 +11,6 @@ import {
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
-/**
- * Authenticated checkpoint after Clerk sign-in.
- *
- * Current-version acceptances pass through without rewriting their original
- * timestamp. Missing or superseded acceptances remain behind the clickwrap and
- * durable recorder before the sanitized destination is restored.
- */
 export default async function LoginCompletePage({
   searchParams,
 }: {

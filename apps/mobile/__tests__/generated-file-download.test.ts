@@ -1,13 +1,3 @@
-/**
- * downloadGeneratedFile (services/fileCreation.ts) — the Cloud-mode
- * generated-file consumption leg on mobile.
- *
- * Pins: bytes are fetched through guardedFetch (Local-mode zero-leak
- * chokepoint), the Clerk Bearer token is attached ONLY for our-cloud hosts,
- * downloaded bytes land in the exports dir with the real extension, and HTTP
- * failures surface as honest errors (401 → sign-in message) instead of a
- * silent empty export.
- */
 
 const mockWriteAsStringAsync = jest.fn();
 const mockGetInfoAsync = jest.fn();
@@ -39,7 +29,6 @@ jest.mock('@/services/authSession', () => ({
 import * as Sharing from 'expo-sharing';
 import { downloadGeneratedFile, shareGeneratedImage } from '@/services/fileCreation';
 
-/** FileReader stand-in: resolves every blob to a fixed base64 data URL. */
 class FakeFileReader {
   onload: (() => void) | null = null;
   onerror: (() => void) | null = null;

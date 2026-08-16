@@ -70,14 +70,6 @@ export type MapSearchToolOutcome =
   | { ok: true; content: string; card: InteractiveCard }
   | { ok: false; content: string };
 
-/**
- * The card's VISIBLE crop, in tiles — not the painted plane, which is larger
- * so wide columns stay filled. Zoom is fitted to what the user can actually
- * see, so both endpoints of a route land inside the frame rather than inside
- * the part of the plane the container crops away. Conservative on purpose: a
- * narrow column shows less than this and would otherwise clip a pin.
- * Mirrors `FRAME_HEIGHT` / `TILE_SIZE` in `MapSearchCard`.
- */
 export const MAP_SEARCH_TILES_ACROSS = 2.5;
 export const MAP_SEARCH_TILES_DOWN = 340 / 256;
 
@@ -86,7 +78,6 @@ export async function executeMapSearchTool(
   context: {
     toolCallId: string;
     now?: () => Date;
-    /** Injectable for tests; production geocodes through Nominatim. */
     resolveView?: typeof resolveMapView;
   },
 ): Promise<MapSearchToolOutcome> {
@@ -112,9 +103,6 @@ export async function executeMapSearchTool(
       url: providerSearchUrl('openstreetmap', query),
     },
   ];
-  // Resolve a real viewport so the card can paint tiles instead of only
-  // offering links. A null result is expected and non-fatal: the card still
-  // ships, just without a map.
   const resolved = await (context.resolveView ?? resolveMapView)(query, {
     tilesAcross: MAP_SEARCH_TILES_ACROSS,
     tilesDown: MAP_SEARCH_TILES_DOWN,

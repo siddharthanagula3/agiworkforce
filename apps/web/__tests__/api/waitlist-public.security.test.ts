@@ -1,26 +1,8 @@
-/**
- * Threat model: POST /api/waitlist/public must:
- * - Reject requests without a valid CSRF token (403) before touching the DB
- * - Return 429 when the 'waitlist' rate limiter signals exceeded
- * - Reject malformed or missing email with 400
- * - Work WITHOUT a signed-in user (anonymous marketing-site capture) and
- *   persist a null user_id in that case
- * - Attach the Clerk user id when a session exists
- * - Fail closed when storage is unavailable, and NOT leak internal state
- *   (table name, database errors, stack traces) in responses
- *
- * Storage contract:
- * - Normalized email is persisted to cloud_managed_waitlist because launch
- *   operations must be able to send invite/release emails.
- * - user_id is nullable for explicitly anonymous records (migration 0034).
- * - Rate limit uses the dedicated 'waitlist' config, not 'default'.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-// ─── Baseline mocks ───────────────────────────────────────────────────────────
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/logger', () => ({
@@ -50,15 +32,11 @@ vi.mock('@/lib/csrf', () => ({
   getSessionIdFromRequest: vi.fn(() => Promise.resolve('session-123')),
 }));
 
-// ─── Rate-limit mock ──────────────────────────────────────────────────────────
 const mockWithRateLimit = vi.fn().mockResolvedValue(null);
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: (...args: unknown[]) => mockWithRateLimit(...args),
 }));
 
-// ─── Neon DB mock ─────────────────────────────────────────────────────────────
-// `query` now matters: the route writes the consent ledger through it before it
-// touches `execute`, and `recordConsent` throws when the INSERT returns no row.
 const mockExecute = vi.fn().mockResolvedValue(1);
 const mockQuery = vi.fn();
 
@@ -82,36 +60,18 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-// ─── Clerk auth mock — OPTIONAL identity, default anonymous ──────────────────
 const mockAuth = vi.fn().mockResolvedValue({ userId: null });
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockAuth(),
 }));
 
-// ─── Import route under test ──────────────────────────────────────────────────
 import { POST, OPTIONS } from '@/app/api/waitlist/public/route';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * A decision for every purpose the waitlist form shows (DPDP s.6).
- *
- * The route refuses to store the address unless the required purpose comes back
- * granted, and refuses the request outright if any shown purpose is simply
- * missing — an absent purpose cannot be told apart from a client that dropped
- * the field, so it is not read as a refusal. Both purposes therefore appear
- * here, and `product_updates` is `false` on purpose: an unticked box is a
- * recorded decision, not an omission.
- */
 const CONSENTED = [
   { purpose: 'enterprise_waitlist', granted: true },
   { purpose: 'product_updates', granted: false },
 ];
 
-/**
- * Every request that expects to reach storage carries consent. Tests that
- * exercise the consent gate itself pass their own `consent` and override it.
- */
 function makePostRequest(
   body: Record<string, unknown>,
   extra?: RequestInit['headers'],
@@ -145,23 +105,18 @@ function rateLimitExceededResponse(): NextResponse {
   );
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
 describe('POST /api/waitlist/public — security tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: CSRF passes, rate limit passes, execute succeeds, anonymous user
     mockRequireCsrfToken.mockResolvedValue(null);
     mockWithRateLimit.mockResolvedValue(null);
     mockExecute.mockResolvedValue(1);
     mockAuth.mockResolvedValue({ userId: null });
-    // The consent ledger INSERT returns the row it wrote; anything else makes
-    // `recordConsent` throw, which is the fail-closed behaviour asserted below.
     mockQuery.mockImplementation((_sql: string, params: unknown[]) =>
       Promise.resolve([consentRowFor(String(params[2]), Boolean(params[3]))]),
     );
   });
 
-  // ─── CSRF protection ────────────────────────────────────────────────────────
   describe('(a) CSRF enforcement', () => {
     it('returns 403 with CSRF_VALIDATION_FAILED when CSRF token is missing', async () => {
       mockRequireCsrfToken.mockResolvedValueOnce(csrfBlockedResponse());
@@ -199,7 +154,6 @@ describe('POST /api/waitlist/public — security tests', () => {
     });
   });
 
-  // ─── Rate limiting ──────────────────────────────────────────────────────────
   describe('(b) Rate limit enforcement', () => {
     it("uses the dedicated 'waitlist' rate limit config", async () => {
       const request = makePostRequest({ email: 'test@example.com' });
@@ -219,7 +173,6 @@ describe('POST /api/waitlist/public — security tests', () => {
     });
   });
 
-  // ─── Anonymous capture (the point of this route) ───────────────────────────
   describe('(c) Anonymous capture', () => {
     it('accepts a signup with NO signed-in user and stores a null user_id', async () => {
       mockAuth.mockResolvedValueOnce({ userId: null });
@@ -231,9 +184,9 @@ describe('POST /api/waitlist/public — security tests', () => {
       expect(mockExecute).toHaveBeenCalledTimes(1);
 
       const [, params] = mockExecute.mock.calls[0] as [string, unknown[]];
-      expect(params[0]).toBeNull(); // user_id
-      expect(params[1]).toBe('visitor@example.com'); // normalized email
-      expect(params[2]).toBe('website'); // source
+      expect(params[0]).toBeNull();
+      expect(params[1]).toBe('visitor@example.com');
+      expect(params[2]).toBe('website');
     });
 
     it('still works when auth() throws (no Clerk middleware context)', async () => {
@@ -268,7 +221,6 @@ describe('POST /api/waitlist/public — security tests', () => {
     });
   });
 
-  // ─── Input validation ───────────────────────────────────────────────────────
   describe('(d) Input validation', () => {
     it('rejects a missing email with 400', async () => {
       const request = makePostRequest({ source: 'website' });
@@ -333,7 +285,6 @@ describe('POST /api/waitlist/public — security tests', () => {
     });
   });
 
-  // ─── Fail-closed storage / no internal leakage ──────────────────────────────
   describe('(e) Fail-closed storage', () => {
     it('returns 5xx (not success) when the table is missing (42P01)', async () => {
       mockExecute.mockRejectedValueOnce(
@@ -374,7 +325,6 @@ describe('POST /api/waitlist/public — security tests', () => {
     });
   });
 
-  // ─── CORS preflight ─────────────────────────────────────────────────────────
   describe('(f) OPTIONS preflight', () => {
     it('returns 204 for preflight when CORS handler passes', async () => {
       const request = new NextRequest('http://localhost/api/waitlist/public', {
@@ -385,12 +335,6 @@ describe('POST /api/waitlist/public — security tests', () => {
     });
   });
 
-  // ─── DPDP consent gate ──────────────────────────────────────────────────────
-  //
-  // This route is the product's largest unconsented intake: a visitor's
-  // plaintext email, no account, no prior relationship, stored indefinitely.
-  // The Act makes that storable only against a purpose the person affirmatively
-  // agreed to, so the gate below is the point of the endpoint, not decoration.
   describe('(g) consent (DPDP s.6)', () => {
     it('refuses to store the address when the required purpose is declined', async () => {
       const request = makePostRequest({
@@ -406,14 +350,10 @@ describe('POST /api/waitlist/public — security tests', () => {
 
       const data = (await response.json()) as { error?: { code?: string } };
       expect(data.error?.code).toBe('CONSENT_REQUIRED');
-      // The whole point: nothing was written.
       expect(mockExecute).not.toHaveBeenCalled();
     });
 
     it('refuses the request when a shown purpose carries no decision at all', async () => {
-      // An absent purpose is not a refusal — it cannot be told apart from a
-      // client that dropped the field, so the request fails rather than
-      // recording a decision nobody made.
       const request = makePostRequest({
         email: 'test@example.com',
         consent: [{ purpose: 'enterprise_waitlist', granted: true }],
@@ -463,7 +403,6 @@ describe('POST /api/waitlist/public — security tests', () => {
         return { purpose: p[2], granted: p[3] };
       });
       expect(recorded).toContainEqual({ purpose: 'enterprise_waitlist', granted: true });
-      // A refusal is a row, not an absence — that distinction is the record.
       expect(recorded).toContainEqual({ purpose: 'product_updates', granted: false });
     });
 
@@ -491,8 +430,8 @@ describe('POST /api/waitlist/public — security tests', () => {
 
       for (const [, params] of consentWrites) {
         const p = params as unknown[];
-        expect(p[0]).toBeNull(); // no user id — this visitor has no account
-        expect(p[1]).toMatch(/^[a-f0-9]{64}$/); // sha256 of the normalised address
+        expect(p[0]).toBeNull();
+        expect(p[1]).toMatch(/^[a-f0-9]{64}$/);
         expect(JSON.stringify(params)).not.toContain('Test@Example.com');
         expect(JSON.stringify(params)).not.toContain('test@example.com');
       }

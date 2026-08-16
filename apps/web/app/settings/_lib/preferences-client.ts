@@ -14,16 +14,6 @@ export interface PreferenceNamespaceSavedDetail {
   value: unknown;
 }
 
-/**
- * Read a namespace and return EXACTLY what the server stored — no merge with a
- * client-side fallback.
- *
- * PER-10: `fetchPreferenceNamespace` merges `{...fallback, ...serverSettings}`,
- * so a stored empty string permanently wins over a correct default and there is
- * no way to tell "the user cleared this" from "the server has never been told".
- * Callers whose defaults are DERIVED (a name, an inferred preference) must use
- * this and apply their own precedence.
- */
 export async function fetchStoredPreferenceNamespace<T extends object>(
   namespace: string,
 ): Promise<Partial<T>> {
@@ -43,11 +33,6 @@ export async function fetchStoredPreferenceNamespace<T extends object>(
     : {};
 }
 
-/**
- * Read a namespace merged over a static fallback. Safe when every fallback
- * value is a CONSTANT default; see `fetchStoredPreferenceNamespace` when the
- * defaults are derived from user identity.
- */
 export async function fetchPreferenceNamespace<T extends object>(
   namespace: string,
   fallback: T,
@@ -56,15 +41,6 @@ export async function fetchPreferenceNamespace<T extends object>(
   return { ...fallback, ...stored } as T;
 }
 
-/**
- * PER-8 — write the canonical full name.
- *
- * `profiles.display_name` is the single source of truth for the user's full
- * name, and `PATCH /api/me` is its only writer. Settings used to write the name
- * into a settings namespace and Clerk `unsafeMetadata` instead, neither of
- * which `/api/me` read, so "Full name" could not change the greeting, header or
- * sidebar.
- */
 export async function saveDisplayName(displayName: string): Promise<void> {
   const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
   const response = await fetch('/api/me', {
@@ -82,11 +58,6 @@ export async function saveDisplayName(displayName: string): Promise<void> {
   }
 }
 
-/**
- * Re-read `/api/me` into both client stores so a profile edit is visible in the
- * greeting, header and sidebar immediately instead of after a hard reload.
- * Lazy imports keep the settings bundle out of these stores' module-init path.
- */
 export async function refreshProfileConsumers(): Promise<void> {
   const [{ useBillingStore }, { useAuthStore }] = await Promise.all([
     import('@shared/stores/web-auth-store'),
@@ -114,9 +85,6 @@ export async function savePreferenceNamespace<T extends object>(
     throw new Error(data.error?.message ?? 'Failed to save settings');
   }
 
-  // Keep active consumers in the current tab aligned with the value that was
-  // just durably accepted. This fires only after a successful response, so a
-  // failed save cannot make runtime behavior diverge from the server value.
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent<PreferenceNamespaceSavedDetail>(PREFERENCE_NAMESPACE_SAVED_EVENT, {

@@ -74,16 +74,6 @@ async function openBillingUrl(
   await openExternalUrl(url);
 }
 
-/**
- * Opens a Stripe Checkout session for the given tier + interval.
- *
- * - POSTs to the web app's /api/checkout endpoint with the user's session JWT.
- * - If STRIPE_SECRET_KEY is not configured on the server, the server returns 503
- *   and we show a toast-like fallback message via the returned error string.
- * - For already-subscribed users, the server returns a billing portal URL instead.
- *
- * Returns an error string on failure, null on success.
- */
 export async function openCheckout(
   tierId: BillingPlanTier,
   interval: BillingInterval = 'monthly',
@@ -133,10 +123,6 @@ export async function openCheckout(
   return null;
 }
 
-/**
- * Opens the Stripe Billing Portal for managing an existing subscription
- * (pause, downgrade, cancel, update payment).
- */
 export async function openBillingPortal(
   onClosed?: () => void | Promise<void>,
 ): Promise<string | null> {
@@ -318,11 +304,6 @@ export async function openUpgradePayment(
   await openBillingUrl(paymentUrl, 'Complete your AGI upgrade payment', onClosed);
 }
 
-/**
- * Refreshes the canonical account snapshot while the billing webhook settles.
- * This mirrors Web's bounded 1s/3s/8s invalidation sequence and never mutates
- * the displayed plan optimistically.
- */
 export async function waitForPlanActivation(tierId: BillingPlanTier): Promise<boolean> {
   const boundary = captureManagedCloudBoundary('Cloud plan activation');
   const delays = [0, 1_000, 3_000, 8_000];

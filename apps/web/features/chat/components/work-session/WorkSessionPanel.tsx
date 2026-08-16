@@ -189,11 +189,6 @@ function extractPaths(input: unknown): string[] {
   return paths;
 }
 
-/**
- * Aggregate the canonical task state into the three sections shown by the
- * persistent AGI Work side panel. The function is pure so the summary contract
- * remains directly testable without rendering the shell.
- */
 export function buildWorkSessionSummary(
   messages: Message[],
   artifacts: Artifact[],

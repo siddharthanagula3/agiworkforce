@@ -1,18 +1,3 @@
-/**
- * PAR-M05 — the composer's full-screen editor.
- *
- * The inline composer caps its field at ~6 lines, so the founder's pasted
- * several-hundred-character message ("when we paste large text in input area its
- * width goes very large and only the middle input") scrolls inside a small
- * window with no way to read it whole. The reference opens the message full
- * screen from a control pinned inside the composer card (IMG_0672).
- *
- * What is pinned here is that the editor is a VIEW, not a second draft: it holds
- * no text of its own, so nothing can diverge between the two surfaces. The
- * composer-side integration (when the control appears, and that the text round
- * trips) lives in chat-input.test.tsx, where the composer's own state is what
- * makes the assertion meaningful.
- */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -48,8 +33,6 @@ function renderEditor(props: Partial<React.ComponentProps<typeof ComposerFullScr
 
 describe('ComposerFullScreenEditor', () => {
   it('renders nothing while closed', () => {
-    // Mounting it closed would put a second autoFocus field in the tree and
-    // fight the inline composer for the keyboard.
     const { queryByTestId } = renderEditor({ visible: false });
     expect(queryByTestId('chat.composer.fullscreen.input')).toBeNull();
   });
@@ -60,7 +43,6 @@ describe('ComposerFullScreenEditor', () => {
 
     const input = getByTestId('chat.composer.fullscreen.input');
     expect(input.props.value).toBe(value);
-    // No height cap: the whole point is that the message is readable at once.
     expect(input.props.multiline).toBe(true);
     expect(input.props.style?.maxHeight).toBeUndefined();
   });
@@ -71,13 +53,10 @@ describe('ComposerFullScreenEditor', () => {
     fireEvent.changeText(getByTestId('chat.composer.fullscreen.input'), 'after');
 
     expect(onChangeText).toHaveBeenCalledWith('after');
-    // Still rendering the prop: the parent's state is the only copy.
     expect(getByTestId('chat.composer.fullscreen.input').props.value).toBe('before');
   });
 
   it('collapses without sending', () => {
-    // Collapse and send sit next to each other; wiring them to the same
-    // handler would fire a message the user only meant to keep editing.
     const { getByTestId, onClose, onSend } = renderEditor();
 
     fireEvent.press(getByTestId('chat.composer.fullscreen.collapse'));
@@ -92,8 +71,6 @@ describe('ComposerFullScreenEditor', () => {
     fireEvent.press(getByLabelText('Send message'));
 
     expect(onSend).toHaveBeenCalledTimes(1);
-    // The composer closes the editor as part of its send handler, so the
-    // editor must not double-dismiss.
     expect(onClose).not.toHaveBeenCalled();
   });
 

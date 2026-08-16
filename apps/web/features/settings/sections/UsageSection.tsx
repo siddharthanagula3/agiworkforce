@@ -13,17 +13,8 @@ import { getBillingPlanPricing, normalizeUsagePercentage } from '@agiworkforce/t
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 
-// Only the tick interval is still needed here; the hour/day thresholds moved to
-// formatUsageResetIn in @agiworkforce/types along with the phrasing they served.
 const MINUTE_MS = 60 * 1000;
 
-/*
- * The local relative-reset formatter was removed: formatUsageResetIn in
- * @agiworkforce/types now owns that phrasing so web, mobile, desktop and the
- * Chrome panel cannot describe the same reset instant four different ways.
- * formatAbsolute stays — it is the verifiable instant PAR-3 added, and it is
- * genuinely web-specific (mobile has no room for it).
- */
 function formatAbsolute(value: string): string {
   return new Date(value).toLocaleString(undefined, {
     month: 'short',
@@ -90,19 +81,6 @@ function UsageBar({
   );
 }
 
-/**
- * One detail line for a meter row.
- *
- * The label and the relative countdown come from the shared vocabulary so this
- * surface cannot drift from mobile and desktop again. The ABSOLUTE instant is
- * kept on top of it, which is what the retired `formatReset` existed to provide
- * (PAR-3): a user should be able to plan from "Resets in 3 hours" and verify
- * against "Jul 26, 4:00 PM". Mobile shows only the relative form, and that is a
- * legitimate difference of space, not of vocabulary.
- *
- * The reset clause is dropped entirely when there is nothing meaningful to say,
- * rather than printing a stale or negative countdown next to a live percentage.
- */
 function usageDetail(percentRemaining: number, resetAt: string | null, nowMs: number): string {
   const remaining = formatUsageRemaining(percentRemaining);
   const resets = formatUsageResetIn(resetAt, nowMs);
@@ -113,27 +91,18 @@ function usageDetail(percentRemaining: number, resetAt: string | null, nowMs: nu
 export function UsageSection() {
   const { usage, loading, error, lastUpdatedAt, stale, refresh } = useManagedUsageSummary();
 
-  // Recomputed on every render tick that matters; the relative countdown is
-  // derived from this so it does not silently freeze at its first value.
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), MINUTE_MS);
     return () => clearInterval(timer);
   }, []);
 
-  // Plan label source of truth = the billing store's subscription tier (same as
-  // BillingSection), so Usage and Billing never disagree. Fall back to /api/usage's
-  // plan_tier, then 'free', when the billing store hasn't hydrated.
   const billingTier = useBillingStore((s) => s.subscription?.tier);
   const rawTier = usage?.plan_tier ?? billingTier ?? 'free';
   const planName = getBillingPlanPricing(rawTier).label;
   const usedPercent = normalizeUsagePercentage(usage?.usage_percentage);
   const sessionUsedPercent = normalizeUsagePercentage(usage?.session_usage_percentage);
   const weeklyUsedPercent = normalizeUsagePercentage(usage?.weekly_usage_percentage);
-  // PAR-1: the contract has carried `flagship_weekly_*` end to end all along and
-  // this component simply never destructured it — so a user could sit at 100%
-  // on the expensive model family while the aggregate bar read 60%, then hit a
-  // wall with no warning.
   const flagshipWeeklyUsedPercent = normalizeUsagePercentage(
     usage?.flagship_weekly_usage_percentage,
   );
@@ -144,7 +113,6 @@ export function UsageSection() {
       hour: 'numeric',
       minute: '2-digit',
     });
-    // PAR-4: say so when the figures on screen are older than the last attempt.
     return stale ? `${time} (refresh failed)` : time;
   }, [lastUpdatedAt, loading, stale]);
 

@@ -1,8 +1,3 @@
-/**
- * Ordering guarantees for the data-loss-safe replace-and-resend helper
- * (WEBUI-REGEN-DELETE-BEFORE-RESEND): server rows are deleted ONLY after the
- * replacement commits, and the transcript is restored verbatim if it never does.
- */
 import { describe, it, expect, vi } from 'vitest';
 import { runReplacingSend, type ReplacingSendPorts } from '../replacingSend';
 
@@ -35,9 +30,7 @@ const SNAPSHOT: Msg[] = [
 describe('runReplacingSend', () => {
   it('deletes old server rows only AFTER a committed send, and does not restore', async () => {
     const { ports, current } = makePorts(SNAPSHOT);
-    // The send commits (true) and, like the real sendMessage, appends the new turn.
     const send = vi.fn(async () => {
-      // At this point the rolled-back rows must already be gone locally (clean UI).
       expect(current().map((m) => m.id)).toEqual(['a']);
       return true;
     });
@@ -46,17 +39,15 @@ describe('runReplacingSend', () => {
 
     expect(send).toHaveBeenCalledOnce();
     expect(ports.deleteServer).toHaveBeenCalledWith(['u', 'r']);
-    // Committed → no restore, so the removal stands.
     expect(current().map((m) => m.id)).toEqual(['a']);
   });
 
   it('restores the exact transcript and skips the server delete when the send does NOT commit', async () => {
     const { ports, current } = makePorts(SNAPSHOT);
-    const send = vi.fn(async () => false); // e.g. expired token → bailed pre-commit
+    const send = vi.fn(async () => false);
 
     await runReplacingSend(ports, ['u', 'r'], send);
 
-    // Nothing lost: the full original transcript is back, order preserved.
     expect(current()).toEqual(SNAPSHOT);
     expect(ports.deleteServer).not.toHaveBeenCalled();
   });

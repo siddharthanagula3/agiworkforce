@@ -70,12 +70,9 @@ jest.mock('lucide-react-native', () => {
     Check: iconFactory('check'),
     Share2: iconFactory('share'),
     RefreshCw: iconFactory('refresh-cw'),
-    // new icons added for parity work
     Eye: iconFactory('eye'),
     Code: iconFactory('code'),
     Download: iconFactory('download'),
-    // icons consumed transitively via GeneratedFileCard rendered inside
-    // ArtifactFullScreen / InlineArtifactCard chains.
     AlertTriangle: iconFactory('alert-triangle'),
     Archive: iconFactory('archive'),
     Clock: iconFactory('clock'),
@@ -216,9 +213,7 @@ describe('mobile artifacts and code screens', () => {
       <ArtifactFullScreen artifact={codeArtifact} visible onClose={onClose} />,
     );
 
-    // Header now shows "Title · TYPE" combined label (language uppercased)
     expect(getByText('main.py · PYTHON')).toBeTruthy();
-    // Language badge still appears in the source view above the code block
     expect(getByText('python')).toBeTruthy();
     expect(getByText(CODE_CONTENT)).toBeTruthy();
 

@@ -107,18 +107,9 @@ describe('ImageFullScreen generated-media boundary', () => {
   });
 });
 
-/**
- * `MessageBubble` opens this same viewer for USER ATTACHMENTS, passing
- * `attachment.url` — an on-device URI. The generated-image resolver only speaks
- * durable `/api/files/<uuid>` paths, so those fell to its `invalid` branch and
- * the viewer rendered "Generated image unavailable" on black with a share
- * button: tapping an image you attached in Local Mode looked broken.
- */
 describe('ImageFullScreen on-device attachments', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // What the resolver returns for anything that is not a durable path. If the
-    // viewer consulted it for these URIs, the black panel would come back.
     mockUseGeneratedImageSource.mockReturnValue({ status: 'invalid', source: null });
     mockShareGeneratedImage.mockResolvedValue(undefined);
   });
@@ -137,8 +128,6 @@ describe('ImageFullScreen on-device attachments', () => {
   });
 
   it('never asks Cloud to authorize an on-device attachment', () => {
-    // Local Mode is a trust boundary: the bytes are on the phone and a token
-    // request for them would be a Cloud round trip the user never asked for.
     render(
       <ImageFullScreen imageUrl="file:///var/mobile/tmp/private.png" visible onClose={jest.fn()} />,
     );

@@ -17,21 +17,11 @@ import {
 
 export interface BuildEffectiveCapabilityDocumentInput {
   sessionId: string;
-  /** Monotonic per-session version/hash — caller-supplied so it can incorporate model/tier/settings versions. */
   version: string;
-  /** Defaults to `new Date().toISOString()`. Pass explicitly in tests for determinism. */
   computedAt?: string;
-  /** Exactly one grant per layer — the type system requires all four, matching "intersection of four layers," not a variable-length list. */
   layers: Readonly<Record<CapabilityLayer, CapabilityLayerGrant>>;
 }
 
-/**
- * Builds the server-authoritative `EffectiveCapabilityDocument` for a
- * session from its four layer grants. A capability is `granted` only when
- * EVERY layer's `granted` set contains it; a capability present in at least
- * one layer's set but not all four is recorded in `deniedBy` with the
- * layers that withheld it (fail-closed — see `./types` module doc).
- */
 export function buildEffectiveCapabilityDocument(
   input: BuildEffectiveCapabilityDocumentInput,
 ): EffectiveCapabilityDocument {

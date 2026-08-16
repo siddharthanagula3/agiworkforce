@@ -1,21 +1,6 @@
-/**
- * Reflection Engine API
- *
- * TypeScript API wrappers for the AGI Reflection Engine commands.
- * The Reflection Engine analyzes execution results, identifies failure patterns,
- * suggests corrections, and provides recommendations for improvement.
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * A reflection insight generated after analyzing execution results.
- * Contains assessment, failure patterns, corrections, and recommendations.
- */
 export interface ReflectionInsight {
   id: string;
   goalId: string;
@@ -28,9 +13,6 @@ export interface ReflectionInsight {
   timestamp: number;
 }
 
-/**
- * Assessment of overall execution quality.
- */
 export interface ExecutionAssessment {
   successRate: number;
   successfulSteps: string[];
@@ -41,9 +23,6 @@ export interface ExecutionAssessment {
   timeEfficiency: number;
 }
 
-/**
- * Details about a failed step.
- */
 export interface FailedStep {
   stepId: string;
   toolId: string;
@@ -53,9 +32,6 @@ export interface FailedStep {
   recoverable: boolean;
 }
 
-/**
- * Categories of failures for pattern recognition.
- */
 export type FailureCategory =
   | 'ResourceUnavailable'
   | 'PermissionDenied'
@@ -67,9 +43,6 @@ export type FailureCategory =
   | 'StateError'
   | 'Unknown';
 
-/**
- * Pattern identified across multiple failures.
- */
 export interface FailurePattern {
   patternId: string;
   category: FailureCategory;
@@ -79,9 +52,6 @@ export interface FailurePattern {
   frequency: number;
 }
 
-/**
- * Suggested correction for a failed step.
- */
 export interface Correction {
   forStepId: string;
   correctionType: CorrectionType;
@@ -91,9 +61,6 @@ export interface Correction {
   priority: number;
 }
 
-/**
- * Types of corrections that can be applied.
- */
 export type CorrectionType =
   | 'Retry'
   | 'RetryWithModification'
@@ -103,9 +70,6 @@ export type CorrectionType =
   | 'Defer'
   | 'RequiresHuman';
 
-/**
- * Sub-goal derived from a complex failed step.
- */
 export interface SubGoal {
   id: string;
   parentGoalId: string;
@@ -116,13 +80,6 @@ export interface SubGoal {
   priority: number;
 }
 
-// ============================================================================
-// User-friendly display helpers
-// ============================================================================
-
-/**
- * Get a human-readable label for a failure category.
- */
 export function getFailureCategoryLabel(category: FailureCategory): string {
   const labels: Record<FailureCategory, string> = {
     ResourceUnavailable: 'Resource Not Found',
@@ -138,9 +95,6 @@ export function getFailureCategoryLabel(category: FailureCategory): string {
   return labels[category] || category;
 }
 
-/**
- * Get a human-readable label for a correction type.
- */
 export function getCorrectionTypeLabel(type: CorrectionType): string {
   const labels: Record<CorrectionType, string> = {
     Retry: 'Retry',
@@ -154,9 +108,6 @@ export function getCorrectionTypeLabel(type: CorrectionType): string {
   return labels[type] || type;
 }
 
-/**
- * Get a color class for a failure category (for UI styling).
- */
 export function getFailureCategoryColor(category: FailureCategory): string {
   const colors: Record<FailureCategory, string> = {
     ResourceUnavailable: 'text-orange-500',
@@ -172,9 +123,6 @@ export function getFailureCategoryColor(category: FailureCategory): string {
   return colors[category] || 'text-gray-500';
 }
 
-/**
- * Get an icon name for a correction type.
- */
 export function getCorrectionTypeIcon(type: CorrectionType): string {
   const icons: Record<CorrectionType, string> = {
     Retry: 'refresh-cw',
@@ -188,15 +136,6 @@ export function getCorrectionTypeIcon(type: CorrectionType): string {
   return icons[type] || 'help-circle';
 }
 
-// ============================================================================
-// API Functions
-// ============================================================================
-
-/**
- * Get reflection insights for a goal.
- * Returns the most recent reflection insight containing assessment,
- * failure patterns, corrections, and recommendations.
- */
 export async function getReflectionInsights(goalId: string): Promise<ReflectionInsight | null> {
   if (!isTauri) {
     console.debug('[reflection] getReflectionInsights (mock)', goalId);
@@ -214,10 +153,6 @@ export async function getReflectionInsights(goalId: string): Promise<ReflectionI
   }
 }
 
-/**
- * Get all failure patterns from recent reflections for a goal.
- * Patterns are aggregated and sorted by frequency (most common first).
- */
 export async function getFailurePatterns(goalId: string): Promise<FailurePattern[]> {
   if (!isTauri) {
     console.debug('[reflection] getFailurePatterns (mock)', goalId);
@@ -233,10 +168,6 @@ export async function getFailurePatterns(goalId: string): Promise<FailurePattern
   }
 }
 
-/**
- * Get suggested corrections for failed steps.
- * Corrections are prioritized based on impact and feasibility.
- */
 export async function getSuggestedCorrections(goalId: string): Promise<Correction[]> {
   if (!isTauri) {
     console.debug('[reflection] getSuggestedCorrections (mock)', goalId);
@@ -252,10 +183,6 @@ export async function getSuggestedCorrections(goalId: string): Promise<Correctio
   }
 }
 
-/**
- * Get sub-goals derived from failed steps.
- * Sub-goals help break down complex failures into manageable pieces.
- */
 export async function getSubGoals(goalId: string): Promise<SubGoal[]> {
   if (!isTauri) {
     console.debug('[reflection] getSubGoals (mock)', goalId);
@@ -271,10 +198,6 @@ export async function getSubGoals(goalId: string): Promise<SubGoal[]> {
   }
 }
 
-/**
- * Get recommendations for improving execution.
- * AI-generated suggestions based on failure analysis.
- */
 export async function getRecommendations(goalId: string): Promise<string[]> {
   if (!isTauri) {
     console.debug('[reflection] getRecommendations (mock)', goalId);
@@ -290,14 +213,6 @@ export async function getRecommendations(goalId: string): Promise<string[]> {
   }
 }
 
-// ============================================================================
-// Analysis Helpers
-// ============================================================================
-
-/**
- * Calculate overall health score based on reflection insight.
- * Returns a score from 0-100.
- */
 export function calculateHealthScore(insight: ReflectionInsight): number {
   const weights = {
     successRate: 0.4,
@@ -308,7 +223,6 @@ export function calculateHealthScore(insight: ReflectionInsight): number {
 
   const { assessment } = insight;
 
-  // Calculate recoverable failure ratio
   const totalFailed = assessment.failedSteps.length;
   const recoverableFailed = assessment.failedSteps.filter((s) => s.recoverable).length;
   const recoverableRatio = totalFailed > 0 ? recoverableFailed / totalFailed : 1;
@@ -322,9 +236,6 @@ export function calculateHealthScore(insight: ReflectionInsight): number {
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-/**
- * Get a summary description for the insight.
- */
 export function getInsightSummary(insight: ReflectionInsight): string {
   const { assessment, failurePatterns, corrections } = insight;
   const successPercent = Math.round(assessment.successRate * 100);

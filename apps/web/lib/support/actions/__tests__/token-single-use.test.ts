@@ -1,7 +1,3 @@
-/**
- * A confirmation token cannot be reused, cannot outlive its TTL, and cannot be
- * pointed at a different proposal.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -83,7 +79,6 @@ describe('support actions — confirmation tokens are single use', () => {
           token_hash: hash,
           surface: 'web',
           conversation_ref: null,
-          // One second in the past.
           expires_at: new Date(Date.now() - 1000),
           consumed_at: null,
           outcome: 'proposed',
@@ -121,14 +116,12 @@ describe('support actions — confirmation tokens are single use', () => {
     await expect(
       confirmSupportAction({
         userId: USER,
-        // Second proposal's id, first proposal's token.
         proposalId: second.proposal.id,
         confirmationToken: first.confirmationToken,
         surface: 'web',
       }),
     ).rejects.toMatchObject({ code: 'SUPPORT_ACTION_PROPOSAL_SPENT' });
 
-    // Neither proposal was spent by the attempt.
     expect(mocks.db!.proposals.every((p) => p.consumed_at === null)).toBe(true);
   });
 

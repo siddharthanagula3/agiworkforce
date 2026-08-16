@@ -16,24 +16,6 @@ const QuerySchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
 });
 
-/**
- * GET /api/settings/organization/seats?organizationId=<uuid>
- *
- * Read-only on purpose.
- *
- * `licensed_seats` is the number the customer PAID for. Exposing a mutation
- * here would let an org admin grant themselves seats they never bought, which
- * is a revenue defect, so the column is writable only by billing provisioning
- * (a `before update` trigger in 0085 rejects the write outright when it comes
- * from the application role).
- *
- * `seatSource: 'unprovisioned'` is the honest signal that no Stripe
- * subscription is linked to this organization yet: the ceiling holds, but it
- * cannot grow until a purchase binds one. That purchase path now exists —
- * `/api/checkout` sends the seat quantity to Stripe and the webhook writes
- * `organizations.licensed_seats` via `persistPurchasedSeatsOnOrganization`
- * (app/api/stripe-webhook/lib/seats.ts) — so growth happens there, never here.
- */
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-seats');
   if (rateLimitResponse) return rateLimitResponse;
@@ -51,7 +33,6 @@ async function handleGet(request: NextRequest) {
   const db = getNeonDb();
   const access = await requireTeamAdminAccess(db, userId, organizationId);
 
-  // Membership in the NAMED org is proved before any seat number is returned.
   const [membership] = await db.query<OrganizationMemberRow>(
     `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members

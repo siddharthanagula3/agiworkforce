@@ -37,7 +37,6 @@ export function useTheme(): ThemeResult {
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
 
   const rawScheme = useColorScheme();
-  // Normalize: 'unspecified' (Android default) should fall back to dark
   const systemScheme: 'dark' | 'light' | null =
     rawScheme === 'light' ? 'light' : rawScheme === 'dark' ? 'dark' : null;
   const isHighContrast = useSystemHighContrast();
@@ -66,7 +65,6 @@ function resolveAccent(color: string, isDark: boolean): string | null {
   return null;
 }
 
-/** Convenience hook — returns just the resolved palette. */
 export function useThemeColors(): ColorScheme {
   return useTheme().colors;
 }

@@ -1,10 +1,5 @@
-/**
- * Email API — typed wrappers for email_*, gmail_oauth_*, and contact_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface EmailProvider {
   imapHost: string;
@@ -80,8 +75,6 @@ export interface GmailAccount {
   displayName?: string;
   connected: boolean;
 }
-
-// ---- Email ----
 
 export async function emailConnect(
   provider: string,
@@ -166,7 +159,6 @@ export async function emailSearch(
 ): Promise<EmailSearchResult> {
   return command<EmailSearchResult>('email_search', { accountId, query, folder, limit });
 }
-// ---- Contacts ----
 
 export async function contactCreate(contact: Contact): Promise<number> {
   return command<number>('contact_create', { contact });
@@ -192,8 +184,6 @@ export async function contactImportVcard(filePath: string): Promise<number> {
 export async function contactExportVcard(filePath: string): Promise<number> {
   return command<number>('contact_export_vcard', { filePath });
 }
-
-// ---- Gmail OAuth ----
 
 export async function gmailOauthStart(config: GmailOAuthConfig): Promise<GmailAuthUrlResponse> {
   return command<GmailAuthUrlResponse>('gmail_oauth_start', { config });

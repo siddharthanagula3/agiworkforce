@@ -1,4 +1,3 @@
-/** POST /api/chat/sync — server-version CAS and optional-field ownership. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const queryMock = vi.fn();
@@ -54,7 +53,6 @@ describe('POST /api/chat/sync — revision CAS', () => {
     );
     expect(convCall).toBeDefined();
     const sql = String(convCall![0]);
-    // Desktop omits model/project/pinned because its SQLite row does not own them.
     expect(sql).toContain('when incoming.has_model then incoming.model else existing.model');
     expect(sql).toContain('existing.server_version = incoming.base_version');
     expect(sql).toContain('updated_at = now()');

@@ -7,17 +7,7 @@ import type { ManagedUsageBalance, ManagedUsageBalanceResponse } from '@agiworkf
 
 interface BudgetTrackerDisplayProps {
   className?: string;
-  /** When true, also fetches and shows the credit balance from /api/llm/v1/credits/balance */
   showCreditBalance?: boolean;
-  /**
-   * `card` (default) is the padded, bordered, multi-row block.
-   * `compact` is a single inline pill for the composer's one-line toolbar.
-   *
-   * The composer footer renders in a one-line flex row, and this component was
-   * card-only — so it was guarded behind `!inline` and never rendered in
-   * production at all. A card dropped into that row breaks the layout, which is
-   * why the guard existed; the fix is a variant, not removing the guard.
-   */
   variant?: 'card' | 'compact';
 }
 
@@ -73,7 +63,6 @@ export function BudgetTrackerDisplay({
   }
 
   if (variant === 'compact') {
-    // Nothing meaningful to show inline until a session has cost something.
     if (sessionUsedPercent === null) return null;
     return (
       <span

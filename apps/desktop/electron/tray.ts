@@ -1,10 +1,3 @@
-/**
- * Menu-bar / system-tray entry point.
- *
- * The tray is also the fallback UI for both garnish features: if a global
- * shortcut is already owned by another app, these menu items are how the user
- * still reaches Quick Ask and Screenshot to Chat.
- */
 import { Menu, Tray, app, nativeImage } from 'electron';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -18,18 +11,8 @@ export interface TrayHandlers {
   onCheckForUpdates: () => void;
 }
 
-/** Module-level so the Tray is never garbage collected (it would disappear). */
 let tray: Tray | null = null;
 
-/**
- * Build the menu-bar image.
- *
- * The icons are read as buffers rather than by path because the packaged app
- * serves them from inside app.asar, where Electron's asar-aware `fs` works but
- * path-based native image loading is unreliable. They are template images:
- * pure black with an alpha shape, which macOS recolors for light/dark menu
- * bars and inverts while the menu is open.
- */
 function trayImage(): Electron.NativeImage {
   const assetsDir = path.join(__dirname, 'assets');
   try {
@@ -60,8 +43,6 @@ function buildMenu(handlers: TrayHandlers): Electron.Menu {
     { type: 'separator' },
     {
       label: 'Quick Ask',
-      // Displayed only: the combo is already owned by globalShortcut, and
-      // registering it again here would double-fire the handler.
       accelerator: quickAskShortcut,
       registerAccelerator: false,
       click: handlers.onQuickAsk,
@@ -86,8 +67,6 @@ export function createTray(handlers: TrayHandlers): Tray {
   tray.setToolTip('AGI Cloud');
   tray.setContextMenu(buildMenu(handlers));
 
-  // On Windows and Linux a left click is expected to open the app; on macOS
-  // the click opens the context menu, which is the platform convention.
   if (process.platform !== 'darwin') {
     tray.on('click', handlers.onOpen);
   }
@@ -95,7 +74,6 @@ export function createTray(handlers: TrayHandlers): Tray {
   return tray;
 }
 
-/** Rebuild the menu after the shortcut settings change. */
 export function refreshTrayMenu(handlers: TrayHandlers): void {
   if (tray && !tray.isDestroyed()) tray.setContextMenu(buildMenu(handlers));
 }

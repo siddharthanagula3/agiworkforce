@@ -50,7 +50,6 @@ export function TransferDialog({
         toast.success(`"${conversationTitle}" downloaded to device`);
       }
 
-      // Reload conversations to reflect the change
       await loadConversations(user.id);
       onClose();
     } catch (err) {

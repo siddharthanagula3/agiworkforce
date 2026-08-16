@@ -24,8 +24,6 @@ import {
   recordCommandExecution,
 } from '../../utils/commandHistory';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
 export interface CommandOption {
   id: string;
   title: string;
@@ -40,7 +38,6 @@ export interface CommandOption {
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Command actions from the host shell (new chat, settings, theme, etc.) */
   commands?: CommandOption[];
 }
 
@@ -59,16 +56,12 @@ type ResultKind = 'command' | 'conversation' | 'message';
 interface PaletteResult {
   kind: ResultKind;
   id: string;
-  // for conversation/message results
   conversation?: ConversationSummary;
   ftsResult?: ChatSearchResult;
   score: number;
   snippet?: string;
-  // for command results
   command?: CommandOption;
 }
-
-// ─── Date grouping helpers ───────────────────────────────────────────────────
 
 type DateGroup = 'Today' | 'Yesterday' | 'This week' | 'Older';
 
@@ -99,8 +92,6 @@ function formatRelativeTime(date: Date | string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// ─── Highlight utility ────────────────────────────────────────────────────────
-
 function highlightSearchTerm(text: string, searchQuery: string): ReactNode {
   if (!searchQuery.trim()) return text;
   try {
@@ -123,8 +114,6 @@ function highlightSearchTerm(text: string, searchQuery: string): ReactNode {
     return text;
   }
 }
-
-// ─── Recent search history (localStorage) ────────────────────────────────────
 
 const RECENT_SEARCHES_KEY = 'agiworkforce-recent-searches';
 const MAX_RECENT_SEARCHES = 6;
@@ -168,8 +157,6 @@ function clearRecentSearches(): void {
   }
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
-
 export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -183,7 +170,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
   const conversations = useChatStore((state) => state.conversations);
   const selectConversation = useChatStore((state) => state.selectConversation);
 
-  // Load recent commands + recent searches on open
   useEffect(() => {
     if (isOpen) {
       setRecentCommandIds(getRecentCommandIds());
@@ -191,7 +177,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     }
   }, [isOpen]);
 
-  // Debounced FTS5 backend search for message content
   useEffect(() => {
     if (ftsDebounceRef.current) clearTimeout(ftsDebounceRef.current);
     if (!query.trim() || query.trim().length < 3 || !isTauri) {
@@ -206,7 +191,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
           limit: 8,
         });
         setFtsResults(results);
-        // Record search in recent history when results come back
         if (results.length > 0) {
           recordRecentSearch(query.trim());
         }
@@ -221,7 +205,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     };
   }, [query]);
 
-  // Clear FTS results when closed
   useEffect(() => {
     if (!isOpen) {
       setFtsResults([]);
@@ -229,7 +212,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     }
   }, [isOpen]);
 
-  // Reset state on close
   useEffect(() => {
     if (!isOpen) {
       setQuery('');
@@ -237,7 +219,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     }
   }, [isOpen]);
 
-  // Reset selection index when query changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
@@ -260,8 +241,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
         return;
       }
       if (result.ftsResult) {
-        // FTS5 returns conversation_id as an i64 SQLite row ID, but the store uses UUID strings.
-        // Use dbIdToUuid to translate the numeric DB ID to the frontend UUID, then look it up.
         const uuid = dbIdToUuid(result.ftsResult.conversation_id);
         const conv = conversations.find((c) => c.id === uuid);
         if (conv) {
@@ -276,12 +255,10 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     [selectConversation, onClose, conversations, handleCommandExecution],
   );
 
-  // Build unified result list
   const results = useMemo((): PaletteResult[] => {
     const q = query.trim();
 
     if (!q) {
-      // Default mode: recent commands + recent conversations
       const recentSet = new Set(recentCommandIds);
       const recentCmds: PaletteResult[] = commands
         .filter((c) => recentSet.has(c.id))
@@ -308,7 +285,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
 
     const ql = q.toLowerCase();
 
-    // Fuzzy-match commands
     const cmdFuse = new Fuse(commands, {
       keys: ['title', 'subtitle', 'group'],
       threshold: 0.35,
@@ -324,7 +300,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
         score: r.score ?? 0,
       }));
 
-    // Fuzzy-match conversations by title/lastMessage
     const convFuse = new Fuse(conversations, {
       keys: ['title', 'lastMessage'],
       threshold: 0.3,
@@ -340,7 +315,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
         score: r.score ?? 0,
       }));
 
-    // FTS5 message results — rank is a negative float (more negative = better)
     const msgResults: PaletteResult[] = ftsResults.map((r) => ({
       kind: 'message' as const,
       id: `msg-${r.message_id}`,
@@ -349,7 +323,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
       snippet: r.content_snippet,
     }));
 
-    // Also do simple fallback substring match for commands if fuse misses
     const cmdIds = new Set(cmdResults.map((r) => r.command?.id));
     const extraCmds: PaletteResult[] = commands
       .filter((c) => !cmdIds.has(c.id) && c.title.toLowerCase().includes(ql))
@@ -359,7 +332,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     return [...cmdResults, ...extraCmds, ...convResults, ...msgResults].slice(0, 14);
   }, [query, conversations, ftsResults, commands, recentCommandIds]);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
@@ -389,8 +361,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, results, selectedIndex, onClose, handleSelect]);
-
-  // ─── Render helpers ─────────────────────────────────────────────────────
 
   const getResultIcon = (result: PaletteResult) => {
     if (result.kind === 'command') {
@@ -467,7 +437,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
       );
     }
 
-    // Conversation result
     const conv = result.conversation!;
     return (
       <div className="flex-1 min-w-0">
@@ -491,9 +460,8 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     );
   };
 
-  // Group results by section header for default (no-query) mode
   const sections = useMemo(() => {
-    if (query.trim()) return null; // flat list in search mode
+    if (query.trim()) return null;
 
     type Section = { heading: string; items: PaletteResult[] };
     const sections: Section[] = [];
@@ -503,7 +471,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
       sections.push({ heading: 'Recent Commands', items: cmdItems });
     }
 
-    // Group conversation results by date
     const convItems = results.filter((r) => r.kind === 'conversation');
     const dateGroups: Record<DateGroup, PaletteResult[]> = {
       Today: [],
@@ -525,13 +492,11 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
     return sections;
   }, [results, query]);
 
-  // Build a flat ordered list for keyboard navigation (same order as rendered)
   const flatResults = useMemo(() => {
     if (!sections) return results;
     return sections.flatMap((s) => s.items);
   }, [sections, results]);
 
-  // Keep selectedIndex in sync with flatResults length
   useEffect(() => {
     setSelectedIndex((prev) => Math.min(prev, Math.max(0, flatResults.length - 1)));
   }, [flatResults.length]);
@@ -648,7 +613,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
           {/* Results */}
           <div className="max-h-[420px] overflow-y-auto" id="palette-results" role="listbox">
             {flatResults.length === 0 && !query.trim() ? (
-              // Empty default view — show recent searches + empty state
               <div className="py-2">
                 {recentSearchEntries.length > 0 && (
                   <div>
@@ -706,7 +670,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                 <p className="mt-1 text-xs text-muted-foreground">Try different keywords</p>
               </div>
             ) : sections ? (
-              // Grouped view (default, no query)
               <div className="py-2">
                 {sections.map((section) => (
                   <div key={section.heading}>
@@ -718,7 +681,6 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
                 ))}
               </div>
             ) : (
-              // Flat list (search mode) — group by kind
               <div className="py-2">
                 {(() => {
                   const cmdResults = flatResults.filter((r) => r.kind === 'command');

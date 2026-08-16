@@ -1,23 +1,5 @@
 import type { Metadata } from 'next';
 
-/**
- * These strings are the copy search engines and link previews quote for the
- * developer API, so they must name only what `public/openapi.json` actually
- * documents.
- *
- * They previously promised "webhooks, and SDK guides". Neither exists: the
- * published spec has no webhook path (the shipped surface is `/llm/v1/models`,
- * `/chat/completions`, `/embeddings`, `/audio/transcriptions` and
- * `/credits/balance`), and every workspace package is `private: true`, so there
- * is no client library anyone can install — `app/partners/page.tsx` says as
- * much in plain text. `keywords` is the one field `page.tsx` does not override
- * (`buildMetadata` replaces title/description/openGraph/twitter/canonical and
- * is passed no keywords), so "AGI SDK" and "webhooks" shipped verbatim on the
- * page while the rest of the block was dead.
- *
- * `__tests__/api-docs-metadata.test.ts` fails if either claim reappears without
- * the spec path or the publishable package that would make it true.
- */
 export const metadata: Metadata = {
   title: 'API Documentation',
   description:

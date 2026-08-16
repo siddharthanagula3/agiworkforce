@@ -1,16 +1,3 @@
-/**
- * tierGuard — unit tests
- *
- * Verifies `guardProviderSwitch` and `mapBillingPlanToUIPlan` correctly enforce
- * the current provider-switch gate: Max tier and above may switch providers
- * mid-thread. Pro/team/free/BYOK/local-only may not.
- *
- * Tier model (2026-08-05, MOBILE-PROVIDER-SWITCH-GATE-DIVERGENCE-01):
- *   PROVIDER_SWITCH_MIN_TIER = 'max'   (aligned to canonical
- *     canSwitchProviderInThread: max / max_15x / enterprise only)
- *   BillingPlanTier: local-only | byok | free | pro | max | team | enterprise
- *   team maps to pro in UIPlanTier; enterprise/max_15x map to max.
- */
 
 import {
   guardProviderSwitch,
@@ -18,16 +5,8 @@ import {
 } from '../src/features/model-picker/tierGuard';
 import { requireAutoMode } from '../test-utils/modelFixtures';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 type Tier = Parameters<typeof guardProviderSwitch>[2];
 const AUTO_MODEL_ID = requireAutoMode().id;
-
-// ---------------------------------------------------------------------------
-// mapBillingPlanToUIPlan — exhaustive coverage
-// ---------------------------------------------------------------------------
 
 describe('mapBillingPlanToUIPlan — all current BillingPlanTier values', () => {
   it('maps local-only → local', () => {
@@ -58,10 +37,6 @@ describe('mapBillingPlanToUIPlan — all current BillingPlanTier values', () => 
     expect(mapBillingPlanToUIPlan('enterprise')).toBe('max');
   });
 });
-
-// ---------------------------------------------------------------------------
-// guardProviderSwitch — allow cases (max+ may switch)
-// ---------------------------------------------------------------------------
 
 describe('guardProviderSwitch — allow cases', () => {
   it('allows switch when currentProvider is null (new conversation)', () => {
@@ -96,13 +71,7 @@ describe('guardProviderSwitch — allow cases', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// guardProviderSwitch — upgrade-required (below max)
-// ---------------------------------------------------------------------------
-
 describe('guardProviderSwitch — upgrade-required cases', () => {
-  // Canonical gate admits only max / max_15x / enterprise; pro and team (which
-  // maps to pro) are now denied along with free / byok / local-only.
   const belowMaxTiers: Tier[] = ['free', 'byok', 'local-only', 'pro', 'team'];
 
   for (const tier of belowMaxTiers) {
@@ -131,10 +100,6 @@ describe('guardProviderSwitch — upgrade-required cases', () => {
     expect(guardProviderSwitch('google', 'anthropic', 'local-only')).toBe('upgrade-required');
   });
 });
-
-// ---------------------------------------------------------------------------
-// guardProviderSwitch — edge cases and stress tests (Phase 4)
-// ---------------------------------------------------------------------------
 
 describe('guardProviderSwitch — edge cases and stress tests', () => {
   it('treats unknown tier string as local (most restrictive) and blocks switch', () => {

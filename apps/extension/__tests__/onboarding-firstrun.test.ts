@@ -1,9 +1,3 @@
-/**
- * Unit tests for the first-run onboarding predicate + storage helpers.
- *
- * Mocks chrome.storage.local to run under vitest/jsdom without the real
- * chrome extension APIs available.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
@@ -12,7 +6,6 @@ import {
   markOnboardingComplete,
 } from '../src/features/side-panel/onboarding';
 
-// ── chrome.storage.local mock ──────────────────────────────────────────────
 function buildStorageMock(initialData: Record<string, unknown> = {}) {
   const store: Record<string, unknown> = { ...initialData };
   return {
@@ -31,7 +24,6 @@ function buildStorageMock(initialData: Record<string, unknown> = {}) {
   };
 }
 
-// ── Setup ─────────────────────────────────────────────────────────────────
 beforeEach(() => {
   vi.unstubAllGlobals();
 });
@@ -98,7 +90,6 @@ describe('markOnboardingComplete()', () => {
       runtime: { lastError: null },
     });
     markOnboardingComplete();
-    // Allow micro-task to settle
     await Promise.resolve();
     expect(storageMock._store[ONBOARDING_COMPLETE_KEY]).toBe(true);
   });

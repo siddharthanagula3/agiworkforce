@@ -1,19 +1,3 @@
-/**
- * Eval-corpus test — the Stage 0/Stage 2 seed.
- *
- * Runs the deterministic classifier over every labelled row and pins two
- * things: the family, and the route the CURRENT Auto policy resolves for that
- * row's task type and tier with the stage OFF. The second pin is the control
- * baseline the design document's quality gate is measured against
- * (`docs/design/execution-plan-contract-and-cpst-2026-08-05.md` §5.1, §6).
- *
- * A failure here means one of two things, and the two must not be confused:
- *  - the classifier changed → fix the classifier or relabel the row;
- *  - the curated policy moved a slot → the baseline moved, and every CPST
- *    comparison made against the old baseline is void.
- *
- * All inputs are fixed literals. No wall-clock value is read anywhere.
- */
 import { describe, expect, it } from 'vitest';
 
 import { resolveAutoRoute } from '../auto';
@@ -134,8 +118,6 @@ describe('corpus under the stage', () => {
         taskFamily: row.expectedFamily,
         enableTaskFamilyStage: true,
       });
-      // An unavailable route stays unavailable; an available one stays
-      // available. The stage may change WHICH model, never WHETHER.
       expect(on.status, row.id).toBe(off.status);
     }
   });

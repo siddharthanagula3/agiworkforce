@@ -17,12 +17,6 @@ export function getRequestId(res: Response): string | undefined {
   return typeof requestId === 'string' ? requestId : undefined;
 }
 
-/**
- * Establishes one bounded request identifier for every HTTP request.
- *
- * A caller-provided identifier is preserved only when it is safe to log and
- * forward. Invalid or oversized values are replaced instead of reflected.
- */
 export const requestContext: RequestHandler = (
   req: Request,
   res: Response,

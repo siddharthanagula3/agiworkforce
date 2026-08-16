@@ -1,12 +1,3 @@
-/**
- * WebRuntime unit tests — mock-only, no live backend.
- *
- * Pins the `x_generated_files` stream-delta handling: wire descriptors are
- * validated against the shared cloud contract, relative `/api/files/{id}`
- * uris are resolved against the cloud API base, and a `generated_files`
- * StreamEvent is emitted for the unified-chat useChat hook to thread onto
- * the assistant message (same path as search_results).
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { StreamEvent } from '@agiworkforce/unified-chat';
 
@@ -65,7 +56,6 @@ describe('mapGeneratedFilesPayload', () => {
         byteCount: 2048,
         kind: 'pdf',
         checksumSha256: 'a'.repeat(64),
-        // Contract defaults for a pre-classification wire payload.
         surface: 'file',
         previewable: false,
       },
@@ -318,8 +308,6 @@ describe('WebRuntime x_generated_files stream handling', () => {
         onPayload: (payload: Record<string, unknown>) => void,
       ) => {
         onChunk('partial answer that got cut');
-        // Server tool loops emit an intermediate 'tool_calls' reason before the
-        // final one — the LAST reason seen must win.
         onPayload({ choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }] });
         onPayload({ choices: [{ delta: {}, finish_reason: 'length', index: 0 }] });
         onDone();

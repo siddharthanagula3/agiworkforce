@@ -8,26 +8,22 @@
  */
 
 export {
-  // Error types and codes
   ErrorCodes,
   type ErrorCode,
   AppError,
   TimeoutError,
 
-  // Error detection and classification
   isRetryableError,
   getErrorMessage,
   parseErrorMessage,
   getTechnicalErrorMessage,
   toAppError,
 
-  // Timeout utilities
   TimeoutPresets,
   withTimeout,
   fetchWithTimeout,
   type FetchWithTimeoutOptions,
 
-  // Retry utilities
   type RetryOptions,
   type NormalizedRetryConfig,
   normalizeRetryConfig,
@@ -36,7 +32,6 @@ export {
   retryWithBackoff,
   getRetryDelay,
 
-  // Error handling wrappers
   withErrorHandling,
   safeJsonParse,
 } from '@shared/lib/error-utils';

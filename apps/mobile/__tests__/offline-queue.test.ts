@@ -1,25 +1,5 @@
-/**
- * Mobile Offline Queue — E2E Smoke Tests
- *
- * Tests the Wave 1 offline queue in apps/mobile/services/offlineQueue.ts.
- *
- * Scenarios covered:
- *  - Items are queued when offline (enqueue API)
- *  - Queue processes items on reconnect (processQueue)
- *  - Success callbacks fire correctly
- *  - Failure callbacks fire correctly on permanent failure
- *  - Exponential backoff delays between retries
- *  - Max retry count drops items with onFailure callback
- *  - Duplicate enqueue (same conversation + content) is ignored
- *  - clear() fires onFailure for all pending items then empties the queue
- *  - isProcessing flag is set during processing
- */
 
 import { offlineQueue, type QueuedMessage } from '../services/offlineQueue';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeMsg(
   overrides: Partial<Omit<QueuedMessage, 'id' | 'queuedAt' | 'retryCount'>> = {},
@@ -33,28 +13,13 @@ function makeMsg(
   };
 }
 
-/**
- * Flush all pending microtasks and macrotasks so that fake timers registered
- * inside async callbacks become visible to jest.advanceTimersByTime().
- *
- * processQueue uses `await sendFn()` then `await sleep()`.  When sendFn rejects
- * the catch branch runs in a microtask, and only then does sleep() register a
- * setTimeout.  We must drain those microtasks before advancing timers so the
- * setTimeout is already registered when advanceTimersByTime runs.
- */
 async function flushMicrotasks(): Promise<void> {
-  // Multiple ticks to ensure deeply nested promise chains resolve fully
   for (let i = 0; i < 5; i++) {
     await Promise.resolve();
   }
 }
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
-  // Drain any leftover items from previous tests
   offlineQueue.clear();
   jest.useFakeTimers();
 });
@@ -64,10 +29,6 @@ afterEach(() => {
   jest.useRealTimers();
   jest.clearAllMocks();
 });
-
-// ---------------------------------------------------------------------------
-// 1. Items are queued when offline
-// ---------------------------------------------------------------------------
 
 describe('enqueue', () => {
   it('enqueues a message and increases queue size', () => {
@@ -116,10 +77,6 @@ describe('enqueue', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. Queue processes items on reconnect
-// ---------------------------------------------------------------------------
-
 describe('processQueue — success path', () => {
   it('processes all items when sendFn succeeds for each', async () => {
     offlineQueue.enqueue(makeMsg({ content: 'a' }));
@@ -159,10 +116,6 @@ describe('processQueue — success path', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. Success callbacks fire correctly
-// ---------------------------------------------------------------------------
-
 describe('onSuccess callback', () => {
   it('fires onSuccess after the message is sent', async () => {
     const onSuccess = jest.fn();
@@ -190,22 +143,16 @@ describe('onSuccess callback', () => {
     jest.runAllTimers();
     await processPromise;
 
-    // Both messages should have been sent despite the callback error
     expect(sendFn).toHaveBeenCalledTimes(2);
     expect(offlineQueue.getQueueSize()).toBe(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 4. Exponential backoff between retries
-// ---------------------------------------------------------------------------
 
 describe('exponential backoff', () => {
   it('pauses after first failure and stops processing remaining items', async () => {
     offlineQueue.enqueue(makeMsg({ content: 'first', conversationId: 'c1' }));
     offlineQueue.enqueue(makeMsg({ content: 'second', conversationId: 'c2' }));
 
-    // First message always fails, second would succeed
     const sendFn = jest
       .fn()
       .mockRejectedValueOnce(new Error('Network error'))
@@ -213,18 +160,13 @@ describe('exponential backoff', () => {
 
     const processPromise = offlineQueue.processQueue(sendFn);
 
-    // Flush microtasks so the sendFn rejection propagates into the catch block
-    // and sleep() registers its setTimeout before we advance fake timers
     await flushMicrotasks();
 
-    // Advance past backoff delay (retryCount 0→1, backoff = 1s * 2^0 = 1s)
     jest.advanceTimersByTime(1_100);
     await processPromise;
 
-    // Only first message attempted — processing stopped after failure
     expect(sendFn).toHaveBeenCalledTimes(1);
 
-    // First message is still in queue (under max retries), second is untouched
     expect(offlineQueue.getQueueSize()).toBe(2);
   });
 
@@ -235,25 +177,17 @@ describe('exponential backoff', () => {
     const sendFn = jest.fn().mockRejectedValue(new Error('fail'));
     const processPromise = offlineQueue.processQueue(sendFn);
 
-    // Flush microtasks so sleep(1000) is registered as a setTimeout
     await flushMicrotasks();
 
-    // Advance to just under 1s — processQueue should still be waiting
     jest.advanceTimersByTime(999);
-    // isProcessing is still true because sleep hasn't resolved yet
     expect(offlineQueue.isProcessing).toBe(true);
 
-    // Advance the remaining 1ms to fire the sleep timeout
     jest.advanceTimersByTime(1);
     await processPromise;
 
     expect(offlineQueue.isProcessing).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 5. Max retry count drops items with onFailure callback
-// ---------------------------------------------------------------------------
 
 describe('max retry count', () => {
   it('drops an item and calls onFailure after 3 failed attempts', async () => {
@@ -264,11 +198,10 @@ describe('max retry count', () => {
 
     const sendFn = jest.fn().mockRejectedValue(new Error('Permanent failure'));
 
-    // Simulate 3 failed processQueue cycles (MAX_RETRY_COUNT = 3)
     for (let i = 0; i < 3; i++) {
       const p = offlineQueue.processQueue(sendFn);
       await flushMicrotasks();
-      jest.advanceTimersByTime(10_000); // enough to pass any backoff
+      jest.advanceTimersByTime(10_000);
       await p;
     }
 
@@ -296,18 +229,15 @@ describe('max retry count', () => {
   it('continues processing subsequent items after dropping an exhausted item', async () => {
     const onFailure = jest.fn();
 
-    // First message will exhaust retries
     offlineQueue.enqueue(makeMsg({ content: 'exhausted', conversationId: 'c1' }), { onFailure });
-    // Second message will succeed
     offlineQueue.enqueue(makeMsg({ content: 'success', conversationId: 'c2' }));
 
-    // Exhaust the first message over 3 cycles
     const permanentError = new Error('Always fails');
     for (let i = 0; i < 3; i++) {
       const sendFn = jest
         .fn()
-        .mockRejectedValueOnce(permanentError) // first msg fails
-        .mockResolvedValue(undefined); // second would succeed
+        .mockRejectedValueOnce(permanentError)
+        .mockResolvedValue(undefined);
 
       const p = offlineQueue.processQueue(sendFn);
       await flushMicrotasks();
@@ -316,18 +246,12 @@ describe('max retry count', () => {
     }
 
     expect(onFailure).toHaveBeenCalledTimes(1);
-    // Second message should still be in queue (was not reached while first was being retried)
-    // It will be processed on the next cycle
     const remaining = offlineQueue.getQueue();
     if (remaining.length > 0) {
       expect(remaining[0]?.content).toBe('success');
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// 6. clear() fires onFailure for all pending items
-// ---------------------------------------------------------------------------
 
 describe('clear()', () => {
   it('empties the queue', () => {
@@ -361,7 +285,6 @@ describe('clear()', () => {
   it('resets isProcessing flag', async () => {
     offlineQueue.enqueue(makeMsg());
 
-    // Start processing but don't let it finish
     let resolveFirst!: () => void;
     const sendFn = jest.fn().mockReturnValue(
       new Promise<void>((resolve) => {
@@ -379,10 +302,6 @@ describe('clear()', () => {
     expect(offlineQueue.isProcessing).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 7. isProcessing flag
-// ---------------------------------------------------------------------------
 
 describe('isProcessing flag', () => {
   it('is false initially', () => {
@@ -417,15 +336,12 @@ describe('isProcessing flag', () => {
     const sendFn = jest.fn().mockReturnValueOnce(firstSendPromise).mockResolvedValue(undefined);
 
     const p1 = offlineQueue.processQueue(sendFn);
-    // Second call while isProcessing should be a no-op
     const p2 = offlineQueue.processQueue(sendFn);
 
     resolveFirst();
     jest.runAllTimers();
     await Promise.all([p1, p2]);
 
-    // sendFn should only have been called from p1's processing session
-    // p2 returned immediately without starting a second loop
     expect(sendFn.mock.calls.length).toBeLessThanOrEqual(2);
   });
 });
@@ -442,6 +358,6 @@ describe('subscribe (live badge)', () => {
     unsub();
     const before = ticks;
     offlineQueue.enqueue(makeMsg({ content: 'c', conversationId: 'conv-3' }));
-    expect(ticks).toBe(before); // no longer notified after unsubscribe
+    expect(ticks).toBe(before);
   });
 });

@@ -2,26 +2,6 @@ import type { UsageStats, ModelUsageStats } from '../../types/billing';
 import { checkUsageLimit } from '../../utils/featureGates';
 import { useBillingStore } from '../auth';
 
-/**
- * Usage slice.
- *
- * Usage metering is SERVER-SIDE. When desktop Cloud mode calls the shared web
- * completions API, the server meters against the credit ledger on its own —
- * client-side `trackUsage` calls were removed (2026-07-10) because they
- * double-counted and required Stripe secrets on the client (a trust-boundary
- * violation). The old `StripeService.trackUsage`/`getUsage` path invoked Tauri
- * billing commands initialized with a Stripe API key; that parallel billing
- * backend has been deleted.
- *
- * The desktop `UsageStats` shape (automations / api_calls / storage /
- * per-model tokens) has no honest source in the web REST API. `/api/usage`
- * intentionally exposes only bounded usage percentages and reset times; raw
- * provider cost, ledger cents, token conversions, and allowance operands stay
- * server-private. Rather than fabricate those fields, `fetchUsage` leaves
- * `usageStats` null — the UI (UsageDashboard) already
- * renders an honest no-data fallback.
- */
-
 export interface UsageSliceState {
   usageStats: UsageStats | null;
   usageStatsLoading: boolean;
@@ -67,9 +47,6 @@ export const createUsageSlice = (
   showTokenWarning: false,
   usageError: null,
 
-  // Records the active billing period. Detailed usage stats are metered
-  // server-side and are not exposed to the desktop client via the web REST
-  // API, so `usageStats` is left null (honest "unavailable" — see file header).
   fetchUsage: async (_customerId, periodStart, periodEnd) => {
     set({
       usagePeriodStartSec: periodStart,

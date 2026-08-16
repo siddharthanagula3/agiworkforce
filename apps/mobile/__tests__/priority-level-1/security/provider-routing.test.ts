@@ -1,12 +1,3 @@
-/**
- * L1 Security — Provider Routing (metadata-driven, no hardcoded model IDs)
- *
- * Mobile resolves models from the embedded catalog (features/model-picker/
- * service). Cloud-managed models are invite-locked: they must not be
- * selectable without an explicit Cloud unlock. These tests exercise the REAL
- * catalog + access predicates so a routing regression (e.g. a cloud model
- * becoming selectable for a local user) fails the build.
- */
 import {
   CLOUD_LOCK_REASON,
   DEFAULT_LOCAL_MODEL_ID,
@@ -21,7 +12,6 @@ import {
 
 describe('L1 Security - Provider Routing (No Hardcoding)', () => {
   test('SECURITY: model IDs resolve from the catalog, not string literals', () => {
-    // Pull an id from the catalog itself rather than hardcoding one.
     const local = LOCAL_MODEL_LIST[0];
     expect(local).toBeDefined();
     const resolved = getModelById(local.id);

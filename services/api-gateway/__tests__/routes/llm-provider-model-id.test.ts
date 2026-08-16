@@ -765,13 +765,10 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const events = sseData(response);
 
     expect(response.status).toBe(200);
-    // Refusal survives stream validation (STOP_REASONS) and reaches the wire
     // as OpenAI's safety vocabulary, not a generic error terminal.
     expect(finishReasons(events)).toEqual(['content_filter']);
     expect(streamErrorMarkers(events)).toEqual([]);
     expect(events.filter((event) => event === '[DONE]')).toHaveLength(1);
-    // Billable honest stop: settle as completed; the refund/retry failure
-    // branches (reason error/cancel) must not fire.
     expect(state.billingEvents.filter((event) => event === 'finalize-completed')).toHaveLength(1);
     expect(state.billingEvents.filter((event) => event === 'finalize-failed')).toHaveLength(0);
   });

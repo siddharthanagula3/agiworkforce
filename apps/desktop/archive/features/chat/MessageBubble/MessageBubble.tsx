@@ -1,18 +1,9 @@
-/**
- * MessageBubble Component
- *
- * Main component for rendering chat messages. Composes sub-components
- * for header, content, actions, attachments, and widgets.
- */
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { getToolIconName, getToolSourceBadge } from '@agiworkforce/types';
 import { toast } from 'sonner';
 
-// Stable empty array reference to avoid infinite re-render in Zustand selectors.
-// Using `?? []` inline creates a new array reference every render, which React
-// interprets as state change → re-render → new array → infinite loop.
 const EMPTY_TIMELINE: never[] = [];
 import { cn } from '../../../lib/utils';
 import { useUnifiedChatStore, uuidToDbId } from '../../../stores/unifiedChatStore';
@@ -27,7 +18,6 @@ import { DeepResearchPanel } from '../DeepResearchPanel';
 import { ImageLightbox } from '../ImageLightbox';
 import { MessageRuntimeInlineActivity } from '../MessageRuntimeActivity';
 
-// Sub-components
 import { MessageHeader } from './MessageHeader';
 import { MessageContent } from './MessageContent';
 import { MessageActions } from './MessageActions';
@@ -50,17 +40,12 @@ import { getMessageWidgets } from './messageRuntime';
 import { ArtifactThumbnailRow } from './ArtifactThumbnailCard';
 import { PastedBadge, isPastedMessage } from './PastedBadge';
 
-// Hooks
 import { useMessageActions } from './useMessageActions';
 import { useMessageReactions } from './useMessageReactions';
 import { useTTS } from '../../../hooks/useTTS';
 
-// Types
 import { MessageBubbleProps, ThinkingMatch, LightboxImage, ContextMenuPosition } from './types';
 
-/**
- * Format timestamp for display
- */
 function formatTimestamp(timestamp: Date): string {
   const date = new Date(timestamp);
   const now = new Date();
@@ -69,26 +54,22 @@ function formatTimestamp(timestamp: Date): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  // Show relative time for recent messages
   if (diffMins < 1) {
     return 'Just now';
   } else if (diffMins < 60) {
     return `${diffMins}m ago`;
   } else if (diffHours < 24 && date.getDate() === now.getDate()) {
-    // Same day - show time
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
     });
   } else if (diffDays < 7) {
-    // Within a week - show day and time
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
       hour: '2-digit',
       minute: '2-digit',
     });
   } else {
-    // Older - show full date
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -98,32 +79,21 @@ function formatTimestamp(timestamp: Date): string {
   }
 }
 
-/**
- * Parse thinking blocks from message content
- */
 function parseThinkingContent(
   content: string,
   metadata?: Record<string, unknown>,
 ): ThinkingMatch | null {
   const explicit = metadata?.['type'] === 'reasoning';
 
-  // Support multiple thinking tag formats from different providers
   const thinkingPatterns = [
-    // Anthropic style: <thinking>...</thinking>
     /<thinking>([\s\S]*?)(?:<\/thinking>|$)/i,
-    // Anthropic alternate: <antthinking>...</antthinking>
     /<antthinking>([\s\S]*?)(?:<\/antthinking>|$)/i,
-    // DeepSeek style: <think>...</think>
     /<think>([\s\S]*?)(?:<\/think>|$)/i,
-    // OpenAI style brackets: [THINKING]...[/THINKING]
     /\[THINKING\]([\s\S]*?)(?:\[\/THINKING\]|$)/i,
-    // Claude internal reasoning: <reasoning>...</reasoning>
     /<reasoning>([\s\S]*?)(?:<\/reasoning>|$)/i,
-    // Chain of thought markers
     /<cot>([\s\S]*?)(?:<\/cot>|$)/i,
   ];
 
-  // Try each pattern and return the first match
   for (const regex of thinkingPatterns) {
     const match = regex.exec(content);
     if (match && (match[1]?.trim() || metadata?.['streaming'])) {
@@ -135,7 +105,6 @@ function parseThinkingContent(
     }
   }
 
-  // If explicitly marked as reasoning type, use entire content
   if (explicit) {
     return {
       content: content,
@@ -232,22 +201,17 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   onToggleSidecar,
   onSuggestionClick,
 }) => {
-  // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
   const [lightboxImage, setLightboxImage] = useState<LightboxImage | null>(null);
   const [compactToolExpanded, setCompactToolExpanded] = useState(false);
   const [compactToolCopied, setCompactToolCopied] = useState(false);
   const compactToolCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Store hooks
   const getSuggestedSidecarMode = useUnifiedChatStore((state) => state.getSuggestedSidecarMode);
   const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
   const sidecar = useUnifiedChatStore((state) => state.sidecar);
   const researchTasks = useExecutionStore((state) => state.researchTasks);
 
-  // Timeline data for this message
-  // IMPORTANT: Return stable references to avoid infinite re-render loop.
-  // `?? []` creates a new array every call — use a module-level constant instead.
   const messageToolTimeline = useChatStore(
     useCallback(
       (state: ChatState) => state.toolTimelineByMessage[message.id] ?? EMPTY_TIMELINE,
@@ -258,16 +222,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     useCallback((state: ChatState) => state.thinkingByMessage[message.id] ?? '', [message.id]),
   );
 
-  // Reactive settings (replaces getState() inside render functions)
   const compactMode = useSettingsStore((state) => state.chatPreferences.compactMode);
-  // Reactive MCP app store (replaces getState() calls inside renderToolCall)
   const mcpApps = useMcpAppStore((state) => state.apps);
   const registerMcpApp = useMcpAppStore((state) => state.registerApp);
 
-  // Tool Call Actions ID - Hoisted for store access
   const actionId = message.metadata?.actionId;
 
-  // Track tool state from store for real-time updates
   const toolState = useToolStore(
     useCallback(
       (state) => {
@@ -281,15 +241,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     ),
   );
 
-  // Track which message IDs we've already opened the sidecar for
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
 
-  // Message type checks
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isAssistant = message.role === 'assistant';
 
-  // Action hooks
   const {
     copied,
     handleCopy,
@@ -349,7 +306,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     }
   }, [message.id, message.content, activeConversationId, forkAndRegenerate]);
 
-  // Memoized values
   const formattedTime = useMemo(() => formatTimestamp(message.timestamp), [message.timestamp]);
 
   const thinkingMatch = useMemo(
@@ -366,15 +322,12 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     return !!(meta?.tool || meta?.toolCall || meta?.event === 'tool');
   }, [message.metadata]);
 
-  // Tool call metadata
   const toolName = message.metadata?.tool || message.metadata?.toolCall || message.metadata?.name;
 
-  // AUDIT-UI-052: Look up pending approval request ID for this tool
   const pendingApprovalId = useToolStore(
     useCallback(
       (state) => {
         if (!toolName && !actionId) return undefined;
-        // Find a pending approval that matches this tool
         const pending = state.pendingApprovals.find(
           (a) =>
             a.status === 'pending' &&
@@ -388,11 +341,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     ),
   );
 
-  // Derive status from store if available, otherwise fallback to metadata
   const toolStatus = useMemo(() => {
     if (toolState) {
-      if ('status' in toolState) return toolState.status; // ToolStreamStateEntry
-      return toolState.success ? 'completed' : 'failed'; // ToolExecution
+      if ('status' in toolState) return toolState.status;
+      return toolState.success ? 'completed' : 'failed';
     }
     return message.metadata?.status || message.metadata?.state || message.metadata?.stage;
   }, [toolState, message.metadata]);
@@ -400,7 +352,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const toolCommand = message.metadata?.command || message.content;
   const requiresApproval = Boolean(message.metadata?.requiresApproval);
 
-  // Research task
   const researchTaskId = message.metadata?.taskId;
   const isResearchTask = message.metadata?.type === 'deep-research-task';
   const researchTask = researchTaskId ? researchTasks[researchTaskId as string] : null;
@@ -411,7 +362,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     };
   }, []);
 
-  // Reset compact tool display state when message changes
   useEffect(() => {
     setCompactToolExpanded(false);
     setCompactToolCopied(false);
@@ -429,9 +379,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     }
   }, []);
 
-  // Open sidecar for new messages
   useEffect(() => {
-    // Auto-trigger sidecar for assistant outputs only.
     if (message.role !== 'assistant') return;
     if (!sidecar.autoTrigger || sidecar.isOpen) return;
     if (processedMessageIdsRef.current.has(message.id)) return;
@@ -446,7 +394,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     }
   }, [message, getSuggestedSidecarMode, openSidecar, sidecar.autoTrigger, sidecar.isOpen]);
 
-  // Register MCP app in a useEffect instead of during render to avoid infinite loop risk
   useEffect(() => {
     if (!toolState) return;
     const isCompleted =
@@ -489,7 +436,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     }
   }, [toolState, toolName, message.metadata, mcpApps, registerMcpApp]);
 
-  // Event handlers
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
@@ -503,7 +449,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     setLightboxImage(image);
   }, []);
 
-  // Render research task
   if (isResearchTask && researchTask) {
     return (
       <div className="group flex gap-3 px-4 py-3 hover:bg-accent/50 transition-colors">
@@ -519,7 +464,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     );
   }
 
-  // Vertical timeline: thinking + tool calls grouped into a collapsible phase.
   const renderTimeline = (embedded = false) => {
     const hasTimelineData = messageToolTimeline.length > 0 || messageThinkingContent;
     if (!hasTimelineData) {
@@ -528,7 +472,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
 
     const isStreaming = Boolean(message.metadata?.streaming);
 
-    // Phase title: first sentence of thinking, or tool name, or fallback
     const phaseTitle = (() => {
       const thinking = messageThinkingContent || thinkingMatch?.content || '';
       if (thinking) {
@@ -543,7 +486,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       return 'Agent activity';
     })();
 
-    const totalSteps = (messageThinkingContent ? 1 : 0) + messageToolTimeline.length + 1; // +1 for done
+    const totalSteps = (messageThinkingContent ? 1 : 0) + messageToolTimeline.length + 1;
     let stepIndex = 0;
 
     return (
@@ -591,11 +534,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     );
   };
 
-  // Pre-render tool call content to share between standalone and dual-mode (thinking + tool)
   const renderToolCall = (embedded = false) => {
-    // compactMode is read from the reactive hook defined at the component scope above
 
-    // In compact mode, show simple status message
     if (compactMode) {
       const toolDisplayInfo = getToolDisplayInfo(toolName);
       const isExecuting = toolStatus === 'running' || toolStatus === 'executing';
@@ -604,8 +544,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
         toolStatus === 'failed' || toolStatus === 'failure' || toolStatus === 'error';
       const statusText = isExecuting ? toolDisplayInfo.activeForm : toolDisplayInfo.completedForm;
 
-      // Compact mode should still surface tool output/error, otherwise successful
-      // tool-only runs appear as a status line with no actionable result.
       const metadataArtifactsRaw = Array.isArray(message.metadata?.artifacts)
         ? (message.metadata?.artifacts as unknown[])
         : [];
@@ -635,8 +573,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
       const collapsedBodyLines = collapsedBodySource ? collapsedBodySource.split('\n') : [];
       const collapsedBodyPreview = collapsedBodyLines.slice(0, 3).join('\n').trim();
       const hiddenLineCount = Math.max(collapsedBodyLines.length - 3, 0);
-      // If a rich inline renderer handles this tool (e.g. InlineSearchResults for search_web),
-      // suppress the raw JSON body — the formatted cards are shown separately.
       const toolHasRichRenderer = toolName ? hasInlineRenderer(toolName as string) : false;
 
       return (
@@ -777,18 +713,15 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               let success = false;
 
               if ('status' in toolState) {
-                // ToolStreamStateEntry
                 resultData = toolState.result || toolState.outputBuffer;
                 success = toolState.status === 'completed';
               } else {
-                // ToolExecution
                 resultData = toolState.output;
                 success = toolState.success;
               }
 
               const errorData = toolState.error;
 
-              // Detect image generation tool results and render them inline
               const isImageTool = (() => {
                 const n = (toolName || '').toString().toLowerCase();
                 return (
@@ -824,9 +757,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 }
               })();
 
-              // ── MCP App detection ─────────────────────────────────────────
-              // If the result contains a __mcp_app key, register + render as
-              // a sandboxed interactive app instead of a plain JSON result card.
               const mcpAppPayload = (() => {
                 if (!resultData) return null;
                 try {
@@ -847,9 +777,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               })();
 
               if (mcpAppPayload && success) {
-                // MCP app registration is handled in a useEffect above to avoid
-                // calling store mutations during render (infinite loop risk).
-                // Here we only look up the already-registered entry.
                 const metaRecord = (message.metadata ?? {}) as Record<string, unknown>;
                 const mcpServerName = String(metaRecord['mcpServer'] ?? 'mcp');
                 const existingEntry = Object.values(mcpApps).find(
@@ -891,7 +818,6 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     );
   };
 
-  // Render thinking message (plus optional tool call)
   if (thinkingMatch) {
     return (
       <div className="flex flex-col">
@@ -922,12 +848,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     );
   }
 
-  // Render standalone tool call
   if (isToolCall) {
     return renderTimeline(false);
   }
 
-  // Render standard message
   return (
     <>
       {/* Image Lightbox */}

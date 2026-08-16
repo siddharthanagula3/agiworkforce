@@ -1,7 +1,3 @@
-/**
- * Image Attachment Preview Component
- * Displays image attachments in messages with lightbox viewer
- */
 
 import { useState } from 'react';
 import NextImage from 'next/image';

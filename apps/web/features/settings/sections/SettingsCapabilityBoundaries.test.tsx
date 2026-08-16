@@ -47,12 +47,6 @@ describe('Web Settings capability boundaries', () => {
     await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
   });
 
-  // Regression, same shape as the security one below: the boundary copy said
-  // "Browser replies only" and listed email and schedule as unavailable while
-  // the Email and Mobile push groups render right underneath it, both backed by
-  // real senders (notification-email-service / push-notification-service, both
-  // dispatched from notifyScheduleCompleted). Under-claiming a shipped channel
-  // is still a false statement, and this test previously locked that claim in.
   it('does not deny the email and push schedule channels, which are implemented', () => {
     render(<NotificationsSection />);
 
@@ -76,10 +70,6 @@ describe('Web Settings capability boundaries', () => {
     ).toBeInTheDocument();
   });
 
-  // Regression: the boundary copy listed "cross-device session revocation" as
-  // unavailable while AccountSection + /api/settings/sessions implement it (with
-  // their own tests). Under-claiming a shipped security control is still a false
-  // statement, and this test previously locked that claim in.
   it('does not deny cross-device session revocation, which is implemented', () => {
     render(<SecuritySection />);
 

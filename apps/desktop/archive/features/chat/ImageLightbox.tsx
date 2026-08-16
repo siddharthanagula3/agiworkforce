@@ -20,7 +20,6 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const imageRef = useRef<HTMLImageElement>(null);
 
-  // Define handlers first
   const handleZoomIn = useCallback(() => {
     setScale((prev) => Math.min(prev + 0.25, 4));
   }, []);
@@ -39,7 +38,6 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
     setPosition({ x: 0, y: 0 });
   }, []);
 
-  // Reset state when opening
   useEffect(() => {
     if (isOpen) {
       setScale(1);
@@ -48,7 +46,6 @@ export function ImageLightbox({ isOpen, onClose, src, alt }: ImageLightboxProps)
     }
   }, [isOpen]);
 
-  // Close on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;

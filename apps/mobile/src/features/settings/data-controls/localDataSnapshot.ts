@@ -59,7 +59,6 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
   const projects = useProjectStore.getState().projects;
   const deviceSettings = useSettingsStore.getState();
   const appMode = useChatAppModeStore.getState().appMode;
-  // Merge device-global fields with the active mode's cloud-safe fields.
   const modeSettings =
     appMode === 'cloud' ? useCloudSettingsStore.getState() : useLocalSettingsStore.getState();
   const settings = { ...deviceSettings, ...modeSettings };
@@ -190,7 +189,6 @@ export async function resetLocalInMemoryState(): Promise<void> {
       research: false,
     },
   });
-  // Reset device-global settings
   useSettingsStore.setState({
     autoApproveMode: 'ask',
     hapticsEnabled: true,
@@ -214,7 +212,6 @@ export async function resetLocalInMemoryState(): Promise<void> {
       camera: true,
     },
   });
-  // Reset mode-specific settings (both local and cloud profiles)
   const defaultPersonalization = {
     fullName: '',
     nickname: '',

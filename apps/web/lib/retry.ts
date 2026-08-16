@@ -1,17 +1,4 @@
-/**
- * Retry utility with exponential backoff
- *
- * Provides configurable retry logic for async operations with:
- * - Exponential backoff (delay doubles each retry)
- * - Jitter to prevent thundering herd
- * - Configurable max retries and delays
- * - Abort signal support
- * - Custom retry condition
- */
 
-/**
- * Custom AbortError class for environments where DOMException isn't available
- */
 class AbortError extends Error {
   constructor(message = 'Aborted') {
     super(message);
@@ -20,23 +7,14 @@ class AbortError extends Error {
 }
 
 export interface RetryOptions {
-  /** Maximum number of retry attempts (default: 3) */
   maxRetries?: number;
-  /** Initial delay in ms before first retry (default: 1000) */
   initialDelayMs?: number;
-  /** Maximum delay between retries in ms (default: 30000) */
   maxDelayMs?: number;
-  /** Multiplier for exponential backoff (default: 2) */
   backoffMultiplier?: number;
-  /** Add random jitter to delays (default: true) */
   jitter?: boolean;
-  /** Maximum jitter as percentage of delay (default: 0.25 = 25%) */
   jitterFactor?: number;
-  /** Optional abort signal to cancel retries */
   signal?: AbortSignal;
-  /** Custom function to determine if error is retryable (default: all errors) */
   isRetryable?: (error: unknown, attempt: number) => boolean;
-  /** Callback for each retry attempt */
   onRetry?: (error: unknown, attempt: number, delayMs: number) => void;
 }
 
@@ -58,9 +36,6 @@ const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'signal' | 'onRetry'>> = {
   isRetryable: () => true,
 };
 
-/**
- * Calculate delay for a retry attempt with exponential backoff and jitter
- */
 export function calculateDelay(
   attempt: number,
   options: {
@@ -71,16 +46,12 @@ export function calculateDelay(
     jitterFactor: number;
   },
 ): number {
-  // Calculate base delay with exponential backoff
   const baseDelay = options.initialDelayMs * Math.pow(options.backoffMultiplier, attempt - 1);
 
-  // Cap at max delay
   const cappedDelay = Math.min(baseDelay, options.maxDelayMs);
 
-  // Add jitter if enabled
   if (options.jitter) {
     const jitterRange = cappedDelay * options.jitterFactor;
-    // WEB-13: Math.random is intentional · retry-backoff jitter, not security-sensitive.
 
     const jitter = (Math.random() - 0.5) * 2 * jitterRange;
     return Math.max(0, Math.round(cappedDelay + jitter));
@@ -89,9 +60,6 @@ export function calculateDelay(
   return Math.round(cappedDelay);
 }
 
-/**
- * Sleep for a specified duration with abort signal support
- */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -138,7 +106,6 @@ export async function retryWithBackoff<T>(
 
   while (attempt <= opts.maxRetries) {
     try {
-      // Check abort signal
       if (opts.signal?.aborted) {
         return {
           success: false,
@@ -159,17 +126,14 @@ export async function retryWithBackoff<T>(
       lastError = error;
       attempt++;
 
-      // Check if we should retry
       if (attempt > opts.maxRetries) {
         break;
       }
 
-      // Check if error is retryable
       if (!opts.isRetryable(error, attempt)) {
         break;
       }
 
-      // Calculate delay
       const delay = calculateDelay(attempt, {
         initialDelayMs: opts.initialDelayMs,
         maxDelayMs: opts.maxDelayMs,
@@ -180,14 +144,11 @@ export async function retryWithBackoff<T>(
 
       totalDelayMs += delay;
 
-      // Call onRetry callback
       opts.onRetry?.(error, attempt, delay);
 
-      // Wait before retry
       try {
         await sleep(delay, opts.signal);
       } catch {
-        // Aborted
         return {
           success: false,
           error: new AbortError(),

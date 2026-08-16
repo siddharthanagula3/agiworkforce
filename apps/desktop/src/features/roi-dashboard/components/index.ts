@@ -8,6 +8,5 @@ export { RecentActivityFeed } from './RecentActivityFeed';
 export { MilestoneToast } from './MilestoneToast';
 export { ExportReportModal } from './ExportReportModal';
 
-// Re-export Outcomes components for unified access
 export { OutcomesDashboard } from '@/features/outcomes/OutcomesDashboard';
 export { GoalOutcomes } from '@/features/outcomes/GoalOutcomes';

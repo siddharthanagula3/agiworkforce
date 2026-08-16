@@ -24,7 +24,6 @@ import { generateId, getTemporalGroup } from '../lib/utils';
 import type { Conversation } from '../lib/types';
 import { tokens } from '../lib/tokens';
 
-// Group ordering for the recents list
 const GROUP_ORDER = ['Pinned', 'Today', 'Yesterday', 'This Week', 'This Month', 'Older'];
 
 interface NavItem {
@@ -38,7 +37,6 @@ interface NavItem {
 export function Sidebar() {
   const { collapsed, toggleSidebar: _toggleSidebar } = useSidebar();
   const hostBridge = useHostBridge();
-  // Hover-expand: rail is collapsed by default; hovering expands to 260px without toggling store
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const isExpanded = !collapsed || hoverExpanded;
   const width = isExpanded ? tokens.spacing.sidebarWidth : tokens.spacing.sidebarCollapsedWidth;
@@ -137,7 +135,6 @@ export function Sidebar() {
     },
   ];
 
-  // Map nav item id to activeView to determine active state
   const viewToNavId: Record<string, string> = {
     chat: 'chats',
     projects: 'projects',
@@ -150,7 +147,6 @@ export function Sidebar() {
   };
   const activeNavId = viewToNavId[activeView] ?? '';
 
-  // Tier/upgrade pill
   const tier = useTierStore(selectTier);
   const showUpgradePill = isFreePlan(tier);
   const planLabel = PLAN_LABEL[tier];

@@ -39,13 +39,6 @@ import {
   managedCloudMetadataLength,
 } from '@agiworkforce/cloud-contracts';
 
-/**
- * Optional metadata projections, in the order they are sacrificed. Artifacts
- * first (re-derivable from the body, or at worst re-askable), then the thinking
- * trace, then tool-call payloads, then search/file side-panels, and only last
- * the activity timeline — which is the closest thing to a record of what the
- * assistant actually did.
- */
 export const TRIMMABLE_METADATA_FIELDS = [
   'artifacts',
   'thinking',
@@ -59,14 +52,8 @@ export const TRIMMABLE_METADATA_FIELDS = [
 export type TrimmableMetadataField = (typeof TRIMMABLE_METADATA_FIELDS)[number];
 
 export interface BoundedCloudMessageMetadata {
-  /** Metadata safe to POST, or `undefined` when nothing is left worth sending. */
   metadata: Record<string, unknown> | undefined;
-  /** Fields removed to fit the budget, in drop order. Empty when nothing was cut. */
   trimmed: TrimmableMetadataField[];
-  /**
-   * Artifacts removed because the message body already carries them verbatim.
-   * NOT reported as trimmed — nothing is lost, they are re-derived on reopen.
-   */
   droppedRederivableArtifacts: number;
 }
 
@@ -74,12 +61,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Remove artifacts whose exact `content` is present in the message body. Those
- * are what `deriveDesktopMessageArtifacts` reconstructs on reopen (identical
- * `uuidv5(conversationId:messageId:ordinal)` id), so persisting them stores the
- * same bytes twice inside a 32 KB budget the body does not share.
- */
 function stripRederivableArtifacts(
   metadata: Record<string, unknown>,
   content: string,
@@ -126,10 +107,6 @@ export function buildBoundedCloudMessageMetadata(
   const trimmed: TrimmableMetadataField[] = [];
 
   const fits = (candidate: Record<string, unknown>): boolean => {
-    // The `metadataTrimmed` note itself costs bytes, so measure the object that
-    // would actually be sent — otherwise a trim can land exactly on the cap and
-    // the note pushes it back over, producing the 400 this function exists to
-    // prevent.
     const withNote =
       trimmed.length > 0 ? { ...candidate, metadataTrimmed: [...trimmed] } : candidate;
     return managedCloudMetadataLength(withNote) <= maxLength;
@@ -153,11 +130,6 @@ export function buildBoundedCloudMessageMetadata(
   };
 }
 
-/**
- * True when the bounded metadata still exceeds the cap after every trimmable
- * field was dropped — i.e. the overflow is in control state we refuse to drop.
- * `persistAssistantTurn` uses this to decide whether it can still POST.
- */
 export function exceedsManagedCloudMetadataBudget(
   metadata: Record<string, unknown> | undefined,
   maxLength: number = MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,

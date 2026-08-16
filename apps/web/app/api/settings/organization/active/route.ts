@@ -13,15 +13,6 @@ import { persistActiveWorkspaceSelection } from '@/lib/services/active-workspace
 
 const SelectionSchema = z.object({ organizationId: z.string().uuid().nullable() }).strict();
 
-/**
- * PUT /api/settings/organization/active
- *
- * Select Personal (`null`) or one organization the authenticated account is a
- * member of. The service verifies membership before persisting the selection;
- * every later RLS request re-verifies it, so this is a scope choice, not a
- * grant. A full page reload after success intentionally clears tenant-owned
- * client caches before the new scope is rendered.
- */
 async function handlePut(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;

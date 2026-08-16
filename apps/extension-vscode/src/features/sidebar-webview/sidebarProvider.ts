@@ -1,12 +1,4 @@
-/**
- * sidebarProvider.ts — WebviewViewProvider for the AGI Workforce sidebar panel.
- *
- * Thin orchestrator: wires webview lifecycle (resolveWebviewView) to ChatStateManager.
- * HTML generation lives in sidebar/webviewContent.ts.
- * Message routing and streaming state live in sidebar/ChatStateManager.ts.
- */
 
-// AUDIT-FIX: vscode-reorg
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
@@ -20,15 +12,12 @@ import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { resolveTierSync } from '../../integrations/tierResolver';
 import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
 
-// Re-export for chatEditorPanel.ts (imported from ./sidebarProvider)
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
 export type {
   WebviewToExtMessage,
   ExtToWebviewMessage,
   UsageMeterWebviewPayload,
 } from './ChatStateManager';
-
-// ─── Provider ─────────────────────────────────────────────────────────────────
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = 'agi-workforce.sidebar';
@@ -41,8 +30,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly _extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
-    // Named `_extensionContext` (not `_context`) because `resolveWebviewView`
-    // takes an unrelated `_context: WebviewViewResolveContext` parameter.
     private readonly _extensionContext: vscode.ExtensionContext,
     conversationTreeProvider?: ConversationTreeProvider,
     workspaceState?: vscode.Memento,
@@ -85,7 +72,6 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       initialEffort,
       supportsEffort,
       this._stateManager.meterCollapsed,
-      // VSCODE-PICKER-TIER-01: gate the <select> roster on the resolved tier.
       resolveTierSync(this._extensionContext),
       shouldShowOnboarding(this._extensionContext.globalState),
       Config.composerFollowUpBehavior(),
@@ -93,17 +79,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     this._messageListener?.dispose();
     this._messageListener = webviewView.webview.onDidReceiveMessage(async (msg) => {
-      // PR-3C (F-11): runtime-validate every webview → extension message.
-      // A compromised webview cannot spoof e.g. {type:'setMode',
-      // payload:{mode:'bypass'}} to silently downgrade agent mode.
       const parsed = parseWebviewMessage(msg);
       if (parsed === undefined) {
         console.warn('[AGI Workforce] dropping malformed webview message', msg);
         return;
       }
-      // The Zod-inferred type is structurally a superset of the existing
-      // WebviewToExtMessage union (optional fields include `| undefined`).
-      // Cast through unknown to bridge the exactOptionalPropertyTypes gap.
       await this._stateManager.handleMessage(
         parsed as unknown as Parameters<typeof this._stateManager.handleMessage>[0],
       );
@@ -118,12 +98,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** Programmatically reveal the sidebar panel. */
   public reveal(): void {
     this._view?.show?.(true);
   }
 
-  /** Prefill the first-party sidebar when the host has no native Chat participant API. */
   public prefillComposer(text: string, references: WorkspaceFileReference[] = []): void {
     this._pendingComposerDraft = { type: 'composerDraft', payload: { text, references } };
     void this._deliverComposerDraft();
@@ -136,50 +114,38 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     if (await view.webview.postMessage(draft)) delete this._pendingComposerDraft;
   }
 
-  /** Public entry-point so extension.ts can push a fresh usage meter on config change. */
   public pushUsageMeter(): void {
     void this._stateManager.pushUsageMeter();
   }
 
-  /**
-   * Adopt an externally edited `agiWorkforce.model` setting before the meter is
-   * pushed, so the header trust pill describes the newly configured provider.
-   */
   public syncModelFromConfiguration(): void {
     this._stateManager.syncActiveModelFromConfiguration();
   }
 
-  /** Push the current browser/device-auth state into the visible account control. */
   public pushAccountStatus(): void {
     void this._stateManager.pushAccountStatus();
   }
 
-  /** Reconcile identity, plan usage, and the header boundary after auth changes. */
   public refreshAccountPresentation(): void {
     void this._stateManager.refreshAccountPresentation();
   }
 
-  /** Replay the persisted first-run experience in an already-open sidebar. */
   public showOnboarding(): void {
     this._stateManager.showOnboarding();
   }
 
-  /** Load a persisted idle/failed developer session into this live chat controller. */
   public resumeConversation(threadId: string): Promise<boolean> {
     return this._stateManager.resumeConversation(threadId);
   }
 
-  /** Keep an already-open composer aligned with the user-scoped active-turn default. */
   public pushFollowUpBehavior(): void {
     this._stateManager.pushFollowUpBehavior();
   }
 
-  /** Clear conversation history and notify the webview. */
   public resetConversation(): void {
     this._stateManager.resetConversation();
   }
 
-  /** Remove the last user+assistant pair and notify the webview. */
   public rewindLast(): void {
     this._stateManager.rewindLast();
   }

@@ -24,31 +24,6 @@ export const metadata = buildMetadata({
   path: '/privacy/requests',
 });
 
-/*
- * DATA RIGHTS AND CONSENT
- *
- * LEGAL REVIEW REQUIRED before this page is relied on — see the header of
- * /privacy/india/page.tsx and DPDP_PROGRESS.md for the itemised list.
- *
- * THE RULE THIS PAGE IS HELD TO: describe only what the code does.
- *
- *  - The consent panel is real: it reads GET /api/consent and writes
- *    POST /api/consent, which append to `consent_records` (migration 0113).
- *    Withdrawal here takes effect on the ledger immediately.
- *  - The request form is real but modest: it writes a row to
- *    `data_rights_requests` (migration 0114) and returns a reference. It does
- *    NOT notify anyone. The copy says so, in those words, in the success state.
- *    An email provider exists in the repository
- *    (lib/support/handoff/resend-client.ts, used by support escalation and
- *    scheduled-task notifications) but nothing connects it to this queue.
- *  - "Export" and "delete my account" are NOT reimplemented here. They already
- *    exist in account settings, and a second half-wired button beside a working
- *    one is how a product ends up with two answers to the same question.
- *
- * DO NOT add copy claiming a response time that no process delivers. The number
- * published here is GRIEVANCE_RESPONSE_TARGET_DAYS, described as a commitment.
- */
-
 export default function DataRightsPage() {
   return (
     <div data-design="agi" data-legal-review="pending-counsel">

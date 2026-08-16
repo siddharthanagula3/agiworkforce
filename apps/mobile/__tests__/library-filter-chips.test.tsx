@@ -1,26 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M07 — the Library filter chips must scroll.
- *
- * The four labels already total ~316pt plus gutters against a 375pt screen, so
- * the previous fixed `flex-row` clipped "Artifacts" off the edge at any
- * accessibility text size (and would clip it outright with a fifth filter),
- * with no gesture that could reach it.
- */
 import React from 'react';
 import { ScrollView } from 'react-native';
 import { fireEvent, render, within } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -33,8 +19,6 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-  // The bottom-anchored search pill (src/shared/components/BottomSearchBar)
-  // reads the safe-area inset so it clears the home indicator.
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
@@ -114,13 +98,9 @@ describe('Library filter chips', () => {
 
     const [row] = rows;
     expect(row.props.showsHorizontalScrollIndicator).toBe(false);
-    // ScrollView's base style is flexGrow: 1; left unpinned the chip row would
-    // claim the rest of the column and push the grid off-screen.
     expect(row.props.style).toMatchObject({ flexGrow: 0 });
     expect(row.props.contentContainerStyle).toMatchObject({ paddingHorizontal: 16, gap: 8 });
 
-    // All four filters live inside that scroller — including the last one,
-    // which is the one that used to be unreachable.
     const chips = within(screen.getByTestId('library-filter-row'));
     for (const label of ['All', 'Images', 'Documents', 'Artifacts']) {
       expect(chips.getByLabelText(`${label} filter`)).toBeTruthy();

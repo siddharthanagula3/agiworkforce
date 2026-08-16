@@ -1,15 +1,3 @@
-/**
- * First-run intro for voice conversation.
- *
- * Two jobs, and the second is the reason this is a gate rather than a tooltip:
- * it explains what voice does, and it discloses that speech is captured before
- * any capture happens. Starting a live microphone session with no prior notice
- * is the part that matters — the copy is parity work, the ordering is not.
- *
- * Shown once and remembered via `voiceOnboardingSeen`. Existing installs also
- * see it: nobody has been shown the disclosure yet, so treating them as having
- * acknowledged it would defeat the purpose.
- */
 
 import { useCallback } from 'react';
 import { Modal, Pressable, View } from 'react-native';
@@ -23,11 +11,6 @@ import { colors } from '@/src/ui/theme';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { useSettingsStore } from '@/stores/settingsStore';
 
-/**
- * The same gradient sphere the live conversation screen uses, at rest. Reusing
- * the motif means the intro shows the thing the user is about to see, rather
- * than a generic illustration.
- */
 function IntroOrb({ size = 168 }: { size?: number }) {
   const r = size / 2;
   return (
@@ -55,14 +38,6 @@ function FeatureRow({ icon, children }: { icon: React.ReactNode; children: React
   );
 }
 
-/**
- * The fill lives on a plain View, not on the Pressable. Three visual passes
- * found the Pressable's own background refusing to paint here while identical
- * pills elsewhere in the app render fine; the difference is that these sit
- * inside a reanimated Animated.View with an `entering` animation and used a
- * function style. A View's backgroundColor is the most reliably painted thing
- * in RN, so this removes the variable instead of explaining it.
- */
 const PILL = {
   backgroundColor: colors.white,
   borderRadius: 999,
@@ -78,9 +53,7 @@ const PILL_LABEL = {
 
 export interface VoiceOnboardingSheetProps {
   visible: boolean;
-  /** Acknowledged — the caller proceeds into voice. */
   onContinue: () => void;
-  /** Dismissed without acknowledging — voice must NOT start. */
   onDismiss: () => void;
 }
 
@@ -98,9 +71,6 @@ export function VoiceOnboardingSheet({
     if (hapticsEnabled) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    // Recorded only on an explicit Continue. Dismissing leaves it unset so the
-    // disclosure returns next time, rather than being silently consumed by a
-    // stray tap on the close button.
     setVoiceOnboardingSeen(true);
     onContinue();
   }, [hapticsEnabled, setVoiceOnboardingSeen, onContinue]);

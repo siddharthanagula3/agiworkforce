@@ -19,12 +19,10 @@ const AccessibleForm = forwardRef<HTMLFormElement, AccessibleFormProps>(
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
 
-      // Track form submission
       trackInteraction('submit', 'form', {
         formId,
       });
 
-      // Check for validation errors
       const form = event.currentTarget;
       const invalidElements = form.querySelectorAll(':invalid');
 
@@ -35,11 +33,9 @@ const AccessibleForm = forwardRef<HTMLFormElement, AccessibleFormProps>(
           );
         }
 
-        // Focus first invalid element
         const firstInvalid = invalidElements[0] as HTMLElement;
         firstInvalid.focus();
 
-        // Set aria-describedby for error announcement
         setAriaDescribedBy(firstInvalid, errorId);
       } else {
         if (announceSuccess) {
@@ -47,7 +43,6 @@ const AccessibleForm = forwardRef<HTMLFormElement, AccessibleFormProps>(
         }
       }
 
-      // Call original onSubmit handler
       // @ts-expect-error - React FormEvent vs SubmitEvent type mismatch
       onSubmit?.(event);
     };

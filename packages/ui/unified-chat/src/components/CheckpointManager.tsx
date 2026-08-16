@@ -34,11 +34,7 @@ import {
 import { cn } from '../lib/utils';
 import type { Checkpoint } from '../stores/checkpointStore';
 
-// Re-export checkpoint type under a stable alias so callers don't need to
-// import from the store separately.
 export type { Checkpoint as ManagerCheckpoint };
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatTimestamp(isoString: string): string {
   const date = new Date(isoString);
@@ -55,40 +51,16 @@ function formatTimestamp(isoString: string): string {
   return date.toLocaleDateString();
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export interface CheckpointManagerProps {
   conversationId: string;
-  /**
-   * Called on mount to load the checkpoint list.
-   * Must return an array of Checkpoint objects.
-   */
   onLoad: (conversationId: string) => Promise<Checkpoint[]>;
-  /**
-   * Called when the user saves a new checkpoint.
-   * Returns the created Checkpoint so the store can be updated.
-   */
   onCreate: (conversationId: string, label: string, description?: string) => Promise<Checkpoint>;
-  /**
-   * Called when the user confirms a restore.
-   * Should throw on failure so the component can surface the error.
-   */
   onRestore: (checkpointId: string, conversationId: string) => Promise<void>;
-  /**
-   * Called when the user confirms a delete.
-   */
   onDelete: (checkpointId: string) => Promise<void>;
-  /**
-   * Optional: called when the user clicks "Fork" on a checkpoint.
-   * If omitted the fork button is hidden.
-   */
   onFork?: (checkpoint: Checkpoint) => Promise<void>;
-  /** Called after restore completes (e.g. to re-render message list). */
   onRestoreComplete?: () => void;
   className?: string;
 }
-
-// ── Inline mini-dialog (avoids desktop-only shadcn Dialog dep) ────────────────
 
 interface MiniDialogProps {
   open: boolean;
@@ -112,8 +84,6 @@ function MiniDialog({ open, title, children }: MiniDialogProps) {
     </div>
   );
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export function CheckpointManager({
   conversationId,

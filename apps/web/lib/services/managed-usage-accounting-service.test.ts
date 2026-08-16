@@ -280,13 +280,6 @@ describe('managed usage accounting', () => {
     });
   });
 
-  /**
-   * CPST Stage-0 telemetry, managed cloud only
-   * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, phase 1).
-   * The keys are additive and optional: omitting them must leave the usage
-   * payload byte-identical to what this service wrote before CPST existed,
-   * which the three assertions above already pin.
-   */
   it('spreads caller-supplied CPST keys into the observed-usage payload', async () => {
     const usage = createObservedProviderUsage();
     accumulateObservedProviderUsage(usage, { inputTokens: 10, outputTokens: 4 });
@@ -312,7 +305,6 @@ describe('managed usage accounting', () => {
     };
     const persisted = JSON.parse(JSON.stringify(call.usage));
 
-    // Accounting keys are untouched by the additive spread.
     expect(persisted.accounting).toBe('observed_provider_usage');
     expect(persisted.reason).toBe('tool_loop_completed');
     expect(persisted.inputTokens).toBe(10);

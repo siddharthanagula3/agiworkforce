@@ -38,11 +38,6 @@ const PLAN_INTERVALS: Readonly<Record<ConfiguredCheckoutPlan, readonly BillingIn
   pro: ['monthly', 'yearly'],
   max: ['monthly'],
   max_15x: ['monthly'],
-  // Team is sold monthly and yearly ($25/seat/mo, $240/seat/yr — Decision #22).
-  // Every amount published for Team is PER SEAT — the seat count is the Stripe
-  // line-item quantity, never part of the unit price. Yearly is USD-only; an
-  // unconfigured STRIPE_PRICE_TEAM_YEARLY_USD makes the yearly entry
-  // checkoutReady=false so the pricing page does not offer it (fail-closed).
   team: ['monthly', 'yearly'],
 };
 
@@ -63,11 +58,6 @@ async function retrieveStripePrice(priceId: string): Promise<StripePriceLike | n
   const stripe = getStripe();
   if (!stripe) return null;
 
-  // Fail SOFT on the read path: a Stripe lookup error (deleted price, live/test
-  // key–price mode mismatch, transient API failure) must degrade the DISPLAY to
-  // the catalog USD fallback with checkoutReady=false — not 500 the pricing
-  // page's price hydration. Checkout stays fail-closed separately: a null here
-  // makes getPriceSelectionForCurrency return null, which refuses checkout.
   let price;
   try {
     price = await stripe.prices.retrieve(priceId, { expand: ['currency_options'] });
@@ -141,12 +131,6 @@ export async function getCheckoutPriceSelection(
   return getPriceSelectionForCurrency(plan, interval, getCurrencyForCountry(countryCode));
 }
 
-/**
- * Resolve a configured Price in an existing subscription's billing currency.
- * Subscription updates cannot safely infer a new currency from the user's
- * current IP location, which may differ from the currency they originally
- * purchased in.
- */
 export async function getPriceSelectionForCurrency(
   plan: ConfiguredCheckoutPlan,
   interval: BillingInterval,

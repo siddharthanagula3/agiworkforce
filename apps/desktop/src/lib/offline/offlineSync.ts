@@ -1,15 +1,3 @@
-/**
- * Offline Sync Manager (Desktop wrapper)
- *
- * Desktop-surface binding of the shared
- * `@agiworkforce/client-runtime/offline-sync` factory. Wires the canonical
- * `OfflineSyncManager` to the desktop offline queue, real Tauri-webview
- * `window` online/offline events, and `navigator.onLine`.
- *
- * The previous standalone implementation lived in this file and was
- * copy-ported from `apps/web/lib/offline/offlineSync.ts`. Both surfaces
- * now share the canonical factory; only adapters differ.
- */
 
 import { createOfflineSyncManager } from '@agiworkforce/client-runtime';
 import { syncOfflineQueue, getQueuedItemCount, subscribeToQueueChanges } from './offlineQueue';

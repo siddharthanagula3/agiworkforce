@@ -1,7 +1,3 @@
-/**
- * Mission Control Store Unit Tests
- * Tests the real-time state management for mission orchestration
- */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useMissionStore } from './mission-control-store';
@@ -18,7 +14,6 @@ import {
 
 describe('Mission Control Store', () => {
   beforeEach(() => {
-    // Reset store to initial state before each test
     useMissionStore.getState().reset();
   });
 
@@ -29,7 +24,6 @@ describe('Mission Control Store', () => {
       expect(state.missionPlan).toEqual([]);
       expect(state.currentMissionId).toBeNull();
       expect(state.missionStatus).toBe('idle');
-      // activeEmployees is now a Record, not a Map
       expect(Object.keys(state.activeEmployees).length).toBe(0);
       expect(state.messages).toEqual([]);
       expect(state.isOrchestrating).toBe(false);
@@ -49,17 +43,15 @@ describe('Mission Control Store', () => {
 
       useMissionStore.getState().startMission(missionId);
 
-      // Get fresh state after mutation
       const state = useMissionStore.getState();
       expect(state.currentMissionId).toBe(missionId);
-      expect(state.missionStatus).toBe('executing'); // Store sets 'executing' on start
+      expect(state.missionStatus).toBe('executing');
       expect(state.error).toBeNull();
     });
 
     it('should start mission in chat mode', () => {
       useMissionStore.getState().startMission('chat-mission-1', 'chat');
 
-      // Get fresh state after mutation
       const state = useMissionStore.getState();
       expect(state.mode).toBe('chat');
       expect(state.missionStatus).toBe('executing');
@@ -69,7 +61,6 @@ describe('Mission Control Store', () => {
       useMissionStore.getState().startMission('mission-1');
       useMissionStore.getState().completeMission();
 
-      // Get fresh state after mutation
       const state = useMissionStore.getState();
       expect(state.missionStatus).toBe('completed');
       expect(state.error).toBeNull();
@@ -81,7 +72,6 @@ describe('Mission Control Store', () => {
       useMissionStore.getState().startMission('mission-2');
       useMissionStore.getState().failMission(errorMessage);
 
-      // Get fresh state after mutation
       const state = useMissionStore.getState();
       expect(state.missionStatus).toBe('failed');
       expect(state.error).toBe(errorMessage);
@@ -103,21 +93,17 @@ describe('Mission Control Store', () => {
     });
 
     it('should reset mission state completely', () => {
-      // Setup complex state
       useMissionStore.getState().startMission('mission-4');
       useMissionStore.getState().setMissionPlan([createPendingTask('Task 1')]);
       useMissionStore.getState().addMessage(createUserMessage('Test message'));
       useMissionStore.getState().updateEmployeeStatus('test-employee', 'thinking');
 
-      // Reset
       useMissionStore.getState().reset();
 
-      // Get fresh state and verify clean slate
       const state = useMissionStore.getState();
       expect(state.missionPlan).toEqual([]);
       expect(state.currentMissionId).toBeNull();
       expect(state.missionStatus).toBe('idle');
-      // activeEmployees is now a Record, not a Map
       expect(Object.keys(state.activeEmployees).length).toBe(0);
       expect(state.messages).toEqual([]);
       expect(state.error).toBeNull();
@@ -205,7 +191,6 @@ describe('Mission Control Store', () => {
     });
 
     it('should handle updating non-existent task gracefully', () => {
-      // Should not throw error
       expect(() => {
         useMissionStore.getState().updateTaskStatus('non-existent-task', 'completed');
       }).not.toThrow();
@@ -216,7 +201,6 @@ describe('Mission Control Store', () => {
 
       useMissionStore.getState().updateTaskStatus('task-1', 'in_progress');
 
-      // Original array should not be modified (Immer middleware)
       expect(originalPlan[0]?.status).toBe('pending');
       expect(useMissionStore.getState().missionPlan[0]?.status).toBe('in_progress');
     });
@@ -226,7 +210,6 @@ describe('Mission Control Store', () => {
     it('should add new employee to active employees', () => {
       useMissionStore.getState().updateEmployeeStatus('code-reviewer', 'thinking');
 
-      // activeEmployees is now a Record, not a Map
       const state = useMissionStore.getState();
       const employee = state.activeEmployees['code-reviewer'];
       expect(employee).toBeDefined();
@@ -240,7 +223,6 @@ describe('Mission Control Store', () => {
         .getState()
         .updateEmployeeStatus('debugger', 'using_tool', 'Bash', 'Run tests');
 
-      // activeEmployees is now a Record, not a Map
       const state = useMissionStore.getState();
       const employee = state.activeEmployees['debugger'];
       expect(employee?.status).toBe('using_tool');
@@ -251,7 +233,6 @@ describe('Mission Control Store', () => {
     it('should set employee to error state', () => {
       useMissionStore.getState().updateEmployeeStatus('code-reviewer', 'error');
 
-      // activeEmployees is now a Record, not a Map
       const state = useMissionStore.getState();
       const employee = state.activeEmployees['code-reviewer'];
       expect(employee?.status).toBe('error');
@@ -262,11 +243,9 @@ describe('Mission Control Store', () => {
       useMissionStore.getState().addEmployeeLog('debugger', 'Starting code review');
       useMissionStore.getState().addEmployeeLog('debugger', 'Found 2 issues');
 
-      // activeEmployees is now a Record, not a Map
       const state = useMissionStore.getState();
       const employee = state.activeEmployees['debugger'];
       expect(employee?.log).toHaveLength(2);
-      // Log entries are objects with timestamp, message, and type
       expect(employee?.log[0]?.message).toBe('Starting code review');
       expect(employee?.log[1]?.message).toBe('Found 2 issues');
     });
@@ -275,7 +254,6 @@ describe('Mission Control Store', () => {
       useMissionStore.getState().updateEmployeeStatus('code-reviewer', 'thinking');
       useMissionStore.getState().updateEmployeeProgress('code-reviewer', 50);
 
-      // activeEmployees is now a Record, not a Map
       const state = useMissionStore.getState();
       const employee = state.activeEmployees['code-reviewer'];
       expect(employee?.progress).toBe(50);
@@ -357,7 +335,6 @@ describe('Mission Control Store', () => {
     });
 
     it('should handle large message volumes', () => {
-      // Add 1000 messages
       for (let i = 0; i < 1000; i++) {
         useMissionStore.getState().addMessage(createUserMessage(`Message ${i}`));
       }
@@ -381,8 +358,6 @@ describe('Mission Control Store', () => {
       useMissionStore.getState().setOrchestrating(true);
       expect(useMissionStore.getState().isOrchestrating).toBe(true);
 
-      // Attempting to start another orchestration
-      // (This would be handled in the orchestrator, but store tracks the flag)
       expect(useMissionStore.getState().isOrchestrating).toBe(true);
     });
   });
@@ -393,11 +368,10 @@ describe('Mission Control Store', () => {
 
       const state = useMissionStore.getState();
       expect(state.mode).toBe('chat');
-      expect(state.activeChatSession).toBeNull(); // Set separately if needed
+      expect(state.activeChatSession).toBeNull();
     });
 
     it('should manage collaborative agents array', () => {
-      // collaborativeAgents is an array, not a Set
       const state = useMissionStore.getState();
       expect(Array.isArray(state.collaborativeAgents)).toBe(true);
     });
@@ -405,8 +379,7 @@ describe('Mission Control Store', () => {
 
   describe('Cleanup Operations', () => {
     it('should cleanup completed tasks older than 1 hour', () => {
-      // Create tasks with completedAt older than 1 hour
-      const oldDate = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
+      const oldDate = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
       useMissionStore
         .getState()
@@ -418,21 +391,18 @@ describe('Mission Control Store', () => {
 
       useMissionStore.getState().cleanupCompletedTasks();
 
-      // Only pending task should remain
       const state = useMissionStore.getState();
       expect(state.missionPlan).toHaveLength(1);
       expect(state.missionPlan[0]?.description).toBe('Task 2');
     });
 
     it('should not remove recently completed tasks', () => {
-      // Create a recently completed task (completedAt is now)
       const recentTask = createCompletedTask('Task 1', 'Done');
 
       useMissionStore.getState().setMissionPlan([recentTask, createPendingTask('Task 2')]);
 
       useMissionStore.getState().cleanupCompletedTasks();
 
-      // Both tasks should remain since completed task is recent
       const state = useMissionStore.getState();
       expect(state.missionPlan).toHaveLength(2);
     });
@@ -459,7 +429,6 @@ describe('Mission Control Store', () => {
         .getState()
         .setMissionPlan([createMockTask({ id: 'task-1', status: 'pending' })]);
 
-      // Simulate rapid updates
       useMissionStore.getState().updateTaskStatus('task-1', 'in_progress', 'employee-1');
       useMissionStore.getState().updateTaskStatus('task-1', 'completed', 'employee-1', 'Success');
 
@@ -473,7 +442,6 @@ describe('Mission Control Store', () => {
       useMissionStore.getState().updateEmployeeStatus('employee-2', 'using_tool', 'Bash');
       useMissionStore.getState().updateEmployeeStatus('employee-3', 'idle');
 
-      // activeEmployees is now a Record, not a Map
       const state = useMissionStore.getState();
       expect(Object.keys(state.activeEmployees).length).toBe(3);
     });
@@ -500,7 +468,6 @@ describe('Mission Control Store', () => {
 
       useMissionStore.getState().updateEmployeeStatus(longName, 'thinking');
 
-      // activeEmployees is now a Record, not a Map
       const state = useMissionStore.getState();
       expect(longName in state.activeEmployees).toBe(true);
     });
@@ -514,7 +481,6 @@ describe('Mission Control Store', () => {
         content: specialContent,
       });
 
-      // Should store raw content (sanitization happens in UI)
       const state = useMissionStore.getState();
       expect(state.messages[0]?.content).toBe(specialContent);
     });
@@ -530,7 +496,7 @@ describe('Mission Control Store', () => {
 
       const state = useMissionStore.getState();
       expect(state.missionPlan).toHaveLength(1000);
-      expect(end - start).toBeLessThan(100); // Should complete in < 100ms
+      expect(end - start).toBeLessThan(100);
     });
 
     it('should handle many active employees efficiently', () => {
@@ -540,7 +506,6 @@ describe('Mission Control Store', () => {
       }
       const end = performance.now();
 
-      // activeEmployees is now a Record, not a Map
       const state = useMissionStore.getState();
       expect(Object.keys(state.activeEmployees).length).toBe(100);
       expect(end - start).toBeLessThan(100);

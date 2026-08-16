@@ -50,9 +50,6 @@ function resolveRequiredTier(
     (requiredPlans ?? []).map((plan) => plan.toLowerCase()).filter(isPaidBillingPlanTier),
   );
 
-  // Prefer the lowest qualifying individual tier, even if a server accidentally
-  // changes required_plans ordering. Team and Enterprise are not rungs on the
-  // personal upgrade ladder, so only use them when no personal tier qualifies.
   const individual = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((tier) => candidates.has(tier));
   if (individual) return individual;
   if (candidates.has('team')) return 'team';
@@ -117,12 +114,6 @@ function planCanUpgradeTo(currentTier: BillingPlanTier, targetTier: PaidBillingP
   return currentIndex < targetIndex;
 }
 
-/**
- * Turn a structured media refusal into the durable transcript metadata that
- * ChatMessageList renders after a reload. The subscription tier is evaluated
- * here, rather than in the card, so a Max 15x/Team/Enterprise account can never
- * be told to buy the same or a lower individual plan after exhausting usage.
- */
 export function resolveMediaPaywallSlot(input: {
   feature: MediaPaywallFeature;
   refusal: MediaBillingRefusal;
@@ -193,8 +184,6 @@ export function resolveMediaPaywallSlot(input: {
           : currentTier),
       reason: canUpgrade ? quota.reason : noUpgradeQuotaReason(code, currentTier),
       recoveryAction: canUpgrade ? 'upgrade' : 'view_usage',
-      // A top-tier exhausted account gets a useful Usage destination, not a
-      // fake upgrade. A plain request-rate refusal remains wait-only.
       showUpgradeCta: canUpgrade || quota.kind !== 'rate_limit',
       showResetTime: quota.showResetTime,
       suggestStandardModel: quota.suggestStandardModel,
@@ -202,8 +191,6 @@ export function resolveMediaPaywallSlot(input: {
     };
   }
 
-  // A legacy 402 may lack a code. Preserve its billing recovery classification
-  // while still applying the account-aware no-lower-tier rule.
   if (refusal.recoveryAction) {
     const nextTier = getNextUpgradeTier(currentTier);
     return {
@@ -224,12 +211,6 @@ export function resolveMediaPaywallSlot(input: {
   return null;
 }
 
-/**
- * The page-level destination router for a persisted refusal card. Keeping this
- * imperative boundary small makes it possible to prove that the CTA opens the
- * exact checkout tier or the correct Settings section, rather than merely
- * proving that a child component forwarded an opaque callback.
- */
 export function runMediaPaywallRecovery(
   selection: { recoveryAction: MediaPaywallRecoveryAction; requiredTier: string },
   handlers: MediaPaywallRecoveryHandlers,
@@ -242,14 +223,6 @@ export function runMediaPaywallRecovery(
     handlers.openSettings('usage');
     return;
   }
-  // Lands on the Billing section, whose "Usage top-up" block is the real,
-  // already-working purchase control. This is the only recovery that helps a
-  // subscriber at the top of the ladder: they cannot upgrade to anything, so
-  // before this existed their paywall card offered no action at all.
-  //
-  // Only reachable when the block is one credits actually clear — see
-  // `clearedByCredits` in billing-catalog.ts. Never route a rolling-window
-  // refusal here; buying credits does not lift those caps today.
   if (selection.recoveryAction === 'top_up') {
     handlers.openSettings('billing');
     return;
@@ -258,7 +231,5 @@ export function runMediaPaywallRecovery(
     handlers.openUpgrade(selection.requiredTier);
     return;
   }
-  // Enterprise and Team are not personal media-upgrade rungs. Falling back to
-  // billing is honest; opening an unrelated personal tier would be a downgrade.
   handlers.openSettings('billing');
 }

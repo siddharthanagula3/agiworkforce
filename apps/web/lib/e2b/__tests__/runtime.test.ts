@@ -1,21 +1,3 @@
-/**
- * E2B runtime — conversation-scoped session lifecycle (mocked SDK + mocked session
- * store; no live sandbox / no E2B_API_KEY in this environment).
- *
- * Verifies:
- *   - No conversationId → ephemeral: one sandbox per getE2BExecutor() call, dispose()
- *     kills it immediately (byte-for-byte the original per-call behavior).
- *   - owned scope + no prior session → creates a sandbox, caches a code context per
- *     language, and persists the session (sandboxId + contexts) after each context
- *     create.
- *   - conversationId + a prior session → resumes via Sandbox.connect(sandboxId)
- *     instead of creating a new sandbox, and reuses the cached context.
- *   - conversationId + a prior session that fails to resume → falls back to creating a
- *     fresh sandbox (fail-open on resume, never surfaced to the model).
- *   - pauseE2BSession() / killE2BSession(): pause/kill the sandbox by ID without
- *     needing a live instance handle (static SandboxApi methods), and killE2BSession
- *     clears the Redis mapping.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -24,11 +6,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('../gate', () => ({ e2bExecutionEnabled: vi.fn(() => true) }));
 
-// GOV-5: metering is exercised by its own unit; here it must not reach the
-// credit ledger.
 const meterSandboxComputeInterval = vi.fn(async (_interval: unknown) => 0);
-// GOV-5: getE2BExecutor refuses to provision when compute cannot be priced;
-// priceable by default here so the lifecycle tests below exercise the normal path.
 const sandboxComputeIsPriceable = vi.fn(() => true);
 vi.mock('../compute-metering', () => ({
   E2B_COMPUTE_RATE_ENV: 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
@@ -36,9 +14,6 @@ vi.mock('../compute-metering', () => ({
   sandboxComputeIsPriceable: () => sandboxComputeIsPriceable(),
 }));
 
-// GOV-4: the plan tier is supplied on the scope in these tests, so the
-// subscription lookup is never reached; mocked anyway so the module graph does
-// not pull the live billing stack into a unit test.
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
 }));
@@ -52,7 +27,6 @@ interface TestScope {
   planTier?: string;
 }
 
-/** Pro grants 5 sandboxes and a 20-minute lifetime (BILLING_PLAN_PRODUCT_LIMITS). */
 function scope(conversationId: string, userId = 'user-1', planTier = 'pro'): TestScope {
   return { tenantId: 'managed-cloud', userId, conversationId, planTier };
 }
@@ -92,8 +66,6 @@ vi.mock('../session-store', () => ({
   deleteE2BSession: vi.fn(async (value: TestScope) => {
     sessions.delete(scopeKey(value));
   }),
-  // GOV-24: count-then-create is now serialised per user. The unit under test
-  // only needs the section to run; contention is covered by the store itself.
   withUserSandboxLock: vi.fn(async (_scope: TestScope, critical: () => Promise<unknown>) => ({
     locked: true,
     result: await critical(),
@@ -109,9 +81,6 @@ const connect = vi.fn(async (sandboxId: string) => makeSandboxInstance(sandboxId
 const staticKill = vi.fn(async () => true);
 const staticPause = vi.fn(async () => true);
 
-// Sandboxes the E2B account currently holds, as the list API would report them. Tests
-// populate this to exercise the per-user concurrency quota. `staticList` filters by the
-// query's metadata (server-side AND filter) and pages the result once.
 let listedSandboxes: Array<{ metadata: Record<string, string> }> = [];
 const staticList = vi.fn((opts?: { query?: { metadata?: Record<string, string> } }) => {
   const wanted = opts?.query?.metadata ?? {};
@@ -161,7 +130,6 @@ vi.mock('@e2b/code-interpreter', () => ({
   Sandbox: { create, connect, kill: staticKill, pause: staticPause, list: staticList },
 }));
 
-/** Build `count` live sandboxes tagged for `userId` (as the E2B list API would report). */
 function liveSandboxesFor(
   userId: string,
   count: number,
@@ -182,7 +150,6 @@ describe('getE2BExecutor — unpriced compute (GOV-5)', () => {
     const { getE2BExecutor } = await import('../runtime');
 
     await expect(getE2BExecutor(scope('conv-unpriced', 'user-unpriced'))).resolves.toBeNull();
-    // The refusal is BEFORE the SDK import/create: no sandbox exists to bill for.
     expect(create).not.toHaveBeenCalled();
     expect(connect).not.toHaveBeenCalled();
   });
@@ -211,7 +178,6 @@ describe('getE2BExecutor — ephemeral (no conversationId)', () => {
     await executor!.runCode({ language: 'python', code: 'x = 1' });
     await executor!.dispose();
 
-    // dispose() with no conversationId kills the underlying sandbox immediately.
     const instance = await create.mock.results[0]!.value;
     expect(instance.kill).toHaveBeenCalledTimes(1);
   });
@@ -250,7 +216,6 @@ describe('getE2BExecutor — conversation-scoped', () => {
     expect(create).not.toHaveBeenCalled();
 
     await executor!.runCode({ language: 'python', code: 'print(x)' });
-    // Reused the cached context; did not create a new one.
     const instance = await connect.mock.results[0]!.value;
     expect(instance.createCodeContext).not.toHaveBeenCalled();
   });
@@ -364,7 +329,7 @@ describe('getE2BExecutor — per-user sandbox quota', () => {
   });
 
   it('creates a fresh sandbox when the user is under the quota', async () => {
-    listedSandboxes = liveSandboxesFor('user-under', 4); // Pro's limit is 5
+    listedSandboxes = liveSandboxesFor('user-under', 4);
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(scope('conv-q2', 'user-under'));
     expect(executor).not.toBeNull();
@@ -372,7 +337,7 @@ describe('getE2BExecutor — per-user sandbox quota', () => {
   });
 
   it('refuses a new sandbox (fail-closed) when the user is at the quota', async () => {
-    listedSandboxes = liveSandboxesFor('user-max', 5); // at Pro's limit
+    listedSandboxes = liveSandboxesFor('user-max', 5);
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(scope('conv-q3', 'user-max'));
     expect(executor).toBeNull();
@@ -380,7 +345,6 @@ describe('getE2BExecutor — per-user sandbox quota', () => {
   });
 
   it('counts only the requesting user, not other users, toward the quota', async () => {
-    // Team is saturated by a different user; this user has none of their own.
     listedSandboxes = liveSandboxesFor('other-user', 20);
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(scope('conv-q4', 'fresh-user'));
@@ -388,10 +352,6 @@ describe('getE2BExecutor — per-user sandbox quota', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  // GOV-21-adjacent (CHANGED): this used to assert fail-OPEN, justified by the
-  // team-wide cap being the backstop. That backstop disappears for every user
-  // at once when the list API degrades — exactly when the per-user cap is the
-  // only remaining limit — so a failed quota check now REFUSES.
   it('fails CLOSED when the quota list check throws', async () => {
     staticList.mockImplementationOnce(() => {
       throw new Error('list API unavailable');
@@ -402,15 +362,13 @@ describe('getE2BExecutor — per-user sandbox quota', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  // GOV-4: sandbox count and lifetime are plan dimensions now, not one flat
-  // constant that gave Free exactly what Max 15x got.
   it('scales the sandbox ceiling with the plan', async () => {
     const { getE2BExecutor } = await import('../runtime');
 
-    listedSandboxes = liveSandboxesFor('user-basic', 2); // Basic's limit is 2
+    listedSandboxes = liveSandboxesFor('user-basic', 2);
     expect(await getE2BExecutor(scope('conv-b', 'user-basic', 'basic'))).toBeNull();
 
-    listedSandboxes = liveSandboxesFor('user-max15', 2); // Max 15x allows 20
+    listedSandboxes = liveSandboxesFor('user-max15', 2);
     expect(await getE2BExecutor(scope('conv-m', 'user-max15', 'max_15x'))).not.toBeNull();
   });
 
@@ -451,8 +409,6 @@ describe('pauseE2BSession / killE2BSession', () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
-  // GOV-5: sandbox seconds were never reserved, settled, or deducted — a user
-  // could burn unbounded compute while every spend meter stayed flat.
   it('meters the open compute interval when a sandbox is paused', async () => {
     sessions.set(scopeKey(scope('conv-meter')), {
       sandboxId: 'sbx-meter',

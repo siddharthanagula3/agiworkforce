@@ -110,7 +110,6 @@ export function CodeEditor({
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       handleSave({ auto: false }).catch((err) => {
-        // AUDIT-P3-ERROR: Save error - handleSave already shows toast notification
         console.debug('[CodeEditor] Save failed:', err);
       });
     });
@@ -234,7 +233,6 @@ export function CodeEditor({
                 size="sm"
                 onClick={() => {
                   handleSave({ auto: false }).catch((err) => {
-                    // AUDIT-P3-ERROR: Save error - handleSave already shows toast notification
                     console.debug('[CodeEditor] Save button failed:', err);
                   });
                 }}

@@ -33,27 +33,11 @@
  * - Add a unit test in `src/__tests__/`.
  */
 
-// ============================================================================
-// Database (relational, RLS-aware)
-// ============================================================================
-
-/**
- * Connection string + options for any Postgres-compatible backend.
- *
- * - Neon: `postgresql://[user]:[pwd]@[project].neon.tech/[db]?sslmode=require`
- * - RDS: `postgresql://[user]:[pwd]@[host]:5432/[db]`
- * - PlanetScale: not Postgres-compatible (MySQL); needs separate adapter.
- */
 export interface DatabaseConnectionConfig {
-  /** Postgres-compatible connection string. */
   connectionString: string;
-  /** Pool size (defaults to provider sensible default). */
   poolSize?: number;
-  /** Statement timeout in ms (defaults to 30s). */
   statementTimeoutMs?: number;
-  /** Per-call query timeout in ms. */
   queryTimeoutMs?: number;
-  /** Application name for connection logs. */
   applicationName?: string;
 }
 
@@ -80,33 +64,10 @@ export interface DatabaseAdapter {
    */
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
 
-  /**
-   * Run a parameterized INSERT / UPDATE / DELETE. Returns affected row count.
-   *
-   * For RETURNING queries, use `query<T>()` instead — `execute()` is for
-   * mutation calls where the caller only needs the count.
-   */
   execute(sql: string, params?: unknown[]): Promise<number>;
 
-  /**
-   * Run a callback inside a transaction. Commits on resolve, rolls back on
-   * throw. The `tx` adapter passed to `fn` must be used for all queries
-   * inside the transaction — DO NOT mix in the outer adapter, or you'll
-   * leave the transaction.
-   *
-   * Note: not every backend supports nested transactions. Adapters MAY use
-   * SAVEPOINTS internally; assume one level of nesting is safe.
-   */
   transaction<T>(fn: (tx: DatabaseAdapter) => Promise<T>): Promise<T>;
 
-  /**
-   * Bind a user JWT for the lifetime of the returned adapter. RLS policies
-   * see `auth.uid()` / equivalent. Returns a NEW adapter — does not mutate
-   * the receiver.
-   *
-   * The original (unscoped) adapter remains usable for service-context
-   * operations (Stripe webhooks, cron jobs).
-   */
   withUser(jwt: string): DatabaseAdapter;
 
   /**
@@ -121,123 +82,41 @@ export interface DatabaseAdapter {
    */
   withOrg(organizationId: string | null): DatabaseAdapter;
 
-  /**
-   * Release any pooled connections / open handles. Safe to call multiple
-   * times. After dispose, all methods reject.
-   */
   dispose(): Promise<void>;
 }
 
-// ============================================================================
-// Auth
-// ============================================================================
-
-/**
- * Verified token claims. Adapters that bring extra claims (org id, custom
- * scopes) MAY return additional fields, but `userId` is always present.
- */
 export interface VerifiedJwt {
   userId: string;
   email?: string;
-  /** Provider-specific claims. Inspect with care; not normalized. */
   raw?: Record<string, unknown>;
 }
 
-/**
- * Refreshed access + refresh token pair. Returned by adapters that support
- * refresh-token exchange.
- */
 export interface RefreshedTokens {
   accessToken: string;
   refreshToken: string;
-  /** Unix epoch seconds when the access token expires. */
   expiresAt?: number;
 }
 
-/**
- * Auth adapter. Verifies JWTs minted by the upstream identity provider.
- * Refresh-token exchange is an optional capability because providers such as
- * Clerk handle session refresh through cookies or native SDK sessions instead
- * of a server-side refresh-token API.
- *
- * Implementations:
- * - Clerk: verifies signature against Clerk session-token keys/JWKS.
- * - Auth0: verifies signature against published JWKS.
- * - Cognito: verifies against AWS-published JWKS for the user pool.
- *
- * Sign-up, password reset, OAuth callback flows live OUTSIDE this interface
- * — they are surface-specific (web cookie flow, mobile PKCE flow). This
- * interface is the **server-side verify** layer that protects API routes.
- */
 export interface AuthAdapter {
-  /**
-   * Verify a JWT issued by the identity provider. Returns null on bad
-   * signature / expired / revoked. Throws on transient infra failure.
-   */
   verifyJwt(token: string): Promise<VerifiedJwt | null>;
 
-  /**
-   * Trade a refresh token for a new access + refresh pair when the provider
-   * exposes that server-side capability. Returns null on invalid / revoked
-   * refresh token. Throws on transient infra failure.
-   */
   refreshToken?(refreshToken: string): Promise<RefreshedTokens | null>;
 }
 
-// ============================================================================
-// Storage (blobs)
-// ============================================================================
-
-/** Result of a successful blob upload. */
 export interface StoragePutResult {
-  /** Canonical URL (may be unsigned/public or require signed-url to access). */
   url: string;
-  /** Provider's content key (echoes back the input for chaining). */
   key: string;
 }
 
-/**
- * Storage adapter for blobs (file uploads, exports, attachment payloads).
- *
- * Bucket semantics are vendor-portable. S3-compatible providers can map a
- * logical bucket to a real bucket or prefix. Bucket names should be short
- * kebab-case strings.
- *
- * Implementations:
- * - S3: PutObjectCommand({ Bucket, Key, Body }).
- * - R2: same SDK as S3 with R2 endpoint.
- * - B2: native B2 SDK.
- */
 export interface StorageAdapter {
-  /**
-   * Upload bytes. Overwrites if key exists. Returns the canonical URL — caller
-   * must NOT assume the URL is publicly accessible; use `signedUrl()` for
-   * private downloads.
-   */
   put(bucket: string, key: string, data: Uint8Array): Promise<StoragePutResult>;
 
-  /**
-   * Download bytes. Returns null if the object doesn't exist. Throws on
-   * permission / infra errors.
-   */
   get(bucket: string, key: string): Promise<Uint8Array | null>;
 
-  /** Delete the object. No-op if it doesn't exist. */
   delete(bucket: string, key: string): Promise<void>;
 
-  /**
-   * Mint a short-lived signed URL for downloading. TTL must be > 0.
-   *
-   * Adapters MAY clamp the TTL (S3 caps at 7 days for SigV4). If the
-   * requested TTL is unsupportable, throw rather than silently extending or
-   * shortening.
-   */
   signedUrl(bucket: string, key: string, ttlSeconds: number): Promise<string>;
 }
-
-// ============================================================================
-// Realtime (pub/sub)
-// ============================================================================
 
 /**
  * Realtime adapter for low-latency pub/sub. Not durable — for durable queues
@@ -249,23 +128,10 @@ export interface StorageAdapter {
  * - Self-hosted ws: thin wrapper over a single websocket connection.
  */
 export interface RealtimeAdapter {
-  /**
-   * Subscribe to a channel. Returns an unsubscribe function. Calling it
-   * MUST tear down server-side subscriptions and close any held sockets if
-   * this was the last subscriber.
-   */
   subscribe(channel: string, onMessage: (payload: unknown) => void): () => void;
 
-  /**
-   * Publish a payload to a channel. Resolves once the broker has accepted
-   * the message — does NOT wait for delivery to subscribers.
-   */
   publish(channel: string, payload: unknown): Promise<void>;
 }
-
-// ============================================================================
-// Provider selection
-// ============================================================================
 
 /**
  * Database providers selectable by the runtime factory. Raw Postgres has a
@@ -274,31 +140,12 @@ export interface RealtimeAdapter {
  */
 export type DatabaseProvider = 'neon';
 
-/**
- * Auth providers. `clerk` has a server verification adapter. `auth0` and
- * `cognito` are documented targets.
- */
 export type AuthProvider = 'auth0' | 'clerk' | 'cognito';
 
-/**
- * Storage providers. `s3` covers AWS + R2 + B2 + MinIO (any S3-compatible
- * backend).
- */
 export type StorageProvider = 's3' | 'r2' | 'b2';
 
-/**
- * Realtime providers. `pusher` and `ably` are documented targets.
- */
 export type RealtimeProvider = 'pusher' | 'ably' | 'self-hosted';
 
-/**
- * Top-level configuration. The factory reads the provider field, picks an
- * adapter, and forwards the remaining config to its constructor.
- *
- * ENV resolution:
- * - `AGI_DATABASE_PROVIDER` -> `provider`
- * - `AGI_DATABASE_URL` or `DATABASE_URL` -> `connectionString`
- */
 export interface DataLayerConfig {
   database: { provider: DatabaseProvider } & Partial<DatabaseConnectionConfig>;
   auth: { provider: AuthProvider } & Record<string, unknown>;
@@ -306,14 +153,6 @@ export interface DataLayerConfig {
   realtime: { provider: RealtimeProvider } & Record<string, unknown>;
 }
 
-// ============================================================================
-// Errors
-// ============================================================================
-
-/**
- * Adapter says "I'm a skeleton — implement me before using." Thrown by
- * Neon and raw Postgres adapters today.
- */
 export class NotImplementedError extends Error {
   constructor(adapterName: string, methodName: string, migrationGuide?: string) {
     const guide = migrationGuide ? `\n\nMigration guide:\n${migrationGuide}` : '';
@@ -326,7 +165,6 @@ export class NotImplementedError extends Error {
   }
 }
 
-/** Configuration is malformed (missing keys, unknown provider, etc.). */
 export class DataLayerConfigError extends Error {
   constructor(message: string) {
     super(`@agiworkforce/data-layer config error: ${message}`);

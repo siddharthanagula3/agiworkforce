@@ -16,8 +16,6 @@ describe('managed usage vocabulary', () => {
   });
 
   it('names buckets by what they govern, not how they are computed', () => {
-    // "Rolling 5 hours" described the mechanism; a user cares whether they can
-    // keep working now. Guard against the mechanism wording returning.
     for (const bucket of MANAGED_USAGE_BUCKET_ORDER) {
       expect(managedUsageBucketLabel(bucket)).not.toMatch(/rolling/i);
     }
@@ -65,8 +63,6 @@ describe('formatUsageResetIn', () => {
 
 describe('formatUsageRemaining', () => {
   it('always states REMAINING, never used', () => {
-    // The Chrome panel rendered "Cloud usage: 12%", which reads as the opposite
-    // of the value it was given.
     expect(formatUsageRemaining(12)).toBe('12% left');
   });
 
@@ -100,9 +96,6 @@ describe('selectUsageWarning', () => {
   });
 
   it('picks the BINDING limit, not the first one over the line', () => {
-    // Telling someone about their weekly total while their session bucket is
-    // nearly gone is the wrong warning, and a wrong warning teaches people to
-    // dismiss warnings.
     const warning = selectUsageWarning([
       { bucket: 'weekly', percentRemaining: 20 },
       { bucket: 'session', percentRemaining: 5 },
@@ -155,7 +148,6 @@ describe('selectUsageWarning', () => {
   });
 
   it('never names a bucket in prose using its meter label', () => {
-    // "You've used 75% of This week" is what one shared string would have given.
     for (const bucket of MANAGED_USAGE_BUCKET_ORDER) {
       const warning = selectUsageWarning([{ bucket, percentRemaining: 10 }]);
       expect(warning?.headline).not.toContain(MANAGED_USAGE_BUCKET_COPY[bucket].label);

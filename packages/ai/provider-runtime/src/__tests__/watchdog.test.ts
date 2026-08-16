@@ -67,7 +67,6 @@ describe('withStreamIdleWatchdog', () => {
   });
 
   it('resets the timer on every chunk', async () => {
-    // 3 chunks, each spaced 30ms; idleMs=50ms → must complete.
     const wd = withStreamIdleWatchdog(timedSource([30, 30, 30], ['a', 'b', 'c']), {
       idleMs: 50,
       warningMs: null,

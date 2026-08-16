@@ -8,9 +8,6 @@ const imageModel = requireCatalogModel(
 );
 
 describe('classifyPrompt', () => {
-  // -------------------------------------------------------------------------
-  // Computer use
-  // -------------------------------------------------------------------------
   it('detects computer use — click keyword', () => {
     const r = classifyPrompt('click on the submit button');
     expect(r.task).toBe('computer_use');
@@ -30,9 +27,6 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('computer_use_premium');
   });
 
-  // -------------------------------------------------------------------------
-  // Image generation
-  // -------------------------------------------------------------------------
   it('detects image generation — generate image', () => {
     const r = classifyPrompt('generate an image of a sunset over mountains');
     expect(r.task).toBe('image_generation');
@@ -49,9 +43,6 @@ describe('classifyPrompt', () => {
     expect(r.task).toBe('image_generation');
   });
 
-  // -------------------------------------------------------------------------
-  // Video generation
-  // -------------------------------------------------------------------------
   it('detects video generation', () => {
     const r = classifyPrompt('generate a video of a flying eagle');
     expect(r.task).toBe('video_generation');
@@ -63,9 +54,6 @@ describe('classifyPrompt', () => {
     expect(r.task).toBe('video_generation');
   });
 
-  // -------------------------------------------------------------------------
-  // Deep research
-  // -------------------------------------------------------------------------
   it('detects deep research', () => {
     const r = classifyPrompt('write a comprehensive analysis of the EV market with citations');
     expect(r.task).toBe('deep_research');
@@ -86,9 +74,6 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('search_fast');
   });
 
-  // -------------------------------------------------------------------------
-  // Web search
-  // -------------------------------------------------------------------------
   it('detects search — latest keyword', () => {
     const r = classifyPrompt("what's the latest news about OpenAI?");
     expect(r.task).toBe('search');
@@ -105,13 +90,10 @@ describe('classifyPrompt', () => {
     expect(r.task).toBe('search');
   });
 
-  // -------------------------------------------------------------------------
-  // Coding
-  // -------------------------------------------------------------------------
   it('detects coding — code fence', () => {
     const r = classifyPrompt('fix this:\n```python\ndef foo():\n  return 1/0\n```');
     expect(r.task).toBe('coding');
-    expect(r.slot).toBe('coding_fast'); // balanced tier default
+    expect(r.slot).toBe('coding_fast');
   });
 
   it('detects coding — write a function', () => {
@@ -132,9 +114,6 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('coding_premium');
   });
 
-  // -------------------------------------------------------------------------
-  // Reasoning
-  // -------------------------------------------------------------------------
   it('detects reasoning — step by step', () => {
     const r = classifyPrompt('solve this step by step: 3x² + 2x - 8 = 0');
     expect(r.task).toBe('reasoning');
@@ -153,9 +132,6 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('reasoning_premium');
   });
 
-  // -------------------------------------------------------------------------
-  // Vision (attachment)
-  // -------------------------------------------------------------------------
   it('detects vision when image attachment present', () => {
     const r = classifyPrompt('what is in this image?', { hasImageAttachment: true });
     expect(r.task).toBe('vision');
@@ -170,19 +146,13 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('vision_premium');
   });
 
-  // -------------------------------------------------------------------------
-  // Long context
-  // -------------------------------------------------------------------------
   it('detects long context for very long prompt', () => {
-    const longPrompt = 'word '.repeat(2500); // ≈ 12500 chars ≈ 3125 tokens
+    const longPrompt = 'word '.repeat(2500);
     const r = classifyPrompt(longPrompt);
     expect(r.task).toBe('long_context');
-    expect(r.slot).toBe('vision_premium'); // Catalog policy owns the backing model.
+    expect(r.slot).toBe('vision_premium');
   });
 
-  // -------------------------------------------------------------------------
-  // Creative writing
-  // -------------------------------------------------------------------------
   it('detects creative writing — write a story', () => {
     const r = classifyPrompt('write a short story about a robot learning to paint');
     expect(r.task).toBe('creative_writing');
@@ -214,20 +184,13 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('creative_writing_premium');
   });
 
-  // -------------------------------------------------------------------------
-  // Simple chat
-  // -------------------------------------------------------------------------
   it('detects simple chat for very short prompts', () => {
     const r = classifyPrompt('hi there!');
     expect(r.task).toBe('simple_chat');
     expect(r.slot).toBe('general_fast');
   });
 
-  // -------------------------------------------------------------------------
-  // General fallback
-  // -------------------------------------------------------------------------
   it('falls back to general for medium prompts without specific signals', () => {
-    // ~55 tokens — no task-specific signals, not short enough for simple_chat
     const r = classifyPrompt(
       'I am planning to open a new restaurant in my city and would like some advice on how to choose the right location and attract customers during the first few months.',
     );
@@ -244,9 +207,6 @@ describe('classifyPrompt', () => {
     expect(r.slot).toBe('general_premium');
   });
 
-  // -------------------------------------------------------------------------
-  // Priority ordering — higher priority wins
-  // -------------------------------------------------------------------------
   it('computer_use wins over coding when both present', () => {
     const r = classifyPrompt('click the run button to execute this Python script');
     expect(r.task).toBe('computer_use');
@@ -259,6 +219,6 @@ describe('classifyPrompt', () => {
 
   it('coding wins over reasoning when both present', () => {
     const r = classifyPrompt('step by step, implement a binary search algorithm in Python');
-    expect(r.task).toBe('coding'); // coding has higher priority than reasoning
+    expect(r.task).toBe('coding');
   });
 });

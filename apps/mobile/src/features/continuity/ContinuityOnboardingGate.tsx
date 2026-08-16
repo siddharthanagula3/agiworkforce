@@ -6,14 +6,6 @@ import { hasAcknowledgedContinuityOnboarding } from './continuity-onboarding';
 
 const CONTINUITY_ROUTE = '/(app)/continuity' as const;
 
-/**
- * Presents the continuity explanation once per Cloud owner on this device.
- *
- * The gate is mounted under the authenticated app layout, after encrypted MMKV
- * and Clerk have both hydrated. A per-session owner set prevents a dismissed
- * route from immediately re-opening when the user uses the system back action;
- * acknowledgement is only persisted by an explicit screen action.
- */
 export function ContinuityOnboardingGate() {
   const router = useRouter();
   const pathname = usePathname();

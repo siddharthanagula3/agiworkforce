@@ -1,16 +1,4 @@
-/**
- * Edge-case modals — unit tests.
- *
- * Each test verifies:
- *   1. The component renders the locked copy strings.
- *   2. The primary CTA callback fires when pressed.
- *
- * All theme and native deps are mocked.
- */
 
-// ---------------------------------------------------------------------------
-// Mocks — MUST be before any imports (Jest hoisting)
-// ---------------------------------------------------------------------------
 
 jest.mock('@/src/ui/theme', () => ({
   spacing: {
@@ -52,12 +40,6 @@ jest.mock('@/hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ isOnline: false, isReconnecting: false, queueSize: 0 }),
 }));
 
-// AccessibilityInfo spy is set up per-suite via beforeEach (see OfflineBanner section)
-
-// ---------------------------------------------------------------------------
-// Imports
-// ---------------------------------------------------------------------------
-
 import React from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -73,13 +55,8 @@ import { FileTooLargeModal } from '@/src/features/edge-cases/components/FileTooL
 import { FileUnreadableModal } from '@/src/features/edge-cases/components/FileUnreadableModal';
 import { CloudTeaseModal } from '@/src/features/edge-cases/components/CloudTeaseModal';
 
-// ---------------------------------------------------------------------------
-// 4. OfflineBanner
-// ---------------------------------------------------------------------------
-
 describe('OfflineBanner', () => {
   beforeEach(() => {
-    // Spy on AccessibilityInfo to avoid native module crash in Jest
     jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
   });
 
@@ -89,14 +66,9 @@ describe('OfflineBanner', () => {
 
   it('renders the celebratory offline copy when offline', () => {
     const { getByText } = render(<OfflineBanner />);
-    // copy contains em-dashes; match partial text that is stable
     expect(getByText(EDGE_COPY.offline.banner)).toBeTruthy();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 8. ModelLoadingFirstRunModal
-// ---------------------------------------------------------------------------
 
 describe('ModelLoadingFirstRunModal', () => {
   it('renders title and subtitle copy', () => {
@@ -111,7 +83,6 @@ describe('ModelLoadingFirstRunModal', () => {
     const { getByText } = render(
       <ModelLoadingFirstRunModal visible progress={0.2} etaSeconds={45} />,
     );
-    // ETA format: "About 45s remaining"
     expect(getByText(/About 45s remaining/)).toBeTruthy();
   });
 
@@ -120,10 +91,6 @@ describe('ModelLoadingFirstRunModal', () => {
     expect(getByText('75%')).toBeTruthy();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 6. StorageFullModal
-// ---------------------------------------------------------------------------
 
 describe('StorageFullModal', () => {
   it('renders title and body copy', () => {
@@ -146,10 +113,6 @@ describe('StorageFullModal', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 7. ThermalThrottleModal
-// ---------------------------------------------------------------------------
-
 describe('ThermalThrottleModal', () => {
   it('renders title and body copy', () => {
     const onDismiss = jest.fn();
@@ -165,10 +128,6 @@ describe('ThermalThrottleModal', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 5. BatteryLowModal
-// ---------------------------------------------------------------------------
 
 describe('BatteryLowModal', () => {
   it('renders title and body copy', () => {
@@ -198,10 +157,6 @@ describe('BatteryLowModal', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. ImageTooLargeModal
-// ---------------------------------------------------------------------------
-
 describe('ImageTooLargeModal', () => {
   it('renders title and body copy', () => {
     const { getByText } = render(<ImageTooLargeModal visible onDismiss={jest.fn()} />);
@@ -216,10 +171,6 @@ describe('ImageTooLargeModal', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 1. FileTooLargeModal
-// ---------------------------------------------------------------------------
 
 describe('FileTooLargeModal', () => {
   it('renders title and body copy', () => {
@@ -236,10 +187,6 @@ describe('FileTooLargeModal', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. FileUnreadableModal
-// ---------------------------------------------------------------------------
-
 describe('FileUnreadableModal', () => {
   it('renders title and body copy', () => {
     const { getByText } = render(<FileUnreadableModal visible onDismiss={jest.fn()} />);
@@ -254,10 +201,6 @@ describe('FileUnreadableModal', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 10. CloudTeaseModal
-// ---------------------------------------------------------------------------
 
 describe('CloudTeaseModal', () => {
   it('renders title copy', () => {

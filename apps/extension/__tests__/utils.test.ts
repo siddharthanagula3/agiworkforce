@@ -19,8 +19,6 @@ import {
   validators,
 } from '../src/utils';
 
-// ─── Chrome storage mock ────────────────────────────────────────────────────
-
 const _storageData: Record<string, unknown> = {};
 
 const chromeMock = {
@@ -42,15 +40,9 @@ const chromeMock = {
 
 (globalThis as Record<string, unknown>).chrome = chromeMock;
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function clearBody(): void {
   document.body.innerHTML = '';
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// logger
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('logger', () => {
   beforeEach(() => {
@@ -89,10 +81,6 @@ describe('logger', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// sleep
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('sleep', () => {
   it('resolves after approximately the specified milliseconds', async () => {
     vi.useFakeTimers();
@@ -114,10 +102,6 @@ describe('sleep', () => {
     await expect(sleep(0)).resolves.toBeUndefined();
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// withTimeout
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('withTimeout', () => {
   it('resolves with the promise value when it completes before timeout', async () => {
@@ -162,10 +146,6 @@ describe('withTimeout', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// RateLimiter
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('RateLimiter', () => {
   it('returns false (not limited) on first call for a new key', () => {
     const limiter = new RateLimiter(10);
@@ -173,100 +153,78 @@ describe('RateLimiter', () => {
   });
 
   it('limits after maxRequestsPerMinute calls', () => {
-    // First call creates state and returns false (no count increment yet)
-    // Calls 2..N check count < max, increment, return false
-    // Call N+1: count >= max → true
-    // For max=3: calls 1,2,3,4 are allowed (false), call 5 is blocked (true)
     const limiter = new RateLimiter(3);
-    expect(limiter.isLimited(1, 'TYPE')).toBe(false); // creates state, count=0
-    expect(limiter.isLimited(1, 'TYPE')).toBe(false); // count=0→1
-    expect(limiter.isLimited(1, 'TYPE')).toBe(false); // count=1→2
-    expect(limiter.isLimited(1, 'TYPE')).toBe(false); // count=2→3
-    expect(limiter.isLimited(1, 'TYPE')).toBe(true); // count=3 >= 3 — limited
+    expect(limiter.isLimited(1, 'TYPE')).toBe(false);
+    expect(limiter.isLimited(1, 'TYPE')).toBe(false);
+    expect(limiter.isLimited(1, 'TYPE')).toBe(false);
+    expect(limiter.isLimited(1, 'TYPE')).toBe(false);
+    expect(limiter.isLimited(1, 'TYPE')).toBe(true);
   });
 
   it('tracks separate limits per tab and message type', () => {
-    // max=2: call 1 creates state (false), calls 2,3 increment (false/false),
-    // call 4 hits count>=2 → limited
     const limiter = new RateLimiter(2);
-    limiter.isLimited(1, 'CLICK'); // creates
-    limiter.isLimited(1, 'CLICK'); // count→1
-    limiter.isLimited(1, 'CLICK'); // count→2
-    // tab 1 CLICK is now at limit
+    limiter.isLimited(1, 'CLICK');
+    limiter.isLimited(1, 'CLICK');
+    limiter.isLimited(1, 'CLICK');
     expect(limiter.isLimited(1, 'CLICK')).toBe(true);
-    // tab 2 CLICK is a fresh counter
     expect(limiter.isLimited(2, 'CLICK')).toBe(false);
-    // tab 1 TYPE is a different message type — fresh
     expect(limiter.isLimited(1, 'TYPE')).toBe(false);
   });
 
   it('enforces screenshot cooldown within the cooldown window', () => {
-    // Call 1: creates state with lastScreenshot=0, returns false immediately (early exit)
-    // Call 2: has state, now-0 >> 500 → primes lastScreenshot to now, not limited
-    // Call 3: now - lastScreenshot < 500 → limited by cooldown
     const limiter = new RateLimiter(120, 500);
-    expect(limiter.isLimited(1, 'CAPTURE_SCREENSHOT')).toBe(false); // creates state
-    expect(limiter.isLimited(1, 'CAPTURE_SCREENSHOT')).toBe(false); // primes lastScreenshot
-    expect(limiter.isLimited(1, 'CAPTURE_SCREENSHOT')).toBe(true); // within cooldown window
+    expect(limiter.isLimited(1, 'CAPTURE_SCREENSHOT')).toBe(false);
+    expect(limiter.isLimited(1, 'CAPTURE_SCREENSHOT')).toBe(false);
+    expect(limiter.isLimited(1, 'CAPTURE_SCREENSHOT')).toBe(true);
   });
 
   it('allows screenshot after cooldown period has elapsed', () => {
     vi.useFakeTimers();
     const limiter = new RateLimiter(120, 500);
-    limiter.isLimited(1, 'CAPTURE_SCREENSHOT'); // creates state
-    limiter.isLimited(1, 'CAPTURE_SCREENSHOT'); // primes lastScreenshot to now
-    vi.advanceTimersByTime(501); // advance past cooldown
-    expect(limiter.isLimited(1, 'CAPTURE_SCREENSHOT')).toBe(false); // cooldown elapsed
+    limiter.isLimited(1, 'CAPTURE_SCREENSHOT');
+    limiter.isLimited(1, 'CAPTURE_SCREENSHOT');
+    vi.advanceTimersByTime(501);
+    expect(limiter.isLimited(1, 'CAPTURE_SCREENSHOT')).toBe(false);
     vi.useRealTimers();
   });
 
   it('reset() clears only entries for the given tab', () => {
-    // max=2: need 4 calls to exhaust (1=creates, 2,3=increment, 4=over limit)
     const limiter = new RateLimiter(2);
-    limiter.isLimited(1, 'CLICK'); // creates
-    limiter.isLimited(1, 'CLICK'); // count=1
-    limiter.isLimited(1, 'CLICK'); // count=2 — at limit
-    limiter.isLimited(2, 'CLICK'); // creates
-    limiter.isLimited(2, 'CLICK'); // count=1
-    limiter.isLimited(2, 'CLICK'); // count=2 — at limit
+    limiter.isLimited(1, 'CLICK');
+    limiter.isLimited(1, 'CLICK');
+    limiter.isLimited(1, 'CLICK');
+    limiter.isLimited(2, 'CLICK');
+    limiter.isLimited(2, 'CLICK');
+    limiter.isLimited(2, 'CLICK');
 
     limiter.reset(1);
 
-    // Tab 1 counter reset — creates fresh state, no longer limited
     expect(limiter.isLimited(1, 'CLICK')).toBe(false);
-    // Tab 2 counter intact — still limited
     expect(limiter.isLimited(2, 'CLICK')).toBe(true);
   });
 
   it('clear() removes all state', () => {
     const limiter = new RateLimiter(2);
-    limiter.isLimited(1, 'CLICK'); // creates
-    limiter.isLimited(1, 'CLICK'); // count=1
-    limiter.isLimited(1, 'CLICK'); // count=2 — at limit
+    limiter.isLimited(1, 'CLICK');
+    limiter.isLimited(1, 'CLICK');
+    limiter.isLimited(1, 'CLICK');
     limiter.clear();
-    // State wiped — next call creates fresh entry
     expect(limiter.isLimited(1, 'CLICK')).toBe(false);
   });
 
   it('resets count when one minute window expires', () => {
     vi.useFakeTimers();
-    // max=2: creates + 2 increments = limited on 4th call
     const limiter = new RateLimiter(2);
-    limiter.isLimited(1, 'TYPE'); // creates state, count=0
-    limiter.isLimited(1, 'TYPE'); // count=1
-    limiter.isLimited(1, 'TYPE'); // count=2
-    expect(limiter.isLimited(1, 'TYPE')).toBe(true); // count=2 >= 2 → limited
+    limiter.isLimited(1, 'TYPE');
+    limiter.isLimited(1, 'TYPE');
+    limiter.isLimited(1, 'TYPE');
+    expect(limiter.isLimited(1, 'TYPE')).toBe(true);
 
     vi.advanceTimersByTime(60_001);
-    // After window reset, count returns to 0 → no longer limited
     expect(limiter.isLimited(1, 'TYPE')).toBe(false);
     vi.useRealTimers();
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// domUtils
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('domUtils', () => {
   beforeEach(clearBody);
@@ -283,7 +241,6 @@ describe('domUtils', () => {
     });
 
     it('returns null for an invalid CSS selector instead of throwing', () => {
-      // Suppress console.error from the logger inside domUtils
       vi.spyOn(console, 'error').mockImplementation(() => {});
       expect(domUtils.querySelector('##invalid##')).toBeNull();
       vi.restoreAllMocks();
@@ -320,8 +277,6 @@ describe('domUtils', () => {
     });
 
     it('returns null when visible=true but element has zero dimensions (jsdom)', async () => {
-      // jsdom always returns 0 from getBoundingClientRect(), so the element
-      // never passes the width > 0 check — waitForSelector returns null after timeout.
       document.body.innerHTML = '<div id="vis" style="width:100px;height:100px"></div>';
       const el = await domUtils.waitForSelector('#vis', 50, true);
       expect(el).toBeNull();
@@ -329,20 +284,14 @@ describe('domUtils', () => {
   });
 
   describe('safeClick', () => {
-    // jsdom 20 rejects `view: window` in the MouseEvent constructor because
-    // jsdom's Window does not pass the UIEvent.view type check. safeClick
-    // catches this error and returns false. We verify the error-handling path
-    // here; production code runs in a real browser where MouseEvent works fine.
 
     it('returns false and logs error when MouseEvent constructor throws (jsdom limitation)', () => {
       document.body.innerHTML = '<button id="btn">Click</button>';
       const btn = document.getElementById('btn')!;
       vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // In jsdom, new MouseEvent({view: window}) throws, so safeClick returns false
       const result = domUtils.safeClick(btn);
       expect(typeof result).toBe('boolean');
-      // The error is caught; logger.error should have been called
       expect(console.error).toHaveBeenCalled();
       vi.restoreAllMocks();
     });
@@ -379,7 +328,6 @@ describe('domUtils', () => {
       document.body.innerHTML = '<div id="r"></div>';
       const el = document.getElementById('r')!;
       const rect = domUtils.getElementRect(el);
-      // jsdom returns a DOMRect object; verify it has numeric properties
       expect(rect).not.toBeNull();
       expect(typeof rect!.width).toBe('number');
       expect(typeof rect!.height).toBe('number');
@@ -390,7 +338,6 @@ describe('domUtils', () => {
     it('returns true when called on a valid element', () => {
       document.body.innerHTML = '<div id="s">Scroll target</div>';
       const el = document.getElementById('s')!;
-      // jsdom does not implement scrollIntoView, so stub it
       el.scrollIntoView = vi.fn();
       expect(domUtils.scrollIntoView(el)).toBe(true);
     });
@@ -404,15 +351,10 @@ describe('domUtils', () => {
     it('returns false for zero-dimension elements (jsdom default)', () => {
       document.body.innerHTML = '<div id="hidden"></div>';
       const el = document.getElementById('hidden')!;
-      // jsdom always returns 0-dimension rects, so this should be false
       expect(domUtils.isVisible(el)).toBe(false);
     });
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// formUtils
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('formUtils', () => {
   beforeEach(clearBody);
@@ -493,8 +435,6 @@ describe('formUtils', () => {
 
   describe('submitForm', () => {
     it('submits the given form via requestSubmit and returns true (L-02)', () => {
-      // L-02 audit 2026-05-19: production now prefers requestSubmit() so
-      // framework-level onSubmit handlers (CSRF tokens, validation) fire.
       document.body.innerHTML = '<form id="f"></form>';
       const form = document.getElementById('f') as HTMLFormElement;
       form.requestSubmit = vi.fn();
@@ -517,7 +457,6 @@ describe('formUtils', () => {
     it('falls back to submit() when requestSubmit is missing', () => {
       document.body.innerHTML = '<form id="legacy"></form>';
       const form = document.getElementById('legacy') as HTMLFormElement;
-      // Simulate an environment without requestSubmit (old Chrome / jsdom variants).
       (form as unknown as { requestSubmit?: undefined }).requestSubmit = undefined;
       form.submit = vi.fn();
       expect(formUtils.submitForm(form)).toBe(true);
@@ -525,20 +464,14 @@ describe('formUtils', () => {
     });
 
     it('returns true even when no form is present in the document', () => {
-      // No form in body; should not throw
       expect(formUtils.submitForm(null)).toBe(true);
     });
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// storageUtils
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('storageUtils', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    // Reset backing store
     for (const k of Object.keys(_storageData)) delete _storageData[k];
 
     chromeMock.storage.local.get.mockImplementation(async (key: string) => ({
@@ -613,10 +546,6 @@ describe('storageUtils', () => {
     vi.restoreAllMocks();
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// validators
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('validators', () => {
   describe('isSafeUrl', () => {
@@ -693,23 +622,16 @@ describe('validators', () => {
     });
 
     it('rejects selectors containing expression-injection metacharacters (M-11)', () => {
-      // After M-11 (audit 2026-05-19): validation is character-class based,
-      // not parseability based. We REJECT chars that should never appear in
-      // a real CSS selector and ACCEPT well-shaped strings even if they'd
-      // throw at parse time. The trade-off: bounded validation cost and no
-      // DoS via expensive selectors like `* * * * * * * *` on huge DOMs.
       expect(validators.isValidSelector('{evil}')).toBe(false);
       expect(validators.isValidSelector('foo; bar')).toBe(false);
       expect(validators.isValidSelector('`tickmark`')).toBe(false);
     });
 
     it('returns false for an empty string (M-11)', () => {
-      // Empty selectors fail the length check.
       expect(validators.isValidSelector('')).toBe(false);
     });
 
     it('returns false for an overly long selector (M-11 DoS guard)', () => {
-      // 2049 chars exceeds the cap; bounded validation cost.
       expect(validators.isValidSelector('a'.repeat(2049))).toBe(false);
     });
   });

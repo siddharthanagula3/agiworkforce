@@ -1,7 +1,3 @@
-/**
- * Settings Validation Schemas Tests
- * Comprehensive tests for form validation with XSS sanitization
- */
 
 import { describe, it, expect } from 'vitest';
 import {
@@ -14,10 +10,8 @@ import {
   validateFormData,
 } from './settings-validation';
 
-// Helper to get error messages from Zod result (compatible with Zod v4)
 function getErrorMessages(result: { success: boolean; error?: unknown; data?: unknown }): string[] {
   if (result.success) return [];
-  // Zod v4 uses issues instead of errors in some cases
   const issues = (result.error as { issues?: Array<{ message: string }> }).issues || [];
   return issues.map((issue) => issue.message);
 }
@@ -80,7 +74,6 @@ describe('Settings Validation Schemas', () => {
       const result = profileSettingsSchema.safeParse(xssProfile);
       expect(result.success).toBe(true);
       if (result.success) {
-        // Should not contain script tags
         expect(result.data.name).not.toContain('<script>');
         expect(result.data.name).not.toContain('</script>');
       }
@@ -97,7 +90,6 @@ describe('Settings Validation Schemas', () => {
       const result = profileSettingsSchema.safeParse(xssProfile);
       expect(result.success).toBe(true);
       if (result.success && result.data.bio) {
-        // XSS should be HTML-encoded (< becomes &lt;)
         expect(result.data.bio).toContain('&lt;');
         expect(result.data.bio).not.toContain('<img');
       }
@@ -485,7 +477,6 @@ describe('Settings Validation Schemas', () => {
       const result = validateFormData(profileSettingsSchema, invalidProfile);
       expect(result.success).toBe(false);
       if (!result.success) {
-        // Should have errors
         expect(Object.keys(result.errors).length).toBeGreaterThan(0);
       }
     });

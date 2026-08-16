@@ -9,7 +9,7 @@ const STATUS_URL: string =
     import.meta.env?.['VITE_STATUS_URL']) ||
   'https://status.agiworkforce.com/status.json';
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const POLL_INTERVAL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
 
 type Severity = 'info' | 'warning' | 'critical';
@@ -65,15 +65,6 @@ function isExpired(message: StatusMessage, now = Date.now()): boolean {
   return new Date(message.expiresAt).getTime() <= now;
 }
 
-/**
- * Treat the remote status document as untrusted input.
- *
- * A malformed severity previously reached StatusBannerItem where the
- * severity configuration lookup returned undefined and crashed the mounted
- * shell. Invalid expiry dates also survived forever because `NaN < now` is
- * false. Reject malformed rows independently so one bad incident cannot hide
- * valid notices or take down the app chrome.
- */
 export function parseStatusMessages(value: unknown, now = Date.now()): StatusMessage[] {
   if (!isRecord(value) || !Array.isArray(value['messages'])) return [];
 
@@ -113,13 +104,8 @@ export function parseStatusMessages(value: unknown, now = Date.now()): StatusMes
 }
 
 async function fetchStatusMessages(): Promise<StatusMessage[]> {
-  // Only fetch in Tauri production builds. In dev mode (tauri dev) the Vite
-  // dev server origin triggers CORS; plain browser has no Tauri at all.
   if (!isTauri || import.meta.env.DEV) return [];
   try {
-    // status.agiworkforce.com is OUR cloud. Route through the egress guard so a
-    // Local/BYOK session does not ping our infra (reveals IP + app-running). The
-    // guard throws fail-closed there; the catch below degrades to no banner.
     const response = await guardedFetch(STATUS_URL, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       cache: 'no-store',
@@ -127,7 +113,6 @@ async function fetchStatusMessages(): Promise<StatusMessage[]> {
     if (!response.ok) return [];
     return parseStatusMessages(await response.json());
   } catch {
-    // Silently fail — status endpoint is non-critical
     return [];
   }
 }

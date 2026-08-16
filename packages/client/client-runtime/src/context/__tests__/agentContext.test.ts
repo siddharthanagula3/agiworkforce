@@ -7,10 +7,6 @@ import {
 } from '../agentContext';
 import type { AgentContext } from '../agentContext';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   return {
     requestId: 'req-001',
@@ -24,13 +20,8 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Basic get/run contract
-// ---------------------------------------------------------------------------
-
 describe('getAgentContext', () => {
   it('returns null outside any runWithContext chain', () => {
-    // Deliberately called at module top-level (no runWithContext wrapping)
     expect(getAgentContext()).toBeNull();
   });
 
@@ -44,14 +35,9 @@ describe('getAgentContext', () => {
   it('returns null again after runWithContext resolves', async () => {
     const ctx = makeCtx();
     await runWithContext(ctx, () => Promise.resolve());
-    // After chain settles the store is gone
     expect(getAgentContext()).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Promise chain propagation
-// ---------------------------------------------------------------------------
 
 describe('context propagation through await chains', () => {
   it('survives a single await hop', async () => {
@@ -98,7 +84,6 @@ describe('context propagation through await chains', () => {
 
     expect(outerSeen).toBe('outer');
     expect(innerSeen).toBe('inner');
-    // After inner settles, outer context is restored
     const afterInner = await runWithContext(outerCtx, async () => {
       await runWithContext(innerCtx, () => Promise.resolve());
       return getAgentContext()!.requestId;
@@ -107,10 +92,6 @@ describe('context propagation through await chains', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Concurrent isolation stress test (1,000 concurrent chains)
-// ---------------------------------------------------------------------------
-
 describe('concurrent isolation — 1,000 Tauri commands with unique contexts', () => {
   it('no context contamination across concurrent chains', async () => {
     const N = 1000;
@@ -118,7 +99,6 @@ describe('concurrent isolation — 1,000 Tauri commands with unique contexts', (
       Array.from({ length: N }, (_, i) => {
         const ctx = makeCtx({ requestId: `req-${i}`, conversationId: `conv-${i}` });
         return runWithContext(ctx, async () => {
-          // Stagger resolutions so chains are genuinely interleaved
           await new Promise<void>((r) => setTimeout(r, Math.random() * 5));
           const seen = getAgentContext()!;
           return { expected: i, seenId: seen.requestId, seenConv: seen.conversationId };
@@ -130,18 +110,11 @@ describe('concurrent isolation — 1,000 Tauri commands with unique contexts', (
       expect(seenId).toBe(`req-${expected}`);
       expect(seenConv).toBe(`conv-${expected}`);
     }
-  }, 30_000); // generous timeout; 1000 chains with up to 5ms stagger = up to ~5s
+  }, 30_000);
 });
-
-// ---------------------------------------------------------------------------
-// Memory test — 10K commands fired and resolved (no growing reference set)
-// ---------------------------------------------------------------------------
 
 describe('memory — 10K commands fire and resolve without leak', () => {
   it('WeakRef baseline: resolved contexts are GC-eligible', async () => {
-    // We cannot force GC in tests, but we can verify that:
-    // 1. 10K contexts complete without throwing (no leak that causes OOM in test runner).
-    // 2. getAgentContext() after each chain is null (storage is cleared per chain).
     const N = 10_000;
     for (let i = 0; i < N; i++) {
       const ctx = makeCtx({ requestId: `mem-${i}` });
@@ -151,14 +124,9 @@ describe('memory — 10K commands fire and resolve without leak', () => {
       });
       expect(seen).toBe(`mem-${i}`);
     }
-    // After all chains settle, storage is clear
     expect(getAgentContext()).toBeNull();
   }, 60_000);
 });
-
-// ---------------------------------------------------------------------------
-// deriveChildContext
-// ---------------------------------------------------------------------------
 
 describe('deriveChildContext', () => {
   it('inherits parent fields and sets invokingRequestId', () => {
@@ -166,8 +134,8 @@ describe('deriveChildContext', () => {
     const child = deriveChildContext(parent, { requestId: 'child-1' });
 
     expect(child.requestId).toBe('child-1');
-    expect(child.conversationId).toBe('conv-x'); // inherited
-    expect(child.invokingRequestId).toBe('parent-1'); // sparse-edge
+    expect(child.conversationId).toBe('conv-x');
+    expect(child.invokingRequestId).toBe('parent-1');
     expect(child.planTier).toBe(parent.planTier);
   });
 
@@ -190,10 +158,6 @@ describe('deriveChildContext', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// reestablishContextInWorker (documents worker re-entry pattern)
-// ---------------------------------------------------------------------------
-
 describe('reestablishContextInWorker', () => {
   it('re-establishes context identically to runWithContext', async () => {
     const ctx = makeCtx({ requestId: 'worker-ctx' });
@@ -204,10 +168,6 @@ describe('reestablishContextInWorker', () => {
     expect(seen).toBe('worker-ctx');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Origin discriminated union
-// ---------------------------------------------------------------------------
 
 describe('AgentOrigin discriminated union', () => {
   it('tauri-command origin records commandName', async () => {

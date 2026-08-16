@@ -1,24 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * SIX-20 — the payload disclosure must actually be on screen.
- *
- * `SendPreview` was built and unit-tested but had zero production imports, so
- * Mobile — a Local / Managed-Cloud dual-trust surface — shipped no "what will
- * be sent" preview at all. These tests assert the mounted behaviour:
- *
- *   - the composer renders it above the input on both chat screens;
- *   - it names the boundary the send will actually use, not the stale model
- *     selection;
- *   - expanding it discloses the live payload (draft size, staged attachments).
- */
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-
-// ---------------------------------------------------------------------------
-// Composer-level: ChatInput joins the host's route with the live draft.
-// ---------------------------------------------------------------------------
 
 const mockSelectedModel = 'fixture-local-model';
 const fixtureCloudModelLabel = 'Fixture Cloud Model';
@@ -128,7 +112,6 @@ describe('ChatInput payload disclosure', () => {
     await waitFor(() => expect(getByTestId('send-preview-panel')).toBeTruthy());
     expect(getByText('Sent through AGI Managed gateway')).toBeTruthy();
     expect(getByText(fixtureCloudModelLabel)).toBeTruthy();
-    // The live draft length is part of the disclosure, not a static blurb.
     expect(getByTestId('send-preview-details')).toBeTruthy();
     expect(getByText('11 chars')).toBeTruthy();
   });
@@ -164,10 +147,6 @@ describe('ChatInput payload disclosure', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Screen-level wiring: both chat screens hand the composer a route.
-// ---------------------------------------------------------------------------
-
 describe('both chat screens mount the disclosure', () => {
   it.each(CHAT_SCREENS)('%s passes sendPreview to its composer', (screenPath) => {
     const source = readFileSync(screenPath, 'utf8');
@@ -177,7 +156,6 @@ describe('both chat screens mount the disclosure', () => {
 
   it('the new-chat screen describes the corrected model, not the stale selection', () => {
     const source = readFileSync(CHAT_SCREENS[0]!, 'utf8');
-    // handleSend and the disclosure must read the same resolved value.
     expect(source).toContain('const modelForSend = useMemo(');
     expect(source).toContain('modelId: modelForSend');
     expect(source).toContain('getShortDisplayName(modelForSend, subscriptionTier)');

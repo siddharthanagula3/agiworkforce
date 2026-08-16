@@ -50,7 +50,6 @@ function renderAndNormalize(
     supportsEffort,
     meterCollapsed,
   );
-  // Normalize anything dynamic that would otherwise drift between runs.
   return html.replace(/STABLE-NONCE-FOR-SNAPSHOTS/g, 'NONCE');
 }
 
@@ -62,10 +61,6 @@ function renderSnapshotAndNormalize(
 ): string {
   let html = renderAndNormalize(initialMode, initialEffort, supportsEffort, meterCollapsed);
 
-  // The picker is catalog-derived production behavior. Snapshot its structure,
-  // not release-specific model IDs/names, so a catalog update does not copy
-  // concrete provider identifiers into test output. Longest values go first to
-  // avoid partial replacement when one catalog string contains another.
   const catalogOptions = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto').sort(
     (left, right) => right.id.length - left.id.length,
   );
@@ -92,10 +87,6 @@ describe('VS Code webview structural snapshots', () => {
 });
 
 describe('model dropdown availability invariant', () => {
-  // Availability invariant (scripts/check-availability-invariant.mjs): a model
-  // with availability !== "live" (e.g. coming_soon) is display-only — it must
-  // never appear as a selectable option on any surface. The webview renders
-  // non-live rows disabled with a "Coming soon" suffix, mirroring the web picker.
   it('renders live models enabled and non-live models as disabled "Coming soon" rows', () => {
     const html = renderAndNormalize();
     const optionTags = html.match(/<option[^>]*>[^<]*<\/option>/g) ?? [];
@@ -119,7 +110,7 @@ describe('model dropdown availability invariant', () => {
     for (const tag of optionTags) {
       if (tag.includes('disabled')) continue;
       const id = /value="([^"]+)"/.exec(tag)?.[1] ?? '';
-      if (id === 'auto' || id.startsWith('auto-')) continue; // routing pseudo-models, not catalog entries
+      if (id === 'auto' || id.startsWith('auto-')) continue;
       expect(isModelSelectable(id), `non-live model "${id}" rendered as selectable`).toBe(true);
     }
   });

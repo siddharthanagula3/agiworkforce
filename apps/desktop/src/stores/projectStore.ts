@@ -1,18 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Project Store
- *
- * Manages project organization for the AGI Workforce desktop app.
- * Projects group conversations, files, and custom instructions together.
- * Also manages the current working folder for scoped sessions (like Claude Code).
- *
- * Updated to Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Persist middleware: Using createJSONStorage, partialize, version, migrate
- * - Better devtools integration with store name
- * - subscribeWithSelector for granular subscriptions
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { invoke, isTauri } from '../lib/tauri-mock';
@@ -44,7 +30,6 @@ export interface KnowledgeBaseFile {
   path: string;
   size?: number;
   mimeType?: string;
-  /** The extracted text content of the file, stored for context injection */
   content?: string;
   addedAt: string;
 }
@@ -56,22 +41,16 @@ export interface Project {
   customInstructions: string;
   files: ProjectFile[];
   conversationIds: string[];
-  /** Canonical server count when exact conversation ids have not hydrated yet. */
   conversationCount?: number | null;
   color?: string;
   icon?: string;
   isArchived: boolean;
-  /** Managed Cloud favorite state, persisted in project metadata. */
   isStarred?: boolean;
   createdAt: string;
   updatedAt: string;
-  /** Knowledge base files with extracted content for context injection */
   knowledgeBaseFiles?: KnowledgeBaseFile[];
-  /** Single grapheme emoji displayed as the project icon in UI */
   iconEmoji?: string | null;
-  /** Canonical accent color from the design system palette */
   accentColor?: ProjectAccentColor | null;
-  /** Default privacy mode for new conversations in this project */
   defaultPrivacyMode?: PrivacyMode | null;
 }
 
@@ -82,14 +61,12 @@ export interface ProjectSettings {
   autoArchiveAfterDays?: number;
 }
 
-/** Mirrors the Rust ProjectContext struct (camelCase via serde rename_all) */
 export interface ProjectContext {
   folder: string | null;
   name: string | null;
   isValid: boolean;
 }
 
-/** Mirrors the Rust ProjectFileInfo struct (camelCase via serde rename_all) */
 export interface ProjectFileInfo {
   path: string;
   name: string;
@@ -98,7 +75,6 @@ export interface ProjectFileInfo {
   extension: string | null;
 }
 
-/** Mirrors the Rust ProjectInstructionFile struct (camelCase via serde rename_all) */
 export interface ProjectInstructionFile {
   path: string;
   filename: string;
@@ -107,24 +83,15 @@ export interface ProjectInstructionFile {
 }
 
 interface ProjectState {
-  // Data
   projects: Project[];
   activeProjectId: string | null;
   projectSettings: Record<string, ProjectSettings>;
   isLoading: boolean;
   error: string | null;
 
-  // Folder scope (like Claude Code's project folder)
   currentFolder: string | null;
-  /**
-   * MRU list that is no longer written to disk. No folder picker renders it
-   * yet, so persisting it implied a "recent folders" menu that does not exist.
-   * A legacy payload still merges its old value in once on hydration; nothing
-   * reads it. Persist it again alongside the UI that shows it.
-   */
   recentFolders: string[];
 
-  // Actions - CRUD
   loadProjects: (options?: { throwOnError?: boolean }) => Promise<void>;
   createProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
@@ -132,44 +99,36 @@ interface ProjectState {
   archiveProject: (id: string) => Promise<void>;
   unarchiveProject: (id: string) => Promise<void>;
 
-  // Active project
   setActiveProject: (id: string | null) => void;
   getActiveProject: () => Project | null;
 
-  // File management
   addFileToProject: (projectId: string, file: Omit<ProjectFile, 'id' | 'addedAt'>) => Promise<void>;
   removeFileFromProject: (projectId: string, fileId: string) => Promise<void>;
 
-  // Knowledge base management
   addKnowledgeBaseFile: (
     projectId: string,
     file: Omit<KnowledgeBaseFile, 'id' | 'addedAt'>,
   ) => Promise<void>;
   removeKnowledgeBaseFile: (projectId: string, fileId: string) => Promise<void>;
 
-  // Conversation linking
   moveConversationToProject: (conversationId: string, projectId: string | null) => Promise<void>;
   linkConversation: (projectId: string, conversationId: string) => Promise<void>;
   unlinkConversation: (projectId: string, conversationId: string) => Promise<void>;
   getProjectForConversation: (conversationId: string) => Project | null;
 
-  // Project settings
   getProjectSettings: (projectId: string) => ProjectSettings;
   updateProjectSettings: (projectId: string, settings: Partial<ProjectSettings>) => Promise<void>;
 
-  // Search/filter
   searchProjects: (query: string) => Project[];
   getArchivedProjects: () => Project[];
   getActiveProjects: () => Project[];
 
-  // Folder scope actions
   setCurrentFolder: (path: string | null) => void;
   addRecentFolder: (path: string) => void;
   removeRecentFolder: (path: string) => void;
   clearRecentFolders: () => void;
   getCurrentFolderDisplayName: () => string | null;
 
-  // Project context (Rust backend)
   getProjectContext: () => Promise<ProjectContext>;
   getProjectSummary: () => Promise<string>;
   listProjectFiles: (maxDepth?: number, includeHidden?: boolean) => Promise<ProjectFileInfo[]>;
@@ -177,14 +136,11 @@ interface ProjectState {
   loadProjectInstructions: () => Promise<ProjectInstructionFile[]>;
   hasProjectInstructions: () => Promise<boolean>;
 
-  // Utilities
   clearError: () => void;
 }
 
-// Version for storage migration
 const PROJECT_STORE_VERSION = 1;
 
-// Maximum number of recent folders to keep
 const MAX_RECENT_FOLDERS = 10;
 let managedProjectsLoad: { boundaryKey: string; promise: Promise<Project[]> } | null = null;
 let projectLoadGeneration = 0;
@@ -218,11 +174,7 @@ function mergeManagedConversationMembership(projects: Project[], current: Projec
   });
 }
 
-/**
- * Formats a folder path for display (e.g., ~/Projects/my-app)
- */
 function formatFolderPath(path: string): string {
-  // If on Windows, try to shorten common paths
   if (path.includes('\\Users\\')) {
     const match = path.match(/[A-Z]:\\Users\\[^\\]+\\(.+)/i);
     if (match) {
@@ -230,7 +182,6 @@ function formatFolderPath(path: string): string {
     }
   }
 
-  // For Unix-like paths, try /home/user or /Users/user
   const unixMatch = path.match(/^\/(?:home|Users)\/[^/]+\/(.+)/);
   if (unixMatch) {
     return '~/' + unixMatch[1];
@@ -243,18 +194,15 @@ export const useProjectStore = create<ProjectState>()(
   devtools(
     persist(
       subscribeWithSelector((set, get) => ({
-        // Initial state
         projects: [],
         activeProjectId: null,
         projectSettings: {},
         isLoading: false,
         error: null,
 
-        // Folder scope state
         currentFolder: null,
         recentFolders: [],
 
-        // Load projects from backend
         loadProjects: async (options) => {
           const generation = ++projectLoadGeneration;
           const boundaryAtStart = managedProjectBoundaryKey();
@@ -289,7 +237,6 @@ export const useProjectStore = create<ProjectState>()(
               if (generation !== projectLoadGeneration || isManagedCloudMode()) return;
               set({ projects, isLoading: false });
             } else {
-              // In web mode, projects are loaded from persisted state
               set({ isLoading: false });
             }
           } catch (error) {
@@ -309,7 +256,6 @@ export const useProjectStore = create<ProjectState>()(
           }
         },
 
-        // Create a new project
         createProject: async (projectData) => {
           set({ isLoading: true, error: null });
           try {
@@ -339,7 +285,6 @@ export const useProjectStore = create<ProjectState>()(
               }));
               return createdProject;
             } else {
-              // Web mode - just add to local state
               set((state) => ({
                 projects: [...state.projects, newProject],
                 isLoading: false,
@@ -354,7 +299,6 @@ export const useProjectStore = create<ProjectState>()(
           }
         },
 
-        // Update an existing project
         updateProject: async (id, updates) => {
           set({ isLoading: true, error: null });
           try {
@@ -394,7 +338,6 @@ export const useProjectStore = create<ProjectState>()(
           }
         },
 
-        // Delete a project
         deleteProject: async (id) => {
           set({ isLoading: true, error: null });
           try {
@@ -424,7 +367,6 @@ export const useProjectStore = create<ProjectState>()(
           }
         },
 
-        // Archive a project
         archiveProject: async (id) => {
           const linkedConversationIds =
             get()
@@ -445,24 +387,20 @@ export const useProjectStore = create<ProjectState>()(
           }
         },
 
-        // Unarchive a project
         unarchiveProject: async (id) => {
           await get().updateProject(id, { isArchived: false });
         },
 
-        // Set active project
         setActiveProject: (id) => {
           set({ activeProjectId: id });
         },
 
-        // Get active project
         getActiveProject: () => {
           const { projects, activeProjectId } = get();
           if (!activeProjectId) return null;
           return projects.find((p) => p.id === activeProjectId) || null;
         },
 
-        // Add file to project
         addFileToProject: async (projectId, fileData) => {
           if (isManagedCloudMode()) {
             throw new Error(
@@ -484,7 +422,6 @@ export const useProjectStore = create<ProjectState>()(
           await get().updateProject(projectId, { files: updatedFiles });
         },
 
-        // Remove file from project
         removeFileFromProject: async (projectId, fileId) => {
           if (isManagedCloudMode()) {
             throw new Error('Device project files are only available in Local mode.');
@@ -498,7 +435,6 @@ export const useProjectStore = create<ProjectState>()(
           await get().updateProject(projectId, { files: updatedFiles });
         },
 
-        // Add a knowledge base file (with extracted content)
         addKnowledgeBaseFile: async (projectId, fileData) => {
           if (isManagedCloudMode()) {
             throw new Error('Cloud knowledge uploads must use the managed project upload flow.');
@@ -518,7 +454,6 @@ export const useProjectStore = create<ProjectState>()(
           await get().updateProject(projectId, { knowledgeBaseFiles: updatedFiles });
         },
 
-        // Remove a knowledge base file
         removeKnowledgeBaseFile: async (projectId, fileId) => {
           if (isManagedCloudMode()) {
             throw new Error(
@@ -534,10 +469,6 @@ export const useProjectStore = create<ProjectState>()(
           await get().updateProject(projectId, { knowledgeBaseFiles: updatedFiles });
         },
 
-        // One authoritative project-membership transition. It updates the
-        // canonical conversation row once, then projects that result into the
-        // chat and project stores. Callers must not pair this with
-        // `setConversationProject`, `linkConversation`, or `unlinkConversation`.
         moveConversationToProject: async (conversationId, projectId) => {
           const projectsBefore = get().projects;
           const chatBefore = useChatStore.getState();
@@ -642,7 +573,6 @@ export const useProjectStore = create<ProjectState>()(
           useChatStore.getState().setConversationProject(conversationId, projectId);
         },
 
-        // Compatibility wrappers delegate to the authoritative transition.
         linkConversation: async (projectId, conversationId) => {
           await get().moveConversationToProject(conversationId, projectId);
         },
@@ -659,18 +589,15 @@ export const useProjectStore = create<ProjectState>()(
           await get().moveConversationToProject(conversationId, null);
         },
 
-        // Get project for a conversation
         getProjectForConversation: (conversationId) => {
           const { projects } = get();
           return projects.find((p) => p.conversationIds.includes(conversationId)) || null;
         },
 
-        // Get project settings
         getProjectSettings: (projectId) => {
           return get().projectSettings[projectId] || {};
         },
 
-        // Update project settings
         updateProjectSettings: async (projectId, settings) => {
           if (isManagedCloudMode()) {
             throw new Error(
@@ -687,7 +614,6 @@ export const useProjectStore = create<ProjectState>()(
             },
           }));
 
-          // Persist to backend if in Tauri
           if (isTauri) {
             try {
               await invoke('project_update_settings', {
@@ -700,7 +626,6 @@ export const useProjectStore = create<ProjectState>()(
           }
         },
 
-        // Search projects
         searchProjects: (query) => {
           const { projects } = get();
           const lowerQuery = query.toLowerCase();
@@ -711,21 +636,17 @@ export const useProjectStore = create<ProjectState>()(
           );
         },
 
-        // Get archived projects
         getArchivedProjects: () => {
           return get().projects.filter((p) => p.isArchived);
         },
 
-        // Get active (non-archived) projects
         getActiveProjects: () => {
           return get().projects.filter((p) => !p.isArchived);
         },
 
-        // Set current folder scope
         setCurrentFolder: (path) => {
           set({ currentFolder: path }, undefined, 'project/setCurrentFolder');
 
-          // If setting a folder (not clearing), add to recent folders
           if (path) {
             const recent = get().recentFolders.filter((f) => f !== path);
             set(
@@ -736,7 +657,6 @@ export const useProjectStore = create<ProjectState>()(
           }
         },
 
-        // Add a folder to recent folders list
         addRecentFolder: (path) => {
           const recent = get().recentFolders.filter((f) => f !== path);
           set(
@@ -746,7 +666,6 @@ export const useProjectStore = create<ProjectState>()(
           );
         },
 
-        // Remove a folder from recent folders
         removeRecentFolder: (path) => {
           set(
             (state) => ({
@@ -757,19 +676,16 @@ export const useProjectStore = create<ProjectState>()(
           );
         },
 
-        // Clear all recent folders
         clearRecentFolders: () => {
           set({ recentFolders: [] }, undefined, 'project/clearRecentFolders');
         },
 
-        // Get display-friendly name for current folder
         getCurrentFolderDisplayName: () => {
           const { currentFolder } = get();
           if (!currentFolder) return null;
           return formatFolderPath(currentFolder);
         },
 
-        // Project context — Rust backend commands
         getProjectContext: async () => {
           try {
             return await invoke<ProjectContext>('project_context_get_folder');
@@ -839,7 +755,6 @@ export const useProjectStore = create<ProjectState>()(
           }
         },
 
-        // Clear error
         clearError: () => {
           set({ error: null });
         },
@@ -876,7 +791,6 @@ export const useProjectStore = create<ProjectState>()(
   ),
 );
 
-// Selectors
 export const selectActiveProject = (state: ProjectState) => {
   if (!state.activeProjectId) return null;
   return state.projects.find((p) => p.id === state.activeProjectId) || null;
@@ -891,10 +805,8 @@ export const selectArchivedProjects = (state: ProjectState) =>
 export const selectProjectById = (id: string) => (state: ProjectState) =>
   state.projects.find((p) => p.id === id) || null;
 
-// Folder scope selectors
 export const selectCurrentFolder = (state: ProjectState) => state.currentFolder;
 export const selectRecentFolders = (state: ProjectState) => state.recentFolders;
 export const selectHasCurrentFolder = (state: ProjectState) => state.currentFolder !== null;
 
-// Export the formatFolderPath utility for use in components
 export { formatFolderPath };

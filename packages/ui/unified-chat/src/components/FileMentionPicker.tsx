@@ -1,17 +1,3 @@
-/**
- * FileMentionPicker — Phase A Slice 5 (ported from UAC)
- *
- * Dropdown picker for @file mentions in the chat input.
- * Shows a filtered list of files with keyboard navigation.
- *
- * Desktop-specific dependencies removed:
- *   - invoke('glob_search' | 'dir_list') → replaced by an async `onSearch` callback prop
- *   - useProjectStore → projectRoot prop
- *
- * Hosts wire in their own filesystem search (Tauri invoke, REST, etc.)
- * via the `onSearch` prop. Falls back to the provided `entries` prop if
- * `onSearch` is not supplied (useful for testing).
- */
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { File, FileText, Folder, Loader2, Search } from 'lucide-react';
@@ -25,21 +11,11 @@ export interface MentionFile {
 }
 
 export interface FileMentionPickerProps {
-  /** Text typed after the @ prefix, used to filter files */
   query: string;
-  /** Called when a file is selected */
   onSelect: (file: MentionFile) => void;
-  /** Called when the picker should close */
   onClose: () => void;
-  /**
-   * Async search callback. Hosts supply filesystem access here.
-   * Receives (query, projectRoot) and resolves to a list of MentionFile.
-   * When omitted, the picker shows the provided `staticEntries`.
-   */
   onSearch?: (query: string, projectRoot: string | null) => Promise<MentionFile[]>;
-  /** Static entries to show (useful when onSearch not provided, e.g. tests). */
   staticEntries?: MentionFile[];
-  /** Project root path (used as context for the search). */
   projectRoot?: string | null;
 }
 
@@ -96,16 +72,15 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   staticEntries = [],
   projectRoot = null,
 }) => {
-  // Compute initial entries synchronously so SSR renders the correct filtered list.
   const initialEntries = useMemo(() => {
-    if (onSearch) return staticEntries.slice(0, MAX_RESULTS); // will be overridden by onSearch
+    if (onSearch) return staticEntries.slice(0, MAX_RESULTS);
     const q = query.toLowerCase().replace(/^file:/, '');
     if (!q) return staticEntries.slice(0, MAX_RESULTS);
     return staticEntries
       .filter((e) => e.name.toLowerCase().includes(q) || e.path.toLowerCase().includes(q))
       .slice(0, MAX_RESULTS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally only on mount — useEffect keeps it updated
+  }, []);
 
   const [entries, setEntries] = useState<MentionFile[]>(initialEntries);
   const [isLoading, setIsLoading] = useState(false);
@@ -113,7 +88,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const listRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
 
-  // Refs for keyboard handler (avoids stale closures)
   const entriesRef = useRef<MentionFile[]>([]);
   const selectedIndexRef = useRef(0);
 
@@ -124,10 +98,8 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     };
   }, []);
 
-  // Load entries from onSearch when query changes
   useEffect(() => {
     if (!onSearch) {
-      // Use static entries directly, filtered by query
       const q = query.toLowerCase().replace(/^file:/, '');
       if (!q) {
         setEntries(staticEntries.slice(0, MAX_RESULTS));
@@ -156,7 +128,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       });
   }, [query, projectRoot, onSearch, staticEntries]);
 
-  // Keep refs in sync
   entriesRef.current = entries;
   selectedIndexRef.current = selectedIndex;
 
@@ -174,7 +145,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     [onSelect],
   );
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       const currentEntries = entriesRef.current;
@@ -201,7 +171,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     return () => window.removeEventListener('keydown', handleKey, true);
   }, [onClose, handleEntryActivate]);
 
-  // Scroll selected item into view
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;

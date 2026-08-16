@@ -1,11 +1,3 @@
-/**
- * ExecutionStream
- *
- * Real-time execution streaming display for a running desktop agent task.
- * Shows the live timeline of tool calls, step progress, and final outcome.
- * Connects to the companion WebSocket via the agent store which is kept
- * in sync by the connectionStore control-message handler.
- */
 import { useEffect, useRef, useCallback } from 'react';
 import { View, ScrollView } from 'react-native';
 import Animated, {
@@ -40,18 +32,10 @@ import { useAgentStore } from '@/stores/agentStore';
 import { useThemeColors } from '@/src/ui/theme';
 import type { ToolCall } from '@/types/chat';
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 export interface ExecutionStreamProps {
   taskId: string;
   onComplete?: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// Spinning loader icon
-// ---------------------------------------------------------------------------
 
 function SpinningLoader({ size = 14, color }: { size?: number; color: string }) {
   const rotation = useSharedValue(0);
@@ -78,10 +62,6 @@ function SpinningLoader({ size = 14, color }: { size?: number; color: string }) 
   );
 }
 
-// ---------------------------------------------------------------------------
-// Duration timer
-// ---------------------------------------------------------------------------
-
 function formatDuration(startedAt: string): string {
   try {
     const elapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
@@ -95,10 +75,6 @@ function formatDuration(startedAt: string): string {
     return '';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Tool call icon map
-// ---------------------------------------------------------------------------
 
 function ToolIcon({ name, size = 12 }: { name: string; size?: number }) {
   const colors = useThemeColors();
@@ -127,10 +103,6 @@ function ToolIcon({ name, size = 12 }: { name: string; size?: number }) {
   }
   return <Zap size={size} color={colors.textMuted} />;
 }
-
-// ---------------------------------------------------------------------------
-// Single tool call row
-// ---------------------------------------------------------------------------
 
 interface ToolCallRowProps {
   call: ToolCall;
@@ -211,10 +183,6 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Completion / failure banner
-// ---------------------------------------------------------------------------
-
 function CompletionBanner({ status }: { status: 'completed' | 'failed' }) {
   const colors = useThemeColors();
   const isSuccess = status === 'completed';
@@ -244,17 +212,12 @@ function CompletionBanner({ status }: { status: 'completed' | 'failed' }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main ExecutionStream component
-// ---------------------------------------------------------------------------
-
 export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
   const colors = useThemeColors();
   const agent = useAgentStore((state) => state.agents.find((a) => a.id === taskId));
   const scrollRef = useRef<ScrollView>(null);
   const prevStatusRef = useRef<string | undefined>(undefined);
 
-  // Auto-scroll to bottom when new tool calls arrive
   useEffect(() => {
     const timer = setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
@@ -262,7 +225,6 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
     return () => clearTimeout(timer);
   }, [agent?.toolCalls.length]);
 
-  // Fire onComplete callback when agent transitions to terminal state
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
     const currentStatus = agent?.status;
@@ -275,7 +237,6 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
 
   const elapsedLabel = formatDuration(agent?.startedAt ?? new Date().toISOString());
 
-  // Collect tool calls — most recent first (but show in chronological order)
   const toolCalls = agent?.toolCalls ?? [];
 
   if (!agent) {

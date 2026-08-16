@@ -83,7 +83,6 @@ function makeInput(
   };
 }
 
-/** The single persisted row, decoded from the upsert's positional parameters. */
 function persistedTurn() {
   const call = mocks.execute.mock.calls.find(([sql]) =>
     String(sql).includes('insert into web_messages'),
@@ -136,14 +135,10 @@ describe('durable cloud agent workflow settlement', () => {
       inputTokens: 1_200,
       outputTokens: 340,
     });
-    // The exact key/shape desktop persists, so a server-saved turn reattaches
-    // through the same path a client-saved one does.
     expect(turn?.metadata['cloudAgentRun']).toEqual({
       runId: RUN_ID,
       runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
       lastSequence: 41,
-      // Recorded so a client can skip asking the server about a finished run
-      // every time it reopens the conversation.
       state: 'ready_for_review',
     });
     expect(turn?.metadata['truncated']).toBeUndefined();
@@ -174,13 +169,11 @@ describe('durable cloud agent workflow settlement', () => {
 
     const turn = persistedTurn();
     expect(turn?.content).toBe('I need to run a command');
-    // Not truncated: the turn is mid-flight waiting on a human, not cut off.
     expect(turn?.metadata['truncated']).toBeUndefined();
     expect(turn?.metadata['cloudAgentRun']).toMatchObject({
       lastSequence: 17,
       state: 'awaiting_input',
     });
-    // awaiting_input must NOT flip the run to a terminal state.
     expect(mocks.transition).not.toHaveBeenCalled();
   });
 
@@ -226,9 +219,6 @@ describe('durable cloud agent workflow settlement', () => {
       String(sql).includes('insert into web_messages'),
     );
     expect(writes).toHaveLength(2);
-    // Idempotency is the upsert key, not a guard in this module: both writes
-    // target the caller-supplied assistant message id, so they collapse to one
-    // row instead of duplicating the turn in the transcript.
     expect(writes[0]?.[1]).toEqual(writes[1]?.[1]);
     expect(String(writes[0]?.[0])).toContain('on conflict (id) do update');
   });
@@ -237,7 +227,6 @@ describe('durable cloud agent workflow settlement', () => {
     await settleWorkflowInvocation(makeInput({ assistantMessageId: undefined }), 'completed');
 
     expect(persistedTurn()).toBeNull();
-    // Billing and lifecycle still settle; only the transcript write is skipped.
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect(mocks.transition).toHaveBeenCalledTimes(1);
   });

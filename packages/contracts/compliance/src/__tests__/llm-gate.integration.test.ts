@@ -1,28 +1,3 @@
-/**
- * Integration test mandated by PRD V5 §10 lock #26:
- *
- *   > Enforcer: `packages/contracts/compliance/src/article50.ts` runs in onboarding
- *   > flow before first AI request; integration test asserts `<meta
- *   > name="agi:ai-generated"` tag on every export.
- *
- * This file is the lock's enforcer. The host app (mobile + web + desktop)
- * wraps every `/api/llm/*` call in `assertLlmGate()`. If the disclosure
- * record is missing, the gate throws BEFORE the HTTP request goes out.
- *
- * We simulate the host-app integration with a fake fetcher and assert:
- *
- *   (a) On a clean install, the first chat send throws
- *       Article50DisclosureRequiredError and no `/api/llm/*` request fires.
- *   (b) After the user accepts the combined disclosure, the second send
- *       reaches the fetcher and succeeds.
- *   (c) When the user picks a Chinese-HQ provider without opting in, the
- *       gate throws ChineseHqProviderNotOptedInError — even if the
- *       Article 50(1) disclosure was accepted.
- *   (d) After per-provider opt-in, the Chinese-HQ provider call reaches
- *       the fetcher.
- *   (e) Every response shipped back through the export path carries the
- *       `<meta name="agi:ai-generated">` marker.
- */
 import { describe, expect, it } from 'vitest';
 import {
   Article50DisclosureRequiredError,
@@ -37,11 +12,6 @@ import { InMemoryConsentLedger, InMemoryDisclosureLedger } from './test-ledger';
 
 const FIXTURE_MODEL_ID = 'fixture-chat-model';
 
-/**
- * Fake LLM client. Mirrors the shape of `apps/mobile/services/streaming.ts`
- * + `apps/web/features/chat/lib/chatClient.ts`: every call goes through the
- * gate first, then the actual fetcher.
- */
 class FakeLlmClient {
   readonly requests: Array<{ url: string; providerId: string }> = [];
 
@@ -56,7 +26,6 @@ class FakeLlmClient {
     requireManagedCloud: boolean;
     body: { messages: Array<{ role: string; content: string }> };
   }): Promise<{ text: string; exported: string }> {
-    // **This is the gate** — the lock's "runs before first AI request" line.
     assertLlmGate({
       providerId: args.providerId,
       disclosureLedger: this.disclosureLedger,
@@ -64,7 +33,6 @@ class FakeLlmClient {
       requireManagedCloud: args.requireManagedCloud,
     });
 
-    // Only reached when the gate is open. Record the fake HTTP request.
     this.requests.push({
       url: '/api/llm/v1/chat/completions',
       providerId: args.providerId,
@@ -95,7 +63,6 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
       }),
     ).rejects.toBeInstanceOf(Article50DisclosureRequiredError);
 
-    // The whole point of the gate: zero outbound traffic before disclosure.
     expect(client.requests).toHaveLength(0);
   });
 
@@ -127,7 +94,6 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
       { url: '/api/llm/v1/chat/completions', providerId: 'anthropic' },
     ]);
     expect(result.text).toContain('hello');
-    // Article 50(2): every export must be machine-readable as AI-generated.
     expect(hasAiGeneratedMarker(result.exported)).toBe(true);
     expect(result.exported).toMatch(/<meta\s+name="agi:ai-generated"/);
   });

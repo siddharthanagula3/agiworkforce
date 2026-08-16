@@ -9,16 +9,6 @@ import {
   fetchLatestDesktopRelease,
 } from '@/lib/releases/github-desktop-releases';
 
-/**
- * GET /api/releases/desktop-cloud/latest
- *
- * Availability probe for the AGI Cloud desktop shell (the Electron app,
- * released under `v-cloud-desktop-*` tags by
- * .github/workflows/release-desktop-cloud.yml). Used by the public download
- * page and installed Electron shell to decide whether a newer signed macOS
- * installer exists. This is an availability contract, not an in-place
- * electron-updater feed; downloads use /api/download?platform=mac&app=cloud.
- */
 async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'release-latest');
   if (rateLimitResponse) {

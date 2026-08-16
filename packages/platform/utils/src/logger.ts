@@ -1,18 +1,3 @@
-/**
- * @agiworkforce/utils — logger facade (FIX-024)
- *
- * Replaces ad-hoc `console.log` / `console.error` across the desktop +
- * web codebases. Provides four levels (debug, info, warn, error) with:
- *
- *   - dev: forwards to console.* with the same level
- *   - prod: routes warn/error to Sentry (when wired); info/debug dropped
- *   - always: redacts well-known secret patterns from message + args
- *
- * The redaction list is a TypeScript port of the Rust patterns in
- * `apps/desktop/src-tauri/src/sys/security/log_redaction.rs` so the same
- * keys never leak into Sentry / browser DevTools / log files regardless
- * of which side of the IPC boundary emitted them.
- */
 
 import type { SecretScanFinding } from '@agiworkforce/types';
 
@@ -38,13 +23,7 @@ export interface SecretScanResult {
 const textEncoder = new TextEncoder();
 
 const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
-  // Order matters — more specific patterns first.
   {
-    // Ported from the Rust reference at apps/cli/src/secret_redaction.rs:93.
-    // FIRST in the table on purpose: a PEM block spans newlines and contains
-    // base64 that later, narrower rules would otherwise chew into pieces,
-    // leaving recognisable key material behind. `[\s\S]` rather than `.` with
-    // the s flag, to keep this readable next to the other patterns.
     id: 'private-key',
     label: 'Private key block',
     severity: 'critical',
@@ -53,19 +32,9 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     replacement: '[REDACTED_PRIVATE_KEY]',
   },
   {
-    // AWS secrets are not self-identifying the way AKIA/ASIA ids are — the
-    // value is plain base64 — so they are only findable by their assignment.
-    // The Rust side catches these (secret_redaction.rs:124); this port did
-    // not, which is exactly the asymmetry that makes a Local -> BYOK handoff
-    // preview look clean while carrying a live credential.
     id: 'aws-secret-assignment',
     label: 'AWS secret or session token assignment',
     severity: 'critical',
-    // Name spelling follows the Rust rule: the AWS CLI, the SDK env vars and
-    // most config files disagree on `_` vs `-`, and JSON puts a quote between
-    // the name and the colon. The value class is everything up to the next
-    // delimiter, since secrets carry `/` and `+`; the `(?!\[REDACTED)` keeps
-    // a placeholder another rule already substituted from being re-chewed.
     pattern:
       /\b(aws[_-]?(?:secret[_-]?access[_-]?key|session[_-]?token))\b["']?\s*[=:]\s*["']?(?!\[REDACTED)[^\s,'"}]{8,}["']?/gi,
     replacement: '$1=[REDACTED_AWS_SECRET]',
@@ -88,10 +57,6 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'google-api-key',
     label: 'Google API key',
     severity: 'critical',
-    // Open-ended, not `{35}`. Google publishes no length contract; the exact
-    // count only describes the keys minted today. A fixed quantifier misses
-    // anything shorter outright and, on anything longer, redacts a 39-char
-    // prefix while leaving the tail in the preview.
     pattern: /AIza[a-zA-Z0-9_-]{30,}/g,
     replacement: '[REDACTED_GOOGLE_KEY]',
   },
@@ -120,9 +85,6 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'github-token',
     label: 'GitHub token',
     severity: 'critical',
-    // 30, matching the Rust rule: 36 is the length of a user-to-server token
-    // body, and the shorter server-to-server and refresh variants share the
-    // prefix table without sharing that length.
     pattern: /gh[psour]_[a-zA-Z0-9]{30,}/g,
     replacement: '[REDACTED_GITHUB_TOKEN]',
   },
@@ -147,7 +109,6 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     pattern: /xox[baprs]-[A-Za-z0-9-]{10,}/g,
     replacement: '[REDACTED_SLACK_TOKEN]',
   },
-  // JWT (header.payload.signature) — ported from extension recorder (C-05).
   {
     id: 'jwt',
     label: 'JWT',
@@ -166,16 +127,6 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'named-secret',
     label: 'Named secret',
     severity: 'high',
-    // Three widenings over the first port, each a live miss the Rust rule
-    // caught: bare `secret`/`token` names (word-bounded, so the compound
-    // spellings above still win); the quote a JSON key puts before its colon;
-    // and a value class of "anything up to the delimiter" rather than an
-    // alphanumeric guess, since passwords and tokens carry punctuation.
-    // The value class keeps Rust's brackets (a bracketed value such as
-    // `token=[abcdefghij12345]` is a secret like any other); the leading
-    // `(?!\[REDACTED)` is what stops an earlier rule's `[REDACTED_*]`
-    // placeholder being matched as a value and flattened a second time,
-    // which would throw away the vendor attribution.
     pattern:
       /(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token|\bsecret\b|\btoken\b)["']?\s*[=:]\s*["']?(?!\[REDACTED)[^\s,'"}]{8,}["']?/gi,
     replacement: '$1=[REDACTED]',
@@ -184,41 +135,16 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     id: 'database-url-credentials',
     label: 'Database URL credentials',
     severity: 'critical',
-    // `postgresql://` and `mongodb+srv://` are the spellings ORMs and Atlas
-    // actually emit, and the earlier scheme list matched neither — a
-    // DATABASE_URL pasted into a handoff preview crossed with its password.
-    // The password class is the Rust one (`[^\s]+`, secret_redaction.rs) and
-    // must stay that wide: generated passwords are base64, so `/` and `+` are
-    // routine, and an earlier revision of this rule that excluded `/` silently
-    // stopped redacting `postgres://user:npg_x9Kq/L2mZ@host/db`. Being greedy
-    // to the last `@` in a whitespace-free token can over-redact a following
-    // `user@host` in the same JSON blob; that is the fail-safe direction and
-    // matches the Rust reference.
     pattern: /(postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s/:@]+:[^\s]+@/gi,
     replacement: '$1://[CREDENTIALS_REDACTED]@',
   },
-  // Page-context redactor patterns ported from
-  // `apps/extension/src/inPagePanel/pageActions.ts` (H-05 audit 2026-05-19).
-  // Credit-card number sequences (13-19 digits with optional separators).
   {
     id: 'payment-card-number',
     label: 'Payment card number',
     severity: 'critical',
-    // Narrowed to the shapes cards actually take, matching the Rust reference
-    // at apps/desktop/src-tauri/src/sys/security/log_redaction.rs:104. The old
-    // generic 13-19 digit run matched epoch-millisecond timestamps, so
-    // `ts=1721469876543` and every `{"startedAt":...}` in a log line came back
-    // as [REDACTED]. A redactor that eats ordinary telemetry gets narrowed by
-    // whoever is debugging at 2am, which is how the real patterns get lost.
     pattern: /\b(?:\d{4}[ \t-]){3}\d{4}\b|\b\d{4}[ \t-]\d{6}[ \t-]\d{5}\b|\b[3-6]\d{12,18}\b/g,
     replacement: '[REDACTED]',
   },
-  // Lines containing the word "password" or "passwd" (case-insensitive,
-  // multi-line) — used to mask form labels that drag the value with them.
-  // This also covers the `--password=` half of the Rust password-flag rule.
-  // The `-p <value>` half is deliberately not ported: unanchored `-p` matches
-  // the middle of ordinary hyphenated words, and a redactor that mangles prose
-  // is one somebody turns off.
   {
     id: 'password-line',
     label: 'Password-bearing line',
@@ -299,23 +225,16 @@ export function scanSecrets(value: unknown, options: SecretScanOptions = {}): Se
   return redactSecretsWithReport(value, options).findings;
 }
 
-/** Apply the redaction patterns to any value safe-stringified. */
 export function redactSecrets(value: unknown): string {
   return redactSecretsWithReport(value).redactedText;
 }
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-/**
- * Redact every arg and forward to the chosen sink. The sink contract
- * matches `console.*(...args: unknown[])` so the original site can be
- * replaced 1:1 by `logger.<level>(...)`.
- */
 type LogSink = (level: LogLevel, args: unknown[]) => void;
 
 const isProduction =
   typeof process !== 'undefined' &&
-  // Vite-style and Node-style env detection both fall back to `development`.
   ((process.env?.['NODE_ENV'] === 'production' || process.env?.['MODE'] === 'production') ?? false);
 
 const consoleSink: LogSink = (level, args) => {
@@ -324,9 +243,6 @@ const consoleSink: LogSink = (level, args) => {
   console[level](...redacted);
 };
 
-// Sentry sink is wired lazily — many entry points (CLI, web SSR, tests)
-// don't have Sentry installed. If `window.Sentry` or a globally-set
-// `globalThis.__AGIWORKFORCE_SENTRY__` exists, warn/error get a breadcrumb.
 const sentrySink: LogSink = (level, args) => {
   const redacted = args.map(redactSecrets);
   // eslint-disable-next-line no-console -- production console fallback
@@ -350,7 +266,6 @@ const sink: LogSink = isProduction ? sentrySink : consoleSink;
 
 export const logger = {
   debug: (...args: unknown[]) => {
-    // Drop in production unless DEBUG flag is set — keeps prod console clean.
     if (!isProduction || (typeof process !== 'undefined' && process.env?.['DEBUG'] !== undefined)) {
       sink('debug', args);
     }

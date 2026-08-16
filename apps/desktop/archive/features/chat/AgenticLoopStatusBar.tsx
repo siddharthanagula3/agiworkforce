@@ -1,9 +1,3 @@
-/**
- * AgenticLoopStatusBar
- *
- * Status bar shown above the chat input when the agentic loop is running.
- * Communicates current iteration progress and hints that the user can queue a follow-up.
- */
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { useChatStore, selectAgenticLoopStatus } from '../../stores/chat/chatStore';

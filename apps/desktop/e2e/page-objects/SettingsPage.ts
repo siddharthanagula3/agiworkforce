@@ -27,7 +27,6 @@ export class SettingsPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
-    // Use semantic locators with fallback to test IDs
     this.saveButton = page
       .getByRole('button', { name: /save/i })
       .or(page.getByTestId('save-settings'))
@@ -49,7 +48,6 @@ export class SettingsPage extends BasePage {
   }
 
   async navigateToSettings() {
-    // Use semantic navigation - prefer role-based or accessible locators
     const settingsLink = this.page
       .getByRole('link', { name: /settings/i })
       .or(this.page.getByRole('button', { name: /settings/i }))

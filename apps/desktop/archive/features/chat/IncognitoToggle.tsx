@@ -1,12 +1,3 @@
-/**
- * IncognitoToggle
- *
- * A compact toggle button that activates incognito mode.
- * When active, new conversations are flagged as incognito so their messages
- * are not persisted to disk or used for training.
- *
- * Competitive parity: mirrors the ghost-icon incognito feature in Claude.ai.
- */
 import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '../../lib/utils';
 

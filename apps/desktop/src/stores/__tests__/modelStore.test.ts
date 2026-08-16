@@ -25,10 +25,8 @@ if (!CONTEXTLESS_MEDIA_MODEL_ID) {
   throw new Error('Model-store tests require a catalog media model without token context');
 }
 
-// Mock @tauri-apps/api/core - throw for unknown commands so error-handling paths are exercised
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn((command: string) => {
-    // Throw for provider status checks so error-handling path returns a defined errorStatus
     if (command === 'llm_check_provider_status') {
       return Promise.reject(new Error('provider status unavailable'));
     }
@@ -37,8 +35,6 @@ vi.mock('@tauri-apps/api/core', () => ({
   isTauri: vi.fn(() => Promise.resolve(false)),
 }));
 
-// Mock the auth store to avoid circular dependency issues
-// Use 'max' plan so model selection is not blocked by tier restrictions
 vi.mock('../auth', () => ({
   useUnifiedAuthStore: {
     getState: () => ({
@@ -56,7 +52,6 @@ vi.mock('../auth', () => ({
   },
 }));
 
-// Mock the settings store
 vi.mock('../settingsStore', () => ({
   useSettingsStore: {
     getState: () => ({
@@ -70,7 +65,6 @@ vi.mock('../settingsStore', () => ({
   waitForSettingsHydration: vi.fn(() => Promise.resolve()),
 }));
 
-// Mock the ui store
 vi.mock('../ui', () => ({
   useUIStore: {
     getState: () => ({
@@ -82,7 +76,6 @@ vi.mock('../ui', () => ({
 
 describe('modelStore', () => {
   beforeEach(() => {
-    // Reset store to defaults
     useModelStore.getState().reset();
   });
 
@@ -166,16 +159,13 @@ describe('modelStore', () => {
 
   describe('checkProviderStatus', () => {
     it('handles successful status check', async () => {
-      // The tauri-mock returns a default response, which will work for testing the flow
       await useModelStore.getState().checkProviderStatus('anthropic');
 
-      // The result comes from the mock — verify the state was updated
       const state = useModelStore.getState();
       expect(state.providerStatuses.anthropic).toBeDefined();
     });
 
     it('handles error status check gracefully', async () => {
-      // The error case is tested via the store's error handling
       const result = await useModelStore.getState().checkProviderStatus('openai');
       expect(result).toBeDefined();
       expect(result.provider).toBe('openai');

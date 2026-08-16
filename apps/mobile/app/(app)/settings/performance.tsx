@@ -1,15 +1,3 @@
-/**
- * Performance settings — Wave 3 v1 final
- *
- * Sections:
- *   1. Device Tier card
- *   2. Loaded Model card (rolling avg tok/s, ttft, memory peak)
- *   3. Tok/s history chart (7-day, react-native-svg)
- *   4. First-token latency chart (7-day)
- *   5. Benchmark CTA
- *   6. Thermal-state indicator (live, polled)
- *   7. Settings toggles
- */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -51,10 +39,6 @@ import {
   type BenchmarkResult,
 } from '@/services/performanceMonitor';
 
-// ---------------------------------------------------------------------------
-// Performance-specific settings keys (MMKV direct — not in the main store)
-// ---------------------------------------------------------------------------
-
 export const PERF_THERMAL_PAUSE_KEY = 'perf-pause-at-thermal-v1';
 export const PERF_BATTERY_PAUSE_KEY = 'perf-pause-at-battery-v1';
 export const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
@@ -68,10 +52,6 @@ function readBool(key: string, def: boolean): boolean {
 function writeBool(key: string, v: boolean): void {
   storage.set(key, v ? 'true' : 'false');
 }
-
-// ---------------------------------------------------------------------------
-// Tier label helpers
-// ---------------------------------------------------------------------------
 
 type TierNum = 1 | 2 | 3;
 
@@ -140,10 +120,6 @@ function platformDisplayName(os: string): string {
   return os.charAt(0).toUpperCase() + os.slice(1);
 }
 
-// ---------------------------------------------------------------------------
-// Thermal state helpers
-// ---------------------------------------------------------------------------
-
 type ThermalColor = { dot: string; label: string; text: string };
 
 function thermalColor(
@@ -167,24 +143,13 @@ function thermalColor(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Chart component
-// ---------------------------------------------------------------------------
-
 interface MiniChartProps {
-  /** Data points, oldest first */
   data: number[];
-  /** Chart width in px */
   width: number;
-  /** Chart height in px */
   height: number;
-  /** Color of the line/dots */
   color: string;
-  /** Color for grid lines */
   gridColor: string;
-  /** Unit string for axis labels, e.g. "t/s" */
   unit: string;
-  /** Accessibility label for VoiceOver / TalkBack */
   accessibilityLabel: string;
 }
 
@@ -284,10 +249,6 @@ function MiniChart({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Settings toggle row
-// ---------------------------------------------------------------------------
-
 function ToggleRow({
   icon: Icon,
   label,
@@ -316,10 +277,6 @@ function ToggleRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Stat chip
-// ---------------------------------------------------------------------------
-
 function StatChip({ label, value, color }: { label: string; value: string; color: string }) {
   const c = useThemeColors();
   return (
@@ -340,15 +297,10 @@ function StatChip({ label, value, color }: { label: string; value: string; color
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
-
 export default function PerformanceScreen() {
   const c = useThemeColors();
   const router = useRouter();
 
-  // --- Perf settings (MMKV direct) ---
   const [pauseAtThermal, setPauseAtThermal] = useState(() =>
     readBool(PERF_THERMAL_PAUSE_KEY, true),
   );
@@ -357,31 +309,23 @@ export default function PerformanceScreen() {
   );
   const [showPerfChip, setShowPerfChip] = useState(() => readBool(PERF_CHIP_SHOW_KEY, true));
 
-  // --- Device capabilities ---
   const [caps, setCaps] = useState<DeviceCapabilities | null>(null);
 
-  // --- Active model (from modelStore.selectedModel) ---
   const selectedModelId = useModelStore((s) => s.selectedModel);
 
-  // --- Rolling stats ---
   const [rollingStats, setRollingStats] = useState(() => getRollingStats());
 
-  // --- 7-day chart data ---
   const [toksEvents, setToksEvents] = useState<PerfEvent[]>([]);
   const [ttftEvents, setTtftEvents] = useState<PerfEvent[]>([]);
 
-  // --- Thermal state (live polled) ---
   const [thermalState, setThermalState] = useState<ThermalState>('nominal');
   const thermalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // --- Benchmark ---
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [lastBenchmark, setLastBenchmark] = useState<BenchmarkResult | null>(null);
 
-  // --- Chart width (layout) ---
   const [chartWidth, setChartWidth] = useState(280);
 
-  // Load caps + initial data on mount
   useEffect(() => {
     getCapabilities()
       .then(setCaps)
@@ -393,7 +337,6 @@ export default function PerformanceScreen() {
     setRollingStats(getRollingStats());
     setThermalState(getThermalState());
 
-    // Poll thermal every 10 s
     thermalTimerRef.current = setInterval(() => {
       setThermalState(getThermalState());
     }, 10_000);
@@ -409,7 +352,6 @@ export default function PerformanceScreen() {
     router.navigate('/(app)/settings/general' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
-  // Persist perf settings immediately on change
   const handleThermalPause = useCallback((v: boolean) => {
     setPauseAtThermal(v);
     writeBool(PERF_THERMAL_PAUSE_KEY, v);
@@ -425,23 +367,17 @@ export default function PerformanceScreen() {
     writeBool(PERF_CHIP_SHOW_KEY, v);
   }, []);
 
-  // --- Benchmark CTA ---
   const handleBenchmark = useCallback(async () => {
     if (isBenchmarking) return;
     setIsBenchmarking(true);
 
-    // Announce start for a11y
     AccessibilityInfo.announceForAccessibility('Running benchmark. Please wait.');
 
     try {
-      // Determine the active local model
       const activeModelId = selectedModelId ?? getDefaultLocalModel().id;
       const localModel = getLocalModelById(activeModelId);
       const backend: BackendName = caps?.tier1Runtime ?? 'llama_rn';
 
-      // Build a minimal generate stub that drives the inference.
-      // In production this calls localGenerate from @agiworkforce/local-llm.
-      // Here we import it lazily to keep the module import graph clean.
       const { localGenerate } = await import('@agiworkforce/local-llm');
 
       const result = await runBenchmark({
@@ -463,7 +399,6 @@ export default function PerformanceScreen() {
 
       setLastBenchmark(result);
 
-      // Refresh rolling stats + charts
       const events = getPerfEventsLastDays(7);
       setToksEvents(events);
       setTtftEvents(events);
@@ -475,30 +410,25 @@ export default function PerformanceScreen() {
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      // Non-blocking — surface via announcement
       AccessibilityInfo.announceForAccessibility(`Benchmark failed: ${msg}`);
     } finally {
       setIsBenchmarking(false);
     }
   }, [isBenchmarking, selectedModelId, caps]);
 
-  // --- Derived data for charts ---
   const toksData = useMemo(() => toksEvents.map((e) => e.tokensPerSecond), [toksEvents]);
   const ttftData = useMemo(() => ttftEvents.map((e) => e.firstTokenLatencyMs), [ttftEvents]);
 
-  // --- Device tier info ---
   const tierInfo = useMemo(() => {
     if (!caps) return null;
     return tierLabel(caps);
   }, [caps]);
 
-  // --- Active local model from catalog ---
   const activeLocalModel = useMemo(() => {
     if (!selectedModelId) return null;
     return getLocalModelById(selectedModelId) ?? null;
   }, [selectedModelId]);
 
-  // --- Thermal indicator ---
   const tIndicator = useMemo(
     () => thermalColor(thermalState, c.teal, c.agentWarning, c.agentError),
     [thermalState, c.teal, c.agentWarning, c.agentError],

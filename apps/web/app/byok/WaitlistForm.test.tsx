@@ -1,13 +1,3 @@
-/**
- * WaitlistForm · CSRF 429 error path
- *
- * Regression test: /api/csrf returning 429 must show a rate-limit message,
- * not the generic "Network error. Please try again." string.
- *
- * The test verifies:
- *   - FAILS without the fix (bare catch yields "Network error.")
- *   - PASSES with the fix (CsrfTokenError.status===429 yields the rate-limit copy)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -22,10 +12,6 @@ const authState = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => ({ isLoaded: authState.isLoaded, isSignedIn: authState.isSignedIn }),
 }));
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeCsrfFetch(status: number, statusText: string) {
   return vi.fn().mockResolvedValue({
@@ -43,13 +29,8 @@ function submitForm() {
   fireEvent.click(screen.getByRole('button', { name: /request early access/i }));
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('WaitlistForm · CSRF error handling', () => {
   beforeEach(() => {
-    // Clear the module-level token cache so each test starts fresh.
     clearCsrfToken();
     authState.isLoaded = true;
     authState.isSignedIn = true;
@@ -86,7 +67,6 @@ describe('WaitlistForm · CSRF error handling', () => {
       ).toBeInTheDocument();
     });
 
-    // Must NOT fall back to the generic network error copy
     expect(screen.queryByText('Network error. Please try again.')).not.toBeInTheDocument();
   });
 

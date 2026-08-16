@@ -1,10 +1,5 @@
-/**
- * Completion API — typed wrappers for code/prompt completion Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface CompletionRequest {
   prompt: string;
@@ -30,8 +25,6 @@ export interface PromptCompletionResponse {
   model: string;
   latencyMs: number;
 }
-
-// ---- Commands ----
 
 export async function getCodeCompletion(request: CompletionRequest): Promise<CompletionResponse> {
   return command<CompletionResponse>('get_code_completion', { request });

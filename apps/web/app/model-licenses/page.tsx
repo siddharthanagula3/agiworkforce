@@ -5,24 +5,6 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { LEGAL_ENTITY, NOTICE_ADDRESS, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import modelRegistry from '@agiworkforce/types/models.json';
 
-/**
- * Model licence disclosure.
- *
- * Nothing documented the licence terms of the third-party and open-weight
- * models this product routes to, which matters for anyone doing procurement or
- * shipping derived output commercially.
- *
- * GENERATED FROM THE CANONICAL REGISTRY, never hand-authored. Every row comes
- * from `packages/contracts/types/src/models.json` — the same file the router,
- * the pricing calculator, and the capability checks read. A hardcoded list here
- * would drift the moment a model is added, and `CLAUDE.md` forbids inventing or
- * copying model ids from memory.
- *
- * A model whose `license` is absent in the registry is shown as such rather
- * than guessed. "Not recorded" is a true statement about our data; naming a
- * licence we cannot prove would be a false one on a legal page.
- */
-
 export const metadata = buildMetadata({
   title: 'Model licences',
   description:
@@ -39,7 +21,6 @@ interface RegistryModel {
   modelType?: string;
 }
 
-/** Provider display names. Unknown providers fall back to their registry key. */
 const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
@@ -59,7 +40,6 @@ function licenceLabel(model: RegistryModel): string {
   if (typeof model.license === 'string' && model.license.trim().length > 0) {
     return model.license === 'proprietary' ? 'Proprietary (provider terms)' : model.license;
   }
-  // Honest absence. See the file header: we do not guess a licence.
   return 'Not recorded in the registry';
 }
 
@@ -73,7 +53,6 @@ const MODELS: RegistryModel[] = Object.values(
   (modelRegistry as { models: Record<string, RegistryModel> }).models,
 );
 
-/** Grouped by provider so a reader can scan by vendor relationship. */
 const BY_PROVIDER = MODELS.reduce<Record<string, RegistryModel[]>>((acc, model) => {
   const key = model.provider ?? 'unknown';
   (acc[key] ??= []).push(model);

@@ -1,11 +1,3 @@
-/**
- * Mobile auth session facade.
- *
- * Cloud account state comes from Clerk (@clerk/expo). This facade bridges the
- * Clerk session to the non-React callers that need a Bearer token — primarily
- * the cloud streaming path in services/streaming.ts. Clerk's token cache
- * (expo-secure-store) persists the session across launches.
- */
 
 import { getClerkInstance } from '@clerk/expo';
 import {
@@ -31,7 +23,6 @@ export interface MobileAuthSession {
   user: MobileAuthUser;
 }
 
-/** Current Clerk session JWT, or null when signed out. */
 export async function getAuthToken(): Promise<string | null> {
   return getClerkToken();
 }
@@ -41,13 +32,6 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-/**
- * Force a fresh Clerk session token, bypassing the in-memory cache.
- * Called by the 401-retry path in api.ts — using the cache here would hand
- * back the same rejected token, making the retry useless. `skipCache: true`
- * triggers a FAPI call so the retry carries a freshly-issued JWT.
- * Returns true if a live session exists after the refresh attempt.
- */
 export async function refreshAuthSession(): Promise<boolean> {
   try {
     const token = await getClerkTokenFresh();

@@ -1,15 +1,9 @@
-/**
- * Me API Tests
- *
- * Tests for the /api/me endpoint that returns user profile and subscription info
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -28,26 +22,21 @@ vi.mock('@/lib/cors', () => ({
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
-// Clerk auth mock — hoisted so it survives clearAllMocks
 const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockClerkAuth(),
 }));
 
-// cloud database service client mock (used by SubscriptionService/CreditService)
 vi.mock('@/lib/neon-db', () => ({
   getServiceClient: vi.fn(() => ({})),
 }));
 
-// Neon DB mock (used for routing_preferences)
 const mockNeonQuery = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (sql: string, params: unknown[]) => {
-      // assertAccountActive() in getClerkAuthUser issues its own account_status
-      // lookup ahead of the route's real query; keep it out of mockNeonQuery's queue.
       if (typeof sql === 'string' && sql.includes('account_status')) {
         return Promise.resolve([]);
       }
@@ -60,7 +49,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-// Mock services — use vi.hoisted() so they're available in vi.mock() factories
 const { mockMeGetSubscription, mockMeGetBalance } = vi.hoisted(() => ({
   mockMeGetSubscription: vi.fn(),
   mockMeGetBalance: vi.fn(),
@@ -78,20 +66,16 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-// Import after mocks
 import { GET, OPTIONS } from '@/app/api/me/route';
 
 describe('Me API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Re-establish auth mock defaults after clearAllMocks
     mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
 
-    // Neon: routing_preferences returns empty by default
     mockNeonQuery.mockResolvedValue([{ routing_preferences: null }]);
 
-    // Re-establish service mock defaults after clearAllMocks
     mockMeGetSubscription.mockResolvedValue({
       id: 'sub-test',
       user_id: 'user-123',
@@ -186,7 +170,6 @@ describe('Me API', () => {
         const data = await response.json();
 
         expect(data.feature_flags).toBeDefined();
-        // Pro tier exposes the Advanced-mode manual picker
         expect(data.feature_flags.advanced_model_access).toBe(true);
       });
 

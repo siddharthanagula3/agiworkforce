@@ -1,17 +1,5 @@
-/**
- * chatStore tests
- *
- * H51 — ID mapping pruning: pruneIdMappingsIfNeeded enforces MAX_ID_MAPPINGS cap,
- *       removes oldest entries first (FIFO by dbId), retains entries at boundary.
- *
- * H15 — generateTitleFromMessage: fenced code stripping, inline code, long truncation.
- *       Store action basics: createConversation, deleteConversation.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// ── Module setup ──────────────────────────────────────────────────────────────
-
-// We need window.localStorage to avoid side effects during module load
 const localStorageMock = {
   getItem: vi.fn().mockReturnValue(null),
   setItem: vi.fn(),
@@ -41,18 +29,11 @@ vi.mock('../../utils/localStorage', () => ({
   },
 }));
 
-// Import after mocks are in place
 import { dbIdToUuid, uuidToDbId, clearIdMappings, useChatStore } from '../chatStore';
 import { useAppModeStore } from '../../appModeStore';
 
 const FIXTURE_MODEL_ID = 'fixture-model';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Uses crypto.randomUUID via dbIdToUuid to populate N entries and return
- * the array of [dbId, uuid] pairs in insertion order.
- */
 function populateMappings(count: number): Array<[number, string]> {
   const pairs: Array<[number, string]> = [];
   for (let i = 1; i <= count; i++) {
@@ -61,8 +42,6 @@ function populateMappings(count: number): Array<[number, string]> {
   }
   return pairs;
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('chatStore ID mapping pruning (H51)', () => {
   beforeEach(() => {
@@ -104,10 +83,8 @@ describe('chatStore ID mapping pruning (H51)', () => {
 
   describe('pruning — FIFO eviction at 1001 entries', () => {
     it('triggers pruning when more than 1000 entries are added', () => {
-      // Add 1001 entries — the 1001st call should trigger pruning
       const pairs = populateMappings(1001);
 
-      // After pruning, the oldest entry (dbId=1) should have been evicted
       const firstUuid = pairs[0]![1];
       expect(uuidToDbId(firstUuid)).toBeUndefined();
     });
@@ -115,7 +92,6 @@ describe('chatStore ID mapping pruning (H51)', () => {
     it('retains the most recent 1000 entries after pruning', () => {
       const pairs = populateMappings(1001);
 
-      // dbId 2 through 1001 should all still be accessible
       for (let i = 1; i < pairs.length; i++) {
         const [dbId, uuid] = pairs[i]!;
         expect(uuidToDbId(uuid)).toBe(dbId);
@@ -124,29 +100,22 @@ describe('chatStore ID mapping pruning (H51)', () => {
     });
 
     it('oldest entry by numeric dbId is removed first (not insertion order)', () => {
-      // Insert out-of-numeric-order: small dbId inserted later should still be
-      // the "oldest" by numeric value and removed first
       populateMappings(999);
 
-      // Add a low dbId (1000th slot is dbId 999, so slot 1000 will be 1000)
-      const veryOldId = 0; // dbId 0 is numerically smallest
+      const veryOldId = 0;
       const veryOldUuid = dbIdToUuid(veryOldId);
 
-      // Now add two more to push past 1000
       dbIdToUuid(1000);
-      dbIdToUuid(1001); // This triggers pruning — dbId=0 should go first
+      dbIdToUuid(1001);
 
-      // dbId 0 was the oldest (numerically smallest), so it should be evicted
       expect(uuidToDbId(veryOldUuid)).toBeUndefined();
     });
   });
 
   describe('pruning — boundary conditions', () => {
     it('does not prune when exactly 1000 entries exist', () => {
-      // Add exactly 1000 entries
       const pairs = populateMappings(1000);
 
-      // All 1000 should still be present
       for (const [dbId, uuid] of pairs) {
         expect(uuidToDbId(uuid)).toBe(dbId);
       }
@@ -161,10 +130,8 @@ describe('chatStore ID mapping pruning (H51)', () => {
     });
 
     it('count stays at or below 1000 after many additions', () => {
-      // Add 1500 entries — cap should be enforced
       populateMappings(1500);
 
-      // Check the most recent 1000 are still present
       for (let i = 501; i <= 1500; i++) {
         const uuid = dbIdToUuid(i);
         expect(typeof uuid).toBe('string');
@@ -184,23 +151,17 @@ describe('chatStore ID mapping pruning (H51)', () => {
       dbIdToUuid(1);
       clearIdMappings();
       const newUuid = dbIdToUuid(1);
-      // Should work fine and return a valid UUID (may be a different one)
       expect(typeof newUuid).toBe('string');
     });
   });
 });
 
-// ── H15 — generateTitleFromMessage ────────────────────────────────────────
-// generateTitleFromMessage is private to chatStore.ts.  We test its logic
-// directly by inlining the same pure function here — keeping these tests
-// fast and isolated from Zustand/Tauri state.
-
 function generateTitleFromMessage(content: string): string {
   const cleaned = content
-    .replace(/```[\s\S]*?```/g, '') // strip fenced code blocks (must run first)
-    .replace(/`[^`]+`/g, '') // strip inline code
-    .replace(/[#*_~[\](){}|\n]+/g, ' ') // markdown punctuation + newlines → space
-    .replace(/\s+/g, ' ') // collapse whitespace
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`]+`/g, '')
+    .replace(/[#*_~[\](){}|\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 
   if (!cleaned) return 'New conversation';
@@ -258,30 +219,26 @@ describe('generateTitleFromMessage (H15)', () => {
 
   describe('long content truncation', () => {
     it('returns content unchanged when it is exactly 50 characters', () => {
-      const exact = 'a'.repeat(50); // 50 chars, no spaces
+      const exact = 'a'.repeat(50);
       expect(generateTitleFromMessage(exact)).toBe(exact);
     });
 
     it('truncates content longer than 50 characters', () => {
       const long = 'a'.repeat(60);
       const title = generateTitleFromMessage(long);
-      expect(title.length).toBeLessThanOrEqual(53); // 50 chars + '...'
+      expect(title.length).toBeLessThanOrEqual(53);
       expect(title.endsWith('...')).toBe(true);
     });
 
     it('truncates at word boundary when last space is beyond position 30', () => {
-      // Build a string that has a space well past position 30 within the first 50 chars
-      // "word word word word word word x" = positions arranged so lastSpace > 30
       const msg = 'word word word word word word extra-long-content-here';
       const title = generateTitleFromMessage(msg);
       expect(title.endsWith('...')).toBe(true);
-      // Should cut at a space boundary
       const withoutEllipsis = title.slice(0, -3);
-      expect(withoutEllipsis.endsWith(' ')).toBe(false); // no trailing space before ...
+      expect(withoutEllipsis.endsWith(' ')).toBe(false);
     });
 
     it('truncates hard at 50 when last space is at or before position 30', () => {
-      // Space only at position 5 — within first 50 chars, lastSpace <= 30
       const msg = 'short ' + 'X'.repeat(60);
       const title = generateTitleFromMessage(msg);
       expect(title.endsWith('...')).toBe(true);
@@ -294,12 +251,9 @@ describe('generateTitleFromMessage (H15)', () => {
   });
 });
 
-// ── H15 — Store action basics ─────────────────────────────────────────────
-
 describe('chatStore action basics (H15)', () => {
   beforeEach(() => {
     useAppModeStore.setState({ mode: 'local' });
-    // Reset the store to a clean slate before each test
     useChatStore.setState({
       conversations: [],
       activeConversationId: null,

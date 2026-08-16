@@ -19,14 +19,6 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/scim/v2/Users — RFC 7644 §3.4.2.
- *
- * Supports `filter=userName eq "x"` (the probe Okta and Entra issue before
- * every create), `externalId eq`, `emails.value eq`, and 1-based
- * startIndex/count pagination. Every query is scoped to the connection the
- * bearer token resolved to; there is no cross-tenant read path.
- */
 export async function GET(request: NextRequest): Promise<Response> {
   return withScim(request, async (context, baseUrl) => {
     const params = new URL(request.url).searchParams;
@@ -45,16 +37,6 @@ export async function GET(request: NextRequest): Promise<Response> {
   });
 }
 
-/**
- * POST /api/scim/v2/Users — RFC 7644 §3.3.
- *
- * Creates the SCIM resource and, when an AGI account with a matching email
- * already exists, the `organization_members` row with
- * `provisioning_source = 'scim'`. When no account exists the resource is
- * created PENDING: 201 is still correct — the resource genuinely exists — and
- * the response's provisioning extension reports `linked: false` rather than
- * implying access was granted.
- */
 export async function POST(request: NextRequest): Promise<Response> {
   return withScim(request, async (context, baseUrl) => {
     const body = await readScimBody(request);

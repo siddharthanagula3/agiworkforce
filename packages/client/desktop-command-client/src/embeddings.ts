@@ -1,10 +1,5 @@
-/**
- * Embeddings API — typed wrappers for code embedding and semantic search Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface EmbeddingStats {
   totalFiles: number;
@@ -27,8 +22,6 @@ export interface SemanticSearchResult {
   lineStart: number;
   lineEnd: number;
 }
-
-// ---- Commands ----
 
 export async function generateCodeEmbeddings(projectPath: string): Promise<void> {
   return command<void>('generate_code_embeddings', { projectPath });

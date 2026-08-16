@@ -1,13 +1,7 @@
-/**
- * Snapshot test for the Chat tab greeting — time-of-day aware heading (round 18).
- * Locks that the greeting node renders with time-derived text.
- */
 
 import React from 'react';
 import { Text } from 'react-native';
 import { render } from '@testing-library/react-native';
-
-// ── Pure helper — mirrors the one in chat.tsx ─────────────────────────────────
 
 function getTimeOfDayGreeting(hour: number): string {
   if (hour < 12) return 'How can I help you this morning?';
@@ -15,8 +9,6 @@ function getTimeOfDayGreeting(hour: number): string {
   if (hour < 21) return 'How can I help you this evening?';
   return 'How can I help you tonight?';
 }
-
-// ── Tests ──────────────────────────────────────────────────────────────────────
 
 describe('Chat tab — time-of-day greeting', () => {
   it('returns morning greeting for hour 8', () => {

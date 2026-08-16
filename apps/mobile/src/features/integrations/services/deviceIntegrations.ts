@@ -2,10 +2,6 @@ import * as Calendar from 'expo-calendar';
 import * as Contacts from 'expo-contacts';
 import { Platform } from 'react-native';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -24,10 +20,6 @@ export interface ContactEntry {
 }
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
-
-// ---------------------------------------------------------------------------
-// Calendar
-// ---------------------------------------------------------------------------
 
 export async function getCalendarPermissionStatus(): Promise<PermissionStatus> {
   const { status } = await Calendar.getCalendarPermissionsAsync();
@@ -75,10 +67,6 @@ export async function getUpcomingEvents(days: number = 7): Promise<CalendarEvent
   }));
 }
 
-// ---------------------------------------------------------------------------
-// Contacts
-// ---------------------------------------------------------------------------
-
 export async function getContactsPermissionStatus(): Promise<PermissionStatus> {
   const { status } = await Contacts.getPermissionsAsync();
   if (status === Contacts.PermissionStatus.GRANTED) return 'granted';
@@ -91,7 +79,6 @@ export async function requestContactsPermission(): Promise<boolean> {
   return status === 'granted';
 }
 
-/** Generate a deterministic fallback ID from contact fields (simple string hash). */
 function stableContactId(name: string, secondary: string): string {
   const input = `${name}:${secondary}`;
   let hash = 0;
@@ -139,29 +126,19 @@ export type ContactsCountResult =
   | { known: true; count: number }
   | { known: false; hasContacts: boolean };
 
-/**
- * Get a count of total contacts (useful for displaying in settings).
- */
 export async function getContactsCount(): Promise<ContactsCountResult> {
   const hasPermission = await requestContactsPermission();
   if (!hasPermission) return { known: true, count: 0 };
 
-  // Use a minimal fields request to count contacts efficiently
   const { data } = await Contacts.getContactsAsync({
     fields: [Contacts.Fields.Name],
     pageSize: 1,
   });
 
-  // expo-contacts doesn't expose total count directly in all versions,
-  // but the data length with pageSize=1 and hasPreviousPage/hasNextPage
-  // gives at least a partial signal. For a true count we need all.
   if (Platform.OS === 'ios') {
-    // On iOS, getContactsAsync without pageSize returns all
     const all = await Contacts.getContactsAsync({ fields: [Contacts.Fields.Name] });
     return { known: true, count: all.data.length };
   }
 
-  // On Android a full count would require paging all contacts; report presence
-  // only, leaving the exact count unknown rather than encoding it as a sentinel.
   return { known: false, hasContacts: data.length > 0 };
 }

@@ -1,34 +1,3 @@
-/**
- * @file Server-side persistence of the assistant turn (findings BUG-10 / STR-5).
- *
- * WHAT WAS BROKEN: the only writer of the assistant message was the BROWSER,
- * at `[DONE]` (`useChatStream.ts`'s `persistAssistant`). `onSuccessfulTurn`
- * on this route was wired solely to auto-memory. A tab close, a crash, or a
- * dropped connection mid-stream therefore lost a turn that had been fully
- * generated and fully billed. The `cancel()` hooks in `managed-agent-stream.ts`
- * and `stream-transform.ts` already ran and settled billing, but persisted
- * nothing, so an aborted turn vanished instead of being kept as truncated.
- *
- * IDEMPOTENCY — WHY THIS NEEDS `assistant_message_id`:
- * `/api/chat/conversations/[id]/messages` upserts `on conflict (id)`, so the
- * server write and the client write collapse into ONE row IF AND ONLY IF they
- * share the row id. There is no other join key: the client id is a browser-
- * generated uuid the server has never seen, and the server request id is not
- * visible to the client. Writing under a server-invented id would leave every
- * saved turn duplicated in the transcript after reload — strictly worse than
- * the bug being fixed.
- *
- * So the request contract now carries an OPTIONAL `assistant_message_id`
- * (`request-processor.ts`), and this module persists only when the caller
- * supplied one. Callers that supply it get durable server-side persistence on
- * both the success and the cancellation path, fully idempotent with their own
- * later save. Callers that do not are skipped with an explicit
- * `assistant_turn_not_server_persisted` warning naming the missing field —
- * never silently, and never by writing a duplicate row.
- *
- * Temporary Chats are excluded, matching the client (`persistAssistant`
- * returns early for them) and the Temporary Chat contract itself.
- */
 
 import 'server-only';
 
@@ -38,40 +7,20 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import type { ProcessedRequest } from './request-processor';
 
-/** Marker stored on a turn saved from an aborted/cancelled stream. */
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
 
 export interface AssistantTurnSnapshot {
-  /** Visible assistant text accumulated so far (may be partial). */
   content: string;
-  /** Model that actually served, after any managed failover rotation. */
   model: string;
   provider: string;
   inputTokens: number;
   outputTokens: number;
-  /** True when the stream ended by cancellation/abort rather than completion. */
   truncated: boolean;
-  /** Validated structured cards emitted beside this turn's prose. */
   interactiveCards?: readonly InteractiveCard[];
-  /**
-   * Durable run this turn belongs to, when it was produced by the managed
-   * agent workflow. Stored under the `cloudAgentRun` metadata key — the SAME
-   * key and shape desktop writes from `CloudRuntime.persistAssistantTurn`
-   * (see `apps/desktop/src/runtime/cloudMessageMetadata.ts`) — so a turn the
-   * server saved while the client was offline reattaches through exactly the
-   * code path a client-saved turn does. `lastSequence` is the journal cursor
-   * already projected into `content`; a reattaching client resumes strictly
-   * after it, which is what keeps replayed prose from being rendered twice.
-   */
   runReference?: {
     runId: string;
     runPath: string;
     lastSequence: number;
-    /**
-     * Run state at the moment this turn was written. Lets a client decide
-     * whether the run is worth rejoining without asking the server about every
-     * finished conversation it opens.
-     */
     state?: string;
   };
 }
@@ -86,13 +35,6 @@ export function canPersistAssistantTurn(processed: ProcessedRequest): boolean {
   );
 }
 
-/**
- * Persist (or update) the assistant turn for this request.
- *
- * Never throws: persistence is a durability improvement on a turn that has
- * already been generated and settled, so a database hiccup must not turn a
- * delivered response into a client-visible failure. Failures are logged.
- */
 export async function persistAssistantTurn(params: {
   processed: ProcessedRequest;
   userId: string;
@@ -120,10 +62,6 @@ export async function persistAssistantTurn(params: {
   const interactiveCards = readPersistedInteractiveCards({
     [INTERACTIVE_CARDS_METADATA_KEY]: snapshot.interactiveCards,
   });
-  // An empty, non-truncated turn carries nothing worth a row unless it carries
-  // a validated card. A truncated turn with no text still records that the turn
-  // existed and was cut off, and a turn carrying a run reference is the
-  // reattachment anchor for work that is still running server-side.
   if (
     !snapshot.content.trim() &&
     !snapshot.truncated &&
@@ -147,12 +85,6 @@ export async function persistAssistantTurn(params: {
   }
 
   try {
-    // Ownership and the workspace captured at admission are both re-asserted
-    // in SQL. A later workspace switch cannot redirect this already-started
-    // turn, and a Personal turn cannot be written into an organization chat.
-    // `on conflict (id) do update ... where conversation_id matches` mirrors
-    // the client message route exactly, which is what makes the two writers
-    // idempotent with each other.
     await getNeonDb().execute(
       `insert into web_messages
          (id, conversation_id, role, content, model, provider, input_tokens, output_tokens, metadata)
@@ -197,17 +129,6 @@ export async function persistAssistantTurn(params: {
   }
 }
 
-/**
- * Extract the visible assistant text from OpenAI-compatible SSE bytes the
- * agentic loops emit. Used by `managed-agent-stream.ts`, which sees only the
- * wire (the tool loop and research loop hand it encoded chunks, not a text
- * accumulator).
- *
- * Reads ONLY `choices[].delta.content` string deltas: the same field the
- * browser accumulates, so the server-saved text matches what the user saw.
- * Custom `x_*` deltas (tool status, approvals, agent events) carry no visible
- * prose and are skipped.
- */
 export function extractAssistantTextDelta(value: Uint8Array): string {
   const text = new TextDecoder().decode(value);
   let out = '';

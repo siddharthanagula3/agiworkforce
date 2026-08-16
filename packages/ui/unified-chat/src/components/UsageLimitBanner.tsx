@@ -1,12 +1,3 @@
-/**
- * UsageLimitBanner — inline banner shown in the chat stream when the user
- * is close to or has exceeded their daily budget. Mirrors Gemini's pattern
- * of surfacing limits where users feel them, not buried in settings.
- *
- * Two exports:
- *   - `UsageLimitBanner` (props-driven, render anywhere)
- *   - `UsageLimitBannerContainer` (auto-wires from budgetStore + threshold gate)
- */
 import { AlertTriangle, Info, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../lib/utils';
@@ -29,7 +20,6 @@ export function getUsageUrgency(usagePercent: number): UrgencyLevel {
   return 'info';
 }
 
-/** Backwards-compatible local alias. */
 const getUrgencyLevel = getUsageUrgency;
 
 function formatTimeRemaining(resetTimeMs: number): string {
@@ -122,11 +112,6 @@ interface UsageLimitBannerContainerProps {
   hasMessages: boolean;
 }
 
-/**
- * Auto-wired variant. Reads budget snapshot from `useBudgetStore`, computes
- * urgency, and renders only when usage crosses the show threshold AND the
- * user hasn't dismissed this session.
- */
 export function UsageLimitBannerContainer({ hasMessages }: UsageLimitBannerContainerProps) {
   const [dismissed, setDismissed] = useState(false);
   const budget = useBudgetStore(selectBudget);

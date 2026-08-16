@@ -2,22 +2,6 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Project } from '../lib/types';
 
-/**
- * Canonical in-memory project view model for surfaces that import
- * `@agiworkforce/unified-chat`.
- *
- * Persistence is intentionally owned by each application trust boundary.
- * The shared package cannot safely choose an unscoped browser key because
- * Web projects are account-owned managed-cloud records while Local projects
- * belong only to their device. Hosts hydrate this view model from their own
- * authenticated or local persistence adapter.
- *
- * Schema: `packages/ui/unified-chat/src/lib/types.ts#Project` — a superset of
- * the web-only schema (adds `iconEmoji`, `accentColor`, `starred`,
- * `conversationIds`). All extra fields are optional so existing persisted
- * records continue to deserialise without migration.
- */
-
 interface ProjectState {
   projects: Project[];
   activeProjectId: string | null;
@@ -29,17 +13,11 @@ interface ProjectState {
   setActiveProject: (id: string | null) => void;
   getActiveProject: () => Project | undefined;
   toggleStar: (id: string) => void;
-  /** Keep project counts coherent after a host successfully reassigns a conversation. */
   reassignConversation: (
     conversationId: string,
     previousProjectId: string | null | undefined,
     nextProjectId: string | null | undefined,
   ) => void;
-  /**
-   * Create a project from a minimal input and return its id. Mirrors the
-   * web `project-store.ts` createProject API so callers can be migrated
-   * incrementally.
-   */
   createProject: (input: {
     name: string;
     description?: string;
@@ -48,7 +26,6 @@ interface ProjectState {
     iconEmoji?: string;
     accentColor?: string;
   }) => string;
-  /** Return the instructions for the active project, or empty string. */
   getActiveProjectInstructions: () => string;
 }
 

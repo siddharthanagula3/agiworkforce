@@ -1,9 +1,3 @@
-/**
- * API gateway process entry point.
- *
- * Runtime construction lives in app.ts/server.ts so importing application code
- * never binds a port or installs process handlers.
- */
 import { validateStartupEnv } from './env';
 import { logger } from './lib/logger';
 import { warnIfMultiInstanceWithoutRedis } from './middleware/rateLimit';

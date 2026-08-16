@@ -1,16 +1,3 @@
-/**
- * Time and focus preferences, rendered inline.
- *
- * The `time-focus` namespace of `/api/settings/preferences` is bearer-reachable,
- * so this replaces a cookie-gated child window that could land on `/login`.
- * Namespace name, shape, defaults, and normalization all come from the shared
- * contract (`@agiworkforce/types` `time-focus`), which is the same code the web
- * section and the reminder consumers use — Desktop does not redefine any of it.
- *
- * `normalizeTimeFocusPreferences` runs on both read and write: it is the guard
- * that turns untrusted account JSON into a schedule the reminder logic can act
- * on, and disables a malformed one rather than half-applying it.
- */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -124,8 +111,6 @@ export function CloudTimeFocusSection() {
     setSaving(true);
     setError(null);
     try {
-      // The namespace holds exactly this shape, so the normalized document IS
-      // the whole namespace — there are no sibling keys to preserve.
       await saveCloudPreferenceNamespace(
         TIME_FOCUS_PREFERENCES_NAMESPACE,
         next as unknown as Record<string, unknown>,

@@ -1,13 +1,3 @@
-/**
- * DES-C08 / DES-C21 coverage for the Cloud settings sections.
- *
- * The regressions these guard:
- *   - A bridged section rendering a bare "Open X" button whose child window can
- *     silently land on /login while the app shows the user as signed in.
- *   - Archived chats and shared links being unreachable from Desktop at all.
- *   - The Account section offering no way to see the account id, manage API
- *     keys, or delete the account — and inventing a session list it cannot serve.
- */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -106,8 +96,6 @@ describe('CloudBridgedSection', () => {
 
     expect(screen.getByTestId('cloud-bridged-reflect')).toBeTruthy();
     expect(screen.getByText(/keeps its own web sign-in/i)).toBeTruthy();
-    // The old copy promised a "content-protected child window" — the very thing
-    // that made these sections invisible on a shared screen (DES-C09).
     expect(screen.queryByText(/content-protected/i)).toBeNull();
   });
 
@@ -271,7 +259,6 @@ describe('CloudAccountControls', () => {
     expect(await screen.findByTestId('cloud-active-sessions')).toBeTruthy();
     expect(await screen.findByText('iPhone')).toBeTruthy();
     expect(screen.getByText(/Mobile Safari 19/)).toBeTruthy();
-    // A device token is not a Clerk session, so no row may be badged as this app.
     expect(screen.queryByText('This session')).toBeNull();
     expect(screen.getByText(/it never appears in this list/i)).toBeTruthy();
   });
@@ -316,8 +303,6 @@ describe('CloudAccountControls', () => {
     await user.click(await screen.findByTestId('cloud-log-out-everywhere'));
 
     await waitFor(() => expect(mocks.revokeAllCloudSessions).toHaveBeenCalledOnce());
-    // The device token is not one of the revoked Clerk sessions, so the local
-    // sign-out (which revokes it via POST /api/auth/logout) is required.
     await waitFor(() => expect(mocks.signOut).toHaveBeenCalledOnce());
   });
 

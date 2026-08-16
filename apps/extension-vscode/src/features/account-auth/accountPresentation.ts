@@ -39,10 +39,6 @@ export function describeAccountPlan(identity: AccountIdentity): string {
   return owner === undefined ? `${identity.planName} plan` : `${identity.planName} plan · ${owner}`;
 }
 
-/**
- * Informational account rows shown before usage and actions. These rows carry
- * no command/action field, so selecting them cannot mutate account state.
- */
 export function buildAccountIdentityItems(
   isSignedIn: boolean,
   identity: AccountIdentity | undefined,
@@ -104,12 +100,6 @@ export function buildTrustReviewItems(
       description: boundaryDescription,
     },
     {
-      // Named for what /settings/privacy actually offers: a telemetry-sharing
-      // toggle, bulk chat archive/delete, data export, and account deletion.
-      // It carries no retention-period setting and no model-training control —
-      // AGI does not train AGI-owned models on customer content, so there is
-      // nothing to opt into. Do not advertise either control here unless the
-      // web page grows one.
       label: '$(eye) Privacy & data controls',
       description: 'Open AGI Cloud privacy settings on Web: telemetry, export, deletion',
       action: 'privacy-settings',

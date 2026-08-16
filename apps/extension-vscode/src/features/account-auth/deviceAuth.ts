@@ -1,16 +1,3 @@
-/**
- * Secretless AGI Cloud sign-in for VS Code-compatible editors.
- *
- * This reuses the RFC 8628-style device-code service owned by the web app and
- * already consumed by the AGI CLI:
- *
- *   POST /api/auth/device/code  -> code + browser approval URL
- *   POST /api/auth/device/token -> seven-day, revocable developer credential
- *
- * OAuth itself stays in the user's normal browser. No client secret or custom
- * URI scheme ships in the marketplace extension, so the same flow works in VS
- * Code, Cursor, Windsurf, and Antigravity.
- */
 
 import * as vscode from 'vscode';
 import * as http from 'http';
@@ -56,7 +43,6 @@ export type DeviceAuthorizationPollResult =
   | { kind: 'expired' }
   | { kind: 'rejected'; message: string };
 
-/** Minimal bounded JSON POST over http/https for the extension host. */
 const postJson: DeviceAuthPost = (urlString, payload, headers) =>
   new Promise((resolve, reject) => {
     const url = new URL(urlString);
@@ -223,11 +209,6 @@ export async function revokeDeviceAuthorization(
   }
 }
 
-/**
- * VS Code-compatible hosts do not always settle `env.openExternal`, even after
- * dispatching the browser request. Bound the confirmation wait so device-code
- * polling can still start and the user can complete approval.
- */
 export function tryOpenDeviceAuthorizationUrl(
   url: string,
   openExternal: DeviceAuthOpenExternal = (target) =>
@@ -332,7 +313,6 @@ export async function signOutOfAgiCloud(secrets: vscode.SecretStorage): Promise<
   const revoked =
     token === undefined ? true : await revokeDeviceAuthorization(getCloudGatewayOrigin(), token);
 
-  // Local sign-out must never be held hostage by a network or gateway failure.
   await clearAccountToken(secrets);
 
   if (revoked) {

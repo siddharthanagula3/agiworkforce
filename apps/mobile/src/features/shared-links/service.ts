@@ -1,10 +1,3 @@
-/**
- * Shared links service.
- *
- * Talks to GET /api/share (list the caller's own links) and
- * DELETE /api/share/:token (revoke one). Both are owner-scoped server-side;
- * nothing here is trusted to do the access control.
- */
 import { api } from '@/services/api';
 
 export interface SharedLink {
@@ -16,7 +9,6 @@ export interface SharedLink {
   messageCount: number;
   createdAt: string;
   expiresAt: string;
-  /** Server-computed: the row still exists but is past its expiry. */
   expired: boolean;
 }
 
@@ -28,11 +20,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-/**
- * Narrow one row, dropping anything malformed rather than rendering `undefined`
- * into the list. A share with no token cannot be opened or revoked, so it has
- * no use on screen.
- */
 function toSharedLink(value: unknown): SharedLink | null {
   if (!isRecord(value)) return null;
   const token = value['token'];

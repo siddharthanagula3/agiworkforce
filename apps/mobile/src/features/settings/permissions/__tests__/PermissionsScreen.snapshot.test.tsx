@@ -1,14 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Snapshot tests for the Permissions settings screens (R21).
- * Locks the index card structure and a native-backed permission detail against
- * visual regressions.
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
-
-// ── Theme mock ────────────────────────────────────────────────────────────────
 
 jest.mock('@/src/ui/theme', () => ({
   colors: {
@@ -55,8 +48,6 @@ jest.mock('@/src/ui/theme', () => ({
   }),
 }));
 
-// ── UI component mocks ────────────────────────────────────────────────────────
-
 jest.mock('@/components/ui/text', () => {
   const RN = require('react-native');
   const Text = (props: Record<string, unknown>) => <RN.Text {...props} />;
@@ -76,8 +67,6 @@ jest.mock('@/components/ui/separator', () => {
   };
 });
 
-// ── Icon mock ─────────────────────────────────────────────────────────────────
-
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const factory = (name: string) => (props: Record<string, unknown>) => (
@@ -94,20 +83,12 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
-// ── Router / navigation mocks ─────────────────────────────────────────────────
-
 let mockPermissionParam = 'camera';
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -122,13 +103,10 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (cb: () => () => void) => {
-    // Call immediately in test environment so the poll runs once
     const cleanup = cb();
     return cleanup;
   },
 }));
-
-// ── Safe area mock ────────────────────────────────────────────────────────────
 
 jest.mock('react-native-safe-area-context', () => {
   const RN = require('react-native');
@@ -140,11 +118,8 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// ── Expo permission mocks ─────────────────────────────────────────────────────
-
 const undetermined = { status: 'undetermined', canAskAgain: true };
 
-// expo-camera@55 exposes permission functions on the Camera named export, not the module namespace
 jest.mock('expo-camera', () => ({
   Camera: {
     getMicrophonePermissionsAsync: jest.fn().mockResolvedValue(undetermined),
@@ -154,9 +129,6 @@ jest.mock('expo-camera', () => ({
   },
   CameraView: 'CameraView',
 }));
-
-// expo-location is not installed in mobile v1, so there is no Location
-// permission kind at all — nothing to mock here.
 
 jest.mock('expo-image-picker', () => ({
   getMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
@@ -180,8 +152,6 @@ jest.mock('expo-calendar', () => ({
   requestRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
-// ── Permissions store mock ────────────────────────────────────────────────────
-
 const mockDefaultPerm = { lastObservedStatus: 'undetermined', userIntent: 'denied' };
 
 const mockPermissionsState = {
@@ -204,8 +174,6 @@ jest.mock('@/stores/permissionsStore', () => ({
     sel ? sel(mockPermissionsState) : mockPermissionsState,
 }));
 
-// ── Settings store mock (needed by Switch) ────────────────────────────────────
-
 jest.mock('@/stores/settingsStore', () => ({
   useSettingsStore: (sel?: (s: Record<string, unknown>) => unknown) => {
     const state = { hapticsEnabled: true };
@@ -213,12 +181,8 @@ jest.mock('@/stores/settingsStore', () => ({
   },
 }));
 
-// ── Imports (after all mocks) ─────────────────────────────────────────────────
-
 import PermissionsScreen from '@/src/features/settings/permissions';
 import PermissionDetailScreen from '@/src/features/settings/permissions/detail';
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
   mockPermissionParam = 'camera';

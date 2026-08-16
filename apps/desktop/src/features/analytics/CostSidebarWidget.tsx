@@ -17,7 +17,6 @@ function formatCostAsCredits(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) {
     return '0 credits';
   }
-  // Convert dollars to credits (1 dollar = 100 credits)
   const credits = dollarsToCredits(value);
   return formatCredits(credits);
 }

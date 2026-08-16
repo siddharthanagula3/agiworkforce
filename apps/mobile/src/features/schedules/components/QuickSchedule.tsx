@@ -1,13 +1,3 @@
-/**
- * Quick Schedule
- *
- * Natural-language schedule creation chip. Accepts free-form phrases like
- * "Run this every day at 9am" and parses them into a schedule without
- * needing the full form. Sends parsed data to the schedule store on confirm.
- *
- * Parsing is intentionally lightweight — only covers the most common patterns.
- * Complex schedules should use the full ScheduleForm.
- */
 import { useState, useCallback } from 'react';
 import {
   View,
@@ -25,13 +15,9 @@ import { useScheduleStore, type CreateScheduleInput } from '../store';
 import { requestsSubDailySchedule } from '../policy';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 
-// ---------------------------------------------------------------------------
-// Natural language parser
-// ---------------------------------------------------------------------------
-
 interface ParsedSchedule {
   recurrence: 'daily' | 'weekly' | 'monthly' | 'once';
-  timeOfDay: string; // HH:MM
+  timeOfDay: string;
   daysOfWeek?: number[];
   dayOfMonth?: number;
   description: string;
@@ -55,7 +41,6 @@ const DAY_NAMES: Record<string, number> = {
 };
 
 function parseTime(raw: string): string | null {
-  // Try "9am", "9:30am", "14:00", "2pm", "noon", "midnight"
   const lower = raw.toLowerCase().trim();
   if (lower === 'noon') return '12:00';
   if (lower === 'midnight') return '00:00';
@@ -74,9 +59,7 @@ function parseTime(raw: string): string | null {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-/** Extract a time string from a sentence. Returns parsed time or default "09:00". */
 function extractTime(text: string): string {
-  // Look for patterns: "at 9am", "at 9:30", "at noon", "@ 2pm"
   const atMatch = text.match(/(?:at|@)\s*([\w:]+(?:\s*(?:am|pm))?)/i);
   if (atMatch) {
     const parsed = parseTime(atMatch[1]);
@@ -85,7 +68,6 @@ function extractTime(text: string): string {
   return '09:00';
 }
 
-/** Parse a natural language string into a structured schedule. */
 export function parseNaturalLanguage(text: string): ParsedSchedule | null {
   const lower = text.toLowerCase().trim();
   if (!lower) return null;
@@ -93,10 +75,8 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
 
   const timeOfDay = extractTime(text);
 
-  // Weekly: "every monday", "on tuesdays and thursdays", "every mon, wed, fri"
   const dayMatches: number[] = [];
   for (const [name, idx] of Object.entries(DAY_NAMES)) {
-    // Check for whole-word match
     const re = new RegExp(`\\b${name}s?\\b`);
     if (re.test(lower)) {
       if (!dayMatches.includes(idx)) dayMatches.push(idx);
@@ -115,7 +95,6 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     };
   }
 
-  // Monthly: "every 1st", "on the 15th", "monthly"
   const monthlyMatch = lower.match(
     /(?:every\s+)?(\d{1,2})(?:st|nd|rd|th)|monthly|once\s+a\s+month/,
   );
@@ -130,7 +109,6 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     };
   }
 
-  // Daily
   if (/daily|every\s+day|each\s+day/.test(lower)) {
     return {
       recurrence: 'daily',
@@ -139,7 +117,6 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     };
   }
 
-  // "every morning" → 8am, "every evening" → 18:00
   if (/every\s+morning/.test(lower)) {
     return { recurrence: 'daily', timeOfDay: '08:00', description: 'Daily at 08:00' };
   }
@@ -150,7 +127,6 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     return { recurrence: 'daily', timeOfDay: '21:00', description: 'Daily at 21:00' };
   }
 
-  // Weekdays
   if (/weekdays?|every\s+weekday/.test(lower)) {
     return {
       recurrence: 'weekly',
@@ -160,7 +136,6 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     };
   }
 
-  // Weekends
   if (/weekends?|every\s+weekend/.test(lower)) {
     return {
       recurrence: 'weekly',
@@ -170,17 +145,12 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     };
   }
 
-  // Fall back to daily if a time was specified
   if (lower.match(/(?:at|@)\s*([\w:]+(?:\s*(?:am|pm))?)/i)) {
     return { recurrence: 'daily', timeOfDay, description: `Daily at ${timeOfDay}` };
   }
 
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Suggestion chips
-// ---------------------------------------------------------------------------
 
 const SUGGESTIONS = [
   'Every day at 9am',
@@ -189,12 +159,7 @@ const SUGGESTIONS = [
   'Every Sunday at 6pm',
 ];
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 interface QuickScheduleProps {
-  /** Pre-filled prompt text (e.g., from current chat context) */
   defaultPrompt?: string;
   onCreated?: () => void;
 }

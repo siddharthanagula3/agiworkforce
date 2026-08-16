@@ -1,11 +1,3 @@
-/**
- * The prompt boundary.
- *
- * "Never put secrets, tokens, or another user's data into a model prompt" and
- * "never raw private allowance values". These tests assert the projection by
- * its OUTPUT rather than by reading the source, so a future edit that spreads
- * the whole context object into the return value fails here.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -56,7 +48,6 @@ describe('toModelSafeAccountFacts', () => {
         /cents|units|budget|allowance|micro|email_address|user_?id|key_?prefix|token|secret/iu,
       );
     }
-    // The one email-shaped key is a STATE, not an address.
     expect(facts.email_verification_state).toBe('verified');
   });
 
@@ -68,9 +59,6 @@ describe('toModelSafeAccountFacts', () => {
   });
 
   it('drops user-authored connector names and URLs, keeping only ids', () => {
-    // A custom connector's display name is attacker-controlled text: it is a
-    // prompt-injection payload the moment it reaches a prompt. The context type
-    // does not even carry it, and the projection emits ids only.
     const facts = toModelSafeAccountFacts(context());
     expect(facts.connector_ids).toEqual(['slack', 'custom-9f2a']);
     expect(facts.connector_count).toBe(2);

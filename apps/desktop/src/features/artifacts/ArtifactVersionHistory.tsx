@@ -1,11 +1,3 @@
-/**
- * ArtifactVersionHistory
- *
- * Standalone component that accepts an artifactId, fetches version history
- * from the artifact store, shows a vertical timeline, and renders a
- * side-by-side diff when a non-current version is selected.
- * The "Restore" button calls artifactStore.rollbackArtifact().
- */
 
 import { formatDistanceToNow } from 'date-fns';
 import { Check, ChevronRight, GitBranch, Loader2, RotateCcw } from 'lucide-react';
@@ -46,7 +38,6 @@ export function ArtifactVersionHistory({
   const [diff, setDiff] = useState<VersionDiff | null>(null);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [isRollingBack, setIsRollingBack] = useState(false);
-  // Version history modal/panel may close while rollback is in flight.
   const isMounted = useIsMounted();
 
   useEffect(() => {

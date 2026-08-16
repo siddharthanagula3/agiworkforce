@@ -17,14 +17,6 @@ export interface SSOPrincipal {
   db: DatabaseAdapter;
 }
 
-/**
- * Authenticate, then confirm the enterprise entitlement, in that order.
- *
- * Both checks fail closed and neither is skippable: every SSO handler routes
- * through here before it reads or writes a connection. The entitlement check
- * uses `canUseBillingPlanCapability(plan, 'enterprise_controls')` — never a
- * tier comparison — so no plan can drift into enterprise controls by ordering.
- */
 export async function authorizeSSORequest(
   request: NextRequest,
   endpoint: string,
@@ -33,9 +25,6 @@ export async function authorizeSSORequest(
   try {
     ({ userId } = await getClerkAuthUser(request));
   } catch (error) {
-    // Preserve the distinction between "not signed in" and an upstream auth
-    // failure so a suspended account or a broken verifier is not silently
-    // reported as an expired token.
     logger.warn({ error, endpoint }, 'Unauthorized SSO request');
     return {
       principal: null,
@@ -80,10 +69,6 @@ export async function getOrgRole(
   return (rows[0]!.role as OrgRole) ?? null;
 }
 
-/**
- * Confirm org membership at the required role. Returns the denial response
- * rather than throwing so callers keep one explicit branch per check.
- */
 export async function requireOrgRole(
   principal: SSOPrincipal,
   organizationId: string,
@@ -118,7 +103,6 @@ export async function requireOrgRole(
   return null;
 }
 
-/** Uniform mapping of unexpected failures, including database unavailability. */
 export function ssoErrorResponse(error: unknown, context: Record<string, unknown>): Response {
   logger.error({ error, ...context }, 'Unexpected error in SSO route');
   if (error instanceof Error && error.message.includes('fetch failed')) {

@@ -5,16 +5,10 @@ import { REGISTERED_COMMANDS } from './registeredCommands';
 
 type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
 
-/**
- * Error with a code property for categorization.
- */
 interface CodedError extends Error {
   code: string;
 }
 
-/**
- * Creates an error with a code property.
- */
 function createCodedError(message: string, code: string): CodedError {
   const error = new Error(message) as CodedError;
   error.code = code;
@@ -55,16 +49,6 @@ const WINDOW_MS = 1000;
 const MAX_REQS_PER_WINDOW = 30;
 const COMMAND_NAME_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
-// Overrides for the `invoke` below — this module's, not `lib/tauri-mock`'s,
-// which reaches Rust by its own path and never reads this table. Only
-// FileTree.tsx and editingStore.ts call in here, so the only commands this table
-// can ever be consulted for are dir_list, dir_create, dir_delete,
-// file_watch_start, file_watch_stop, file_write, file_rename, file_delete and
-// get_file_diff. An entry for anything else is inert however correct its
-// spelling, and an entry whose key is not a registered command is worse: it
-// reads as an override while the call silently takes IPC_TIMEOUT_MS — which
-// is how `read_file` sat here for a command actually named `file_read`.
-// `src/utils/__tests__/ipc.test.ts` pins the keys against both facts.
 export const COMMAND_TIMEOUTS: Record<string, number> = {
   file_write: 60000,
 };
@@ -178,20 +162,15 @@ export const TypeGuards = {
  * // Proceeds if under limit, throws if exceeded
  */
 async function rateLimit(key: string): Promise<void> {
-  // Wait for any existing lock on this key to be released
   while (rateLimitLocks.has(key)) {
     await rateLimitLocks.get(key);
   }
 
-  // HKS-002 fix: Initialize resolveLock with a no-op to ensure it's always defined
-  // This prevents potential deadlocks if an error occurs during lock setup
   let resolveLock: () => void = () => {};
   const lockPromise = new Promise<void>((resolve) => {
     resolveLock = resolve;
   });
 
-  // AUDIT-007-020 fix: Set the lock and immediately wrap in try/finally
-  // to guarantee lock release even if any subsequent operation fails
   rateLimitLocks.set(key, lockPromise);
 
   try {
@@ -207,9 +186,6 @@ async function rateLimit(key: string): Promise<void> {
     pruned.push(now);
     buckets.set(key, pruned);
   } finally {
-    // HKS-002 + AUDIT-007-020 fix: Always delete lock first, then resolve
-    // This ensures cleanup happens even if any operation throws
-    // The lock MUST be released to prevent deadlock on subsequent calls
     rateLimitLocks.delete(key);
     resolveLock();
   }

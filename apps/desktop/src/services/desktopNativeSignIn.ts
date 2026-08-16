@@ -1,34 +1,3 @@
-/**
- * Turn a Clerk session into the durable AGI Cloud credential Desktop already
- * knows how to store, refresh, and revoke.
- *
- * ## Why an exchange instead of using the Clerk token directly
- *
- * A Clerk session JWT is deliberately short-lived (Clerk rotates it on the
- * order of a minute) and is renewed by the Clerk client, not by us. Desktop's
- * cloud stack is built around a first-party developer token plus a device
- * refresh token — that is what the native vault stores
- * (`account_store_access_token` / `account_store_refresh_token`), what
- * `/api/auth/device/refresh` renews, and what `/api/me` and managed chat
- * already accept. Persisting a 60-second Clerk token in the OS keyring would
- * produce a session that is expired before the app restarts.
- *
- * So native sign-in reuses the server contract that already exists, with the
- * browser removed from the middle:
- *
- *   1. `POST /api/auth/device/code` — the app asks for its own device code.
- *   2. `POST /api/auth/device/approve` — the app approves that code with the
- *      Clerk session it just obtained natively. `lib/api-auth.ts` accepts a
- *      Clerk JWT bearer here, and `lib/csrf.ts` treats a cryptographically
- *      valid bearer as a CSRF bypass, so no cookie and no CSRF token are
- *      required.
- *   3. `POST /api/auth/device/token` — the ordinary poll issues the developer
- *      token + refresh token.
- *
- * No web endpoint changes. The CLI's device flow is untouched, and the Desktop
- * browser-approval fallback still works because it drives the same three
- * routes.
- */
 
 import {
   pollDeviceAuthorization,
@@ -45,14 +14,6 @@ export interface NativeCloudCredential {
   expiresAt: number;
 }
 
-/**
- * Failure of the exchange step, kept separate from Clerk failures.
- *
- * `kind` exists so callers can render the truth: a server fault is a server
- * fault. The device-token poll used to collapse every non-2xx into "AGI Cloud
- * rejected the device sign-in request", which told a user whose backend had
- * thrown a 500 that their account had been refused.
- */
 export type NativeExchangeFailureKind =
   | 'network'
   | 'server_error'
@@ -114,13 +75,6 @@ function assertNativeResponse(value: unknown): NativeDeviceAuthorizationResponse
   return value as NativeDeviceAuthorizationResponse;
 }
 
-/**
- * POST adapter for the device-authorization routes.
- *
- * Under a native Desktop shell these run through its audited account bridge
- * because the renderer is a different origin from agiworkforce.com. The local
- * development browser uses guarded fetch instead.
- */
 function createDeviceAuthorizationPost(signal?: AbortSignal): DeviceAuthorizationPost {
   const trustedOrigin = new URL(WEB_APP_URL).origin;
 
@@ -262,10 +216,6 @@ async function approveOwnDeviceCode(
   }
 }
 
-/**
- * Exchange a natively obtained Clerk session token for the AGI Cloud device
- * credential Desktop stores in its existing vault.
- */
 export async function exchangeClerkSessionForCloudCredential(
   clerkSessionToken: string,
   options: { signal?: AbortSignal } = {},
@@ -279,8 +229,6 @@ export async function exchangeClerkSessionForCloudCredential(
   }
 
   if (usesNativeCloudAccountBridge) {
-    // Pin the native HTTP client to the same origin the webview uses before
-    // any authorization call, so a stale override cannot redirect approval.
     await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
   }
 
@@ -300,9 +248,6 @@ export async function exchangeClerkSessionForCloudCredential(
 
   await approveOwnDeviceCode(authorization.userCode, clerkSessionToken, signal);
 
-  // The code is already approved, so the first poll normally succeeds. A short
-  // bounded retry absorbs read-replica lag between the approve write and the
-  // token read without reintroducing a long "Checking…" wait.
   let lastPending = false;
   for (let attempt = 0; attempt < APPROVED_POLL_ATTEMPTS; attempt += 1) {
     if (attempt > 0) await delay(APPROVED_POLL_DELAY_MS, signal);

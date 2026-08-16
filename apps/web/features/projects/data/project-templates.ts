@@ -1,31 +1,8 @@
-/**
- * Starter templates for new projects.
- *
- * ON SCOPE — these are BUILT-IN and read-only. There is deliberately no
- * user-defined template CRUD, because the product already has that feature
- * under another name: `POST /api/projects/[id]/duplicate` copies a project's
- * instructions, settings, and knowledge files while leaving conversations
- * behind, which is exactly what "save this project as a template" would do. A
- * second subsystem storing name + instructions would be a parallel
- * implementation of the same behaviour, with its own table and its own drift.
- *
- * What duplicate CANNOT do is help someone with no project yet — the empty
- * state, where a user faces a blank "Instructions" box and no idea what belongs
- * in it. That is the gap these fill.
- *
- * Every template only pre-fills fields the create form already sends. Applying
- * one is not special-cased anywhere: it writes the same `name`, `description`,
- * and `instructions` a user could have typed, so a template can never produce a
- * project the user could not have made by hand.
- */
 
 export interface ProjectTemplate {
   id: string;
-  /** Shown on the template chip. */
   label: string;
-  /** One line explaining who it is for. */
   summary: string;
-  /** Pre-filled project name. The user can still edit it before creating. */
   name: string;
   description: string;
   instructions: string;
@@ -101,7 +78,6 @@ export const PROJECT_TEMPLATES: readonly ProjectTemplate[] = [
   },
 ];
 
-/** Lookup by id; `undefined` for an unknown id rather than a silent fallback. */
 export function getProjectTemplate(id: string): ProjectTemplate | undefined {
   return PROJECT_TEMPLATES.find((template) => template.id === id);
 }

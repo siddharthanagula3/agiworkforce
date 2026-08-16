@@ -1,33 +1,17 @@
-/**
- * ToolTimeline Component Tests
- *
- * Covers:
- * - Returns null when entries array is empty
- * - Header shows "Used N tool(s)" when all tools are completed
- * - Header shows an active tool summary when any entry is running
- * - Error count is displayed in the header when errors exist
- * - Total duration is shown in the header for completed runs
- * - Tool list is expanded automatically while tools are running
- * - Toggle collapse / expand by clicking the header button
- * - Individual ToolLabel entries are rendered inside the expanded list
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ToolLabelEntry } from '../ToolLabel';
 
-// Mock framer-motion so AnimatePresence and motion render synchronously in jsdom
 vi.mock('framer-motion', () => ({
   motion: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock: framer-motion motion proxy
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   },
-  // Render children immediately — avoids needing to await animation exit
   AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
-// ToolLabel uses framer-motion too; mock it consistently
 vi.mock('../ToolLabel', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../ToolLabel')>();
   return actual;
@@ -35,7 +19,6 @@ vi.mock('../ToolLabel', async (importOriginal) => {
 
 import { ToolTimeline } from '../ToolTimeline';
 
-// Three completed entries used as the default set
 const completedEntries: ToolLabelEntry[] = [
   { id: '1', displayName: 'Read', displayArgs: 'main.rs', status: 'completed', durationMs: 45 },
   {
@@ -68,7 +51,6 @@ describe('ToolTimeline', () => {
     });
 
     it('shows the total cumulative duration when all tools have finished', () => {
-      // Total: 45 + 3200 + 12 = 3257ms → 3.3s
       render(<ToolTimeline entries={completedEntries} />);
       expect(screen.getByText(/3\.3s/)).toBeInTheDocument();
     });
@@ -79,7 +61,6 @@ describe('ToolTimeline', () => {
         { id: 'b', displayName: 'Edit', displayArgs: 'y', status: 'completed', durationMs: 12 },
       ];
       render(<ToolTimeline entries={shortEntries} />);
-      // 45 + 12 = 57ms
       expect(screen.getByText(/57ms/)).toBeInTheDocument();
     });
 
@@ -88,7 +69,6 @@ describe('ToolTimeline', () => {
         { id: 'x', displayName: 'Read', displayArgs: 'f', status: 'completed' },
       ];
       render(<ToolTimeline entries={noDurationEntries} />);
-      // totalDuration = 0, so the duration span is not rendered
       expect(screen.queryByText(/ms\)/)).not.toBeInTheDocument();
       expect(screen.queryByText(/s\)/)).not.toBeInTheDocument();
     });
@@ -159,7 +139,6 @@ describe('ToolTimeline', () => {
         { id: 'r', displayName: 'Read', displayArgs: 'main.rs', status: 'running' },
       ];
       render(<ToolTimeline entries={running} />);
-      // The tool label "Read" should be visible without any user interaction
       expect(screen.getByText('Read')).toBeInTheDocument();
     });
   });
@@ -167,7 +146,6 @@ describe('ToolTimeline', () => {
   describe('collapse / expand toggle', () => {
     it('starts collapsed when all tools are completed', () => {
       render(<ToolTimeline entries={completedEntries} />);
-      // Individual tool labels are inside the collapsible section which starts closed
       expect(screen.queryByText('Read')).not.toBeInTheDocument();
     });
 
@@ -175,13 +153,9 @@ describe('ToolTimeline', () => {
       const user = userEvent.setup();
       render(<ToolTimeline entries={completedEntries} />);
 
-      // Click the header toggle button
       const headerButton = screen.getByRole('button');
       await user.click(headerButton);
 
-      // Now each ToolLabel entry should be visible. Edit renders via the
-      // file-op structured row (basename + extension badge) per round 19;
-      // Read + Bash continue to render their displayName text.
       expect(screen.getByText('Read')).toBeInTheDocument();
       expect(screen.getByText('Bash')).toBeInTheDocument();
       expect(screen.getByText('lib.rs')).toBeInTheDocument();
@@ -193,11 +167,9 @@ describe('ToolTimeline', () => {
       render(<ToolTimeline entries={completedEntries} />);
 
       const headerButton = screen.getByRole('button');
-      // First click: expand
       await user.click(headerButton);
       expect(screen.getByText('Read')).toBeInTheDocument();
 
-      // Second click: collapse
       await user.click(headerButton);
       expect(screen.queryByText('Read')).not.toBeInTheDocument();
     });
@@ -210,8 +182,6 @@ describe('ToolTimeline', () => {
 
       await user.click(screen.getByRole('button'));
 
-      // Edit uses the file-op structured renderer (basename + ext badge);
-      // other tools render their displayName text directly.
       expect(screen.getByText('Read')).toBeInTheDocument();
       expect(screen.getByText('Bash')).toBeInTheDocument();
       expect(screen.getByText('lib.rs')).toBeInTheDocument();
@@ -223,7 +193,6 @@ describe('ToolTimeline', () => {
 
       await user.click(screen.getByRole('button'));
 
-      // Args are rendered as JSON via argsFromDisplayArgs({ input: displayArgs })
       expect(screen.getByText(/main\.rs/)).toBeInTheDocument();
       expect(screen.getByText(/cargo test/)).toBeInTheDocument();
       expect(screen.getByText(/lib\.rs/)).toBeInTheDocument();

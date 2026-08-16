@@ -1,13 +1,7 @@
-/**
- * Device Approve API Tests
- *
- * Tests for device authorization approval/denial flow
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -25,22 +19,19 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 
-// Mock environment variables
 vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
-    if (key === 'DEVICE_TOKEN_ENCRYPTION_KEY') return 'a'.repeat(64); // 64 hex chars = 32 bytes
+    if (key === 'DEVICE_TOKEN_ENCRYPTION_KEY') return 'a'.repeat(64);
     return 'test-value';
   }),
 }));
 
-// Mock Clerk auth — route calls auth() from @clerk/nextjs/server
 const mockClerkAuth = vi.fn();
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockClerkAuth(),
 }));
 
-// Mock Neon DB — route calls getNeonDb() for all DB operations
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 
@@ -53,17 +44,14 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-// Mock device token crypto — encryptToken is called on approval
 vi.mock('@/lib/device-token-crypto', () => ({
   encryptToken: vi.fn(() => 'encrypted-token-value'),
   decryptToken: vi.fn((t: string) => t),
 }));
 
-// Import after mocks
 import { POST, OPTIONS } from '@/app/api/device/approve/route';
 import { requireCsrfToken } from '@/lib/csrf';
 
-// Helpers for building consistent pending records
 function makePendingRecord(
   overrides: Partial<{
     device_id: string;
@@ -80,22 +68,18 @@ function makePendingRecord(
 }
 
 describe('Device Approve API', () => {
-  // Valid hex code per schema
   const validCode = 'ABC123DEF456';
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated Clerk user with valid token
     mockClerkAuth.mockResolvedValue({
       userId: 'user-123',
       getToken: vi.fn().mockResolvedValue('clerk-session-token'),
     });
 
-    // Default: DB query returns a valid pending record (SELECT)
     mockQuery.mockResolvedValue([makePendingRecord()]);
 
-    // Default: DB execute succeeds (UPDATE ... RETURNING)
     mockExecute.mockResolvedValue(undefined);
   });
 
@@ -120,8 +104,6 @@ describe('Device Approve API', () => {
 
     describe('CSRF Protection', () => {
       it('should return 403 when x-csrf-token header is absent', async () => {
-        // Override the global mock so requireCsrfToken enforces the check for
-        // this test only, returning a 403 as the real implementation would.
         vi.mocked(requireCsrfToken).mockResolvedValueOnce(
           new Response(
             JSON.stringify({
@@ -135,7 +117,6 @@ describe('Device Approve API', () => {
           ),
         );
 
-        // Request has no x-csrf-token header — CSRF check must reject it.
         const request = new NextRequest('http://localhost/api/device/approve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -206,9 +187,7 @@ describe('Device Approve API', () => {
       });
 
       it('should accept valid approve action', async () => {
-        // SELECT returns pending record
         mockQuery.mockResolvedValueOnce([makePendingRecord()]);
-        // UPDATE ... RETURNING status = 'approved'
         mockQuery.mockResolvedValueOnce([{ status: 'approved' }]);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
@@ -224,17 +203,12 @@ describe('Device Approve API', () => {
         expect(data.success).toBe(true);
         expect(data.status).toBe('approved');
 
-        // Security: the approve endpoint must NOT expose raw tokens in its response.
-        // Tokens are encrypted and stored in the DB; the device retrieves them exactly
-        // once via the poll endpoint (GET /api/device/poll) after the code is consumed.
         expect(data.access_token).toBeUndefined();
         expect(data.refresh_token).toBeUndefined();
       });
 
       it('should accept valid deny action', async () => {
-        // SELECT returns pending record
         mockQuery.mockResolvedValueOnce([makePendingRecord()]);
-        // UPDATE ... RETURNING status = 'denied'
         mockQuery.mockResolvedValueOnce([{ status: 'denied' }]);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
@@ -265,7 +239,6 @@ describe('Device Approve API', () => {
 
     describe('Device Code Validation', () => {
       it('should return 400 for non-existent code', async () => {
-        // SELECT returns no rows
         mockQuery.mockResolvedValueOnce([]);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
@@ -279,11 +252,9 @@ describe('Device Approve API', () => {
       });
 
       it('should return 400 for expired code', async () => {
-        // SELECT returns expired record
         mockQuery.mockResolvedValueOnce([
           makePendingRecord({ expires_at: new Date(Date.now() - 60_000).toISOString() }),
         ]);
-        // UPDATE to set status = 'expired'
         mockExecute.mockResolvedValueOnce(undefined);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
@@ -297,7 +268,6 @@ describe('Device Approve API', () => {
       });
 
       it('should return 409 for already processed code', async () => {
-        // SELECT returns already-approved record
         mockQuery.mockResolvedValueOnce([makePendingRecord({ status: 'approved' })]);
 
         const request = new NextRequest('http://localhost/api/device/approve', {

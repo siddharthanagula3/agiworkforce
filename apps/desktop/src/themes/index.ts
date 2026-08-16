@@ -1,10 +1,3 @@
-/**
- * Theme Registry
- *
- * Central registry for built-in and custom themes.
- * Themes are applied by setting CSS custom properties on :root,
- * mirroring the HSL variable convention in globals.css.
- */
 
 import type { ThemeDefinition } from './types';
 import { catppuccinMocha } from './presets/catppuccin-mocha';
@@ -49,21 +42,15 @@ export function getThemeById(id: string): ThemeDefinition | undefined {
   return [...BUILTIN_THEMES, ...getCustomThemes()].find((t) => t.id === id);
 }
 
-/**
- * Apply a theme definition to the document root via CSS custom properties.
- * The variant class (dark/light) is also toggled so Tailwind's dark: utilities work.
- */
 export function applyTheme(theme: ThemeDefinition): void {
   if (typeof document === 'undefined') return;
 
   const root = document.documentElement;
   const { colors, variant } = theme;
 
-  // Toggle Tailwind dark class based on variant
   root.classList.remove('dark', 'light');
   root.classList.add(variant);
 
-  // Apply all CSS custom properties
   root.style.setProperty('--background', colors.background);
   root.style.setProperty('--foreground', colors.foreground);
   root.style.setProperty('--card', colors.card);
@@ -84,14 +71,9 @@ export function applyTheme(theme: ThemeDefinition): void {
   root.style.setProperty('--input', colors.input);
   root.style.setProperty('--ring', colors.ring);
 
-  // Store the active theme id on the root for reference
   root.setAttribute('data-theme-id', theme.id);
 }
 
-/**
- * Remove all inline CSS custom properties set by applyTheme,
- * falling back to the stylesheet defaults.
- */
 export function clearAppliedTheme(): void {
   if (typeof document === 'undefined') return;
 

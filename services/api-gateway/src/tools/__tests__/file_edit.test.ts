@@ -1,14 +1,3 @@
-/**
- * file_edit integration tests — exercises the api-gateway tool wrapper
- * around `@agiworkforce/apply-patch`.
- *
- * Validates that:
- *   - happy path: a valid Add patch creates a file and reports success
- *   - workspace-escape: relative `../escape.txt` is rejected with code
- *     `'workspace_escape'`
- *   - blocklist: `/etc` as workspace root is rejected
- *   - invalid input: missing patch returns `'invalid_input'`
- */
 
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

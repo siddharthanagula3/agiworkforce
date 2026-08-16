@@ -19,7 +19,6 @@ type UploadState =
   | { status: 'uploading'; fileName: string; progress: number }
   | { status: 'error'; message: string };
 
-/** Return a file-type icon character based on MIME type. */
 function fileIcon(mimeType: string): string {
   if (mimeType.startsWith('image/')) return '🖼';
   if (mimeType === 'application/pdf') return '📄';
@@ -36,7 +35,6 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
   const [previewFile, setPreviewFile] = useState<ProjectKnowledgeFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load files on mount / projectId change
   useEffect(() => {
     let cancelled = false;
     setLoadState('loading');
@@ -58,7 +56,6 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
 
   async function handleDelete(file: ProjectKnowledgeFile) {
     const previous = files;
-    // Optimistic removal; roll back if the server rejects.
     setFiles((current) => current.filter((f) => f.id !== file.id));
     try {
       const csrfToken = await getCsrfToken();
@@ -96,7 +93,6 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) void handleUpload(file);
-    // Reset so the same file can be re-uploaded after dismissing an error
     e.target.value = '';
   }
 

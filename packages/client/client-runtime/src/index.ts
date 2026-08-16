@@ -7,35 +7,23 @@
  * @packageDocumentation
  */
 
-// Runtime environment detection
 export { RuntimeEnv, isTauri, isCloudWeb, isTest, getRuntimeEnv } from './detect';
 
-// Local/Cloud app-mode contract — the persisted trust boundary, read once.
-// The resolver is the module's whole public surface; the key, the parser and
-// the mode type stay private to `./mode`. Mirrored in desktop-index.ts, which
-// apps/desktop aliases the package root to.
 export { resolveClientChatExecutionMode } from './mode';
 
-// Capability-aware command dispatch
 export { command, commandWithWarning } from './command';
 export type { CommandResult } from './command';
 
-// Error types for capability gating
 export { DesktopRequiredError, createDesktopPreferredWarning } from './errors';
 export type { DesktopPreferredWarning } from './errors';
 
-// Command capability registry
 export { resolveCommandCapability } from './registry';
 
-// Event bus abstraction
 export { listen, once, emit } from './events';
 export type { EventCallback, UnlistenFn } from './events';
 
-// HTTP transport (typically not used directly — command() handles routing)
 export { routeToCloud } from './http';
 
-// Canonical Cloud agent-event projection. Portable across Web, Desktop, and
-// React Native; rendered by each surface using its native UI primitives.
 export {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
@@ -56,13 +44,6 @@ export type {
   FinishAgentActivityLocallyOptions,
 } from './agentActivity';
 
-// NOTE: agentContext / AsyncLocalStorage have moved to the subpath barrel
-// `@agiworkforce/client-runtime/node` (see ./node.ts). They depend on node:async_hooks
-// and were previously transitively pulled into mobile/web bundles, requiring a
-// polyfill at `apps/mobile/lib/polyfills/async_hooks.cjs`. With the split,
-// the universal entry no longer references node built-ins.
-
-// Central state architecture — createStore + onChangeAppState choke-point
 export {
   createStore,
   appStateStore,
@@ -99,7 +80,6 @@ export type {
   PlanTier,
 } from './state';
 
-// Per-surface priority send pipeline (messageQueueManager) — Task 1.4
 export {
   createMessageQueue,
   createWebStorageAdapter,
@@ -124,12 +104,6 @@ export type {
   SyncKvStore,
 } from './queue';
 
-// Shared offline queue + sync manager factories. Mirrored on the
-// universal entry (alongside the dedicated `./offline-queue` and
-// `./offline-sync` subpath exports in package.json) so TypeScript
-// resolution via the package `main`/`types` field — and the desktop
-// vite bundle that aliases the package root to `desktop-index.ts` —
-// can both see these symbols from `'@agiworkforce/client-runtime'`.
 export { createOfflineQueue } from './offline-queue';
 export type {
   MessageRetryStatus,
@@ -154,9 +128,6 @@ export type {
   SyncManagerState,
 } from './offline-sync';
 
-// Browser-approved, revocable device authorization shared by Desktop, CLI-like
-// developer surfaces, and editor extensions. Transport remains injected so the
-// universal package never assumes browser fetch or Node http.
 export { pollDeviceAuthorization, requestDeviceAuthorization } from './deviceAuthorization';
 export type {
   DeviceAuthorizationPollResult,

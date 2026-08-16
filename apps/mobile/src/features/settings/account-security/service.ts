@@ -1,11 +1,9 @@
 import { api } from '@/services/api';
 import { fetchAccountSettings, saveAccountSettings } from '@/services/preferences';
 
-/** Same option set the web security section offers. */
 export const SESSION_TIMEOUT_MINUTES = [15, 30, 60, 120, 480] as const;
 export type SessionTimeoutMinutes = (typeof SESSION_TIMEOUT_MINUTES)[number];
 
-/** Web's default when the account has never been told otherwise. */
 export const DEFAULT_SESSION_TIMEOUT: SessionTimeoutMinutes = 60;
 
 export interface AuditLogEntry {
@@ -22,15 +20,6 @@ export interface GroupedAuditEntry {
   repeats: number;
 }
 
-/**
- * Collapse consecutive repeats of the same action.
- *
- * A retry burst against one rate-limited endpoint can fill the entire page
- * with identical rows — the live account returned twenty "Rate limit exceeded"
- * entries, six inside the same second — burying the sign-ins and account
- * changes this section exists to show. Nothing is dropped: the count is
- * displayed, and a different action always starts a new row.
- */
 export function groupAuditEntries(entries: AuditLogEntry[]): GroupedAuditEntry[] {
   return entries.reduce<GroupedAuditEntry[]>((grouped, entry) => {
     const previous = grouped[grouped.length - 1];
@@ -102,10 +91,6 @@ function isSessionTimeout(value: unknown): value is SessionTimeoutMinutes {
   return SESSION_TIMEOUT_MINUTES.includes(value as SessionTimeoutMinutes);
 }
 
-/**
- * Session timeout lives in the account's un-namespaced settings document —
- * the same key and the same endpoint the web security section writes.
- */
 export async function fetchSessionTimeout(): Promise<SessionTimeoutMinutes> {
   const settings = await fetchAccountSettings();
   const stored = settings['session_timeout'];
@@ -116,24 +101,17 @@ export async function saveSessionTimeout(minutes: SessionTimeoutMinutes): Promis
   await saveAccountSettings({ session_timeout: minutes });
 }
 
-/** One active account session, mirroring `serializeSession` in the web route. */
 export interface AccountSessionRow {
   id: string;
   device: string;
   browser: string | null;
   location: string | null;
   lastActiveAt: string | null;
-  /** True only when the server matched this row to THIS app's Clerk session. */
   isCurrent: boolean;
 }
 
 export interface AccountSessions {
   sessions: AccountSessionRow[];
-  /**
-   * Whether the server could identify the caller's own row. Mobile sends a Clerk
-   * session JWT, so this is normally true; false means "no row is known to be
-   * this device", never "this device is missing from the list".
-   */
   currentSessionKnown: boolean;
 }
 
@@ -144,7 +122,6 @@ function optionalString(value: unknown): string | null {
 function parseAccountSessionRow(value: unknown): AccountSessionRow | null {
   if (!isRecord(value)) return null;
   const id = value['id'];
-  // A row with no id cannot be revoked, so it must not be offered as a device.
   if (typeof id !== 'string' || !id) return null;
   const device = value['device'];
   return {
@@ -166,21 +143,10 @@ export function parseAccountSessions(value: unknown): AccountSessions {
     sessions: rows
       .map(parseAccountSessionRow)
       .filter((row): row is AccountSessionRow => row !== null),
-    // Anything but an explicit true means "we could not tell", which the UI has
-    // to say out loud rather than marking an arbitrary row as this device.
     currentSessionKnown: isRecord(value) && value['currentSessionKnown'] === true,
   };
 }
 
-/**
- * The account's active sessions across every surface.
- *
- * This is a real server read, not a guess made from the local Clerk session:
- * `apps/web/app/api/settings/sessions/route.ts` resolves the caller through
- * `getClerkAuthUser`, which accepts the same Clerk session JWT bearer this app
- * already sends on `/api/settings/2fa`, and marks the caller's own row from that
- * token's `sid` claim.
- */
 export async function fetchAccountSessions(signal?: AbortSignal): Promise<AccountSessions> {
   const response = await api.get<unknown>(
     '/api/settings/sessions',
@@ -189,19 +155,10 @@ export async function fetchAccountSessions(signal?: AbortSignal): Promise<Accoun
   return parseAccountSessions(response);
 }
 
-/**
- * End one other device's session. The server re-checks that the session belongs
- * to this account and 404s otherwise, so a stale id fails closed.
- */
 export async function revokeAccountSession(sessionId: string): Promise<void> {
   await api.delete(`/api/settings/sessions/${encodeURIComponent(sessionId)}`);
 }
 
-/**
- * Recent security activity for this account. Web renders the same rows with
- * filtering and paging; mobile shows the most recent page, which is what the
- * "did anything happen to my account" question actually needs.
- */
 export async function fetchAuditLog(limit = 20, signal?: AbortSignal): Promise<AuditLogEntry[]> {
   const response = await api.get<unknown>(
     `/api/settings/audit-logs?limit=${limit}`,
@@ -214,8 +171,6 @@ export async function fetchAuditLog(limit = 20, signal?: AbortSignal): Promise<A
     const id = raw['id'];
     const action = raw['action'];
     const createdAt = raw['createdAt'];
-    // An entry with no id, action or timestamp cannot be rendered as activity;
-    // drop it rather than showing "undefined" in a security log.
     if (typeof id !== 'string' || typeof action !== 'string' || typeof createdAt !== 'string') {
       return [];
     }

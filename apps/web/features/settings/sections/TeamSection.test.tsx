@@ -238,8 +238,6 @@ describe('TeamSection', () => {
       'href',
       '/pricing#pricing-team-title',
     );
-    // Let the component's delegated React handler run, then suppress jsdom's
-    // unsupported document navigation after the behavior under test completes.
     document.addEventListener('click', (event) => event.preventDefault(), { once: true });
     fireEvent.click(screen.getByRole('link', { name: 'Choose Team seats' }));
     expect(onExit).toHaveBeenCalledOnce();

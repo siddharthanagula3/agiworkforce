@@ -1,15 +1,5 @@
 'use client';
 
-/**
- * SidebarWordmark · product brand lockup for the top of the app-shell sidebar.
- *
- * Renders the shared AgiMark alongside an "AGI Workforce" serif wordmark so the
- * chat + projects shell carries a brand identity (parity with the reference
- * sidebar wordmark). Uses `var(--font-newsreader)` directly — next/font sets
- * that variable on <body>, so it inherits reliably regardless of Tailwind
- * `@theme` token emission.
- */
-
 import Link from 'next/link';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 

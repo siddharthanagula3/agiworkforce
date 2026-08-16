@@ -31,13 +31,6 @@ import {
   workModeLabel,
 } from './task-display';
 
-/**
- * Split a goal's stored detail ("Constraints: …\nDeliverable: …") back into
- * structured fields for a faithful re-run. The server writes these labels in a
- * fixed English form (see `agiWorkGoalProgressEvent`), so matching them here is
- * exact, not a guess; anything unrecognised is simply dropped rather than
- * re-sent as noise.
- */
 function parseGoalDetail(detail: string | undefined): {
   constraints?: string;
   deliverable?: string;
@@ -60,14 +53,6 @@ export function projectTaskJournal(events: AgentEventEnvelope[]): AgentActivityS
   );
 }
 
-/**
- * Progress ids AGI Work reserves for the run's goal + plan (CAP-048). These are
- * ordinary `progress-update` events on the durable journal — no new event
- * variant, no migration — that `/tasks` lifts out of the progress list into
- * dedicated Goal and Plan sections. The literals mirror the server's wire
- * contract (`agiwork-plan.ts`); a guard test on each side keeps them in step,
- * the same way the `x_research_plan` snake_case contract is mirrored.
- */
 const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
 const AGIWORK_PLAN_PROGRESS_ID_PREFIX = 'agiwork:plan:';
 
@@ -152,16 +137,10 @@ export interface TaskDetailPanelProps {
   loading: boolean;
   error: string | null;
   truncated?: boolean;
-  /** The host is polling this run's journal because it is still live. */
   autoRefreshing?: boolean;
   onRefresh(): void;
   onClose(): void;
   onOpenConversation(conversationId: string): void;
-  /**
-   * Re-run this AGI Work task from its original goal. Provided only when the
-   * host can start a run AND the run is a terminal AGI Work task whose goal was
-   * recorded; the button is otherwise absent.
-   */
   onRerun?(goal: AgiWorkRerunGoal): void;
 }
 
@@ -203,9 +182,6 @@ export function TaskDetailPanel({
 
   const activity = projectTaskJournal(events);
   const entries = activity?.entries ?? [];
-  // CAP-048: the run's goal + plan ride the journal as progress events under
-  // reserved ids. Lift them out first so they render as their own sections and
-  // never double up inside the generic Progress list below.
   const goalEntry = entries.find(
     (entry): entry is AgentActivityProgressEntry =>
       entry.kind === 'progress' && entry.progressId === AGIWORK_GOAL_PROGRESS_ID,
@@ -227,11 +203,6 @@ export function TaskDetailPanel({
   const context = entries.filter(
     (entry): entry is AgentActivityContextEntry => entry.kind === 'context',
   );
-  // Why a task failed was recorded in the journal all along — `error` events are
-  // already reduced into AgentActivityErrorEntry — but this panel rendered only
-  // Progress/Outputs/Context, so a failed run showed a red "Failed" badge and no
-  // reason. A failed task with no stated cause is indistinguishable from a
-  // broken product, so the reason is now shown first.
   const failures = entries.filter(
     (entry): entry is AgentActivityErrorEntry => entry.kind === 'error',
   );

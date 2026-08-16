@@ -30,11 +30,8 @@ import { Checkbox } from '@/ui/Checkbox';
 import { ScrollArea } from '@/ui/ScrollArea';
 
 interface GitStatusPanelProps {
-  /** Repository path to display status for */
   repoPath: string;
-  /** Callback when a file is selected for diff viewing */
   onFileSelect?: (filePath: string, staged: boolean) => void;
-  /** Additional CSS classes */
   className?: string;
 }
 
@@ -78,19 +75,16 @@ export function GitStatusPanel({ repoPath, onFileSelect, className }: GitStatusP
     new Set(['staged', 'unstaged', 'untracked', 'conflicts']),
   );
 
-  // Update repo path when prop changes
   useEffect(() => {
     setRepoPath(repoPath);
   }, [repoPath, setRepoPath]);
 
-  // Fetch status on mount and when repo path changes
   useEffect(() => {
     if (repoPath) {
       refreshStatus();
     }
   }, [repoPath, refreshStatus]);
 
-  // Build file items from status
   const fileItems = useMemo((): FileItem[] => {
     if (!status) return [];
 

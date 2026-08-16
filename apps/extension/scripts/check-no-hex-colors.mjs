@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-/* global URL, console, process */
-/**
- * AP-02: Scan extension source for hardcoded color literals.
- * Recommends var(--agi-ext-*) token usage.
- * Exit 0 = clean, 1 = literals found.
- */
 
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
@@ -21,19 +15,12 @@ const EXCLUDE_DIRS = new Set([
   join(ROOT, 'node_modules'),
 ]);
 
-// Patterns that indicate a hardcoded color literal (not inside a comment)
 const COLOR_PATTERNS = [
-  // hex colors: #rgb #rrggbb #rgba #rrggbbaa
   { re: /#[0-9a-fA-F]{3,8}\b/g, label: 'hex color' },
-  // rgb() / rgba()
   { re: /rgba?\s*\(/g, label: 'rgb/rgba()' },
-  // hsl() / hsla()
   { re: /hsla?\s*\(/g, label: 'hsl/hsla()' },
 ];
 
-// Lines that should be exempt regardless of match:
-// - pure CSS/HTML comments
-// - <meta name="theme-color" ...> or similar meta color references
 const EXEMPT_LINE_RE = [
   /^\s*\/\//, // single-line TS/JS comment
   /^\s*\*/, // JSDoc / block comment continuation

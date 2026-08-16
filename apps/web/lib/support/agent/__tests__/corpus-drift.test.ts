@@ -1,12 +1,3 @@
-/**
- * The committed corpus artifact must match what the builder produces from the
- * content directory, byte for byte — and the builder's guards must actually
- * reject bad documents.
- *
- * Without the drift check, `corpus.generated.json` silently rots the moment
- * someone edits a markdown file and forgets to rebuild, and the agent starts
- * citing pages that no longer say what it claims.
- */
 
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,7 +15,6 @@ afterAll(() => {
   rmSync(workDir, { recursive: true, force: true });
 });
 
-/** Build from a throwaway content dir; returns stderr when the build fails. */
 function buildFromDocument(markdown: string): { ok: boolean; message: string } {
   const contentDir = mkdtempSync(join(workDir, 'content-'));
   writeFileSync(join(contentDir, 'probe.md'), markdown, 'utf8');

@@ -3,10 +3,6 @@ import { Briefcase, Smile, Cloud, Zap, BookOpen, Code, Play, Square } from 'luci
 import { cn } from '../../lib/utils';
 import { getVoicePersonaParams } from './voicePersonaParams';
 
-// ---------------------------------------------------------------------------
-// Persona definitions
-// ---------------------------------------------------------------------------
-
 interface VoicePersona {
   id: string;
   name: string;
@@ -64,18 +60,10 @@ const VOICE_PERSONAS: VoicePersona[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface VoicePersonaSelectorProps {
   selectedPersona: string;
   onSelect: (personaId: string) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function VoicePersonaSelector({ selectedPersona, onSelect }: VoicePersonaSelectorProps) {
   const [playingPersonaId, setPlayingPersonaId] = useState<string | null>(null);
@@ -89,9 +77,6 @@ export function VoicePersonaSelector({ selectedPersona, onSelect }: VoicePersona
     setPlayingPersonaId(null);
   }, []);
 
-  // Cancel any in-progress speech when the component unmounts so the
-  // speech does not continue in the background and the onend callback
-  // does not call setState on an unmounted component.
   useEffect(() => {
     return () => {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -106,18 +91,15 @@ export function VoicePersonaSelector({ selectedPersona, onSelect }: VoicePersona
 
       if (!window.speechSynthesis) return;
 
-      // If already playing this persona, stop it
       if (playingPersonaId === persona.id) {
         stopPreview();
         return;
       }
 
-      // Cancel any in-progress speech
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(persona.samplePhrase);
 
-      // Apply persona-specific speech parameters (shared with real TTS in useTTS).
       const params = getVoicePersonaParams(persona.id);
       utterance.rate = params.rate;
       utterance.pitch = params.pitch;

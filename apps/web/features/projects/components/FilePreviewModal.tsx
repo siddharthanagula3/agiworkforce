@@ -9,23 +9,6 @@ interface Props {
   onClose: () => void;
 }
 
-/**
- * FilePreviewModal -- renders a knowledge file inline.
- *
- * Images: rendered as an img with object-fit contain.
- * PDFs: embedded via iframe pointing at the storage URI.
- * Markdown (.md, .mdx): rendered via MarkdownContent (GFM + syntax highlighting).
- * Code files (.ts, .tsx, .js, .jsx, .py, .rs, .json, .css, .html, etc.):
- *   syntax-highlighted via MarkdownContent with a fenced code block.
- * Text/plain: raw pre in monospace.
- *
- * The modal is dismissible via backdrop click, the Close button, or Escape.
- */
-
-// ---------------------------------------------------------------------------
-// Extension -> language mapping for syntax highlighting
-// ---------------------------------------------------------------------------
-
 const EXT_LANG: Record<string, string> = {
   ts: 'typescript',
   tsx: 'tsx',
@@ -73,21 +56,15 @@ const EXT_LANG: Record<string, string> = {
   mdx: 'markdown',
 };
 
-/** Return the lowercase extension of a filename, without the leading dot. */
 function fileExt(fileName: string): string {
   const name = fileName.toLowerCase();
   const dot = name.lastIndexOf('.');
   return dot >= 0 ? name.slice(dot + 1) : '';
 }
 
-// ---------------------------------------------------------------------------
-// Text preview subcomponent
-// ---------------------------------------------------------------------------
-
 interface TextPreviewProps {
   storageUri: string;
   fileName: string;
-  /** MIME type of the file, used as fallback when extension is ambiguous */
   mimeType: string;
 }
 
@@ -97,7 +74,6 @@ function resolveRenderMode(fileName: string, mimeType: string): RenderMode {
   const ext = fileExt(fileName);
   if (ext === 'md' || ext === 'mdx' || ext === 'markdown') return 'markdown';
   if (ext in EXT_LANG && ext !== 'md' && ext !== 'mdx') return 'code';
-  // Fallback for files with missing/wrong extensions: JSON/XML MIME gets code view.
   if (mimeType === 'application/json' || mimeType === 'application/xml') return 'code';
   return 'plain';
 }
@@ -163,10 +139,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
 
   if (mode === 'code') {
     const ext = fileExt(fileName);
-    // Prefer extension lang; fall back to sensible MIME-based guess.
     const lang = EXT_LANG[ext] ?? (mimeType === 'application/json' ? 'json' : 'text');
-    // Escape backticks in content to prevent breaking out of the code fence.
-    // Replace ``` with an escaped variant that markdown renderers won't interpret as a fence.
     const escapedText = text.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
     const fenced = `\`\`\`${lang}\n${escapedText}\n\`\`\``;
     return (
@@ -182,7 +155,6 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
     );
   }
 
-  // Plain text
   return (
     <pre
       style={{
@@ -204,14 +176,9 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Modal shell
-// ---------------------------------------------------------------------------
-
 export function FilePreviewModal({ file, onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Escape key to close
   useEffect(() => {
     if (!file) return;
     function handleKey(e: KeyboardEvent) {
@@ -221,7 +188,6 @@ export function FilePreviewModal({ file, onClose }: Props) {
     return () => document.removeEventListener('keydown', handleKey);
   }, [file, onClose]);
 
-  // Lock body scroll while open
   useEffect(() => {
     if (!file) return;
     const prev = document.body.style.overflow;
@@ -235,9 +201,6 @@ export function FilePreviewModal({ file, onClose }: Props) {
 
   const isImage = file.mimeType.startsWith('image/');
   const isPdf = file.mimeType === 'application/pdf';
-  // A file is text-previewable if MIME is text-ish, or if its extension maps
-  // to a code language (covers .ts/.tsx/.py/.rs etc. served as
-  // application/octet-stream from some storage backends).
   const ext = fileExt(file.fileName);
   const isText = isTextAttachmentMeta(file.fileName, file.mimeType) || ext in EXT_LANG;
 
@@ -249,9 +212,6 @@ export function FilePreviewModal({ file, onClose }: Props) {
 
   async function handleDownload() {
     try {
-      // Fetch as blob so the download attribute works cross-origin.
-      // Public object storage may serve content-disposition: inline, so a bare
-      // anchor href could open the file in-tab instead of saving it.
       const r = await fetch(file!.storageUri);
       const blob = await r.blob();
       const objectUrl = URL.createObjectURL(blob);
@@ -263,7 +223,6 @@ export function FilePreviewModal({ file, onClose }: Props) {
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     } catch {
-      // Fallback: open in new tab if fetch fails (e.g. CORS on non-Blob hosts)
       window.open(file!.storageUri, '_blank', 'noopener,noreferrer');
     }
   }

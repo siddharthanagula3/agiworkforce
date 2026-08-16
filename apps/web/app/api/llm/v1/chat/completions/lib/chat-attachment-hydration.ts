@@ -39,11 +39,6 @@ export class ChatAttachmentHydrationError extends Error {
   }
 }
 
-/**
- * PER-27 — substituted for an owned attachment we can no longer serve, so one
- * deleted Library file degrades a single part of one turn instead of
- * permanently breaking the conversation that referenced it.
- */
 const ATTACHMENT_UNAVAILABLE_PLACEHOLDER =
   '[attachment unavailable \u2014 it was deleted from your Library]';
 
@@ -52,7 +47,6 @@ function filenameFromMetadata(metadata: Record<string, unknown>, fallback: strin
   return typeof filename === 'string' && filename.trim() ? filename.trim() : fallback;
 }
 
-/** Replace owner-scoped asset references with provider-wire multimodal content. */
 export async function hydrateChatAttachments(
   messages: HydratableMessage[],
   userId: string,
@@ -89,11 +83,6 @@ export async function hydrateChatAttachments(
 
       const asset = await getMediaAssetById(assetId);
 
-      // PER-27: an asset that exists but belongs to somebody else is an
-      // AUTHORIZATION failure, not a missing file. It must still fail closed,
-      // before any storage read, so a guessed/leaked asset id can never be
-      // laundered into a prompt. This branch is deliberately checked first and
-      // still throws.
       if (asset && asset.userId !== userId) {
         throw new ChatAttachmentHydrationError(
           404,
@@ -102,16 +91,6 @@ export async function hydrateChatAttachments(
         );
       }
 
-      // PER-27: a missing, soft-deleted, or storage-less asset the user DOES
-      // own degrades to a placeholder instead of failing the turn.
-      //
-      // Every turn re-sends the whole conversation history, including every
-      // historical attachment reference, so deleting one file from the Library
-      // used to make every subsequent message in that conversation fail
-      // forever with a 404 and no in-product way to recover — the user could
-      // not edit the invisible reference out of the history. Substituting text
-      // keeps the conversation usable and tells the model (and, through it,
-      // the user) exactly why the file is not there.
       if (!asset || asset.deletedAt || !asset.storagePathname) {
         hydrated.push({
           type: 'text',

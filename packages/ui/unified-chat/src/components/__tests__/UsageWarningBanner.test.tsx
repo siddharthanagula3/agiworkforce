@@ -5,10 +5,6 @@ import { UsageWarningBanner } from '../UsageWarningBanner';
 
 afterEach(cleanup);
 
-/**
- * The warnings are built through the real selector rather than hand-authored,
- * so a change that stops the selector producing a warning fails here too.
- */
 const warning = selectUsageWarning([{ bucket: 'weekly', percentRemaining: 25 }]);
 const critical = selectUsageWarning([{ bucket: 'session', percentRemaining: 5 }]);
 
@@ -31,16 +27,12 @@ describe('UsageWarningBanner', () => {
   });
 
   it('announces as status, not alert', () => {
-    // This has been true for the last hour; interrupting a screen reader
-    // mid-word for it is wrong.
     render(<UsageWarningBanner warning={warning} />);
     expect(screen.getByRole('status')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('renders no upgrade affordance when the host passed no handler', () => {
-    // A user already on the top tier has nothing to upgrade to, and a dead
-    // control is worse than an absent one.
     render(<UsageWarningBanner warning={warning} />);
     expect(screen.queryByText('Get more usage')).toBeNull();
   });
@@ -79,9 +71,6 @@ describe('UsageWarningBanner', () => {
   });
 
   it('truncates a long headline instead of pushing the actions out', () => {
-    // min-w-0 on the text column is what makes the truncate actually engage in
-    // a flex row; without it the headline holds its intrinsic width and the
-    // dismiss button leaves the container.
     render(<UsageWarningBanner warning={warning} onUpgrade={() => {}} onDismiss={() => {}} />);
     const headline = screen.getByText("You've used 75% of your weekly limit");
     expect(headline.className).toContain('truncate');

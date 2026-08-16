@@ -1,22 +1,3 @@
-/**
- * Coverage contract between `background.ts handleMessageAsync` and the
- * `MESSAGE_POLICY` matrix in `src/background/policy.ts`.
- *
- * The matrix has a permissive fallback (`allowlisted-tab`, cross-tab allowed).
- * Three feature drops — memories, quick mode, tab groups — added handlers and
- * never added the matching policy entry, so every one of them was reachable
- * from any content script on an allowlisted origin. Nothing failed, because
- * inheriting the default is indistinguishable from choosing it.
- *
- * This suite removes that silence: a `case` in the dispatcher with no explicit
- * entry is a test failure. Types reached only through the dispatcher's
- * `default:` forward-to-content-script arm (TYPE, CLICK, …) are exempt — they
- * are not `case`s — but they already carry DOM-mutation entries.
- *
- * The dispatcher is parsed from source rather than imported: `background.ts` is
- * a service-worker entrypoint with module-load side effects. Source scanning is
- * the established pattern here (see `context-handoff-boundary.test.ts`).
- */
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -25,11 +6,6 @@ import { EXTENSION_PAGE_ONLY_MESSAGE_TYPES, MESSAGE_POLICY } from '../src/backgr
 
 const backgroundSource = readFileSync(resolve(process.cwd(), 'src/background.ts'), 'utf8');
 
-/**
- * Body of `handleMessageAsync`, from its declaration to the first
- * column-0 closing brace. Bounding the slice keeps unrelated switches
- * (the cookie-domain matcher, the computer-use action loop) out of the scan.
- */
 function readDispatcherBody(): string {
   const start = backgroundSource.indexOf('async function handleMessageAsync(');
   expect(start).toBeGreaterThan(-1);
@@ -38,7 +14,6 @@ function readDispatcherBody(): string {
   return backgroundSource.slice(start, end);
 }
 
-/** Message types the dispatcher handles with a dedicated `case`. */
 function handledMessageTypes(): string[] {
   const body = readDispatcherBody();
   const types = [...body.matchAll(/^ {4}case '([A-Z_]+)'/gm)].map((match) => match[1] as string);
@@ -78,9 +53,6 @@ describe('handlers with no content-script sender are extension-page-only', () =>
   });
 
   it('gates account-backed conversation mirroring (enqueue and delete)', () => {
-    // These enqueue an authenticated write or delete of the user's transcript
-    // to their account. An allowlisted page reaching either is a privacy
-    // failure, not a bug.
     for (const type of ['SYNC_CONVERSATION', 'DELETE_CLOUD_CONVERSATION']) {
       expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(type)).toBe(true);
     }
@@ -93,9 +65,6 @@ describe('handlers with no content-script sender are extension-page-only', () =>
   });
 
   it('leaves the content-script senders reachable from an allowlisted tab', () => {
-    // Regression guard on over-gating: these are sent by `content.ts` or the
-    // in-page panel, so moving them to extension-page-only would break the
-    // page surfaces outright.
     for (const type of [
       'TAB_READY',
       'SYNC_PAGE_CONTEXT',

@@ -108,11 +108,6 @@ describe('signup terms recorder', () => {
   });
 });
 
-// Arriving at /signup/complete is not proof the terms were on screen: Clerk
-// transfers an unknown OAuth identity from the /login SignIn card straight into
-// a sign-up, and the URL can simply be typed by an account that already exists.
-// The page therefore gates the recorder on the assent marker, not on how it was
-// reached.
 describe('/signup/complete terms gate', () => {
   beforeEach(() => {
     window.sessionStorage.clear();

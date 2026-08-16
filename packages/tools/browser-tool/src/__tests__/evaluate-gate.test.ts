@@ -1,18 +1,3 @@
-/**
- * Regression tests for the `allowEvaluate` gate on `runBrowserAction`.
- *
- * Background: prior versions of this package ran arbitrary LLM-supplied
- * JavaScript inside the persistent browser context with no gate. The
- * persistent context retains cookies / localStorage for every site the
- * agent has logged in to, so an evaluate could exfiltrate credentials with
- * a single fetch(). The gate refuses `evaluate` by default and never
- * launches the browser — these tests pin both behaviors.
- *
- * The "unset flag" path must NOT reach playwright; if it does the test
- * fails with a launch error. The "set flag" path is verified by injecting
- * a fake profile / page via module mocking — we don't actually launch
- * Chromium in unit tests.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,8 +13,6 @@ afterEach(() => {
 
 describe('runBrowserAction evaluate gate', () => {
   it('refuses evaluate when allowEvaluate is unset (no profile launched)', async () => {
-    // Mock profile.openProfile so a failure to call it = pass; if the
-    // gate ever regresses and the code reaches openProfile, this throws.
     let openCalled = false;
     vi.doMock('../profile', async () => {
       const actual = await vi.importActual<typeof import('../profile')>('../profile');
@@ -82,7 +65,6 @@ describe('runBrowserAction evaluate gate', () => {
   });
 
   it('runs evaluate when allowEvaluate is true', async () => {
-    // Stub openProfile to return a fake Page that records the script.
     let executedScript: string | null = null;
     const fakePage = {
       url: () => 'https://example.test/',

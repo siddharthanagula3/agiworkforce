@@ -65,19 +65,15 @@ describe('AgentActivityTimeline', () => {
   });
 
   it('auto-expands a running run live and collapses on a manual toggle', () => {
-    // Claude/ChatGPT behaviour: while the run is active the timeline streams its
-    // steps live (expanded), not a single collapsed summary line.
     render(<AgentActivityTimeline activity={activity()} />);
 
     const trigger = screen.getByRole('button', { name: /hide agent activity/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    // Claude-style header: the semantic phrase of the work, never a "Working for Xs" pill.
     expect(trigger.textContent).toContain('Searching official sources');
     expect(trigger.textContent).not.toMatch(/Working for|\bs\b · |Done in/i);
     expect(screen.getByText('Official agent documentation')).toBeTruthy();
     expect(screen.getByText('example.com')).toBeTruthy();
 
-    // The user can still collapse it mid-run.
     fireEvent.click(trigger);
     const collapsed = screen.getByRole('button', { name: /show agent activity/i });
     expect(collapsed.getAttribute('aria-expanded')).toBe('false');
@@ -91,7 +87,6 @@ describe('AgentActivityTimeline', () => {
     const trigger = screen.getByRole('button', { name: /show agent activity/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('Official agent documentation')).toBeNull();
-    // Collapsed header is the Claude-style semantic phrase, not a "Done in Xs" pill.
     expect(trigger.textContent).toContain('Searching official sources');
     expect(trigger.textContent).not.toMatch(/Done in/i);
   });
@@ -162,13 +157,10 @@ describe('AgentActivityTimeline', () => {
 
     render(<AgentActivityTimeline activity={completed} defaultExpanded />);
 
-    // Appears both as the collapsed-header summary (finalSummary) and as the expanded
-    // step — Claude shows the phrase in the header and the detail below.
     expect(screen.getAllByText('Context automatically compacted').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /research-report\.html/i }).getAttribute('href')).toBe(
       '/api/files/report-1',
     );
-    // No ChatGPT-style elapsed pill anywhere — the summary is a semantic phrase.
     expect(screen.queryByText(/Done in/i)).toBeNull();
   });
 
@@ -191,7 +183,6 @@ describe('AgentActivityTimeline', () => {
     );
 
     expect(screen.queryByText('Progress step 1')).toBeNull();
-    // 'Progress step 55' is both the header summary (last step) and the visible step row.
     expect(screen.getAllByText('Progress step 55').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: /show 15 earlier steps/i }));
@@ -203,8 +194,6 @@ describe('AgentActivityTimeline', () => {
 
 describe('AgentActivityTimeline connector badges', () => {
   function connectorActivity(name: string): AgentActivityState {
-    // A single running connector tool so the live timeline auto-expands and
-    // renders the tool card (and therefore its badge).
     return activity({
       status: 'running',
       entries: [
@@ -232,10 +221,6 @@ describe('AgentActivityTimeline connector badges', () => {
   });
 
   it('does not mislabel an opaque custom-<id> connector as "C"', () => {
-    // The serverId of a user's custom remote connector is an opaque `custom-<hex>`
-    // that carries no human name; its leading "c" must not become the badge letter
-    // (every custom connector would otherwise read "C"). It falls back to the
-    // generic connector badge instead.
     const { container } = render(
       <AgentActivityTimeline activity={connectorActivity('mcp__custom-a1b2c3d4e5__do_thing')} />,
     );
@@ -272,10 +257,7 @@ describe('AgentActivityTimeline connector badges', () => {
   });
 });
 
-// ─── Lazy authentication (inline Connect card) ────────────────────────────────
-
 describe('AgentActivityTimeline · connector authorization required', () => {
-  /** Exactly what the server emits — see apps/web/lib/connectors/connect-required.ts. */
   const connectEnvelope = JSON.stringify({
     agi_connector_authorization_required: true,
     connectorId: 'linear',
@@ -287,11 +269,6 @@ describe('AgentActivityTimeline · connector authorization required', () => {
     message: 'Linear is not connected for this account.',
   });
 
-  /**
-   * `tool-execution-end` carries `name: tc.qualifiedName` and
-   * `output: toAgentEventJson(content)`, and `content` is a string, so a
-   * finished connector tool call reaches this component exactly like this.
-   */
   function finishedConnectorRun(output: string): AgentActivityState {
     return activity({
       status: 'completed',
@@ -330,7 +307,6 @@ describe('AgentActivityTimeline · connector authorization required', () => {
 
   it('stays expanded after the run finishes so the card is not hidden behind the summary pill', () => {
     render(<AgentActivityTimeline activity={finishedConnectorRun(connectEnvelope)} />);
-    // A completed run normally collapses to a single pill.
     expect(screen.getByTestId('connector-connect-card')).toBeTruthy();
   });
 

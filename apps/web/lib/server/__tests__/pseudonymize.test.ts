@@ -50,11 +50,6 @@ describe('pseudonymizeIdentifier', () => {
   });
 
   it('does not produce a reversible digest when LOG_SALT is unset', () => {
-    // THE REGRESSION. The four call sites this replaced used
-    // `sha256(id + (LOG_SALT ?? ''))`, so an unset LOG_SALT — only a WARNING
-    // in validate-env, not a critical variable — silently emitted an unsalted
-    // hash of an enumerable identifier. Anyone holding the user list could
-    // reverse it. The fallback key must be unpredictable, not empty.
     delete process.env['LOG_SALT'];
     __resetPseudonymizationKeyForTests();
 
@@ -77,7 +72,6 @@ describe('pseudonymizeIdentifier', () => {
   });
 });
 
-/** The exact construction this module replaced, for the regression above. */
 function createUnsaltedLegacyDigest(value: string, lengthHex: number): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { createHash } = require('node:crypto') as typeof import('node:crypto');

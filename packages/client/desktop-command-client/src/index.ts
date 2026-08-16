@@ -7,11 +7,7 @@
  * @packageDocumentation
  */
 
-// ---- Cross-cutting shared types ----
-// These types are also reachable via the namespace exports below, but are
 // re-exported directly for ergonomic consumption (e.g. BridgeStatusCard
-// imports the diagnostics shape without round-tripping through the
-// `browserExtension` namespace).
 export type { ExtensionStatusDiagnostics } from './browserExtension';
 export type {
   AutomationPermissions,
@@ -23,7 +19,6 @@ export type {
   RecordingStatus,
 } from './automation';
 
-// ---- Wave 1: Settings, Auth, LLM, Window ----
 export * as settings from './settings';
 export * as auth from './auth';
 export * as security from './security';
@@ -36,7 +31,6 @@ export * as capabilities from './capabilities';
 export * as customAgents from './customAgents';
 export * as customInstructions from './customInstructions';
 
-// ---- Wave 2: Chat, Database, MCP, Cache, File Ops ----
 export * as chat from './chat';
 export * as mcp from './mcp';
 export * as knowledge from './knowledge';
@@ -46,7 +40,6 @@ export * as database from './database';
 export * as cache from './cache';
 export * as errorReporting from './errorReporting';
 
-// ---- Wave 3: Agents, Automation, Voice, Computer Use ----
 export * as agent from './agent';
 export * as automation from './automation';
 export * as voice from './voice';
@@ -55,7 +48,6 @@ export * as toolConfirmation from './toolConfirmation';
 export * as thinking from './thinking';
 export * as browserExtension from './browserExtension';
 
-// ---- Wave 4: Content, Research, Projects ----
 export * as research from './research';
 export * as document from './document';
 export * as projects from './projects';
@@ -66,7 +58,6 @@ export * as lsp from './lsp';
 export * as codeEditing from './codeEditing';
 export * as media from './media';
 
-// ---- Wave 5: Productivity, Email, Teams, Billing ----
 export * as email from './email';
 export * as calendar from './calendar';
 export * as messaging from './messaging';
@@ -76,7 +67,6 @@ export * as cloudStorage from './cloudStorage';
 export * as teams from './teams';
 export * as governance from './governance';
 
-// ---- Wave 6: Analytics, Marketplace, Skills, Notifications, Polish ----
 export * as analytics from './analytics';
 export * as notifications from './notifications';
 export * as canvas from './canvas';

@@ -1,14 +1,3 @@
-/**
- * ToolExecutionProgress Component
- *
- * Displays real-time progress for streaming tool executions.
- * Features:
- * - Progress bar for percentage-based progress
- * - Streaming text output display
- * - Expandable/collapsible output
- * - Cancel button for long-running tools
- * - Error and retry handling
- */
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Loader2,
@@ -29,25 +18,15 @@ import {
 import type { ToolStreamStateEntry } from '../../../stores/unifiedChatStore';
 
 export interface ToolExecutionProgressProps {
-  /** The tool stream state to display */
   stream: ToolStreamStateEntry;
-  /** Optional callback to cancel the tool execution */
   onCancel?: () => void;
-  /** Optional callback to retry a failed tool execution */
   onRetry?: () => void;
-  /** Whether to auto-scroll the output */
   autoScroll?: boolean;
-  /** Initial expanded state */
   defaultExpanded?: boolean;
-  /** Maximum height for the output area */
   maxOutputHeight?: number;
-  /** Custom class name */
   className?: string;
 }
 
-/**
- * Get icon for tool based on name
- */
 function getToolIcon(toolName: string): React.ReactNode {
   const name = toolName.toLowerCase();
 
@@ -70,9 +49,6 @@ function getToolIcon(toolName: string): React.ReactNode {
   return <Wrench size={16} />;
 }
 
-/**
- * Format bytes to human readable string
- */
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -81,9 +57,6 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-/**
- * Format duration in milliseconds to human readable string
- */
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
@@ -112,14 +85,12 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
     };
   }, []);
 
-  // Auto-scroll output when new content arrives
   useEffect(() => {
     if (autoScroll && expanded && outputRef.current && stream.status === 'running') {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
   }, [stream.outputBuffer, autoScroll, expanded, stream.status]);
 
-  // Copy output to clipboard
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(stream.outputBuffer);
@@ -131,7 +102,6 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
     }
   };
 
-  // Get status color
   const getStatusColor = () => {
     switch (stream.status) {
       case 'running':
@@ -147,7 +117,6 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
     }
   };
 
-  // Get status icon
   const getStatusIcon = () => {
     switch (stream.status) {
       case 'running':
@@ -162,10 +131,8 @@ export const ToolExecutionProgress: React.FC<ToolExecutionProgressProps> = ({
     }
   };
 
-  // Calculate progress percentage
   const progressPercent = Math.round(stream.progress * 100);
 
-  // Check if we have byte progress info
   const hasByteProgress = stream.bytesTotal !== undefined && stream.bytesTotal > 0;
 
   return (

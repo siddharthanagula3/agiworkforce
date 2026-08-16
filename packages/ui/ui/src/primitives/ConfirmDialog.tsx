@@ -12,8 +12,6 @@ import {
   AlertDialogTitle,
 } from './AlertDialog';
 
-// Identical across web/desktop (only mechanical 'use client' diff — this file is a
-// thin wrapper around AlertDialog, whose own drift is resolved in AlertDialog.tsx).
 export interface ConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;

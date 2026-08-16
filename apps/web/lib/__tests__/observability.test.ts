@@ -1,12 +1,3 @@
-/**
- * SCALE-VER-006 — span emission, trace correlation, and attribute redaction.
- *
- * These assert the three properties the ledger item is about:
- *   1. a span record exists at all, with the OTel-shaped fields;
- *   2. everything inside one request shares a `trace_id`, including plain
- *      `logger.*` lines that were never edited to know about tracing;
- *   3. nothing sensitive rides along in a span attribute.
- */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
@@ -156,8 +147,6 @@ describe('redactAttributes', () => {
     expect(redactValue('xoxb-1234567890-abcdefghij')).toBe(REDACTED);
   });
 });
-
-// --- span emission -----------------------------------------------------------
 
 const emitted: Array<Record<string, unknown>> = [];
 

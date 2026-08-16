@@ -1,18 +1,3 @@
-/**
- * Repository guard for audit CRIT-001.
- *
- * The connector directory advertised 89 branded connectors in present tense
- * ("Search, read, send, and draft email across your Gmail inbox") while exactly
- * one of them — github — has an adapter in this repository. Every other id
- * produced a `501` from `POST /api/connectors` unless a deployment operator had
- * separately registered an OAuth app or mapped a remote MCP endpoint for it.
- *
- * These tests are the guard that keeps that from coming back. They assert that
- * every connector has ONE recorded resolution in the canonical registry, that
- * present-tense capability copy is only reachable for an entry the registry
- * says has a shipped adapter, and that every unknown/unregistered state fails
- * closed rather than toward "connectable".
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -32,19 +17,6 @@ import {
   type Connector,
 } from '../connectors';
 
-/**
- * Verbs that open a present-tense capability claim. Matching the FIRST word of
- * a description is what distinguishes "Search, read, send…" (a claim the
- * product must be able to honour) from "Not available by default. An operator
- * can connect Gmail for email search, reading, sending, and drafts." (a
- * statement about configuration).
- *
- * This list is a heuristic and is deliberately not the only check — the
- * structural assertion that every description equals what
- * `buildConnectorDescription()` generates is what makes the guard airtight.
- * The verb list catches a hand-written string that happens to be generated in
- * the same shape, and is cheap to extend.
- */
 const PRESENT_TENSE_OPENERS = new Set([
   'access',
   'acknowledge',
@@ -82,7 +54,6 @@ function firstWord(sentence: string): string {
   return (sentence.split(/[\s,.]+/)[0] ?? '').toLowerCase();
 }
 
-/** Rebuild the hand-declared half of a catalog entry (what a seed contains). */
 function toSeed(connector: Connector) {
   const { description: _description, riskClass: _riskClass, ...seed } = connector;
   return seed;
@@ -104,8 +75,6 @@ describe('CRIT-001 guard — one recorded resolution per connector', () => {
     const firstParty = Object.values(CONNECTOR_CAPABILITIES)
       .filter((r) => r.implementation === 'first-party')
       .map((r) => r.id);
-    // github's three tools are GITHUB_TOOL_DEFS in lib/user-connector-tools.ts.
-    // Adding an id here is a claim that invoking its actions works today.
     expect(firstParty).toEqual(['github']);
   });
 
@@ -138,9 +107,6 @@ describe('CRIT-001 guard — one recorded resolution per connector', () => {
   });
 
   it('never reports a connector as generally available while none is', () => {
-    // Every connector in this repository needs deployment configuration or a
-    // Desktop install. If that stops being true, the release state — and the
-    // copy generated from it — has to change with it.
     const generallyAvailable = Object.values(CONNECTOR_CAPABILITIES)
       .filter((r) => r.releaseState === 'generally-available')
       .map((r) => r.id);
@@ -185,8 +151,6 @@ describe('CRIT-001 guard — present-tense copy requires a shipped adapter', () 
   });
 
   it('falls to the most restrictive copy for a connector nobody registered', () => {
-    // A new catalog entry whose registry record was forgotten must not inherit
-    // the friendliest wording.
     expect(
       buildConnectorDescription({
         id: 'not-registered-anywhere',
@@ -209,10 +173,6 @@ describe('CRIT-001 guard — availability and health fail closed', () => {
   const gmail = CONNECTORS.find((c) => c.id === 'gmail')!;
 
   it('does not call a connector ready without a server answer', () => {
-    // Before the fix, no server answer meant a static guess from `phase` and
-    // `authType`: 'request_access' ("Coming soon") for a phase-1 OAuth entry and
-    // 'ready' — the state that renders a live Connect button — for any phase-1
-    // entry that was not OAuth. Neither is knowable without the server.
     expect(getConnectorAvailability(gmail, undefined)).toBe('unavailable');
     for (const connector of CONNECTORS) {
       expect(getConnectorAvailability(connector, undefined)).not.toBe('ready');
@@ -226,9 +186,6 @@ describe('CRIT-001 guard — availability and health fail closed', () => {
 
   it('treats an unknown connector id with no runtime evidence as not configured', () => {
     expect(resolveConnectorHealth({ connectorId: 'never-heard-of-it' })).toBe('not-configured');
-    // Absence of evidence is what fails closed — not absence of a catalog entry.
-    // An operator-registered OAuth provider outside the directory is a real
-    // connector, and the server's own `available`/`connected` answer stands.
     expect(resolveConnectorHealth({ connectorId: 'never-heard-of-it', available: true })).toBe(
       'connectable',
     );

@@ -1,14 +1,3 @@
-/**
- * Keeps mobile quiet hours and break reminders in step with the account.
- *
- * Web stores both under the shared `time-focus` preference namespace, and the
- * contract in @agiworkforce/types documents itself as the evaluator for
- * "browser and native notification consumers" — but mobile never read or wrote
- * the namespace. A schedule set on web did nothing here, and vice versa.
- *
- * TRUST BOUNDARY: this is an ACCOUNT setting, so it only syncs in Cloud Mode.
- * In Local Mode the device-local store stays authoritative and nothing is sent.
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   TIME_FOCUS_PREFERENCES_NAMESPACE,
@@ -26,12 +15,7 @@ export type TimeFocusSyncStatus = 'local' | 'loading' | 'synced' | 'saving' | 'e
 
 interface TimeFocusSync {
   status: TimeFocusSyncStatus;
-  /** Present only when a load or save failed. */
   error: string | null;
-  /**
-   * Push the current local slice to the account. A no-op outside Cloud Mode, so
-   * callers can invoke it unconditionally after any edit.
-   */
   push: () => void;
 }
 
@@ -45,8 +29,6 @@ export function useTimeFocusSync(): TimeFocusSync {
   const isCloud = appMode === 'cloud' && isClerkSignedIn;
   const [status, setStatus] = useState<TimeFocusSyncStatus>(isCloud ? 'loading' : 'local');
   const [error, setError] = useState<string | null>(null);
-  // A save scheduled while an earlier one is still in flight replaces it rather
-  // than queueing, so rapid toggling sends one final state instead of a burst.
   const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -65,9 +47,6 @@ export function useTimeFocusSync(): TimeFocusSync {
         const stored = await fetchPreferenceNamespace(TIME_FOCUS_PREFERENCES_NAMESPACE);
         if (cancelled) return;
         const { quietHours } = useNotificationPrefsStore.getState();
-        // The account is authoritative in Cloud Mode, but a never-configured
-        // namespace must not wipe a schedule the user set on this device — so
-        // the device timezone is the fallback and normalize decides the rest.
         applyTimeFocusPreferences(normalizeTimeFocusPreferences(stored, quietHours.timezone));
         setStatus('synced');
       } catch (caught) {
@@ -114,7 +93,6 @@ export function useTimeFocusSync(): TimeFocusSync {
   return { status, error, push };
 }
 
-/** Exposed for callers that need the account default without importing the contract. */
 export function defaultsForTimezone(timezone: string): TimeFocusPreferences {
   return defaultTimeFocusPreferences(timezone);
 }

@@ -1,24 +1,3 @@
-/**
- * Managed Cloud chat client for the paid Chrome surface.
- *
- * Chrome is not part of the free chat plan. Server-verified model admission and
- * managedChatHandler's paid-plan gate run before this transport is called.
- * This module:
- *   - Routes to POST https://agiworkforce.com/api/llm/v1/chat/completions
- *   - Economy model: resolved from the canonical routing slot in models.json
- *   - Streams SSE response back via an async generator
- *   - Auth: fresh Clerk Native API token; a local-storage override exists only
- *     in development builds
- *
- * MODEL:
- *   Read from the canonical model catalog via getRoutingSlotModel('general_fast')
- *   (the lowest-cost managed-cloud chat lane). Never hardcoded.
- *
- * SECURITY:
- *   - Only posts to FREE_TRIAL_GATEWAY — validated before every fetch
- *   - Bearer token never logged
- *   - Request envelopes are bounded before crossing the privileged gateway
- */
 
 import {
   createManagedCloudAgentRunClient,
@@ -50,14 +29,6 @@ import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
 import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './clerkAuth';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-/**
- * The economy model used for free-trial prompts.
- * Read from the canonical SLOT_REGISTRY 'general_fast' slot (lowest-cost lane;
- * managed_cloud.taskRouting in models.json was cleared in favour of the slot
- * registry). Never hardcoded — this constant is the single indirection point.
- */
 export const FREE_TRIAL_MODEL: string = getRoutingSlotModel('general_fast');
 
 /**
@@ -66,51 +37,26 @@ export const FREE_TRIAL_MODEL: string = getRoutingSlotModel('general_fast');
  */
 export const MANAGED_CHAT_MAX_INPUT_CHARS = 32_000;
 
-/** Bound the request envelope before it reaches the privileged web route. */
 export const MANAGED_CHAT_MAX_MESSAGES = 100;
 export const MANAGED_CHAT_MAX_ATTACHMENTS = 5;
-/** Total decoded attachment bytes allowed in one managed-chat request envelope. */
 export const MANAGED_CHAT_MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_BYTES;
-/**
- * Per-file ceiling for a single composer attachment, read from the canonical
- * chat-attachment contract rather than restated here. The request envelope cap
- * above is a *total* across up to `MANAGED_CHAT_MAX_ATTACHMENTS` files, so a
- * surface that pre-filters individual files needs this narrower number; before
- * this constant existed the side panel carried its own 10 MB literal and turned
- * away files every other client accepts.
- */
 export const MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
 export const MANAGED_CHAT_DEFAULT_TIMEOUT_MS = 90_000;
-/** Maximum size of one not-yet-dispatched SSE event. */
 export const MANAGED_CHAT_MAX_SSE_FRAME_CHARS = 1_048_576;
-/** Maximum visible text accepted for one managed-chat turn. */
 export const MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS = 4_194_304;
 const MANAGED_CHAT_MAX_ERROR_BODY_CHARS = 65_536;
 
-/**
- * The web app's Next.js API route that handles free-tier users.
- * This is distinct from https://api.agiworkforce.com/v1/chat/completions
- * (the Express gateway) which blocks free-tier users with 403.
- */
 export const FREE_TRIAL_GATEWAY = 'https://agiworkforce.com';
 export const FREE_TRIAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/chat/completions`;
-/**
- * Composed from the canonical contract path, not from `FREE_TRIAL_ENDPOINT`,
- * so a server-side move of the resume route cannot leave Chrome posting
- * approvals at a dead URL while the initial-turn endpoint still works.
- */
 export const MANAGED_APPROVAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}${TOOL_APPROVAL_RESUME_PATH}`;
 export const MANAGED_MODELS_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/models`;
 export const MANAGED_USAGE_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage`;
 
-/** Retired hand-pasted token keys retained only for cleanup during sign-out. */
 const SESSION_TOKEN_KEY = 'agi_clerk_session_token';
 const DEV_TOKEN_KEY = 'agi_dev_bearer_token';
 
 export interface ManagedModelAccess {
-  /** Effective tier after subscription-status enforcement. */
   subscriptionTier: string;
-  /** Recorded plan, retained for canceled/past-due recovery UI. */
   accountPlanTier?: string;
   subscriptionStatus?: string;
   usagePercentage?: number;
@@ -120,7 +66,6 @@ export interface ManagedModelAccess {
   allowedAutoModes: string[];
 }
 
-/** Token and non-secret owner are captured atomically and never separated. */
 export interface ManagedCloudAuthContext {
   token: string;
   owner: ManagedCloudOwner;
@@ -145,10 +90,6 @@ function normalizeAccessString(value: unknown, maxLength: number): string | unde
     : undefined;
 }
 
-/**
- * Load model admission from the authenticated server owner. Chrome never
- * trusts a side-panel supplied tier or a stale `agi_user_tier` storage value.
- */
 export async function getManagedModelAccess(
   token: string,
   signal?: AbortSignal,
@@ -240,20 +181,6 @@ export async function getManagedModelAccess(
   };
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-
-/**
- * Retrieve the Clerk Bearer token.
- *
- * Priority:
- *   1. Clerk Chrome Extension SDK Native API session
- *   2. chrome.storage.local["agi_dev_bearer_token"] — static dev token,
- *      DEV BUILDS ONLY (gated by import.meta.env.DEV; absent in production)
- *   3. null — user must sign in
- *
- * This is the single credential contract for Managed Cloud chat and computer
- * use. Production always uses Clerk; the manual fallback is development-only.
- */
 export async function getAuthToken(forceRefresh = false): Promise<string | null> {
   try {
     const token = await getFreshClerkToken(forceRefresh);
@@ -264,12 +191,6 @@ export async function getAuthToken(forceRefresh = false): Promise<string | null>
     // dev-only token below remains an explicit local escape hatch for tests.
   }
 
-  // DEV-ONLY: a manually pasted bearer token in chrome.storage.local. This path
-  // is gated to dev builds — `import.meta.env.DEV` is false in production Vite
-  // builds, so this branch is tree-shaken out and production never reads a
-  // persisted bearer from disk. Production tokens come only from the in-memory
-  // session store (set by the sign-in flow). (Vitest sets DEV=true, so tests
-  // exercising the dev-token path still pass.)
   if (isDevBuild()) {
     try {
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -297,13 +218,6 @@ async function developmentTokenOwner(token: string): Promise<ManagedCloudOwner> 
   };
 }
 
-/**
- * Capture Managed Cloud authority once at operation admission.
- *
- * Production uses Clerk's user id + session id. The development-only manual
- * token path derives a non-reversible local fingerprint so the raw credential
- * is never persisted or placed on extension messages.
- */
 export async function getManagedCloudAuthContext(
   forceRefresh = false,
 ): Promise<ManagedCloudAuthContext | null> {
@@ -326,18 +240,11 @@ export async function getManagedCloudAuthContext(
   }
 }
 
-/** True only in dev/test Vite builds; false in production builds (tree-shaken). */
 function isDevBuild(): boolean {
   return Boolean((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV);
 }
 
-/**
- * Sign out of Clerk and remove retired development/manual token remnants.
- */
 export async function clearAuthToken(): Promise<void> {
-  // Capture the exact owner before Clerk is cleared. Options-page sign-out has
-  // no side-panel transition hook, so the worker must tear down every stream,
-  // scheduled recovery, and browser-automation run for this incarnation first.
   let previousOwner: ManagedCloudOwner | undefined;
   try {
     previousOwner = (await getManagedCloudAuthContext())?.owner;
@@ -384,8 +291,6 @@ export async function clearAuthToken(): Promise<void> {
     // ignore
   }
 }
-
-// ─── Message shape ────────────────────────────────────────────────────────────
 
 export type FreeTrialContentPart =
   | { type: 'text'; text: string }
@@ -469,10 +374,6 @@ function assertMessageShape(message: FreeTrialMessage): void {
   }
 }
 
-/**
- * Apply one request-wide text budget, prioritizing the current turn and recent
- * history. The old per-message slice allowed N × 32k input through.
- */
 function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMessage[] {
   const window = selectBoundedMessageWindow(messages);
   let remaining = MANAGED_CHAT_MAX_INPUT_CHARS;
@@ -519,8 +420,6 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
   return reversed.reverse();
 }
 
-// ─── Stream result ────────────────────────────────────────────────────────────
-
 export type FreeTrialChunk =
   | { type: 'text'; text: string }
   | { type: 'agent-event'; envelope: AgentEventEnvelope; durableReplay?: true }
@@ -543,16 +442,11 @@ export type FreeTrialChunk =
     };
 
 export interface ManagedChatStreamOptions {
-  /** Concrete canonical model selected by the shared router. */
   model?: string;
-  /** Effort already reconciled against the concrete routed model catalog. */
   effort?: Effort;
   extendedThinking?: boolean;
-  /** Paid Chrome agent mode. Chat remains available for non-agent transports. */
   workMode?: 'chat' | 'agiwork';
-  /** Internal continuation body validated by the shared approval contract. */
   approvalResume?: ToolApprovalResumeRequest;
-  /** Retry-stable billing/run key required by the Managed Cloud route. */
   idempotencyKey?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -596,7 +490,6 @@ class ManagedChatProtocolError extends Error {
   }
 }
 
-/** Parse one already-decoded SSE data payload. */
 function parseSseData(dataPayload: string): ParsedSseFrame {
   const data = dataPayload.trim();
   if (!data) return { recognized: true };
@@ -646,7 +539,6 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
   if (choices !== undefined) {
     if (!Array.isArray(choices)) return protocolError();
     if (choices.length === 0) {
-      // OpenAI-compatible streams may send a trailing usage-only chunk.
       if (event['usage'] === undefined) return protocolError();
       recognized = true;
     } else {
@@ -790,18 +682,6 @@ async function readBoundedErrorBody(response: Response): Promise<string> {
   return body.slice(0, MANAGED_CHAT_MAX_ERROR_BODY_CHARS);
 }
 
-// ─── Core streaming call ──────────────────────────────────────────────────────
-
-/**
- * Stream a paid Chrome Managed Cloud completion from the AGI web gateway.
- *
- * Yields FreeTrialChunk items:
- *   { type: 'text', text }  — incremental content delta
- *   { type: 'done' }        — stream complete
- *   { type: 'error', ... }  — terminal error
- *
- * The server is the authoritative quota and plan gate.
- */
 export async function* streamFreeChat(
   messages: FreeTrialMessage[],
   token: string,
@@ -909,9 +789,6 @@ export async function* streamFreeChat(
             model,
             messages: cappedMessages,
             stream: true,
-            // Chrome owns a validated, display-only map-card renderer. It does
-            // not own the suspended-run response path, so `canRespond` must
-            // remain false and clarification tools stay unavailable here.
             [INTERACTIVE_CARD_REQUEST_KEY]: {
               supported: ['map-search.v1'],
               canRespond: false,
@@ -1110,7 +987,6 @@ export async function* streamFreeChat(
       }
     };
 
-    /** Continue the exact server-owned run instead of submitting the prompt twice. */
     const followDurableRun = async function* (): AsyncGenerator<FreeTrialChunk> {
       if (!runReference) return;
       const client = createManagedCloudAgentRunClient({
@@ -1317,11 +1193,6 @@ export async function* streamFreeChat(
   }
 }
 
-/**
- * Continue one suspended server-owned tool boundary. The client submits only
- * the stable run id and explicit per-tool decisions; private transcript,
- * arguments, and provider continuity remain server-owned.
- */
 export function streamManagedChatApproval(
   runId: string,
   toolApprovals: ToolApprovalDecisionWire[],

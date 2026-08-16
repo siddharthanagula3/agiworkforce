@@ -26,8 +26,6 @@ import { SupportActionRefusal, type SupportActionResult } from '../types';
 export function executeHandoff(definition: SupportActionDefinition): SupportActionResult {
   const endpoint = definition.endpoint;
   if (!endpoint) {
-    // Fail closed: a handoff action with no descriptor is a registry bug, and
-    // guessing an endpoint is exactly what this layer must never do.
     throw new SupportActionRefusal(
       'SUPPORT_ACTION_UNAVAILABLE',
       409,

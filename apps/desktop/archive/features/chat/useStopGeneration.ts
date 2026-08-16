@@ -1,9 +1,3 @@
-/**
- * useStopGeneration
- *
- * Custom hook that encapsulates handleStopGeneration and the NEW_CHAT_ABORT_EVENT useEffect
- * from UnifiedAgenticChat.
- */
 import { useEffect, useCallback } from 'react';
 import { isTauri } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
@@ -43,7 +37,6 @@ export function useStopGeneration(config: UseStopGenerationConfig) {
   } = config;
 
   const handleStopGeneration = useCallback(async () => {
-    // AUDIT-STREAM-059 fix: Clear the stream watchdog when user stops generation
     if (streamWatchdogTimeoutRef.current) {
       clearTimeout(streamWatchdogTimeoutRef.current);
       streamWatchdogTimeoutRef.current = null;
@@ -54,7 +47,6 @@ export function useStopGeneration(config: UseStopGenerationConfig) {
       abortControllerRef.current = null;
     }
 
-    // AUDIT-STREAM-038 fix: Pass conversation ID for scoped stop
     const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
     const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : undefined;
 
@@ -76,7 +68,6 @@ export function useStopGeneration(config: UseStopGenerationConfig) {
       clearQueuedStreamUpdates();
     }
 
-    // AUDIT-STREAM-037 fix: Clear per-tool timeout callbacks to prevent stale timeout errors
     toolExecutionTimeoutsRef.current.forEach((timeoutEntry) => {
       clearTimeout(timeoutEntry.softTimeoutId);
       clearTimeout(timeoutEntry.hardTimeoutId);

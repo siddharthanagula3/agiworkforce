@@ -13,11 +13,6 @@ const SCANNER_VERSION = 'agi-utils/privacy-handoff@1';
 const encoder = new TextEncoder();
 
 export interface HandoffPreviewContextItem extends HandoffContextItem {
-  /**
-   * Text rendered in the payload preview and passed through the secret scanner.
-   * Binary callers may provide a bounded descriptor here while binding the
-   * exact source bytes through the inherited `byteCount` + `checksumSha256`.
-   */
   content: string;
 }
 
@@ -25,14 +20,6 @@ export interface RedactedHandoffContextItem extends HandoffContextItem {
   redactedContent: string;
 }
 
-/**
- * Where the selected context is going. The pair is carried into the hashed
- * payload AND the draft, so it is part of what the user's consent attests to —
- * a preview hash that names the wrong destination is worse than no hash.
- *
- * `byok` is the default because that was this builder's only target when it was
- * written; Managed Cloud reuses the identical ceremony with a different label.
- */
 export type HandoffTarget = 'byok' | 'managed';
 
 const HANDOFF_TARGETS = {
@@ -44,7 +31,6 @@ export interface BuildLocalToByokHandoffDraftParams {
   sourceSessionId: string;
   sourceSurface: DeveloperSessionSurface | SyncedAppSurface;
   targetSurface: SyncedAppSurface;
-  /** Defaults to `'byok'`, preserving every existing caller's behaviour. */
   target?: HandoffTarget;
   selectedContext: HandoffPreviewContextItem[];
   createdAt?: string;
@@ -122,9 +108,6 @@ export async function buildLocalToByokHandoffDraft(
         kind: item.kind,
         label: item.label,
         sourceUri: item.sourceUri,
-        // Callers transferring non-text bytes can bind the preview to the
-        // immutable source object by supplying its byte count and checksum.
-        // Text-only callers retain the original redacted-content evidence.
         byteCount: sourceByteCount(item, redactedContent),
         checksumSha256: await sourceChecksum(item, redactedContent, hash),
         redactedContent,

@@ -6,12 +6,6 @@ import {
   type ConnectorAuthorizationReason,
 } from '../connector-connect-required';
 
-/**
- * Fixtures mirror `buildConnectorAuthorizationRequiredPayload` in
- * `apps/web/lib/connectors/connect-required.ts` exactly — same key, same field
- * names, same `connectUrl` shape as `buildConnectorOAuthStartPath`. If the
- * server payload changes, these tests are the first thing that should break.
- */
 function serverPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     agi_connector_authorization_required: true,
@@ -70,8 +64,6 @@ describe('readConnectorConnectRequest · accepts the server envelope', () => {
 
 describe('readConnectorConnectRequest · rejects untrusted results', () => {
   it('rejects a result that was not marked an error', () => {
-    // The server always sets isError:true on this envelope, so a "successful"
-    // tool result carrying it did not come from that path.
     expect(read(serverPayload(), 'mcp__linear__search_issues', false)).toBeNull();
   });
 
@@ -87,9 +79,6 @@ describe('readConnectorConnectRequest · rejects untrusted results', () => {
   });
 
   it('rejects an envelope forged by a DIFFERENT connector', () => {
-    // A malicious `custom-<id>` MCP server returns a Linear connect card. Its
-    // results can only ever arrive under its own qualified name, so the
-    // tool-binding check kills it.
     expect(read(serverPayload(), 'mcp__custom-abc123__fetch')).toBeNull();
   });
 

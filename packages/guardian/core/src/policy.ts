@@ -1,11 +1,3 @@
-/**
- * Final policy evaluation — the single decision behind the required
- * "AGI Guardian / Final Policy" check run.
- *
- * Shadow mode never fails a check regardless of findings; that is the whole
- * point of shadow rollout. Blocking decisions require both a blocking-enabled
- * config and a blocking-eligible finding class.
- */
 import type { GuardianConfig } from './config.js';
 import type { Finding, ScannerRun, Suppression } from './schema.js';
 
@@ -15,7 +7,6 @@ export interface PolicyDecision {
   conclusion: CheckConclusion;
   blocking: Finding[];
   advisory: Finding[];
-  /** Human-readable reasons for the conclusion, in decision order. */
   reasons: string[];
 }
 
@@ -44,7 +35,7 @@ export function evaluatePolicy(
     if (f.suppression === null) return true;
     if (isExpired(f.suppression, now)) {
       reasons.push(`suppression expired for ${f.rule_id} (${f.path})`);
-      return true; // expired suppressions become visible again
+      return true;
     }
     return false;
   });
@@ -89,11 +80,8 @@ export function evaluatePolicy(
 }
 
 function isBlockingEligible(finding: Finding, config: GuardianConfig): boolean {
-  // Pre-existing (baselined) findings never block unless explicitly enabled.
   if (!finding.is_new) return config.blocking.existing_debt;
 
-  // An LLM must never be the sole authority for a blocking decision: it needs
-  // deterministic corroboration or a confirmed, concrete failure path.
   if (finding.source_type === 'llm') {
     const corroborated =
       finding.deterministic_evidence.length > 0 ||

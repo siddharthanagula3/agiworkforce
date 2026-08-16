@@ -1,12 +1,3 @@
-/**
- * ArtifactList
- *
- * Sidebar list of all canvas artifacts in the current session.
- * - Type icon + title + language + relative timestamp
- * - Click to open in CanvasPanel
- * - Delete button per item
- * - "New" button to create a blank artifact
- */
 
 import { Code2, FileText, Globe, Plus, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
@@ -17,10 +8,6 @@ import {
   type CanvasArtifact,
   type CanvasArtifactType,
 } from '../../stores/editingStore';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function TypeIcon({ type }: { type: CanvasArtifactType }) {
   switch (type) {
@@ -54,10 +41,6 @@ function executionBadge(state: CanvasArtifact['executionState']): React.ReactNod
     return <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 shrink-0 animate-pulse" />;
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// ArtifactList
-// ---------------------------------------------------------------------------
 
 interface ArtifactListProps {
   className?: string;

@@ -305,14 +305,6 @@ describe('Managed Cloud account/session authority', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Token-claim owner fallback
-//
-// Regression: the MV3 background Clerk client (standardBrowser: false) does not
-// reliably hydrate clerk.user / session.user, so a valid signed-in session was
-// rejected as "unowned" and the side panel could never reach Managed Cloud.
-// ---------------------------------------------------------------------------
-
 function base64Url(value: string): string {
   return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }

@@ -1,13 +1,3 @@
-/**
- * Memory summary — a read-only overview of what the assistant has stored.
- *
- * Deliberately NOT a server call and NOT a model call: the summary is a local
- * projection of the entries this device already holds
- * (`memory/services/consolidation.ts#summarizeMemoryFacts`), so the screen can
- * only ever restate stored text. Every render carries a provenance line naming
- * how many memories it was generated from and when, and which trust boundary
- * those memories live on.
- */
 import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import { Brain } from 'lucide-react-native';
@@ -20,7 +10,6 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 
-/** Absolute day the summary was generated, e.g. "3 August 2026". */
 function formatGeneratedOn(date: Date): string {
   return date.toLocaleDateString(undefined, {
     year: 'numeric',
@@ -48,8 +37,6 @@ export default function MemorySummaryScreen() {
   }, [fetchMemories]);
 
   const summary = useMemo(() => summarizeMemoryFacts(entries), [entries]);
-  // Generated at render time from the entries above — not persisted, so it can
-  // never claim a staleness the data does not have.
   const generatedOn = formatGeneratedOn(new Date());
 
   return (

@@ -15,8 +15,6 @@ import {
 
 const REPO_OWNER = process.env['DESKTOP_GITHUB_OWNER'] || 'siddharthanagula3';
 const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-app';
-// The Electron cloud shell publishes v-cloud-desktop-* releases from the
-// monorepo release workflow (.github/workflows/release-desktop-cloud.yml).
 const CLOUD_REPO_OWNER = process.env['DESKTOP_CLOUD_GITHUB_OWNER'] || 'siddharthanagula3';
 const CLOUD_REPO_NAME = process.env['DESKTOP_CLOUD_GITHUB_REPO'] || 'agiworkforce';
 
@@ -33,12 +31,6 @@ const TRUSTED_GITHUB_RELEASES: ReadonlyArray<{ owner: string; repo: string }> = 
   { owner: CLOUD_REPO_OWNER, repo: CLOUD_REPO_NAME },
 ];
 
-/**
- * Pick the AGI Cloud (Electron) macOS installer. An explicit architecture is
- * exact and fails closed when missing; the legacy architecture-less public
- * link keeps Apple Silicon first with an Intel fallback. Cloud releases ship
- * signed/notarized DMGs only until a real in-place updater contract exists.
- */
 function selectCloudMacInstallerAsset(
   release: StableDesktopRelease,
   architecture: 'arm64' | 'x64' | null,
@@ -86,26 +78,12 @@ function isExternalRedirectAllowed(rawUrl: string): boolean {
   return true;
 }
 
-/**
- * PUBLIC ENDPOINT: Download route for desktop application installers.
- *
- * SECURITY NOTE: This endpoint is intentionally unauthenticated because:
- * 1. Desktop app downloads should be publicly accessible to encourage adoption
- * 2. The download files are already publicly hosted on GitHub releases
- * 3. Authentication happens within the desktop app after installation
- * 4. Rate limiting is applied at 30 requests/minute per IP to prevent abuse
- *
- * If download access needs to be restricted in the future (e.g., for beta builds),
- * add authentication by calling getClerkAuthUser(request) from lib/api-auth.
- */
 async function handleDownload(request: NextRequest) {
-  // Rate limiting: 30 requests per minute per IP to prevent abuse
   const rateLimitResponse = await withRateLimit(request, 'download');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
 
-  // AUDIT-P3-008-018: Log download requests for abuse detection
   const clientIp =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||
@@ -165,7 +143,6 @@ async function handleDownload(request: NextRequest) {
       : selectDesktopInstallerAsset(release, platform as DesktopDownloadPlatform);
 
   if (asset) {
-    // Set clean filenames for downloads
     const cleanFilenames: Record<string, string> = {
       mac: app === 'cloud' ? 'agiworkforce-cloud.dmg' : 'agiworkforce.dmg',
       windows: 'agiworkforce-setup.exe',
@@ -178,7 +155,6 @@ async function handleDownload(request: NextRequest) {
     }
     const filename = cleanFilenames[platform] || asset.name;
 
-    // Fetch the file from GitHub and stream it back with custom filename
     const fileResponse = await fetch(downloadUrl, {
       signal: AbortSignal.timeout(30_000),
     });
@@ -187,12 +163,6 @@ async function handleDownload(request: NextRequest) {
       throw createError.serviceUnavailable('Failed to fetch installer from GitHub');
     }
 
-    // SEV-WEB-M-2 fix (2026-05-05): when filename falls back to `asset.name`
-    // from GitHub's Releases API, an attacker-controlled release-asset name
-    // containing `"` or CR/LF would land in the Content-Disposition header
-    // verbatim · header injection / response-splitting risk. Encode per
-    // RFC 5987: strip control chars + quotes from the ASCII fallback and use
-    // `filename*=UTF-8''<percent-encoded>` for the canonical name.
     const safeAsciiFilename = Array.from(filename, (char) => {
       const code = char.charCodeAt(0);
       return code <= 31 || code === 127 || char === '"' || char === '\\' ? '_' : char;
@@ -200,7 +170,6 @@ async function handleDownload(request: NextRequest) {
     const utf8Filename = encodeURIComponent(filename);
     const contentDisposition = `attachment; filename="${safeAsciiFilename}"; filename*=UTF-8''${utf8Filename}`;
 
-    // Stream the file with custom Content-Disposition header
     return new NextResponse(fileResponse.body, {
       status: 200,
       headers: {
@@ -212,18 +181,13 @@ async function handleDownload(request: NextRequest) {
     });
   }
 
-  // No matching asset found in release? Fallback.
   return fallbackToStatic(platform, request, app);
 }
 
 function fallbackToStatic(platform: string, request: Request, app: string | null = null) {
-  // The cloud shell has no static fallback URLs; absence is a plain 503.
   if (app === 'cloud') {
     return NextResponse.json({ error: 'Installer unavailable', platform, app }, { status: 503 });
   }
-  // Do not fall back to local static placeholders. `public/downloads/` is ignored
-  // and not deployed, so every platform needs either a trusted release asset or
-  // an explicit NEXT_PUBLIC_DOWNLOAD_URL_* value.
   const downloadUrls: Record<string, string | undefined> = {
     mac: process.env['NEXT_PUBLIC_DOWNLOAD_URL_MAC'] || undefined,
     windows: process.env['NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS'] || undefined,

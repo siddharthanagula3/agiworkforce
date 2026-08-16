@@ -6,12 +6,6 @@ import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-term
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Settings layout — auth gate only. The actual settings UI is now the shared
- * SettingsModal (packages/ui/ui) opened via SettingsModalProvider. Each child
- * page under /settings/* renders a SettingsModalRedirect that fires
- * openSettings(section) and sends the user back to /chat with the modal open.
- */
 export default async function SettingsLayout({ children }: { children: ReactNode }) {
   const { userId } = await auth();
   const requestHeaders = await headers();

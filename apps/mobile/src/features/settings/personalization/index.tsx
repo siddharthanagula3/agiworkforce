@@ -1,9 +1,3 @@
-/**
- * Personalization Settings Screen
- *
- * User profile fields (name, nickname, occupation, custom instructions)
- * plus 4 response-style sliders (warmth, enthusiasm, headers/lists, emoji).
- */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, TextInput, Platform, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -24,10 +18,6 @@ import {
   type StyleSliderConfig as SliderConfig,
 } from './constants';
 import { useAuthStore } from '@/src/features/auth/store';
-
-// ---------------------------------------------------------------------------
-// Style preset selector
-// ---------------------------------------------------------------------------
 
 function StylePresetSelector({
   value,
@@ -73,10 +63,6 @@ function StylePresetSelector({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Labeled Input
-// ---------------------------------------------------------------------------
-
 function LabeledInput({
   label,
   value,
@@ -119,10 +105,6 @@ function LabeledInput({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Style Slider
-// ---------------------------------------------------------------------------
-
 function StyleSlider({
   config,
   value,
@@ -164,26 +146,11 @@ function StyleSlider({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
-//
-// There is deliberately no theme control here. This screen commits every field
-// through the header Save (and offers "Discard changes?" on back), but the
-// theme card wrote straight to the store on tap and was never part of
-// `hasChanges` — so discarding reverted the text fields while silently keeping
-// the theme change it had implicitly promised to revert. Appearance is owned by
-// the Settings root row (`/(app)/settings/appearance`), which has no draft
-// contract to violate.
-
 export default function PersonalizationScreen() {
   const router = useRouter();
   const c = useThemeColors();
   const { scope } = useLocalSearchParams<{ scope?: string }>();
   const globalIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
-  // An explicit ?scope= from navigation (Settings' "Local Mode" vs "Cloud"
-  // sections) always wins over the current chat toggle, so this screen never
-  // silently shows Cloud data under a "Local Mode" tap or vice versa.
   const isCloud = scope === 'cloud' ? true : scope === 'local' ? false : globalIsCloud;
 
   const localPersonalization = useLocalSettingsStore((s) => s.personalization);
@@ -195,7 +162,6 @@ export default function PersonalizationScreen() {
   const personalization = isCloud ? cloudPersonalization : localPersonalization;
   const setPersonalization = isCloud ? cloudSetPersonalization : localSetPersonalization;
 
-  // Local editing state — commit on Save
   const [fullName, setFullName] = useState(personalization.fullName);
   const [nickname, setNickname] = useState(personalization.nickname);
   const [occupation, setOccupation] = useState(personalization.occupation);
@@ -210,13 +176,6 @@ export default function PersonalizationScreen() {
     isCloud ? clerkUserId : undefined,
   );
 
-  // Expo Router can reuse this screen's instance across pushes to the same
-  // route with only the `scope` search param changing (Local <-> Cloud), so
-  // the `useState` initializers above only run on the very first mount. Without
-  // this resync, editing Cloud Personalization then navigating to Local
-  // Personalization (or vice versa) would show stale unsaved edits from the
-  // other scope instead of that scope's real data — resync whenever the
-  // resolved scope actually changes.
   const prevIsCloudRef = useRef(isCloud);
   useEffect(() => {
     const scopeChanged = prevIsCloudRef.current !== isCloud;
@@ -225,10 +184,6 @@ export default function PersonalizationScreen() {
       previousCloudOwnerRef.current !== undefined &&
       previousCloudOwnerRef.current !== clerkUserId;
     if (isCloud) previousCloudOwnerRef.current = clerkUserId;
-    // A first Cloud pull may arrive after this screen mounts. Adopt it while
-    // the draft is pristine, but never overwrite text or slider changes the
-    // user is actively editing. Scope changes always load the destination
-    // scope and clear the dirty marker.
     if (!scopeChanged && !cloudOwnerChanged && draftDirtyRef.current) return;
     prevIsCloudRef.current = isCloud;
     draftDirtyRef.current = false;
@@ -269,10 +224,6 @@ export default function PersonalizationScreen() {
     },
   };
 
-  // `replace` to the Settings root discarded the entry point AND the back
-  // entry, so a user who opened Personalization from a chat or from Profile
-  // landed on Settings with no way back. Pop the real stack; the Settings root
-  // stays only as the deep-link fallback, matching `SettingsScreenShell`.
   const goBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -318,8 +269,6 @@ export default function PersonalizationScreen() {
   }, [hasChanges, goBack]);
 
   const handleSave = useCallback(() => {
-    // The store write below is now the saved baseline. Clear before writing so
-    // the same-scope store update can normalize trimmed values into the draft.
     draftDirtyRef.current = false;
     setPersonalization({
       fullName: fullName.trim(),

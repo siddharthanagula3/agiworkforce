@@ -44,7 +44,6 @@ describe('deriveReasoningPhrase', () => {
   });
 
   it('uses the last non-empty line for detection', () => {
-    // First line says analyze but last line says writing — should pick writing
     const content = 'analyzing the structure\n\nwriting the output now';
     expect(deriveReasoningPhrase(content)).toBe('Writing');
   });

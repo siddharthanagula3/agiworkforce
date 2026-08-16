@@ -201,10 +201,6 @@ describe('ChatInput draft ownership', () => {
     expect(textarea.value).toBe('');
   });
 
-  // The current catalog has no model without an effort ladder, so there is no
-  // entry that can demonstrate the hidden-control state. Restore the test when
-  // that capability shape exists again.
-
   it('sends an attachment-only turn instead of enabling a silent no-op', () => {
     const onSend = vi.fn();
     renderComposer(onSend);

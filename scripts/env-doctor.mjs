@@ -55,11 +55,7 @@ const contracts = {
       ],
       development: [['DATABASE_URL', 'AGI_DATABASE_URL']],
     },
-    // Names the source scan cannot follow: passed to a helper
-    // (`readInt('AGI_SUPPORT_…')`), built from a prefix (`${prefix}_CLIENT_ID`),
     // or reached through an exported constant (`E2B_COMPUTE_RATE_ENV`). Pinning
-    // them is the only thing standing between an operator and a support channel,
-    // an OAuth connector, or a meter that reports itself off with no clue why.
     documentedKeys: [
       'AGI_SUPPORT_FROM_EMAIL',
       'AGI_SUPPORT_FALLBACK_EMAIL',
@@ -71,9 +67,6 @@ const contracts = {
       'CONNECTOR_OAUTH_LINEAR_CLIENT_ID',
       'CONNECTOR_OAUTH_LINEAR_CLIENT_SECRET',
       'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
-      // The three incident-response kill-switches, each read as
-      // `process.env[SOME_ENV_CONST]`. A switch whose name an operator cannot
-      // find mid-incident is not a switch.
       'AGI_DURABLE_INITIAL_TURNS',
       'AGI_MANAGED_COMPUTE_PRIVATE_BETA',
       'AGI_WEB_MCP_PRIVATE_BETA',
@@ -123,16 +116,9 @@ const contracts = {
     urlKeys: ['VITE_AGI_WEB_API_BASE_URL', 'CLERK_FRONTEND_API', 'CLERK_SYNC_HOST'],
   },
   cli: {
-    // The CLI runs on a workstation, so there is no separate production
-    // deployment to document — one example serves both modes.
     productionExample: 'apps/cli/.env.example',
     developmentExample: 'apps/cli/.env.example',
-    // Every CLI variable has a working default, so none is required at runtime.
-    // Its contract is documentation, enforced by sourceScans below.
     required: { production: [], development: [] },
-    // Read as `env::var(SOME_CONST)`, which the Rust scan's string-literal
-    // pattern cannot follow. Without the pin the name is invisible to both the
-    // scan and the operator.
     documentedKeys: ['AGI_PLUGIN_REGISTRY_URL'],
     urlKeys: ['AGIWORKFORCE_API_BASE', 'AGI_API_URL', 'AGI_AUTH_BASE'],
   },
@@ -176,14 +162,6 @@ const contracts = {
   },
 };
 
-/**
- * Names the process is handed rather than deployed with: some by the hosting
- * runtime (`NODE_ENV`, `NEXT_RUNTIME`, `VERCEL_ENV`, `NEXT_PHASE`), the rest by
- * the operating system or the terminal the process was launched from (`PATH`,
- * `HOME`, `SHELL`, `EDITOR`, `TERM`, `COLUMNS`, the colour hints). Neither kind
- * belongs in an example file: listing them would invite an operator to set a
- * value that the runtime or the user's shell overwrites anyway.
- */
 const platformProvidedKeys = new Set([
   'COLORFGBG',
   'COLORTERM',
@@ -201,23 +179,6 @@ const platformProvidedKeys = new Set([
   'VERCEL_ENV',
 ]);
 
-/**
- * Reading an environment variable that no example file names is how a feature
- * ships silently disabled: the code degrades politely, the deployment looks
- * healthy, and nothing tells the operator which name to set. Each scan below
- * reads the shipped source of one surface and fails the contract on any name
- * the deployment could set but was never told about.
- *
- * Only code that runs on the deployment counts. Workstation tooling (scripts,
- * e2e harnesses, bundler config) reads its own variables and has no operator.
- *
- * Two limits, so nobody reads more protection into this than it gives. Only the
- * surfaces listed here are scanned — `gateway`, `signaling`, `desktop`,
- * `mobile`, and `extension` still rely on their example files being maintained
- * by hand. And only a literal name is matched: a read through a constant or
- * composed at runtime is invisible here and belongs in the owning contract's
- * `documentedKeys`.
- */
 const sourceScans = [
   {
     scope: 'web',
@@ -283,10 +244,6 @@ function parseExampleKeys(contents) {
   return { keys, duplicates };
 }
 
-/**
- * Every environment name the shipped source of one surface reads, mapped to the
- * first file that reads it so a failure names somewhere to look.
- */
 function scanSourceEnvKeys(scan, paths) {
   const readers = new Map();
   for (const path of paths) {
@@ -312,10 +269,6 @@ function checkExampleContracts() {
   })
     .split(/\r?\n/)
     .filter(Boolean);
-  // The source scan also reads files that are not committed yet, because the
-  // moment worth catching an undocumented variable is while the code adding it
-  // is still being written — not on CI after the fact. `--exclude-standard`
-  // keeps build output and other gitignored paths out.
   const scannable = execFileSync(
     'git',
     ['ls-files', '--cached', '--others', '--exclude-standard'],
@@ -357,10 +310,6 @@ function checkExampleContracts() {
         }
       }
 
-      // Union across both modes: a name in either example counts as documented.
-      // That means a key documented only in a `.env.local.example` satisfies the
-      // scan while a production operator never reads it. No scope has such a key
-      // today; if one appears, split this per mode rather than widening it.
       let documented = documentedByScope.get(scope);
       if (!documented) {
         documented = new Set();

@@ -22,7 +22,6 @@ import {
 const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
 type Platform = DesktopReleasePlatform;
 
-// Tauri update manifest format
 interface TauriUpdateManifest {
   version: string;
   notes: string;
@@ -47,9 +46,6 @@ interface ReleaseRecord {
   is_critical: boolean;
 }
 
-/**
- * Get release from database
- */
 async function getReleaseFromDatabase(
   platform: Platform,
   channel: DesktopReleaseChannel = 'stable',
@@ -78,9 +74,6 @@ async function getReleaseFromDatabase(
   }
 }
 
-/**
- * Fallback: Get release from GitHub Releases API
- */
 async function getReleaseFromGitHub(
   platform: Platform,
   channel: DesktopReleaseChannel,
@@ -105,9 +98,6 @@ async function getReleaseFromGitHub(
   };
 }
 
-/**
- * Record download analytics (non-blocking)
- */
 async function recordDownload(releaseId: string, request: NextRequest): Promise<void> {
   if (!releaseId) return;
 
@@ -134,22 +124,14 @@ async function recordDownload(releaseId: string, request: NextRequest): Promise<
       referrer,
     ]);
   } catch (error) {
-    // Non-blocking - log and continue
     logger.warn({ error, releaseId }, 'Failed to record download analytics');
   }
 }
 
-/**
- * GET /api/releases/latest/:platform
- *
- * Returns Tauri-compatible update manifest for the specified platform.
- * First checks database, then falls back to GitHub Releases API.
- */
 async function handleGetLatestRelease(
   request: NextRequest,
   { params }: { params: Promise<{ platform: string }> },
 ): Promise<NextResponse> {
-  // Rate limiting - generous for update checks
   const rateLimitResponse = await withRateLimit(request, 'release-latest');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -157,7 +139,6 @@ async function handleGetLatestRelease(
 
   const { platform } = await params;
 
-  // Validate platform
   if (!platform || !VALID_PLATFORMS.includes(platform as Platform)) {
     throw createError.validation(
       `Invalid platform. Valid platforms: ${VALID_PLATFORMS.join(', ')}`,
@@ -166,7 +147,6 @@ async function handleGetLatestRelease(
 
   const validPlatform = platform as Platform;
 
-  // Get channel from query params (default: stable)
   const url = new URL(request.url);
   const rawChannel = url.searchParams.get('channel') || 'stable';
   if (!isDesktopReleaseChannel(rawChannel)) {
@@ -174,15 +154,12 @@ async function handleGetLatestRelease(
   }
   const channel = rawChannel;
 
-  // Try database first
   let release = await getReleaseFromDatabase(validPlatform, channel);
 
-  // Fall back to GitHub if database doesn't have the release
   if (!release) {
     release = await getReleaseFromGitHub(validPlatform, channel);
   }
 
-  // No release found
   if (!release) {
     return NextResponse.json(
       { error: { code: 'NOT_FOUND', message: 'No release found for this platform' } },
@@ -190,12 +167,10 @@ async function handleGetLatestRelease(
     );
   }
 
-  // Record download analytics (non-blocking)
   recordDownload(release.id, request).catch((e: unknown) => {
     console.error('[Releases] Failed to record download:', e);
   });
 
-  // Build Tauri-compatible update manifest
   const parsedVersion = parseSemanticVersion(release.version);
   if (!parsedVersion) {
     logger.error({ version: release.version }, 'Release record has an invalid semantic version');
@@ -217,12 +192,10 @@ async function handleGetLatestRelease(
     },
   };
 
-  // Add cache headers
   const headers = new Headers();
-  headers.set('Cache-Control', 'public, max-age=300, s-maxage=300'); // 5 minute cache
+  headers.set('Cache-Control', 'public, max-age=300, s-maxage=300');
   headers.set('Content-Type', 'application/json');
 
-  // Add release metadata headers
   if (release.is_critical) {
     headers.set('X-Release-Critical', 'true');
   }

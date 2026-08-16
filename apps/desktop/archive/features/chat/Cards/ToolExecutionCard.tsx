@@ -47,11 +47,9 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
   const handleCopy = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
-      // AUDIT-005-012 fix: Show success toast on copy
       toast.success('Copied to clipboard');
     } catch (err) {
       console.error('Failed to copy:', err);
-      // AUDIT-005-012 fix: Show toast notification on copy failure
       toast.error('Failed to copy to clipboard');
     }
   };
@@ -67,7 +65,6 @@ export const ToolExecutionCard: React.FC<ToolExecutionCardProps> = ({
   const inputJson = execution.input ? formatJson(execution.input) : '';
   const outputJson = execution.output ? formatJson(execution.output) : '';
 
-  // ERR-002: Translate MCP/technical errors to user-friendly messages
   const friendlyError = useMemo(() => {
     if (!execution.error) return null;
     const friendly = getFriendlyError(execution.error);

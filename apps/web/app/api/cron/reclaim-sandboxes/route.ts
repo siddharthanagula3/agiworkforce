@@ -8,15 +8,6 @@ import { reclaimAbandonedE2BSandboxes } from '@/lib/e2b/reclaim';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-/**
- * GOV-6: reclaim managed sandboxes that nothing can reach any more.
- *
- * Conversation-scoped sandboxes are paused rather than killed, and the Redis
- * mapping needed to resume one expires after 24h while `killE2BSession()` runs
- * only on explicit conversation delete. Without this job a paused sandbox
- * outlives its mapping and permanently occupies a slot in both the E2B team cap
- * and the owner's per-plan sandbox budget.
- */
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized cron request');

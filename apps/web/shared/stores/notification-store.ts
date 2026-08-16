@@ -1,7 +1,3 @@
-/**
- * Notification store using Zustand
- * Handles app-wide notifications, alerts, and user messages
- */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -9,7 +5,6 @@ import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
 import { logger } from '@shared/lib/logger';
 
-// Track auto-close timeouts to prevent memory leaks
 const notificationTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -25,10 +20,10 @@ export interface Notification {
   actionUrl?: string;
   onAction?: () => void;
   metadata?: Record<string, unknown>;
-  autoClose?: number; // ms until auto-close
+  autoClose?: number;
   category?: string;
   priority: 'low' | 'medium' | 'high';
-  source?: string; // Where the notification came from
+  source?: string;
 }
 
 export interface Toast {
@@ -43,14 +38,11 @@ export interface Toast {
 }
 
 export interface NotificationState {
-  // Notifications (persistent)
   notifications: Record<string, Notification>;
   unreadCount: number;
 
-  // Toasts (temporary)
   toasts: Record<string, Toast>;
 
-  // Settings
   settings: {
     enableDesktopNotifications: boolean;
     enableSoundNotifications: boolean;
@@ -66,56 +58,46 @@ export interface NotificationState {
     };
   };
 
-  // UI state
   isOpen: boolean;
   selectedCategory: string | null;
 
-  // Permissions
   desktopPermission: 'default' | 'granted' | 'denied';
 }
 
 export interface NotificationActions {
-  // Notification management
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => string;
   updateNotification: (id: string, updates: Partial<Notification>) => void;
   removeNotification: (id: string) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   clearAll: () => void;
-  clearOld: (olderThan: number) => void; // Clear notifications older than X days
+  clearOld: (olderThan: number) => void;
 
-  // Toast management
   showToast: (toast: Omit<Toast, 'id'>) => string;
   removeToast: (id: string) => void;
   clearToasts: () => void;
 
-  // Quick notification methods
   showSuccess: (message: string, title?: string, options?: Partial<Notification>) => void;
   showError: (message: string, title?: string, options?: Partial<Notification>) => void;
   showWarning: (message: string, title?: string, options?: Partial<Notification>) => void;
   showInfo: (message: string, title?: string, options?: Partial<Notification>) => void;
 
-  // Settings
   updateSettings: (settings: Partial<NotificationState['settings']>) => void;
   setCategorySettings: (
     category: string,
     settings: NotificationState['settings']['categories'][string],
   ) => void;
 
-  // UI state
   openNotifications: () => void;
   closeNotifications: () => void;
   toggleNotifications: () => void;
   setSelectedCategory: (category: string | null) => void;
 
-  // Permissions
   requestDesktopPermission: () => Promise<NotificationPermission>;
 
-  // System integration
   sendDesktopNotification: (notification: Notification) => void;
   playNotificationSound: () => void;
 
-  // Utility
   getNotificationsByCategory: (category: string) => Notification[];
   getUnreadNotifications: () => Notification[];
   cleanup: () => void;
@@ -138,7 +120,6 @@ const DEFAULT_SETTINGS: NotificationState['settings'] = {
   },
 };
 
-// Shared AudioContext to prevent resource leaks from repeated allocations
 let sharedAudioCtx: AudioContext | null = null;
 function getAudioContext(): AudioContext {
   if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
@@ -168,7 +149,6 @@ export const useNotificationStore = create<NotificationStore>()(
       immer((set, get) => ({
         ...INITIAL_STATE,
 
-        // Notification management
         addNotification: (notificationData: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
           const id = crypto.randomUUID();
           const notification: Notification = {
@@ -183,7 +163,6 @@ export const useNotificationStore = create<NotificationStore>()(
             state.unreadCount += 1;
           });
 
-          // Send desktop notification if enabled
           const { settings, sendDesktopNotification } = get();
           const categorySettings = settings.categories[notification.category || 'system'];
 
@@ -195,12 +174,10 @@ export const useNotificationStore = create<NotificationStore>()(
             sendDesktopNotification(notification);
           }
 
-          // Play sound if enabled
           if (!settings.muteAll && settings.enableSoundNotifications && categorySettings?.sound) {
             get().playNotificationSound();
           }
 
-          // Auto-remove if specified (track timeout for cleanup)
           if (notification.autoClose) {
             const timeoutId = setTimeout(() => {
               notificationTimeouts.delete(id);
@@ -221,7 +198,6 @@ export const useNotificationStore = create<NotificationStore>()(
                 ...updates,
               };
 
-              // Update unread count if read status changed
               if (wasUnread && updates.read === true) {
                 state.unreadCount = Math.max(0, state.unreadCount - 1);
               } else if (!wasUnread && updates.read === false) {
@@ -234,7 +210,6 @@ export const useNotificationStore = create<NotificationStore>()(
           set((state) => {
             const notification = state.notifications[id];
             if (notification) {
-              // Clear any pending auto-close timeout
               const timeoutId = notificationTimeouts.get(id);
               if (timeoutId) {
                 clearTimeout(timeoutId);
@@ -263,7 +238,6 @@ export const useNotificationStore = create<NotificationStore>()(
 
         clearAll: () =>
           set((state) => {
-            // Clear all pending auto-close timeouts to prevent memory leaks
             notificationTimeouts.forEach((timeoutId) => {
               clearTimeout(timeoutId);
             });
@@ -288,7 +262,6 @@ export const useNotificationStore = create<NotificationStore>()(
           });
         },
 
-        // Toast management
         showToast: (toastData: Omit<Toast, 'id'>) => {
           const id = crypto.randomUUID();
           const toast: Toast = {
@@ -300,21 +273,17 @@ export const useNotificationStore = create<NotificationStore>()(
             state.toasts[id] = toast;
           });
 
-          // Auto-remove after duration - track timeout to prevent memory leaks
           const timeoutId = setTimeout(() => {
-            // Clean up the timeout tracking
             toastTimeouts.delete(id);
             get().removeToast(id);
           }, toast.duration);
 
-          // Track the timeout so it can be cleared on manual removal
           toastTimeouts.set(id, timeoutId);
 
           return id;
         },
 
         removeToast: (id: string) => {
-          // Clear any pending auto-close timeout to prevent memory leaks
           const timeoutId = toastTimeouts.get(id);
           if (timeoutId) {
             clearTimeout(timeoutId);
@@ -331,7 +300,6 @@ export const useNotificationStore = create<NotificationStore>()(
         },
 
         clearToasts: () => {
-          // Clear all pending auto-close timeouts to prevent memory leaks
           toastTimeouts.forEach((timeoutId) => {
             clearTimeout(timeoutId);
           });
@@ -345,7 +313,6 @@ export const useNotificationStore = create<NotificationStore>()(
           });
         },
 
-        // Quick notification methods
         showSuccess: (message: string, title?: string, options = {}) => {
           get().addNotification({
             type: 'success',
@@ -392,7 +359,6 @@ export const useNotificationStore = create<NotificationStore>()(
           });
         },
 
-        // Settings
         updateSettings: (newSettings: Partial<NotificationState['settings']>) =>
           set((state) => {
             state.settings = { ...state.settings, ...newSettings };
@@ -406,7 +372,6 @@ export const useNotificationStore = create<NotificationStore>()(
             state.settings.categories[category] = categorySettings;
           }),
 
-        // UI state
         openNotifications: () =>
           set((state) => {
             state.isOpen = true;
@@ -427,7 +392,6 @@ export const useNotificationStore = create<NotificationStore>()(
             state.selectedCategory = category;
           }),
 
-        // Permissions
         requestDesktopPermission: async () => {
           if (!('Notification' in window)) {
             set((state) => {
@@ -445,16 +409,7 @@ export const useNotificationStore = create<NotificationStore>()(
           return permission;
         },
 
-        // System integration
         sendDesktopNotification: (notification: Notification) => {
-          // Read the live browser permission instead of the store's cached
-          // `desktopPermission` field. That field is only ever updated by
-          // this store's own requestDesktopPermission() action — a caller
-          // that requests permission directly via the raw
-          // Notification.requestPermission() API (e.g. the in-chat
-          // "enable notifications" banner) leaves desktopPermission stuck
-          // at 'default' forever, so this always silently no-op'd even
-          // after the user actually granted permission.
           if (typeof window === 'undefined' || !('Notification' in window)) return;
           if (Notification.permission === 'granted') {
             const desktopNotification = new Notification(notification.title, {
@@ -472,7 +427,6 @@ export const useNotificationStore = create<NotificationStore>()(
               desktopNotification.close();
             };
 
-            // Auto-close desktop notification
             setTimeout(() => {
               desktopNotification.close();
             }, 5000);
@@ -481,7 +435,6 @@ export const useNotificationStore = create<NotificationStore>()(
 
         playNotificationSound: () => {
           try {
-            // Reuse a shared AudioContext to prevent resource leaks
             const audioContext = getAudioContext();
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
@@ -503,7 +456,6 @@ export const useNotificationStore = create<NotificationStore>()(
           }
         },
 
-        // Utility
         getNotificationsByCategory: (category: string) => {
           const { notifications } = get();
           return Object.values(notifications).filter(
@@ -517,16 +469,13 @@ export const useNotificationStore = create<NotificationStore>()(
         },
 
         cleanup: () => {
-          // Clear all pending auto-close timeouts
           notificationTimeouts.forEach((timeoutId) => {
             clearTimeout(timeoutId);
           });
           notificationTimeouts.clear();
 
-          // Clean up old notifications (older than 30 days)
           get().clearOld(30);
 
-          // Clear all toasts
           get().clearToasts();
         },
       })),
@@ -541,7 +490,6 @@ export const useNotificationStore = create<NotificationStore>()(
         onRehydrateStorage: () => {
           return (_state, error) => {
             if (!error) {
-              // Prune old notifications on rehydration
               useNotificationStore.getState().cleanup();
             }
           };
@@ -555,21 +503,8 @@ export const useNotificationStore = create<NotificationStore>()(
   ),
 );
 
-// ============================================================================
-// SELECTOR HOOKS (optimized with useShallow to prevent stale closures)
-// ============================================================================
-
-/**
- * Selector for notifications record - returns stable reference
- * Use this for direct access to notifications by ID
- */
 export const useNotificationsRecord = () => useNotificationStore((state) => state.notifications);
 
-/**
- * Selector for sorted notifications array
- * Note: This creates a new array each render. For performance-critical components,
- * use useNotificationsRecord and memoize the sorting in your component with useMemo.
- */
 export const useNotifications = () =>
   useNotificationStore((state) =>
     Object.values(state.notifications).sort((a, b) => {
@@ -581,11 +516,6 @@ export const useNotifications = () =>
     }),
   );
 
-/**
- * Selector for unread notifications
- * Note: This creates a new array each render. For performance-critical components,
- * use useNotificationsRecord and memoize the filtering in your component with useMemo.
- */
 export const useUnreadNotifications = () =>
   useNotificationStore((state) =>
     Object.values(state.notifications)
@@ -599,30 +529,14 @@ export const useUnreadNotifications = () =>
       }),
   );
 
-/**
- * Selector for toasts record - returns stable reference
- */
 export const useToastsRecord = () => useNotificationStore((state) => state.toasts);
 
-/**
- * Selector for toasts as array
- * Note: Creates a new array each render
- */
 export const useToasts = () => useNotificationStore((state) => Object.values(state.toasts));
 
-/**
- * Selector for unread count - primitive value, no shallow needed
- */
 export const useUnreadCount = () => useNotificationStore((state) => state.unreadCount);
 
-/**
- * Selector for notification settings - returns stable reference
- */
 export const useNotificationSettings = () => useNotificationStore((state) => state.settings);
 
-/**
- * Selector for notification UI state - uses useShallow for multi-value selection
- */
 export const useNotificationUIState = () =>
   useNotificationStore(
     useShallow((state) => ({

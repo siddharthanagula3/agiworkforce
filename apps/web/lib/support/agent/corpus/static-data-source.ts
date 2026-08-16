@@ -1,23 +1,7 @@
-/**
- * Adapts the existing support-centre static data into corpus chunks.
- *
- * `lib/support/static-data.ts` already holds published FAQs and articles and
- * had no runtime consumer; the support agent becomes its first. It is IMPORTED,
- * not rewritten — rewriting it into a re-export would silently hollow out the
- * existing string assertion in `lib/__tests__/public-billing-copy.test.ts`.
- *
- * Only `is_published: true` FAQs are indexed. This is product documentation, not
- * user content: no database is read here or anywhere else in this subtree.
- */
 
 import { STATIC_ARTICLES, STATIC_FAQS } from '@/lib/support/static-data';
 import type { CorpusChunk } from '../types';
 
-/**
- * Where each static record's citation points. Static data carries no route of
- * its own, so the mapping is declared here against real public pages and pinned
- * by `authoritative-links.test.ts`.
- */
 const FAQ_CATEGORY_PATHS: Record<string, string> = {
   'getting-started': '/help',
   billing: '/pricing',
@@ -33,7 +17,6 @@ const ARTICLE_CATEGORY_PATHS: Record<string, string> = {
 
 const FALLBACK_PATH = '/support';
 
-/** Strip markdown headings/formatting so indexed text is prose, not syntax. */
 function flattenMarkdown(markdown: string): string {
   return markdown
     .split('\n')

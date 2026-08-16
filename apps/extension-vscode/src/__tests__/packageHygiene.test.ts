@@ -48,8 +48,6 @@ describe('VSIX package hygiene', () => {
     );
   });
 
-  // Lives here rather than in marketplaceReadme.test.ts so the two expensive
-  // vsce listings stay in one file and never run in parallel.
   it('packages the Marketplace README but not the contributor notes', { timeout: 60_000 }, () => {
     const extensionRoot = resolve(__dirname, '../..');
     const result = spawnSync(

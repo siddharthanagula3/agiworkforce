@@ -21,8 +21,6 @@ import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 
-// ─── Module mocks ──────────────────────────────────────────────────────────────
-
 const chatComposerMocks = vi.hoisted(() => ({
   skillResult: {
     skills: [
@@ -108,12 +106,6 @@ vi.mock('./VoiceInputButton', () => ({
   ),
 }));
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
-
-/**
- * AUDIT-FIX CMP-14: a plan that really holds the `agi_work` capability, so the
- * client gate under test is the same one the server enforces.
- */
 const PRO_SUBSCRIPTION: SubscriptionPlan = {
   tier: 'pro',
   display_name: 'Pro',
@@ -159,16 +151,7 @@ describe('ChatComposerNew', () => {
     originalBillingLoading = useBillingStore.getState().isLoading;
     originalBillingError = useBillingStore.getState().error;
     originalRefreshUser = useBillingStore.getState().refreshUser;
-    // AUDIT-FIX CMP-14: the Chat | AGI Work toggle is gated on the canonical
-    // `agi_work` billing capability (PRO_TIERS) so the client agrees with
-    // `request-processor.ts`. It used to be gated on `!isFreeTrial`, which left
-    // BASIC-tier users with an enabled control and a hard
-    // `agi_work_plan_required` error on send. These tests exercise the paid
-    // path, so they need a plan that actually has the capability; the
-    // free-plan expectations below pass `freeTrial` explicitly.
     useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
-    // AUDIT-FIX CMP-1/CMP-2/CMP-5: composer toggles are per-conversation store
-    // state now, so each test must start from a clean bucket.
     useChatStore.setState({ composerTogglesByConversation: {} });
   });
 
@@ -210,24 +193,16 @@ describe('ChatComposerNew', () => {
   });
 
   it('keeps the control cluster on one line (flex-nowrap) so Send never drops to a 2nd row', () => {
-    // Bug 1: inside a conversation the sidebar narrows the composer column and the
-    // Send button wrapped to a second row. The prior flex-wrap+order layout broke
-    // lines on each control's CONTENT size, so min-w-0 alone couldn't stop the wrap.
-    // The fix puts the controls in their own flex-nowrap row — a hard CSS guarantee
-    // that they stay on one line (the footer shrinks via min-w-0 instead of wrapping).
     const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
     const cluster = container.querySelector('.flex-nowrap') as HTMLElement | null;
     expect(cluster).toBeTruthy();
     expect(cluster!.className).toContain('min-w-0');
 
-    // The leading "+" control and the trailing Send button are BOTH in that one row,
-    // so flex-nowrap keeps them on the same line at any width.
     const plus = screen.getByRole('button', { name: /more options/i });
     const send = screen.getByRole('button', { name: /send message/i });
     expect(cluster!.contains(plus)).toBe(true);
     expect(cluster!.contains(send)).toBe(true);
 
-    // The textarea is the full-width row ABOVE the controls, not inside the cluster.
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     expect(cluster!.contains(textarea)).toBe(false);
   });
@@ -308,8 +283,6 @@ describe('ChatComposerNew', () => {
       />,
     );
 
-    // A preselected project flips the composer into AGI Work mode by itself
-    // (URL-entry path); the toggle must reflect it.
     expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -726,9 +699,6 @@ describe('ChatComposerNew', () => {
     );
   });
 
-  // AUDIT-FIX CMP-3: "Temporary chat" only renders when the host supplies
-  // `onSetTemporaryChat` (a real PUT). Without an active conversation AND that
-  // handler there is nothing to persist, so the control must stay absent.
   it('does not show incognito when no active conversation can be made temporary', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
@@ -756,7 +726,6 @@ describe('ChatComposerNew', () => {
   it('renders Skills, Connectors, and Plugins entries in the overflow menu', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    // Open the overflow menu to reveal sub-components
     const moreBtn = screen.getByRole('button', { name: /more options/i });
     fireEvent.click(moreBtn);
 
@@ -766,10 +735,6 @@ describe('ChatComposerNew', () => {
   });
 
   it('plus-menu entries open the settings modal at their pane (no inline lists, no fake toggles)', () => {
-    // Founder directive 2026-07-10: Skills/Connectors/Plugins in the plus-menu
-    // are ENTRY POINTS into the settings modal — the lists live in the modal
-    // panes, never inline in the composer. Also honest-UI: no connect toggles
-    // implying a mid-chat capability that does not exist.
     chatComposerMocks.openSettings.mockClear();
     render(<ChatComposerNew onSend={vi.fn()} />);
 
@@ -785,8 +750,6 @@ describe('ChatComposerNew', () => {
     fireEvent.click(screen.getByText('Plugins'));
     expect(chatComposerMocks.openSettings).toHaveBeenLastCalledWith('plugins');
 
-    // The old placements are gone: no legacy <a> routes, no inline skills
-    // flyout search box, no connector toggle switches.
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
     expect(screen.getByText('Connectors').closest('a')).toBeNull();
     expect(screen.getByText('Plugins').closest('a')).toBeNull();
@@ -796,7 +759,6 @@ describe('ChatComposerNew', () => {
 
   it('disables Send button when loading', () => {
     render(<ChatComposerNew onSend={vi.fn()} isLoading />);
-    // When isLoading, mode='stop' and disabled={false} (stop is always clickable)
     const stopButton = screen.getByRole('button', { name: /send message/i });
     expect(stopButton).toHaveAttribute('data-mode', 'stop');
   });
@@ -819,12 +781,9 @@ describe('ChatComposerNew', () => {
   });
 
   it('renders the work-mode toggle ONLY when backed by host project data (never disconnected)', () => {
-    // Without projectPicker there is no project backing → no Chat/AGI Work
-    // toggle (a mode switch that scopes nothing would be a dead control).
     render(<ChatComposerNew onSend={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'AGI Work' })).not.toBeInTheDocument();
-    // Tools no longer sit in the input area as always-present pills.
     expect(screen.queryByRole('button', { name: /toggle web search/i })).not.toBeInTheDocument();
   });
 
@@ -954,7 +913,6 @@ describe('ChatComposerNew', () => {
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
 
-    // First send carries webSearchEnabled: true.
     await userEvent.type(textarea, 'first');
     fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
     await waitFor(() =>
@@ -966,7 +924,6 @@ describe('ChatComposerNew', () => {
       ),
     );
 
-    // Second send must STILL carry webSearchEnabled: true (fire-once would reset it).
     await userEvent.type(textarea, 'second');
     fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
     await waitFor(() =>
@@ -980,9 +937,6 @@ describe('ChatComposerNew', () => {
   });
 
   describe('Project or folder picker', () => {
-    // The picker is only rendered when the host passes REAL project data
-    // (WebChatPage supplies useManagedCloudProjects rows) — the selection is
-    // threaded into createConversation as projectId, so it is never cosmetic.
     const pickerProjects = [
       { id: 'proj-1', name: 'Website Redesign' },
       { id: 'proj-2', name: 'Mobile App' },
@@ -998,7 +952,6 @@ describe('ChatComposerNew', () => {
       };
     }
 
-    /** The chip lives BELOW the composer and only renders in AGI Work mode. */
     function enterAgiWork() {
       fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
     }
@@ -1045,7 +998,6 @@ describe('ChatComposerNew', () => {
     it('a preselected project (URL entry) auto-enters AGI Work and shows the project on the chip', () => {
       const picker = makePicker({ activeProjectId: 'proj-1' });
       render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
-      // No manual toggle click: the preselected project flips the mode itself.
       expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
         'aria-pressed',
         'true',
@@ -1099,16 +1051,13 @@ describe('ChatComposerNew', () => {
       const { rerender } = render(<ChatComposerNew onSend={onSendMock} isLoading isGenerating />);
 
       const textarea = screen.getByRole('textbox', { name: /message input/i });
-      // Type-ahead: the textarea is enabled during streaming.
       expect(textarea).not.toBeDisabled();
       await userEvent.type(textarea, 'follow up question');
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      // Not sent yet — it is queued and shown as pending.
       expect(onSendMock).not.toHaveBeenCalled();
       expect(screen.getByTestId('queued-followup')).toBeInTheDocument();
 
-      // The turn finishes (isLoading true -> false): the queued message flushes.
       rerender(<ChatComposerNew onSend={onSendMock} isLoading={false} isGenerating={false} />);
       await waitFor(() => {
         expect(onSendMock).toHaveBeenCalledWith(
@@ -1300,14 +1249,6 @@ describe('ChatComposerNew', () => {
     });
   });
 
-  /**
-   * "Create video" was the one plus-menu entry that did not exist, even though
-   * /api/media/video/generate, its billing entitlement, and MessageBubble's
-   * in-flight + finished states were all already implemented. These lock the
-   * entry point itself: an entitled user can reach video mode and hand a
-   * prompt to the host, and a non-entitled user is sent to the upgrade path
-   * instead of composing a prompt that is guaranteed to 403.
-   */
   describe('Create video', () => {
     const MAX_15X_SUBSCRIPTION: SubscriptionPlan = {
       tier: 'max_15x',
@@ -1326,12 +1267,10 @@ describe('ChatComposerNew', () => {
       fireEvent.click(screen.getByRole('button', { name: /more options/i }));
       const item = screen.getByText('Create video');
       expect(item).toBeInTheDocument();
-      // No upgrade badge: this plan really holds the capability.
       expect(item.closest('button')).not.toHaveTextContent(/upgrade/i);
 
       fireEvent.click(item);
 
-      // Entering video mode is visible (exit pill) and re-labels the input.
       expect(
         screen.getByRole('button', { name: /exit video generation mode/i }),
       ).toBeInTheDocument();
@@ -1342,16 +1281,12 @@ describe('ChatComposerNew', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {
-        // The complete catalog-backed tuple rides along. Omitting either
-        // visible picker value would make the composer look wired while the
-        // route silently fell back to its defaults.
         expect(onGenerateVideo).toHaveBeenCalledWith('a cat surfing', {
           modelId: VIDEO_MODELS[0]!.id,
           aspectRatio: '16:9',
           resolution: '720p',
         });
       });
-      // The prompt goes to the media harness, never to the chat turn.
       expect(onSend).not.toHaveBeenCalled();
     });
 
@@ -1381,8 +1316,6 @@ describe('ChatComposerNew', () => {
     });
 
     it('sends a non-entitled tier to the upgrade path instead of into video mode', () => {
-      // Pro is entitled to image generation but NOT video (billing-catalog:
-      // video_generation -> ['max_15x', 'enterprise']).
       useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
       const onUpgradeRequest = vi.fn();
       const onGenerateVideo = vi.fn();
@@ -1410,14 +1343,11 @@ describe('ChatComposerNew', () => {
       useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
       render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={vi.fn()} />);
 
-      // Text model selector is present in normal mode...
       expect(screen.getByTestId('composer-footer')).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: /more options/i }));
       fireEvent.click(screen.getByText('Create video'));
 
-      // ...and is replaced by the video picker, never left showing a text model
-      // beside "Describe the video you want".
       expect(screen.queryByTestId('composer-footer')).not.toBeInTheDocument();
       const picker = screen.getByRole('button', { name: /select video model/i });
       expect(picker).toBeInTheDocument();
@@ -1445,8 +1375,6 @@ describe('ChatComposerNew', () => {
       await userEvent.type(textarea, 'a cat surfing');
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      // The picker is a real control: its selection reaches the route, which
-      // validates it. A dead picker would call through with no options at all.
       await waitFor(() => {
         expect(onGenerateVideo).toHaveBeenCalledWith('a cat surfing', {
           modelId: VIDEO_MODELS[0]!.id,
@@ -1464,9 +1392,6 @@ describe('ChatComposerNew', () => {
       fireEvent.click(screen.getByRole('button', { name: /more options/i }));
       fireEvent.click(screen.getByText('Create video'));
 
-      // Type first, then change the options. This catches a stale submit
-      // callback that was memoized from the draft change but omitted the media
-      // selectors from its dependency list.
       const textarea = screen.getByRole('textbox', { name: /message input/i });
       await userEvent.type(textarea, 'a portrait travel clip');
       fireEvent.click(screen.getByRole('button', { name: 'Select video aspect ratio' }));
@@ -1505,9 +1430,6 @@ describe('ChatComposerNew', () => {
       fireEvent.click(screen.getByRole('button', { name: /select video model/i }));
       fireEvent.click(screen.getByRole('button', { name: restricted!.model.label }));
       fireEvent.click(screen.getByRole('button', { name: 'Select video quality' }));
-      // The option's accessible name also includes its visible "8s only"
-      // qualifier; click the quality label itself so the assertion remains
-      // catalog-derived.
       fireEvent.click(screen.getByText(restricted!.quality!.label));
       fireEvent.keyDown(textarea, { key: 'Enter' });
 

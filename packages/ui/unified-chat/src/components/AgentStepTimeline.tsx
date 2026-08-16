@@ -1,15 +1,8 @@
-// packages/ui/unified-chat/src/components/AgentStepTimeline.tsx
-// Ported from apps/desktop/src/components/UnifiedAgenticChat/AgentStepTimeline.tsx
-// Pure props — no store dependencies.
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '../lib/utils';
-
-// ────────────────────────────────────────────────────────────────────────────
-// Types
-// ────────────────────────────────────────────────────────────────────────────
 
 export type AgentType = 'planner' | 'executor' | 'reviewer' | 'coordinator' | string;
 export type StepStatus = 'pending' | 'running' | 'complete' | 'error' | 'skipped';
@@ -28,10 +21,6 @@ export interface AgentStepTimelineProps {
   steps: AgentStep[];
   compact?: boolean;
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Color helpers
-// ────────────────────────────────────────────────────────────────────────────
 
 function agentTypeBadgeClasses(agentType: AgentType): string {
   switch (agentType) {
@@ -80,20 +69,12 @@ function statusLabelClasses(status: StepStatus): string {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Duration helpers
-// ────────────────────────────────────────────────────────────────────────────
-
 function formatDuration(startedAt?: number, completedAt?: number): string | null {
   if (!startedAt || !completedAt) return null;
   const ms = completedAt - startedAt;
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Single step item
-// ────────────────────────────────────────────────────────────────────────────
 
 interface StepItemProps {
   step: AgentStep;
@@ -196,10 +177,6 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
     </div>
   );
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// Main component
-// ────────────────────────────────────────────────────────────────────────────
 
 export function AgentStepTimeline({ steps, compact = false }: AgentStepTimelineProps) {
   if (steps.length === 0) return null;

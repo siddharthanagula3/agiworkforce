@@ -12,9 +12,6 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-// ─── Chrome storage stub ──────────────────────────────────────────────────────
-// Must be set on globalThis before any module import that reads chrome.*
-
 const mockStorageData: Record<string, unknown> = {};
 
 const chromeMock = vi.hoisted(() => {
@@ -43,8 +40,6 @@ const chromeMock = vi.hoisted(() => {
   return { mock, data };
 });
 
-// ─── Module imports (after chrome stub) ──────────────────────────────────────
-
 import {
   getPageActions,
   truncatePageText,
@@ -52,8 +47,6 @@ import {
 } from '../src/features/content/in-page-panel/pageActions';
 import { loadPosition, savePosition, applyPosition } from '../src/features/content/in-page-panel/launcher';
 import { isPanelEnabled, IN_PAGE_PANEL_ENABLED_KEY } from '../src/inPagePanel/setup';
-
-// ─── getPageActions ───────────────────────────────────────────────────────────
 
 describe('getPageActions', () => {
   it('returns YouTube actions for youtube.com/watch?v=xxx', () => {
@@ -73,7 +66,6 @@ describe('getPageActions', () => {
     const actions = getPageActions('https://www.youtube.com/channel/UCxxx');
     const ids = actions.map((a) => a.id);
     expect(ids).not.toContain('yt_summarize');
-    // Falls through to generic
     expect(ids).toContain('summarize');
   });
 
@@ -108,8 +100,6 @@ describe('getPageActions', () => {
   });
 });
 
-// ─── truncatePageText ─────────────────────────────────────────────────────────
-
 describe('truncatePageText', () => {
   it('returns the full text when under the limit', () => {
     const text = 'Hello world';
@@ -123,9 +113,8 @@ describe('truncatePageText', () => {
   });
 
   it('collapses runs of spaces before counting', () => {
-    const text = 'a   b   c'; // 3 spaces between each
+    const text = 'a   b   c';
     const result = truncatePageText(text, 1000);
-    // Should be collapsed to 'a b c'
     expect(result).toBe('a b c');
   });
 
@@ -142,11 +131,8 @@ describe('truncatePageText', () => {
   });
 });
 
-// ─── Launcher position persist ────────────────────────────────────────────────
-
 describe('launcher position persist', () => {
   beforeEach(() => {
-    // Clear mock storage between tests
     const data = chromeMock.data;
     for (const key of Object.keys(data)) {
       delete data[key];
@@ -173,7 +159,6 @@ describe('launcher position persist', () => {
   });
 
   it('loadPosition rejects invalid stored values and falls back to default', async () => {
-    // Simulate a corrupted storage value
     chromeMock.data['agi_panel_launcher_pos'] = { bottom: -1, right: 'bad' };
     const pos = await loadPosition();
     expect(pos.bottom).toBe(24);
@@ -187,8 +172,6 @@ describe('launcher position persist', () => {
     expect(el.style.right).toBe('40px');
   });
 });
-
-// ─── isPanelEnabled ───────────────────────────────────────────────────────────
 
 describe('isPanelEnabled', () => {
   beforeEach(() => {
@@ -218,14 +201,6 @@ describe('isPanelEnabled', () => {
     expect(enabled).toBe(true);
   });
 });
-
-// ─── redactSensitiveText ──────────────────────────────────────────────────────
-// Regression coverage for the live pageActions.ts previously importing a local
-// two-pattern (credit-card + password-line) redactor instead of the shared
-// @agiworkforce/utils redactSecrets. The local pattern let JWTs, AWS/GitHub/
-// Anthropic/Google/Stripe/Groq/XAI keys, and generic bearer tokens visible on
-// a page (DevTools panels, READMEs, pasted curl commands) reach the LLM
-// prompt un-redacted. See in-page-panel FIX 1 in the dead-code audit report.
 
 describe('redactSensitiveText', () => {
   it('redacts credit-card numbers (pre-existing coverage)', () => {
@@ -257,5 +232,4 @@ describe('redactSensitiveText', () => {
   });
 });
 
-// ─── Unused export placeholder to prevent tree-shaking warning ────────────────
 void mockStorageData;

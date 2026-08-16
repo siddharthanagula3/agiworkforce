@@ -1,5 +1,3 @@
-// app.config.js — dynamic Expo config (replaces app.json).
-// New Architecture is the default in Expo SDK 55 — no explicit newArchEnabled needed.
 /** @type {import('expo/config').ExpoConfig} */
 const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'development';
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
@@ -20,28 +18,18 @@ function envIsTruthy(name) {
   return value === '1' || value === 'true' || value === 'yes';
 }
 
-// Launch-screen palette. These MUST stay equal to `background` in each half of
-// `src/ui/theme/tokens.ts` — the native launch screen is drawn before any JS
-// runs, so any drift is visible as a colour flash at the handoff to the first
-// React frame. `__tests__/splash-launch-config.test.ts` pins them to the tokens.
 const SPLASH_BACKGROUND_LIGHT = '#ffffff';
 const SPLASH_BACKGROUND_DARK = '#0f0f0f';
-// Rendered width of the brand lockup on the launch screen, in dp. The source
 // PNGs are 4x this, so the same asset is crisp on iOS @3x and Android xxxhdpi.
 const SPLASH_IMAGE_WIDTH = 220;
 
-// Default behavior:
-// - production/preview-like app-env => keep full entitlement set (Push, SIWA, Siri, Translate).
-// - development app-env => use minimal entitlements for basic dev provisioning.
 const shouldUseProductionEntitlements =
   envIsTruthy('EXPO_ENABLE_PRODUCTION_IOS_ENTITLEMENTS') ||
   (appEnv !== 'development' && !envIsTruthy('EXPO_DISABLE_PRODUCTION_IOS_ENTITLEMENTS'));
 
 const iosEntitlements = shouldUseProductionEntitlements
   ? {
-      // Siri + App Intents: required for Shortcuts app registration and Siri phrase triggers.
       'com.apple.developer.siri': true,
-      // Apple Translate framework entitlement (required for Translation API on iOS 17.4+).
       'com.apple.developer.natural-language.translation': true,
     }
   : {};
@@ -73,21 +61,11 @@ const config = {
   icon: './assets/icon.png',
   scheme: 'agiworkforce',
   userInterfaceStyle: 'automatic',
-  // NOTE: there is deliberately no top-level `splash` key. It has no dark
-  // variant (see @expo/prebuild-config getIosSplashConfig — only the plugin
-  // props and `ios.splash` carry `dark`), so the single background it declared
-  // flashed near-black before every light-theme launch. The expo-splash-screen
-  // plugin below owns the launch screen for both themes.
   ios: {
     supportsTablet: true,
-    // Keep iPad multitasking enabled. Expo's iOS prebuild then emits every
-    // required iPad orientation while the top-level portrait lock remains in
-    // effect for iPhone.
     requireFullScreen: false,
     bundleIdentifier: 'com.agiworkforce.app',
     buildNumber: '2',
-    // AUDIT-FIX: H-11 — declare the canonical apex host so iOS verifies the AASA file on
-    // /.well-known/ before any Universal-Link tap is routed to the app.
     associatedDomains,
     infoPlist: {
       NSCameraUsageDescription:
@@ -104,40 +82,16 @@ const config = {
         'AGI Workforce uses speech recognition to transcribe voice input for AI conversations.',
       NSTranslationUsageDescription:
         'AGI Workforce uses on-device translation to translate text between languages privately.',
-      // NSUserActivityTypes declares the activity type identifiers for App Intents / Siri.
-      // com.agiworkforce.app.intent is the base namespace for all custom intents.
       NSUserActivityTypes: ['INSendMessageIntent', 'com.agiworkforce.app.intent'],
-      // Export compliance. Without this key every upload stalls in App Store
-      // Connect on "Missing Compliance" and the founder has to re-answer the
-      // encryption questionnaire per build — TestFlight builds are undeliverable
-      // until they do. `false` is the accurate answer here because every cipher
-      // the app relies on is an Apple OS implementation:
-      //   - transport: HTTPS/TLS only, through URLSession (RN fetch, expo-fetch);
-      //   - DB key storage: expo-secure-store -> iOS Keychain (Security.framework);
-      //   - key material: expo-crypto getRandomBytesAsync -> SecRandomCopyBytes;
-      //   - agi_mobile.db at rest: SQLCipher, but ExpoSQLite.podspec compiles it
-      //     with `-DSQLCIPHER_CRYPTO_CC`, so the codec calls Apple CommonCrypto
-      //     rather than shipping a bundled OpenSSL/libsodium cipher.
-      // Nothing in apps/mobile implements a proprietary or non-standard
-      // algorithm. If that ever changes — a vendored cipher, a hand-rolled
-      // scheme, anything not backed by the OS — this MUST flip to true and the
-      // build needs a real export-compliance code before submission.
       ITSAppUsesNonExemptEncryption: false,
     },
     entitlements: {
       ...iosEntitlements,
-      // Supported iOS Share Extension handoff: the extension cannot reliably
-      // launch its containing app, so it persists reviewed drafts here and the
-      // app imports them on its next authenticated foreground.
       'com.apple.security.application-groups': [iosShareAppGroupIdentifier],
     },
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
         {
-          // CA92.1 — MMKV / RN AsyncStorage app-container-exclusive config.
-          // C56D.1 — UserDefaults access from a bundled SDK (GoogleUtilities /
-          //          Google Sign-In). Apple pairs C56D.1 with UserDefaults, not
-          //          FileTimestamp; it is genuinely used by that dependency.
           NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryUserDefaults',
           NSPrivacyAccessedAPITypeReasons: ['CA92.1', 'C56D.1'],
         },
@@ -146,15 +100,10 @@ const config = {
           NSPrivacyAccessedAPITypeReasons: ['35F9.1'],
         },
         {
-          // E174.1 — check free space before writing a model download.
-          // 85F4.1 — display free space to the user in the download UX.
           NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryDiskSpace',
           NSPrivacyAccessedAPITypeReasons: ['E174.1', '85F4.1'],
         },
         {
-          // C617.1 — mtimes on files inside the app container (cache eviction).
-          // 3B52.1 — timestamps on user-provided files (image / document picker).
-          // 0A2A.1 — third-party SDK wrapper (ExpoFileSystem file operations).
           NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryFileTimestamp',
           NSPrivacyAccessedAPITypeReasons: ['C617.1', '3B52.1', '0A2A.1'],
         },
@@ -191,52 +140,24 @@ const config = {
       'USE_BIOMETRIC',
       'USE_FINGERPRINT',
     ],
-    // Expo prebuild prefixes `android.intent.action.` / `android.intent.category.`
-    // onto these names itself, so they MUST be the short forms. Fully-qualified
-    // names here produced doubled names in the generated manifest
-    // (android.intent.action.android.intent.action.SEND), leaving the share
-    // target and the verified App Link dead.
     intentFilters: [
-      // Share-sheet target. text/plain only — the app has no image ingestion
-      // path for shares, so image/* must not be advertised.
       {
         action: 'SEND',
         category: ['DEFAULT'],
         data: [{ mimeType: 'text/plain' }],
       },
-      // Text-selection toolbar action ("AGI Workforce" on any selected text).
-      // MainActivity.kt rewrites ACTION_PROCESS_TEXT into the
-      // agiworkforce://intent/share deep link, same as ACTION_SEND.
       {
         action: 'PROCESS_TEXT',
         category: ['DEFAULT'],
         data: [{ mimeType: 'text/plain' }],
       },
-      // AUDIT-FIX: H-11 — verified Android App Link for the handled paths on
-      // https://agiworkforce.com. autoVerify=true forces the OS to fetch
-      // /.well-known/assetlinks.json before this filter is honored, so an
-      // unverified third-party app cannot claim the same VIEW intent.
-      //
-      // Declaring the bare host claimed every marketing, pricing, docs and blog
-      // URL on the domain: an installed app swallowed those taps and dropped
-      // the user on a screen with nothing to show, because no handler matches
-      // them. The paths below are the ones `app/_layout.tsx` routes.
-      //
-      // These entries are checked against the AASA components web serves by
-      // `__tests__/android-intent-filters.test.ts`, which derives them from
-      // `apps/web/lib/server/mobile-app-association.ts`. Nothing checks them
-      // against `app/_layout.tsx` — adding a path here without a handler there
-      // reopens the dead-end above, so add the handler in the same change.
       {
         action: 'VIEW',
         autoVerify: true,
         category: ['DEFAULT', 'BROWSABLE'],
         data: [
-          // Desktop companion pairing: code in the query string.
           { scheme: 'https', host: 'agiworkforce.com', path: '/pair' },
-          // Desktop companion pairing: code as one path segment.
           { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/pair/' },
-          // Clerk account recovery handoff.
           { scheme: 'https', host: 'agiworkforce.com', path: '/auth/reset-password' },
         ],
       },
@@ -244,20 +165,8 @@ const config = {
   },
   plugins: [
     'expo-asset',
-    // StoreKit 2 / Google Play Billing. Native subscriptions and consumable
-    // top-ups require a development/preview/production build; Expo Go cannot
-    // load this native module.
     'expo-iap',
-    // Embeds the Newsreader faces used by the AGI wordmark so the brand
-    // lockup renders in the real typeface instead of a Georgia fallback.
     'expo-font',
-    // Launch screen. `userInterfaceStyle` is 'automatic', so the OS decides
-    // which variant a cold launch shows and both must exist. The image is the
-    // full brand LOCKUP (mark + Newsreader wordmark), not the bare mark: the
-    // mark alone is a static twelve-spoke starburst, which reads as a stalled
-    // loading spinner — the same reasoning already recorded on the chat empty
-    // state in app/(app)/(tabs)/chat.tsx. Regenerate both PNGs with
-    // `python3 apps/mobile/scripts/generate_logo_assets.py lockups`.
     [
       'expo-splash-screen',
       {
@@ -271,15 +180,10 @@ const config = {
         },
       },
     ],
-    // Registers the BGTaskScheduler identifier and the `processing` background
-    // mode that expo-background-task needs; without it registerTaskAsync throws
-    // at runtime. Replaces expo-background-fetch, which Expo deprecated.
     'expo-background-task',
     'expo-image',
     'expo-router',
     'expo-secure-store',
-    // minSdkVersion 26 (Android 8.0) floor — required by com.google.mlkit:genai-common
-    // (withAGIAICore.cjs) manifest merger; drops Android 7.0/7.1 support.
     [
       'expo-build-properties',
       {
@@ -288,8 +192,6 @@ const config = {
         },
       },
     ],
-    // Clerk cloud auth (native AuthView + secure token cache). Adds the Clerk
-    // iOS/Android native modules; requires a native rebuild (expo run:ios).
     [
       '@clerk/expo',
       {
@@ -297,10 +199,6 @@ const config = {
       },
     ],
     ...conditionalPlugins,
-    // AUDIT-FIX: STT-WIRE — on-device speech recognition via iOS Speech
-    // framework / Android SpeechRecognizer. Microphone usage description is
-    // already declared above; this plugin emits NSSpeechRecognitionUsageDescription
-    // and the Android RECORD_AUDIO + manifest entries.
     [
       'expo-speech-recognition',
       {
@@ -312,8 +210,6 @@ const config = {
     [
       'expo-localization',
       {
-        // Arabic is selectable in-app. Native startup must permit RTL before
-        // React Native applies the persisted per-language forceRTL preference.
         supportsRTL: true,
         forcesRTL: false,
       },
@@ -341,13 +237,6 @@ const config = {
         cameraPermission: 'Allow $(DISPLAYNAME) to access your camera.',
       },
     ],
-    // SQLCipher: enables encrypted SQLite at the native layer (replaces the stock
-    // SQLite pod/AAR with the SQLCipher variant). This is required for the
-    // PRAGMA key ceremony in storage/db.ts to actually encrypt agi_mobile.db.
-    // Without this option expo-sqlite links stock SQLite and the PRAGMA key is
-    // a silent no-op, leaving the DB plaintext at rest.
-    // NOTE: changing this setting requires a `pod install` / native rebuild —
-    // it is not a JS-only change.
     ['expo-sqlite', { useSQLCipher: true }],
     'expo-updates',
     'expo-web-browser',
@@ -359,47 +248,17 @@ const config = {
     ],
     'expo-document-picker',
     'expo-sharing',
-    // Tier 3 universal fallback: llama.rn config plugin wires native GGUF runtime.
-    // Models downloaded at runtime into Documents/models/ — not bundled in the binary.
     'llama.rn',
-    // Tier 2 Android: wires AGITranslateModule + AGITranslatePackage into the generated android/ project.
-    // Injects com.google.mlkit:translate:17.0.3 gradle dep + registers AGITranslatePackage in MainApplication.kt.
     './native/android/withAGITranslate.cjs',
-    // Tier 2 Android: wires AGIVisionOCR + AGIVisionOCRPackage into the generated android/ project.
-    // Injects com.google.mlkit:text-recognition:16.0.0 gradle dep + registers AGIVisionOCRPackage in MainApplication.kt.
     './native/android/withAGIVisionOCR.cjs',
-    // iOS: copies AGIFoundationModels, AGITranslate, AGIVisionOCR, and AGIAppIntents Swift/ObjC sources
-    // into the generated ios/<AppName>/ directory and registers them with the Xcode project target.
-    // RCT_EXTERN_MODULE bridges auto-register with React Native bridge scanning — no manual list needed.
     './native/ios/withAGINativeModulesIOS.cjs',
-    // iOS Share Extension: adds the generated app-extension target and copies
-    // its tracked UIKit source/Info.plist. It accepts text and web links only,
-    // previews and saves them to the App Group for the containing app to import.
     './native/ios/withAGIShareExtension.cjs',
-    // iOS local device builds: remove production-only entitlement keys after Expo package plugins run.
     './native/ios/withAGIDevEntitlements.cjs',
-    // iOS: opt Clerk's static-linked Google pods (GoogleUtilities/RecaptchaInterop/
-    // AppCheckCore) into modular headers so pod install succeeds without switching
-    // the whole app to use_frameworks!.
     './native/ios/withClerkModularHeaders.cjs',
-    // Tier 1 Android: wires AGIAICoreModule + AGIAICorePackage into the generated android/ project.
-    // Injects com.google.mlkit:genai-prompt + registers AGIAICorePackage in MainApplication.kt.
     './native/android/withAGIAICore.cjs',
-    // Share-sheet / PROCESS_TEXT ingestion: patches the generated MainActivity.kt
-    // so ACTION_SEND EXTRA_TEXT and ACTION_PROCESS_TEXT are rewritten into the
-    // agiworkforce://intent/share deep link (RN Linking never surfaces intent
-    // extras). Pairs with the SEND/PROCESS_TEXT intentFilters above. android/ is
-    // generated, so this lives as a plugin — direct android/ edits are erased by
-    // the next prebuild.
     './native/android/withAGIShareIntent.cjs',
-    // Detox e2e (Android): wires the test runner and the exact installed Detox Android artifact,
-    // and loopback-only network security for the Detox test server. This local plugin replaces the
-    // Expo-53-only community package so SDK upgrades cannot pull stale Expo native modules.
-    // iOS remains wired through Detox's native build integration.
     ...(envIsTruthy('EXPO_ENABLE_DETOX') ? ['./native/android/withAGIDetox.cjs'] : []),
   ],
-  // Fingerprint includes native modules and config-plugin output, so an OTA
-  // update can never cross onto an incompatible native binary.
   runtimeVersion: {
     policy: 'fingerprint',
   },

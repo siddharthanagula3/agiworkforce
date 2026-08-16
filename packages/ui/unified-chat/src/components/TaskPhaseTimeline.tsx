@@ -1,6 +1,3 @@
-// packages/ui/unified-chat/src/components/TaskPhaseTimeline.tsx
-// Ported from apps/desktop/src/components/UnifiedAgenticChat/TaskPhaseTimeline.tsx
-// No Tauri, no desktop stores. Uses local ToolCallCard and TaskPhaseSection.
 
 import { useMemo } from 'react';
 import { cn } from '../lib/utils';
@@ -10,32 +7,17 @@ import type { TaskPhase } from './TaskPhaseSection';
 import { ToolCallCard } from './ToolCallCard';
 import type { ToolCallStatus } from './ToolCallCard';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Extended entry type — ToolLabelEntry augmented with optional phase metadata.
-// ─────────────────────────────────────────────────────────────────────────────
-
 export interface ToolLabelEntryWithPhase extends ToolLabelEntry {
-  /** Optional phase name used to group tool calls into TaskPhaseSection blocks. */
   phase?: string;
-  /** Unix timestamp (ms) when this tool call started, for phase duration calc. */
   startTime?: number;
-  /** Unix timestamp (ms) when this tool call ended, for phase duration calc. */
   endTime?: number;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Props
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface TaskPhaseTimelineProps {
   entries: ToolLabelEntryWithPhase[];
   isStreaming?: boolean;
   className?: string;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function toToolCallStatus(status: ToolLabelEntry['status']): ToolCallStatus {
   switch (status) {
@@ -74,10 +56,6 @@ function groupByPhase(entries: ToolLabelEntryWithPhase[]): Map<string, ToolLabel
   }
   return map;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TaskPhaseTimeline
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function TaskPhaseTimeline({
   entries,

@@ -1,37 +1,12 @@
-/**
- * Coverage wave 2 — capability-aware command router (trust-boundary enforcement).
- *
- * Exercises the LOCKED rule "never silently route Local to BYOK/cloud":
- *   - resolveCommandCapability() classifies every command into a RuntimeTier.
- *   - command() throws DesktopRequiredError for desktop-only commands in web mode
- *     and must NOT call routeToCloud for them.
- *   - command() / commandWithWarning() route cloud + desktop-preferred to the
- *     cloud gateway, attaching a fallback warning for desktop-preferred.
- *
- * The dispatch tests mock BOTH ./detect (isTauri:false, isTest:false — to escape
- * the test-mode guard and reach the real routing branch) AND ./http (to observe
- * whether routeToCloud is called). Forgetting isTest:false would make command()
- * throw the "called in test environment" error and falsely pass a loose
- * .rejects.toThrow(); we therefore assert the EXACT error type below.
- *
- * Files under test:
- *   - src/registry.ts  (resolveCommandCapability, COMMAND_PREFIXES tier map)
- *   - src/command.ts   (command, commandWithWarning)
- *   - src/errors.ts    (DesktopRequiredError, DesktopPreferredWarning)
- *   - src/http.ts      (routeToCloud — mocked, asserted called / not called)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Force web/cloud mode: not desktop, not test. This makes the routing branch of
-// command() load-bearing instead of short-circuiting on the test-mode guard.
 vi.mock('../detect', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../detect')>()),
   isTauri: false,
   isTest: false,
 }));
 
-// Observe cloud routing without making a real network call.
 vi.mock('../http', () => ({
   routeToCloud: vi.fn().mockResolvedValue('CLOUD_OK'),
 }));
@@ -46,10 +21,6 @@ const mockedRouteToCloud = vi.mocked(routeToCloud);
 beforeEach(() => {
   mockedRouteToCloud.mockClear();
 });
-
-// ---------------------------------------------------------------------------
-// resolveCommandCapability — pure classifier (no mocks needed)
-// ---------------------------------------------------------------------------
 
 describe('resolveCommandCapability (tier classification)', () => {
   it('maps a Local file command to desktop-only', () => {
@@ -78,15 +49,11 @@ describe('resolveCommandCapability (tier classification)', () => {
   });
 
   it('honors a per-command override over prefix matching', () => {
-    // get_app_version has no matching prefix; only the explicit override classifies it.
     expect(resolveCommandCapability('get_app_version').tier).toBe('desktop-only');
-    // cloud_chat_stream would prefix-match nothing meaningful; override pins it cloud.
     expect(resolveCommandCapability('cloud_chat_stream').tier).toBe('cloud');
   });
 
   it('LOCK REGRESSION: no Local-only prefix is ever classified cloud', () => {
-    // If any of these flips to 'cloud', a Local command would silently exfiltrate
-    // to the API gateway with zero other test catching it.
     const localOnlyPrefixes = [
       'file_read',
       'terminal_exec',
@@ -106,15 +73,9 @@ describe('resolveCommandCapability (tier classification)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// command() — dispatch behavior in web/cloud mode
-// ---------------------------------------------------------------------------
-
 describe('command() dispatch (web/cloud mode)', () => {
   it('LOCK ENFORCEMENT: rejects a desktop-only command with DesktopRequiredError AND never routes it to cloud', async () => {
-    // Exact-type assertion guards against a spurious pass from the test-mode guard.
     await expect(command('file_read')).rejects.toBeInstanceOf(DesktopRequiredError);
-    // The discriminating assertion: the Local command must NOT reach the gateway.
     expect(mockedRouteToCloud).not.toHaveBeenCalled();
   });
 
@@ -135,10 +96,6 @@ describe('command() dispatch (web/cloud mode)', () => {
     expect(mockedRouteToCloud.mock.calls[0]![2].tier).toBe('desktop-preferred');
   });
 });
-
-// ---------------------------------------------------------------------------
-// commandWithWarning() — warning attachment contrast
-// ---------------------------------------------------------------------------
 
 describe('commandWithWarning() warning behavior', () => {
   it('attaches NO warning for a clean cloud command', async () => {

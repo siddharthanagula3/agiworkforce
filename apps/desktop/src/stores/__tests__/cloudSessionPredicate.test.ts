@@ -1,17 +1,3 @@
-/**
- * One session, one answer.
- *
- * Regression guard for the 2026-07-28 split-brain: the same Managed Cloud
- * session rendered as signed-in (chat greeting, Settings > General "Plan: Max
- * 15x", Settings > Billing) and signed-out (sidebar "Sign in / Cloud sync",
- * Settings > Account, Tasks, Library, Settings > Privacy) at the same time.
- *
- * Cause: five hand-rolled predicates over one store, and only the one the
- * signed-out surfaces used required `user.email`. The desktop bearer is minted
- * by /api/auth/device/token with `email: ''` whenever the browser approval had
- * no email claim (apps/web/lib/server/developer-token.ts), so that predicate
- * was permanently false for a perfectly valid paid session.
- */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,11 +21,6 @@ import {
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-/**
- * Exactly what stores/authOrchestrator.ts projects for a
- * real desktop device bearer: display name from /api/me, email from the JWT
- * claim — which is the empty string.
- */
 function projectRealDeviceSession(): void {
   const store = useAuthStore.getState();
   store.setUser({ id: 'user_demo', email: '', name: 'demo' });
@@ -61,7 +42,6 @@ function projectRealDeviceSession(): void {
   });
 }
 
-/** True when the managed egress boundary admits the current state. */
 function egressBoundaryAdmits(): boolean {
   try {
     captureManagedCloudBoundary();
@@ -81,14 +61,12 @@ describe('desktop cloud session: one predicate for every surface', () => {
     projectRealDeviceSession();
 
     const state = useAuthStore.getState();
-    expect(state.user?.email).toBe(''); // the shipped token really does look like this
+    expect(state.user?.email).toBe('');
     expect(state.plan).toBe('max_15x');
     expect(selectHasCloudAccountSession(state)).toBe(true);
   });
 
   it('never disagrees with the managed egress boundary', () => {
-    // Egress is the boundary that already worked in the buggy build; a surface
-    // that says "Sign in" while managed requests succeed is the split-brain.
     const cases: Array<[string, () => void, boolean]> = [
       ['signed out', () => {}, false],
       [
@@ -103,7 +81,6 @@ describe('desktop cloud session: one predicate for every surface', () => {
           useAuthStore.getState().setAccount({
             id: 'local-abc',
             displayName: 'Local User',
-            // Exactly what App.tsx's applyLocalAccount writes.
             isLocalDeviceAccount: true,
             plan: 'local-only',
             accessToken: null,
@@ -203,18 +180,7 @@ describe('desktop cloud session: one predicate for every surface', () => {
     );
   });
 
-  /**
-   * DES-C17. The admission conjunct used to be `plan !== 'local-only'`, which is
-   * a *sniff* of a field the auth orchestrator writes several async steps after
-   * the credential: STEP 1 projects id/email/accessToken, and `setAccount`
-   * preserves the previous plan while `updates.plan` is undefined, so a device
-   * that had been running Local mode still read as local-only for the whole
-   * entitlement window (hashUserId + an untimed credits fetch) and App.tsx
-   * re-rendered AuthPage over a user who had just approved the device.
-   */
   it('admits a freshly approved device before its plan tier resolves', () => {
-    // Arrange: this install was in Local mode, so the synthesized device
-    // account is what is currently in the store.
     useAuthStore.getState().setAccount({
       id: 'local-abc',
       displayName: 'Local User',
@@ -224,8 +190,6 @@ describe('desktop cloud session: one predicate for every surface', () => {
     });
     expect(selectHasCloudAccountSession(useAuthStore.getState())).toBe(false);
 
-    // Act: exactly the orchestrator's synchronous boundary projection — the
-    // credential lands while account-scoped capability data is reset.
     const store = useAuthStore.getState();
     store.setUser({ id: 'user_demo', email: '', name: 'demo' });
     store.setAccount({
@@ -236,8 +200,6 @@ describe('desktop cloud session: one predicate for every surface', () => {
       isLocalDeviceAccount: false,
     });
 
-    // Assert: admitted immediately, while the new account's plan is unresolved
-    // and no Local/account-A entitlement survives the identity transition.
     const midWindow = useAuthStore.getState();
     expect(midWindow.plan).toBeNull();
     expect(selectHasCloudAccountSession(midWindow)).toBe(true);
@@ -245,8 +207,6 @@ describe('desktop cloud session: one predicate for every surface', () => {
   });
 
   it('derives every cloud-gated surface from selectHasCloudAccountSession', () => {
-    // The bug was four extra definitions of "signed in", not a bad value. Any
-    // surface that re-derives one from raw store fields can drift again.
     const surfaces = [
       'App.tsx',
       'features/v3/Sidebar.tsx',

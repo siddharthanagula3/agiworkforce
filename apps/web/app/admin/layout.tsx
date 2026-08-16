@@ -16,8 +16,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   await requireCurrentTermsAcceptance(userId, '/admin');
 
-  // Verify the authenticated user has admin or owner role via Clerk publicMetadata.
-  // This matches the check in the API routes (security/route.ts verifyAdminAccess).
   const client = await clerkClient();
   const user = await client.users.getUser(userId as string);
   const meta = user.publicMetadata as Record<string, unknown> | null | undefined;
@@ -28,14 +26,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     redirect('/');
   }
 
-  // CRIT-014: role alone was the whole gate here, so a SUSPENDED admin — one
-  // whose `profiles.account_status` was set by POST /api/admin/security
-  // ?action=suspend-user, which deliberately does not revoke the Clerk session —
-  // still rendered the console. `assertAccountActive` is the same read every
-  // other authenticated surface performs via `getClerkAuthUser`; it fails closed
-  // (503) when the status lookup itself fails, and both outcomes deny here.
-  //
-  // `redirect()` signals by throwing, so it must stay OUT of the try block.
   let accountActive = true;
   try {
     await assertAccountActive(userId as string);

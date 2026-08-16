@@ -1,7 +1,3 @@
-/**
- * Agent Metrics Store
- * Tracks real-time metrics from agent activity and chat sessions
- */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -23,27 +19,22 @@ export interface ChatSession {
 }
 
 export interface AgentMetrics {
-  // Overall statistics
   totalSessions: number;
   activeSessions: number;
   completedTasks: number;
   failedTasks: number;
 
-  // Agent workforce
   totalAgents: number;
   activeAgents: number;
   idleAgents: number;
 
-  // Usage metrics
   totalTokensUsed: number;
   totalMessagesExchanged: number;
   averageResponseTime: number;
 
-  // Success metrics
   successRate: number;
   averageTaskDuration: number;
 
-  // Real-time tracking
   currentSessions: ChatSession[];
   recentActivity: Array<{
     id: string;
@@ -53,12 +44,10 @@ export interface AgentMetrics {
     agentName?: string;
   }>;
 
-  // Agent status tracking (using Record for serialization compatibility)
   agentStatuses: Record<string, AgentStatus>;
   agentCommunications: AgentCommunication[];
 }
 
-/** Activity type for agent metrics */
 export type AgentActivityType =
   | 'session_start'
   | 'session_end'
@@ -66,11 +55,9 @@ export type AgentActivityType =
   | 'task_complete'
   | 'task_failed';
 
-/** Session status type */
 export type SessionStatusType = 'pending' | 'in_progress' | 'completed' | 'failed';
 
 export interface AgentMetricsState extends AgentMetrics {
-  // Actions
   startSession: (
     session: Omit<ChatSession, 'id' | 'startTime' | 'lastActivity' | 'isActive'>,
   ) => string;
@@ -84,16 +71,13 @@ export interface AgentMetricsState extends AgentMetrics {
 
   incrementTokens: (amount: number) => void;
 
-  // Computed getters
   getActiveSessionsCount: () => number;
   getTodayTasksCount: () => number;
   getSuccessRate: () => number;
 
-  // Background service control
   isBackgroundServiceRunning: boolean;
   setBackgroundServiceRunning: (running: boolean) => void;
 
-  // Reset
   reset: () => void;
 }
 
@@ -207,7 +191,6 @@ export const useAgentMetricsStore = create<AgentMetricsState>()(
               [agentName]: status,
             };
 
-            // Count active vs idle agents
             let activeCount = 0;
             let idleCount = 0;
 
@@ -311,13 +294,6 @@ export const useAgentMetricsStore = create<AgentMetricsState>()(
   ),
 );
 
-// =============================================
-// SELECTOR HOOKS - Optimized re-render patterns
-// =============================================
-
-/**
- * Get overall metrics summary
- */
 export const useAgentMetricsSummary = () =>
   useAgentMetricsStore((state) => ({
     totalSessions: state.totalSessions,
@@ -330,36 +306,18 @@ export const useAgentMetricsSummary = () =>
         : 0,
   }));
 
-/**
- * Get current active sessions
- */
 export const useCurrentSessions = () => useAgentMetricsStore((state) => state.currentSessions);
 
-/**
- * Get only active sessions (filtered)
- */
 export const useActiveSessions = () =>
   useAgentMetricsStore((state) => state.currentSessions.filter((s) => s.isActive));
 
-/**
- * Get recent activity feed
- */
 export const useRecentActivity = () => useAgentMetricsStore((state) => state.recentActivity);
 
-/**
- * Get agent statuses
- */
 export const useAgentStatuses = () => useAgentMetricsStore((state) => state.agentStatuses);
 
-/**
- * Get a specific agent's status
- */
 export const useAgentStatus = (agentName: string) =>
   useAgentMetricsStore((state) => state.agentStatuses[agentName]);
 
-/**
- * Get agent workforce summary
- */
 export const useAgentWorkforce = () =>
   useAgentMetricsStore((state) => ({
     totalAgents: state.totalAgents,
@@ -367,32 +325,20 @@ export const useAgentWorkforce = () =>
     idleAgents: state.idleAgents,
   }));
 
-/**
- * Get token usage metrics
- */
 export const useTokenMetrics = () =>
   useAgentMetricsStore((state) => ({
     totalTokensUsed: state.totalTokensUsed,
     totalMessagesExchanged: state.totalMessagesExchanged,
   }));
 
-/**
- * Get computed success rate
- */
 export const useSuccessRate = () =>
   useAgentMetricsStore((state) => {
     const total = state.completedTasks + state.failedTasks;
     return total > 0 ? (state.completedTasks / total) * 100 : 0;
   });
 
-/**
- * Get agent communications
- */
 export const useAgentCommunications = () =>
   useAgentMetricsStore((state) => state.agentCommunications);
 
-/**
- * Check if background service is running
- */
 export const useIsBackgroundServiceRunning = () =>
   useAgentMetricsStore((state) => state.isBackgroundServiceRunning);

@@ -1,9 +1,3 @@
-/**
- * Memory API
- *
- * GET /api/memory - List all memories for the authenticated user
- * POST /api/memory - Create a new memory
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -26,7 +20,6 @@ async function handleGetMemories(request: NextRequest) {
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
   const parsedOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
-  // [H7 fix] Clamp both bounds: limit must be 1-100, offset must be 0-10000
   const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
   const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
 
@@ -58,7 +51,6 @@ async function handleGetMemories(request: NextRequest) {
 }
 
 async function handleCreateMemory(request: NextRequest) {
-  // CSRF protection for state-changing POST endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
 

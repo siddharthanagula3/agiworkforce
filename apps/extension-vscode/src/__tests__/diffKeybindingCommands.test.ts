@@ -1,16 +1,3 @@
-/**
- * diffKeybindingCommands.test.ts — SIX-14.
- *
- * `contributes.keybindings` binds `agi-workforce.acceptDiff` to
- * Ctrl/Cmd+Shift+Enter and `agi-workforce.rejectDiff` to Escape, both gated on
- * `editorTextFocus && agi-workforce.hasDiff`. Keybindings pass no arguments,
- * but both handlers required a `sessionId`, so the keypress ended in
- * `_activeDiffs.get(undefined)` / `Map.delete(undefined)` — no edit, no
- * dismissal, no toast, no log. Pressing Escape over a diff did nothing at all.
- *
- * These tests invoke the real registered handlers the way VS Code does for a
- * keybinding: with zero arguments.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
@@ -49,11 +36,6 @@ function makeEditor(uri: vscode.Uri, cursorLine: number) {
   } as unknown as vscode.TextEditor;
 }
 
-/**
- * Register the real command handlers against a real DiffDecorationProvider.
- * Only the provider under test is real — the other deps are never touched by
- * the diff commands.
- */
 function registerDiffCommands(): {
   handlers: Map<string, Handler>;
   provider: DiffDecorationProvider;
@@ -97,7 +79,6 @@ describe('diff keybinding commands (SIX-14)', () => {
       (kb) =>
         kb.command === 'agi-workforce.acceptDiff' || kb.command === 'agi-workforce.rejectDiff',
     );
-    // If these ever stop being keybound, this whole file can go.
     expect(bindings.map((kb) => kb.command).sort()).toEqual([
       'agi-workforce.acceptDiff',
       'agi-workforce.rejectDiff',
@@ -113,7 +94,6 @@ describe('diff keybinding commands (SIX-14)', () => {
     provider.showDiff(editor, 'old value', 'new value', new vscode.Range(3, 0, 3, 9));
     expect(provider.sessionCount).toBe(1);
 
-    // Exactly what pressing Escape sends: the command id and nothing else.
     await handlers.get('agi-workforce.rejectDiff')?.();
 
     expect(provider.sessionCount).toBe(0);
@@ -143,7 +123,6 @@ describe('diff keybinding commands (SIX-14)', () => {
     const second = provider.showDiff(editor, 'c', 'd', new vscode.Range(9, 0, 9, 1));
     expect(provider.sessionCount).toBe(2);
 
-    // The cursor sits on line 0, nearest `first` — the explicit id must win.
     await handlers.get('agi-workforce.rejectDiff')?.(second.id);
 
     expect(provider.getSession(second.id)).toBeUndefined();
@@ -153,8 +132,6 @@ describe('diff keybinding commands (SIX-14)', () => {
   it('says so when the accept chord resolves nothing instead of failing silently', async () => {
     const { handlers, provider } = registerDiffCommands();
     const editor = makeEditor(vscode.Uri.file('/mock/workspace/src/app.ts'), 3);
-    // A diff exists (so `agi-workforce.hasDiff` is true and the chord fires)
-    // but the user is focused on a different file.
     provider.showDiff(editor, 'old', 'new', new vscode.Range(3, 0, 3, 3));
     vscode.window.activeTextEditor = makeEditor(vscode.Uri.file('/mock/workspace/src/other.ts'), 0);
 
@@ -174,7 +151,6 @@ describe('diff keybinding commands (SIX-14)', () => {
 
     await handlers.get('agi-workforce.rejectDiff')?.();
 
-    // Escape is a global dismissal key; it must not nag on every press.
     expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
     expect(provider.sessionCount).toBe(1);
   });
@@ -189,8 +165,6 @@ describe('diff keybinding commands (SIX-14)', () => {
     for (const id of diffCommands) {
       const handler = handlers.get(id);
       expect(handler, `${id} is keybound but not registered`).toBeDefined();
-      // A keybinding supplies no arguments. A handler that throws or rejects
-      // here is dead on the keyboard path.
       await expect(
         Promise.resolve(handler?.()),
         `${id} threw when invoked with no arguments`,

@@ -1,11 +1,3 @@
-/**
- * Desktop Surface Heartbeat Service
- *
- * Cloud surface heartbeats are handled by the API gateway/device-link path.
- * The desktop app must not write directly to the cloud database from the
- * frontend. This service keeps the lifecycle hook in place and avoids network
- * side effects until the Clerk-authenticated heartbeat endpoint is wired.
- */
 
 const HEARTBEAT_INTERVAL_MS = 60_000;
 

@@ -1,17 +1,4 @@
 import { resolveScreenDir } from '../support/dom';
-// Drives the 11 conversation-action QA items (Chat, Tier 1, desktop-qa-checklist.md)
-// against the LIVE tree: DesktopShellV3 -> unified-chat ChatInterface/ChatInput/
-// MessageBubble for message rendering, apps/desktop/src/features/v3/Sidebar.tsx +
-// ConversationRow.tsx for conversation-list actions. Real Tauri IPC, real SQLite
-// (via chat_* commands), real local Ollama — no mocks.
-//
-// NOTE: this harness's `@wdio/tauri-service` embedded driver retries a window-
-// focus check ("Tauri core.invoke not available after 5s timeout") before nearly
-// every discrete WebdriverIO command (findElement/click/waitForDisplayed each
-// pay a fixed ~5-6s tax), independent of app behavior — reproduced even by a
-// no-op diagnostic spec. To stay inside sane per-test budgets, most steps below
-// are collapsed into single `browser.execute()` calls that do the DOM
-// query/click/poll in-page (one WebDriver round trip instead of many).
 
 const SCREEN_DIR = resolveScreenDir('desktop-qa');
 
@@ -92,17 +79,12 @@ describe('AGI Desktop conversation actions', () => {
     await clickSelector('button[title="New chat"]');
     await browser.pause(500);
 
-    // Force a long output so generation is still in-flight when we check —
-    // even a fast small local model needs real wall-clock time for ~200 lines.
     await sendMessageFast(
       'Count from one to two hundred. Write out each number as an English word ' +
         '(one, two, three, ...) on its own line. Do not stop early, do not summarize, ' +
         'write all two hundred lines in full.',
     );
 
-    // In-page poll: the Stop button flips synchronously in the frontend the
-    // instant Send is clicked (store.startStreaming()), independent of the
-    // backend/model — so it should appear almost immediately if wired.
     const stopAppeared = await waitForSelector('button[aria-label="Stop generation"]', 15000);
     console.log('STOP: Stop button appeared while streaming:', stopAppeared);
 
@@ -159,8 +141,6 @@ describe('AGI Desktop conversation actions', () => {
     await waitForSelector('div[role="menu"]', 5000);
     await clickButtonWithText('div[role="menu"]', 'Rename');
 
-    // Inline rename input: React-controlled, so use the WebdriverIO native-value
-    // setter (fires proper input events) rather than raw DOM assignment.
     const input = await $(
       '[data-testid="conversation-row"][data-conversation-active="true"] input',
     );
@@ -260,7 +240,7 @@ describe('AGI Desktop conversation actions', () => {
       moreBtn?.click();
     });
     await waitForSelector('div[role="menu"]', 5000);
-    await clickButtonWithText('div[role="menu"]', 'Delete'); // first click arms confirm
+    await clickButtonWithText('div[role="menu"]', 'Delete');
     await waitForSelector('div[role="menu"]', 3000);
     const confirmClicked = await clickButtonWithText('div[role="menu"]', 'Confirm delete');
     console.log('DELETE: confirm-delete menu item found and clicked:', confirmClicked);

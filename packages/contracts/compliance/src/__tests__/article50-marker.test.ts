@@ -43,7 +43,6 @@ describe('Article50Marker — buildProvenanceClaim', () => {
     });
     const serialised = serialiseClaim(claim);
     expect(typeof serialised).toBe('string');
-    // The sorted-key contract — `assertions` is alphabetically first.
     expect(serialised.indexOf('assertions')).toBeLessThan(serialised.indexOf('version'));
   });
 });

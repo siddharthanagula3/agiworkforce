@@ -1,24 +1,4 @@
 #!/usr/bin/env node
-/**
- * Run the vendored SkillSpector scanner against in-repo skill packages and fail
- * on a DO_NOT_INSTALL verdict.
- *
- * `tools/AGENTS.md` calls `tools/skill-vetting` "the trust differentiator for
- * skill/plugin/MCP pre-install vetting", but until this script existed nothing
- * outside the scanner's own `verify.sh` ever invoked it — the enforced boundary
- * was a claim, not a gate. This is the gate.
- *
- * The invocation contract is copied from `tools/skill-vetting/verify.sh`, which
- * is the only proven usage: `skillspector scan <dir> --no-llm --format json
- * --output <file>`, then read `risk_assessment.recommendation`. The scanner's
- * own exit code is deliberately not trusted — verify.sh ignores it and reads the
- * verdict from the report, because a nonzero exit also means "risk score > 50",
- * which is not the same thing as "do not install".
- *
- * Usage:
- *   node scripts/scan-skills-with-vetting.mjs                scan every in-repo skill package
- *   node scripts/scan-skills-with-vetting.mjs <dir> [<dir>…] scan specific packages
- */
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -30,7 +10,6 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const VETTING_ROOT = join(REPO_ROOT, 'tools', 'skill-vetting');
 const LOCK_PATH = join(REPO_ROOT, 'skills-lock.json');
 
-/** Verdicts that must block a merge. */
 const BLOCKING_RECOMMENDATIONS = new Set(['DO_NOT_INSTALL']);
 
 function skillRoots() {

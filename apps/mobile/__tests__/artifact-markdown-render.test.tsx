@@ -1,13 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M08 — document/research artifacts must render as formatted markdown.
- *
- * Both artifact viewers used to dump `artifact.content` into a single flat
- * <Text>, so `# `, `- `, `**` and fenced code markers showed up literally.
- * These tests lock the rendered tree: headings and list items are separate
- * Text nodes, no leaf carries the raw source, and the monospace path for
- * code artifacts is unchanged.
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
@@ -47,8 +38,6 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ getParent: () => null, dispatch: jest.fn() }),
 }));
 
-// The gallery pulls in expo-router transitively (GeneratedImage → imagegen →
-// services/api), which needs the real @react-navigation/native mocked above.
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
@@ -92,11 +81,6 @@ const codeArtifact: Artifact = {
   content: CODE_CONTENT,
 };
 
-/**
- * Every string leaf under a rendered subtree, in document order. Accepts either
- * a react-test-renderer JSON node or a ReactTestInstance — both expose
- * `children` as an array of nodes/strings.
- */
 function collectTextLeaves(node: unknown, out: string[] = []): string[] {
   if (typeof node === 'string') {
     out.push(node);
@@ -118,15 +102,11 @@ describe('ArtifactFullScreen markdown rendering (PAR-M08)', () => {
       <ArtifactFullScreen artifact={documentArtifact} visible onClose={jest.fn()} />,
     );
 
-    // Heading text is its own node with the marker stripped.
     expect(screen.getByText('Quarterly Plan')).toBeTruthy();
     expect(screen.getByText('Milestones')).toBeTruthy();
-    // Each list item is its own node.
     expect(screen.getByText('Ship the mobile viewer')).toBeTruthy();
     expect(screen.getByText('Close the parity backlog')).toBeTruthy();
-    // Inline emphasis becomes a nested node rather than literal asterisks.
     expect(screen.getByText('bold')).toBeTruthy();
-    // The whole source is never a single node.
     expect(screen.queryByText(DOCUMENT_CONTENT)).toBeNull();
 
     const leaves = collectTextLeaves(screen.getByTestId('artifact-fullscreen-markdown'));
@@ -187,8 +167,6 @@ describe('Artifacts gallery preview markdown rendering (PAR-M08)', () => {
     expect(screen.getByText('Ship the mobile viewer')).toBeTruthy();
     expect(screen.queryByText(DOCUMENT_CONTENT)).toBeNull();
 
-    // Scoped to the preview body: the grid thumbnail behind the modal still
-    // shows raw source lines by design, so a whole-tree scan would be moot.
     const leaves = collectTextLeaves(screen.getByTestId('artifact-preview-content'));
     expect(leaves).toContain('Quarterly Plan');
     expect(leaves).toContain('Ship the mobile viewer');

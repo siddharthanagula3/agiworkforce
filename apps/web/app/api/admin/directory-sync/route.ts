@@ -16,14 +16,9 @@ export const dynamic = 'force-dynamic';
 
 const VALID_PROVIDERS = ['okta', 'azure_ad', 'google', 'onelogin', 'generic_scim'] as const;
 
-/** The base URL an admin pastes into their IdP's SCIM configuration. */
 function scimBaseUrl(request: NextRequest): string {
   return `${new URL(request.url).origin}/api/scim/v2`;
 }
-
-// ---------------------------------------------------------------------------
-// GET - connections, recent sync activity, and the SCIM base URL
-// ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -47,8 +42,6 @@ export async function GET(request: NextRequest) {
           order by created_at desc`,
         [access.organizationId],
       );
-      // Recent IdP activity, so an admin can see what directory sync actually
-      // did rather than trusting that it did anything.
       events = await db.query<DirectorySyncEventRow>(
         `select id, connection_id, organization_id, event_type, user_email, raw_payload,
                 processed_at, error, created_at
@@ -81,10 +74,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// POST - Register a new directory sync connection
-// ---------------------------------------------------------------------------
-
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
@@ -108,9 +97,6 @@ export async function POST(request: NextRequest) {
     const access = await requireDirectorySyncAdmin(request, organizationId ?? null);
     if (isDirectorySyncAccessFailure(access)) return access.response;
 
-    // AUDIT-FIX STB-15: `provider` was correctly allowlisted, but `directory_id`
-    // had only a truthiness check and `display_name` had none at all — no type,
-    // no length — on the row that binds this organization's identity provider.
     if (typeof provider !== 'string' || typeof directory_id !== 'string') {
       return NextResponse.json(
         { error: 'provider and directory_id are required and must be strings' },
@@ -213,10 +199,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// DELETE - Remove a directory sync connection
-// ---------------------------------------------------------------------------
-
 export async function DELETE(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
@@ -240,8 +222,6 @@ export async function DELETE(request: NextRequest) {
 
     const db = getNeonDb();
 
-    // Scoped by organization in the predicate itself: a connection belonging to
-    // another tenant is indistinguishable from one that does not exist.
     const existing = await db
       .query<
         Pick<DirectorySyncConnectionRow, 'id' | 'organization_id' | 'provider' | 'directory_id'>
@@ -259,10 +239,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     try {
-      // Deleting the connection cascades to its SCIM tokens, provisioned users,
-      // groups and sync events (0084). Provisioned `organization_members` rows
-      // are deliberately NOT cascaded — removing a connection is a
-      // configuration change, not a mass deprovisioning event.
       await db.execute(
         'delete from directory_sync_connections where id = $1 and organization_id = $2',
         [connectionId, access.organizationId],

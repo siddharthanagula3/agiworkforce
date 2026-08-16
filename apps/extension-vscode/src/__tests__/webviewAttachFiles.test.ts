@@ -1,14 +1,3 @@
-/**
- * webviewAttachFiles.test.ts — schema coverage for the new `attachFiles`
- * webview→host message added on 2026-05-21 (round-2 audit P0 #3, vscode-ext
- * composer drag-drop + paste-image wire).
- *
- * The schema's job is to refuse hostile payloads: oversized data URLs,
- * path-separator filenames, non-`data:` URLs, and empty/too-many batches.
- * If any of these slip past, the host writes attacker-controlled bytes to
- * disk and then hands the path to addToContext. Hard to recover from once
- * that surface ships, so keep the test set tight.
- */
 
 import { describe, it, expect } from 'vitest';
 import { parseWebviewMessage } from '../protocol/webviewMessages';
@@ -138,9 +127,6 @@ describe('attachFiles webview→host schema', () => {
   });
 
   it('passes removePendingAttachment through the gate (was dropped, keeping the file attached)', () => {
-    // Regression: the schema omitted this message, so parseWebviewMessage returned
-    // undefined and the host never removed the file — the chip vanished client-side
-    // but the attachment was still sent on the next turn.
     const result = parseWebviewMessage({
       type: 'removePendingAttachment',
       payload: { id: 'att-123' },

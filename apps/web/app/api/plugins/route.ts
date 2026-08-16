@@ -17,28 +17,7 @@ import {
   type PluginRegistryListResponse,
 } from '@agiworkforce/types';
 
-/**
- * Hosted plugin registry — list (CAP-046 slice 2).
- *
- *   GET /api/plugins                      - the whole catalogue (paged)
- *   GET /api/plugins?category=Developer   - one category
- *   GET /api/plugins?status=published     - only distributable entries
- *   GET /api/plugins?source=marketplace   - by provenance
- *
- * PUBLIC and unauthenticated by design: the marketplace page renders for
- * signed-out visitors and the CLI resolves against this endpoint before a user
- * has any account. Migration 0096 makes catalogue rows world-readable and grants
- * the app role SELECT only, so there is no write surface to protect here.
- *
- * Rate limiting reuses the `model-catalog` bucket — the other public, cached,
- * read-only catalogue endpoint with the same abuse profile. A dedicated
- * `plugin-registry` key belongs in lib/rate-limit.ts and is tracked as a
- * follow-up rather than duplicated here.
- */
-
 export const runtime = 'nodejs';
-// The catalogue lives in the database, so the response cannot be baked at build
-// time; it is CDN-cacheable instead (see Cache-Control below).
 export const dynamic = 'force-dynamic';
 
 const QuerySchema = z.object({
@@ -92,8 +71,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(body, {
       status: 200,
       headers: {
-        // Short public cache: the catalogue changes rarely, and a stale entry
-        // for a minute is harmless because nothing here is user-specific.
         'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
         ...headers,
       },

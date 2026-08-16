@@ -1,10 +1,3 @@
-/**
- * Public path aliases served only by api.agiworkforce.com.
- *
- * Next rewrites these paths after Proxy runs. Keep the rewrite table and the
- * Proxy pass-through decision on this one contract: if Proxy redirects a
- * source first, the host condition is lost and the rewrite can never match.
- */
 export const API_HOST_REWRITE_ROUTES = [
   {
     source: '/v1/chat/completions',

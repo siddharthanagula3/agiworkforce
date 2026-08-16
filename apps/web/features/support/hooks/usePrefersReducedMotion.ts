@@ -1,13 +1,5 @@
 'use client';
 
-/**
- * Reads the OS reduced-motion preference.
- *
- * Uses matchMedia directly rather than framer-motion's `useReducedMotion`
- * because test/setup.ts stubs that hook to a constant `false`, which would make
- * any reduced-motion test vacuous.
- */
-
 import { useEffect, useState } from 'react';
 
 const QUERY = '(prefers-reduced-motion: reduce)';
@@ -29,7 +21,6 @@ export function usePrefersReducedMotion(): boolean {
         media.removeEventListener('change', onChange);
       };
     }
-    // Safari < 14 / older jsdom.
     if (typeof media.addListener === 'function') {
       media.addListener(onChange);
       return () => {

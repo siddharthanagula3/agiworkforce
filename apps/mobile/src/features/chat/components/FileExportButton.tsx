@@ -1,22 +1,3 @@
-/**
- * FileExportButton — bottom sheet for exporting assistant message content.
- *
- * Presented on long-press of assistant messages. Offers:
- *   - Export as PDF
- *   - Export as Text
- *   - Copy to Clipboard
- *   - Share...
- *
- * Regression: this previously used @gorhom/bottom-sheet's plain (non-modal)
- * BottomSheet, which positions itself relative to its nearest ancestor rather
- * than the screen. Since this component is mounted inside MessageBubble — a
- * row inside the virtualized message list — the sheet was clipped to that
- * row's small bounds and never visible, silently no-opping "Export Message...".
- * No BottomSheetModalProvider exists in this app to fix it the @gorhom way, so
- * this uses React Native's native Modal instead — the same proven pattern as
- * MessageEditModal.tsx in this directory, which renders via a native window
- * layer and is immune to list-item clipping.
- */
 
 import { useCallback, useState } from 'react';
 import { View, Pressable, ActivityIndicator, Modal, StyleSheet } from 'react-native';
@@ -29,18 +10,11 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { exportToPDF, exportToText, shareFile, type ExportResult } from '@/services/fileCreation';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface FileExportButtonProps {
-  /** The message content to export */
   content: string;
   /** Title for the exported document (defaults to truncated content) */
   title?: string;
-  /** Whether the bottom sheet is visible */
   visible: boolean;
-  /** Called when the sheet should close */
   onClose: () => void;
 }
 
@@ -53,10 +27,6 @@ interface ActionItem {
   icon: typeof FileText;
   iconColorToken: keyof ColorScheme;
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const ACTIONS: ActionItem[] = [
   {
@@ -89,10 +59,6 @@ const ACTIONS: ActionItem[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function FileExportButton({
   content,
   title: titleProp,
@@ -103,7 +69,6 @@ export function FileExportButton({
   const [loading, setLoading] = useState<ExportAction | null>(null);
   const [success, setSuccess] = useState<ExportAction | null>(null);
 
-  // Derive a title from the first line of content if not provided
   const title = titleProp ?? (content.split('\n')[0].slice(0, 60) || 'Chat Export');
 
   const handleClose = useCallback(() => {
@@ -154,7 +119,6 @@ export function FileExportButton({
         }
       } catch (err) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        // Error state clears after a moment so the user can retry
         setLoading(null);
       } finally {
         setLoading(null);
@@ -176,13 +140,6 @@ export function FileExportButton({
         onPress={handleClose}
         accessibilityLabel="Dismiss export menu"
         accessibilityRole="button"
-        // accessible=false: without this, a Pressable with a label/role becomes a
-        // leaf accessibility element and swallows every descendant — the whole
-        // sheet (all 4 export actions, the close button) would be invisible to
-        // VoiceOver, reachable only as one opaque "Dismiss export menu" node.
-        // The dedicated "Close export menu" X button remains the labeled,
-        // accessible dismiss path; this backdrop only needs to stay tappable for
-        // sighted users, which accessible=false does not affect.
         accessible={false}
       >
         <SafeAreaView edges={['bottom']} style={styles.safeArea}>
@@ -227,12 +184,6 @@ export function FileExportButton({
                 const ActionIcon = action.icon;
 
                 return (
-                  // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
-                  // (docs/agent-context/known-flaws.md): a function-style `style`
-                  // prop silently drops flexDirection/alignItems/padding in this
-                  // stack, which would stack the icon above the label instead of
-                  // beside it. `children`-as-function keeps pressed state while
-                  // every real style lives on a plain View.
                   <Pressable
                     key={action.key}
                     onPress={() => handleAction(action.key)}

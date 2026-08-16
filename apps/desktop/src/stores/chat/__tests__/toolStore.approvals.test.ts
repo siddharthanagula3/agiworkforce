@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { enableMapSet } from 'immer';
 import { useToolStore, type ApprovalRequest } from '../toolStore';
 
-// Immer MapSet plugin required for stores using Map/Set in state
 enableMapSet();
 
 const baseApproval: Omit<ApprovalRequest, 'createdAt' | 'status'> = {

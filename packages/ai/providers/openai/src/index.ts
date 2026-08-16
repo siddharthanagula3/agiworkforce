@@ -91,32 +91,12 @@ const OPENAI_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface OpenAIAdapterConfig extends ProviderAdapterConfig {
-  /** Organization id (legacy `OpenAI-Organization` header). */
   organization?: string;
-  /** Project id (`OpenAI-Project` header). */
   project?: string;
-  /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
-  /** Send `service_tier` on requests where allowed (api.openai.com only). */
   serviceTier?: 'auto' | 'default' | 'flex';
-  /**
-   * Use the Responses API (`/v1/responses`) instead of Chat Completions.
-   * Required for OpenAI models with server-side reasoning state. Default is
-   * automatic for native OpenAI catalog-known chat/text models. Set `false`
-   * to force Chat Completions for legacy callers and diagnostics.
-   */
   useResponsesApi?: boolean;
-  /**
-   * For the Responses path: when `true`, the server stores the response so
-   * subsequent requests can chain via `previous_response_id`. Default
-   * `false` — stateless, matching Chat Completions semantics. Wave 3
-   * (Hobby/Pro tier) can flip this on for a server-side conversation cache.
-   */
   responsesStore?: boolean;
-  /**
-   * Content-free structural telemetry for the Responses path. This callback
-   * never receives prompts, response text, tool names/arguments, URLs, or files.
-   */
   onResponsesDiagnostics?: (diagnostics: OpenAIResponsesDiagnostics) => void;
 }
 
@@ -260,8 +240,6 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
         for (const entry of list.data ?? []) {
           if (typeof entry.id === 'string') ids.add(entry.id);
         }
-        // Merge: prefer curated metadata; surface any newer ids from /models
-        // that aren't in the curated list as id-only entries.
         const out: ModelInfo[] = OPENAI_MODEL_CATALOG.filter(
           (m) => ids.size === 0 || ids.has(m.id),
         ).map((m) => ({ ...m }));
@@ -277,16 +255,12 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
     },
 
     async *stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk> {
-      // 1. Detect this (provider, baseUrl, model) combo's compat profile.
       const detected = detectOpenAICompletionsCompat({
         provider: 'openai',
         ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
         id: req.model,
       });
 
-      // 1a. Branch: Responses API path (`/v1/responses`) for native OpenAI
-      // text/chat models. OpenAI-compatible endpoints stay on Chat
-      // Completions because many reject Responses-only fields or semantics.
       if (shouldUseOpenAIResponsesApi(req, config, detected)) {
         try {
           const responsesParams = translateChatRequestToResponses(req, {
@@ -295,7 +269,6 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
             ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
           });
           const requestDiagnostics = summarizeOpenAIResponsesRequest(responsesParams);
-          // SDK type churns; cast at the boundary.
           const responsePromise = sdk.responses.create(
             responsesParams as unknown as Parameters<typeof sdk.responses.create>[0],
             { signal },
@@ -338,15 +311,11 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
         }
       }
 
-      // 2. Translate the request using compat-aware shape rules.
       const params = translateChatRequest(req, {
         compat: detected.defaults,
         provider: 'openai',
       });
 
-      // 3. Apply Responses API payload policy on top — this also handles the
-      //    Chat Completions case for `store`/`prompt_cache_key`/`service_tier`
-      //    when the gate matches.
       const policy = resolveOpenAIResponsesPayloadPolicy(
         {
           provider: 'openai',
@@ -362,16 +331,12 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
       const payload = params as unknown as Record<string, unknown>;
       applyOpenAIResponsesPayloadPolicy(payload, policy);
 
-      // service_tier (only allowed on the openai-public + responses combination,
-      // but Chat Completions accepts it too on api.openai.com)
       if (config.serviceTier && payload['service_tier'] === undefined) {
         payload['service_tier'] = config.serviceTier;
       }
 
-      // 4. Send via SDK; SDK returns an async iterable of typed chunks.
       try {
         const sdkStream = await sdk.chat.completions.create(
-          // Cast at the boundary — our hand-typed shape is a subset of the SDK's.
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },
         );

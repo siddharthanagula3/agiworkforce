@@ -1,34 +1,8 @@
-/**
- * Format loaded skills as a system-prompt block.
- *
- * Output shape (mirrors OpenClaw's `formatSkillsForPrompt` XML envelope):
- *
- * ```xml
- * <available_skills>
- *   <skill>
- *     <name>diffs</name>
- *     <description>Use the diffs tool to produce real, shareable diffs.</description>
- *     <location>/path/to/skill.md</location>
- *   </skill>
- *   <skill>...</skill>
- * </available_skills>
- * ```
- *
- * This legacy formatter is for trusted host-local flows that intentionally
- * expose local locations. Model-facing Cloud flows must use
- * `formatSkillsForToolPrompt`, which never includes locations or bodies.
- *
- * If `inlineBodies: true` is passed, full body text is included inside each
- * `<skill>` block — useful for short prompts or test fixtures, but burns
- * tokens.
- */
 
 import type { Skill } from './types';
 
 export interface FormatSkillsOptions {
-  /** Inline skill bodies (default: false — list-only). */
   inlineBodies?: boolean;
-  /** Optional filter: only include skills matching this allowlist. */
   allowlist?: ReadonlySet<string>;
 }
 

@@ -68,11 +68,9 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   const hasContent = typeof artifact.content === 'string' && artifact.content.trim().length > 0;
   const awaitingOutput = artifactStatus === 'running' && !hasContent;
 
-  // AUDIT-005-003 fix: Ref to track mount state and timeout for copy state reset
   const isMountedRef = useRef(true);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // AUDIT-005-003 fix: Cleanup on unmount
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -132,7 +130,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     try {
       await navigator.clipboard.writeText(artifact.content);
       setCopied(true);
-      // AUDIT-005-003 fix: Clear previous timeout and add mount check
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
       }
@@ -236,8 +233,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       });
       if (!savePath) return;
 
-      // Shared tabular parser handles CSV/TSV and the legacy JSON
-      // array-of-objects shape — same path the unified-chat renderer uses.
       const data = parseTabular(artifact.content);
       if (!data || data.rows.length === 0) {
         toast.error('No data to export');
@@ -307,7 +302,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
       if (!savePath) return;
 
-      // AUDIT-005-007 fix: Track FileReader and add mount check before state updates
       const reader = new FileReader();
       reader.onloadend = async () => {
         if (!isMountedRef.current) return;
@@ -375,7 +369,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(svgBlob);
 
-      // AUDIT-005-008 fix: Create canvas and draw SVG with mount check
       const img = new Image();
       img.onload = async () => {
         if (!isMountedRef.current) {
@@ -395,7 +388,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
           ctx.drawImage(img, 0, 0, width, height);
 
           canvas.toBlob(async (blob) => {
-            // AUDIT-005-008 fix: Check mount state before state updates
             if (!isMountedRef.current) return;
             if (blob) {
               const pngUrl = URL.createObjectURL(blob);
@@ -426,8 +418,6 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
   const handleCopyMarkdown = async () => {
     try {
-      // Shared tabular parser handles CSV/TSV and the legacy JSON
-      // array-of-objects shape — same path the unified-chat renderer uses.
       const data = parseTabular(artifact.content);
       if (!data || data.rows.length === 0) {
         toast.error('No data to copy');

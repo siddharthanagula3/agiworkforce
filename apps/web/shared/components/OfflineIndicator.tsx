@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * Offline Indicator Component
- *
- * Displays network status and offline queue information.
- * Shows banner when offline or when items are pending sync.
- *
- * Features:
- * - Online/offline status display
- * - Queue item count
- * - Sync status (syncing, synced, error)
- * - Retry button
- * - Auto-hide when online with no pending items
- */
-
 import { useEffect, useState } from 'react';
 import { AlertCircle, Check, Loader, Wifi, WifiOff } from 'lucide-react';
 import {
@@ -30,19 +16,10 @@ import {
 import type { SyncManagerState } from '@/lib/offline/offlineSync';
 
 interface OfflineIndicatorProps {
-  /**
-   * Position of the indicator (default: bottom of screen)
-   */
   position?: 'top' | 'bottom';
 
-  /**
-   * Custom class names for the banner
-   */
   className?: string;
 
-  /**
-   * Show indicator even when online with no pending items
-   */
   alwaysShow?: boolean;
 }
 
@@ -54,7 +31,6 @@ export function OfflineIndicator({
   const [state, setState] = useState<SyncManagerState | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
-  // Initialize sync manager on mount
   useEffect(() => {
     initializeSyncManager();
 
@@ -63,13 +39,10 @@ export function OfflineIndicator({
     };
   }, []);
 
-  // Subscribe to state changes
   useEffect(() => {
-    // Get initial state
     const initialState = getSyncState();
     setState(initialState);
 
-    // Subscribe to changes
     const unsubscribe = subscribeSyncState((newState) => {
       setState(newState);
     });
@@ -77,7 +50,6 @@ export function OfflineIndicator({
     return unsubscribe;
   }, []);
 
-  // Determine visibility
   useEffect(() => {
     if (!state) {
       setIsVisible(false);
@@ -101,7 +73,6 @@ export function OfflineIndicator({
   const severity = getStatusSeverity();
   const message = getStatusMessage();
 
-  // Color schemes based on severity
   const bgColor = {
     success: 'bg-green-50 dark:bg-green-950',
     info: 'bg-blue-50 dark:bg-blue-950',
@@ -130,7 +101,6 @@ export function OfflineIndicator({
     error: 'text-red-600 dark:text-red-400',
   }[severity];
 
-  // Select icon based on state
   const getIcon = () => {
     switch (state.state) {
       case SyncState.SYNCING:
@@ -210,9 +180,6 @@ export function OfflineIndicator({
   );
 }
 
-/**
- * Format time for display
- */
 function formatTime(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();

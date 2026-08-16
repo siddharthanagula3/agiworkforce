@@ -1,15 +1,3 @@
-/**
- * Stripe's subscription status vocabulary is wider than the column that stores
- * it. `paused` — a trial that ended with no payment method — has no slot in the
- * CHECK constraint created by `apps/web/db/neon/0003_subscriptions.sql`, so
- * writing it verbatim aborts the webhook transaction, every Stripe retry aborts
- * the same way, and the row keeps its previous `trialing`/`active` status while
- * entitlement keeps reading that status as paid access.
- *
- * The allowed set below is parsed out of the migration rather than retyped, so
- * widening the constraint (the real fix, which makes `paused` storable) relaxes
- * this test instead of breaking it.
- */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -72,8 +60,6 @@ function pausedSubscription(): Stripe.Subscription {
   return {
     id: 'sub_paused',
     customer: 'cus_123',
-    // Stripe sets this when a trial ends and the customer left no payment
-    // method (trial_settings.end_behavior.missing_payment_method = 'pause').
     status: 'paused',
     cancel_at_period_end: false,
     canceled_at: null,
@@ -116,8 +102,6 @@ describe('toStoredSubscriptionStatus', () => {
   });
 
   it('never maps a Stripe status onto an entitled one it did not mean', () => {
-    // active/trialing are the entitled statuses (lib/entitlement.ts). Only
-    // Stripe's own active/trialing may produce them.
     expect(toStoredSubscriptionStatus('paused')).not.toBe('active');
     expect(toStoredSubscriptionStatus('paused')).not.toBe('trialing');
   });
@@ -162,14 +146,12 @@ describe('customer.subscription.updated for a paused subscription', () => {
     const update = calls.find((call) => call.sql.includes('update subscriptions set'));
     expect(update, 'the paused subscription must still be written').toBeDefined();
 
-    // The status is the first bound parameter of that UPDATE.
     const writtenStatus = update!.params[0];
     expect(
       storableStatusesFromMigration(),
       `status "${String(writtenStatus)}" violates the subscriptions.status CHECK constraint, so ` +
         `the webhook transaction rolls back and the row keeps its entitled status`,
     ).toContain(writtenStatus);
-    // And a paused subscription must not stay entitled.
     expect(writtenStatus).not.toBe('trialing');
     expect(writtenStatus).not.toBe('active');
   });

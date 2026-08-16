@@ -1,22 +1,5 @@
-/**
- * useNotifications Hook
- *
- * Provides a React hook for interacting with the in-app notification center.
- * Supports listing, reading, deleting notifications and managing settings.
- *
- * Features:
- * - Paginated notification list
- * - Mark read/unread
- * - Delete notifications
- * - Settings management
- * - Real-time updates via Tauri events
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
 
@@ -84,18 +67,13 @@ export interface CreateNotificationInput {
 }
 
 interface UseNotificationsOptions {
-  /** Auto-fetch notifications on mount */
   autoFetch?: boolean;
-  /** Page size for pagination */
   pageSize?: number;
-  /** Filter by unread only */
   unreadOnly?: boolean;
-  /** Filter by notification type */
   filterType?: NotificationType;
 }
 
 interface UseNotificationsReturn {
-  // State
   notifications: Notification[];
   unreadCount: number;
   total: number;
@@ -106,7 +84,6 @@ interface UseNotificationsReturn {
   error: string | null;
   settings: NotificationSettings | null;
 
-  // Actions
   list: (options?: {
     page?: number;
     pageSize?: number;
@@ -125,14 +102,9 @@ interface UseNotificationsReturn {
   clearError: () => void;
 }
 
-// ============================================================================
-// Hook Implementation
-// ============================================================================
-
 export function useNotifications(options: UseNotificationsOptions = {}): UseNotificationsReturn {
   const { autoFetch = true, pageSize = 20, unreadOnly = false, filterType } = options;
 
-  // State
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [total, setTotal] = useState(0);
@@ -143,13 +115,8 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettingsState] = useState<NotificationSettings | null>(null);
 
-  // Refs
   const mountedRef = useRef(true);
   const unlistenRefs = useRef<UnlistenFn[]>([]);
-
-  // ============================================================================
-  // API Methods
-  // ============================================================================
 
   const list = useCallback(
     async (
@@ -180,7 +147,6 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
           if (requestPage === 1) {
             setNotifications(response.notifications);
           } else {
-            // Append for pagination
             setNotifications((prev) => [...prev, ...response.notifications]);
           }
           setUnreadCount(response.unread_count);
@@ -358,16 +324,11 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
     setError(null);
   }, []);
 
-  // ============================================================================
-  // Event Listeners
-  // ============================================================================
-
   useEffect(() => {
     mountedRef.current = true;
 
     const setupListeners = async () => {
       try {
-        // Listen for new notifications
         const unlistenNew = await listen<Notification>('notification:new', (event) => {
           if (mountedRef.current) {
             setNotifications((prev) => [event.payload, ...prev]);
@@ -377,7 +338,6 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
         });
         unlistenRefs.current.push(unlistenNew);
 
-        // Listen for unread count updates
         const unlistenUnread = await listen<number>('notification:unread_count', (event) => {
           if (mountedRef.current) {
             setUnreadCount(event.payload);
@@ -385,7 +345,6 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
         });
         unlistenRefs.current.push(unlistenUnread);
 
-        // Listen for deleted notifications
         const unlistenDeleted = await listen<string>('notification:deleted', (event) => {
           if (mountedRef.current) {
             setNotifications((prev) => prev.filter((n) => n.id !== event.payload));
@@ -393,7 +352,6 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
         });
         unlistenRefs.current.push(unlistenDeleted);
 
-        // Listen for settings changes
         const unlistenSettings = await listen<NotificationSettings>(
           'notification:settings_changed',
           (event) => {
@@ -417,7 +375,6 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
     };
   }, []);
 
-  // Auto-fetch on mount
   useEffect(() => {
     if (autoFetch) {
       void list({ page: 1 });
@@ -426,7 +383,6 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   }, [autoFetch, list, getSettings]);
 
   return {
-    // State
     notifications,
     unreadCount,
     total,
@@ -437,7 +393,6 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
     error,
     settings,
 
-    // Actions
     list,
     markRead,
     markAllRead,

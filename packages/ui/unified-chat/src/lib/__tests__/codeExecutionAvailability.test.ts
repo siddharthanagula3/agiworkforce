@@ -12,9 +12,6 @@ describe('isCodeExecutionAvailable', () => {
   });
 
   it('lights a tools-capable model without native execution when E2B is live', () => {
-    // The pre-fix bug: this returned false because the model has no native
-    // interpreter. The platform E2B sandbox is model-agnostic, so a tools-capable
-    // model still gets an honest toggle when the deployment flag is on.
     expect(isCodeExecutionAvailable(false, true, 'moonshot', true)).toBe(true);
     expect(isCodeExecutionAvailable(false, true, 'deepseek', true)).toBe(true);
   });

@@ -5,10 +5,6 @@ import {
 } from '@agiworkforce/types';
 import type { MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
 
-// The shared billing catalog is the only tier taxonomy — the same rule
-// planModels.ts follows. A hand-maintained copy here silently dropped Max 15x
-// and Team from auth and feature gating after a Cloud sync, and a second copy of
-// the labels let the desktop advertise a plan name the checkout never sells.
 export type PlanTier = BillingPlanTier;
 export type SubscriptionSource = MeSubscriptionSource | 'unknown';
 

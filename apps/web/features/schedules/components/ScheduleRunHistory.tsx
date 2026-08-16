@@ -51,7 +51,6 @@ function runStatusIcon(run: ScheduleRun) {
 
 function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
   const resultText = scheduleResultText(run);
-  // Cost and tokens have always been recorded per run; nothing displayed them.
   const usage = scheduleRunUsage(run);
   return (
     <li className="rounded-xl border border-border/70 bg-background/70 p-3">

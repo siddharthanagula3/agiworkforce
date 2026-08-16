@@ -1,11 +1,3 @@
-/**
- * Pairing Endpoint Tests
- *
- * Tests for HTTP pairing endpoints:
- * - POST /pairings (create pairing)
- * - GET /pairings/:code (lookup pairing)
- * - DELETE /pairings/:code (delete pairing)
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
@@ -18,18 +10,15 @@ vi.mock('../../src/db.js', () => ({
   insertSession: vi.fn(),
 }));
 
-// Create test app that mimics the signaling server HTTP endpoints
 function createTestApp() {
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: '16kb' }));
 
-  // Simplified pairing creation endpoint
   app.post('/pairings', async (_req, res) => {
     try {
-      // Mock successful creation
       const code = 'ABCD1234EFGH';
-      const expiresAt = Date.now() + 300000; // 5 minutes
+      const expiresAt = Date.now() + 300000;
 
       res.json({
         code,
@@ -44,16 +33,13 @@ function createTestApp() {
     }
   });
 
-  // Pairing lookup endpoint
   app.get('/pairings/:code', async (req, res) => {
     const code = req.params['code'];
 
-    // Validate the production 12-character, alphanumeric uppercase format.
     if (!code || !/^[A-Z0-9]{12}$/.test(code)) {
       return res.status(400).json({ error: 'invalid_code_format' });
     }
 
-    // Mock response based on code
     if (code === 'NOTFOUND0000') {
       return res.status(404).json({ error: 'pairing_not_found' });
     }
@@ -92,11 +78,9 @@ function createTestApp() {
     });
   });
 
-  // Pairing deletion endpoint
   app.delete('/pairings/:code', async (req, res) => {
     const code = req.params['code'];
 
-    // Validate code format
     if (!code || !/^[A-Z0-9]{12}$/.test(code)) {
       return res.status(400).json({ error: 'invalid_code_format' });
     }

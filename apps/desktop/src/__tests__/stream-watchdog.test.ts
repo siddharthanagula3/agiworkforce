@@ -1,27 +1,6 @@
-/**
- * Stream Watchdog — E2E Smoke Tests
- *
- * Tests the Wave 1 stream-end hardening behavior wired through settingsStore's
- * streamInactivityTimeoutSeconds and the chatStore / unifiedChatStore streaming state.
- *
- * Scenarios covered:
- *  - Watchdog starts when streaming begins (isStreaming=true)
- *  - Watchdog stops when streaming ends normally
- *  - Watchdog triggers timeout after the configured inactivity period
- *  - Timeout resets isStreaming, isLoading, and currentStreamingMessageId
- *  - Stream activity markers extend the watchdog (reset the timer)
- *  - Configurable timeout from settings
- */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useSettingsStore } from '../stores/settingsStore';
-
-// ---------------------------------------------------------------------------
-// We test the watchdog logic in isolation using a lightweight simulation
-// that mirrors the actual watchdog pattern used in the streaming hooks.
-// This avoids coupling to specific component internals while fully exercising
-// the contract.
-// ---------------------------------------------------------------------------
 
 interface WatchdogState {
   isStreaming: boolean;
@@ -29,10 +8,6 @@ interface WatchdogState {
   currentStreamingMessageId: string | null;
 }
 
-/**
- * Minimal watchdog implementation that mirrors what the real streaming hook does.
- * Uses fake timers so tests stay deterministic.
- */
 function createWatchdog(
   timeoutMs: number,
   onTimeout: (setState: (partial: Partial<WatchdogState>) => void) => void,
@@ -40,7 +15,6 @@ function createWatchdog(
   let timerId: ReturnType<typeof setTimeout> | null = null;
 
   return {
-    /** Call when a new stream starts. */
     start(setState: (partial: Partial<WatchdogState>) => void) {
       this.clear();
       timerId = setTimeout(() => {
@@ -49,12 +23,10 @@ function createWatchdog(
       }, timeoutMs);
     },
 
-    /** Call on each streamed token to push back the deadline. */
     extend(setState: (partial: Partial<WatchdogState>) => void) {
       this.start(setState);
     },
 
-    /** Call when the stream ends normally. */
     clear() {
       if (timerId !== null) {
         clearTimeout(timerId);
@@ -62,21 +34,15 @@ function createWatchdog(
       }
     },
 
-    /** Expose for test introspection. */
     get isActive() {
       return timerId !== null;
     },
   };
 }
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
   vi.useFakeTimers();
 
-  // Reset stream inactivity setting to a known default
   useSettingsStore.setState((state) => ({
     executionPreferences: {
       ...state.executionPreferences,
@@ -89,10 +55,6 @@ afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
 });
-
-// ---------------------------------------------------------------------------
-// 1. Configuration
-// ---------------------------------------------------------------------------
 
 describe('stream watchdog configuration', () => {
   it('reads streamInactivityTimeoutSeconds from settings', () => {
@@ -108,10 +70,6 @@ describe('stream watchdog configuration', () => {
     );
   });
 });
-
-// ---------------------------------------------------------------------------
-// 2. Watchdog starts when streaming begins
-// ---------------------------------------------------------------------------
 
 describe('watchdog starts on stream begin', () => {
   it('timer is active after start() is called', () => {
@@ -134,10 +92,6 @@ describe('watchdog starts on stream begin', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. Watchdog stops when streaming ends normally
-// ---------------------------------------------------------------------------
-
 describe('watchdog stops on normal stream end', () => {
   it('clear() deactivates the timer before it fires', () => {
     const state: WatchdogState = {
@@ -152,7 +106,6 @@ describe('watchdog stops on normal stream end', () => {
     watchdog.start((patch) => Object.assign(state, patch));
     watchdog.clear();
 
-    // Advance past the timeout — should not fire
     vi.advanceTimersByTime(30_001);
 
     expect(onTimeout).not.toHaveBeenCalled();
@@ -173,7 +126,6 @@ describe('watchdog stops on normal stream end', () => {
     const watchdog = createWatchdog(30_000, onTimeout);
     watchdog.start((patch) => Object.assign(state, patch));
 
-    // Graceful end: caller manually clears streaming state and the watchdog
     state.isStreaming = false;
     state.isLoading = false;
     state.currentStreamingMessageId = null;
@@ -186,10 +138,6 @@ describe('watchdog stops on normal stream end', () => {
     expect(state.currentStreamingMessageId).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 4. Watchdog triggers timeout after inactivity period
-// ---------------------------------------------------------------------------
 
 describe('watchdog timeout after inactivity', () => {
   it('fires the timeout callback after the configured period', () => {
@@ -257,10 +205,6 @@ describe('watchdog timeout after inactivity', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 5. Stream activity markers extend the watchdog
-// ---------------------------------------------------------------------------
-
 describe('watchdog extension on stream activity', () => {
   it('extend() resets the timer when called before it fires', () => {
     const state: WatchdogState = {
@@ -276,14 +220,11 @@ describe('watchdog extension on stream activity', () => {
     const watchdog = createWatchdog(30_000, onTimeout);
     watchdog.start((patch) => Object.assign(state, patch));
 
-    // Advance 25 seconds, then receive a token (extend)
     vi.advanceTimersByTime(25_000);
     watchdog.extend((patch) => Object.assign(state, patch));
 
-    // Advance another 25 seconds — original deadline was at 30s total but extend reset it
     vi.advanceTimersByTime(25_000);
 
-    // Should NOT have timed out yet (total elapsed = 50s, but timer was reset at 25s)
     expect(state.isStreaming).toBe(true);
 
     watchdog.clear();
@@ -305,7 +246,6 @@ describe('watchdog extension on stream activity', () => {
     const watchdog = createWatchdog(10_000, onTimeout);
     watchdog.start((patch) => Object.assign(state, patch));
 
-    // Simulate a stream that keeps producing tokens every 8 seconds
     vi.advanceTimersByTime(8_000);
     watchdog.extend((patch) => Object.assign(state, patch));
 
@@ -315,8 +255,6 @@ describe('watchdog extension on stream activity', () => {
     vi.advanceTimersByTime(8_000);
     watchdog.extend((patch) => Object.assign(state, patch));
 
-    // Total real elapsed: 24 seconds, but timer was reset 3 times at 8s intervals
-    // Last reset was at 24s, so 10s deadline means it fires at 34s total
     expect(timeoutFired).toBe(false);
 
     watchdog.clear();
@@ -336,11 +274,9 @@ describe('watchdog extension on stream activity', () => {
     const watchdog = createWatchdog(10_000, onTimeout);
     watchdog.start((patch) => Object.assign(state, patch));
 
-    // Token activity at 5s resets the timer
     vi.advanceTimersByTime(5_000);
     watchdog.extend((patch) => Object.assign(state, patch));
 
-    // Now silence — timer fires at 5s+10s = 15s from start
     vi.advanceTimersByTime(10_000);
 
     expect(state.isStreaming).toBe(false);
@@ -348,10 +284,6 @@ describe('watchdog extension on stream activity', () => {
     expect(state.currentStreamingMessageId).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 6. Settings-driven timeout is consumed correctly
-// ---------------------------------------------------------------------------
 
 describe('configurable timeout integration', () => {
   it('uses the value from settingsStore for the watchdog period', () => {
@@ -373,11 +305,9 @@ describe('configurable timeout integration', () => {
     const watchdog = createWatchdog(timeoutMs, onTimeout);
     watchdog.start((patch) => Object.assign(state, patch));
 
-    // Should NOT fire at 14 999 ms
     vi.advanceTimersByTime(14_999);
     expect(state.isStreaming).toBe(true);
 
-    // Should fire at exactly 15 000 ms
     vi.advanceTimersByTime(1);
     expect(state.isStreaming).toBe(false);
   });

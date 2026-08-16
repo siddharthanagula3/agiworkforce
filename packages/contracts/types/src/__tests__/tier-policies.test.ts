@@ -1,10 +1,3 @@
-/**
- * Tier-policy registry tests — covers Free + Hobby per the auto-routing spec
- * compatibility behavior retained while consumers migrate to model-registry policy.
- *
- * The shape and freeze guarantees are load-bearing for billing and routing,
- * so failures here should fail CI.
- */
 import { describe, expect, it } from 'vitest';
 import {
   TIER_POLICIES,
@@ -57,8 +50,6 @@ describe('TIER_POLICIES — Pro tier compatibility policy', () => {
   const policy = getTierPolicy('pro');
 
   it('caps monthly text tokens at 40M', () => {
-    // Raised from 20M to 40M in commit d5e6c7978 ("raise pro token limits");
-    // this assertion was the stale half of that deliberate change.
     expect(policy.tokenCapPerMonth).toBe(40_000_000);
   });
 
@@ -72,8 +63,6 @@ describe('TIER_POLICIES — Pro tier compatibility policy', () => {
   });
 
   it('exposes Pool B workhorse + Pro `*_pro` slots + image_generation', () => {
-    // Spec §3 + §4 — Pro consumes its own *_pro slots plus the workhorse for
-    // 100% downgrade fallback and shared image_generation.
     expect(policy.allowedSlots).toContain('workhorse_general');
     expect(policy.allowedSlots).toContain('general_balanced_pro');
     expect(policy.allowedSlots).toContain('coding_premium_pro');
@@ -91,20 +80,15 @@ describe('TIER_POLICIES — Pro tier compatibility policy', () => {
   });
 
   it('does NOT expose Hobby-pool or pre-spec slots that moved away in Task #16', () => {
-    // Pool B Hobby slots replaced by *_pro counterparts.
     expect(policy.allowedSlots).not.toContain('general_fast');
     expect(policy.allowedSlots).not.toContain('general_balanced');
     expect(policy.allowedSlots).not.toContain('coding_fast');
     expect(policy.allowedSlots).not.toContain('coding_premium');
-    // The Hobby reasoning slot is replaced by the Pro-specific counterpart.
     expect(policy.allowedSlots).not.toContain('reasoning_premium');
-    // Creative writing folded into general_balanced_pro per spec.
     expect(policy.allowedSlots).not.toContain('creative_writing');
     expect(policy.allowedSlots).not.toContain('creative_writing_premium');
-    // Vision folded into multimodal_pro.
     expect(policy.allowedSlots).not.toContain('vision_fast');
     expect(policy.allowedSlots).not.toContain('vision_premium');
-    // Premium CU is a Pro+ unlock; Pro keeps light CU only.
     expect(policy.allowedSlots).not.toContain('computer_use_premium');
   });
 
@@ -191,8 +175,6 @@ describe('TIER_POLICIES — freeze guarantees (Vercel server-no-shared-module-st
     'use strict';
     const free = TIER_POLICIES.free;
     expect(() => {
-      // Cast to a writable shape to bypass the readonly compile-time guard;
-      // the runtime freeze should still throw.
       (free as { tokenCapPerMonth: number }).tokenCapPerMonth = 999_999;
     }).toThrow();
   });
@@ -250,9 +232,6 @@ describe('getTierPolicy — public getter', () => {
   });
 
   it('unknown tier falls back to Free tier shape', () => {
-    // 'plus' was removed by the 2026-06-30 pricing decision with no rename
-    // successor — a genuinely unknown tier. ('hobby' is NOT unknown: it is
-    // basic's pre-rename name still carried by subscription rows.)
     expect(getTierPolicy('plus')).toMatchObject<Partial<TierPolicy>>({
       tier: 'free',
       tokenCapPerMonth: null,
@@ -266,12 +245,6 @@ describe('getTierPolicy — public getter', () => {
 });
 
 describe('Task #26 — TierPolicy declaration consolidation', () => {
-  // Regression guard: the Phase-0 TierPolicy interface was missing the
-  // Phase-1 spec fields (tokenCapPerMonth, capBehavior, allowManualSelection,
-  // allowImageGeneration, etc). Before consolidation, TypeScript resolved the
-  // legacy shape first and consumers like `assertQuota` saw `manualModelSelection`
-  // as `false` for Pro — locking paying users out of the Advanced-mode toggle
-  // they were entitled to. These two invariants encode the fix.
   it('exposes the Advanced-mode manual picker for Pro on both legacy and aliased fields', () => {
     expect(getTierPolicy('pro').manualModelSelection).toBe(true);
     expect(getTierPolicy('pro').allowManualSelection).toBe(true);
@@ -280,8 +253,6 @@ describe('Task #26 — TierPolicy declaration consolidation', () => {
   it('keeps Free Auto-only while basic/hobby get the pro policy (2026-07-16 ladder)', () => {
     expect(getTierPolicy('free').manualModelSelection).toBe(false);
     expect(getTierPolicy('free').allowManualSelection).toBe(false);
-    // Basic (and its pre-rename alias 'hobby') shares Pro's tier policy —
-    // budget-differentiated, not capability-differentiated.
     for (const alias of ['basic', 'hobby']) {
       expect(getTierPolicy(alias).tier).toBe('pro');
       expect(getTierPolicy(alias).manualModelSelection).toBe(true);

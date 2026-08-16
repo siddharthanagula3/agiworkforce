@@ -13,19 +13,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ─── Polyfill CSS.escape for jsdom ───────────────────────────────────────────
 if (typeof globalThis.CSS === 'undefined') {
   (globalThis as Record<string, unknown>).CSS = {};
 }
 if (typeof CSS.escape !== 'function') {
   CSS.escape = (value: string) => value.replace(/([^\w-])/g, '\\$1');
 }
-
-// ─── Chrome API stubs ────────────────────────────────────────────────────────
-// vi.hoisted() runs BEFORE vi.mock() calls and static module imports in Vitest.
-// content.ts calls initialize() at module scope (line 1942), which immediately
-// calls chrome.runtime.onMessage.addListener — so the chrome global must exist
-// on globalThis before the module is imported.
 
 const chromeMock = vi.hoisted(() => {
   const mock = {
@@ -47,8 +40,6 @@ const chromeMock = vi.hoisted(() => {
   (globalThis as Record<string, unknown>).chrome = mock;
   return mock;
 });
-
-// ─── Mock dependencies imported by content.ts ────────────────────────────────
 
 vi.mock('../src/utils', () => ({
   logger: {
@@ -128,26 +119,17 @@ vi.mock('../src/nlweb', () => ({
     .mockResolvedValue({ supported: false, endpoints: [], schemaTypes: [], url: '' }),
 }));
 
-// ─── Import after mocks are in place ─────────────────────────────────────────
-
 import { automationState, handleMessage, checkConnectionStatus } from '../src/content.ts';
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function clearBody(): void {
   document.body.innerHTML = '';
 }
 
-/**
- * Dispatch a message through the content script's handleMessage and await the response.
- */
 function dispatchMessage(msg: Record<string, unknown>): Promise<unknown> {
   return new Promise((resolve) => {
     handleMessage(msg, {} as chrome.runtime.MessageSender, (response) => resolve(response));
   });
 }
-
-// ─── Setup / teardown ────────────────────────────────────────────────────────
 
 beforeEach(() => {
   clearBody();
@@ -162,10 +144,6 @@ afterEach(() => {
   clearBody();
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Message validation (isValidMessage)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('handleMessage — invalid messages are rejected', () => {
   it('rejects null messages', async () => {
     const response = await dispatchMessage(null as unknown as Record<string, unknown>);
@@ -179,7 +157,6 @@ describe('handleMessage — invalid messages are rejected', () => {
 
   it('rejects messages with an unknown type', async () => {
     const response = await dispatchMessage({ type: 'TOTALLY_UNKNOWN_ACTION' });
-    // isValidMessage returns false → 'Invalid message'
     expect(response).toMatchObject({ success: false, error: 'Invalid message' });
   });
 
@@ -198,20 +175,12 @@ describe('handleMessage — invalid messages are rejected', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// TAB_READY
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('handleMessage — TAB_READY', () => {
   it('responds with success and ready=true', async () => {
     const response = await dispatchMessage({ type: 'TAB_READY' });
     expect(response).toMatchObject({ success: true, ready: true });
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// GET_PAGE_INFO
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('handleMessage — GET_PAGE_INFO', () => {
   it('returns success with url, title, html, selectedText', async () => {
@@ -230,18 +199,12 @@ describe('handleMessage — GET_PAGE_INFO', () => {
     const response = (await dispatchMessage({ type: 'GET_PAGE_INFO' })) as {
       metadata?: { title?: string; favicon?: string; schemaTypes?: unknown[] };
     };
-    // The page-metadata module is mocked (see top of file) to a known object;
-    // its presence proves handleGetPageInfo actually calls extractPageMetadata.
     expect(response.metadata).toBeDefined();
     expect(response.metadata?.title).toBe('Test Page');
     expect(response.metadata?.favicon).toBe('/favicon.ico');
     expect(Array.isArray(response.metadata?.schemaTypes)).toBe(true);
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// GET_FORMS
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('handleMessage — GET_FORMS', () => {
   it('returns success with a forms array', async () => {
@@ -262,10 +225,6 @@ describe('handleMessage — GET_FORMS', () => {
     expect(Array.isArray(response.forms)).toBe(true);
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// CLICK
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('handleMessage — CLICK', () => {
   it('returns success=false for an invalid selector', async () => {
@@ -295,10 +254,6 @@ describe('handleMessage — CLICK', () => {
     expect(response).toMatchObject({ success: true });
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// TYPE
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('handleMessage — TYPE', () => {
   it('returns success=false for an invalid selector', async () => {
@@ -334,10 +289,6 @@ describe('handleMessage — TYPE', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// GET_TEXT
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('handleMessage — GET_TEXT', () => {
   it('returns success=false for invalid selector', async () => {
     const { validators } = await import('../src/utils');
@@ -358,10 +309,6 @@ describe('handleMessage — GET_TEXT', () => {
     expect(response).toMatchObject({ success: true, text: 'Hello' });
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// SET_ATTRIBUTE — security allowlist
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('handleMessage — SET_ATTRIBUTE security', () => {
   it('blocks event handler attributes (onclick)', async () => {
@@ -414,10 +361,6 @@ describe('handleMessage — SET_ATTRIBUTE security', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// EXECUTE_SCRIPT — allowlist enforcement
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('handleMessage — EXECUTE_SCRIPT allowlist', () => {
   it('rejects unknown script operations', async () => {
     const response = (await dispatchMessage({
@@ -463,10 +406,6 @@ describe('handleMessage — EXECUTE_SCRIPT allowlist', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// CONNECTION_STATUS_CHANGED
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('handleMessage — CONNECTION_STATUS_CHANGED', () => {
   it('sets automationState.connectionStatus to connected', async () => {
     await dispatchMessage({
@@ -495,10 +434,6 @@ describe('handleMessage — CONNECTION_STATUS_CHANGED', () => {
     expect(syncCall).toBeUndefined();
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// START_RECORDING / STOP_RECORDING / GET_RECORDED_ACTIONS
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('handleMessage — recording lifecycle', () => {
   beforeEach(() => {
@@ -539,10 +474,6 @@ describe('handleMessage — recording lifecycle', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// WEBMCP_DISCOVER_TOOLS / WEBMCP_CALL_TOOL
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('handleMessage — WebMCP messages', () => {
   it('WEBMCP_DISCOVER_TOOLS returns supported and tools from discoverAllTools', async () => {
     const { discoverAllTools } = await import('../src/webmcp');
@@ -581,10 +512,6 @@ describe('handleMessage — WebMCP messages', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// checkConnectionStatus
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('checkConnectionStatus', () => {
   it('sets connectionStatus to connected when nativeConnected=true', async () => {
     chromeMock.runtime.sendMessage.mockResolvedValueOnce({ nativeConnected: true });
@@ -604,10 +531,6 @@ describe('checkConnectionStatus', () => {
     expect(automationState.connectionStatus).toBe('disconnected');
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// RUN_PAGE_ACTIONS — orchestration
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('handleMessage — RUN_PAGE_ACTIONS', () => {
   it('returns success=true with result summary when all actions succeed', async () => {
@@ -640,7 +563,6 @@ describe('handleMessage — RUN_PAGE_ACTIONS', () => {
 
   it('returns error field when an action fails', async () => {
     const { validators } = await import('../src/utils');
-    // Use mockReturnValueOnce to avoid tainting subsequent tests with a persistent false value
     (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
 
     const response = (await dispatchMessage({
@@ -648,7 +570,6 @@ describe('handleMessage — RUN_PAGE_ACTIONS', () => {
       actions: [{ type: 'click', id: 'a1', selector: '##bad' }],
     })) as { success: boolean; error: string | undefined };
 
-    // click with invalid selector should mark this as failed
     expect(response.success).toBe(false);
     expect(typeof response.error).toBe('string');
   });
@@ -662,10 +583,6 @@ describe('handleMessage — RUN_PAGE_ACTIONS', () => {
     expect(response.taskId).toMatch(/^task_\d+$/);
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Remaining message types — basic routing coverage
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('handleMessage — additional message types routing', () => {
   const invalidSelectorSetup = async () => {
@@ -742,15 +659,12 @@ describe('handleMessage — additional message types routing', () => {
   });
 
   it('CAPTURE_ELEMENT: returns error when no element is under pointer', async () => {
-    // lastPointerTarget is null initially
     const response = await dispatchMessage({ type: 'CAPTURE_ELEMENT' });
     expect(response).toMatchObject({ success: false, error: 'No element under pointer' });
   });
 
   it('GET_ELEMENT_INFO: returns error when no active element', async () => {
-    // document.activeElement defaults to body — serialise it or return error
     const response = await dispatchMessage({ type: 'GET_ELEMENT_INFO' });
-    // Either succeeds with body info or fails; just assert it's a well-formed response
     expect(typeof (response as Record<string, unknown>).success).toBe('boolean');
   });
 
@@ -812,14 +726,12 @@ describe('handleMessage — additional message types routing', () => {
   });
 
   it('CLICK_AT_COORDINATES: returns error when no element at coordinates', async () => {
-    // document.elementFromPoint returns null for 0,0 in jsdom
     const response = (await dispatchMessage({
       type: 'CLICK_AT_COORDINATES',
       x: 9999,
       y: 9999,
     })) as { success: boolean; error?: string };
 
-    // In jsdom elementFromPoint may return body; we just assert response shape
     expect(typeof response.success).toBe('boolean');
   });
 });

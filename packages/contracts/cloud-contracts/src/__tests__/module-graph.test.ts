@@ -1,12 +1,3 @@
-/**
- * Guards the package's internal import graph against require cycles.
- *
- * A runtime cycle here is not cosmetic: Metro logs it on every Mobile boot and,
- * depending on which module a bundler evaluates first, one side sees the other's
- * exports as `undefined` — a Zod schema that is `undefined` at parse time turns
- * a contract violation into a crash. Type-only edges are excluded because they
- * are erased before any bundler sees them.
- */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -23,14 +14,7 @@ function listSourceFiles(directory: string): string[] {
   });
 }
 
-/**
- * Relative specifiers that survive type erasure. `import type ...` /
- * `export type ...` statements and inline `type` specifiers are excluded; a
- * statement that names at least one value still counts as a runtime edge.
- */
 function readRuntimeRelativeImports(source: string): string[] {
-  // The clause may wrap across lines but never contains `;` or `=`, which stops
-  // the lazy match from running past a statement that has no `from` at all.
   const statement =
     /(?:^|\n)\s*(?:import|export)(?<clause>[^;=]*?)from\s*['"](?<specifier>\.[^'"]*)['"]/g;
   const specifiers: string[] = [];
@@ -70,7 +54,6 @@ function buildGraph(): Map<string, string[]> {
   return graph;
 }
 
-/** Every cycle reachable from any module, reported as readable paths. */
 function findCycles(graph: Map<string, string[]>): string[] {
   const cycles = new Set<string>();
   const onStack = new Set<string>();

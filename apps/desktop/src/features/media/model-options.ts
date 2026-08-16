@@ -12,7 +12,6 @@ export interface MediaImageProviderOption {
   id: ImageProviderId;
   label: string;
   description: string;
-  /** Canonical catalog model id. Provider API ids are resolved server-side. */
   model: string;
   badge?: string;
 }

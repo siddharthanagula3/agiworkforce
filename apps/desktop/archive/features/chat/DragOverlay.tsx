@@ -1,17 +1,10 @@
-/**
- * DragOverlay Component
- *
- * Full-screen overlay shown when dragging files over the app.
- */
 
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Paperclip } from 'lucide-react';
 
 export interface DragOverlayProps {
-  /** Whether the overlay is visible */
   isVisible: boolean;
-  /** Whether the current model supports vision/images */
   visionSupported?: boolean;
 }
 

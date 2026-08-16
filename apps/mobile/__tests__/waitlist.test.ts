@@ -1,16 +1,4 @@
-/**
- * Waitlist service + store — unit tests
- *
- * Covers:
- *  - joinWaitlist() success path: posts through the Web/API waitlist endpoint
- *  - joinWaitlist() validation error (bad email)
- *  - joinWaitlist() network error
- *  - useWaitlistStore defaults, markJoined, clear, MMKV persistence
- */
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -34,10 +22,6 @@ jest.mock('../services/api', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Imports (after mocks are registered)
-// ---------------------------------------------------------------------------
-
 import {
   joinWaitlist,
   redeemInviteCode,
@@ -46,16 +30,11 @@ import {
   useWaitlistStore,
 } from '../src/features/waitlist';
 
-// Retrieve the inner mock functions after imports so they are fully initialised.
 const { post, get } = (
   jest.requireMock('../services/api') as {
     __mocks: { post: jest.Mock; get: jest.Mock };
   }
 ).__mocks;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getStoreState() {
   return useWaitlistStore.getState();
@@ -75,20 +54,11 @@ function resetStore() {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
   jest.clearAllMocks();
   resetStore();
-  // CSRF preflight: GET /api/csrf resolves a token by default.
   get.mockResolvedValue({ token: 'test-csrf-token' });
 });
-
-// ---------------------------------------------------------------------------
-// joinWaitlist — success
-// ---------------------------------------------------------------------------
 
 describe('joinWaitlist — success', () => {
   it('posts a row with the normalised email', async () => {
@@ -151,7 +121,6 @@ describe('joinWaitlist — success', () => {
     await joinWaitlist({ email: 'a@b.com' });
 
     expect(get).toHaveBeenCalledWith('/api/csrf');
-    // The token must reach the POST so requireCsrfToken passes server-side.
     expect(post).toHaveBeenCalledWith(
       '/api/waitlist/public',
       expect.anything(),
@@ -163,16 +132,12 @@ describe('joinWaitlist — success', () => {
 
   it('throws WaitlistNetworkError and does NOT post when the CSRF preflight fails', async () => {
     get.mockReset();
-    get.mockResolvedValueOnce({}); // no token returned
+    get.mockResolvedValueOnce({});
 
     await expect(joinWaitlist({ email: 'a@b.com' })).rejects.toThrow(WaitlistNetworkError);
     expect(post).not.toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// joinWaitlist — validation errors
-// ---------------------------------------------------------------------------
 
 describe('joinWaitlist — validation errors', () => {
   it('throws WaitlistValidationError for an empty email', async () => {
@@ -193,10 +158,6 @@ describe('joinWaitlist — validation errors', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// joinWaitlist — network / RPC errors
-// ---------------------------------------------------------------------------
-
 describe('joinWaitlist — network errors', () => {
   it('throws WaitlistNetworkError on API failure', async () => {
     post.mockRejectedValueOnce(new Error('server error'));
@@ -204,10 +165,6 @@ describe('joinWaitlist — network errors', () => {
     await expect(joinWaitlist({ email: 'a@b.com' })).rejects.toThrow(WaitlistNetworkError);
   });
 });
-
-// ---------------------------------------------------------------------------
-// redeemInviteCode — local alpha unlock
-// ---------------------------------------------------------------------------
 
 describe('redeemInviteCode — alpha code', () => {
   it('accepts ALPHATESTER and returns the local alpha invite id', async () => {
@@ -232,10 +189,6 @@ describe('redeemInviteCode — alpha code', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// useWaitlistStore — defaults
-// ---------------------------------------------------------------------------
-
 describe('useWaitlistStore — defaults', () => {
   it('starts with joined = false', () => {
     expect(getStoreState().joined).toBe(false);
@@ -253,10 +206,6 @@ describe('useWaitlistStore — defaults', () => {
     expect(getStoreState().cloudUnlocked).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// useWaitlistStore — markJoined
-// ---------------------------------------------------------------------------
 
 describe('useWaitlistStore — markJoined', () => {
   it('sets joined = true', () => {
@@ -288,10 +237,6 @@ describe('useWaitlistStore — markJoined', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// useWaitlistStore — markInviteRedeemed
-// ---------------------------------------------------------------------------
-
 describe('useWaitlistStore — markInviteRedeemed', () => {
   it('unlocks cloud access and normalizes the invite code', () => {
     getStoreState().markInviteRedeemed({
@@ -306,10 +251,6 @@ describe('useWaitlistStore — markInviteRedeemed', () => {
     expect(state.cloudUnlockedAt).toBeDefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// useWaitlistStore — clear
-// ---------------------------------------------------------------------------
 
 describe('useWaitlistStore — clear', () => {
   it('resets joined to false', () => {

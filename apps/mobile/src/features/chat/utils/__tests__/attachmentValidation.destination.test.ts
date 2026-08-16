@@ -1,21 +1,3 @@
-/**
- * The attach-time size ceiling has to depend on where the file is going,
- * because the two destinations refuse at different sizes for different reasons:
- *
- *  - cloud: `api.uploadFile` POSTs `byteCount` to `/api/uploads/presign`, which
- *    refuses anything over 12 MiB (apps/web/app/api/uploads/presign/route.ts:100)
- *    and `api.uploadFile` refuses at the same number first
- *    (apps/mobile/services/api.ts:501). That is a DETERMINISTIC contract
- *    rejection. Before this, the composer accepted up to 25 MB regardless, so
- *    `uploadWithRetry` burned three exponential-backoff retries
- *    (stores/chat/chatExecutionStore.ts:503) and told the user to "check your
- *    connection".
- *  - local: `guardedFetch` throws `EgressBlockedError` for our-cloud hosts in
- *    Local mode (lib/egressGuard.ts:170-176), so no upload is even possible;
- *    `createLocalAttachmentReferences` (chatExecutionStore.ts:996) hands the
- *    file straight to docParser / on-device OCR. The 12 MiB cloud contract must
- *    NOT be applied here.
- */
 const mockIsParseable = jest.fn();
 jest.mock('@/services/docParser', () => ({
   isParseableDocument: (...args: unknown[]) => mockIsParseable(...args),
@@ -30,7 +12,6 @@ import {
   type ValidatableAttachment,
 } from '@/src/features/chat/utils/attachmentValidation';
 
-/** Between the 12 MiB cloud contract and the 25 MB device ceiling. */
 const TWENTY_MB = 20 * 1024 * 1024;
 
 function doc(overrides: Partial<ValidatableAttachment> = {}): ValidatableAttachment {
@@ -58,8 +39,6 @@ describe('the cloud ceiling is the upload contract, not the device ceiling', () 
     expect(reason).toContain('big.pdf');
     expect(reason).toContain('AGI Cloud');
     expect(reason).toContain('12 MB');
-    // The whole point of the fix: the user must not be told this was a
-    // network problem, which is what uploadWithRetry's alert says.
     expect(reason.toLowerCase()).not.toContain('connection');
   });
 
@@ -67,7 +46,6 @@ describe('the cloud ceiling is the upload contract, not the device ceiling', () 
     expect(
       isAcceptableAttachment(doc({ fileSize: MAX_CLOUD_ATTACHMENT_BYTES + 1 }), 'cloud'),
     ).not.toBe(true);
-    // …and accepts one exactly at it, the value presign itself accepts.
     expect(isAcceptableAttachment(doc({ fileSize: MAX_CLOUD_ATTACHMENT_BYTES }), 'cloud')).toBe(
       true,
     );

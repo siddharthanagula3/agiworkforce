@@ -1,11 +1,3 @@
-/**
- * Unit tests for the cloud-turn finalization helpers in chatExecutionStore:
- *
- *  - generatedFileArtifactsFromWire: x_generated_files wire descriptors →
- *    generated-file artifacts (GeneratedFileCard / InlineArtifactCard input).
- *  - citationsFromToolCalls: the turn's web-search tool results → inline
- *    answer citations (CitationChip / CollapsibleSources input).
- */
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),

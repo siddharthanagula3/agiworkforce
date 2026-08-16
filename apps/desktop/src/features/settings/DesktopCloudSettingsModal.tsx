@@ -102,7 +102,6 @@ import {
   getBillingPlanProductLimits,
   type BillingPlanLimit,
 } from '@agiworkforce/types';
-// Type-only use (`keyof typeof ...shape`); erased at build time.
 import type { MeFeatureFlagsSchema } from '@agiworkforce/cloud-contracts';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
 
@@ -150,11 +149,6 @@ function formatUsageReset(value: string | null): string {
   }).format(date)}`;
 }
 
-/**
- * Help destinations for the desktop cloud shell. Same pages the web Help
- * section links to; opened in the user's browser because they are hosted, not
- * device-local.
- */
 const CLOUD_HELP_LINKS: readonly { href: string; label: string; description: string }[] = [
   { href: '/docs', label: 'Documentation', description: 'Guides for every surface.' },
   { href: '/help', label: 'Help center', description: 'Answers to common questions.' },
@@ -164,7 +158,6 @@ const CLOUD_HELP_LINKS: readonly { href: string; label: string; description: str
   { href: '/legal', label: 'Legal', description: 'Terms, privacy, and related documents.' },
 ];
 
-/** Resolve a hosted settings path against the web app origin and open it. */
 async function openExternalHelpLink(href: string): Promise<void> {
   const url = new URL(href, WEB_APP_URL);
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
@@ -209,11 +202,6 @@ const DESKTOP_CLOUD_SETTINGS_NAV: SettingsNavGroupResolved[] = SETTINGS_NAV_GROU
           { key: 'memory' as const, label: 'Memory', icon: Brain },
         ];
       }
-      // Web keeps these two out of its settings nav and links to them from its
-      // Privacy section instead. Desktop's Privacy tab is its own component and
-      // carries no such links, so without nav entries both surfaces were
-      // unreachable here — including the only way to revoke a link this app can
-      // already publish.
       if (item.key === 'privacy') {
         return [
           item,
@@ -225,8 +213,6 @@ const DESKTOP_CLOUD_SETTINGS_NAV: SettingsNavGroupResolved[] = SETTINGS_NAV_GROU
     }),
   }),
 );
-
-// ── Tab components (existing, fully wired) ────────────────────────────────────
 
 const LazyGeneralTab = lazy(() =>
   import('./tabs/General').then((m) => ({ default: m.GeneralTab })),
@@ -273,7 +259,6 @@ const LazyCloudPlugins = lazy(() =>
 const LazyCloudTeam = lazy(() =>
   import('./cloud/CloudTeamSection').then((m) => ({ default: m.CloudTeamSection })),
 );
-// ── Cloud-only sections that have no dedicated desktop tab ────────────────────
 
 function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
   const { plan, subscriptionSource, subscriptionStatus, subscriptionFetchStatus } = useAuthStore(
@@ -293,9 +278,6 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
     subscriptionFetchStatus === 'succeeded',
   );
 
-  // Billing belongs to the Cloud account, not to this device. Without a Cloud
-  // session there is no plan to show and no Stripe customer to open a portal
-  // for, so say that instead of rendering a plan card the user cannot act on.
   if (!hasCloudAccountSession) {
     return (
       <div className="flex flex-col gap-2">
@@ -515,16 +497,6 @@ function formatPlanLimit(limit: BillingPlanLimit | undefined): string {
   return typeof limit === 'number' ? new Intl.NumberFormat().format(limit) : 'Unavailable';
 }
 
-/**
- * The managed feature flags `/api/me` emits, derived from `MeFeatureFlagsSchema`
- * rather than retyped, so this cannot drift from the contract. The auth store
- * widens the payload to `Record<string, boolean>`, which silently answers
- * `undefined` for a key the server never sends, so read flags through this
- * union: a name that is not a declared flag is a type error instead of a status
- * that never changes. The schema's `.catchall` means the server may ship a flag
- * before it is declared here; that flag simply is not readable until it is added
- * to the schema, which is the intended direction.
- */
 type ManagedFeatureFlag = keyof typeof MeFeatureFlagsSchema.shape;
 
 function isManagedFlagEnabled(
@@ -534,7 +506,6 @@ function isManagedFlagEnabled(
   return featureFlags[flag] === true;
 }
 
-/** Managed capability status. Native Local agent controls stay in Local settings. */
 function DesktopCapabilitiesSection() {
   const featureFlags = useAuthStore((state) => state.featureFlags);
   const plan = useAuthStore(selectPlan);
@@ -664,8 +635,6 @@ function DesktopCapabilitiesSection() {
   );
 }
 
-// ── Skeleton shown while a section is hydrating ───────────────────────────────
-
 function SectionSkeleton() {
   return (
     <div role="status" aria-live="polite" className="flex flex-col gap-6 motion-safe:animate-pulse">
@@ -677,19 +646,6 @@ function SectionSkeleton() {
   );
 }
 
-/**
- * Desktop's static catalog (apps/desktop/src/features/connectors/connectorDefinitions.ts)
- * and the server's connector-id namespace (VALID_CONNECTOR_IDS in
- * apps/web/app/api/connectors/route.ts) mostly agree, but four desktop ids
- * differ from what the server — and its `user_connectors.connector_id` rows —
- * expect: three underscore/hyphen mismatches and one outright rename
- * (microsoft_teams → teams). Reconciled here rather than by renaming the
- * catalog ids, since local Tauri/MCP connect flows key on the catalog id as-is.
- * Every other desktop id that has no server counterpart (e.g. figma, canva,
- * vercel, atlassian — see the audit note below) is intentionally left
- * unmapped: it will never appear in `available`, so toSettingsConnectors drops
- * it from the grid entirely without needing an entry here.
- */
 const DESKTOP_TO_SERVER_CONNECTOR_ID: Record<string, string> = {
   google_calendar: 'google-calendar',
   google_drive: 'google-drive',
@@ -704,12 +660,10 @@ const SERVER_TO_DESKTOP_CONNECTOR_ID: Record<string, string> = Object.fromEntrie
   ]),
 );
 
-/** Desktop catalog id → server connector id, for POST/DELETE calls and the `available` lookup. */
 function toServerConnectorId(desktopId: string): string {
   return DESKTOP_TO_SERVER_CONNECTOR_ID[desktopId] ?? desktopId;
 }
 
-/** Server connector id (from GET /api/connectors) → desktop catalog id, for display/matching. */
 function toDesktopConnectorId(serverId: string): string {
   return SERVER_TO_DESKTOP_CONNECTOR_ID[serverId] ?? serverId;
 }
@@ -720,18 +674,6 @@ function toDisplayConnectorId(connector: CloudConnectorEntry): string {
     : toDesktopConnectorId(connector.connectorId);
 }
 
-/**
- * Maps desktop's ConnectorDef[] (names/logos/categories — static catalog
- * metadata) → shared SettingsConnector[].
- *
- * The catalog is filtered down to connectors this surface can act on: the ones
- * the server reports as `available` (see listConnectors() in
- * api/cloudConnectors.ts), plus anything the account is already connected to so
- * disconnect stays reachable even if the server later stops offering it. The
- * rest of the static catalog is not rendered at all — a grid row promising a
- * connector no backend can enable is an availability claim the product cannot
- * keep, so it is omitted rather than labelled "Coming soon".
- */
 function toSettingsConnectors(
   availableIds: ReadonlySet<string>,
   connectedIds: ReadonlySet<string>,
@@ -744,9 +686,6 @@ function toSettingsConnectors(
     description: c.description,
     category: c.category,
     authType: c.authType,
-    // The server does not expose a verified tool/action count. Zero keeps
-    // the optional Actions row hidden instead of fabricating a metric from
-    // static catalog order.
     actionCount: 0,
     phase: 1,
     iconBg: CONNECTOR_FALLBACK_THEME,
@@ -755,15 +694,11 @@ function toSettingsConnectors(
   }));
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
-
 export interface DesktopCloudSettingsModalProps {
   open: boolean;
   onClose: () => void;
   initialTab?: SettingsTab;
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export function DesktopCloudSettingsModal({
   open,
@@ -774,15 +709,10 @@ export function DesktopCloudSettingsModal({
     resolveCloudSettingsSection(initialTab),
   );
 
-  // Sync when the dialog is re-opened with a different tab
   useEffect(() => {
     if (open) setActiveSection(resolveCloudSettingsSection(initialTab));
   }, [open, initialTab]);
 
-  // ── Connectors (CLOUD state — real client of web's /api/connectors) ──────
-  // Trust boundary: this section reflects server truth, not local Tauri MCP
-  // connector state (see stores/connectorsStore.ts, which stays wired to the
-  // LOCAL settings' ConnectorGallery only — never blended in here).
   const [cloudConnectors, setCloudConnectors] = useState<CloudConnectorEntry[] | undefined>(
     undefined,
   );
@@ -833,10 +763,6 @@ export function DesktopCloudSettingsModal({
     void loadCloudConnectors();
   }, [open, activeSection, hasLoadedConnectors, connectorsLoading, loadCloudConnectors]);
 
-  // cloudConnectors always holds server-shaped rows (server id space); the
-  // adapter surface (connectedConnectors / SettingsConnector.id) always uses
-  // desktop's catalog id space. Translate exactly at these two boundaries —
-  // see toServerConnectorId/toDesktopConnectorId above.
   const connectedConnectors: ConnectedConnector[] | undefined = useMemo(
     () =>
       cloudConnectors?.map((c) => ({
@@ -905,7 +831,6 @@ export function DesktopCloudSettingsModal({
     [refreshCloudConnectors],
   );
 
-  // ── Skills (Managed Cloud catalog — the same source chat admission uses) ─
   const [skills, setSkills] = useState<SettingsSkill[] | undefined>(undefined);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [hasLoadedSkills, setHasLoadedSkills] = useState(false);
@@ -984,8 +909,6 @@ export function DesktopCloudSettingsModal({
         iconText: 'MCP',
         canConnect: false,
       }));
-    // Catalog ids the account already holds a connection for; they stay in the
-    // grid regardless of current server availability so disconnect is reachable.
     const connectedCatalogIds = new Set(
       cloudConnectors
         .filter((connector) => connector.source !== 'custom')
@@ -994,7 +917,6 @@ export function DesktopCloudSettingsModal({
     return [...toSettingsConnectors(availableConnectorIds, connectedCatalogIds), ...custom];
   }, [availableConnectorIds, cloudConnectors]);
 
-  // ── Data adapter ─────────────────────────────────────────────────────────
   const adapter: SettingsDataAdapter = useMemo(
     () => ({
       connectors: settingsConnectors,
@@ -1034,7 +956,6 @@ export function DesktopCloudSettingsModal({
     ],
   );
 
-  // ── GeneralTab props (mirrors SettingsPanel wiring) ──────────────────────
   const windowPreferences = useSettingsStore(useShallow((s) => s.windowPreferences));
   const globalHotkeyPreferences = useSettingsStore(useShallow((s) => s.globalHotkeyPreferences));
   const setTheme = useSettingsStore((s) => s.setTheme);
@@ -1054,13 +975,10 @@ export function DesktopCloudSettingsModal({
   );
 
   const openPlans = useCallback(() => {
-    // Close Settings before opening Pricing so two modal focus traps never
-    // overlap. This keeps keyboard focus and animation behavior deterministic.
     onClose();
     window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } }));
   }, [onClose]);
 
-  // ── Auto-save general settings when section changes away from general ─────
   const prevSectionRef = useRef(activeSection);
   useEffect(() => {
     if (prevSectionRef.current === 'general' && activeSection !== 'general') {
@@ -1073,7 +991,6 @@ export function DesktopCloudSettingsModal({
     prevSectionRef.current = activeSection;
   }, [activeSection, saveSettings]);
 
-  // ── Section content map ──────────────────────────────────────────────────
   const sectionContent: Partial<Record<string, React.ReactNode>> = useMemo(
     () => ({
       general: (
@@ -1119,8 +1036,6 @@ export function DesktopCloudSettingsModal({
           <LazyCoworkTab />
         </Suspense>
       ),
-      // Two-factor status and recent account activity read fine with the device
-      // bearer, so they render here instead of behind a cookie-gated window.
       security: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyCloudSecurity />
@@ -1128,22 +1043,12 @@ export function DesktopCloudSettingsModal({
       ),
       // Safety is in SETTINGS_NAV_GROUPS_WEB, which this modal maps over to build
       // its nav. It reads and writes the `safety` namespace of
-      // /api/settings/preferences, which authenticates with the device bearer.
       safety: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyCloudSafety />
         </Suspense>
       ),
-      // Help mirrors web's Help section: the desktop cloud shell is the same
-      // Managed Cloud plane, so the same documentation, support, status, and
-      // legal destinations apply. Rendered as external links because these are
-      // hosted pages, not device surfaces.
       help: <CloudHelpLinks />,
-      // Archived chats and shared links are conversation-data surfaces web
-      // reaches from its Privacy section rather than from the settings nav.
-      // Desktop could already publish a share (DesktopShellV3 calls
-      // createDesktopCloudShare) with no way to list or revoke one; both are
-      // served by bearer-reachable routes, so both render inline.
       archived: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyArchivedChats />
@@ -1154,9 +1059,6 @@ export function DesktopCloudSettingsModal({
           <LazySharedLinks />
         </Suspense>
       ),
-      // The `notifications`, `time-focus`, and `general` namespaces of
-      // /api/settings/preferences and GET /api/reflect all authenticate through
-      // getClerkAuthUser, so each renders the account's real data here.
       notifications: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyCloudNotifications />
@@ -1172,8 +1074,6 @@ export function DesktopCloudSettingsModal({
           <LazyCloudTimeFocus />
         </Suspense>
       ),
-      // No account plugin contract exists anywhere, and the path this used to
-      // bridge to (/settings/plugins) is not a route on the web app.
       plugins: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyCloudPlugins onOpenSection={setActiveSection} />

@@ -61,10 +61,6 @@ const EVENT_ROUTERS: Readonly<Record<string, EventRouter>> = {
   ping: () => ({ kind: 'ping' }),
 };
 
-/**
- * Convert GitHub's event header plus untrusted JSON body into one bounded,
- * explicit route. Downstream handlers never infer an event from payload shape.
- */
 export function routeGitHubWebhookEvent(
   event: string | null,
   payload: unknown,

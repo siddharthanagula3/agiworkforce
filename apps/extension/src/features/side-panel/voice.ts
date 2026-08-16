@@ -56,9 +56,6 @@ export function setupVoiceInput(
       if (transcript) {
         inputEl.value = inputEl.value ? `${inputEl.value} ${transcript}` : transcript;
         autoResize(inputEl);
-        // Programmatic value writes do not emit `input`. The side panel uses
-        // that event to enable Send and refresh slash-command suggestions, so
-        // dictation must participate in the same composer state path as typing.
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
       }
     };
@@ -69,11 +66,8 @@ export function setupVoiceInput(
 
     recognition.onend = () => {
       listening = false;
-      // Memory-leak guard: only update DOM if document is still active
       if (document.body) {
         micBtn.classList.remove('active');
-        // EXT-06: was the "🎤" emoji, which renders in the system emoji font
-        // beside stroke-only SVG icons in the same composer row.
         micBtn.replaceChildren(renderIcon(Mic, 14));
         micBtn.title = 'Voice input';
       }

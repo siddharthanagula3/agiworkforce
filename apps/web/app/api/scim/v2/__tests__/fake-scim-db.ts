@@ -1,16 +1,3 @@
-/**
- * An in-memory stand-in for the Neon adapter that actually EXECUTES the SCIM
- * service's statements against JavaScript arrays.
- *
- * This exists so the round-trip test asserts on real state transitions —
- * "after PATCH active:false the organization_members row is gone" — rather
- * than on a scripted sequence of mock return values, which would pass even if
- * the service stopped writing anything.
- *
- * Statements are matched by their normalized text; an unrecognized statement
- * THROWS rather than returning `[]`, so a query the service starts issuing can
- * never be silently ignored by the harness.
- */
 
 export interface FakeRow {
   [column: string]: unknown;
@@ -67,7 +54,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
     const q = norm(sql);
     const p = params;
 
-    // --- scim_tokens -------------------------------------------------------
     if (q.includes('from scim_tokens') && q.includes('token_prefix = $1')) {
       const nowMs = Date.now();
       return state.scim_tokens.filter(
@@ -112,9 +98,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       return [{ id: row['id'] }];
     }
     if (q.includes('from scim_tokens') && q.includes('where organization_id = $1')) {
-      // The real statement names its columns and deliberately omits
-      // `token_hash`; the harness must honour that or the test that proves the
-      // hash never leaves the server would be vacuous.
       return state.scim_tokens
         .filter((row) => row['organization_id'] === p[0])
         .map(({ token_hash: _hash, ...rest }) => {
@@ -123,7 +106,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
         });
     }
 
-    // --- directory_sync_connections ---------------------------------------
     if (q.includes('from directory_sync_connections') && q.includes('id = $1')) {
       return state.directory_sync_connections.filter(
         (row) => row['id'] === p[0] && row['organization_id'] === p[1],
@@ -168,7 +150,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       return row ? [row] : [];
     }
 
-    // --- organization_members ---------------------------------------------
     if (q.startsWith('select organization_id, role from organization_members')) {
       return state.organization_members
         .filter(
@@ -190,7 +171,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
         (row) => row['organization_id'] === organizationId && row['user_id'] === userId,
       );
       if (existing) {
-        // Mirrors the CASE in reconcileMembership's ON CONFLICT clause.
         if (existing['role'] === 'owner') {
           // untouchable
         } else if (existing['provisioning_source'] === 'scim') {
@@ -221,12 +201,10 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       return new Array(before - state.organization_members.length).fill({}) as FakeRow[];
     }
 
-    // --- subscriptions -----------------------------------------------------
     if (q.includes('from subscriptions') && q.includes('where user_id = $1')) {
       return state.subscriptions.filter((row) => row['user_id'] === p[0]);
     }
 
-    // --- profiles ----------------------------------------------------------
     if (q.includes('from profiles') && q.includes('lower(email) = lower($1)')) {
       const email = String(p[0] ?? '').toLowerCase();
       return state.profiles
@@ -234,7 +212,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
         .map((row) => ({ id: row['id'] }));
     }
 
-    // --- directory_sync_events --------------------------------------------
     if (q.startsWith('insert into directory_sync_events')) {
       state.directory_sync_events.push({
         id: uuid(),
@@ -256,7 +233,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
         .map((row) => ({ ...row }));
     }
 
-    // --- scim_provisioned_users -------------------------------------------
     if (q.startsWith('insert into scim_provisioned_users')) {
       const [connectionId, organizationId, externalId, userName] = p as [
         string,
@@ -303,7 +279,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       return [];
     }
     if (q.startsWith('update scim_provisioned_users set user_name')) {
-      // PATCH path
       const row = state.scim_provisioned_users.find(
         (entry) =>
           entry['id'] === p[0] &&
@@ -323,7 +298,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       return [{ ...row }];
     }
     if (q.startsWith('update scim_provisioned_users set external_id')) {
-      // PUT path
       const row = state.scim_provisioned_users.find(
         (entry) =>
           entry['id'] === p[0] &&
@@ -378,7 +352,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       return matched.slice(offset, offset + limit).map((row) => ({ ...row }));
     }
 
-    // --- scim_groups -------------------------------------------------------
     if (q.startsWith('insert into scim_groups')) {
       const [connectionId, organizationId, externalId, displayName] = p as [
         string,
@@ -451,7 +424,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       return matched.slice(offset, offset + limit).map((row) => ({ ...row }));
     }
 
-    // --- scim_group_members ------------------------------------------------
     if (q.startsWith('insert into scim_group_members')) {
       const exists = state.scim_group_members.some(
         (row) => row['group_id'] === p[0] && row['scim_user_id'] === p[1],
@@ -518,12 +490,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
     row['updated_at'] = now();
   }
 
-  /**
-   * Deep copy of every table, row objects included.
-   *
-   * Rows are mutated in place by `assignUser`, so a shallow array copy would
-   * share row identity with the live state and "restore" nothing.
-   */
   function snapshot(): FakeScimDbState {
     const copy = {} as FakeScimDbState;
     for (const table of Object.keys(state) as Array<keyof FakeScimDbState>) {
@@ -534,8 +500,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
 
   function restore(saved: FakeScimDbState): void {
     for (const table of Object.keys(state) as Array<keyof FakeScimDbState>) {
-      // Splice in place: `state` is handed to the test, so the array identity
-      // has to survive a rollback.
       state[table].length = 0;
       state[table].push(...saved[table]);
     }
@@ -545,15 +509,6 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
     query: async <T>(sql: string, params?: unknown[]): Promise<T[]> =>
       run(sql, params) as unknown as T[],
     execute: async (sql: string, params?: unknown[]): Promise<number> => run(sql, params).length,
-    /**
-     * A REAL transaction: commit on resolve, roll every table back on throw.
-     *
-     * This used to be `fn(adapter)` — a passthrough that never rolled anything
-     * back. Any test asserting "a failed multi-statement write leaves no
-     * partial state" would then have passed against code that had no
-     * transaction at all, which is exactly the assertion the SCIM group
-     * writes need to be held to.
-     */
     transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
       const saved = snapshot();
       try {

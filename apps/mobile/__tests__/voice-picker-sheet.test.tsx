@@ -1,11 +1,3 @@
-/**
- * Parity with references-2/chatgpt-ios-voice-02-choose-spruce-voice.png.
- *
- * The behaviour worth pinning is when the choice is COMMITTED. Browsing past a
- * voice must not change the user's saved preset — otherwise opening the picker
- * and backing out silently reassigns their voice to whatever happened to be on
- * screen when they closed it.
- */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -58,8 +50,6 @@ describe('VoicePickerSheet', () => {
   });
 
   it('does NOT change the saved voice when dismissed', () => {
-    // The regression: writing the preset on every swipe would mean closing the
-    // sheet leaves the user on whichever voice they happened to scroll past.
     const existing = VOICE_PRESETS[1]!;
     useSettingsStore.setState({ selectedPresetId: existing.id });
     const onStart = jest.fn();

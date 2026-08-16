@@ -17,8 +17,6 @@ jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return {
     SafeAreaView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
-    // The bottom-anchored search pill (src/shared/components/BottomSearchBar)
-    // reads the safe-area inset so it clears the home indicator.
     useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
   };
 });
@@ -57,12 +55,6 @@ describe('Cloud Connectors screen — unshipped-feature gating (public alpha)', 
   it('shows only the waitlist placeholder, not the interactive catalog, when FEATURES.connectors is false', () => {
     const { getByText, queryByText } = render(<CloudConnectorsScreen />);
 
-    // Regression: the doc comment promises "a waitlist placeholder is shown
-    // rather than a dead list" when the flag is off, but the catalog rendered
-    // unconditionally below the placeholder — a user saw a fully interactive
-    // Notion/Airtable/Trello/... list whose "Connect" button popped a broken
-    // "AGI Cloud access... join the waitlist" alert that contradicted the
-    // flag's own "not a cloud-access gate" contract.
     expect(getByText('Connectors — AGI Cloud')).toBeTruthy();
     expect(queryByText('Notion')).toBeNull();
     expect(queryByText('Slack')).toBeNull();

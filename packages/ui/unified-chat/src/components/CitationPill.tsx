@@ -38,7 +38,6 @@ export function CitationPill({ citation, className }: CitationPillProps) {
           height={12}
           className="rounded-[2px] shrink-0 object-contain"
           onError={(e) => {
-            // Hide broken favicon images gracefully
             (e.currentTarget as HTMLImageElement).style.display = 'none';
           }}
         />

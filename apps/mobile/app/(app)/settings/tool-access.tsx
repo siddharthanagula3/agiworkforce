@@ -1,15 +1,3 @@
-/**
- * Tool access — how eagerly AGI loads tool definitions for a Cloud turn.
- *
- * `chatViewStore.toolAccess` has existed with a setter, persistence, and a
- * `tool_access` field in the GDPR/DPDP data export since the store was written,
- * but `setToolAccess` had ZERO call sites — the value could only ever be its
- * default, and the export reported a preference the user was never able to set.
- * This screen is that missing control.
- *
- * The three-option-card shape mirrors Settings › Action approvals, which is the
- * established mobile pattern for a mutually exclusive choice.
- */
 
 import { useMemo } from 'react';
 import { View } from 'react-native';

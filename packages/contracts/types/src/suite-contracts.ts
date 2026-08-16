@@ -15,25 +15,12 @@
 import type { Provider } from './provider';
 import type { ArtifactType, ConversationId, MessageId, RiskLevel } from './conversation';
 
-// ============================================================================
-// Trust Boundary And Surface Contracts
-// ============================================================================
-
-/** User-visible privacy boundary for every conversation, session, and artifact. */
 export type PrivacyMode = 'local' | 'byok' | 'managed';
 
-/**
- * Provider execution path.
- *
- * These values intentionally differ from `PrivacyMode`: a managed-native
- * provider may still be privacy-mode `managed`, while direct BYOK is always
- * privacy-mode `byok`.
- */
 export type ProviderMode = 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
 
 export type SourceSurface = 'web' | 'desktop' | 'mobile' | 'cli' | 'vscode' | 'chrome';
 
-/** User-facing chat execution mode exposed by every app surface. */
 export type ChatExecutionMode = 'local_only' | 'byok' | 'cloud_managed';
 
 export type SyncedAppSurface = Extract<SourceSurface, 'web' | 'desktop' | 'mobile'>;
@@ -169,19 +156,6 @@ export function isDeveloperSessionSurface(
   return (DEVELOPER_SESSION_SURFACES as readonly SourceSurface[]).includes(surface);
 }
 
-/**
- * Runtime guard for the cross-surface chat-sync rule. Throws when a caller
- * tries to enrol a `DeveloperSessionSurface` (cli / vscode / chrome) into
- * the synced-app chat pipeline. The goal contract for AGI Workforce is
- * explicit: normal consumer chat sync is Web / Desktop / Mobile only; the
- * developer surfaces keep separate workspace-scoped histories. Round-2
- * audit (2026-05-21).
- *
- * Use at any service boundary that touches synced chat — cloud
- * realtime channel subscription, conversationSync.startBackgroundSync,
- * the API gateway chat-history endpoints — so a future caller cannot
- * accidentally cross the boundary.
- */
 export function assertSurfaceCanSyncChats(
   surface: SourceSurface,
 ): asserts surface is SyncedAppSurface {
@@ -379,10 +353,6 @@ export interface SuiteToolEvent {
   updatedAt?: string;
 }
 
-// ============================================================================
-// Synced App Conversations And Developer Sessions
-// ============================================================================
-
 export type ConversationVisibility = 'private' | 'team' | 'organization';
 
 export interface SyncedAppConversation {
@@ -416,8 +386,6 @@ export interface SyncedAppMessage {
   createdAt: string;
 }
 
-// Compatibility contract for the existing web_conversations/web_messages sync
-// tables. Root conversations/messages remain the target canonical sync schema.
 export type LegacyWebSyncOrigin = SyncedAppSurface;
 export type LegacyWebSyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
@@ -518,23 +486,12 @@ export interface HandoffDraft {
   createdAt: string;
 }
 
-// ============================================================================
-// Projects, Artifacts, Compute Sessions, And Generated Files
-// ============================================================================
-
 export type ProjectAccentColor = 'emerald' | 'sky' | 'amber' | 'rose' | 'violet' | 'zinc';
 
 export type ProjectImportSource = 'claude' | 'openai' | 'manual';
 
 export interface ProjectRecord {
   id: string;
-  /**
-   * Owner user id. Stored as `user_id` in the Postgres `user_projects`
-   * table for historical reasons (the column predates the round-10
-   * schema). The data-layer maps both names; downstream code should
-   * prefer `ownerUserId` because the SQL `user_id` is ambiguous
-   * (project_members also has `user_id` for a different purpose).
-   */
   ownerUserId: string;
   organizationId?: string | null;
   name: string;
@@ -542,34 +499,16 @@ export interface ProjectRecord {
   defaultPrivacyMode: PrivacyMode;
   defaultProviderMode: ProviderMode;
   allowedSurfaces: SourceSurface[];
-  /** Custom instructions / system prompt scoped to the project. */
   instructions?: string | null;
-  /** Catalog model id from `packages/contracts/types/src/models.json`. Never invent. */
   defaultModelId?: string | null;
-  /** Denormalized count for header rendering (avoids fan-out reads). */
   knowledgeFileCount?: number | null;
-  /** Canonical count of live conversations currently assigned to the project. */
   conversationCount?: number | null;
-  /** Denormalized count for header rendering. */
   memberCount?: number | null;
-  /** ISO-8601 timestamp of last activity, used for sort + "Last used" chip. */
   lastUsedAt?: string | null;
-  /** Single emoji for visual identity. Capped at one grapheme by host. */
   iconEmoji?: string | null;
-  /** Bounded accent palette. Host maps to its own color tokens. */
   accentColor?: ProjectAccentColor | null;
-  /** Provenance for imported projects (Claude / OpenAI / manual). */
   importedFrom?: ProjectImportSource | null;
-  /**
-   * Whether the project is archived. Mirrors Postgres `is_archived`
-   * column from the original 20260318 migration.
-   */
   isArchived?: boolean;
-  /**
-   * Free-form jsonb metadata. Mirrors Postgres `metadata` column from
-   * the original 20260318 migration. Reserved for app-specific
-   * extensions that don't deserve a typed field yet.
-   */
   metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
@@ -593,35 +532,18 @@ export interface ProjectKnowledgeFile {
   mimeType: string;
   byteCount: number;
   checksumSha256: string;
-  /** Optional short summary (for tooltips / search). */
   summary?: string | null;
   sourceSurface: SourceSurface;
-  /**
-   * Original uploader. Nullable because the FK uses `ON DELETE SET NULL`
-   * (migration `20260521130000_fix_project_knowledge_files_fk.sql`) — when
-   * the auth user is deleted, the file row survives with a tombstoned
-   * audit trail. Hosts render "Uploaded by a deleted user" when null.
-   */
   addedByUserId: string | null;
   addedAt: string;
-  /** Retention timestamp if any (mirrors generated-file retention). */
   retentionExpiresAt?: string | null;
   deletedAt?: string | null;
-  /**
-   * Storage URI of the underlying binary in cloud object storage. The
-   * Postgres column is `storage_uri text NOT NULL`. Consumers should
-   * not assume this is a public URL — most files require a signed-URL
-   * fetch via the storage SDK.
-   */
   storageUri: string;
 }
 
 export interface ProjectInstructions {
-  /** Free-form system prompt prepended to chats inside the project. */
   systemPrompt?: string | null;
-  /** Short rules-of-engagement (tone, format, etc.). */
   responseStyle?: string | null;
-  /** Preferred response format ("markdown" / "json" / "plain"). */
   formatPreference?: string | null;
   /** Hard safety directives (will not be overridden by chat-scoped instructions). */
   safetyDirectives?: string | null;
@@ -1050,22 +972,6 @@ export function validateGeneratedFileTrustBoundary(
   return violations;
 }
 
-/**
- * Throw-variant of `validateGeneratedFileTrustBoundary`. Use at persistence
- * boundaries (anywhere a GeneratedFile record is written to durable
- * storage, replicated across surfaces, or transferred between trust
- * boundaries). Parallels `assertSurfaceCanSyncChats` — fail fast rather
- * than silently persist a record that violates the trust contract.
- *
- * The thrown Error includes every violation code so the call site can
- * choose to log, telemetry-emit, or rethrow as an http 422 / tauri
- * command error. Callers that want graceful degradation should call the
- * `validateGeneratedFileTrustBoundary` non-throw variant directly.
- *
- * Round-11 (2026-05-22) ultrathink slice — wires a defined-but-unused
- * defensive utility into a fail-fast boundary helper. Mirror of the
- * sync-rule guard pattern.
- */
 export function assertGeneratedFileTrustBoundary(input: GeneratedFileTrustBoundaryInput): void {
   const violations = validateGeneratedFileTrustBoundary(input);
   if (violations.length === 0) return;
@@ -1073,10 +979,6 @@ export function assertGeneratedFileTrustBoundary(input: GeneratedFileTrustBounda
   const messages = violations.map((v) => `- ${v.code}: ${v.message}`).join('\n');
   throw new Error(`AGI generated-file trust-boundary violation [${codes}]:\n${messages}`);
 }
-
-// ============================================================================
-// Remote Control, Computer Use, And Dispatch Payloads
-// ============================================================================
 
 export type RemoteControlSessionStatus =
   | 'pairing'
@@ -1141,10 +1043,6 @@ export interface DispatchApprovalEvent {
   decidedAt?: string | null;
 }
 
-// ============================================================================
-// Connector/MCP Registry
-// ============================================================================
-
 export type ConnectorTransport = 'stdio' | 'sse' | 'http' | 'websocket' | 'native_host';
 
 export interface ConnectorCapability {
@@ -1167,10 +1065,6 @@ export interface ConnectorRegistryEntry {
   version: string;
   installedAt?: string | null;
 }
-
-// ============================================================================
-// Developer Session Event Stream, Fork, And Replay Records
-// ============================================================================
 
 export type DeveloperSessionEventKind =
   | 'session.started'
@@ -1449,9 +1343,6 @@ export interface DeveloperSessionReplayResult {
 
 export type AgentSessionEventKind = DeveloperSessionEventKind;
 
-// Compatibility name for older agent-session callers. New code should use
-// `DeveloperSessionEvent` so CLI, VS Code, Chrome, and future viewers share
-// sequence-aware stream frames.
 export interface AgentSessionEvent {
   id: string;
   sessionId: string;
@@ -1500,19 +1391,6 @@ export interface TaskBoard {
   updatedAt: string;
 }
 
-// ---------------------------------------------------------------------------
-// SendPreview — "what will be sent" disclosure for cloud/BYOK turns
-// ---------------------------------------------------------------------------
-//
-// Implements PLAN.md section 5 task: "Add visible 'what will be sent' previews
-// for cloud/BYOK turns." Surfaces consume `SendPreviewPresentation` (built via
-// `summarizeSendPreview`) to render a privacy-respecting disclosure of the
-// outbound request shape before the user sends a message — model destination,
-// privacy mode, attachment summary, system-prompt size, estimated context
-// tokens. Local mode renders with a privacy-positive "stays on device" banner
-// rather than the BYOK/Managed destination call-out. This is intentional —
-// AGI's local-first stance treats Local turns as transparent by default.
-
 export interface SendPreviewInput {
   providerMode: ProviderMode;
   modelLabel?: string | undefined;
@@ -1524,9 +1402,7 @@ export interface SendPreviewInput {
   estimatedInputTokens?: number | undefined;
   contextWindowTokens?: number | undefined;
   toolNames?: ReadonlyArray<string> | undefined;
-  /** Destination host for BYOK/Managed turns (e.g., "api.anthropic.com"). */
   destinationHost?: string | undefined;
-  /** Source session label inherited into this turn, if any. */
   sourceSessionLabel?: string | undefined;
 }
 
@@ -1535,7 +1411,6 @@ export interface SendPreviewPresentation {
   privacyMode: PrivacyMode;
   privacyShortLabel: string;
   privacyLabel: string;
-  /** True for `providerMode === 'Local'` — drives the privacy-positive banner. */
   staysLocal: boolean;
   destinationLabel: string;
   destinationHost?: string | undefined;
@@ -1547,7 +1422,6 @@ export interface SendPreviewPresentation {
   contextLabel?: string | undefined;
   toolsLabel?: string | undefined;
   sourceSessionLabel?: string | undefined;
-  /** Long-form banner copy describing where the turn goes and what carries with it. */
   bannerCopy: string;
 }
 
@@ -1644,15 +1518,6 @@ export function summarizeSendPreview(input: SendPreviewInput): SendPreviewPresen
   };
 }
 
-// ============================================================================
-// Project Header Presentation
-// ============================================================================
-//
-// Pure derivation of header-level chips and labels from a ProjectRecord.
-// Hosts (Web sidebar, Desktop project view, Mobile drawer) read the
-// presentation to keep wording, accent palette, and surface-chip ordering
-// identical across surfaces without sharing JSX.
-
 const PROJECT_ACCENT_FALLBACK: ProjectAccentColor = 'zinc';
 
 const PROJECT_IMPORT_SOURCE_LABELS: Record<ProjectImportSource, string> = {
@@ -1687,9 +1552,7 @@ const SOURCE_SURFACE_CHIP_ORDER: SourceSurface[] = [
 
 export interface ProjectHeaderInput {
   project: ProjectRecord;
-  /** Optional display label for the default model — host resolves from catalog. */
   defaultModelLabel?: string | null;
-  /** Optional relative label like "2h ago" — host computes from `lastUsedAt`. */
   lastUsedRelativeLabel?: string | null;
 }
 
@@ -1710,11 +1573,6 @@ export interface ProjectHeaderPresentation {
   memberCountLabel?: string | undefined;
   lastUsedLabel?: string | undefined;
   importedFromLabel?: string | undefined;
-  /**
-   * Allowed-surface chips ordered by canonical surface order (web → desktop →
-   * mobile → cli → vscode → chrome). Hosts render in this order so the chip
-   * row is identical across surfaces.
-   */
   surfaceChips: string[];
 }
 

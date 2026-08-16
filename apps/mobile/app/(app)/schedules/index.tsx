@@ -42,7 +42,6 @@ export default function SchedulesScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  // Initial fetch
   useEffect(() => {
     if (FEATURES.schedules && isCloudMode && cloudUnlocked) void fetchSchedules();
   }, [cloudUnlocked, fetchSchedules, isCloudMode]);
@@ -151,7 +150,6 @@ export default function SchedulesScreen() {
     );
   }
 
-  // Loading skeleton
   if (loading && schedules.length === 0) {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
@@ -265,10 +263,6 @@ export default function SchedulesScreen() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Header
-// ---------------------------------------------------------------------------
-
 function Header({
   onBackPress,
   onCreatePress,
@@ -302,10 +296,6 @@ function Header({
     </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Empty State
-// ---------------------------------------------------------------------------
 
 function EmptyState({
   onCreatePress,

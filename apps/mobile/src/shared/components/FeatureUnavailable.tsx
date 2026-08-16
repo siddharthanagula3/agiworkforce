@@ -1,15 +1,3 @@
-/**
- * FeatureUnavailable — friendly fallback for routes that are gated OFF in this
- * build (`lib/v1FeatureFlags.ts`).
- *
- * Why: several route screens previously did `if (!FEATURES.x) return null`. A
- * `null` route renders a BLANK screen, so a deep link / push tap / direct URL
- * to a disabled feature stranded the user on nothing. Rendering this instead
- * guarantees there is never a blank screen, and gives a clear way back.
- *
- * In-app navigation never links to these routes (they are orphaned while the
- * flag is off); this is purely defence-in-depth for external entry points.
- */
 import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,7 +6,6 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
 interface FeatureUnavailableProps {
-  /** Human-readable feature name, e.g. "Scheduled tasks". */
   feature?: string;
 }
 

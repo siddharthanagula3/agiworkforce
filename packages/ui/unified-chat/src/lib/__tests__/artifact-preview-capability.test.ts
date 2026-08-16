@@ -17,11 +17,6 @@ import {
   SCRIPTS_BLOCKED_NOTICE,
 } from '../artifact-preview-capability';
 
-/**
- * jsdom does not execute a srcdoc document's inline scripts, so we drive the
- * probe's observable contract directly: install an iframe stub whose `load`
- * fires with (or without) the flag the probe document would have set.
- */
 function probeDocument(marked = true) {
   return {
     documentElement: {
@@ -48,7 +43,6 @@ function stubIframes(options: { flag?: unknown; contentWindow?: unknown; marked?
               document: probeDocument(options.marked ?? true),
             },
     });
-    // srcdoc assignment is the last thing the probe does before appending.
     Object.defineProperty(frame, 'srcdoc', {
       configurable: true,
       set: () => {
@@ -96,17 +90,12 @@ describe('probeSameDocumentScriptSupport', () => {
   it('never runs model content: the probe frame carries only the fixed probe doc', async () => {
     const stub = stubIframes({ flag: true });
     await probeSameDocumentScriptSupport(document);
-    // allow-same-origin is what makes the result readable and is only safe
-    // because the document is a fixed literal in this module.
     expect(stub.created[0]!.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin');
     stub.restore();
   });
 
   it('ignores an about:blank load instead of misreporting it as blocked', async () => {
     vi.useFakeTimers();
-    // `marked: false` is the initial about:blank navigation: it fires `load`,
-    // has no probe marker, and obviously never ran our script. Concluding from
-    // it would report `'blocked'` on every platform, web included.
     const stub = stubIframes({ flag: undefined, marked: false });
     const pending = probeSameDocumentScriptSupport(document);
     await vi.advanceTimersByTimeAsync(2_500);
@@ -139,11 +128,7 @@ describe('probeSameDocumentScriptSupport', () => {
 
     void probeSameDocumentScriptSupport(document);
 
-    // Inserting first would navigate to about:blank and burn the probe's only
-    // real load event on a document that can never answer the question.
     expect(order).toEqual(['srcdoc', 'append']);
-    // The marker is written by the parser, so it survives a blocked script and
-    // is what distinguishes "probe loaded, script blocked" from "wrong document".
     expect(assignedSrcdoc).toContain('data-agi-artifact-probe');
     expect(assignedSrcdoc).toContain('__agiArtifactInlineScriptProbe');
     appendSpy.mockRestore();

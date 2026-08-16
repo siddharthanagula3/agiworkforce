@@ -36,11 +36,6 @@ function renderWebview(): string {
   );
 }
 
-/**
- * Read the composer's own ceiling out of the shipped script, not a copy — a
- * duplicated constant here would keep passing after the webview drifted.
- * Accepts the `a * b` product form so the assertion survives either spelling.
- */
 function webviewAttachmentCap(): number {
   const match = /var MAX_ATTACHMENT_BYTES = ([0-9_*\s]+);/.exec(renderWebview());
   if (!match) throw new Error('MAX_ATTACHMENT_BYTES not found in webview script');

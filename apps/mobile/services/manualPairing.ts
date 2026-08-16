@@ -1,15 +1,3 @@
-/**
- * Manual Desktop-companion pairing.
- *
- * QR payloads already contain the short-lived mobile role token. Manual entry
- * intentionally carries only the 12-character code shown by Desktop, so it
- * exchanges that high-entropy, five-minute bearer secret for the same role
- * token through the signaling service before opening the WebSocket.
- *
- * This is part of the explicit companion signaling flow, not chat/data egress.
- * It uses secureFetch directly for TLS policy while sending no Clerk token,
- * chat content, files, or account metadata.
- */
 import { WS_URL } from '@/lib/constants';
 import { secureFetch } from '@/services/secureFetch';
 
@@ -23,7 +11,6 @@ export interface ManualPairingClaim {
   wsUrl: string;
 }
 
-/** Remove only the human-readable separators Desktop inserts into the code. */
 export function normalizePairingInput(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed.startsWith('agiw:')) {

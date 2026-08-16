@@ -37,21 +37,6 @@ function toolCallChunk(index: number, id: string, name: string, args: string) {
   };
 }
 
-// CHANGED BY AUDIT-FIX SYS-25 — read loudly.
-//
-// `isReadOnlyTool` no longer prefix-matches tool NAMES; it reads the declared
-// tool metadata model (lib/tool-metadata.ts). The previous expectations
-// (`read_file`, `list_directory`, `get_weather`, `search_web`, `query_db` are
-// read-only) asserted a classification that could never fire in production:
-// NO tool on this route is named any of those. Platform tools are
-// `web_search` / `url_fetch` / `execute_code` / ... and every MCP or connector
-// tool is qualified `mcp__<server>__<tool>`, so the old function returned false
-// for every real tool and the parallel branch was dead code.
-//
-// The replacement expectations below use REAL tool names and assert the
-// property that actually matters: declared read-class tools may run in
-// parallel; everything else — including any undeclared MCP tool, whatever it is
-// named — serialises.
 describe('isReadOnlyTool — driven by the declared tool metadata model', () => {
   it('treats declared read-class platform and connector tools as parallel-safe', () => {
     for (const name of ['web_search', 'url_fetch', 'skill', 'mcp__github__get_pull_request_diff']) {
@@ -73,8 +58,6 @@ describe('isReadOnlyTool — driven by the declared tool metadata model', () => 
   });
 
   it('serialises UNDECLARED MCP tools no matter how read-like the name looks', () => {
-    // The whole point of the metadata model: a remote server can name a
-    // mutating tool `get_and_archive`. Unknown means write, never read.
     for (const name of [
       'mcp__acme__get_and_archive',
       'mcp__acme__list_then_delete',
@@ -141,13 +124,11 @@ describe('collectProviderStream — untrusted accumulation bounds', () => {
 
   it('bounds accumulated tool-argument JSON per call', async () => {
     const huge = 'x'.repeat(TOOL_LOOP_STREAM_LIMITS.maxToolArgsJsonChars + 50_000);
-    // Split the oversized args across many fragments to exercise the running cap.
     const chunks: unknown[] = [toolCallChunk(0, 'id-0', 'get_a', '')];
     for (let i = 0; i < huge.length; i += 10_000) {
       chunks.push(toolCallChunk(0, 'id-0', 'get_a', huge.slice(i, i + 10_000)));
     }
     const { pendingToolCalls } = await collectProviderStream(sseStream(chunks));
-    // Args parse fails on the truncated JSON and falls back to a bounded _raw.
     const raw = pendingToolCalls[0]?.args['_raw'];
     expect(typeof raw).toBe('string');
     expect((raw as string).length).toBeLessThanOrEqual(
@@ -235,7 +216,6 @@ describe('trimToolResultHistory — bound accumulated tool-result context', () =
   });
 
   it('truncates the OLDEST results first, keeps the most recent verbatim, drops no message', () => {
-    // 5 tool results of 1000 chars each = 5000; budget 2500, keep the newest 2.
     const msgs: TestMsg[] = [
       sys,
       user,
@@ -254,17 +234,12 @@ describe('trimToolResultHistory — bound accumulated tool-result context', () =
     const truncated = trimToolResultHistory(msgs, 2500, 2);
 
     expect(truncated).toBeGreaterThan(0);
-    // No message removed → every assistant tool_call keeps its matching result.
     expect(msgs.length).toBe(lenBefore);
-    // The two most-recent results are untouched.
     expect(msgs.find((m) => m.tool_call_id === 't4')!.content).toBe('x'.repeat(1000));
     expect(msgs.find((m) => m.tool_call_id === 't5')!.content).toBe('x'.repeat(1000));
-    // The oldest was truncated to the marker.
     expect(msgs.find((m) => m.tool_call_id === 't1')!.content).toContain('omitted');
-    // System + user messages are never touched.
     expect(msgs[0]).toBe(sys);
     expect(msgs[1]).toBe(user);
-    // Retained tool content is now within budget.
     const retained = msgs
       .filter((m) => m.role === 'tool')
       .reduce((sum, m) => sum + String(m.content).length, 0);
@@ -281,6 +256,6 @@ describe('trimToolResultHistory — bound accumulated tool-result context', () =
       toolMsg('big', 5000),
     ];
     trimToolResultHistory(msgs, 100, 0);
-    expect(msgs[2]!.content).toBe(parts); // untouched structured content
+    expect(msgs[2]!.content).toBe(parts);
   });
 });

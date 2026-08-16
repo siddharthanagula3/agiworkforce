@@ -1,18 +1,3 @@
-/**
- * Translate `ChatRequest` → OpenAI Chat Completions API params.
- *
- * Notable mapping:
- *   - `system` (string | TextBlock[]) → first message with role "system"
- *     (or "developer" when supportsDeveloperRole is true)
- *   - assistant `tool_use` blocks → `tool_calls` array on assistant message
- *   - `tool_result` blocks → separate messages with role "tool"
- *   - image blocks → `content: [{ type: "image_url", image_url: { url } }]`
- *   - `thinking` blocks → dropped from history (OpenAI handles reasoning server-side)
- *   - `tools` → `[{ type: "function", function: { name, description, parameters, strict? } }]`
- *   - `tool_choice` → vendor shape
- *   - `maxOutputTokens` → `max_completion_tokens` or `max_tokens` per
- *     `OpenAICompletionsCompatDefaults.maxTokensField`
- */
 
 import type {
   ChatRequest,
@@ -43,7 +28,6 @@ function isTextBlock(b: ContentBlock): b is TextBlock {
 }
 
 function translateUserContent(blocks: ContentBlock[]): string | OpenAIChatUserMessagePart[] {
-  // OpenAI accepts string content if it's text-only; otherwise array.
   const hasNonText = blocks.some((b) => b.type !== 'text');
   if (!hasNonText) {
     return blocks
@@ -65,8 +49,6 @@ function translateUserContent(blocks: ContentBlock[]): string | OpenAIChatUserMe
     if (b.type === 'file') {
       throw new TypeError('File inputs require an OpenAI Responses-capable model');
     }
-    // tool_result / tool_use / thinking are not valid in user content;
-    // caller routes those elsewhere.
     return [];
   });
 }
@@ -108,10 +90,6 @@ function extractToolResultMessages(blocks: ContentBlock[]): OpenAIChatToolMessag
   return out;
 }
 
-/**
- * Convert a sequence of ProviderMessages to a flat OpenAI message list. Tool
- * results from assistant turns become standalone "tool" role messages.
- */
 function translateMessages(
   msgs: ProviderMessage[],
   systemRole: 'system' | 'developer',
@@ -130,7 +108,6 @@ function translateMessages(
       continue;
     }
     if (msg.role === 'user') {
-      // Tool results sometimes come as user messages; split them out.
       const blocks = typeof msg.content === 'string' ? [] : msg.content;
       const toolResultMessages = extractToolResultMessages(blocks);
       out.push(...toolResultMessages);
@@ -138,7 +115,6 @@ function translateMessages(
         typeof msg.content === 'string'
           ? msg.content
           : translateUserContent(blocks.filter((b) => b.type !== 'tool_result'));
-      // Skip emitting an empty user message that consisted only of tool results.
       if (typeof remaining === 'string') {
         if (remaining.length > 0) {
           out.push({ role: 'user', content: remaining });
@@ -148,7 +124,6 @@ function translateMessages(
       }
       continue;
     }
-    // assistant
     if (typeof msg.content === 'string') {
       out.push({ role: 'assistant', content: msg.content });
       continue;
@@ -171,7 +146,6 @@ function prependExplicitSystem(
   if (system === undefined) return messages;
   const text =
     typeof system === 'string' ? system : system.map((b: TextBlock) => b.text).join('\n\n');
-  // If first message is already a system message, replace; else prepend.
   if (messages[0]?.role === 'system' || messages[0]?.role === 'developer') {
     return [{ role: systemRole, content: text }, ...messages.slice(1)];
   }
@@ -211,21 +185,10 @@ function thinkingBudgetToRequestedEffort(
   return 'minimal';
 }
 
-/**
- * OpenAI built-in tools that exist only on the Responses API. The Chat
- * Completions endpoint (which every provider `translateChatRequest` targets,
- * including all 9 openai-compat vendors) rejects them with HTTP 400
- * ("Supported values are: 'function' and 'custom'"). Reproduces
- * `apps/web/lib/llm-providers/openai.ts`'s `OPENAI_RESPONSES_ONLY_TOOL_TYPES`/
- * `toOpenAiChatTools` exactly, scoped to `provider === 'openai'` only (see
- * below) rather than applied to every compat vendor.
- */
 const OPENAI_RESPONSES_ONLY_TOOL_TYPES = new Set(['web_search_preview', 'code_interpreter']);
 
 export interface TranslateOptions {
-  /** Result of `detectOpenAICompletionsCompat()` — drives field shape. */
   compat: OpenAICompletionsCompatDefaults;
-  /** Provider id (for tool-schema cleaning). */
   provider: string;
 }
 
@@ -242,23 +205,7 @@ export function translateChatRequest(
   const strict = compat.supportsStrictMode && (req.tools?.some((t) => t.strict) ?? false);
   const translatedTools = req.tools?.map((t) => translateTool(t, strict, provider)) ?? [];
   const rawVendorTools = req.rawVendorTools ?? [];
-  // hasTools mirrors apps/web/lib/llm-providers/openai.ts's `Array.isArray(request.tools)
-  // && request.tools.length > 0`, computed on the PRE-strip merged tool set -- a request
-  // whose only "tool" is web_search_preview (stripped to zero below) still counts as
-  // hasTools for the reasoning_effort gate further down, matching legacy's own order of
-  // operations (it computes hasTools before ever stripping Responses-only tool types).
   const hasTools = translatedTools.length + rawVendorTools.length > 0;
-  // rawVendorTools are provider-native payloads (e.g. web_search_preview) appended
-  // verbatim -- the caller owns their wire shape. EXCEPT for provider === 'openai':
-  // web_search_preview/code_interpreter exist only on OpenAI's Responses API and
-  // /chat/completions rejects them with HTTP 400 ("Supported values are: 'function' and
-  // 'custom'"). apps/web/lib/llm-providers/openai.ts strips them so the call degrades to
-  // no native search/interpreter instead of failing outright -- reproduced here so the
-  // canonical path doesn't turn that silent no-op into a hard error. Scoped to 'openai'
-  // only: none of the 9 openai-compat providers' legacy files strip anything (request-
-  // processor.ts only ever injects web_search_preview when provider === 'openai'), so
-  // extending this to every compat vendor would be an unverified behavior change for
-  // consumers this migration hasn't audited.
   const vendorTools =
     provider === 'openai'
       ? rawVendorTools.filter((t) => {
@@ -285,7 +232,6 @@ export function translateChatRequest(
     ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
   };
 
-  // max_tokens vs max_completion_tokens per compat
   if (req.maxOutputTokens !== undefined) {
     if (compat.maxTokensField === 'max_completion_tokens') {
       params.max_completion_tokens = req.maxOutputTokens;
@@ -294,14 +240,6 @@ export function translateChatRequest(
     }
   }
 
-  // Reasoning effort (mapped through compat thinking format). An explicit `req.effort` --
-  // set directly by a caller that already knows the exact tier it wants (e.g. apps/web's
-  // canonical-request.ts buildOpenAIChatRequest) -- takes priority over a
-  // thinking.budgetTokens-derived tier: thinkingBudgetToRequestedEffort's thresholds don't
-  // round-trip `Effort` tiers losslessly (see `ChatRequest.effort`'s docstring in
-  // packages/contracts/types/src/provider-adapter.ts), so a caller with the real tier in hand should
-  // be able to bypass that heuristic entirely rather than have it re-derived from a budget
-  // number and possibly land on a different tier.
   if (
     compat.supportsReasoningEffort &&
     (req.effort !== undefined || req.thinking?.type === 'enabled')
@@ -315,12 +253,6 @@ export function translateChatRequest(
       model: { provider: 'openai', id: req.model },
       effort: requested,
     });
-    // OpenAI's /v1/chat/completions returns HTTP 400 when a request combines
-    // reasoning_effort with function tools on current reasoning models --
-    // apps/web/lib/llm-providers/openai.ts omits reasoning_effort whenever any tools are
-    // present, computed on the same pre-strip hasTools above. Scoped to provider ===
-    // 'openai' like the tool-stripping above: none of the compat providers' legacy files
-    // have this gate, so it must not start omitting reasoning_effort for their requests.
     const omitForTools = provider === 'openai' && hasTools;
     if (resolved && !omitForTools) {
       params.reasoning_effort = resolved as NonNullable<

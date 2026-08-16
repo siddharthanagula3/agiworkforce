@@ -1,43 +1,14 @@
-/**
- * Platform capability matrix — the SINGLE SOURCE OF TRUTH for which user-facing
- * capabilities each app SURFACE (web / desktop / mobile) exposes.
- *
- * This is the PLATFORM axis ONLY. It is deliberately orthogonal to:
- *   - MODEL capabilities  (does the *selected model* support vision / code-exec /
- *     web-search) — see `model-catalog` (`codeExecution`, `vision`, ...).
- *   - MODEL-ENVIRONMENT availability (is the E2B / local-runtime environment
- *     configured) — see `evaluateModelEnvironment`.
- *   - FEATURE flags / rollout gates (e.g. mobile `FEATURES.webSearch`).
- *
- * Layering: a UI action should FIRST ask `isCapabilityEnabled(platform, cap)` to
- * decide whether to RENDER AT ALL on this surface, and only then apply the
- * narrower model / environment / feature gates to decide whether it is currently
- * usable. Shared UI must consume this matrix (via the per-surface
- * CapabilityProvider) instead of probing browser APIs (e.g. the File System
- * Access API exists in Chrome but "working directory" is a *desktop product*
- * capability) or branching on `platform === 'desktop'`.
- *
- * Source of truth for the values is the product capability spec:
- *   Web      — cloud only.
- *   Desktop  — everything Web has, PLUS local-machine capabilities (superset).
- *   Mobile   — chat/images/voice/camera/photos/file-picker/marketplace/billing/
- *              notifications; NO desktop-local capabilities.
- *
- * Cells the product spec leaves UNSPECIFIED are set to MATCH CURRENT SHIPPED
- * BEHAVIOR (not inferred) and tagged `SPEC-SILENT` for founder confirmation.
- */
 import type { SourceSurface, SyncedAppSurface } from './suite-contracts';
 
 export type PlatformCapability =
-  // ── Universal (cloud) — every synced surface ────────────────────────────────
   | 'canChat'
   | 'canUseImages'
-  | 'canUploadFiles' // web "File upload" · mobile "File picker"
+  | 'canUploadFiles'
   | 'canUseVoice'
   | 'canUseMarketplace'
   | 'canUseBilling'
   | 'canUseCloudModels'
-  | 'canUseCloudExecution' // cloud code execution (E2B); NOT local run-code
+  | 'canUseCloudExecution'
   // ── Web + Desktop (cloud tools) ─────────────────────────────────────────────
   | 'canUseWebSearch'
   | 'canUseDeepResearch'
@@ -65,7 +36,6 @@ export type PlatformCapability =
 type CapabilityRow = Readonly<Record<PlatformCapability, boolean>>;
 
 const WEB: CapabilityRow = {
-  // Universal cloud
   canChat: true,
   canUseImages: true,
   canUploadFiles: true,
@@ -74,13 +44,11 @@ const WEB: CapabilityRow = {
   canUseBilling: true,
   canUseCloudModels: true,
   canUseCloudExecution: true,
-  // Web + Desktop cloud tools
   canUseWebSearch: true,
   canUseDeepResearch: true,
   canUseConnectors: true,
   canUsePlugins: true,
   canUseSkills: true,
-  // Desktop-only (local machine) — MUST be absent on web
   canUseWorkingDirectory: false,
   canUseFileSystem: false,
   canRunLocalCode: false,
@@ -93,14 +61,12 @@ const WEB: CapabilityRow = {
   canUseLocalMcp: false,
   canUseLocalModels: false,
   canUseNativeIntegrations: false,
-  // Mobile-only device
   canUseCamera: false,
   canUsePhotos: false,
   canUseNotifications: false, // SPEC-SILENT for web; web push not shipped — false matches current
 };
 
 const DESKTOP: CapabilityRow = {
-  // Desktop is a SUPERSET of web.
   canChat: true,
   canUseImages: true,
   canUploadFiles: true,
@@ -114,7 +80,6 @@ const DESKTOP: CapabilityRow = {
   canUseConnectors: true,
   canUsePlugins: true,
   canUseSkills: true,
-  // Desktop-only local-machine capabilities
   canUseWorkingDirectory: true,
   canUseFileSystem: true,
   canRunLocalCode: true,
@@ -127,14 +92,12 @@ const DESKTOP: CapabilityRow = {
   canUseLocalMcp: true,
   canUseLocalModels: true,
   canUseNativeIntegrations: true,
-  // Device capabilities — SPEC-SILENT for desktop; not surfaced today → false
   canUseCamera: false,
   canUsePhotos: false,
   canUseNotifications: true, // desktop has native notifications
 };
 
 const MOBILE: CapabilityRow = {
-  // Universal cloud
   canChat: true,
   canUseImages: true,
   canUploadFiles: true, // "File picker"
@@ -143,22 +106,11 @@ const MOBILE: CapabilityRow = {
   canUseBilling: true,
   canUseCloudModels: true,
   canUseCloudExecution: true,
-  // Cloud tools — SPEC-SILENT on mobile's product "Includes" list. The matrix
-  // declares PLATFORM capability (mobile's AddToChatSheet HAS these affordances);
-  // the v1 FEATURE flags then gate runtime availability ON TOP (the intended
-  // layering). As of 2026-08-06 `FEATURES.webSearch`, `research`, and
-  // `connectors` are all TRUE in apps/mobile/lib/v1FeatureFlags.ts — the older
-  // note here claiming they were off pending "AGI Cloud invite access" was stale
-  // (Managed Cloud went open public alpha 2026-06-27; there is no invite gate).
-  // Runtime availability now turns on the per-account capability handshake from
-  // `/api/me?surface=mobile` and the selected model's own capabilities, not on
-  // these flags.
   canUseWebSearch: true,
   canUseDeepResearch: true,
   canUseConnectors: true,
   canUsePlugins: false, // SPEC-SILENT · current: not surfaced in mobile composer
   canUseSkills: false, // SPEC-SILENT · current: not surfaced in mobile composer
-  // Desktop-only — explicitly MUST NOT appear on mobile
   canUseWorkingDirectory: false,
   canUseFileSystem: false,
   canRunLocalCode: false,
@@ -171,17 +123,11 @@ const MOBILE: CapabilityRow = {
   canUseLocalMcp: false,
   canUseLocalModels: false,
   canUseNativeIntegrations: false,
-  // Mobile device capabilities
   canUseCamera: true,
   canUsePhotos: true,
   canUseNotifications: true,
 };
 
-/**
- * The platform → capability truth table. Frozen so it can be relied on as a
- * constant single source of truth across all surfaces (and non-React contexts
- * such as the CLI).
- */
 export const PLATFORM_CAPABILITIES: Readonly<Record<SyncedAppSurface, CapabilityRow>> =
   Object.freeze({
     web: WEB,
@@ -189,7 +135,6 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<SyncedAppSurface, Capability
     mobile: MOBILE,
   });
 
-/** Does `platform` expose `capability`? The one function UI capability-gates on. */
 export function isCapabilityEnabled(
   platform: SyncedAppSurface,
   capability: PlatformCapability,
@@ -197,28 +142,12 @@ export function isCapabilityEnabled(
   return PLATFORM_CAPABILITIES[platform]?.[capability] ?? false;
 }
 
-/** The full capability row for a platform (e.g. to build a context value once). */
 export function getPlatformCapabilities(platform: SyncedAppSurface): CapabilityRow {
   return PLATFORM_CAPABILITIES[platform] ?? WEB;
 }
 
-/** All capability keys (handy for tests / exhaustive iteration). */
 export const ALL_PLATFORM_CAPABILITIES = Object.keys(WEB) as readonly PlatformCapability[];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADDITIVE metadata: domains + permission descriptors.
-//
-// This layer is purely ADDITIVE — it annotates the existing `can*` keys, it does
-// NOT rename them or change `isCapabilityEnabled`. The flat boolean matrix above
-// remains the platform-gating source of truth. This metadata exists so the
-// capability layer can grow toward agent autonomy (confirmation prompts, danger
-// classification, background/long-running scheduling) WITHOUT a model migration.
-// A full resource-based rename (canCaptureScreen, canReadFilesystem/Write/Watch,
-// graduated ask/allow/deny) is deliberately deferred until a concrete capability
-// needs semantics the boolean cannot express — see the architecture review.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Resource/feature domain a capability belongs to (for grouping + governance). */
 export type CapabilityDomain =
   | 'core'
   | 'media'
@@ -232,12 +161,6 @@ export type CapabilityDomain =
   | 'commerce'
   | 'system';
 
-/**
- * Runtime-permission descriptor for a capability. Consumed by future agent
- * autonomy: whether an action needs explicit user confirmation, is destructive,
- * is generally dangerous, runs in the background, or is long-running. Today this
- * is metadata only (no enforcement) — the foundation, not the mechanism.
- */
 export interface CapabilityPermissions {
   requiresConfirmation?: boolean;
   destructive?: boolean;
@@ -251,7 +174,6 @@ export interface CapabilityMetadata {
   permissions?: CapabilityPermissions;
 }
 
-/** Per-capability domain + permission metadata. Every key in the matrix has one. */
 export const CAPABILITY_METADATA: Readonly<Record<PlatformCapability, CapabilityMetadata>> =
   Object.freeze({
     canChat: { domain: 'core' },
@@ -305,31 +227,17 @@ export const CAPABILITY_METADATA: Readonly<Record<PlatformCapability, Capability
     canUseSkills: { domain: 'developer' },
   });
 
-/** Metadata (domain + permissions) for a capability. */
 export function getCapabilityMetadata(capability: PlatformCapability): CapabilityMetadata {
   return CAPABILITY_METADATA[capability];
 }
 
-/** All capabilities in a domain (e.g. to render a settings/governance group). */
 export function getCapabilitiesByDomain(domain: CapabilityDomain): PlatformCapability[] {
   return ALL_PLATFORM_CAPABILITIES.filter((cap) => CAPABILITY_METADATA[cap].domain === domain);
 }
 
-/** Whether a capability needs explicit user confirmation before an agent runs it. */
 export function capabilityRequiresConfirmation(capability: PlatformCapability): boolean {
   return CAPABILITY_METADATA[capability].permissions?.requiresConfirmation ?? false;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Cross-surface capability discovery.
-//
-// The boolean platform matrix above remains the runtime gate for synced apps.
-// This smaller registry serves a different purpose: product surfaces can keep
-// notable capabilities discoverable while truthfully showing that they run
-// somewhere else. Developer surfaces use the canonical SourceSurface names
-// (`chrome` and `vscode`) internally; user-facing labels spell those out as the
-// Chrome and VS Code extensions.
-// ─────────────────────────────────────────────────────────────────────────────
 
 export type DiscoverableSurfaceCapability = 'managed-plugins' | 'browser-control' | 'computer-use';
 
@@ -410,11 +318,6 @@ function formatSurfaceList(labels: readonly string[]): string {
   return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 }
 
-/**
- * Builds honest availability copy for capability lists and settings surfaces.
- * Unsupported capabilities remain discoverable without rendering a fake
- * enabled control or requiring each app to invent its own surface labels.
- */
 export function getSurfaceCapabilityAvailability(
   capability: DiscoverableSurfaceCapability,
   surface: SourceSurface,

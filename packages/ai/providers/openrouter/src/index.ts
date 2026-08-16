@@ -49,18 +49,9 @@ import { createOpenRouterUsageNormalizer } from './usage';
 
 const OPENROUTER_DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
-/**
- * Fallback attribution values, matching the literal fallbacks in
- * `apps/web/lib/llm-providers/openrouter.ts` (`NEXT_PUBLIC_APP_URL ||
- * 'https://agiworkforce.app'` and `'AGI Workforce'`). This package has no
- * Next.js dependency, so callers that want the env-driven site URL pass it
- * in explicitly via `config.siteUrl` (e.g. the web app reads
- * `process.env.NEXT_PUBLIC_APP_URL` itself and forwards it).
- */
 const OPENROUTER_DEFAULT_SITE_URL = 'https://agiworkforce.app';
 const OPENROUTER_DEFAULT_APP_TITLE = 'AGI Workforce';
 
-/** Hosts a `baseUrl` override is allowed to resolve to (SSRF allowlist). */
 const OPENROUTER_ALLOWED_BASE_HOSTS: readonly string[] = [
   'openrouter.ai',
   'localhost',
@@ -77,25 +68,10 @@ const OPENROUTER_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface OpenRouterAdapterConfig extends ProviderAdapterConfig {
-  /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
-  /**
-   * Extra hostnames a `baseUrl` override may resolve to, beyond
-   * `openrouter.ai` / `localhost` / `127.0.0.1`. A `baseUrl` whose host
-   * isn't allowlisted falls back to the default base URL rather than being
-   * trusted unconditionally (SSRF guard implemented by
-   * `@agiworkforce/provider-runtime`).
-   */
   additionalAllowedBaseUrlHosts?: readonly string[];
-  /** `HTTP-Referer` attribution header value. Default `'https://agiworkforce.app'`. */
   siteUrl?: string;
-  /** `X-Title` attribution header value. Default `'AGI Workforce'`. */
   appTitle?: string;
-  /**
-   * Cache retention for the Anthropic `cache_control` block injected on
-   * `anthropic/*` routes. Default `'short'` (5-minute ephemeral), matching
-   * the web adapter's default. Pass `'none'` to disable.
-   */
   anthropicCacheRetention?: OpenRouterAnthropicCacheRetention;
 }
 
@@ -112,7 +88,6 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
     ...(config.apiKey ? { apiKey: config.apiKey } : {}),
     baseURL: baseUrl,
     ...(config.fetch ? { fetch: config.fetch } : {}),
-    // Required by OpenRouter ToS — see module docstring.
     defaultHeaders: {
       'HTTP-Referer': config.siteUrl ?? OPENROUTER_DEFAULT_SITE_URL,
       'X-Title': config.appTitle ?? OPENROUTER_DEFAULT_APP_TITLE,
@@ -161,12 +136,8 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
         provider: 'open_router',
       });
 
-      // Quirk: Anthropic cache_control passthrough for anthropic/* routes.
       applyOpenRouterAnthropicCacheControl(params, anthropicCacheRetention);
 
-      // Request a final usage event before [DONE] — mirrors the web
-      // adapter's streamRequest(), which sets this explicitly rather than
-      // relying on the (host-unrecognized-by-default) compat resolver.
       params.stream_options = { include_usage: true };
 
       const normalizer = createOpenRouterUsageNormalizer();

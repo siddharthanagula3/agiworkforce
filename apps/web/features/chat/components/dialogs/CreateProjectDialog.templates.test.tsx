@@ -2,14 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-/**
- * Project templates pre-fill the create form and nothing else. The behaviour
- * worth pinning is that they never clobber something the user typed, and that a
- * template can only send fields the user could have entered by hand — a
- * template that quietly configured a project differently from the visible form
- * would make the create dialog lie about what it is about to do.
- */
-
 const createProject = vi.hoisted(() => vi.fn());
 
 vi.mock('@/features/projects/services/managed-cloud-projects', () => ({
@@ -64,8 +56,6 @@ describe('CreateProjectDialog — templates', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Research' }));
 
-    // Losing typed input to a template click is the failure that makes people
-    // stop trusting the picker.
     expect(input).toHaveValue('Q3 competitive analysis');
   });
 
@@ -96,7 +86,6 @@ describe('CreateProjectDialog — templates', () => {
 
     await waitFor(() => expect(createProject).toHaveBeenCalled());
     const payload = createProject.mock.calls[0]![0] as Record<string, unknown>;
-    // Empty strings would make every blank project carry meaningless fields.
     expect(payload).not.toHaveProperty('instructions');
     expect(payload).not.toHaveProperty('description');
   });

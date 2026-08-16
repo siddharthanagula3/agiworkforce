@@ -14,11 +14,6 @@ export const OWNED_CLOUD_WINDOW_LABELS = {
   connectorInstall: 'cloud-connector-install',
 } as const;
 
-/**
- * Close every child window that can display or mutate authenticated Cloud
- * account state. Logout calls this before credential revocation so a Stripe,
- * connector, or account window cannot remain open across account boundaries.
- */
 export async function closeOwnedCloudWebviewWindows(): Promise<void> {
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
   await Promise.allSettled(
@@ -29,14 +24,6 @@ export async function closeOwnedCloudWebviewWindows(): Promise<void> {
   );
 }
 
-/**
- * Wait for a Tauri-owned webview window to become usable.
- *
- * Tauri normally emits either `tauri://created` or `tauri://error`, but a
- * platform webview failure can otherwise strand the caller in a permanent
- * loading state. All account, billing, connector, and sign-in windows share
- * this bounded mechanic so their feature services only own product policy.
- */
 export async function waitForOwnedWebviewWindow(
   ownedWindow: OwnedWebviewWindow,
   failureLabel: string,

@@ -1,10 +1,5 @@
 'use client';
 
-/**
- * /skills — opens the settings modal at the Skills section for authenticated
- * users. Unauthenticated visitors see a redirect to login (skills require an account).
- */
-
 import { Suspense } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';

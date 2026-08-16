@@ -1,15 +1,3 @@
-/**
- * Memory Store
- *
- * Manages persistent memory for AGI Workforce, including preferences,
- * facts, decisions, and context. Uses SQLite via Tauri commands for storage.
- *
- * Zustand v5 patterns:
- * - Middleware composition: devtools(persist(...))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Persist middleware: Using createJSONStorage, partialize, version
- * - Better devtools integration with store name
- */
 import { toast } from 'sonner';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist } from 'zustand/middleware';
@@ -30,8 +18,6 @@ export interface MemoryEntry {
   created_at: string;
   updated_at: string;
 }
-
-// --- Types for decay, export/import, and dashboard ---
 
 export interface DecayConfig {
   enabled: boolean;
@@ -83,11 +69,9 @@ interface MemoryState {
   isLoading: boolean;
   error: string | null;
 
-  // Hydration tracking for persist middleware
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
 
-  // --- Existing actions ---
   remember: (
     category: MemoryCategory,
     topic: string,
@@ -104,9 +88,6 @@ interface MemoryState {
   clearError: () => void;
   reset: () => void;
 
-  // --- Newly wired actions ---
-
-  // Core memory operations
   storeMemory: (
     category: MemoryCategory,
     topic: string,
@@ -119,35 +100,29 @@ interface MemoryState {
   listCategories: () => Promise<string[]>;
   exportAll: () => Promise<MemoryEntry[]>;
 
-  // Daily log operations
   logContext: (content: string, entryType?: string, metadata?: string) => Promise<number>;
   getDailyLogs: (date: string) => Promise<DailyLogEntry[]>;
   cleanupLogs: (keepDays?: number) => Promise<number>;
 
-  // Decay operations
   runDecay: () => Promise<DecayResult>;
   getDecayConfig: () => Promise<DecayConfig>;
   setDecayConfig: (config: DecayConfig) => Promise<void>;
   boostOnAccess: (memoryId: number) => Promise<number>;
   getStats: () => Promise<MemoryStats>;
 
-  // Export/import operations
   exportJson: (path?: string) => Promise<Record<string, unknown>>;
   exportMarkdown: (path?: string) => Promise<string>;
   importJson: (path: string, strategy?: string) => Promise<ImportResult>;
 
-  // Dashboard operations
   getDashboardStats: () => Promise<Record<string, unknown>>;
   getProjectMemories: (projectName?: string, limit?: number) => Promise<MemoryEntry[]>;
   getUsageTrends: () => Promise<Record<string, unknown>>;
   suggestImportant: () => Promise<MemoryEntry[]>;
 
-  // Decay operations (additional)
   getDecayCandidates: () => Promise<DecayCandidate[]>;
   recallWithBoost: (category: MemoryCategory, topic: string) => Promise<MemoryEntry | null>;
   decaySingle: (memoryId: number, decayAmount: number) => Promise<number>;
 
-  // Import operations (additional)
   importJsonString: (json: string, strategy?: string) => Promise<ImportResult>;
 }
 
@@ -162,38 +137,25 @@ const storageFallback: Storage = {
   setItem: () => undefined,
 };
 
-// Version for storage migration
-// Version 2: AUDIT-006-024 - Added memory caps and size limits
 const MEMORY_STORE_VERSION = 2;
 
-// AUDIT-006-024: Memory limits to prevent unbounded localStorage growth
 const MEMORY_LIMITS = {
   maxEntries: 100,
   maxTotalSizeBytes: 1024 * 1024, // 1MB
 } as const;
 
-/**
- * Calculate the approximate size of a memory entry in bytes.
- */
 function estimateMemoryEntrySize(entry: MemoryEntry): number {
-  return JSON.stringify(entry).length * 2; // UTF-16 encoding
+  return JSON.stringify(entry).length * 2;
 }
 
-/**
- * Prune memories to fit within limits.
- * Removes oldest entries first (by created_at timestamp).
- */
 function pruneMemories(memories: MemoryEntry[]): MemoryEntry[] {
-  // Sort by created_at (oldest first) for consistent pruning
   const sorted = [...memories].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
 
-  // First pass: enforce max entries limit (keep newest)
   const pruned =
     sorted.length > MEMORY_LIMITS.maxEntries ? sorted.slice(-MEMORY_LIMITS.maxEntries) : sorted;
 
-  // Second pass: enforce total size limit (remove oldest until under limit)
   let totalSize = pruned.reduce((acc, entry) => acc + estimateMemoryEntrySize(entry), 0);
   while (totalSize > MEMORY_LIMITS.maxTotalSizeBytes && pruned.length > 0) {
     const removed = pruned.shift();
@@ -229,7 +191,6 @@ export const useMemoryStore = create<MemoryState>()(
           try {
             const id = await memoryApi.remember(category, topic, content, importance);
 
-            // Refresh memories list after adding
             await get().loadAll();
 
             set({ isLoading: false }, undefined, 'memory/remember/success');
@@ -282,7 +243,6 @@ export const useMemoryStore = create<MemoryState>()(
             const deleted = await memoryApi.forgetTopic(category, topic);
 
             if (deleted) {
-              // Refresh memories list after deleting
               await get().loadAll();
               toast.success('Memory forgotten');
             }
@@ -352,7 +312,6 @@ export const useMemoryStore = create<MemoryState>()(
           try {
             const memories = await memoryApi.listAll();
 
-            // AUDIT-006-024: Apply memory limits to prevent unbounded growth
             const prunedMemories = pruneMemories(memories);
 
             set(
@@ -366,10 +325,6 @@ export const useMemoryStore = create<MemoryState>()(
             set({ error: message, isLoading: false }, undefined, 'memory/loadAll/error');
           }
         },
-
-        // ---------------------------------------------------------------
-        // Newly wired actions
-        // ---------------------------------------------------------------
 
         storeMemory: async (
           category: MemoryCategory,
@@ -453,8 +408,6 @@ export const useMemoryStore = create<MemoryState>()(
           }
         },
 
-        // Daily log operations
-
         logContext: async (content: string, entryType?: string, metadata?: string) => {
           set({ isLoading: true, error: null }, undefined, 'memory/logContext/start');
           try {
@@ -497,8 +450,6 @@ export const useMemoryStore = create<MemoryState>()(
             throw error;
           }
         },
-
-        // Decay operations
 
         runDecay: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/runDecay/start');
@@ -569,8 +520,6 @@ export const useMemoryStore = create<MemoryState>()(
           }
         },
 
-        // Export/import operations
-
         exportJson: async (path?: string) => {
           set({ isLoading: true, error: null }, undefined, 'memory/exportJson/start');
           try {
@@ -621,8 +570,6 @@ export const useMemoryStore = create<MemoryState>()(
             throw error;
           }
         },
-
-        // Dashboard operations
 
         getDashboardStats: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/getDashboardStats/start');
@@ -680,10 +627,6 @@ export const useMemoryStore = create<MemoryState>()(
           }
         },
 
-        // ---------------------------------------------------------------
-        // Decay operations (additional)
-        // ---------------------------------------------------------------
-
         getDecayCandidates: async () => {
           set({ isLoading: true, error: null }, undefined, 'memory/getDecayCandidates/start');
           try {
@@ -727,10 +670,6 @@ export const useMemoryStore = create<MemoryState>()(
           }
         },
 
-        // ---------------------------------------------------------------
-        // Import operations (additional)
-        // ---------------------------------------------------------------
-
         importJsonString: async (json: string, strategy?: string) => {
           set({ isLoading: true, error: null }, undefined, 'memory/importJsonString/start');
           try {
@@ -772,16 +711,13 @@ export const useMemoryStore = create<MemoryState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        // Only persist the memories array for offline access / quick hydration
         partialize: (state) => ({
           memories: state.memories,
         }),
-        // AUDIT-006-024: Migration logic for existing users
         migrate: (persistedState, version) => {
           const state = persistedState as { memories?: MemoryEntry[] };
 
           if (version < 2) {
-            // Version 2: Apply memory limits to existing data
             if (state.memories && Array.isArray(state.memories)) {
               state.memories = pruneMemories(state.memories);
             }
@@ -789,7 +725,6 @@ export const useMemoryStore = create<MemoryState>()(
 
           return state as MemoryState;
         },
-        // Called when rehydration finishes (with or without errors)
         onRehydrateStorage: () => (state) => {
           if (state) {
             state.setHasHydrated(true);
@@ -801,10 +736,6 @@ export const useMemoryStore = create<MemoryState>()(
   ),
 );
 
-/**
- * Wait for memory store to finish hydrating from localStorage.
- * Use this before accessing memories that depend on persisted values.
- */
 export function waitForMemoryHydration(): Promise<void> {
   return new Promise((resolve) => {
     const state = useMemoryStore.getState();
@@ -821,13 +752,11 @@ export function waitForMemoryHydration(): Promise<void> {
   });
 }
 
-// Selectors
 export const selectMemories = (state: MemoryState) => state.memories;
 export const selectMemoryLoading = (state: MemoryState) => state.isLoading;
 export const selectMemoryError = (state: MemoryState) => state.error;
 export const selectMemoryHasHydrated = (state: MemoryState) => state._hasHydrated;
 
-// Derived selectors
 export const selectMemoriesByCategory = (category: MemoryCategory) => (state: MemoryState) =>
   state.memories.filter((m) => m.category === category);
 
@@ -848,11 +777,6 @@ export const selectDecisions = (state: MemoryState) =>
 export const selectContextMemories = (state: MemoryState) =>
   state.memories.filter((m) => m.category === 'context');
 
-// ---------------------------------------------------------------------------
-// User-facing memory injection.
-// ---------------------------------------------------------------------------
-
-/** Rough token estimate: ~4 chars per token */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
@@ -887,10 +811,6 @@ export function buildMemoryContext(memories: MemoryEntry[], maxTokens: number = 
   if (lines.length <= 1) return '';
   return fenceUntrustedMemoryContent(lines.join('\n'));
 }
-
-// ============================================================================
-// Project Memory Store (absorbed from projectMemoryStore.ts — task-w58)
-// ============================================================================
 
 export interface ProjectContext {
   id: number;

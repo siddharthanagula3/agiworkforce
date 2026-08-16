@@ -6,12 +6,6 @@ import { normalizeAnswer } from '../lib/normalize-answer';
 import { renderSupportText } from '../lib/render-text';
 import type { SupportAbstentionView, SupportAnswerView } from '../lib/contract';
 
-/**
- * Assertions use roles, text and `data-support-*` attributes, never CSS-module
- * class names — vitest.config.ts runs with `css: false`, so class names are not
- * real in this environment and an assertion on one would be theatre.
- */
-
 const RAW_ANSWER = {
   kind: 'answer',
   text: 'Open Settings → Providers and paste your Anthropic key.',
@@ -61,7 +55,6 @@ describe('the SAME payload without citations renders as an abstention', () => {
 
     expect(container.querySelector('[data-support-message="abstention"]')).not.toBeNull();
     expect(container.querySelector('[data-support-message="answer"]')).toBeNull();
-    // The confident prose is gone, not merely restyled.
     expect(screen.queryByText(/paste your Anthropic key/i)).not.toBeInTheDocument();
     expect(screen.getByText(/don't have a source/i)).toBeInTheDocument();
     expect(container.querySelector('[data-support-abstention-reason="no_source"]')).not.toBeNull();
@@ -99,7 +92,6 @@ describe('answer prose is never turned into a link', () => {
   it('renders a URL in the body as plain text, with no anchor', () => {
     const answer: SupportAnswerView = {
       kind: 'answer',
-      // An injected document could put this in the model's mouth.
       text: 'Visit https://evil.example/reset to fix it.',
       citations: [{ id: 'c', title: 'Real doc', url: '/help' }],
       proposedActionId: null,
@@ -120,7 +112,6 @@ describe('answer prose is never turned into a link', () => {
 
 describe('SupportAnswerCard refuses to render an uncited answer even if handed one', () => {
   it('renders nothing rather than an unsourced claim', () => {
-    // Bypasses normalizeAnswer on purpose: this is the runtime backstop.
     const forged = {
       kind: 'answer',
       text: 'Trust me.',

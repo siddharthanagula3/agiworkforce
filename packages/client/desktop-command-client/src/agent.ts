@@ -1,11 +1,6 @@
-/**
- * Agent API — typed wrappers for agi_*, orchestrator_*, agent_*, background_*, swarm_* commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
 import type { AgentConfig } from '@agiworkforce/types';
-
-// ---- Types ----
 
 export type { AgentConfig };
 
@@ -56,13 +51,9 @@ export interface Goal {
   createdAt: string;
 }
 export interface OrchestratorInitRequest {
-  /** LLM model identifier for the orchestrator. */
   model?: string;
-  /** LLM provider identifier. */
   provider?: string;
-  /** Maximum concurrent agents. */
   maxConcurrentAgents?: number;
-  /** Arbitrary metadata. */
   metadata?: Record<string, unknown>;
 }
 export interface SpawnAgentRequest {
@@ -172,13 +163,9 @@ export interface BackgroundAgentStats {
   failed: number;
 }
 export interface BgSubmitTaskRequest {
-  /** Task description or goal. */
   task: string;
-  /** LLM model identifier. */
   model?: string;
-  /** Tool names the task is allowed to use. */
   tools?: string[];
-  /** Arbitrary metadata. */
   metadata?: Record<string, unknown>;
 }
 export interface ListBackgroundTasksRequest {
@@ -228,13 +215,9 @@ export interface WorkflowExecutionLog {
   level: string;
 }
 export interface SwarmInitRequest {
-  /** LLM model identifier for swarm agents. */
   model?: string;
-  /** LLM provider identifier. */
   provider?: string;
-  /** Maximum number of concurrent swarm agents. */
   maxAgents?: number;
-  /** Arbitrary metadata. */
   metadata?: Record<string, unknown>;
 }
 export interface SwarmGoalRequest {
@@ -251,8 +234,6 @@ export interface SwarmStats {
   activeAgents: number;
   completedTasks: number;
 }
-
-// ---- AGI Core ----
 
 export async function agiInit(config: AGIConfig): Promise<void> {
   return command<void>('agi_init', { config });
@@ -277,8 +258,6 @@ export async function agiListGoals(): Promise<Goal[]> {
 export async function agiStop(): Promise<void> {
   return command<void>('agi_stop');
 }
-
-// ---- Orchestrator ----
 
 export async function orchestratorInit(request: OrchestratorInitRequest): Promise<void> {
   return command<void>('orchestrator_init', { request });
@@ -339,8 +318,6 @@ export async function getRecentKnowledge(limit: number): Promise<KnowledgeEntryR
   return command<KnowledgeEntryResponse[]>('get_recent_knowledge', { limit });
 }
 
-// ---- Agent ----
-
 export async function agentInit(config: AgentConfig): Promise<void> {
   return command<void>('agent_init', { config });
 }
@@ -376,8 +353,6 @@ export async function questionAnswer(id: string, answer: unknown): Promise<void>
   return command<void>('question_answer', { id, answer });
 }
 
-// ---- Background Agents ----
-
 export async function backgroundAgentPush(input: PushToBackgroundInput): Promise<PushResponse> {
   return command<PushResponse>('background_agent_push', { input });
 }
@@ -411,8 +386,6 @@ export async function backgroundAgentCleanup(): Promise<number> {
 export async function backgroundAgentShouldPush(goal: string): Promise<[boolean, string]> {
   return command<[boolean, string]>('background_agent_should_push', { goal });
 }
-
-// ---- Background Tasks ----
 
 export async function bgSubmitTask(request: BgSubmitTaskRequest): Promise<string> {
   return command<string>('bg_submit_task', { request });
@@ -469,8 +442,6 @@ export async function timeoutGetRecommended(taskType: string): Promise<number> {
   return command<number>('timeout_get_recommended', { taskType });
 }
 
-// ---- Workflows ----
-
 export async function createWorkflow(definition: WorkflowDefinition): Promise<string> {
   return command<string>('create_workflow', { definition });
 }
@@ -524,8 +495,6 @@ export async function triggerWorkflowOnEvent(
 export async function getNextExecutionTime(cronExpr: string): Promise<number> {
   return command<number>('get_next_execution_time', { cronExpr });
 }
-
-// ---- Swarm ----
 
 export async function swarmInit(request: SwarmInitRequest): Promise<void> {
   return command<void>('swarm_init', { request });

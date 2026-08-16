@@ -6,17 +6,6 @@ import type { InteractiveCard, MapSearchCardBody, MapSearchView } from '@agiwork
 import { getAuthHeaders } from '@/services/authSession';
 import { useThemeColors } from '@/src/ui/theme';
 
-/**
- * Mobile renderer for interactive cards.
- *
- * Mirrors the web `InteractiveCardBlock`: `recognized` is the discriminant that
- * makes degradation total. A card whose kind this build does not know, or whose
- * body failed contract validation, arrives as `recognized: false` WITHOUT a
- * body — so a renderer cannot reach for unvalidated data — and we render its
- * authored `fallback` text instead. A card is therefore never a blank space in
- * the answer.
- */
-
 const TILE_SIZE = 256;
 const FRAME_HEIGHT = 200;
 
@@ -24,11 +13,6 @@ type TileAccess =
   | { status: 'blocked' | 'authorizing' | 'signed-out' | 'error' }
   | { status: 'ready'; headers: { Authorization: string } };
 
-/**
- * Resolve the short-lived owner bearer header once for the whole card block.
- * A Local transcript must never contact the Managed Cloud tile route, so the
- * disabled branch returns synchronously without consulting auth storage.
- */
 function useManagedCloudTileAccess(enabled: boolean): TileAccess {
   const [access, setAccess] = useState<TileAccess>(() =>
     enabled ? { status: 'authorizing' } : { status: 'blocked' },
@@ -66,7 +50,6 @@ function useManagedCloudTileAccess(enabled: boolean): TileAccess {
   return access;
 }
 
-/** Web Mercator projection into world pixels. Mirrors the web card exactly. */
 function project(latitude: number, longitude: number, zoom: number) {
   const worldSize = TILE_SIZE * 2 ** zoom;
   const clamped = Math.max(-85.05112878, Math.min(85.05112878, latitude));
@@ -105,8 +88,6 @@ function MapTiles({
     for (let col = -acrossHalf; col <= acrossHalf; col++) {
       const x = centreTileX + col;
       const y = centreTileY + row;
-      // Off-grid tiles are skipped rather than wrapped: wrapping x would paint
-      // the far side of the world beside the target. A gap is the honest render.
       if (x < 0 || y < 0 || x >= tileCount || y >= tileCount) continue;
       tiles.push({
         key: `${x}-${y}`,
@@ -308,10 +289,6 @@ function MapSearchCard({
             accessibilityRole="button"
             accessibilityLabel={primary.label}
             onPress={() => {
-              // The contract already constrained this to an https provider
-              // search URL, so no additional scheme check is needed here. A
-              // platform-level handoff can still fail, so keep the control
-              // from becoming a rejected promise with no visible feedback.
               void Linking.openURL(primary.url).catch(() => {
                 Alert.alert(
                   'Could not open Maps',
@@ -352,9 +329,7 @@ export function InteractiveCardBlock({
   canLoadManagedCloudTiles,
 }: {
   cards: InteractiveCard[];
-  /** Managed-cloud origin that serves `/api/maps/tile/...`. */
   tileBaseUrl: string;
-  /** Fail-closed trust-boundary gate. Local transcripts never request Cloud tiles. */
   canLoadManagedCloudTiles: boolean;
 }) {
   const colors = useThemeColors();
@@ -388,8 +363,6 @@ export function InteractiveCardBlock({
             />
           );
         }
-        // Unknown kind or failed validation: render the authored fallback so
-        // the turn never contains an unexplained gap.
         return (
           <View
             key={card.cardId}

@@ -1,9 +1,3 @@
-/**
- * Tests for the desktop pairing state machine (src/features/native-bridge/pairing.ts).
- *
- * Chrome extension APIs are shimmed via the global chrome mock set up in
- * vitest.setup.ts / the existing test helpers. Fetch is mocked per-test.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
@@ -14,8 +8,6 @@ import {
   confirmPairing,
   _resetStateForTesting,
 } from '../src/features/native-bridge/pairing';
-
-// ── Minimal chrome storage shim ───────────────────────────────────────────────
 
 type StorageCallback = (items: Record<string, unknown>) => void;
 type RemoveCallback = () => void;
@@ -58,17 +50,13 @@ const chromeMock = {
   },
 };
 
-// Install chrome global before each test
 beforeEach(() => {
-  // Reset all stores
   for (const k of Object.keys(sessionStore)) delete sessionStore[k];
   for (const k of Object.keys(localStore)) delete localStore[k];
   chromeMock.runtime.lastError = null;
   chromeMock.runtime.sendMessage.mockReset();
   chromeMock.runtime.sendMessage.mockResolvedValue({ success: true });
-  // Reset module-level state
   _resetStateForTesting();
-  // Install chrome global
   vi.stubGlobal('chrome', chromeMock);
 });
 
@@ -76,8 +64,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('getPairingState', () => {
   it('starts in idle phase', () => {
@@ -112,15 +98,12 @@ describe('loadPairingState', () => {
     sessionStore['agi_bridge_token'] = 'tok456';
     const state = await loadPairingState();
     expect(state.phase).toBe('paired');
-    // No fingerprint key stored → fingerprint is null
     expect(state.fingerprint).toBeNull();
   });
 });
 
 describe('confirmPairing', () => {
   it('stores token in session storage and transitions to paired', async () => {
-    // H-07 audit 2026-05-19: token must be 32-128 chars of [A-Za-z0-9_-];
-    // fingerprint must be 4-32 chars of the same charset.
     const token = 'secret-token-' + 'a'.repeat(28);
     const state = await confirmPairing(token, 'ab12');
     expect(state.phase).toBe('paired');
@@ -130,7 +113,6 @@ describe('confirmPairing', () => {
   });
 
   it('derives fingerprint from first 4 chars when not provided', async () => {
-    // H-07: token must be 32-128 chars; first 4 chars become the fingerprint.
     const token = 'xyzw' + 'a'.repeat(36);
     const state = await confirmPairing(token);
     expect(state.phase).toBe('paired');
@@ -327,15 +309,13 @@ describe('requestPairing — failure paths', () => {
   });
 
   it('is idempotent when already requesting (no double-fire)', async () => {
-    // Force into requesting phase
-    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {}))); // never resolves
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
     vi.stubGlobal('AbortSignal', { timeout: (_ms: number) => ({}) });
 
     void requestPairing();
     const state = getPairingState();
     expect(state.phase).toBe('requesting');
 
-    // Second call should return immediately without launching another fetch
     const state2 = await requestPairing();
     expect(state2.phase).toBe('requesting');
   });

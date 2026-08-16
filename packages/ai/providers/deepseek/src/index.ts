@@ -45,7 +45,6 @@ const DEEPSEEK_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface DeepSeekAdapterConfig extends ProviderAdapterConfig {
-  /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
 }
 

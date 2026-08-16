@@ -9,11 +9,6 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
-/**
- * GET /api/settings/audit-logs/actions
- * Return the distinct audit event_type values that exist for the current user.
- * Used to populate the filter dropdown in the audit log UI.
- */
 async function handleGetActions(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-audit-actions');
   if (rateLimitResponse) return rateLimitResponse;
@@ -38,8 +33,6 @@ async function handleGetActions(request: NextRequest) {
       [userId],
     );
 
-    // Return the user's actual action set merged with the known well-typed set
-    // so the dropdown is populated even before the user has any logs.
     const knownActions = [
       'login',
       'logout',

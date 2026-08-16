@@ -63,10 +63,6 @@ import type {
 import { isSyncedAppSurface, providerModeToPrivacyMode } from '../suite-contracts';
 import type { CapabilityDocumentRef } from '../capability-handshake';
 
-// ============================================================================
-// Session Kind Discriminants
-// ============================================================================
-
 export type SessionKind =
   | 'cloud_chat'
   | 'cloud_work'
@@ -98,17 +94,8 @@ export function isSessionKind(value: string): value is SessionKind {
   return (SESSION_KINDS as readonly string[]).includes(value);
 }
 
-// ============================================================================
-// Shared Field Types (CC §4.2 "every session must carry")
-// ============================================================================
-
-/** Where the session's code/model call physically executes. */
 export type SessionExecutionLocation = 'device' | 'managed-cloud' | 'hybrid-projection';
 
-/**
- * WHO/WHAT is authoritative for running the session. Distinct from
- * `trustBoundary.providerMode` — see the module doc comment.
- */
 export type SessionExecutionAuthority =
   | 'local_device'
   | 'byok_provider_account'
@@ -126,7 +113,6 @@ export const SESSION_EXECUTION_AUTHORITIES = [
   'relay_control_plane',
 ] as const satisfies readonly SessionExecutionAuthority[];
 
-/** Trust boundary — reuses the kernel's `PrivacyMode`/`ProviderMode` pair verbatim. */
 export interface SessionTrustBoundary {
   privacyMode: PrivacyMode;
   providerMode: ProviderMode;
@@ -146,26 +132,11 @@ export interface SessionAccountScope {
   projectId?: string | null;
 }
 
-/**
- * Sync boundary for this session. `syncEligible: true` is only ever valid
- * when `originSurface` also passes the kernel's `isSyncedAppSurface` guard —
- * see `validateSessionInvariants`. Deliberately reuses `SyncedAppSurface`
- * rather than inventing a parallel sync-surface enum.
- */
 export interface SessionSyncPolicy {
   syncEligible: boolean;
   syncedSurfaces?: readonly SyncedAppSurface[];
 }
 
-/**
- * Version pin into the capability/permission-policy state that applied when
- * this session was created or last re-admitted. `capabilityDocument` cites
- * the server-computed `EffectiveCapabilityDocument`
- * (`../capability-handshake`) BY REFERENCE (session id + version) — a
- * session record never embeds the full grant/denial payload, only enough to
- * detect a stale snapshot and force a re-handshake before the next
- * capability-gated action.
- */
 export interface SessionPolicySnapshot {
   capabilityDocument: CapabilityDocumentRef;
   permissionPolicyVersion: string;
@@ -183,11 +154,6 @@ export interface SessionRetentionPolicy {
   deletionPolicy: SessionDeletionPolicy;
 }
 
-/**
- * Provenance recorded on a session that itself resulted from an accepted
- * handoff. Field names deliberately mirror `HandoffDraft` in
- * `../suite-contracts` so a mapper between the two is a straight copy.
- */
 export interface SessionHandoffProvenance {
   handoffDraftId: string;
   sourceSessionId: string;
@@ -196,17 +162,10 @@ export interface SessionHandoffProvenance {
 }
 
 export interface SessionHandoffPolicy {
-  /** Can this session originate a `HandoffDraft` (be its `sourceSessionId`)? */
   canBeHandoffSource: boolean;
-  /** Can this session accept an incoming `HandoffDraft` as its continuation? */
   canBeHandoffTarget: boolean;
-  /** Non-null only when this session itself resulted from an accepted handoff. */
   provenance?: SessionHandoffProvenance | null;
 }
-
-// ============================================================================
-// Session Base + Per-Kind Discriminated Union
-// ============================================================================
 
 interface SessionBase<K extends SessionKind> {
   id: string;
@@ -236,7 +195,6 @@ export interface CloudChatSession extends SessionBase<'cloud_chat'> {
   };
 }
 
-/** The durable AGI Work/Research "run" record — see `ComputeSession` for the executing environment underneath it. */
 export interface CloudWorkSession extends SessionBase<'cloud_work'> {
   originSurface: SyncedAppSurface;
   storageScope: Extract<StorageScope, 'managed_compute'>;
@@ -246,7 +204,6 @@ export interface CloudWorkSession extends SessionBase<'cloud_work'> {
   };
 }
 
-/** The ephemeral per-session cloud execution environment (closer to `ComputeSession` than to a durable `cloud_work` run). */
 export interface ManagedSandboxSession extends SessionBase<'managed_sandbox'> {
   originSurface: SyncedAppSurface;
   storageScope: Extract<StorageScope, 'managed_compute'>;
@@ -332,12 +289,7 @@ export type AppSession =
   | RemoteProjectionSession
   | HandoffSnapshotSession;
 
-/** Narrow `AppSession` to a specific `SessionKind` — ergonomic helper for hosts and tests. */
 export type SessionOfKind<K extends SessionKind> = Extract<AppSession, { kind: K }>;
-
-// ============================================================================
-// Per-Kind Structural Defaults
-// ============================================================================
 
 export interface SessionKindDefaults {
   executionLocation: SessionExecutionLocation;
@@ -345,20 +297,9 @@ export interface SessionKindDefaults {
   storageScope: StorageScope;
   syncEligible: boolean;
   hostRequirement: SessionHostRequirement;
-  /**
-   * A representative trust boundary. For the six kinds whose `trustBoundary`
-   * is type-pinned this is the ONLY valid value; for the remaining five it is
-   * a typical default and callers may substitute any `PrivacyMode`/
-   * `ProviderMode` pair consistent with `providerModeToPrivacyMode`.
-   */
   trustBoundary: SessionTrustBoundary;
 }
 
-/**
- * Structural defaults per `SessionKind`, derived from CC §4.1/§4.2/§4.3/§5.
- * The `default: never` arm makes this exhaustive at compile time — adding a
- * twelfth `SessionKind` without a case here fails the build.
- */
 export function getSessionKindDefaults(kind: SessionKind): SessionKindDefaults {
   switch (kind) {
     case 'cloud_chat':
@@ -430,7 +371,6 @@ export function getSessionKindDefaults(kind: SessionKind): SessionKindDefaults {
         executionAuthority: 'managed_cloud_service',
         storageScope: 'developer_workspace',
         syncEligible: false,
-        // CC §4.1 "Managed developer task" row: "Host needed after start? No".
         hostRequirement: { required: false },
         trustBoundary: { privacyMode: 'managed', providerMode: 'ManagedGateway' },
       };
@@ -468,11 +408,6 @@ export function getSessionKindDefaults(kind: SessionKind): SessionKindDefaults {
   }
 }
 
-// ============================================================================
-// Cross-Field Invariants
-// ============================================================================
-
-/** Kinds allowed to ever report `syncPolicy.syncEligible: true` (CC §4.3/§5). All others are type-pinned `false`. */
 const SYNC_ELIGIBLE_KINDS: ReadonlySet<SessionKind> = new Set<SessionKind>([
   'cloud_chat',
   'cloud_work',
@@ -491,12 +426,6 @@ export interface SessionInvariantViolation {
   message: string;
 }
 
-/**
- * Validates cross-field invariants that the type system alone cannot express
- * (or that guard against a caller widening a narrowed field back to `string`
- * at a JS boundary). Mirrors the `validateGeneratedFileTrustBoundary` /
- * `assertGeneratedFileTrustBoundary` pattern in `../suite-contracts`.
- */
 export function validateSessionInvariants(session: AppSession): SessionInvariantViolation[] {
   const violations: SessionInvariantViolation[] = [];
   const add = (code: SessionInvariantViolationCode, message: string) =>
@@ -519,12 +448,6 @@ export function validateSessionInvariants(session: AppSession): SessionInvariant
     );
   }
 
-  // Defense in depth on the surface dimension: even an allowed kind must not
-  // claim sync eligibility from a non-synced origin surface. This is the
-  // check that is NOT redundant with the kind allowlist above for
-  // `remote_projection`, whose originSurface can legitimately be `desktop`
-  // (a surface that IS sync-eligible for consumer chat) even though
-  // `remote_projection` itself must never sync.
   if (session.syncPolicy.syncEligible && !isSyncedAppSurface(session.originSurface)) {
     add(
       'sync-eligible-surface-not-synced',
@@ -556,13 +479,6 @@ export function validateSessionInvariants(session: AppSession): SessionInvariant
   return violations;
 }
 
-/**
- * Throw-variant of `validateSessionInvariants`. Use at persistence
- * boundaries — anywhere an `AppSession` is written to durable storage or
- * crosses a trust boundary — so a violating record fails fast instead of
- * silently persisting. Parallels `assertGeneratedFileTrustBoundary` and
- * `assertSurfaceCanSyncChats` in `../suite-contracts`.
- */
 export function assertSessionInvariants(session: AppSession): void {
   const violations = validateSessionInvariants(session);
   if (violations.length === 0) return;

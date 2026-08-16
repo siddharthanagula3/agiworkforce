@@ -101,8 +101,6 @@ async function handleGoogleNotification(request: NextRequest): Promise<NextRespo
     [purchaseTokenHash],
   );
   if (!anchor) {
-    // A device verification can race the RTDN delivery. Acknowledge the
-    // unknown event; the device path remains the only safe account binder.
     return NextResponse.json({ received: true, status: 'unknown_purchase' });
   }
   const productId = notification.data.oneTimeProductNotification?.sku ?? anchor.product_id;

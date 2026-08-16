@@ -1,10 +1,3 @@
-/**
- * ScheduleEditor
- *
- * Full-page (modal overlay) editor for creating or editing a scheduled task.
- * Supports Daily / Weekly / Monthly / Custom (cron) frequencies.
- * Integrates with schedulerStore's createTask / updateTask actions.
- */
 import { Calendar, Clock, Info, Loader2, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -12,19 +5,11 @@ import { cn } from '../../lib/utils';
 import { useSchedulerStore } from '../../stores/schedulerStore';
 import { buildSchedulePreview, type Frequency, type Schedule } from '../../stores/schedulesStore';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface ScheduleEditorProps {
   isOpen: boolean;
   editingSchedule?: Schedule | null;
   onClose: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const FREQUENCY_OPTIONS: Array<{ value: Frequency; label: string; description: string }> = [
   { value: 'daily', label: 'Daily', description: 'Runs once per day at a chosen time' },
@@ -45,10 +30,6 @@ const WEEKDAY_OPTIONS: Array<{ value: number; label: string; short: string }> = 
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTE_OPTIONS = [0, 15, 30, 45];
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function buildCronExpression(schedule: {
   frequency: Frequency;
@@ -76,10 +57,6 @@ function padTime(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-// ---------------------------------------------------------------------------
-// Field style helper
-// ---------------------------------------------------------------------------
-
 function fieldCn(extra?: string): string {
   return cn(
     'w-full rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-3 py-2 text-sm text-[var(--chat-text-primary)]',
@@ -89,27 +66,21 @@ function fieldCn(extra?: string): string {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEditorProps) {
   const createTask = useSchedulerStore((s) => s.createTask);
   const updateTask = useSchedulerStore((s) => s.updateTask);
 
   const isEditing = editingSchedule != null;
 
-  // Form state
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
   const [frequency, setFrequency] = useState<Frequency>('daily');
   const [hour, setHour] = useState(9);
   const [minute, setMinute] = useState(0);
-  const [weekDays, setWeekDays] = useState<number[]>([1]); // Monday default
+  const [weekDays, setWeekDays] = useState<number[]>([1]);
   const [cronExpression, setCronExpression] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Populate form when editing
   useEffect(() => {
     if (editingSchedule) {
       setName(editingSchedule.name);
@@ -130,7 +101,6 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
     }
   }, [editingSchedule, isOpen]);
 
-  // Escape key to close
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {

@@ -64,7 +64,6 @@ describe('DirectorySyncAdminPage', () => {
     render(<DirectorySyncAdminPage />);
 
     expect(await screen.findByText('https://app.example.com/api/scim/v2')).toBeTruthy();
-    // Listed as a connection and offered as a token target.
     expect(screen.getAllByText(/Okta production/).length).toBeGreaterThan(0);
     expect(screen.getByText(/user\.provisioned/)).toBeTruthy();
   });
@@ -78,7 +77,6 @@ describe('DirectorySyncAdminPage', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Enterprise subscription');
-    // Nothing is invented when the server refuses.
     expect(screen.queryByText(/Okta production/)).toBeNull();
   });
 
@@ -131,8 +129,6 @@ describe('DirectorySyncAdminPage', () => {
     expect(await screen.findByText(rawToken)).toBeTruthy();
     expect(screen.getByText(/will not be shown again/i)).toBeTruthy();
 
-    // The re-listing after minting must not contain the raw value; the UI shows
-    // only the public prefix for the persisted token.
     await waitFor(() => {
       expect(screen.getByText(new RegExp(`scim_${'ab'.repeat(8)}_…`))).toBeTruthy();
     });

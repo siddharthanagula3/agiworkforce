@@ -1,12 +1,3 @@
-/**
- * Local→Cloud sync — message body regression test.
- *
- * Previously syncLocalConversationsToCloud() only POSTed the conversation
- * shell (title/metadata) and never sent message bodies, while still
- * reporting the conversation+messages as successfully synced. This test
- * asserts the server actually receives message content via the bulk
- * messages endpoint, and that success is only reported once accepted.
- */
 
 jest.mock('../services/api', () => ({
   api: { get: jest.fn(), post: jest.fn() },

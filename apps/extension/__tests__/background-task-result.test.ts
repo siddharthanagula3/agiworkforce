@@ -1,16 +1,3 @@
-/**
- * background-task-result.test.ts — SIX-04.
- *
- * Regression: scheduled tasks and prompt shortcuts dispatched through
- * `handleChatMessage` with a fixed `clientInstanceId` (`scheduled-task` /
- * `shortcut-replay`). The only `CHAT_CHUNK` listener is the side panel, which
- * filters on its own per-panel UUID, so the answer was generated, billed, and
- * discarded — `recordScheduledTaskRun` persisted only `lastRun`.
- *
- * The answer now lands in the same browser conversation store an interactive
- * answer lands in, under a stable task-scoped id, without stealing the active
- * conversation from an open panel.
- */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -23,8 +10,6 @@ function selected(
   store: Record<string, unknown>,
   key: string | string[] | null,
 ): Record<string, unknown> {
-  // `chrome.storage.*.get(null)` returns the whole area — the link pruner
-  // relies on that shape.
   if (key === null) return { ...store };
   const keys = Array.isArray(key) ? key : [key];
   return Object.fromEntries(keys.map((entry) => [entry, store[entry]]));
@@ -148,7 +133,6 @@ describe('a completed background run is retained', () => {
       ['assistant', 'Three things happened overnight.'],
     ]);
 
-    // The History drawer lists exactly this collection.
     expect((await listConversations()).map((entry) => entry.id)).toContain(target.conversationId);
   });
 
@@ -177,7 +161,6 @@ describe('a completed background run is retained', () => {
     const stored = await getConversation(target.conversationId);
     expect(stored?.messages).toHaveLength(4);
     expect(stored?.messages.at(-1)?.content).toBe('Run two.');
-    // One thread, not two entries.
     expect(
       (await listConversations()).filter((entry) => entry.id === target.conversationId),
     ).toHaveLength(1);
@@ -257,14 +240,12 @@ describe('a completed background run is retained', () => {
     expect(await recordResult(target, '   \n  ')).toBeUndefined();
     expect(seen).toEqual([]);
     expect(await getConversation(target.conversationId)).toBeUndefined();
-    // No phantom entry in the History drawer either.
     expect(await listConversations()).toEqual([]);
   });
 
   it('survives a storage round-trip through the store normalizer', async () => {
     const target = delivery();
     await recordResult(target, 'Persisted answer.');
-    // Re-read straight from the raw record the way a fresh service worker does.
     const raw = _local[BROWSER_STORE_KEY] as { conversations: Array<{ id: string }> };
     expect(raw.conversations.some((entry) => entry.id === target.conversationId)).toBe(true);
     expect((await getConversation(target.conversationId))?.messages.at(-1)?.content).toBe(
@@ -315,7 +296,6 @@ describe('notification carries the result', () => {
   it('maps a notification to its result and clears the link once consumed', async () => {
     await linkNotificationToConversation('agi_notif_1', OWNER, 'bg-task-task_1');
     expect(await takeNotificationConversation('agi_notif_1', OWNER)).toBe('bg-task-task_1');
-    // Consumed: a second click must not re-open it.
     expect(await takeNotificationConversation('agi_notif_1', OWNER)).toBeUndefined();
   });
 
@@ -325,7 +305,6 @@ describe('notification carries the result', () => {
     }
     const retained = Object.keys(_session).filter((key) => key.startsWith('agi_notif_conv_'));
     expect(retained).toHaveLength(20);
-    // The newest link still resolves; the oldest was dropped.
     expect(await takeNotificationConversation('agi_notif_29', OWNER)).toBe('bg-task-task_29');
     expect(await takeNotificationConversation('agi_notif_0', OWNER)).toBeUndefined();
   });
@@ -345,9 +324,6 @@ describe('notification carries the result', () => {
   });
 });
 
-// background.ts registers listeners at import time and is not unit-importable,
-// so the wiring between the schedulers and the sink above is asserted at the
-// source level — the same technique task-notifications-toggle.test.ts uses.
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(resolve(here, '..', rel), 'utf8');
 const background = read('src/background.ts');
@@ -357,7 +333,6 @@ describe('background dispatch is wired to the sink', () => {
   it('dispatches scheduled prompts and shortcut prompts under the shared client ids', () => {
     expect(background).toContain('clientInstanceId: SCHEDULED_TASK_CLIENT_ID');
     expect(background).toContain('clientInstanceId: SHORTCUT_REPLAY_CLIENT_ID');
-    // The literals must not linger anywhere else in the dispatch path.
     expect(background).not.toContain("clientInstanceId: 'scheduled-task'");
     expect(background).not.toContain("clientInstanceId: 'shortcut-replay'");
   });
@@ -378,7 +353,6 @@ describe('background dispatch is wired to the sink', () => {
   });
 
   it('files the transcript on every terminal path, not only on success', () => {
-    // success, non-success result, and thrown error.
     const calls = background.match(/await deliverBackgroundResult\(/g) ?? [];
     expect(calls.length).toBe(3);
     expect(background).toContain('if (delivery && text) transcript.push(text)');
@@ -448,8 +422,6 @@ describe('the side panel can reach a stored background result', () => {
     expect(sidePanel).toContain(
       'isPromptBased && resultConversationId && storedConversationIds.has(resultConversationId)',
     );
-    // Play on a prompt shortcut must land the user on the answer, not on a
-    // spinner that finished with nothing to read.
     expect(sidePanel).toContain('if (!isPromptBased || !resultConversationId) {');
     expect(sidePanel).toContain('openStoredConversation(resultConversationId).then((opened)');
   });

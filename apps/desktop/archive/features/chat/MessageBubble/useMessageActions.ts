@@ -1,8 +1,3 @@
-/**
- * useMessageActions Hook
- *
- * Handles message action logic including copy, bookmark, edit, and retry.
- */
 
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -21,19 +16,14 @@ interface UseMessageActionsOptions {
 }
 
 interface UseMessageActionsReturn {
-  // Copy state and handler
   copied: boolean;
   handleCopy: () => Promise<void>;
-  // Bookmark handler
   handleBookmark: () => void;
-  // Edit state and handlers
   isEditing: boolean;
   handleStartEdit: () => void;
   handleCancelEdit: () => void;
   handleSaveEdit: (newContent: string) => void;
-  // Retry handler
   handleRetry: () => void;
-  // Actions visibility state
   showActions: boolean;
   setShowActions: (show: boolean) => void;
 }
@@ -51,13 +41,11 @@ export function useMessageActions({
   const [isEditing, setIsEditing] = useState(false);
   const [showActions, setShowActions] = useState(false);
 
-  // AUDIT-005-001 fix: Store timeout ID in ref for cleanup
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toggleMessageBookmark = useUnifiedChatStore((state) => state.toggleMessageBookmark);
   const retryFailedMessage = useUnifiedChatStore((state) => state.retryFailedMessage);
 
-  // AUDIT-005-001 fix: Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
@@ -75,7 +63,6 @@ export function useMessageActions({
         icon: React.createElement(Check, { className: 'h-4 w-4' }) as React.ReactNode,
         duration: 2000,
       });
-      // AUDIT-005-001 fix: Clear previous timeout before setting new one
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
       }
@@ -116,7 +103,6 @@ export function useMessageActions({
       if (onEditSave) {
         onEditSave(messageId, newContent);
       } else if (onEdit) {
-        // Fallback to legacy onEdit behavior
         onEdit(newContent);
       }
     },

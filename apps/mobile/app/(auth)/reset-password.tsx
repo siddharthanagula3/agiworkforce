@@ -1,9 +1,3 @@
-/**
- * reset-password.tsx
- *
- * Password reset is owned by the Web/Clerk account surface. Mobile v1 keeps
- * this route as a gated deep-link placeholder so old links do not crash.
- */
 import { useCallback } from 'react';
 import { Alert, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,11 +11,6 @@ import { openExternalUrl } from '@/lib/safeOpenURL';
 export default function ResetPasswordScreen() {
   const { colors: themeColors } = useTheme();
   const router = useRouter();
-  // Expo Router passes URL fragment params as query params when the route is
-  // matched via a deep link.
-  //
-  // Account recovery is web-owned. This route only prevents stale deep links
-  // from falling through to unrelated handlers.
   const params = useLocalSearchParams<{
     access_token?: string;
     refresh_token?: string;

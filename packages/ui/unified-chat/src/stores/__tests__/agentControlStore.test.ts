@@ -2,9 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useAgentControlStore } from '../agentControlStore';
 
-// UI-AGENTMODE-DEFAULT-01 (founder decision): agent edits must always require
-// explicit user intent. A fresh conversation must default to 'ask' (confirm
-// every edit), never 'auto' (edits run without confirmation).
 describe('agentControlStore — safe default (UI-AGENTMODE-DEFAULT-01)', () => {
   beforeEach(() => {
     useAgentControlStore.setState({ byConversation: {}, byProject: {} });

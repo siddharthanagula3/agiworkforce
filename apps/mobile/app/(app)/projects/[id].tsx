@@ -2,10 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
-// navigation package, so the raw hook can land on a different context
-// instance than the one expo-router's navigator provides.
 import { useNavigation } from 'expo-router';
 import { ArrowLeft, Menu } from 'lucide-react-native';
 import { summarizeProjectHeader } from '@agiworkforce/types';
@@ -63,14 +59,6 @@ function LocalOnlyFallback({
   );
 }
 
-/**
- * Cloud project header. The cross-device `fetchProject` REST detail call is
- * gated off in v1 (FEATURES.crossDeviceSync=false), but synced cloud projects
- * still live in `cloudProjectStore`. Without this, a cloud project fell through
- * to LocalOnlyFallback and rendered a "Local project" label + the raw UUID (no
- * local row exists). Drive the header from the cloud store so the name is
- * correct and the (mode-aware) Chats/Sources tabs render below.
- */
 function CloudProjectHeader({
   name,
   colors,
@@ -99,7 +87,6 @@ function CloudProjectHeader({
   );
 }
 
-/** Segmented tab bar with Chats / Sources segments. */
 function TabBar({
   activeTab,
   onTabChange,
@@ -172,9 +159,6 @@ export default function ProjectDetailScreen() {
 
   const localProject = useProjectStore((s) => s.projects.find((p) => p.id === id));
 
-  // In cloud mode, a synced cloud project lives in cloudProjectStore (the
-  // crossDeviceSync-gated REST fetch is off in v1). Detect it so the header +
-  // title come from real cloud data instead of the "Local"/raw-UUID fallback.
   const appMode = useChatAppModeStore((s) => s.appMode);
   const cloudProject = useCloudProjectStore((s) =>
     s.projects.find((p) => p.id === id && p.deletedAt === null),
@@ -265,7 +249,6 @@ export default function ProjectDetailScreen() {
       );
     }
 
-    // error or idle — show local-only fallback (also shows tab bar below)
     return <LocalOnlyFallback projectId={id} localProject={localProject} colors={colors} />;
   };
 

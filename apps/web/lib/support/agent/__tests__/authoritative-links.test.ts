@@ -1,10 +1,3 @@
-/**
- * Every link the agent hands a user when it refuses must resolve to a real page.
- *
- * An authoritative link that 404s turns an honest refusal into a dead end, which
- * is worse than the refusal itself. This test walks the filesystem rather than
- * trusting the constant.
- */
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';

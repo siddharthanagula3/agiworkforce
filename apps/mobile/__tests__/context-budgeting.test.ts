@@ -1,18 +1,4 @@
-/**
- * Tests for context budgeting, memory compaction, and RAG chunking.
- *
- * Uses two model fixtures to exercise both extremes:
- *   - fixture-small-context-model: contextWindow = 4096
- *   - fixture-large-context-model: contextWindow = 262144
- *
- * All contextWindow values are read from the mocked catalog — no numbers
- * are hardcoded in the production code under test.
- */
 
-// ---------------------------------------------------------------------------
-// Catalog mock — factory runs before module-level consts (jest hoisting)
-// so the catalog data is defined inline inside the factory.
-// ---------------------------------------------------------------------------
 
 const SMALL_CONTEXT_MODEL_ID = 'fixture-small-context-model';
 const LARGE_CONTEXT_MODEL_ID = 'fixture-large-context-model';
@@ -53,10 +39,6 @@ jest.mock('@/lib/models', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Imports (after mock)
-// ---------------------------------------------------------------------------
-
 import {
   computeContextBudget,
   estimateTokens,
@@ -70,10 +52,6 @@ import {
 } from '../src/features/memory/services/ragChunker';
 import type { ChatMessage } from '../types/chat';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeMessage(id: string, role: 'user' | 'assistant', content: string): ChatMessage {
   return {
     id,
@@ -84,16 +62,11 @@ function makeMessage(id: string, role: 'user' | 'assistant', content: string): C
   };
 }
 
-/** Build N messages each with `charsPerMessage` chars of content. */
 function makeMessages(count: number, charsPerMessage: number): ChatMessage[] {
   return Array.from({ length: count }, (_, i) =>
     makeMessage(`msg-${i}`, i % 2 === 0 ? 'user' : 'assistant', 'a'.repeat(charsPerMessage)),
   );
 }
-
-// ---------------------------------------------------------------------------
-// contextBudgeter tests
-// ---------------------------------------------------------------------------
 
 describe('contextBudgeter', () => {
   describe('estimateTokens', () => {
@@ -107,37 +80,28 @@ describe('contextBudgeter', () => {
     });
 
     it('rounds up fractional tokens', () => {
-      expect(estimateTokens('abc')).toBe(1); // ceil(3/4) = 1
-      expect(estimateTokens('abcde')).toBe(2); // ceil(5/4) = 2
+      expect(estimateTokens('abc')).toBe(1);
+      expect(estimateTokens('abcde')).toBe(2);
     });
   });
 
   describe('computeContextBudget — small context (4K)', () => {
     const modelId = SMALL_CONTEXT_MODEL_ID;
-    // contextWindow = 4096
-    // hardCap = floor(4096 * 0.8) = 3276
-    // warnThreshold = floor(4096 * 0.7) = 2867
 
     it('returns ok status when usage is low', () => {
-      const messages = makeMessages(2, 100); // tiny messages
+      const messages = makeMessages(2, 100);
       const budget = computeContextBudget(modelId, messages);
       expect(budget.status).toBe('ok');
       expect(budget.usedFraction).toBeLessThan(0.7);
     });
 
     it('returns warn status when 70-80% full', () => {
-      // warnThreshold=2867. Each char=0.25 tokens. Need ~2867*4=11468 chars used.
-      // 2 messages × 5500 chars = 11000 chars content + role overhead → ~2762 tokens
-      // Try 3 messages × 4000 chars = 12000 chars → ~3004 tokens > 2867
       const messages = makeMessages(3, 4000);
       const budget = computeContextBudget(modelId, messages);
-      // Should be warn or compact depending on exact count — either is above 70%
       expect(['warn', 'compact']).toContain(budget.status);
     });
 
     it('returns compact status when >= 80% full', () => {
-      // hardCap = 3276 tokens = ~13104 chars of content + per-msg overhead
-      // 5 messages × 2800 chars = 14000 chars → ~3504 tokens > 3276
       const messages = makeMessages(5, 2800);
       const budget = computeContextBudget(modelId, messages);
       expect(budget.status).toBe('compact');
@@ -156,12 +120,8 @@ describe('contextBudgeter', () => {
 
   describe('computeContextBudget — large context (262K)', () => {
     const modelId = LARGE_CONTEXT_MODEL_ID;
-    // contextWindow = 262144
-    // hardCap = floor(262144 * 0.8) = 209715
-    // warnThreshold = floor(262144 * 0.7) = 183500
 
     it('stays ok with thousands of normal messages', () => {
-      // 100 messages × 200 chars = 20000 chars → ~5000 tokens << 183500
       const messages = makeMessages(100, 200);
       const budget = computeContextBudget(modelId, messages);
       expect(budget.status).toBe('ok');
@@ -186,10 +146,6 @@ describe('contextBudgeter', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// memoryCompactor tests
-// ---------------------------------------------------------------------------
-
 describe('memoryCompactor', () => {
   describe('compact — small context (4K)', () => {
     const modelId = SMALL_CONTEXT_MODEL_ID;
@@ -199,16 +155,14 @@ describe('memoryCompactor', () => {
       const result = await compact(modelId, messages);
       expect(result.compacted).toBe(false);
       expect(result.droppedTurns).toBe(0);
-      expect(result.messages).toBe(messages); // same reference
+      expect(result.messages).toBe(messages);
     });
 
     it('compacts when at 80% threshold', async () => {
-      // Force a compact scenario: 5 messages × 2800 chars
       const messages = makeMessages(5, 2800);
       const result = await compact(modelId, messages);
       expect(result.compacted).toBe(true);
       expect(result.droppedTurns).toBeGreaterThan(0);
-      // Result has fewer messages than original (summary + kept)
       expect(result.messages.length).toBeLessThan(messages.length);
     });
 
@@ -227,10 +181,10 @@ describe('memoryCompactor', () => {
       if (result.compacted) {
         const keptCount = messages.length - result.droppedTurns;
         const keptOriginals = messages.slice(result.droppedTurns);
-        const keptInResult = result.messages.slice(1); // skip summary
+        const keptInResult = result.messages.slice(1);
         expect(keptInResult.length).toBe(keptCount);
         for (let i = 0; i < keptOriginals.length; i++) {
-          expect(keptInResult[i]).toBe(keptOriginals[i]); // same reference
+          expect(keptInResult[i]).toBe(keptOriginals[i]);
         }
       }
     });
@@ -254,15 +208,11 @@ describe('memoryCompactor', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// ragChunker tests
-// ---------------------------------------------------------------------------
-
 describe('ragChunker', () => {
   describe('getRagChunkingConfig', () => {
     it('small context (4K) → targetTokens = 25% of 4096', () => {
       const config = getRagChunkingConfig(SMALL_CONTEXT_MODEL_ID);
-      expect(config.targetTokens).toBe(Math.floor(4096 * 0.25)); // 1024
+      expect(config.targetTokens).toBe(Math.floor(4096 * 0.25));
     });
 
     it('small context (4K) → overlapTokens = 10% of targetTokens', () => {
@@ -278,7 +228,7 @@ describe('ragChunker', () => {
 
     it('large context (262K) → targetTokens = 25% of 262144', () => {
       const config = getRagChunkingConfig(LARGE_CONTEXT_MODEL_ID);
-      expect(config.targetTokens).toBe(Math.floor(262144 * 0.25)); // 65536
+      expect(config.targetTokens).toBe(Math.floor(262144 * 0.25));
     });
 
     it('large context (262K) → maxChunksPerQuery = 16', () => {
@@ -301,32 +251,23 @@ describe('ragChunker', () => {
     });
 
     it('the small-context fixture produces smaller chunks than the large fixture', () => {
-      // 5000-word document: small targetWords = floor(1024/1.3) ≈ 787 words/chunk
-      // → multiple chunks expected
       const text = Array.from({ length: 5000 }, (_, i) => `word${i}`).join(' ');
       const smallContextChunks = chunkForModel(text, SMALL_CONTEXT_MODEL_ID);
       const largeContextChunks = chunkForModel(text, LARGE_CONTEXT_MODEL_ID);
 
-      // The small-context fixture must produce more chunks (smaller targetWords).
       expect(smallContextChunks.length).toBeGreaterThan(largeContextChunks.length);
     });
 
     it('chunks have overlapping content', () => {
-      // Use repeated words so overlap is detectable even with exact match.
-      // Pattern: "aaa bbb ccc ..." — all words are distinct unique tokens so we
-      // verify overlap by checking chunk1 starts before chunk0 ends (index-wise).
       const wordCount = 2000;
       const words = Array.from({ length: wordCount }, (_, i) => `word${i}`);
       const text = words.join(' ');
       const chunks = chunkForModel(text, SMALL_CONTEXT_MODEL_ID);
-      if (chunks.length < 2) return; // can't test overlap with 1 chunk
+      if (chunks.length < 2) return;
 
-      // Verify the second chunk starts before the last word of the first chunk
-      // by checking that chunk1's first word appears somewhere inside chunk0.
       const chunk0Words = chunks[0].text.split(' ');
       const chunk1Words = chunks[1].text.split(' ');
       const chunk1Start = chunk1Words[0];
-      // chunk1 first word must appear in chunk0 (overlap = chunk1 starts inside chunk0)
       expect(chunk0Words).toContain(chunk1Start);
     });
 

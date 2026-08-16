@@ -1,9 +1,3 @@
-/**
- * CustomModelsSettings
- *
- * Allows users to configure custom OpenAI-compatible model endpoints
- * (Groq, OpenRouter, Ollama with custom URL, vLLM, LM Studio, etc.)
- */
 
 import {
   AlertCircle,
@@ -94,7 +88,6 @@ async function verifyCustomModel(
     if (apiKey.trim()) {
       headers['Authorization'] = `Bearer ${apiKey.trim()}`;
     }
-    // Try /models endpoint first
     try {
       const response = await fetch(`${baseUrl}/models`, {
         method: 'GET',
@@ -107,7 +100,6 @@ async function verifyCustomModel(
     } catch {
       // Fall through to chat completions fallback
     }
-    // Try chat completions as fallback
     const chatResp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
@@ -187,7 +179,6 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
   const [formError, setFormError] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
 
-  // Reset form state when the dialog opens or the edit target changes
   useEffect(() => {
     if (open) {
       setForm(configToFormState(initial));

@@ -13,10 +13,6 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
-// navigation package, so the raw hook can land on a different context
-// instance than the one expo-router's navigator provides.
 import { useNavigation } from 'expo-router';
 import { MoreHorizontal, WifiOff, SquarePen, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -114,16 +110,10 @@ interface ConversationUiActionScope {
   ownership: AccountScopedUiState;
 }
 
-/**
- * Chat conversation screen.
- * Loads messages for the given conversation ID, renders MessageList + ChatInput.
- */
 export default function ChatScreen() {
   const colors = useThemeColors();
   const params = useLocalSearchParams<{ id: string; prompt?: string }>();
-  // useLocalSearchParams can return string | string[] -- narrow to string
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  // Prompt pre-fill from a deep link (?prompt=)
   const initialPrompt = Array.isArray(params.prompt) ? params.prompt[0] : (params.prompt ?? '');
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const activeProject = useProjectStore((s) =>
@@ -161,10 +151,6 @@ export default function ChatScreen() {
   const conversationMessages = useChatStore((s) =>
     id ? (s.messages[id] ?? EMPTY_CHAT_MESSAGES) : EMPTY_CHAT_MESSAGES,
   );
-  // Scope streaming state to THIS conversation. The global isStreaming flag
-  // covers any background stream, which showed a stop button (and locked the
-  // composer) on conversations that weren't streaming after a mid-stream
-  // conversation switch — the exact stuck-send-affordance bug this guards.
   const isStreaming = useChatStore((s) => (id ? s.streamingConversationIds.includes(id) : false));
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
   const conversations = useChatStore((s) => s.conversations);
@@ -211,22 +197,12 @@ export default function ChatScreen() {
   const approveRequest = useAgentStore((s) => s.approveRequest);
   const rejectRequest = useAgentStore((s) => s.rejectRequest);
 
-  // Find current conversation title
   const conversation = conversations.find((c) => c.id === id);
   const title = conversation?.title ?? 'Chat';
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)
     : executionModeForSelection(selectedModel, appMode);
 
-  /**
-   * Route half of the "what will be sent" disclosure (SIX-20). The boundary is
-   * the CONVERSATION's, not the app toggle's — a Local thread stays Local even
-   * while the app mode says Cloud, and `handleSend` dispatches on exactly this
-   * value. `sendMessage` is called with `selectedModel`, so that is the model
-   * named here; `getShortDisplayName` keeps it a human name rather than the
-   * raw wire id. The composer completes the payload half (draft length,
-   * staged attachments) and renders the compact card above the input.
-   */
   const sendPreviewInput = useMemo<SendPreviewInput>(
     () => ({
       providerMode: (conversationExecutionMode === 'cloud'
@@ -261,10 +237,6 @@ export default function ChatScreen() {
     return ownership ? { conversationId: id, ownership } : null;
   }, [conversationExecutionMode, id]);
 
-  // Expo Router can retain this screen while Clerk switches accounts. Clear
-  // message-derived transient state before paint if its captured conversation
-  // or Cloud epoch no longer matches. Local quotes/rename drafts remain
-  // device-owned across a Cloud account switch.
   useLayoutEffect(() => {
     currentConversationScopeRef.current = {
       conversationId: id,
@@ -288,7 +260,6 @@ export default function ChatScreen() {
     renameModalVisible,
   ]);
 
-  // Set current conversation and load messages on mount
   useEffect(() => {
     if (!id) return;
     setCurrentConversationId(id);
@@ -300,31 +271,14 @@ export default function ChatScreen() {
     };
   }, [id, setCurrentConversationId, loadMessages, markConversationRead]);
 
-  // ---------------------------------------------------------------------------
-  // Voice playback.
-  //
-  // A TYPED chat never speaks on its own. This screen used to auto-speak every
-  // completed assistant message, gated on `settings.voiceEnabled` — but that
-  // setting is labelled "Voice Input / Use the microphone for dictation and
-  // voice conversations" and defaults to ON, so an input preference was
-  // silently driving speech OUTPUT and every reply in a silent, typed
-  // conversation was read aloud (founder 2026-08-13).
-  //
-  // Reading a reply aloud now has exactly two deliberate entry points, both
-  // still wired: voice mode, which speaks through `useVoiceConversation`, and
-  // the per-message play control in MessageBubble. `stopSpeaking` is kept so
-  // navigating away or sending again still cuts off whichever of those started.
-  // ---------------------------------------------------------------------------
   const { stop: stopSpeaking } = useVoicePlayback();
 
-  // Stop any ongoing speech when the user navigates away from this screen.
   useEffect(() => {
     return () => {
       stopSpeaking();
     };
   }, [stopSpeaking]);
 
-  // Open the paywall bottom sheet whenever the chat store captures a paywall error.
   useEffect(() => {
     if (paywallError) {
       paywallSheetRef.current?.expand();
@@ -338,9 +292,6 @@ export default function ChatScreen() {
       mode?: TaskChipType,
       dispatchOptions?: { awaitCompletion?: boolean },
     ): boolean | Promise<boolean> => {
-      // Returns false when a pre-flight gate blocks the send so the composer
-      // keeps the user's draft; true (or a promise resolving true on
-      // acceptance) once the message is genuinely committed.
       if (!id) return false;
       stopSpeaking?.();
       if (conversationExecutionMode === 'cloud' && !FEATURES.cloudChat) {
@@ -351,9 +302,6 @@ export default function ChatScreen() {
         return false;
       }
 
-      // Prepend quoted context if replying to a message. The quote bar is
-      // dismissed only after the point of no return below — a send blocked by
-      // a pre-flight gate must not consume the quote context.
       let finalText = text;
       const currentQuote =
         quotedMessage && isConversationActionCurrent(quotedMessageScopeRef.current)
@@ -375,14 +323,10 @@ export default function ChatScreen() {
 
       const trimmedInput = text.trim();
 
-      // Checked before image: in Video mode every send is a video request, and
-      // the image classifier would otherwise claim visual-sounding prompts.
       const videoRequest = resolveMobileVideoGenerationRequest({
         executionMode: conversationExecutionMode,
         text: trimmedInput,
         mediaMode,
-        // Video output shape from the composer sheet; the resolver narrows
-        // these to the wire contract's literal unions.
         aspectRatio: videoAspectRatio,
         resolution: videoResolution,
         subscriptionTier,
@@ -441,9 +385,6 @@ export default function ChatScreen() {
         aspectRatio: imageAspectRatio,
       });
 
-      // Image output is dispatched through the canonical media route for both
-      // slash commands and natural language. Local conversations never call
-      // the Managed Cloud resolver.
       if (imageRequest.status === 'blocked') {
         Alert.alert(imageRequest.alert.title, imageRequest.alert.message);
         return false;
@@ -476,8 +417,6 @@ export default function ChatScreen() {
         return true;
       }
 
-      // Local inference is intentionally network-independent. Only an owned
-      // Managed Cloud turn enters the reconnect queue.
       if (!isOnline && conversationExecutionMode === 'cloud') {
         if (!clerkUserId) {
           Alert.alert(
@@ -511,11 +450,6 @@ export default function ChatScreen() {
 
       quotedMessageScopeRef.current = null;
       setQuotedMessage(null);
-      // Voice / hands-free (awaitCompletion) must wait for the FULL reply so it can
-      // read it aloud and re-arm the mic — resolve on stream completion (sendMessage's
-      // own promise), NOT on accept. Without this the voice caller resolved on
-      // onAccepted (pre-stream), so it read an empty reply and never re-armed. Mirrors
-      // the image path above and the home screen's text path.
       if (dispatchOptions?.awaitCompletion) {
         return sendMessage(id, finalText, selectedModel, attachments, sendOptions).catch(
           (err: unknown) => {
@@ -525,9 +459,6 @@ export default function ChatScreen() {
           },
         );
       }
-      // Otherwise resolve true the moment the store commits the user message (all
-      // pre-flight gates passed) so the composer clears then — not on tap and not only
-      // at stream end. Shared with the home screen via resolveOnAcceptedSend.
       return resolveOnAcceptedSend(
         (onAccepted) =>
           sendMessage(id, finalText, selectedModel, attachments, {
@@ -535,8 +466,6 @@ export default function ChatScreen() {
             onAccepted,
           }),
         (err) => {
-          // Never fail silently: surface the failure in the SendErrorBanner
-          // (the composer keeps the draft because we resolve false).
           console.warn('[ChatScreen] sendMessage rejected:', err);
           setSendError('Message could not be sent. Please try again.');
         },
@@ -568,12 +497,6 @@ export default function ChatScreen() {
       isOnline,
       clerkUserId,
       enqueueOfflineMessage,
-      // Read inside this callback when building the generation request
-      // (videoAspectRatio/videoResolution above, imageAspectRatio below). Left
-      // out of the deps they were captured stale, so changing aspect ratio or
-      // resolution in the media controls had NO effect on the next generation
-      // until some unrelated dependency happened to change and rebuild the
-      // callback — the setting appeared to apply and silently did not.
       imageAspectRatio,
       videoAspectRatio,
       videoResolution,
@@ -586,12 +509,6 @@ export default function ChatScreen() {
 
   const resolveAppMode = useCallback(
     (modelId: string): AppMode => {
-      // Use the canonical classifier, which consults the FULL managed-cloud catalog
-      // (cloudModelSourceMap). The old path used getModelById, whose map only holds
-      // local models + ONE "preview" cloud model per provider — so every non-preview
-      // cloud model from another provider fell through to 'local'
-      // and wrongly triggered a "Switch from AGI Cloud to Local Mode" prompt when
-      // selected inside a Cloud chat. executionModeForModel classifies them as 'cloud'.
       return executionModeForSelection(modelId, conversationExecutionMode);
     },
     [conversationExecutionMode],
@@ -632,11 +549,6 @@ export default function ChatScreen() {
     }
   }, [cloudUnlocked, conversation, conversationExecutionMode, setAppMode, subscriptionTier]);
 
-  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
-  // signing in IS the entitlement (no invite, no waitlist). Every cloud-gated
-  // entry point (mode toggle, locked cloud model in the picker, connectors) routes
-  // a signed-out user to Clerk sign-in; ClerkTokenBridge flips cloudUnlocked on
-  // success. Local stays the free, account-less default.
   const handleOpenCloudSignIn = useCallback(() => {
     router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
   }, [router]);
@@ -706,8 +618,6 @@ export default function ChatScreen() {
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
-  // Sheet-to-sheet handoff: the "+" sheet must finish closing before the model
-  // picker snaps open, or the second sheet mounts behind the first backdrop.
   const handleSheetModelPicker = useCallback(() => {
     addToChatRef.current?.close();
     setTimeout(() => {
@@ -730,7 +640,6 @@ export default function ChatScreen() {
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
   }, [handleOpenCloudSignIn, router]);
 
-  // Attachment handlers lifted from AttachmentButton for AddToChatSheet
   const handleSheetCamera = useCallback(async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -784,8 +693,6 @@ export default function ChatScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        // Single source of truth shared with the attach-time validator — the
-        // picker must never advertise a type `isParseableDocument` rejects.
         type: [...PICKABLE_DOCUMENT_MIME_TYPES],
         copyToCacheDirectory: true,
       });
@@ -818,14 +725,10 @@ export default function ChatScreen() {
   const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const handleTapCloudMode = useCallback(() => {
-    // Fail closed: no cloud model wired → stay Local rather than dangle a dead toggle.
     if (!DEFAULT_CLOUD_MODEL_ID) {
       setAppMode('local');
       return;
     }
-    // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
-    // signing in IS the entitlement (no invite, no waitlist). Route a signed-out user
-    // to Clerk sign-in; ClerkTokenBridge flips cloudUnlocked on success.
     if (!cloudUnlocked) {
       router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
       return;
@@ -885,11 +788,7 @@ export default function ChatScreen() {
   }, [id, loadMessages]);
 
   const handleOpenVoiceMode = useCallback(() => {
-    // Dismiss first: the composer keeps focus otherwise and the keyboard sits
-    // on top of whatever we open.
     Keyboard.dismiss();
-    // The recording disclosure has to land before any microphone opens, so the
-    // gate lives here rather than inside the voice surfaces themselves.
     if (!useSettingsStore.getState().voiceOnboardingSeen) {
       setVoiceIntroVisible(true);
       return;
@@ -917,23 +816,14 @@ export default function ChatScreen() {
 
   const handleExitInlineVoice = useCallback(() => {
     setVoiceInlineVisible(false);
-    // The composer only mounts on the next frame; defer so leaving voice via
-    // the keyboard pill lands the user in a focused, ready-to-type field.
     requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
   }, []);
 
-  // Voice mode replaces the composer, so the "+" sheet's results would land on
-  // an unmounted Composer (its attach ref is null) and vanish silently. Leave
-  // voice first, then open the sheet.
   const handleVoiceAttach = useCallback(() => {
     setVoiceInlineVisible(false);
     handleOpenAddToChat();
   }, [handleOpenAddToChat]);
 
-  // Compare streams BOTH panes through the managed-cloud gateway, so it only
-  // exists inside the Cloud boundary. Offering `/compare` from a Local
-  // conversation led straight into guardedFetch's refusal, rendered verbatim
-  // in both panes. Passing `undefined` removes it from the command palette.
   const handleOpenCompare = useCallback(() => {
     router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
   }, [router]);
@@ -943,22 +833,13 @@ export default function ChatScreen() {
     setExportSheetVisible(true);
   }, []);
 
-  /**
-   * Voice conversation send: sends text to the current conversation and returns
-   * the assistant reply text for TTS once streaming completes.
-   */
   const handleVoiceSendMessage = useCallback(
     async (text: string): Promise<string> => {
       if (!id) throw new Error('No conversation');
       stopSpeaking();
       const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[id] ?? []);
-      // Reuse the exact composer dispatch path so voice requests receive the
-      // same Auto routing, image-generation specialist handoff, gates, and
-      // visible errors as typed requests.
       const accepted = await handleSend(text, undefined, undefined, { awaitCompletion: true });
       if (!accepted) {
-        // Pre-flight gate blocked the send — surface the store's real reason
-        // in the voice UI instead of a misleading "Sent to chat."
         throw new Error(useChatStore.getState().error ?? 'Message was not sent. Please try again.');
       }
       return (
@@ -973,11 +854,6 @@ export default function ChatScreen() {
     (messageId: string) => {
       if (!id) return;
       if (conversationExecutionMode === 'cloud') {
-        // Cloud messages render from useChatCloudMessageStore (merged into
-        // useChatStore.messages), not the local chatMessageStore that
-        // deleteMessage() mutates — deleting there alone is a silent no-op for
-        // Cloud conversations. Optimistically remove from the cloud cache and
-        // persist the delete server-side so a resync doesn't bring it back.
         const previous = useChatCloudMessageStore.getState().messages[id];
         useChatCloudMessageStore.getState().deleteCloudMessage(id, messageId);
         deleteCloudMessagesRemote(id, [messageId]).catch(() => {
@@ -1142,10 +1018,6 @@ export default function ChatScreen() {
     title,
   ]);
 
-  // Placed after handleVoiceSendMessage, not before: options are evaluated when
-  // the hook is CALLED, so referencing a const declared further down puts it in
-  // its temporal dead zone and throws on first render. That exact mistake shipped
-  // green in the tab screen last time — no test mounts a chat with voice on.
   const {
     phase: inlineVoicePhase,
     muted: inlineVoiceMuted,
@@ -1241,9 +1113,6 @@ export default function ChatScreen() {
                 borderRadius: radii.full,
                 backgroundColor: colors.inputSurface,
                 maxWidth: 120,
-                // Yield before the mode toggle does. Without this the header's
-                // fixed-size children fought for a slot narrower than their sum
-                // on a 375pt device and the toggle overlapped this chip.
                 flexShrink: 1,
               }}
               accessibilityLabel={`Active project: ${activeProject.name}. Tap to view details.`}

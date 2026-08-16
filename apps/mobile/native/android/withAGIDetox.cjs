@@ -1,9 +1,3 @@
-// Expo SDK 55 config plugin for the Android side of Detox.
-//
-// The community @config-plugins/detox package is pinned to Expo 53 and pulls
-// an incompatible expo-build-properties release into this app. Keeping the
-// small native contract here makes clean prebuilds deterministic without
-// coupling the mobile dependency graph to an abandoned Expo SDK range.
 
 const {
   AndroidConfig,

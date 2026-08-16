@@ -35,10 +35,6 @@ import type { ApprovalRequest, StatusStep, ToolCall } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
-// ---------------------------------------------------------------------------
-// Progress Bar
-// ---------------------------------------------------------------------------
-
 function ProgressBar({ progress, color }: { progress: number; color: string }) {
   const clamped = Math.max(0, Math.min(100, progress));
   return (
@@ -61,10 +57,6 @@ function ProgressBar({ progress, color }: { progress: number; color: string }) {
     </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Status step row
-// ---------------------------------------------------------------------------
 
 function StepRow({ step, index }: { step: StatusStep; index: number }) {
   const colors = useThemeColors();
@@ -102,10 +94,6 @@ function StepRow({ step, index }: { step: StatusStep; index: number }) {
     </Animated.View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Tool call row
-// ---------------------------------------------------------------------------
 
 function ToolCallRow({ tool }: { tool: ToolCall }) {
   const colors = useThemeColors();
@@ -162,10 +150,6 @@ function ToolCallRow({ tool }: { tool: ToolCall }) {
     </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Approval request row
-// ---------------------------------------------------------------------------
 
 function ApprovalRow({
   request,
@@ -229,10 +213,6 @@ function ApprovalRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
-
 export default function AgentDetailScreen() {
   const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -240,9 +220,6 @@ export default function AgentDetailScreen() {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const agent = useAgentStore((s) => s.agents.find((a) => a.id === id));
-  // Select the raw (stable-reference) array and filter in a memo — see
-  // app/(app)/companion/index.tsx for the full "Maximum update depth
-  // exceeded" root-cause writeup; this file had the identical crash.
   const allApprovals = useAgentStore((s) => s.pendingApprovals);
   const pendingApprovals = useMemo(
     () => allApprovals.filter((r) => r.status === 'pending'),

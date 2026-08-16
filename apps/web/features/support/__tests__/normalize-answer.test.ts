@@ -29,12 +29,10 @@ describe('normalizeAnswer — the citation invariant', () => {
     if (result.kind !== 'abstention') throw new Error('expected an abstention');
     expect(result.reason).toBe('no_source');
     expect(result.escalationOffered).toBe(true);
-    // The unsourced claim must not survive into the rendered text.
     expect(result.text).not.toContain('Settings');
   });
 
   it('turns an answer whose citations are all unusable into an abstention', () => {
-    // Every entry fails: no url, unsafe scheme, protocol-relative host.
     const result = normalizeAnswer({
       ...CITED,
       citations: [

@@ -14,7 +14,6 @@ export const DeviceNameSchema = z
   .max(200, 'device_name must be 200 characters or less')
   .refine(
     (val) => {
-      // Check for control characters (0x00-0x1F and 0x7F)
       for (let i = 0; i < val.length; i++) {
         const code = val.charCodeAt(i);
         if ((code >= 0x00 && code <= 0x1f) || code === 0x7f) {
@@ -27,9 +26,6 @@ export const DeviceNameSchema = z
   )
   .optional();
 
-// Editor/CLI device types (vscode, cursor, windsurf, antigravity, cli) use the
-// same RFC-8628-style device-code flow as desktop; they must be accepted here or
-// POST /api/device/link 400s and the extension sign-in never completes.
 export const DeviceTypeSchema = z.enum([
   'desktop',
   'mobile',

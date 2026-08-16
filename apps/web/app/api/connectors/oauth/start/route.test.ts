@@ -1,11 +1,3 @@
-/**
- * The Connect button's server half.
- *
- * Pins the properties an authorization start must have: it refuses to begin a
- * flow it cannot finish, the verifier never leaves the server, the redirect
- * URI comes from configuration rather than the request, and the pending row is
- * bound to the signed-in user.
- */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -81,10 +73,6 @@ afterEach(() => {
 });
 
 describe('GET /api/connectors/oauth/start', () => {
-  // trello, not linear: 2f4cebaf4 gave linear a verified remote MCP endpoint, so
-  // it now takes the self-service discovery branch and fails there (502) rather
-  // than reaching the "no OAuth app configured in this deployment" branch. A
-  // connector with no MCP endpoint is what still exercises that branch.
   it('refuses to start a flow for a provider with no OAuth app configured', async () => {
     const response = await GET(request('?connectorId=trello'));
 
@@ -103,11 +91,6 @@ describe('GET /api/connectors/oauth/start', () => {
   });
 
   it('reports a self-service discovery failure as an upstream failure, not as unconfigured', async () => {
-    // linear HAS an MCP endpoint, so with nothing configured the route tries
-    // live client registration and that is what fails. Saying "unavailable /
-    // 501" there would blame this deployment's configuration for an upstream
-    // problem, so the branch answers 502 instead. Pinned because the two
-    // failures look identical to a user and must not be conflated.
     const response = await GET(request('?connectorId=linear&mode=json'));
 
     expect(response.status).toBe(502);
@@ -129,7 +112,6 @@ describe('GET /api/connectors/oauth/start', () => {
     expect(location.searchParams.get('code_challenge_method')).toBe('S256');
     expect(location.searchParams.get('scope')).toBe('read write');
     expect(location.searchParams.get('state')).toMatch(/^[a-f0-9]{64}$/);
-    // Neither the verifier nor the client secret may be visible to the browser.
     expect(location.searchParams.get('code_verifier')).toBeNull();
     expect(location.toString()).not.toContain('client-secret-value');
   });
@@ -146,7 +128,6 @@ describe('GET /api/connectors/oauth/start', () => {
     expect(pending['redirectUri']).toBe('https://app.example.com/api/connectors/oauth/callback');
     expect(pending['codeChallengeMethod']).toBe('S256');
     expect(String(pending['codeVerifier']).length).toBeGreaterThan(20);
-    // The state is handed to the provider; the store hashes it.
     const location = new URL(response.headers.get('location') as string);
     expect(pending['state']).toBe(location.searchParams.get('state'));
   });

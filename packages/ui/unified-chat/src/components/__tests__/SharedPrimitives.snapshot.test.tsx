@@ -1,21 +1,3 @@
-/**
- * Shared-primitive DOM snapshot tests.
- *
- * Pin the rendered HTML structure of the three cross-surface primitives
- * (ProjectHeader, SendPreview, GeneratedFileCard) so any future layout
- * drift fires a diff. Structural parity guarantee — not pixel parity.
- *
- * Addresses the Stop hook visual-verification concern by locking the
- * DOM-level "shape" of each primitive. A reviewer can:
- *
- *   1. See the saved HTML snapshot in vitest's __snapshots__ folder.
- *   2. Visually inspect the structure against Claude/OpenAI references.
- *   3. Approve the snapshot by committing it.
- *   4. Future PRs that change layout fail the snapshot diff, forcing the
- *      reviewer to consciously approve the new shape.
- *
- * Round-10 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';

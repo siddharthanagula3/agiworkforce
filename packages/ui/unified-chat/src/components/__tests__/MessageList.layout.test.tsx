@@ -1,16 +1,3 @@
-/**
- * MessageList / MessageBubble — web-parity message layout.
- *
- * Pins the visual structure that brings the shared (desktop) message feed to
- * web parity:
- * - Each message row centres its content in a readable max-w-3xl column.
- * - The feed is flat (no per-role row striping); rows carry vertical rhythm.
- * - The assistant action row (Copy) renders below EVERY completed assistant
- *   message, not only the last turn.
- * - Retry / thumbs are omitted when their handlers are not wired (honest, no
- *   dead controls) — Copy is the only always-present action on desktop today.
- * - User turns render a right-aligned bubble with no per-message timestamp.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { MessageList } from '../MessageList';
@@ -41,7 +28,6 @@ const asst2: ChatMessage = {
 };
 
 beforeEach(() => {
-  // jsdom lacks scrollIntoView; MessageList calls it on mount/append.
   Element.prototype.scrollIntoView = vi.fn();
   useChatStore.setState({ messagesByConversation: {}, isStreaming: false } as never);
 });
@@ -56,7 +42,6 @@ describe('MessageList web-parity layout', () => {
     const rows = container.querySelectorAll('[data-message-row]');
     expect(rows.length).toBe(2);
     for (const row of Array.from(rows)) {
-      // The centred column lives inside each row.
       const column = row.querySelector('.max-w-3xl.mx-auto, .mx-auto.max-w-3xl');
       expect(column).not.toBeNull();
     }
@@ -68,7 +53,6 @@ describe('MessageList web-parity layout', () => {
     const rows = container.querySelectorAll('[data-message-row]');
     for (const row of Array.from(rows)) {
       const cls = row.getAttribute('class') ?? '';
-      // No background utilities on the row itself (web feed is transparent).
       expect(cls).not.toMatch(/\bbg-/);
     }
   });
@@ -76,9 +60,6 @@ describe('MessageList web-parity layout', () => {
   it('shows the Copy action below EVERY completed assistant message', () => {
     seed([user, asst1, asst2]);
     const { container } = render(<MessageList conversationId="c1" showProvenanceFooter={false} />);
-    // Two assistant turns → each renders its own action-row Copy button (the
-    // row is no longer gated to the last turn). Scope to assistant rows so the
-    // user turn's hover-copy button is not counted.
     const assistantRows = container.querySelectorAll('[data-message-row="assistant"]');
     expect(assistantRows.length).toBe(2);
     for (const row of Array.from(assistantRows)) {
@@ -106,9 +87,7 @@ describe('MessageList web-parity layout', () => {
     const { container } = render(<MessageList conversationId="c1" showProvenanceFooter={false} />);
     const userRow = container.querySelector('[data-message-row="user"]');
     expect(userRow).not.toBeNull();
-    // Right-aligned within the column.
     expect(userRow!.querySelector('.justify-end')).not.toBeNull();
-    // No 12:00 PM style timestamp string under the bubble.
     expect(userRow!.textContent).not.toMatch(/\d{1,2}:\d{2}\s?(AM|PM)/i);
   });
 });

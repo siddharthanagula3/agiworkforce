@@ -1,25 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Tests for ModelPickerSheet component.
- *
- * Covers:
- *  - Local auto modes
- *  - On-device model rows from @agiworkforce/local-llm
- *  - Locked Cloud Managed rows
- *  - Local selection behavior
- *  - Fail-closed cloud selection behavior
- *  - Subscription-tier gating (free economy allowance, upgrade locks, downgrade revalidation)
- *  - Reasoning-effort selector (cloud scope)
- *  - Thinking-toggle expansion on reselect
- */
 
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks - avoid React.createElement(RN.*) inside factories to prevent
-// NativeWind's CSSInterop Babel transform from injecting out-of-scope vars.
-// ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -115,10 +97,6 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-// ---------------------------------------------------------------------------
-// Import modules under test AFTER mocks
-// ---------------------------------------------------------------------------
-
 import { ModelPickerSheet } from '../src/features/model-picker/components/ModelPickerSheet';
 import { useModelInstallStore } from '../src/features/model-picker/installStore';
 import { useModelStore } from '../src/features/model-picker/store';
@@ -143,10 +121,6 @@ import {
   type ModelReasoning,
 } from '@agiworkforce/types';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const LITE_MODEL_ID = requireLocalModel(
   (model) => model.role === 'lite-mode',
@@ -265,10 +239,6 @@ function renderPicker(overrides?: {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('ModelPickerSheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -317,9 +287,6 @@ describe('ModelPickerSheet', () => {
 
     expect(getByText('AGI Standard')).toBeTruthy();
     expect(getByText('AGI Lite')).toBeTruthy();
-    // OS-resident runtimes stay visible so the picker can truthfully distinguish
-    // ready, unavailable, and unsupported devices instead of pretending the
-    // capability does not exist.
     expect(getByText('Apple Intelligence')).toBeTruthy();
   });
 
@@ -335,10 +302,6 @@ describe('ModelPickerSheet', () => {
     const { getByText, getAllByText } = renderPicker({ modelScope: 'all' });
 
     expect(getByText('On device')).toBeTruthy();
-    // Cloud models are grouped by PROVIDER (OpenAI, Anthropic, …), not under a
-    // single "Cloud" header. Assert the first locked model's provider section
-    // renders — derived from the catalog so it can't drift (see repeated-bug
-    // class: never assert hard-coded catalog strings).
     expect(getByText(LOCKED_CLOUD_MODELS[0]!.providerLabel)).toBeTruthy();
     expect(getAllByText('Sign in').length).toBeGreaterThan(0);
   });
@@ -365,8 +328,6 @@ describe('ModelPickerSheet', () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getAllByLabelText } = renderPicker({ modelScope: 'cloud' });
 
-    // Preset display names (e.g. "Fast") repeat across providers, so scope to
-    // the first matching locked row — all locked rows share the same gating.
     const lockedRow = getAllByLabelText(
       `${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`,
     )[0]!;
@@ -456,13 +417,8 @@ describe('ModelPickerSheet', () => {
 
   it('selects cloud rows after invite access', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
-    // This model may be a Max-only flagship model — set the tier so this test's
-    // actual intent (invite/sign-in unlock, not subscription-tier gating) holds.
     useTierStore.setState({ tier: 'max' });
     const cloudModel = LOCKED_CLOUD_MODELS[0]!;
-    // At Max tier + unlocked, the row renders the REAL model name (not the
-    // free-tier preset the LOCKED snapshot carries), so resolve the rendered
-    // name to find the row.
     const renderedName = getModelByIdForCloudAccess(cloudModel.id, true, 'max')!.name;
     const { getAllByLabelText, getByText } = renderPicker({ modelScope: 'cloud' });
 
@@ -476,10 +432,6 @@ describe('ModelPickerSheet', () => {
   });
 
   it('shows an upgrade lock (not sign-in) for a Max-only model on a Pro subscription', () => {
-    // Regression: cloudUnlocked-only gating meant a Pro user could select a
-    // Max-only model with no upgrade indicator at all — the server
-    // would then reject it. Being cloud-unlocked and tier-locked must show
-    // "Upgrade required" and route to billing, not the sign-in flow.
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'pro' });
 
@@ -530,7 +482,6 @@ describe('ModelPickerSheet', () => {
     );
     expect(row.props.accessibilityHint).toBe('Opens plan upgrade options');
     expect(getAllByText('Upgrade').length).toBeGreaterThan(0);
-    // A signed-in tier lock must not masquerade as a sign-in lock.
     expect(queryByText('Sign in')).toBeNull();
   });
 
@@ -545,7 +496,6 @@ describe('ModelPickerSheet', () => {
     const maxOnlyModel = getModelByIdForCloudAccess(MAX_ONLY_MODEL.id, true, 'pro')!;
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
-    // No ", selected" suffix and no selected a11y state on a locked row.
     const row = getByLabelText(
       `${maxOnlyModel.name}, upgrade required, ${maxOnlyModel.lockReason}`,
     );
@@ -586,9 +536,6 @@ describe('ModelPickerSheet', () => {
   it('sets a per-conversation effort override through one discrete slider', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    // The reasoning-effort selector only renders for a reasoning-capable model
-    // (component gate: modelScope==='cloud' && selectedSupportsReasoning), so
-    // select one first.
     useModelStore.getState().setModel(EFFORT_MODEL.id);
     const { getByLabelText } = renderPicker({ modelScope: 'cloud', conversationId: 'conv-1' });
 
@@ -606,7 +553,6 @@ describe('ModelPickerSheet', () => {
     fireEvent(slider, 'valueChange', efforts.indexOf(nextEffort));
 
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe(nextEffort);
-    // Effort and model choice are independent: no selection change, no close.
     expect(useModelStore.getState().selectedModel).toBe(EFFORT_MODEL.id);
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();
   });
@@ -614,7 +560,6 @@ describe('ModelPickerSheet', () => {
   it('writes the project-default effort when no conversation id is provided', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    // Effort selector needs a reasoning-capable model selected (see above).
     useModelStore.getState().setModel(EFFORT_MODEL.id);
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
@@ -660,8 +605,6 @@ describe('ModelPickerSheet', () => {
     });
   });
 
-  // Covers the branch where catalog metadata exposes an on/off thinking toggle
-  // instead of the graded effort slider.
   it('shows a thinking toggle and no effort selector for a thinking_toggle model', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
@@ -669,7 +612,6 @@ describe('ModelPickerSheet', () => {
     const { queryByTestId, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     expect(queryByTestId('model-picker-effort-selector')).toBeNull();
-    // The thinking block only renders on an expanded row (ModelRow.tsx:222).
     fireEvent.press(getByLabelText(`${THINKING_TOGGLE_MODEL.name}, selected`));
     expect(getByLabelText(`Thinking mode for ${THINKING_TOGGLE_MODEL.name}`)).toBeTruthy();
   });
@@ -687,9 +629,6 @@ describe('ModelPickerSheet', () => {
     fireEvent(getByLabelText('Reasoning effort'), 'valueChange', sourceEfforts.indexOf('max'));
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('max');
 
-    // The target catalog model has no 'max' — selecting it must clamp the
-    // conversation effort to the new model's own default instead of silently
-    // keeping a value the new model does not support.
     fireEvent.press(getByTestId(`model-row-${CLAMP_TARGET_MODEL.id}`));
 
     const targetDefault = getModelReasoning(CLAMP_TARGET_MODEL.id).defaultEffort!;

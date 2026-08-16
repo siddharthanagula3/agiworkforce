@@ -1,9 +1,3 @@
-/**
- * CustomAgentsList
- *
- * Card grid listing all custom agents with an inline editor.
- * Fetches from Rust backend on mount.
- */
 
 import { Bot, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -22,8 +16,6 @@ import {
   AlertDialogTitle,
 } from '@/ui/AlertDialog';
 import { CustomAgentEditor } from './CustomAgentEditor';
-
-// ---- Sub-components ----------------------------------------------------------
 
 interface AgentCardProps {
   agent: CustomAgentConfig;
@@ -160,8 +152,6 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
     </div>
   );
 }
-
-// ---- Main Component ----------------------------------------------------------
 
 type EditorMode =
   | { kind: 'closed' }

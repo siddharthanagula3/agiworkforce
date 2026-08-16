@@ -1,16 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Updater Store
- *
- * Manages application update state including update availability,
- * download progress, user preferences, and dismissal tracking.
- *
- * Uses Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Persist middleware: Using createJSONStorage, partialize, version
- * - subscribeWithSelector for granular subscriptions
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 
@@ -39,22 +27,18 @@ export interface DownloadProgress {
 }
 
 interface UpdaterState {
-  // Update state
   status: UpdateStatus;
   updateInfo: UpdateInfo | null;
   downloadProgress: DownloadProgress | null;
   error: string | null;
 
-  // User preferences
   autoCheckEnabled: boolean;
   checkIntervalHours: number;
 
-  // Dismissal tracking
   lastCheckTime: number | null;
   dismissedVersion: string | null;
   dismissedAt: number | null;
 
-  // Actions
   setStatus: (status: UpdateStatus) => void;
   setUpdateInfo: (info: UpdateInfo | null) => void;
   setDownloadProgress: (progress: DownloadProgress | null) => void;
@@ -69,12 +53,10 @@ interface UpdaterState {
 
   reset: () => void;
 
-  // Hydration tracking for persist middleware
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
 }
 
-// Dismissal expires after 24 hours
 const DISMISSAL_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 const storageFallback: Storage = {
@@ -94,7 +76,6 @@ export const useUpdaterStore = create<UpdaterState>()(
   devtools(
     persist(
       subscribeWithSelector((set) => ({
-        // Initial state
         status: 'idle',
         updateInfo: null,
         downloadProgress: null,
@@ -190,35 +171,23 @@ export const useUpdaterStore = create<UpdaterState>()(
   ),
 );
 
-/**
- * Check if the dismissal for a version has expired
- */
 export function isDismissalExpired(dismissedAt: number | null): boolean {
   if (!dismissedAt) return true;
   return Date.now() - dismissedAt > DISMISSAL_EXPIRY_MS;
 }
 
-/**
- * Check if we should show the update notification for a version
- */
 export function shouldShowUpdateNotification(
   version: string,
   dismissedVersion: string | null,
   dismissedAt: number | null,
 ): boolean {
-  // If no dismissal, always show
   if (!dismissedVersion || !dismissedAt) return true;
 
-  // If different version, show it
   if (dismissedVersion !== version) return true;
 
-  // If dismissal expired, show it
   return isDismissalExpired(dismissedAt);
 }
 
-/**
- * Wait for updater store to finish hydrating from localStorage.
- */
 export function waitForUpdaterHydration(): Promise<void> {
   return new Promise((resolve) => {
     const state = useUpdaterStore.getState();
@@ -235,7 +204,6 @@ export function waitForUpdaterHydration(): Promise<void> {
   });
 }
 
-// Selectors for optimized subscriptions
 export const selectUpdateStatus = (state: UpdaterState) => state.status;
 export const selectUpdateInfo = (state: UpdaterState) => state.updateInfo;
 export const selectDownloadProgress = (state: UpdaterState) => state.downloadProgress;

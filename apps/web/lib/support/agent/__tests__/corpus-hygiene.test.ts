@@ -1,12 +1,3 @@
-/**
- * Corpus hygiene: the retrieval index must contain no user content and no
- * secrets, and the subtree must have no path to a database.
- *
- * The import scan is the strongest of these. "No user content in the index" is
- * enforced by the ABSENCE of a database dependency in `lib/support/agent/**`,
- * not by a policy someone has to remember — if a future edit imports a
- * user-scoped data source into this subtree, this test fails.
- */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -16,7 +7,6 @@ import { STATIC_FAQS } from '@/lib/support/static-data';
 
 const AGENT_DIR = join(__dirname, '..');
 
-/** Same patterns as `lib/leak-detector.ts`. Kept literal so this test is standalone. */
 const SECRET_PATTERNS: { name: string; pattern: RegExp }[] = [
   { name: 'openai/anthropic key', pattern: /sk-[A-Za-z0-9_-]{32,}/ },
   { name: 'stripe live key', pattern: /sk_live_[A-Za-z0-9]{24,}/ },
@@ -26,11 +16,6 @@ const SECRET_PATTERNS: { name: string; pattern: RegExp }[] = [
   { name: 'bearer token', pattern: /Bearer\s+[A-Za-z0-9_-]{20,}/ },
 ];
 
-/**
- * Modules that would give this subtree a path to user data. Importing any of
- * them is the failure — the point is that the index is structurally incapable of
- * containing another account's content.
- */
 const FORBIDDEN_IMPORTS = [
   '@/lib/server/neon-db',
   '@/lib/server/user-scoped-db',
@@ -97,8 +82,6 @@ describe('corpus content', () => {
   it('carries no email address, user id, or account-shaped identifier', () => {
     if (!corpus.available) throw new Error('corpus unavailable');
     for (const chunk of corpus.chunks) {
-      // contact@agiworkforce.com is the one published support address and is
-      // allowed; anything else that looks like a personal mailbox is not.
       const emails = (chunk.text.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) ?? []).map((email) =>
         email.replace(/\.$/, ''),
       );

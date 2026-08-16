@@ -1,18 +1,3 @@
-/**
- * /api/projects · organization-shared reads.
- *
- * READ THIS BEFORE CHANGING THE ROUTE. `/api/projects` and `/api/projects/[id]`
- * run on `getNeonDb()` — the Neon OWNER connection, which has BYPASSRLS. Every
- * policy in migration 0086 is inert on this path. The shared-project id set the
- * route binds IS the tenant boundary here, not a convenience filter, and it is
- * derived entirely server-side from `organization_members` +
- * `organization_shared_projects`.
- *
- * These tests are written to go RED if that predicate is weakened: they assert
- * the SQL still fences on both `p.user_id = $1` and `p.id = any($4::uuid[])`,
- * that the bound id set is the server-derived one, and that a project the org
- * does not share is not reachable by uuid.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -103,9 +88,6 @@ describe('GET /api/projects · shared projects', () => {
     expect(response.status).toBe(200);
 
     const [sql, params] = mockQuery.mock.calls[0]!;
-    // Both halves of the fence must survive: own projects OR the explicitly
-    // shared id set. Dropping either is a defect — dropping the second silently
-    // removes the feature, dropping the fence entirely exposes every project.
     expect(sql).toMatch(/p\.user_id = \$1 or p\.id = any\(\$4::uuid\[\]\)/i);
     expect(sql).toMatch(/p\.organization_id is not distinct from \$5::uuid/i);
     expect((params as unknown[])[0]).toBe('member-1');
@@ -119,8 +101,6 @@ describe('GET /api/projects · shared projects', () => {
     await LIST_PROJECTS(listRequest());
 
     const [, params] = mockQuery.mock.calls[0]!;
-    // `= any('{}')` is false for every row, so the predicate collapses to
-    // exactly today's personal behaviour.
     expect((params as unknown[])[3]).toEqual([]);
   });
 
@@ -134,7 +114,6 @@ describe('GET /api/projects · shared projects', () => {
     await LIST_PROJECTS(listRequest());
 
     const [sql] = mockQuery.mock.calls[0]!;
-    // Sharing a project must not sweep members' chats into org visibility.
     expect(sql).toMatch(/from web_conversations c[\s\S]*?and c\.user_id = \$1/i);
   });
 
@@ -169,7 +148,7 @@ describe('GET /api/projects/[id] · shared project detail', () => {
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockQuery
-      .mockResolvedValueOnce([]) // owner read: not theirs
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([projectRow({ is_org_shared: true })]);
 
     const response = await GET_PROJECT(detailRequest(SHARED_PROJECT), {
@@ -192,12 +171,8 @@ describe('GET /api/projects/[id] · shared project detail', () => {
       projectIds: [SHARED_PROJECT],
     });
     mockResolveActiveOrganizationId.mockResolvedValue(ORG);
-    // Owner read misses; the shared read is fenced to the shared id set, so a
-    // foreign uuid matches nothing.
     mockQuery.mockResolvedValue([]);
 
-    // `withErrorHandler` turns the thrown AppError into a response, so assert
-    // on the wire status the caller actually receives.
     const response = await GET_PROJECT(detailRequest(FOREIGN_PROJECT), {
       params: Promise.resolve({ id: FOREIGN_PROJECT }),
     });
@@ -215,7 +190,6 @@ describe('GET /api/projects/[id] · shared project detail', () => {
       params: Promise.resolve({ id: FOREIGN_PROJECT }),
     }).catch(() => undefined);
 
-    // One statement: the owner read. No unscoped second query.
     expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 });
