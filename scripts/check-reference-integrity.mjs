@@ -153,16 +153,42 @@ function collectManifestNames(files) {
   return { scripts, packages };
 }
 
-/** One batched `git check-ignore`: a runbook citing an untracked secret is correct, not rot. */
+/**
+ * One batched `git check-ignore`: a runbook citing an untracked secret is correct, not rot.
+ *
+ * Each candidate is asked twice, bare and with a trailing slash. A directory-only
+ * pattern (`/ios/`, `dist/`) matches a bare path only while that directory exists
+ * on disk, so a reference to a generated build output resolved as ignored on a
+ * developer machine that had built it and as a dangling reference on a fresh
+ * checkout. The trailing-slash form tells git to judge the name as a directory,
+ * which makes the answer depend on the ignore rules alone.
+ */
+export function ignoreQueryMap(candidates) {
+  // Map every query back to the reference it was derived from, so a candidate that
+  // already ends in a slash is not confused with its bare form.
+  const sourceOf = new Map();
+  for (const candidate of candidates) {
+    sourceOf.set(candidate, candidate);
+    if (!candidate.endsWith('/')) sourceOf.set(`${candidate}/`, candidate);
+  }
+  return sourceOf;
+}
+
 function ignoredPaths(candidates) {
   if (candidates.length === 0) return new Set();
+  const sourceOf = ignoreQueryMap(candidates);
   try {
     const output = execFileSync('git', ['check-ignore', '--stdin'], {
       cwd: REPO_ROOT,
       encoding: 'utf8',
-      input: candidates.join('\n'),
+      input: [...sourceOf.keys()].join('\n'),
     });
-    return new Set(output.split('\n').filter(Boolean));
+    return new Set(
+      output
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => sourceOf.get(line) ?? line),
+    );
   } catch {
     // Exit 1 means nothing matched.
     return new Set();
