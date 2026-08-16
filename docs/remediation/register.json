@@ -14644,15 +14644,19 @@
       "severity": "MEDIUM",
       "status": "open",
       "effort": "L",
-      "evidence": "Three E2E chat tests assert capabilities absent from the product. (1) 'should display message statistics' expects a token/cost panel — no token or cost display exists anywhere in the desktop chat UI. (2) 'should edit a message' expects an edit control — editMessage is defined in chatStore with NO UI consumer, i.e. inert code. (3) 'AGI Integration > should detect and submit goal-like messages' expects a `agi-submitted` indicator, which appears nowhere in the source.",
-      "fix": "Either build the three affordances, or retire the tests and record the capabilities as not-supported. This is a product decision: deleting the tests silently would return the suite to the vacuous green its own header was written to end. Blocks E2E going fully green (10 of 13 pass as of 2026-08-16).",
+      "evidence": "Four E2E chat tests describe capabilities absent from the product. (1) 'should display message statistics' drives a stats button and data-testid=\"stats-panel\" — zero occurrences in apps/desktop/src, and desktop surfaces no per-message token or cost figure for such a panel to read. (2) 'should edit a message' drives data-testid=\"message-item\", a per-message edit control, and textarea[data-editing=\"true\"] — all zero occurrences; chatStore.editMessage is defined and re-exported through unifiedChatStore with no caller, i.e. a stranded store half. (3) 'should detect and submit goal-like messages' expects data-testid=\"agi-submitted\" — zero occurrences, and no goal-detection path exists. (4) 'should not submit non-goal messages to AGI' reported GREEN, which is worse: with the indicator absent for every input it cannot distinguish 'correctly did not submit' from 'feature does not exist'.",
+      "fix": "Founder decision 2026-08-16: build all three affordances. Wire an editor UI to the existing chatStore.editMessage action, add a per-message stats panel over real token/cost data, and add AGI goal detection with a submission indicator. The four tests are marked test.fixme with the specific missing selector named in each, so the suite reports them as pending instead of deleting the only written record of the intent — and the vacuous negative test no longer reports false confidence. Remove each fixme in the same change that builds its capability.",
       "sources": ["apps/desktop/e2e/chat.spec.ts"],
       "code_refs": [
-        "apps/desktop/e2e/chat.spec.ts",
-        "apps/desktop/src/stores/chat/chatStore.ts:271"
+        "apps/desktop/e2e/chat.spec.ts:226",
+        "apps/desktop/e2e/chat.spec.ts:249",
+        "apps/desktop/e2e/chat.spec.ts:346",
+        "apps/desktop/e2e/chat.spec.ts:368",
+        "apps/desktop/src/stores/chat/chatStore.ts:271",
+        "apps/desktop/src/stores/unifiedChatStore.ts:413"
       ],
       "merged_from": [],
-      "resolution_note": "[2026-08-16] Raised this session; needs a founder/product call."
+      "resolution_note": "[2026-08-16] Raised this session. Founder called it the same day: build all three. Marked the four tests test.fixme to unblock E2E in the meantime, each comment naming the exact missing selector. Item stays OPEN until the affordances ship and the fixmes come off."
     },
     {
       "id": "DPDP-90",

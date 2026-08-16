@@ -214,7 +214,16 @@ test.describe('Chat Workflow', () => {
     await expect(stopButton).toBeHidden({ timeout: 30000 });
   });
 
-  test('should edit a message', async ({ page }) => {
+  // DESK-202. This is a specification, not a regression guard: none of what it
+  // drives has ever been built. `data-testid="message-item"`, the per-message
+  // edit control, and `textarea[data-editing="true"]` have zero occurrences in
+  // `apps/desktop/src`. The store half exists and is stranded —
+  // `chatStore.editMessage` is defined and re-exported through
+  // `unifiedChatStore`, and nothing calls either. Wiring an editor UI to that
+  // action is what closes this; deleting the test would erase the only written
+  // record of the intent, and inventing a UI to satisfy it would be guessing at
+  // a design nobody specified.
+  test.fixme('should edit a message', async ({ page }) => {
     const messageItem = page.getByTestId('message-item').last();
     await expect(messageItem, 'No messages available to edit').toBeVisible();
 
@@ -234,7 +243,10 @@ test.describe('Chat Workflow', () => {
     await expect(messageItem).toContainText('Edited message content');
   });
 
-  test('should display message statistics', async ({ page }) => {
+  // DESK-202. Also unbuilt: there is no stats affordance and no
+  // `data-testid="stats-panel"` in `apps/desktop/src`, and desktop surfaces no
+  // per-message token or cost figure anywhere for such a panel to read.
+  test.fixme('should display message statistics', async ({ page }) => {
     const statsButton = page.getByRole('button', { name: /stats/i });
     await expect(statsButton, 'Stats button not available').toBeVisible();
 
@@ -328,7 +340,10 @@ test.describe('Chat AGI Integration', () => {
     await expectCloudShellReady(page);
   });
 
-  test('should detect and submit goal-like messages', async ({ page }) => {
+  // DESK-202. The whole feature is unbuilt: `agi-submitted` has zero
+  // occurrences in `apps/desktop/src`, and no goal-detection path exists to
+  // render it.
+  test.fixme('should detect and submit goal-like messages', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
     await expect(chatInput, 'Chat input not available').toBeVisible();
 
@@ -345,7 +360,12 @@ test.describe('Chat AGI Integration', () => {
     });
   });
 
-  test('should not submit non-goal messages to AGI', async ({ page }) => {
+  // DESK-202. This one reports green, which is worse than reporting red: with
+  // no goal detection built, `agi-submitted` is absent for every input, so the
+  // assertion cannot tell "correctly did not submit" from "feature does not
+  // exist". It is the negative half of the test above and only becomes
+  // meaningful when the positive half can pass.
+  test.fixme('should not submit non-goal messages to AGI', async ({ page }) => {
     const chatInput = page.getByRole('textbox', { name: /message/i });
     await expect(chatInput, 'Chat input not available').toBeVisible();
 
