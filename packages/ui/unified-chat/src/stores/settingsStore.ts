@@ -38,7 +38,16 @@ interface SettingsState {
   genericWebSearchDeploymentEnabled: boolean;
   memorySearchChats: boolean;
   memoryGenerateFromHistory: boolean;
-  toolAccessMode: 'lazy' | 'eager';
+  // AUDIT-FIX settings-21: `toolAccessMode: 'lazy' | 'eager'` and
+  // `setToolAccessMode` used to live here, persisted and even exported in the
+  // GDPR data snapshot, but had zero readers and zero writers anywhere in the
+  // repo — no UI control rendered it, and nothing branched tool-loading
+  // behavior on it. A settings control that only writes this field back to
+  // itself (no request contract, network body, or server handler consumes
+  // it) would be a decorative toggle, the exact anti-pattern
+  // PrivacySection.tsx's deleted training toggle also was. Deleted rather
+  // than half-wired; reintroduce only alongside the real send-time behavior
+  // it would need to gate.
   autoApproveMode: 'ask' | 'smart' | 'full';
   notifyCompletions: boolean;
   notifyAgentUpdates: boolean;
@@ -52,7 +61,6 @@ interface SettingsState {
   toggleCodeExecution: () => void;
   setCodeExecutionDeploymentEnabled: (enabled: boolean) => void;
   setGenericWebSearchDeploymentEnabled: (enabled: boolean) => void;
-  setToolAccessMode: (mode: 'lazy' | 'eager') => void;
   setAutoApproveMode: (mode: 'ask' | 'smart' | 'full') => void;
   toggleNotifyCompletions: () => void;
   toggleNotifyAgentUpdates: () => void;
@@ -85,7 +93,6 @@ export const useSettingsStore = create<SettingsState>()(
       genericWebSearchDeploymentEnabled: false,
       memorySearchChats: true,
       memoryGenerateFromHistory: true,
-      toolAccessMode: 'lazy' as const,
       autoApproveMode: 'ask' as const,
       notifyCompletions: true,
       notifyAgentUpdates: true,
@@ -103,7 +110,6 @@ export const useSettingsStore = create<SettingsState>()(
         set({ codeExecutionDeploymentEnabled: enabled }),
       setGenericWebSearchDeploymentEnabled: (enabled) =>
         set({ genericWebSearchDeploymentEnabled: enabled }),
-      setToolAccessMode: (mode) => set({ toolAccessMode: mode }),
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
       toggleNotifyCompletions: () => set((s) => ({ notifyCompletions: !s.notifyCompletions })),
       toggleNotifyAgentUpdates: () => set((s) => ({ notifyAgentUpdates: !s.notifyAgentUpdates })),

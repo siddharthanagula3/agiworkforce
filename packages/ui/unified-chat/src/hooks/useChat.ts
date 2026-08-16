@@ -38,6 +38,7 @@ import {
 import { resolveThinkingSendPolicy } from '../lib/thinkingPolicy';
 import {
   getRegenerateReplayDecision,
+  planEditRollback,
   planRegenerateRollback,
   type RegenerateReplayMetadata,
   type SendReplayMetadataLike,
@@ -1554,6 +1555,78 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   );
 
   /**
+   * Rewrite one of the user's own turns and re-run the conversation from there.
+   *
+   * Deliberately edit-and-RESEND, not edit-in-place: the assistant answered the
+   * old wording, so leaving its reply next to new text produces a transcript
+   * that answers a question nobody asked. `deleteMessages` is required for the
+   * same reason regenerate requires it — without a durable delete the rewrite
+   * would sit beside the turn it replaces on the next reload. Hosts gate the
+   * Edit affordance on the same capability, so this refusal is a backstop, not
+   * the primary guard.
+   */
+  const editAndResend = useCallback(
+    (userMessageId: string, newContent: string) => {
+      if (!runtime || !runtime.deleteMessages || isStreamingRef.current) return;
+      const trimmed = newContent.trim();
+      if (!trimmed) return;
+      const store = useChatStore.getState();
+      const convId = store.activeConversationId;
+      if (!convId) return;
+      const messages = store.messagesByConversation[convId] ?? [];
+      const plan = planEditRollback(messages, userMessageId);
+      if (!plan) return;
+      const userMessage = messages[plan.userIndex];
+      if (!userMessage) return;
+      if (trimmed === userMessage.content.trim()) return;
+
+      // Same limitation as regenerate: the attachments were uploaded against
+      // the original turn and re-sending the text alone would silently drop
+      // them, so refuse loudly instead of sending a different prompt than the
+      // transcript shows.
+      if (userMessage.attachments && userMessage.attachments.length > 0) {
+        toast.error(
+          'Editing is unavailable for a turn with attachments. Send a new message with the files attached.',
+        );
+        return;
+      }
+
+      const decision = getRegenerateReplayDecision({
+        userMetadata: userMessage.metadata as RegenerateReplayMetadata | undefined,
+        assistantMetadata: messages[plan.userIndex + 1]?.metadata as
+          | RegenerateReplayMetadata
+          | undefined,
+      });
+      if (!decision.ok) {
+        toast.error(decision.message);
+        return;
+      }
+
+      const snapshot = messages.map((message) => ({ ...message }));
+      store.setMessages(convId, messages.slice(0, plan.userIndex));
+
+      sendMessage(
+        trimmed,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        decision.replay?.workMode,
+        undefined,
+        {
+          messageIds: plan.rollbackIds,
+          snapshot,
+          replay: decision.replay,
+        },
+        undefined,
+        decision.replay?.webSearchEnabled ? 'web_search' : undefined,
+      );
+    },
+    [runtime, sendMessage],
+  );
+
+  /**
    * Resolve one pending tool-approval card. Partial decisions remain visibly
    * awaiting approval and are persisted on the card. Once every call has a
    * decision, the runtime sends the durable run id plus decision set and the
@@ -1800,6 +1873,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     stopGeneration,
     continueGeneration,
     regenerate,
+    editAndResend,
     resolveToolApproval,
     isStreaming,
     isApprovalTurnLive,

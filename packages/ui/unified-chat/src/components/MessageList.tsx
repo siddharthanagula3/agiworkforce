@@ -52,6 +52,12 @@ interface MessageListProps {
    * which would otherwise render wired but silently no-op.
    */
   approvalTurnExpired?: boolean;
+  /**
+   * Commit an edited body for one of the user's own turns. Forwarded to
+   * `MessageBubble`; omitted means no Edit control renders anywhere in the
+   * feed, rather than one wired to nothing.
+   */
+  onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
 /**
@@ -72,6 +78,7 @@ export function MessageList({
   onToolApprove,
   onToolReject,
   approvalTurnExpired,
+  onEditMessage,
 }: MessageListProps) {
   const { t } = useUiTranslation('chat');
   const messages = useChatStore((s) => s.messagesByConversation[conversationId] ?? []);
@@ -215,6 +222,7 @@ export function MessageList({
                   onToolReject={onToolReject}
                   approvalTurnExpired={approvalTurnExpired}
                   onResendApproval={onRegenerateMessage}
+                  onEdit={onEditMessage}
                 />
                 {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (
                   <ProvenanceFooter message={msg} onPinModel={handlePinModel} />
