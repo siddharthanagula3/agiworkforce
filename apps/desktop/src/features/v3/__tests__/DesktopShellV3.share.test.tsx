@@ -53,6 +53,9 @@ vi.mock('../../../lib/tauri-mock', () => ({
   isTauri: true,
   isCloudWeb: false,
   isDesktopUiDevLocal: false,
+  // tauri-mock re-exports isElectronHost from runtimeEnvironment; a factory
+  // that omits it makes Vitest throw on first read rather than fall through.
+  isElectronHost: false,
   supportsLocalAppMode: true,
   isTauriContext: () => true,
   listen: vi.fn().mockResolvedValue(() => {}),
@@ -80,9 +83,16 @@ vi.mock('@agiworkforce/unified-chat', async () => {
   const useChatStore = (selector: (state: ReturnType<typeof readState>) => unknown) =>
     selector(readState());
   useChatStore.getState = readState;
+  // `getSelectedModel` is part of the real store's contract (modelStore.ts) and
+  // DesktopShellV3 calls it during render, so a stub without it throws
+  // "state.getSelectedModel is not a function" before anything is asserted.
   const useChatModelStore = (
-    selector: (state: { models: Array<Record<string, unknown>> }) => unknown,
-  ) => selector({ models: [] });
+    selector: (state: {
+      models: Array<Record<string, unknown>>;
+      selectedModelId: string;
+      getSelectedModel: () => undefined;
+    }) => unknown,
+  ) => selector({ models: [], selectedModelId: '', getSelectedModel: () => undefined });
   return {
     CapabilityProvider: (props: { children?: ReactNode }) =>
       React.createElement(React.Fragment, null, props.children),
