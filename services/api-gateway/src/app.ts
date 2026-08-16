@@ -20,6 +20,7 @@ import { usageRouter } from './routes/usage';
 import { mcpRouter } from './mcp/mcpRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { requestContext, getRequestId } from './middleware/requestContext';
+import { responseCompression } from './middleware/responseCompression';
 import {
   validateContentType,
   validateCsrf,
@@ -79,6 +80,11 @@ export function createApp(options: GatewayAppOptions = {}): Express {
   }
 
   app.use(requestContext);
+  // Ahead of the routers so it wraps every response body, and ahead of helmet
+  // only in the sense that ordering here does not matter for header-setting
+  // middleware. Fly does not compress at the edge the way Vercel does, so
+  // without this the gateway ships every JSON body uncompressed.
+  app.use(responseCompression());
   app.use(helmet());
   app.use(
     cors({
