@@ -68,9 +68,11 @@ security findings before making a gate blocking; build the enterprise identity s
 
 ## 4. The single most valuable artifact
 
-`docs/agent-context/phase4-capability-audit.md` — 38 capability families, 194KB, produced read-only
-by 10 agents. Per family: what the UI **claims** (file:line), what is actually reachable **from a
-real entry point**, the precise gap, what a user hits **today**, and cost **both ways**.
+`docs/remediation/` — the consolidated remediation register. It absorbed the former
+`phase4-capability-audit.md` (38 capability families, produced read-only by 10 agents) along with
+every other audit, flaw list and gap analysis in the repository. Per item: what the UI **claims**
+(file:line), what is actually reachable **from a real entry point**, the precise gap, what a user
+hits **today**, and what "done" means. Start at `docs/remediation/WAVES.md`.
 
 **15 of 38 are `ALREADY_HONEST` — the ledger box is stale and there is nothing to fix.** That is a
 ~40% false-positive rate on the phase holding 168 of the 519 open criteria. Do not re-derive this;
