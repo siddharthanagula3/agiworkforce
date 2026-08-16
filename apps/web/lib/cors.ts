@@ -144,12 +144,37 @@ export function handleCorsPreflightRequest(
   });
 }
 
+// Add a field to Vary without dropping the ones already there. Overwriting
+// would silently disable another route's cache key -- /api/pricing/localized
+// varies on X-Vercel-IP-Country, and losing that serves one country's prices to
+// every country.
+export function appendVary(response: Response, field: string): void {
+  const existing = response.headers.get('Vary');
+  if (!existing) {
+    response.headers.set('Vary', field);
+    return;
+  }
+  if (existing.trim() === '*') return;
+  const fields = existing
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (fields.some((entry) => entry.toLowerCase() === field.toLowerCase())) return;
+  response.headers.set('Vary', [...fields, field].join(', '));
+}
+
 export function withCorsAndSecurityHeaders<TResponse extends Response>(
   response: TResponse,
   request: NextRequest,
 ): TResponse {
   const corsHeaders = getCorsHeaders(request);
   const securityHeaders = getSecurityHeaders();
+
+  // The body Vercel puts on the wire depends on the request's Accept-Encoding,
+  // and several API routes are Cache-Control: public. Without this a shared
+  // cache downstream may hand a brotli body to a client that asked for
+  // identity, which cannot decode it.
+  appendVary(response, 'Accept-Encoding');
 
   for (const [key, value] of Object.entries(corsHeaders)) {
     response.headers.set(key, value);

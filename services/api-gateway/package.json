@@ -15,9 +15,9 @@
   "dependencies": {
     "@agiworkforce/apply-patch": "workspace:*",
     "@agiworkforce/data-layer": "workspace:*",
+    "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/provider-protocol": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
-    "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/providers-factory": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
@@ -25,6 +25,7 @@
     "@clerk/backend": "^3.4.0",
     "@neondatabase/serverless": "^1.1.0",
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
+    "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/express-serve-static-core": "^5.1.1",
