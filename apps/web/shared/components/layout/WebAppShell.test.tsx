@@ -32,6 +32,12 @@ const shellState = vi.hoisted(() => ({
   conversationsLoading: false,
 }));
 
+/** Stable stub for the shared `useConfirm` destructive-confirm hook. */
+const confirmStub = vi.hoisted(() => ({
+  confirm: vi.fn(async () => true),
+  dialog: null as React.ReactNode,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerState.push }),
   usePathname: () => routerState.pathname,
@@ -39,6 +45,9 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@clerk/nextjs', () => ({
   useClerk: () => ({ signOut: vi.fn() }),
+  // The rail asks whether the signed-in user is an admin before offering the
+  // /admin destination; an ordinary user is the right default here.
+  useUser: () => ({ isLoaded: true, user: { publicMetadata: {} } }),
 }));
 
 // Rendering the account menu's real contents (see the DropdownMenu mock below)
@@ -70,6 +79,11 @@ vi.mock('@agiworkforce/ui', () => ({
   DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   DropdownMenuLabel: () => null,
   DropdownMenuSeparator: () => null,
+  // shell-nav-ia-gap-01: the shell's destructive confirms (delete conversation,
+  // delete project) go through the shared AlertDialog wrapper instead of
+  // window.confirm. Stable identity so the shell's useCallback deps do not
+  // churn on every render, matching the real hook.
+  useConfirm: () => confirmStub,
 }));
 
 vi.mock('@/lib/hooks/useConversations', () => ({
