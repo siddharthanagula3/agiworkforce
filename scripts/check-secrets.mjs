@@ -50,6 +50,11 @@ const PATTERNS = [
   { name: 'GitHub token', re: /gh[pousr]_[A-Za-z0-9]{30,}/g },
   { name: 'Google API key', re: /AIza[A-Za-z0-9_-]{35}/g },
   { name: 'AWS access key id', re: /A(?:KIA|SIA)[A-Z0-9]{16}/g },
+  // A Supabase PAT authenticates the Management API for the whole account —
+  // enumerate projects, read and rotate project API keys and DB connection
+  // strings, run SQL, delete projects. One was committed to .mcp.json and the
+  // scanner had no pattern for it, which is why it survived (SEC-01).
+  { name: 'Supabase personal access token', re: /sbp_[a-f0-9]{40}/g },
   {
     name: 'Postgres/Redis URL with password',
     re: /\b(?:postgres|postgresql|rediss?|mongodb)(?:\+\w+)?:\/\/[^\s:@/]+:[^\s@/]{6,}@/gi,
@@ -83,18 +88,93 @@ const SKIP_FILE =
 /** This scanner necessarily contains every pattern it looks for. */
 const SELF = new Set(['scripts/check-secrets.mjs', 'scripts/__tests__/check-secrets.test.mjs']);
 
-function trackedFiles() {
-  // Tracked files only: an untracked local `.env` is the developer's business
-  // and cannot leak through a push. `git ls-files` also respects .gitignore for
-  // free, which a manual walk would have to reimplement.
+function git(args) {
   try {
-    return execFileSync('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 64 * 1024 * 1024 })
-      .toString('utf8')
-      .split('\0')
-      .filter(Boolean);
+    return execFileSync('git', args, { cwd: root, maxBuffer: 512 * 1024 * 1024 }).toString('utf8');
   } catch {
-    return [];
+    return '';
   }
+}
+
+/**
+ * Files that a `git add -A` would commit: everything tracked, plus everything
+ * untracked that is NOT ignored.
+ *
+ * This used to be tracked-only, on the reasoning that an untracked local `.env`
+ * is the developer's business and cannot leak through a push. That holds for
+ * *ignored* files and only for those — an untracked file that .gitignore does
+ * not cover is one `git add -A` away from being pushed, which is exactly how a
+ * credential arrives in history. `--exclude-standard` keeps the original
+ * protection for `.env` and friends while closing that gap (SEC-01).
+ */
+function workingTreeFiles() {
+  const tracked = git(['ls-files', '-z']).split('\0').filter(Boolean);
+  const untracked = git(['ls-files', '--others', '--exclude-standard', '-z'])
+    .split('\0')
+    .filter(Boolean);
+  return [...new Set([...tracked, ...untracked])];
+}
+
+/**
+ * Every blob ever reachable from any ref, deduped by object id.
+ *
+ * The working tree is the wrong place to look for a leaked credential: removing
+ * the line does not remove the blob, and `git log --all -S` still yields it to
+ * anyone who can clone. SEC-01 is exactly that — the Supabase PAT was replaced
+ * by `${SUPABASE_ACCESS_TOKEN}` in a later commit and remained retrievable from
+ * nine ancestor commits of main. Deduping by object id means a blob that
+ * survives a thousand commits is read once.
+ *
+ * History mode is opt-in (`--history`) because it is far too slow for the
+ * commit hook; CI runs it, where minutes are affordable and a leak is not.
+ */
+function historyBlobs() {
+  const entries = git(['rev-list', '--objects', '--all'])
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const sp = line.indexOf(' ');
+      return sp === -1 ? null : { sha: line.slice(0, sp), path: line.slice(sp + 1) };
+    })
+    .filter((e) => e && e.path && !SKIP_FILE.test(e.path))
+    .filter((e) => !e.path.split('/').some((segment) => SKIP_DIRS.has(segment)));
+
+  const byId = new Map();
+  for (const e of entries) if (!byId.has(e.sha)) byId.set(e.sha, e.path);
+  return byId;
+}
+
+/** Read a batch of blobs via one `git cat-file --batch` invocation. */
+function readBlobs(shas) {
+  if (shas.length === 0) return new Map();
+  let raw;
+  try {
+    raw = execFileSync('git', ['cat-file', '--batch'], {
+      cwd: root,
+      input: `${shas.join('\n')}\n`,
+      maxBuffer: 1024 * 1024 * 1024,
+    });
+  } catch {
+    return new Map();
+  }
+  const out = new Map();
+  let i = 0;
+  while (i < raw.length) {
+    const nl = raw.indexOf(0x0a, i);
+    if (nl === -1) break;
+    const header = raw.subarray(i, nl).toString('utf8');
+    const [sha, type, sizeText] = header.split(' ');
+    if (type !== 'blob') {
+      // "<sha> missing" — no payload follows.
+      i = nl + 1;
+      continue;
+    }
+    const size = Number(sizeText);
+    const start = nl + 1;
+    if (size <= 2 * 1024 * 1024) out.set(sha, raw.subarray(start, start + size).toString('utf8'));
+    i = start + size + 1; // trailing newline
+  }
+  return out;
 }
 
 /**
@@ -140,7 +220,34 @@ const findings = [];
 let scanned = 0;
 let exempted = 0;
 
-for (const rel of trackedFiles()) {
+/**
+ * Match every pattern against one source. `useAllowlist` is false for history:
+ * the allowlist exempts a credential format at a path in the CURRENT tree, and
+ * a reviewed fixture today says nothing about a real credential that sat at the
+ * same path three months ago.
+ */
+function scanSource(rel, src, { useAllowlist }) {
+  for (const { name, re } of PATTERNS) {
+    re.lastIndex = 0;
+    let match;
+    while ((match = re.exec(src)) !== null) {
+      const lineNo = src.slice(0, match.index).split('\n').length;
+      const line = src.split('\n')[lineNo - 1] ?? '';
+      if (PLACEHOLDER.test(line)) continue;
+      const key = allowKey(rel, name);
+      if (useAllowlist && allowed.has(key)) {
+        allowed.set(key, true);
+        exempted += 1;
+        continue;
+      }
+      findings.push({ rel, lineNo, name, hint: match[0].slice(0, 12) });
+    }
+  }
+}
+
+const scanHistory = process.argv.includes('--history');
+
+for (const rel of workingTreeFiles()) {
   if (SELF.has(rel)) continue;
   if (SKIP_FILE.test(rel)) continue;
   if (rel.split('/').some((segment) => SKIP_DIRS.has(segment))) continue;
@@ -157,21 +264,22 @@ for (const rel of trackedFiles()) {
     continue;
   }
   scanned += 1;
+  scanSource(rel, src, { useAllowlist: true });
+}
 
-  for (const { name, re } of PATTERNS) {
-    re.lastIndex = 0;
-    let match;
-    while ((match = re.exec(src)) !== null) {
-      const lineNo = src.slice(0, match.index).split('\n').length;
-      const line = src.split('\n')[lineNo - 1] ?? '';
-      if (PLACEHOLDER.test(line)) continue;
-      const key = allowKey(rel, name);
-      if (allowed.has(key)) {
-        allowed.set(key, true);
-        exempted += 1;
-        continue;
-      }
-      findings.push({ rel, lineNo, name, hint: match[0].slice(0, 12) });
+let historyBlobCount = 0;
+if (scanHistory) {
+  const blobs = historyBlobs();
+  const shas = [...blobs.keys()];
+  const CHUNK = 512;
+  for (let i = 0; i < shas.length; i += CHUNK) {
+    const chunk = shas.slice(i, i + CHUNK);
+    const contents = readBlobs(chunk);
+    for (const [sha, src] of contents) {
+      const rel = blobs.get(sha) ?? sha;
+      if (SELF.has(rel)) continue;
+      historyBlobCount += 1;
+      scanSource(`${rel} (history blob ${sha.slice(0, 9)})`, src, { useAllowlist: false });
     }
   }
 }
@@ -204,6 +312,8 @@ if (stale.length > 0) {
 }
 
 console.log(
-  `Secret scan passed (${scanned} tracked files, ${PATTERNS.length} credential formats, ` +
+  `Secret scan passed (${scanned} working-tree files` +
+    (scanHistory ? ` + ${historyBlobCount} history blobs` : '') +
+    `, ${PATTERNS.length} credential formats, ` +
     `${exempted} reviewed exemption(s) across ${allowed.size} allowlist entries).`,
 );
