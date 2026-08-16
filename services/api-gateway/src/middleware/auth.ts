@@ -7,7 +7,13 @@ import {
   type CloudSurfaceClass,
 } from '../authenticated-user';
 import { requireEnv } from '../env';
-import { getUserScopedClient } from '../lib/neonClients';
+import {
+  authDatabaseBreaker,
+  clerkBreaker,
+  isDependencyUnavailableError,
+  retryAfterSeconds,
+} from '../lib/dependencies';
+import { getUserScopedClient, type CloudDbClient, type DbResult } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
@@ -46,7 +52,7 @@ async function verifyGatewayOrClerkToken(token: string): Promise<VerifiedPrincip
       throw new jwt.JsonWebTokenError('Invalid token issuer');
     }
 
-    const claims = await verifyToken(token, { secretKey });
+    const claims = await clerkBreaker().execute(() => verifyToken(token, { secretKey }));
     const emailClaim =
       typeof (claims as Record<string, unknown>)['email'] === 'string'
         ? ((claims as Record<string, unknown>)['email'] as string)
@@ -108,6 +114,135 @@ declare global {
   }
 }
 
+class AuthQueryError extends Error {
+  constructor(readonly dbError: { message?: string } | null) {
+    super(dbError?.message ?? 'auth query failed');
+    this.name = 'AuthQueryError';
+  }
+}
+
+// Runs an auth-path query behind the shared Neon breaker. The builder resolves
+// `{ data, error }` instead of rejecting, so the error has to be rethrown or the
+// breaker would score a failing database as healthy.
+async function authDbQuery<T>(
+  db: CloudDbClient,
+  run: (client: CloudDbClient) => Promise<DbResult<T>>,
+): Promise<T | null> {
+  return authDatabaseBreaker().execute(async () => {
+    const { data, error } = await run(db);
+    if (error) throw new AuthQueryError(error);
+    return data;
+  });
+}
+
+/// The outcome of the two post-signature checks every authenticated entry point
+/// owes: is this token revoked, and is this account still active. The WebSocket
+/// path used to do neither, so a revoked token and a suspended account kept a
+/// live socket for as long as they held it.
+export type TokenUsability =
+  | { ok: true }
+  | { ok: false; reason: 'revoked'; code: 'TOKEN_REVOKED'; status: 401; message: string }
+  | { ok: false; reason: 'inactive'; code: 'ACCOUNT_NOT_ACTIVE'; status: 403; message: string }
+  | {
+      ok: false;
+      reason: 'unavailable';
+      code: 'AUTH_CHECK_UNAVAILABLE';
+      status: 503;
+      message: string;
+      error: unknown;
+    };
+
+export async function checkTokenUsable(
+  jti: string | undefined,
+  userId: string,
+  db: () => CloudDbClient,
+): Promise<TokenUsability> {
+  if (typeof jti === 'string' && jti.length > 0) {
+    const cached = revocationCache.get(jti);
+    const cacheStale = !cached || Date.now() - cached.cachedAt > REVOCATION_CACHE_TTL_MS;
+    if (cacheStale) {
+      try {
+        const revokedRow = await authDbQuery(db(), (client) =>
+          client.from('revoked_jwts').select('jti').eq('jti', jti).maybeSingle(),
+        );
+        if (revokedRow) {
+          return {
+            ok: false,
+            reason: 'revoked',
+            code: 'TOKEN_REVOKED',
+            status: 401,
+            message: 'Token revoked',
+          };
+        }
+        revocationCache.set(jti, { cachedAt: Date.now() });
+      } catch (revocationCheckError) {
+        logger.error(
+          { error: revocationCheckError, jti },
+          'Revocation check failed — failing closed',
+        );
+        return {
+          ok: false,
+          reason: 'unavailable',
+          code: 'AUTH_CHECK_UNAVAILABLE',
+          status: 503,
+          message: 'Service temporarily unavailable. Please try again shortly.',
+          error: revocationCheckError,
+        };
+      }
+    }
+  }
+
+  let accountStatus = getCachedAccountStatus(userId);
+  if (accountStatus === null) {
+    try {
+      const profile = await authDbQuery(db(), (client) =>
+        client
+          .from<{ account_status?: string }>('profiles')
+          .select('account_status')
+          .eq('id', userId)
+          .single(),
+      );
+      const freshStatus = profile?.account_status ?? 'unknown';
+      setCachedAccountStatus(userId, freshStatus);
+      accountStatus = freshStatus;
+    } catch (killSwitchError) {
+      logger.error({ error: killSwitchError }, 'Kill switch DB check failed — failing closed');
+      return {
+        ok: false,
+        reason: 'unavailable',
+        code: 'AUTH_CHECK_UNAVAILABLE',
+        status: 503,
+        message: 'Service temporarily unavailable. Please try again shortly.',
+        error: killSwitchError,
+      };
+    }
+  }
+
+  if (accountStatus !== 'active') {
+    return {
+      ok: false,
+      reason: 'inactive',
+      code: 'ACCOUNT_NOT_ACTIVE',
+      status: 403,
+      message: `Account ${accountStatus}. Contact support for assistance.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+function respondDependencyUnavailable(
+  res: Response,
+  error: unknown,
+  code: 'IDENTITY_PROVIDER_UNAVAILABLE' | 'AUTH_CHECK_UNAVAILABLE',
+): void {
+  res.setHeader('Retry-After', String(retryAfterSeconds(error)));
+  res.status(503).json({
+    error: 'Service temporarily unavailable. Please try again shortly.',
+    code,
+  });
+}
+
 export async function authenticateToken(
   req: Request,
   res: Response,
@@ -123,84 +258,38 @@ export async function authenticateToken(
       return;
     }
 
-    const { payload, surface } = await verifyGatewayOrClerkToken(token);
-    req.user = { ...authenticatedUserSchema.parse(payload), token, surface };
-
-    if (typeof payload.jti === 'string' && payload.jti.length > 0) {
-      const jti = payload.jti;
-      const cached = revocationCache.get(jti);
-      const cacheStale = !cached || Date.now() - cached.cachedAt > REVOCATION_CACHE_TTL_MS;
-
-      if (cacheStale) {
-        try {
-          const { data: revokedRow, error: revokedError } = await getUserScopedClient(req.user)
-            .from('revoked_jwts')
-            .select('jti')
-            .eq('jti', jti)
-            .maybeSingle();
-
-          if (revokedError) {
-            logger.error({ error: revokedError, jti }, 'Revocation DB check failed');
-            res.status(503).json({
-              error: 'Service temporarily unavailable. Please try again shortly.',
-              code: 'AUTH_CHECK_UNAVAILABLE',
-            });
-            return;
-          }
-
-          if (revokedRow) {
-            res.status(401).json({ error: 'Token revoked', code: 'TOKEN_REVOKED' });
-            return;
-          }
-
-          revocationCache.set(jti, { cachedAt: Date.now() });
-        } catch (revocationCheckError) {
-          logger.error(
-            { error: revocationCheckError, jti },
-            'Revocation check threw — failing closed',
-          );
-          res.status(503).json({
-            error: 'Service temporarily unavailable. Please try again shortly.',
-            code: 'AUTH_CHECK_UNAVAILABLE',
-          });
-          return;
-        }
-      }
-    }
-
-    const userId = req.user.userId;
-    let accountStatus = getCachedAccountStatus(userId);
-
-    if (accountStatus === null) {
-      try {
-        const { data: profile, error: profileError } = await getUserScopedClient(req.user)
-          .from('profiles')
-          .select('account_status')
-          .eq('id', userId)
-          .single();
-
-        if (profileError) {
-          throw profileError;
-        }
-
-        const freshStatus = profile?.account_status ?? 'unknown';
-        setCachedAccountStatus(userId, freshStatus);
-        accountStatus = freshStatus;
-      } catch (killSwitchError) {
-        logger.error({ error: killSwitchError }, 'Kill switch DB check failed — failing closed');
-        res.status(503).json({
-          error: 'Service temporarily unavailable. Please try again shortly.',
-          code: 'AUTH_CHECK_UNAVAILABLE',
-        });
+    let payload: jwt.JwtPayload;
+    let surface: CloudSurfaceClass;
+    try {
+      ({ payload, surface } = await verifyGatewayOrClerkToken(token));
+    } catch (verificationError) {
+      if (isDependencyUnavailableError(verificationError)) {
+        logger.error(
+          { error: verificationError },
+          'Identity provider unavailable — short-circuiting instead of waiting',
+        );
+        respondDependencyUnavailable(res, verificationError, 'IDENTITY_PROVIDER_UNAVAILABLE');
         return;
       }
+      throw verificationError;
     }
+    const authedUser = { ...authenticatedUserSchema.parse(payload), token, surface };
+    req.user = authedUser;
 
-    if (accountStatus !== 'active') {
-      res.status(403).json({
-        error: `Account ${accountStatus}. Contact support for assistance.`,
-        code: 'ACCOUNT_NOT_ACTIVE',
-      });
+    let dbClient: CloudDbClient | null = null;
+    const db = (): CloudDbClient => (dbClient ??= getUserScopedClient(authedUser));
+
+    const usability = await checkTokenUsable(
+      typeof payload.jti === 'string' ? payload.jti : undefined,
+      req.user.userId,
+      db,
+    );
+    if (!usability.ok) {
+      if (usability.reason === 'unavailable') {
+        respondDependencyUnavailable(res, usability.error, usability.code);
+        return;
+      }
+      res.status(usability.status).json({ error: usability.message, code: usability.code });
       return;
     }
 

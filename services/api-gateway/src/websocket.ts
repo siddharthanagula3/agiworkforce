@@ -5,6 +5,7 @@ import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
 import { logger } from './lib/logger';
 import { getUserScopedClient } from './lib/neonClients';
+import { checkTokenUsable } from './middleware/auth';
 import { resolveRequestId } from './middleware/requestContext';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
@@ -411,6 +412,30 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
     }
 
     const { userId } = parseResult.data;
+
+    // The HTTP path has always rejected a revoked token and a non-active
+    // account; this one verified the signature and stopped there, so either
+    // kept a live socket for as long as the holder kept it open. Same helper,
+    // same fail-closed behaviour.
+    const usability = await checkTokenUsable(
+      typeof payload === 'object' && payload !== null && typeof payload.jti === 'string'
+        ? payload.jti
+        : undefined,
+      userId,
+      () => getUserScopedClient({ userId, token: message.token }),
+    );
+    if (!usability.ok) {
+      logger.warn(
+        { userId, reason: usability.reason },
+        'WebSocket auth refused after signature check',
+      );
+      ws.send(
+        JSON.stringify({ type: 'auth_error', error: usability.message, code: usability.code }),
+      );
+      ws.close();
+      return;
+    }
+
     ws.userId = userId;
 
     if (typeof message.deviceId === 'string' && message.deviceId.length > 0) {

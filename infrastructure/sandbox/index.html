@@ -168,23 +168,26 @@
           'http://localhost:5173',
         ]);
 
+        // Vercel preview hosts for this project, and nothing else. The old form
+        // of this check was startsWith('agiworkforce-') + endsWith('.vercel.app'),
+        // which anyone could satisfy by registering agiworkforce-pwn.vercel.app
+        // and then driving the render sink in this frame.
+        // Shape: agiworkforce-<deployment hash>-<team>.vercel.app. The hash
+        // segment is what an attacker cannot mint: Vercel assigns it, and it is
+        // long and hex-ish. Requiring it rejects agiworkforce-pwn.vercel.app
+        // and short two-segment names like agiworkforce-a-b.vercel.app that a
+        // project/team pair could otherwise be crafted to produce.
+        const VERCEL_PREVIEW_HOST =
+          /^agiworkforce-[a-z0-9]{9,}-[a-z0-9]+(?:-[a-z0-9]+)*\.vercel\.app$/;
+
         function isAllowedParent(origin) {
           if (ALLOWED_PARENT_ORIGINS.has(origin)) return true;
-          // Allow any *.vercel.app preview for the agiworkforce project.
-          // Format: agiworkforce-<hash>-<team>.vercel.app
           try {
             const u = new URL(origin);
-            if (
-              u.protocol === 'https:' &&
-              u.hostname.endsWith('.vercel.app') &&
-              u.hostname.startsWith('agiworkforce-')
-            ) {
-              return true;
-            }
+            return u.protocol === 'https:' && VERCEL_PREVIEW_HOST.test(u.hostname);
           } catch (e) {
-            // ignore
+            return false;
           }
-          return false;
         }
 
         const idleEl = document.getElementById('idle');
@@ -453,6 +456,12 @@
         }
 
         window.addEventListener('message', function (event) {
+          // Origin alone is not enough: any window that can reach this frame
+          // can post to it, and a nested or opener window on an allowed origin
+          // would have passed. Only the embedding parent drives the renderer.
+          if (event.source !== window.parent) {
+            return;
+          }
           if (!isAllowedParent(event.origin)) {
             return; // silently drop — common during cross-origin probes
           }
