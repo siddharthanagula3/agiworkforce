@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { blockContext, isIntentional, validateAllowlist } from './check-reference-integrity.mjs';
+import {
+  blockContext,
+  ignoreQueryMap,
+  isIntentional,
+  validateAllowlist,
+} from './check-reference-integrity.mjs';
 import {
   buildPathIndex,
   extractComments,
@@ -154,4 +159,35 @@ test('knownContradictions require an owner', () => {
   validateAllowlist({ knownContradictions: [{ key: 'path::a::b' }] }, errors);
   assert.equal(errors.length, 1);
   assert.match(errors[0], /needs an owner/);
+});
+
+// ---------------------------------------------------------------------------
+// Gitignore probing
+// ---------------------------------------------------------------------------
+
+test('a bare candidate is also asked as a directory', () => {
+  // `git check-ignore` matches a directory-only pattern (`/ios/`) against a bare
+  // path only while that directory exists on disk, so the bare form alone made the
+  // answer depend on whether the developer had run a build.
+  const map = ignoreQueryMap(['apps/mobile/ios']);
+  assert.deepEqual([...map.keys()], ['apps/mobile/ios', 'apps/mobile/ios/']);
+  assert.equal(map.get('apps/mobile/ios/'), 'apps/mobile/ios');
+});
+
+test('a candidate that already ends in a slash is not duplicated or rewritten', () => {
+  const map = ignoreQueryMap(['build/']);
+  assert.deepEqual([...map.keys()], ['build/']);
+  assert.equal(map.get('build/'), 'build/');
+});
+
+test('each query maps back to the reference it came from', () => {
+  const map = ignoreQueryMap(['a/b', 'c/']);
+  assert.deepEqual(
+    [...map.entries()],
+    [
+      ['a/b', 'a/b'],
+      ['a/b/', 'a/b'],
+      ['c/', 'c/'],
+    ],
+  );
 });
