@@ -80,14 +80,31 @@ export function isGitHubAppConfigured(): boolean {
  *
  * @see https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-setup-url
  */
-export function isGitHubInstallationLinkingAvailable(): boolean {
-  return Boolean(
-    GITHUB_APP_ID &&
-    GITHUB_APP_PRIVATE_KEY_BASE64 &&
-    GITHUB_APP_SLUG &&
-    GITHUB_APP_CLIENT_ID &&
+export function missingGitHubInstallationLinkingVars(): string[] {
+  return Object.entries({
+    GITHUB_APP_ID,
+    GITHUB_APP_PRIVATE_KEY_BASE64,
+    GITHUB_APP_SLUG,
+    GITHUB_APP_CLIENT_ID,
     GITHUB_APP_CLIENT_SECRET,
-  );
+  })
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+}
+
+let linkingUnavailableLogged = false;
+
+export function isGitHubInstallationLinkingAvailable(): boolean {
+  const missing = missingGitHubInstallationLinkingVars();
+  if (missing.length === 0) return true;
+  if (!linkingUnavailableLogged) {
+    linkingUnavailableLogged = true;
+    console.warn(
+      `[github-app] GitHub connector linking is disabled: missing ${missing.join(', ')}. ` +
+        'The /api/connectors route answers 501 until every one of these is set.',
+    );
+  }
+  return false;
 }
 
 export function getGitHubAppInstallUrl(): string | null {

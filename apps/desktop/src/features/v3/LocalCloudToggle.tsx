@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Laptop, Cloud, type LucideIcon } from 'lucide-react';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
+import { supportsLocalAppMode } from '../../lib/runtimeEnvironment';
 
 export interface LocalCloudToggleProps {
   collapsed?: boolean;
@@ -82,15 +83,21 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
 
   const localLabel = t('sidebar.mode.local');
   const cloudLabel = t('sidebar.mode.cloud');
+  const localUnavailable = t('sidebar.mode.localUnavailable');
 
   if (collapsed) {
     const Icon = isLocal ? Laptop : Cloud;
     const destinationLabel = isLocal ? cloudLabel : localLabel;
-    const switchLabel = t('sidebar.mode.switchTo', { mode: destinationLabel });
+    const wouldSwitchToLocal = !isLocal;
+    const blocked = wouldSwitchToLocal && !supportsLocalAppMode;
+    const switchLabel = blocked
+      ? localUnavailable
+      : t('sidebar.mode.switchTo', { mode: destinationLabel });
     return (
       <button
         type="button"
-        onClick={() => setMode(isLocal ? 'cloud' : 'local')}
+        onClick={blocked ? undefined : () => setMode(isLocal ? 'cloud' : 'local')}
+        aria-disabled={blocked || undefined}
         title={switchLabel}
         aria-label={switchLabel}
         className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
@@ -104,7 +111,8 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
           borderRadius: 8,
           border: '1px solid var(--chat-border)',
           background: 'var(--chat-surface-elevated)',
-          cursor: 'pointer',
+          cursor: blocked ? 'not-allowed' : 'pointer',
+          opacity: blocked ? 0.55 : 1,
           color: 'var(--chat-text-secondary)',
         }}
       >
@@ -126,7 +134,14 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
         border: '1px solid var(--chat-border)',
       }}
     >
-      <Segment active={isLocal} icon={Laptop} label={localLabel} onClick={() => setMode('local')} />
+      <Segment
+        active={isLocal}
+        icon={Laptop}
+        label={localLabel}
+        onClick={() => setMode('local')}
+        disabled={!supportsLocalAppMode}
+        title={supportsLocalAppMode ? undefined : localUnavailable}
+      />
       <Segment active={!isLocal} icon={Cloud} label={cloudLabel} onClick={() => setMode('cloud')} />
     </div>
   );

@@ -38,6 +38,7 @@ export interface ProjectSettingsDialogProps {
     >,
   ) => void;
   onDelete: (id: string) => void;
+  onDuplicated?: () => void;
 }
 
 export function ProjectSettingsDialog({
@@ -46,6 +47,7 @@ export function ProjectSettingsDialog({
   project,
   onUpdate,
   onDelete,
+  onDuplicated,
 }: ProjectSettingsDialogProps) {
   const [name, setName] = useState(project.name);
   const [instructions, setInstructions] = useState(project.instructions ?? '');
@@ -82,6 +84,7 @@ export function ProjectSettingsDialog({
           ? `Project duplicated with ${copiedKnowledgeFiles} file${copiedKnowledgeFiles === 1 ? '' : 's'}.`
           : 'Project duplicated.',
       );
+      onDuplicated?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not duplicate the project.');
     } finally {

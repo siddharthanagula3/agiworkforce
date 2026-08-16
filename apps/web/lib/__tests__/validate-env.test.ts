@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../price-tier-mapping', () => ({
@@ -164,5 +163,56 @@ describe('validateStripeKeyModeConsistency', () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual([expect.stringContaining('Production deployment')]);
+  });
+});
+
+import { validateSecurityEscapeHatches } from '../validate-env';
+
+describe('validateSecurityEscapeHatches · ACCOUNT_STATUS_FAIL_OPEN', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    delete process.env['ACCOUNT_STATUS_FAIL_OPEN'];
+    delete process.env['VERCEL_ENV'];
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  it('says nothing when the hatch is unset — the default is fail-closed', () => {
+    expect(validateSecurityEscapeHatches()).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('says nothing when the hatch is present but off', () => {
+    process.env['ACCOUNT_STATUS_FAIL_OPEN'] = '0';
+    process.env['VERCEL_ENV'] = 'production';
+
+    expect(validateSecurityEscapeHatches()).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('fails the production boot check when the hatch is on', () => {
+    process.env['ACCOUNT_STATUS_FAIL_OPEN'] = 'true';
+    process.env['VERCEL_ENV'] = 'production';
+
+    const result = validateSecurityEscapeHatches();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      expect.stringContaining('suspended and banned accounts keep working'),
+    ]);
+  });
+
+  it('only warns outside production, so a developer can still turn it on locally', () => {
+    process.env['ACCOUNT_STATUS_FAIL_OPEN'] = 'on';
+
+    const result = validateSecurityEscapeHatches();
+
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toEqual([expect.stringContaining('ACCOUNT_STATUS_FAIL_OPEN')]);
   });
 });

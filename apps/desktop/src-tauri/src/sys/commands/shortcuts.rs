@@ -268,8 +268,7 @@ fn transition_quick_query_registration(
     mut register: impl FnMut(&str) -> Result<(), String>,
     mut unregister: impl FnMut(&str) -> Result<(), String>,
 ) -> Result<(), String> {
-    let desired_is_already_registered =
-        previous_is_registered && previous_key == desired_key;
+    let desired_is_already_registered = previous_is_registered && previous_key == desired_key;
     let mut registered_desired_during_transition = false;
 
     // Register the replacement before unregistering the current shortcut. If
@@ -327,8 +326,7 @@ pub async fn apply_quick_query_hotkey_preferences(
             enabled: false,
             is_global: true,
         });
-    let previous_is_registered =
-        had_previous_shortcut && previous.is_global && previous.enabled;
+    let previous_is_registered = had_previous_shortcut && previous.is_global && previous.enabled;
     transition_quick_query_registration(
         previous_is_registered,
         &previous.key,
@@ -821,10 +819,7 @@ mod tests {
         );
 
         assert_eq!(result, Err("accelerator unavailable".to_string()));
-        assert_eq!(
-            operations.into_inner(),
-            vec!["register:Control+Alt+Space"]
-        );
+        assert_eq!(operations.into_inner(), vec!["register:Control+Alt+Space"]);
     }
 
     #[test]

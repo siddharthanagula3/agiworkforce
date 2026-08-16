@@ -2396,7 +2396,10 @@ impl ToolExecutionGuard {
                 Err(SecurityError::BlockedDomain(host))
             }
             Err(EgressDenial::UnresolvedDestination(host)) => {
-                warn!("Blocked destination that could not be proven public: {}", host);
+                warn!(
+                    "Blocked destination that could not be proven public: {}",
+                    host
+                );
                 Err(SecurityError::BlockedDomain(host))
             }
         }

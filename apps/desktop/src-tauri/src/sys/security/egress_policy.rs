@@ -166,9 +166,7 @@ pub(crate) fn judge_destination(
                 .resolve(domain, port)
                 .map_err(|_| EgressDenial::UnresolvedDestination(host_str.to_string()))?;
             if addresses.is_empty() {
-                return Err(EgressDenial::UnresolvedDestination(
-                    host_str.to_string(),
-                ));
+                return Err(EgressDenial::UnresolvedDestination(host_str.to_string()));
             }
             for address in addresses {
                 let internal = match address {

@@ -1,4 +1,3 @@
-
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
 import { MAX_CHAT_ATTACHMENT_BYTES } from '@agiworkforce/cloud-contracts';
 
@@ -11,10 +10,7 @@ export interface SanitizeOptions {
 }
 
 export class SecurityManager {
-
   private encryptionKey: CryptoKey | null = null;
-  private static _syncEncryptWarnShown = false;
-  private static _syncDecryptWarnShown = false;
   private static readonly ENCRYPTION_SALT = 'agiagent-security-salt-v1';
   private static readonly KEY_ITERATIONS = 100000;
 
@@ -96,123 +92,6 @@ export class SecurityManager {
     } catch (error) {
       console.error('Failed to derive encryption key:', error);
       throw new Error('Encryption key derivation failed');
-    }
-  }
-
-  private getSyncKey(): Uint8Array {
-    const keySource = this.getKeySource();
-    const encoder = new TextEncoder();
-    const keyBytes = encoder.encode(keySource);
-
-    const key = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      key[i] = keyBytes[i % keyBytes.length]!;
-    }
-
-    for (let round = 0; round < 4; round++) {
-      for (let i = 0; i < 32; i++) {
-        key[i] = (key[i]! ^ key[(i + 7) % 32]! ^ key[(i + 13) % 32]!) & 0xff;
-        key[i] = ((key[i]! << 3) | (key[i]! >> 5)) & 0xff;
-      }
-    }
-
-    return key;
-  }
-
-  /**
-   * @deprecated UNSAFE: Uses reversible XOR stream cipher with a deterministic key.
-   * Do NOT use for new code. Use `encryptAsync()` with AES-GCM instead.
-   *
-   * Synchronously encrypt a plaintext string.
-   *
-   * @param plaintext - The string to encrypt
-   * @returns Base64-encoded encrypted data
-   */
-  encrypt(plaintext: string): string {
-    if (!plaintext) {
-      return '';
-    }
-
-    if (!SecurityManager._syncEncryptWarnShown) {
-      SecurityManager._syncEncryptWarnShown = true;
-      console.warn(
-        '[SecurityManager] encrypt() uses an insecure XOR cipher. Migrate to encryptAsync() for AES-GCM.',
-      );
-    }
-
-    try {
-      const key = this.getSyncKey();
-      const encoder = new TextEncoder();
-      const data = encoder.encode(plaintext);
-
-      const nonce = new Uint8Array(16);
-      if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
-        window.crypto.getRandomValues(nonce);
-      } else if (typeof globalThis !== 'undefined' && 'crypto' in globalThis) {
-        (globalThis as unknown as { crypto: Crypto }).crypto.getRandomValues(nonce);
-      } else {
-        throw new Error('No cryptographically secure random number generator available');
-      }
-
-      const encrypted = new Uint8Array(data.length);
-      for (let i = 0; i < data.length; i++) {
-        const keyByte =
-          key[i % 32]! ^ nonce[i % 16]! ^ ((i * 31) & 0xff) ^ key[(i + nonce[i % 16]!) % 32]!;
-        encrypted[i] = data[i]! ^ keyByte;
-      }
-
-      const combined = new Uint8Array(nonce.length + encrypted.length);
-      combined.set(nonce);
-      combined.set(encrypted, nonce.length);
-
-      return btoa(String.fromCharCode(...combined));
-    } catch (error) {
-      console.error('Synchronous encryption failed:', error);
-      throw new Error('Failed to encrypt data');
-    }
-  }
-
-  /**
-   * @deprecated UNSAFE: Uses reversible XOR stream cipher with a deterministic key.
-   * Do NOT use for new code. Use `decryptAsync()` with AES-GCM instead.
-   *
-   * Synchronously decrypt an encrypted string.
-   * Expects data encrypted with the encrypt() method.
-   *
-   * @param encryptedData - Base64-encoded encrypted data
-   * @returns Decrypted plaintext string
-   */
-  decrypt(encryptedData: string): string {
-    if (!encryptedData) {
-      return '';
-    }
-
-    if (!SecurityManager._syncDecryptWarnShown) {
-      SecurityManager._syncDecryptWarnShown = true;
-      console.warn(
-        '[SecurityManager] decrypt() uses an insecure XOR cipher. Migrate to decryptAsync() for AES-GCM.',
-      );
-    }
-
-    try {
-      const key = this.getSyncKey();
-
-      const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0));
-
-      const nonce = combined.slice(0, 16);
-      const encrypted = combined.slice(16);
-
-      const decrypted = new Uint8Array(encrypted.length);
-      for (let i = 0; i < encrypted.length; i++) {
-        const keyByte =
-          key[i % 32]! ^ nonce[i % 16]! ^ ((i * 31) & 0xff) ^ key[(i + nonce[i % 16]!) % 32]!;
-        decrypted[i] = encrypted[i]! ^ keyByte;
-      }
-
-      return new TextDecoder().decode(decrypted);
-    } catch (error) {
-      console.error('Synchronous decryption failed:', error);
-      throw new Error('Failed to decrypt data');
     }
   }
 
