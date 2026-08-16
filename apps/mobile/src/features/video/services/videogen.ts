@@ -1,7 +1,7 @@
-
 import * as Crypto from 'expo-crypto';
 
 import { api } from '@/services/api';
+import { resolveGeneratedVideoUri } from './videoUri';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import type { ManagedMediaVideoGenerationRequest } from '@agiworkforce/cloud-contracts';
 
@@ -100,8 +100,10 @@ export async function generateVideo(
 
     if (status.status === 'completed') {
       if (!status.video_url) throw new Error('Video finished with no URL');
+      const videoUrl = resolveGeneratedVideoUri(status.video_url);
+      if (!videoUrl) throw new Error('Video finished with an address this app cannot open');
       return {
-        videoUrl: status.video_url,
+        videoUrl,
         ...(status.thumbnail_url ? { thumbnailUrl: status.thumbnail_url } : {}),
       };
     }

@@ -91,6 +91,15 @@ describe('TauriRuntime', () => {
     expect(new TauriRuntime().supportsAgentControl).toBe(false);
   });
 
+  it('advertises reasoning effort, which it does forward to the native command', async () => {
+    const { TauriRuntime } = await import('../TauriRuntime');
+    // ChatInterface reads `supportsReasoningEffort ?? supportsAgentControl !== false`,
+    // so leaving this undefined on a runtime with supportsAgentControl:false
+    // hid both the effort chip and the thinking control while sendMessage kept
+    // forwarding the value.
+    expect(new TauriRuntime().supportsReasoningEffort).toBe(true);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     resetArtifactStore();
