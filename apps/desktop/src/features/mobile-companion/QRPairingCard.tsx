@@ -3,14 +3,9 @@ import { useShallow } from 'zustand/react/shallow';
 import { toDataURL } from 'qrcode';
 import { Check, Copy, Maximize2, RefreshCw, Smartphone, WifiOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { copyToClipboard } from '@/utils/clipboard';
 import { useConnectionStore } from '../../stores/connectionStore';
 
@@ -110,7 +105,7 @@ export function QRPairingCard() {
             <p className="mt-1 text-xs leading-5 text-slate-500">
               On your phone, open{' '}
               <span className="font-medium text-slate-700">
-                AGI Workforce &rarr; Desktop Companion
+                AGI Workforce &rarr; {MOBILE_REMOTE_SCREEN_LABEL}
               </span>
               , then select <span className="font-medium text-slate-700">Scan QR Code</span>.
             </p>
@@ -118,7 +113,7 @@ export function QRPairingCard() {
         </div>
 
         <ol className="list-inside list-decimal space-y-1 text-xs text-slate-600">
-          <li>Open Desktop Companion on your phone</li>
+          <li>Open {MOBILE_REMOTE_SCREEN_LABEL} on your phone</li>
           <li>Select Scan QR Code</li>
           <li>Scan the QR or choose Enter code manually</li>
         </ol>
@@ -225,7 +220,7 @@ export function QRPairingCard() {
           <DialogHeader>
             <DialogTitle>Scan with your phone</DialogTitle>
             <DialogDescription>
-              In AGI Workforce Mobile, open Desktop Companion and select Scan QR Code.
+              In AGI Workforce Mobile, open {MOBILE_REMOTE_SCREEN_LABEL} and select Scan QR Code.
             </DialogDescription>
           </DialogHeader>
           {qrImage && (

@@ -1,3 +1,4 @@
+import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QRPairingCard } from './QRPairingCard';
@@ -33,7 +34,7 @@ describe('QRPairingCard', () => {
     render(<QRPairingCard />);
 
     expect(screen.getByText(/AGI Workforce/)).toHaveTextContent(
-      'AGI Workforce → Desktop Companion',
+      `AGI Workforce → ${MOBILE_REMOTE_SCREEN_LABEL}`,
     );
     expect(screen.getByText('Select Scan QR Code')).toBeInTheDocument();
     expect(
