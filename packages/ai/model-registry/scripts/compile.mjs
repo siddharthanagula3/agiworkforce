@@ -1,5 +1,5 @@
-/* global AbortSignal, fetch */
 #!/usr/bin/env node
+/* global AbortSignal, fetch */
 
 import { strict as assert } from 'node:assert';
 import console from 'node:console';
