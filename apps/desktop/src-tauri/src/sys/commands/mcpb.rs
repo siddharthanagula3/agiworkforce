@@ -17,7 +17,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::process::Command;
 
 // ============================================================================
@@ -2696,6 +2697,20 @@ pub async fn mcpb_get_bundle_details(
     Ok(bundle)
 }
 
+/// Resolves the allow-list shipped alongside the binary. Declared in
+/// `tauri.conf.json` under `bundle.resources`, so it exists in every installer;
+/// when it does not, [`AllowlistState::permits`] denies in a release build.
+fn load_packaged_allowlist(app: &AppHandle) -> crate::core::mcp::manifest::AllowlistState {
+    let resolved = app
+        .path()
+        .resolve(
+            crate::core::mcp::manifest::ALLOWLIST_RESOURCE,
+            BaseDirectory::Resource,
+        )
+        .ok();
+    crate::core::mcp::manifest::load_state(resolved.as_deref())
+}
+
 /// Install a bundle via npm.
 #[tauri::command]
 pub async fn mcpb_install_bundle(
@@ -2726,6 +2741,24 @@ pub async fn mcpb_install_bundle(
         .clone()
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
     let install_spec = npm_install_spec(&bundle, &npm_package);
+
+    // The slopsquatting allow-list was only ever consulted by
+    // core::mcp::config::install_bundle, which nothing in the product calls —
+    // this is the path that actually runs `npm install -g`, and it checked
+    // nothing. Refuse an unlisted package here, before npm can fetch and run
+    // its install scripts.
+    let allowlist = load_packaged_allowlist(&app);
+    if !allowlist.permits(&npm_package) {
+        let reason = if allowlist.is_absent() {
+            format!(
+                "The MCP allow-list is missing from this installation, so '{npm_package}' cannot be verified. Reinstall AGI Workforce."
+            )
+        } else {
+            format!("MCP package '{npm_package}' is not on the allow-list.")
+        };
+        tracing::warn!(package = %npm_package, absent = allowlist.is_absent(), "MCP install refused");
+        return Err(reason);
+    }
 
     // Emit install started event
     emit_install_started(&app, &bundle_id);

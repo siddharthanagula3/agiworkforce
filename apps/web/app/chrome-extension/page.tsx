@@ -69,7 +69,10 @@ const BOUNDARY_LEDGER = [
   { k: 'Manifest', v: 'Chrome MV3 with side panel' },
   { k: 'Bridge', v: 'Native messaging to AGI Desktop · localhost port 8787' },
   { k: 'Pairing', v: 'Explicit pairing · HMAC-signed messages' },
-  { k: 'Inference in Chrome', v: 'None. Execution happens on Desktop.' },
+  {
+    k: 'Inference in Chrome',
+    v: 'Chat runs on Desktop. Computer use calls the Managed Cloud gateway directly from the extension, and the screenshots it takes go with it.',
+  },
   { k: 'Keys in Chrome', v: 'None. Keys stay on Desktop, encrypted at rest.' },
   {
     k: 'Chat-memory sync',
@@ -127,9 +130,10 @@ export default function ChromeExtensionPage() {
             The browser asks. Your desktop answers.
           </h2>
           <p className="agi-fl-section-lede">
-            AGI in Chrome never runs models and never stores provider keys. It captures what you
-            point at, crosses one paired bridge, and lets Desktop do the heavy lifting. The trust
-            boundary you chose on Desktop is the one that applies here.
+            AGI in Chrome never runs a model locally and never stores provider keys. For chat it
+            captures what you point at, crosses one paired bridge, and lets Desktop do the heavy
+            lifting. Computer use is the exception: it signs in to Managed Cloud and calls that
+            gateway directly, sending the conversation and the screenshots it takes with it.
           </p>
           <ol className="agi-steps">
             {ARCHITECTURE_STEPS.map((step, i) => (
