@@ -1,3 +1,4 @@
+/* global console, process */
 #!/usr/bin/env node
 
 import fs from 'node:fs';

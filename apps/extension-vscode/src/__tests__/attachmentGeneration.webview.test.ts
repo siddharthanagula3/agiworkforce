@@ -31,6 +31,7 @@ function boot(): ReturnType<typeof vi.fn> {
   const inline = Array.from(parsed.querySelectorAll('script')).find((script) =>
     script.textContent?.includes('acquireVsCodeApi()'),
   );
+  // llm-guardrail-allow: executes repository-owned webview JavaScript in jsdom
   new Function(inline?.textContent ?? '')();
   return postMessage;
 }

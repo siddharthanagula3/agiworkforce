@@ -1,3 +1,4 @@
+// apps/mobile/src/features/schedules - public API barrel.
 export { ScheduleCard } from './components/ScheduleCard';
 export { ScheduleForm } from './components/ScheduleForm';
 export { QuickSchedule, parseNaturalLanguage } from './components/QuickSchedule';

@@ -13,6 +13,7 @@ if (!LIVE_MODEL_ID) {
   throw new Error('The canonical OpenAI fast-completion route must exist');
 }
 
+// llm-guardrail-allow: env-gated live-provider test; makes real paid API calls, deliberately skipped without keys
 describe.skipIf(skip)('OpenAI adapter live', () => {
   it('streams a tiny completion end-to-end', async () => {
     const adapter = createOpenAIAdapter({ apiKey, skipDiscovery: true });
@@ -57,6 +58,7 @@ describe.skipIf(skip)('OpenAI adapter live', () => {
   });
 });
 
+// llm-guardrail-allow: visible placeholder row so skipped live suites stay discoverable in test output
 describe.skipIf(!skip)('OpenAI adapter live (skipped)', () => {
   it.skip('set AGIWORKFORCE_LIVE_TEST=1 + OPENAI_API_KEY to run', () => {});
 });

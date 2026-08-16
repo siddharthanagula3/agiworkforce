@@ -1,3 +1,4 @@
+/* global console */
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';

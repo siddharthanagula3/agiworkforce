@@ -1,3 +1,4 @@
+  // llm-guardrail-allow: this block IS the ban on the sink, not a use of it
 import { defineConfig, globalIgnores } from 'eslint/config';
 import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
@@ -79,8 +80,10 @@ const eslintConfig = defineConfig([
       'no-restricted-syntax': [
         'error',
         {
+          // llm-guardrail-allow: rule selector/message naming the banned sink
           selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
           message:
+            // llm-guardrail-allow: rule message naming the banned sink
             'dangerouslySetInnerHTML can introduce XSS. Sanitize via DOMPurify (@shared/utils/html-sanitizer) and add a per-line eslint-disable with WEB-37 justification, or render via JSX.',
         },
       ],

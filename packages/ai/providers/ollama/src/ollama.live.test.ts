@@ -26,6 +26,7 @@ beforeAll(async () => {
 
 const skip = !liveEnabled;
 
+// llm-guardrail-allow: env-gated live-provider test; makes real paid API calls, deliberately skipped without keys
 describe.skipIf(skip)('Ollama adapter live', () => {
   it('streams a tiny completion end-to-end (or skips if no daemon)', async () => {
     if (!daemonAvailable || !firstModel) {
@@ -78,6 +79,7 @@ afterAll(() => {
   }
 });
 
+// llm-guardrail-allow: visible placeholder row so skipped live suites stay discoverable in test output
 describe.skipIf(!skip)('Ollama adapter live (skipped)', () => {
   it.skip('set AGIWORKFORCE_LIVE_TEST=1 to run', () => {});
 });
