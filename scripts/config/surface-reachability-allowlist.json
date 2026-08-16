@@ -293,6 +293,7 @@
           "apps/web/features/chat/components/messages/AudioPlayer.tsx",
           "apps/web/features/chat/components/messages/AudioVisualizer.tsx",
           "apps/web/features/chat/components/messages/DropZoneOverlay.tsx",
+          "apps/web/features/chat/components/messages/EditableMessage.tsx",
           "apps/web/features/chat/components/messages/index.ts",
           "apps/web/features/chat/components/tokens/index.ts",
           "apps/web/features/chat/components/workflows/ToolProgressIndicator.tsx",
