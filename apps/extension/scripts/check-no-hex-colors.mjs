@@ -1,5 +1,5 @@
-/* global URL, console, process */
 #!/usr/bin/env node
+/* global URL, console, process */
 
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
