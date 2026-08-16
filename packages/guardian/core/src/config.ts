@@ -193,7 +193,11 @@ function globToRegExp(pattern: string): RegExp {
       out += '[^/]';
       i += 1;
     } else {
-      out += (pattern[i] as string).replace(/[.+^${}()|[\]\\]/, '\\$&');
+      // `pattern[i]` is a single character, so replace-first already escaped
+      // all of it; the missing `g` was nonetheless a latent trap (and what
+      // js/incomplete-sanitization flagged) the moment this ever handles more
+      // than one character.
+      out += (pattern[i] as string).replace(/[.+^${}()|[\]\\]/g, '\\$&');
       i += 1;
     }
   }

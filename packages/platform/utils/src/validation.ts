@@ -395,7 +395,19 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
     /<script\b/i, // Match opening script tag (catches all script tags)
     /<\/script\s*\/?>/i, // Match closing script tag with optional space/slash
     /javascript:/i,
-    /on\w+\s*=/i,
+    // `/on\w+\s*=/i` ran polynomially on input made of many repetitions of
+    // "on" (js/polynomial-redos): "on" matched at every other offset and each
+    // start re-scanned the tail. Requiring a real attribute boundary before
+    // the handler name leaves only genuine start positions, which is linear —
+    // and is strictly more accurate, since it no longer fires on "on" embedded
+    // in a longer attribute name such as `xonclick=` or the `data-onclick=`
+    // data attribute. That narrowing is the one behaviour change, and it is
+    // pinned by tests. Split in two rather than written as
+    // a lookbehind: this package ships to browsers, and a lookbehind is a
+    // parse-time SyntaxError on Safari before 16.4, which would take out the
+    // whole module rather than just this check.
+    /^on\w+\s*=/i,
+    /[^\w-]on\w+\s*=/i,
     /<iframe/i,
     /<object/i,
     /<embed/i,
