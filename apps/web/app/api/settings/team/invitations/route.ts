@@ -1,3 +1,4 @@
+import { isOrganizationAdminRole } from '@agiworkforce/types';
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -47,7 +48,7 @@ async function requireOrgAdmin(
   if (!membership) {
     throw createError.forbidden('You are not a member of this organization');
   }
-  if (!['owner', 'admin'].includes(membership.role)) {
+  if (!isOrganizationAdminRole(membership.role)) {
     throw createError.forbidden('Only owners and admins can manage invitations');
   }
   return membership;

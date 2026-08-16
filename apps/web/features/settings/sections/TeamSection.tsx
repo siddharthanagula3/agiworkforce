@@ -1,5 +1,6 @@
 'use client';
 
+import { isOrganizationAdminRole } from '@agiworkforce/types';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Building2, Copy, Mail, RefreshCw, RotateCw, Trash2, Users, X } from 'lucide-react';
 import {
@@ -215,7 +216,7 @@ export function TeamSection() {
   const canAdminister =
     access.canManageTeam &&
     organization !== null &&
-    ['owner', 'admin'].includes(organization.currentUserRole);
+    isOrganizationAdminRole(organization.currentUserRole);
   const isOwner = organization?.currentUserRole === 'owner';
   const pendingInvitations =
     invitationsQuery.data?.invitations.filter((invitation) => invitation.status === 'pending') ??

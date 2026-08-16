@@ -1,3 +1,4 @@
+import { isOrganizationAdminRole } from '@agiworkforce/types';
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -342,7 +343,7 @@ async function handlePatch(request: NextRequest) {
 
   const access = await requireTeamAdminAccess(db, userId, membership.organization_id);
 
-  if (!['owner', 'admin'].includes(membership.role)) {
+  if (!isOrganizationAdminRole(membership.role)) {
     throw createError.forbidden('Only owners and admins can update organization settings');
   }
 
