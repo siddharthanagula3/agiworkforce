@@ -1,5 +1,5 @@
 -- =============================================================================
--- Reversal: 0121_delete_user_data_execute_narrowing.sql
+-- Reversal: 0120_delete_user_data_execute_narrowing.sql
 --
 -- Restores the PUBLIC EXECUTE grant on `public.delete_user_data(text)` that the
 -- forward migration revoked. That is what Postgres grants a new function by
@@ -19,6 +19,6 @@ begin;
 grant execute on function public.delete_user_data(text) to public;
 
 delete from public.schema_migrations
-where filename = '0121_delete_user_data_execute_narrowing.sql';
+where filename = '0120_delete_user_data_execute_narrowing.sql';
 
 commit;
