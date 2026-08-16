@@ -62,7 +62,17 @@ const PROJECT_IN_ORG_B = '33333333-3333-4333-8333-333333333333';
 /** A member of org A. Their membership row is the ONLY source of org scope. */
 function bindCallerInOrgA(role: 'owner' | 'admin' | 'member' = 'admin'): void {
   mockQuery.mockImplementation(async (sql: string) => {
-    if (/from public\.organization_members/i.test(sql) && /where user_id = \$1/i.test(sql)) {
+    // Two statements: the active organization is derived from the caller's own
+    // user_settings row first, then the role is read for that pair. Answering
+    // only the old single query left membership null and turned every
+    // assertion into a 403.
+    if (/from public\.user_settings/i.test(sql) && /where s\.user_id = \$1/i.test(sql)) {
+      return [{ organization_id: ORG_A }];
+    }
+    if (
+      /from public\.organization_members/i.test(sql) &&
+      /where organization_id = \$1 and user_id = \$2/i.test(sql)
+    ) {
       return [{ organization_id: ORG_A, role }];
     }
     return [];

@@ -71,10 +71,21 @@ vi.mock('@/lib/github-app', () => ({
 
 // ── Types catalog mock (model ID lookups) ────────────────────────────────────
 
-vi.mock('@agiworkforce/types', () => ({
-  getProviderDefaultModel: vi.fn(() => 'fixture-model'),
-  getTaskModelForProvider: vi.fn(() => 'fixture-model'),
-}));
+vi.mock('@agiworkforce/types', async () => {
+  // Spread the real module rather than listing exports. A factory mock replaces
+  // the module wholesale, so every symbol the route reaches transitively has to
+  // be present or Vitest throws at first read and the suite dies at LOAD, with
+  // no assertion having run. Listing them one at a time just moves the error to
+  // the next missing name (CAPABILITY_LAYERS, then SYNCED_APP_SURFACES, ...).
+  // Only the two model resolvers below are actually being stubbed, so only they
+  // are overridden — same pattern as __tests__/api/media-image-generate.test.ts.
+  const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  return {
+    ...actual,
+    getTaskModelForProvider: () => 'fixture-model',
+    getProviderDefaultModel: () => 'fixture-model',
+  };
+});
 
 // Route under test — imported AFTER all vi.mock() calls
 import { POST } from '@/app/api/github/webhook/route';
