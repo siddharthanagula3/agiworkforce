@@ -52,7 +52,12 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
-jest.mock('@react-navigation/drawer', () => ({}));
+// `jest.mock('@react-navigation/drawer', …)` used to sit here. That package is
+// not a dependency of apps/mobile and nothing under src/ or app/ imports it —
+// this line was the only reference to it left in the whole surface, from before
+// the drawer was rebuilt. jest.mock resolves the module path even when the
+// factory replaces it, so the leftover mock threw "Cannot find module" and took
+// the entire suite down at load.
 
 jest.mock('../src/features/chat/components/ModeSwitchModal', () => {
   const { View, Pressable } = require('react-native');
