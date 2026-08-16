@@ -27,7 +27,7 @@ use crate::core::llm::{
 
 use super::action_executor::ActionExecutor;
 use super::app_permissions::AppPermissionManager;
-use super::safety::{ComputerUseSafetyLayer, SafetyConfig};
+use super::safety::{describe_app_permission_block, ComputerUseSafetyLayer, SafetyConfig};
 use super::session::SessionConfig;
 use super::types::{
     ComputerUseAction, Coordinate, ElementBounds, HotkeyModifier, MouseButton, ScrollDirection,
@@ -110,7 +110,6 @@ pub struct AnthropicComputerUseAgent {
     config: AnthropicComputerUseConfig,
     safety_layer: ComputerUseSafetyLayer,
     action_executor: ActionExecutor,
-    app_permissions: Arc<AppPermissionManager>,
     app_handle: Option<AppHandle>,
 }
 
@@ -121,7 +120,8 @@ impl AnthropicComputerUseAgent {
         app_permissions: Arc<AppPermissionManager>,
         config: AnthropicComputerUseConfig,
     ) -> Self {
-        let safety_layer = ComputerUseSafetyLayer::new(config.safety.clone());
+        let safety_layer =
+            ComputerUseSafetyLayer::with_app_permissions(config.safety.clone(), app_permissions);
         let window_coordinator = WindowCoordinator::new(config.window.clone());
         let action_executor = ActionExecutor::new(window_coordinator);
 
@@ -130,7 +130,6 @@ impl AnthropicComputerUseAgent {
             config,
             safety_layer,
             action_executor,
-            app_permissions,
             app_handle: None,
         }
     }
@@ -689,78 +688,21 @@ impl AnthropicComputerUseAgent {
         Ok(general_purpose::STANDARD.encode(&png_data))
     }
 
-    /// Checks if the current foreground app is permitted.
-    /// Returns `Some(reason)` if blocked, `None` if allowed.
+    /// Checks whether the app in front is permitted, using the same
+    /// foreground gate the observe-plan-act loop uses. The previous
+    /// stand-in here blocked on *any* denied app and otherwise allowed
+    /// everything, because platform window detection was unbuilt when it
+    /// was written; `WindowCoordinator::get_active_window` now has real
+    /// macOS, Windows and Linux implementations.
     async fn check_app_permission(&self) -> Option<String> {
         if !self.config.safety.check_app_permissions {
             return None;
         }
 
-        // Safety-critical deny-list: terminal emulators, browsers with active
-        // sessions, password managers, and the system keychain must never be
-        // automated, regardless of any user-configured permission record.
-        // This list supplements the financial/crypto deny-list already defined in
-        // app_permissions::ALWAYS_BLOCKED_BUNDLE_IDS.
-        const SAFETY_DENY_BUNDLES: &[&str] = &[
-            // Terminal emulators (arbitrary command execution risk)
-            "com.apple.Terminal",
-            "com.googlecode.iterm2",
-            "net.kovidgoyal.kitty",
-            "com.microsoft.VSCode",
-            // Browsers (active login sessions, cookie exposure)
-            "com.apple.Safari",
-            "com.google.Chrome",
-            "com.brave.Browser",
-            "org.mozilla.firefox",
-            "com.microsoft.edgemac",
-            "com.operasoftware.Opera",
-            // Password managers (credential stores)
-            "com.1password.1password",
-            "com.lastpass.LastPassMacDesktop",
-            "com.bitwarden.desktop",
-            "io.dashlane.Dashlane",
-            // System credential store
-            "com.apple.keychainaccess",
-        ];
-
-        // Tracked gap DESKTOP-COMPUTER-USE-FOREGROUND-GATE-01 (known-flaws.md):
-        // platform window detection cannot yet resolve the live foreground
-        // app's bundle ID, so this gate does not call
-        // `self.app_permissions.decide(app_name, Some(bundle_id)).await`
-        // against the real foreground window. Until that lands, every
-        // configured permission is checked up front: any app with an
-        // explicitly-Denied status or a bundle ID on the safety/financial
-        // deny-list blocks the action (previously discarded via
-        // `let _ = &self.app_permissions`).
-
-        // Check any explicitly-denied apps via the public API.
-        let denied = self.app_permissions.denied_apps().await;
-        if let Some(blocked) = denied.first() {
-            return Some(format!(
-                "App '{}' is blocked by your automation permissions.",
-                blocked.app_name
-            ));
-        }
-
-        // Check all configured permissions for safety-deny-listed bundle IDs.
-        let all_perms = self.app_permissions.list_permissions().await;
-        for perm in &all_perms {
-            if let Some(bid) = perm.bundle_id.as_deref() {
-                if SAFETY_DENY_BUNDLES.contains(&bid)
-                    || super::app_permissions::is_always_blocked_bundle(bid)
-                {
-                    return Some(format!(
-                        "App '{}' (bundle: {}) is in the safety deny-list and cannot be automated.",
-                        perm.app_name, bid
-                    ));
-                }
-            }
-        }
-
-        // No configured permission matched — allow (default permissive until
-        // DESKTOP-COMPUTER-USE-FOREGROUND-GATE-01 closes and this gate checks
-        // the live foreground app).
-        None
+        self.safety_layer
+            .check_app_permission()
+            .await
+            .map(|reason| describe_app_permission_block(&reason))
     }
 
     /// Builds a `ComputerUseResult`.

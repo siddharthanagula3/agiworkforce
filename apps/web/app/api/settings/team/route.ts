@@ -1,3 +1,4 @@
+import { isOrganizationAdminRole } from '@agiworkforce/types';
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -124,7 +125,7 @@ async function handleAddMember(request: NextRequest) {
       if (!requesterMembership) {
         throw createError.forbidden('You are not a member of this organization');
       }
-      if (!['owner', 'admin'].includes(requesterMembership.role)) {
+      if (!isOrganizationAdminRole(requesterMembership.role)) {
         throw createError.forbidden('Only owners and admins can add team members');
       }
 

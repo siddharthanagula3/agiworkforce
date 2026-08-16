@@ -16,6 +16,24 @@ use super::types::{ComputerUseAction, HotkeyModifier, ScreenAnalysis};
 use super::window_manager::WindowCoordinator;
 use crate::automation::safety_patterns;
 
+pub const UNKNOWN_FOREGROUND_APP: &str = "an app AGI could not identify";
+
+/// Renders a foreground-app block as a sentence the agent can hand to the user.
+pub fn describe_app_permission_block(reason: &SafetyReason) -> String {
+    match reason {
+        SafetyReason::AppDenied { app_name } => {
+            format!("'{app_name}' is blocked by your automation permissions.")
+        }
+        SafetyReason::AppHardBlocked { app_name, .. } => format!(
+            "'{app_name}' is in the always-blocked category (investment, crypto, banking, payments) and cannot be automated."
+        ),
+        SafetyReason::AppRequiresApproval { app_name, .. } => {
+            format!("'{app_name}' has not been approved for automation yet.")
+        }
+        other => format!("{other:?}"),
+    }
+}
+
 /// Static patterns for safety checks.
 static PROMPT_INJECTION_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
 static SENSITIVE_WINDOW_TITLES: OnceLock<Vec<Regex>> = OnceLock::new();
@@ -389,6 +407,17 @@ impl ComputerUseSafetyLayer {
     /// apps (investment / crypto / banking) and on apps the user has denied,
     /// and asks the user before the first interaction with a new app.
     pub async fn check_app_permission(&self) -> Option<SafetyReason> {
+        self.check_foreground_app(WindowCoordinator::get_active_window())
+            .await
+    }
+
+    /// The decision half of `check_app_permission`, with the foreground lookup
+    /// passed in so the unresolvable case is testable on a machine that has a
+    /// desktop session.
+    pub async fn check_foreground_app(
+        &self,
+        active: Option<super::window_manager::ActiveWindow>,
+    ) -> Option<SafetyReason> {
         if !self.config.check_app_permissions {
             return None;
         }
@@ -398,13 +427,17 @@ impl ComputerUseSafetyLayer {
             None => return None,
         };
 
-        let active = match WindowCoordinator::get_active_window() {
+        let active = match active {
             Some(w) => w,
             None => {
-                // Could not determine the foreground app (Linux v1 path,
-                // or AppleScript blocked). Fail open with a warning rather
-                // than blocking — the rest of the safety stack still applies.
-                return None;
+                // An unreadable foreground app is exactly the state the
+                // always-blocked list exists for: a banking or crypto window
+                // that reports no name would otherwise sail past every check
+                // below. Ask the user instead of assuming it is safe.
+                return Some(SafetyReason::AppRequiresApproval {
+                    app_name: UNKNOWN_FOREGROUND_APP.to_string(),
+                    bundle_id: None,
+                });
             }
         };
 
@@ -762,6 +795,54 @@ impl ComputerUseSafetyLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// CI has no desktop session, so `get_active_window()` returns None here —
+    /// the same state a Linux v1 host or a blocked AppleScript produces. That
+    /// used to allow the action; a banking window that reports no name would
+    /// have sailed past the always-blocked list.
+    #[tokio::test]
+    async fn unreadable_foreground_app_asks_instead_of_allowing() {
+        let layer = ComputerUseSafetyLayer::with_app_permissions(
+            SafetyConfig::default(),
+            Arc::new(AppPermissionManager::new()),
+        );
+
+        match layer.check_foreground_app(None).await {
+            Some(SafetyReason::AppRequiresApproval {
+                app_name,
+                bundle_id,
+            }) => {
+                assert_eq!(app_name, UNKNOWN_FOREGROUND_APP);
+                assert!(bundle_id.is_none());
+            }
+            other => panic!("expected an approval request, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn the_gate_still_honours_its_off_switch() {
+        let config = SafetyConfig {
+            check_app_permissions: false,
+            ..SafetyConfig::default()
+        };
+        let layer = ComputerUseSafetyLayer::with_app_permissions(
+            config,
+            Arc::new(AppPermissionManager::new()),
+        );
+
+        assert!(layer.check_foreground_app(None).await.is_none());
+    }
+
+    #[test]
+    fn a_block_reads_as_a_sentence_not_a_debug_dump() {
+        let described = describe_app_permission_block(&SafetyReason::AppHardBlocked {
+            app_name: "Coinbase".to_string(),
+            bundle_id: Some("com.coinbase.app".to_string()),
+        });
+        assert!(described.contains("Coinbase"));
+        assert!(described.contains("always-blocked"));
+        assert!(!described.contains("AppHardBlocked"));
+    }
 
     #[test]
     fn test_safety_decision_creation() {
