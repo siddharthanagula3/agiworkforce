@@ -15,7 +15,7 @@ const SANDBOX_HTML = readFileSync(
 );
 
 function previewHostPattern(): RegExp {
-  const match = SANDBOX_HTML.match(/const VERCEL_PREVIEW_HOST\s*=\s*\n?\s*(\/.*?\/);/s);
+  const match = SANDBOX_HTML.match(/const VERCEL_PREVIEW_HOST\s*=\s*\n?\s*(\/[\s\S]*?\/);/);
   if (!match) throw new Error('VERCEL_PREVIEW_HOST is no longer declared in the sandbox');
   const body = match[1]!.slice(1, -1);
   return new RegExp(body);
