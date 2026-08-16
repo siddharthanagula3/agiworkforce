@@ -83,9 +83,16 @@ describe('getSubscription — lapsed store subscriptions', () => {
   it('never expires a Stripe-linked row, even with a stale period end', async () => {
     // Stripe owns its own lifecycle through webhooks; deriving expiry here
     // would fight it.
+    //
+    // The id has to be WELL FORMED to prove that. `isStripeSubscriptionId` is
+    // /^sub_[A-Za-z0-9]+$/, so the previous fixture `sub_stripe_123` — with an
+    // underscore after the prefix — failed it. That left ownership
+    // 'unverified' with a store identifier present, which is exactly the case
+    // the store-expiry rule is meant to catch, so the row expired and the test
+    // read as a Stripe regression when it was really a malformed fixture.
     const db = dbReturning(
       baseRow({
-        stripe_subscription_id: 'sub_stripe_123',
+        stripe_subscription_id: 'sub_1P0AbCdEfGhIjKlMnOpQrSt',
         apple_original_transaction_id: 'apple-tx-1',
       }),
     );

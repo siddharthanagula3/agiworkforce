@@ -344,8 +344,19 @@ describe('Single Conversation API', () => {
 
   describe('DELETE /api/chat/conversations/[id]', () => {
     describe('Soft Deleting Conversation', () => {
+      // The soft delete is `db.query(... returning id)`, NOT `db.execute`: the
+      // handler has to know whether a row actually matched, because unknown,
+      // foreign, wrong-workspace and already-deleted rows all have to answer
+      // 404 rather than report a success that clears a durable tombstone.
+      // Mocking `execute` therefore left `query` returning the default [], and
+      // every case below answered 404. Routed by SQL rather than by call order,
+      // since the handler resolves the active organization first.
+      const deleteSql = /update web_conversations/i;
+
       it('should soft delete conversation by setting deleted_at', async () => {
-        mockExecute.mockResolvedValueOnce(undefined);
+        mockQuery.mockImplementation(async (sql: string) =>
+          deleteSql.test(sql) ? [{ id: 'conv-1' }] : [],
+        );
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
           method: 'DELETE',
@@ -358,14 +369,29 @@ describe('Single Conversation API', () => {
         expect(data.success).toBe(true);
 
         // Verify soft delete uses deleted_at = now() (not hard delete)
-        expect(mockExecute).toHaveBeenCalledWith(
+        expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('deleted_at'),
           expect.any(Array),
         );
       });
 
+      it('should return 404 when no row matches, rather than reporting success', async () => {
+        mockQuery.mockImplementation(async () => []);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer valid-token' },
+        });
+        const response = await DELETE(request, mockContext);
+
+        expect(response.status).toBe(404);
+      });
+
       it('should return 500 on database error', async () => {
-        mockExecute.mockRejectedValueOnce(new Error('DB error'));
+        mockQuery.mockImplementation(async (sql: string) => {
+          if (deleteSql.test(sql)) throw new Error('DB error');
+          return [];
+        });
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
           method: 'DELETE',
@@ -389,7 +415,9 @@ describe('Single Conversation API', () => {
       });
 
       it('should only delete conversations owned by authenticated user', async () => {
-        mockExecute.mockResolvedValueOnce(undefined);
+        mockQuery.mockImplementation(async (sql: string) =>
+          /update web_conversations/i.test(sql) ? [{ id: 'conv-1' }] : [],
+        );
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
           method: 'DELETE',
@@ -398,7 +426,7 @@ describe('Single Conversation API', () => {
         await DELETE(request, mockContext);
 
         // Verify user_id filter is applied
-        expect(mockExecute).toHaveBeenCalledWith(
+        expect(mockQuery).toHaveBeenCalledWith(
           expect.stringMatching(/user_id = \$2[\s\S]*organization_id is not distinct from \$3/),
           ['conv-1', 'user-123', null],
         );
