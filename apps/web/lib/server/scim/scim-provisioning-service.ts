@@ -920,22 +920,59 @@ export async function getScimGroupMembers(
   );
 }
 
+// Ids travel as one array parameter, so statement arity is fixed at three no
+// matter how many members a group has and the 65535-parameter ceiling never
+// applies. What chunking still buys is bounded lock duration: an IdP pushing a
+// 50k-member group should not hold write locks on scim_group_members for the
+// whole set in one statement.
+const MEMBER_WRITE_CHUNK = 1000;
+
+function chunkIds(ids: readonly string[], size: number): string[][] {
+  const batches: string[][] = [];
+  for (let index = 0; index < ids.length; index += size) {
+    batches.push(ids.slice(index, index + size));
+  }
+  return batches;
+}
+
 async function addGroupMembers(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
   groupId: string,
   memberIds: string[],
 ): Promise<void> {
+  if (memberIds.length === 0) return;
+
+  // A malformed id is a 404 and an unknown one a 400, and the per-member lookup
+  // this replaces raised whichever came first in the caller's order. Existence
+  // is resolved in one round trip, then the input is walked to raise the same
+  // error at the same position. Only well-formed ids reach the query, because a
+  // non-uuid would fail the array cast rather than simply not match.
+  const wellFormed = [...new Set(memberIds.filter((id) => UUID_PATTERN.test(id)))];
+  const known = new Set(
+    (
+      await db.query<{ id: string }>(
+        `select id
+           from scim_provisioned_users
+          where id = any($1::uuid[]) and connection_id = $2 and organization_id = $3`,
+        [wellFormed, ctx.connectionId, ctx.organizationId],
+      )
+    ).map((row) => row.id),
+  );
+
   for (const memberId of memberIds) {
-    const target = await getScimUser(db, ctx, memberId);
-    if (!target) {
+    assertResourceId(memberId, 'User');
+    if (!known.has(memberId)) {
       throw new ScimError(400, `Unknown member id ${memberId}`, 'invalidValue');
     }
+  }
+
+  for (const batch of chunkIds([...new Set(memberIds)], MEMBER_WRITE_CHUNK)) {
     await db.execute(
       `insert into scim_group_members (group_id, scim_user_id, organization_id)
-       values ($1, $2, $3)
+       select $1, unnest($2::uuid[]), $3
        on conflict (group_id, scim_user_id) do nothing`,
-      [groupId, memberId, ctx.organizationId],
+      [groupId, batch, ctx.organizationId],
     );
   }
 }
@@ -946,10 +983,17 @@ async function removeGroupMembers(
   groupId: string,
   memberIds: string[],
 ): Promise<void> {
-  for (const memberId of memberIds) {
+  // The per-member delete never validated the id: a malformed one matched
+  // nothing and removed nothing. Filtering preserves that, since a non-uuid
+  // cannot equal a uuid column and would only break the array cast.
+  const ids = [...new Set(memberIds.filter((id) => UUID_PATTERN.test(id)))];
+  if (ids.length === 0) return;
+
+  for (const batch of chunkIds(ids, MEMBER_WRITE_CHUNK)) {
     await db.execute(
-      'delete from scim_group_members where group_id = $1 and scim_user_id = $2 and organization_id = $3',
-      [groupId, memberId, ctx.organizationId],
+      `delete from scim_group_members
+        where group_id = $1 and organization_id = $2 and scim_user_id = any($3::uuid[])`,
+      [groupId, ctx.organizationId, batch],
     );
   }
 }
@@ -959,10 +1003,175 @@ async function reconcileGroupMembers(
   ctx: ScimConnectionContext,
   scimUserIds: string[],
 ): Promise<void> {
-  for (const scimUserId of scimUserIds) {
-    const row = await getScimUser(db, ctx, scimUserId);
-    if (row) await reconcileMembership(db, ctx, row);
+  if (scimUserIds.length === 0) return;
+
+  // getScimUser validated each id before reading it, so keep that ahead of the
+  // batched read. Every caller runs inside a transaction, so raising before the
+  // first reconcile rather than partway through leaves the same visible state.
+  for (const scimUserId of scimUserIds) assertResourceId(scimUserId, 'User');
+
+  const unique = [...new Set(scimUserIds)];
+  const rows = await db.query<ScimProvisionedUserRow>(
+    `select ${USER_COLUMNS}
+       from scim_provisioned_users
+      where id = any($1::uuid[]) and connection_id = $2 and organization_id = $3`,
+    [unique, ctx.connectionId, ctx.organizationId],
+  );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+
+  const present = unique.map((id) => byId.get(id)).filter((row): row is ScimProvisionedUserRow =>
+    Boolean(row),
+  );
+  if (present.length === 0) return;
+
+  await linkAccountsBatch(db, ctx, present);
+
+  // Inactive users lose non-owner membership; the single-user path issues one
+  // delete each, and the predicate is identical here.
+  const revoked = present
+    .filter((row) => !row.active && row.linked_user_id)
+    .map((row) => row.linked_user_id as string);
+  for (const batch of chunkIds(revoked, MEMBER_WRITE_CHUNK)) {
+    await db.execute(
+      `delete from organization_members
+        where organization_id = $1
+          and user_id = any($2::text[])
+          and role <> 'owner'`,
+      [ctx.organizationId, batch],
+    );
   }
+
+  const grantable = present.filter((row) => row.active && row.linked_user_id);
+  if (grantable.length === 0) return;
+
+  const roles = await resolveMappedRolesBatch(
+    db,
+    ctx,
+    grantable.map((row) => row.id),
+  );
+
+  // Split on whether a mapped role exists, because the single-user upsert's
+  // CASE behaves differently when its role parameter is null: a null leaves a
+  // manually-set role alone unless the row is already scim-provisioned. Two
+  // statements keep that exactly rather than approximating it with one.
+  const withRole = grantable
+    .map((row) => ({ userId: row.linked_user_id as string, role: roles.get(row.id) ?? null }))
+    .filter((entry): entry is { userId: string; role: ProvisionedRole } => entry.role !== null);
+  const withoutRole = grantable
+    .filter((row) => (roles.get(row.id) ?? null) === null)
+    .map((row) => row.linked_user_id as string);
+
+  for (const batch of chunkEntries(withRole, MEMBER_WRITE_CHUNK)) {
+    await db.execute(
+      `insert into organization_members
+         (organization_id, user_id, role, provisioning_source, provisioned_at)
+       select $1, entry.user_id, entry.role, 'scim', now()
+         from unnest($2::text[], $3::text[]) as entry(user_id, role)
+       on conflict (organization_id, user_id) do update
+         set role = case
+               when organization_members.role = 'owner' then organization_members.role
+               else excluded.role
+             end,
+             provisioning_source = 'scim',
+             provisioned_at = now()`,
+      [ctx.organizationId, batch.map((e) => e.userId), batch.map((e) => e.role)],
+    );
+  }
+
+  for (const batch of chunkIds(withoutRole, MEMBER_WRITE_CHUNK)) {
+    await db.execute(
+      `insert into organization_members
+         (organization_id, user_id, role, provisioning_source, provisioned_at)
+       select $1, entry.user_id, 'member', 'scim', now()
+         from unnest($2::text[]) as entry(user_id)
+       on conflict (organization_id, user_id) do update
+         set role = case
+               when organization_members.role = 'owner' then organization_members.role
+               when organization_members.provisioning_source = 'scim' then 'member'
+               else organization_members.role
+             end,
+             provisioning_source = 'scim',
+             provisioned_at = now()`,
+      [ctx.organizationId, batch],
+    );
+  }
+}
+
+function chunkEntries<T>(entries: readonly T[], size: number): T[][] {
+  const batches: T[][] = [];
+  for (let index = 0; index < entries.length; index += size) {
+    batches.push(entries.slice(index, index + size));
+  }
+  return batches;
+}
+
+// The single-user linkAccount resolves one profile by email and writes one row.
+// Across a group that was two round trips per unlinked member.
+async function linkAccountsBatch(
+  db: DatabaseAdapter,
+  ctx: ScimConnectionContext,
+  rows: ScimProvisionedUserRow[],
+): Promise<void> {
+  const pending = rows.filter((row) => !row.linked_user_id && row.email);
+  if (pending.length === 0) return;
+
+  const emails = [...new Set(pending.map((row) => (row.email as string).toLowerCase()))];
+  const profiles = await db.query<{ id: string; email: string }>(
+    'select id, lower(email) as email from profiles where lower(email) = any($1::text[])',
+    [emails],
+  );
+  const profileByEmail = new Map(profiles.map((profile) => [profile.email, profile.id]));
+
+  const linked = pending
+    .map((row) => ({ row, profileId: profileByEmail.get((row.email as string).toLowerCase()) }))
+    .filter((entry): entry is { row: ScimProvisionedUserRow; profileId: string } =>
+      Boolean(entry.profileId),
+    );
+  if (linked.length === 0) return;
+
+  for (const batch of chunkEntries(linked, MEMBER_WRITE_CHUNK)) {
+    await db.execute(
+      `update scim_provisioned_users as target
+          set linked_user_id = entry.linked_user_id, linked_at = now()
+         from unnest($1::uuid[], $2::text[]) as entry(id, linked_user_id)
+        where target.id = entry.id and target.organization_id = $3`,
+      [batch.map((e) => e.row.id), batch.map((e) => e.profileId), ctx.organizationId],
+    );
+  }
+
+  // Mirror the write onto the in-memory rows so the membership step below sees
+  // the same linked ids the single-user path would have returned.
+  for (const entry of linked) entry.row.linked_user_id = entry.profileId;
+}
+
+async function resolveMappedRolesBatch(
+  db: DatabaseAdapter,
+  ctx: ScimConnectionContext,
+  scimUserIds: string[],
+): Promise<Map<string, ProvisionedRole | null>> {
+  const resolved = new Map<string, ProvisionedRole | null>();
+  if (scimUserIds.length === 0) return resolved;
+
+  const rows = await db.query<{ scim_user_id: string; mapped_role: ProvisionedRole | null }>(
+    `select m.scim_user_id, g.mapped_role
+       from scim_group_members m
+       join scim_groups g on g.id = m.group_id
+      where m.scim_user_id = any($1::uuid[])
+        and m.organization_id = $2
+        and g.connection_id = $3`,
+    [scimUserIds, ctx.organizationId, ctx.connectionId],
+  );
+
+  const grouped = new Map<string, Array<ProvisionedRole | null>>();
+  for (const row of rows) {
+    const list = grouped.get(row.scim_user_id) ?? [];
+    list.push(row.mapped_role);
+    grouped.set(row.scim_user_id, list);
+  }
+  for (const scimUserId of scimUserIds) {
+    resolved.set(scimUserId, strongestMappedRole(grouped.get(scimUserId) ?? []));
+  }
+  return resolved;
 }
 
 export async function createScimGroup(
