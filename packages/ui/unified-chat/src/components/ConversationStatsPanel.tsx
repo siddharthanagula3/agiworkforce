@@ -67,7 +67,7 @@ export function ConversationStatsPanel({ messages }: { messages: readonly ChatMe
     <section
       data-testid="stats-panel"
       aria-label={t('stats.panelLabel', 'Conversation token usage')}
-      className="border-b border-[var(--chat-border)] bg-[var(--chat-surface)] px-4 py-3 text-[13px]"
+      className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-4 py-3 text-[13px]"
     >
       <h2 className="mb-2 font-medium text-[var(--chat-text-primary)]">
         {t('stats.heading', 'Token usage')}
