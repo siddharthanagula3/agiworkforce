@@ -13,7 +13,7 @@ from skillspector.nodes.build_context import _read_file_cache, _walk_skill_files
 
 def _skill_with_escaping_link(tmp_path: Path) -> tuple[Path, Path]:
     secret = tmp_path / "id_rsa"
-    secret.write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+    secret.write_text("EXAMPLE-PLACEHOLDER-NOT-A-KEY <your-private-key-would-be-here>\n")
 
     skill = tmp_path / "skill"
     skill.mkdir()
@@ -38,7 +38,7 @@ def test_an_escaping_symlink_never_reaches_the_file_cache(tmp_path: Path) -> Non
     cache = _read_file_cache(skill, components)
 
     assert "notes.txt" not in cache
-    assert all("PRIVATE KEY" not in content for content in cache.values())
+    assert all("EXAMPLE-PLACEHOLDER-NOT-A-KEY" not in content for content in cache.values())
 
 
 def test_a_link_that_stays_inside_is_still_skipped_but_not_reported(tmp_path: Path) -> None:
