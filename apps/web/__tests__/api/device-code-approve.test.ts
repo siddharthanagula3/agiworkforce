@@ -13,6 +13,14 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn(() => null),
 }));
 
+// Approving a device now requires the caller to have accepted the current
+// Terms first — an unmocked gate answered false, so the route returned 403
+// TERMS_ACCEPTANCE_REQUIRED and every case here read as an auth failure.
+const mockHasAcceptedCurrentTerms = vi.hoisted(() => vi.fn(async () => true));
+vi.mock('@/lib/server/terms', () => ({
+  hasAcceptedCurrentTerms: mockHasAcceptedCurrentTerms,
+}));
+
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -92,6 +100,38 @@ describe('Device code approve compatibility API', () => {
       expect.stringContaining('UPDATE device_authorization_codes'),
       ['user_clerk_123', null, null, expect.any(String), 'cli-device-id'],
     );
+  });
+
+  it('refuses to approve a device until the current terms are accepted', async () => {
+    // The gate the mock above defaults to true. Pinned so that default is a
+    // stated assumption rather than a silent one: an unaccepted user must not
+    // be able to authorize a CLI device.
+    mockHasAcceptedCurrentTerms.mockResolvedValueOnce(false);
+    mockQuery.mockResolvedValueOnce([
+      {
+        device_id: 'cli-device-id',
+        status: 'pending',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+      },
+    ]);
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/auth/device/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_code: 'ABCD-2345' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'TERMS_ACCEPTANCE_REQUIRED' },
+    });
+    expect(
+      mockQuery.mock.calls.some(([sql]) =>
+        String(sql).includes('UPDATE device_authorization_codes'),
+      ),
+    ).toBe(false);
   });
 
   it('rejects invalid user-code formats before touching Neon', async () => {

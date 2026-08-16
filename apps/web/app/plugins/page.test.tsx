@@ -27,6 +27,15 @@ vi.mock('../byok/WaitlistForm', () => ({ WaitlistForm: () => <div /> }));
 
 import PluginsPage from './page';
 
+/**
+ * The sentence `availabilityClaim` renders for a catalogue that READ fine but
+ * has nothing installable. The assertions below used to spell the older wording
+ * ("every entry is a declared pack") — which meant the two `not.toBeInTheDocument`
+ * checks passed against a string production no longer emits anywhere, i.e.
+ * vacuously. One constant so all three move together.
+ */
+const DECLARED_ONLY_CLAIM = /no pack is installable in this environment yet/i;
+
 function entry(overrides: Partial<PluginRegistryEntry> = {}): PluginRegistryEntry {
   return {
     id: 'github-automation',
@@ -61,7 +70,7 @@ describe('PluginsPage availability claim', () => {
 
     render(await PluginsPage());
 
-    expect(screen.queryByText(/every entry is a declared pack/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(DECLARED_ONLY_CLAIM)).not.toBeInTheDocument();
     expect(screen.getAllByText(/unreachable/i).length).toBeGreaterThan(0);
   });
 
@@ -70,7 +79,7 @@ describe('PluginsPage availability claim', () => {
 
     render(await PluginsPage());
 
-    expect(screen.queryByText(/every entry is a declared pack/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(DECLARED_ONLY_CLAIM)).not.toBeInTheDocument();
     expect(screen.getByText(/holds no packs yet/i)).toBeInTheDocument();
   });
 
@@ -79,7 +88,7 @@ describe('PluginsPage availability claim', () => {
 
     render(await PluginsPage());
 
-    expect(screen.getByText(/every entry is a declared pack/i)).toBeInTheDocument();
+    expect(screen.getByText(DECLARED_ONLY_CLAIM)).toBeInTheDocument();
   });
 
   it('counts installable packs against the rows actually read', async () => {
