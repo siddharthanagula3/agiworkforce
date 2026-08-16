@@ -36,6 +36,7 @@ import { UsageWarningBanner } from './UsageWarningBanner';
 import { Disclaimer } from './Disclaimer';
 import { MessageList } from './MessageList';
 import { ConversationHeader, type ConversationHeaderProps } from './ConversationHeader';
+import { ConversationStatsPanel } from './ConversationStatsPanel';
 import { useChatStore } from '../stores/chatStore';
 import { useUIStore } from '../stores/uiStore';
 import { useChat } from '../hooks/useChat';
@@ -401,6 +402,7 @@ export function ChatInterface({
 
   const hasMessages = messages.length > 0;
   const [rewindTimelineOpen, setRewindTimelineOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const slashCommandHost = useMemo(() => {
     if (!hostBridge?.createConversation) return undefined;
@@ -711,8 +713,13 @@ export function ChatInterface({
             }
             artifactsOpen={conversationActions?.artifactsOpen ?? artifactOpen}
             artifactCount={conversationActions?.artifactCount ?? conversationArtifacts.length}
+            onToggleStats={
+              conversationActions?.onToggleStats ?? (() => setStatsOpen((open) => !open))
+            }
+            statsOpen={conversationActions?.statsOpen ?? statsOpen}
           />
         )}
+        {hasMessages && statsOpen ? <ConversationStatsPanel messages={messages} /> : null}
 
         {/* Content area — grows to fill remaining vertical space, hides overflow for
             MessageList's own internal scroll container */}

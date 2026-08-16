@@ -180,11 +180,20 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
       .map((word, index) => (index === 0 ? word : ` ${word}`))
       .map((piece) => `data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\n`)
       .join('');
+    const usageFrame = `data: ${JSON.stringify({
+      choices: [],
+      usage: {
+        prompt_tokens: 128,
+        completion_tokens: 64,
+        prompt_tokens_details: { cached_tokens: 32 },
+        completion_tokens_details: { reasoning_tokens: 16 },
+      },
+    })}\n\n`;
     return route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
       headers: mockCloudCorsHeaders(route),
-      body: `${frames}data: [DONE]\n\n`,
+      body: `${frames}${usageFrame}data: [DONE]\n\n`,
     });
   });
 
