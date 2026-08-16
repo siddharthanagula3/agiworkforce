@@ -110,7 +110,6 @@ export {
 } from './expandable-chat';
 export { ExpandableChatDemo } from './expandable-chat-demo';
 export { MessageLoading } from './message-loading';
-export { PromptInputBox } from './ai-prompt-box';
 
 export { DashboardLoading, ChatLoading, DataLoading } from './premium-loading';
 export { SkeletonText, SkeletonCard, SkeletonAvatar, SkeletonTable } from './skeleton-loader';
