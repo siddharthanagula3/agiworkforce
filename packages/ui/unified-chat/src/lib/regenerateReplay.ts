@@ -144,6 +144,25 @@ interface MinimalMessage {
  * the caller can read its content/attachments/metadata) plus the ids to delete,
  * or `null` if there's no regenerable user turn.
  */
+/**
+ * The edit-and-resend counterpart of {@link planRegenerateRollback}, addressed
+ * by the USER turn being rewritten rather than by the assistant reply.
+ *
+ * Everything from the edited turn onward is superseded, not just its immediate
+ * answer: a later turn was written in reply to text the user has now changed,
+ * so leaving it would produce a transcript that answers a question nobody
+ * asked. This mirrors how regenerate rolls back from `userIndex`.
+ */
+export function planEditRollback(
+  messages: readonly MinimalMessage[],
+  userMessageId: string,
+): { userIndex: number; rollbackIds: string[] } | null {
+  const userIndex = messages.findIndex((m) => m.id === userMessageId);
+  if (userIndex < 0) return null;
+  if (messages[userIndex]?.role !== 'user') return null;
+  return { userIndex, rollbackIds: messages.slice(userIndex).map((m) => m.id) };
+}
+
 export function planRegenerateRollback(
   messages: readonly MinimalMessage[],
   assistantId: string,

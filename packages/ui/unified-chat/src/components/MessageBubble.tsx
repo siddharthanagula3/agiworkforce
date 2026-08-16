@@ -7,6 +7,8 @@ import {
   Image as ImageIcon,
   AlertTriangle,
   Wrench,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button, useUiTranslation } from '@agiworkforce/ui';
@@ -64,6 +66,16 @@ interface MessageBubbleProps {
    * before, so hosts without the derivation capability are unaffected.
    */
   artifactProjection?: MessageArtifactProjection | null;
+  /**
+   * Commit an edited body for one of the user's own turns. Wire it and the user
+   * bubble grows an Edit affordance; omit it and no edit control renders at all
+   * rather than one that silently does nothing.
+   *
+   * Only user turns are editable. Rewriting an assistant turn would let the
+   * transcript claim the model said something it never said, which is a
+   * provenance problem, not a convenience.
+   */
+  onEdit?: (messageId: string, newContent: string) => void;
 }
 
 /**
@@ -620,6 +632,77 @@ function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) 
   );
 }
 
+/**
+ * The stored user turn, right-aligned (web `.user-bubble` parity: px-4 py-2.5,
+ * radius-2xl, --chat-user-bubble-bg). No per-message timestamp — the web feed
+ * uses date dividers plus provenance for time cues, not a stamp under every
+ * user turn.
+ */
+function UserBubbleBody({ content }: { content: string }) {
+  return (
+    <div
+      className={cn(
+        'w-fit max-w-full rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-2.5',
+        'text-[15px] leading-relaxed text-[var(--chat-text-primary)]',
+        'whitespace-pre-wrap break-words',
+      )}
+    >
+      {content}
+    </div>
+  );
+}
+
+/**
+ * Hover-revealed user actions (web parity). Edit renders only when the host
+ * wired a commit handler, so a surface without one shows Copy alone rather than
+ * a button that does nothing.
+ *
+ * AUDIT-FIX GOV-30: `opacity-0 group-hover:opacity-100` had no focus
+ * counterpart, so a keyboard user tabbed into a fully transparent button —
+ * focus ring included. `group-focus-within` reveals it.
+ */
+function UserBubbleActions({
+  copied,
+  onCopy,
+  onStartEdit,
+  t,
+}: {
+  copied: boolean;
+  onCopy: () => void;
+  onStartEdit?: (() => void) | undefined;
+  t: (key: string, fallback: string) => string;
+}) {
+  // AUDIT-FIX GOV-38: 44px touch target on phones (28px was below the
+  // minimum), compact on pointer viewports.
+  const iconButton =
+    'h-11 w-11 touch-manipulation sm:h-7 sm:w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]';
+
+  return (
+    <div className="flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={copied ? t('bubble.copied', 'Copied') : t('bubble.copyMessage', 'Copy message')}
+        onClick={onCopy}
+        className={cn(iconButton, copied && 'text-[var(--chat-accent-secondary)]')}
+      >
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+      </Button>
+      {onStartEdit && (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t('bubble.editMessage', 'Edit message')}
+          onClick={onStartEdit}
+          className={iconButton}
+        >
+          <Pencil size={13} />
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function MessageBubble({
   message,
   onRetry,
@@ -629,10 +712,14 @@ export function MessageBubble({
   approvalTurnExpired,
   onResendApproval,
   artifactProjection,
+  onEdit,
 }: MessageBubbleProps) {
   const { t } = useUiTranslation('chat');
   const isUser = message.role === 'user';
   const isStreaming = Boolean(message.isStreaming);
+  // `null` means "not editing". A string holds the in-progress draft, so
+  // cancelling restores the stored content rather than whatever was typed.
+  const [editDraft, setEditDraft] = useState<string | null>(null);
   const canonicalActivity = message.metadata?.['agentActivity'] as AgentActivityState | undefined;
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const [copied, setCopied] = useState(false);
@@ -692,58 +779,84 @@ export function MessageBubble({
     URL.revokeObjectURL(url);
   }
 
+  const isEditing = editDraft !== null;
+
+  function commitEdit() {
+    const next = (editDraft ?? '').trim();
+    // An empty body would blank the turn the assistant answered, leaving a
+    // transcript whose reply has no question. Treat it as a cancel.
+    if (next.length > 0 && next !== message.content) onEdit?.(message.id, next);
+    setEditDraft(null);
+  }
+
   if (isUser) {
     return (
       <div
         data-role="user"
+        data-testid="message-item"
         className="group message-enter flex max-w-[85%] min-w-0 flex-col items-end gap-1"
       >
         {message.attachments && message.attachments.length > 0 && (
           <UserMessageAttachments attachments={message.attachments} />
         )}
-        {/* Right-aligned rounded bubble (web .user-bubble parity: px-4 py-2.5,
-            radius-2xl, --chat-user-bubble-bg). No per-message timestamp — the
-            web feed uses date dividers + provenance for time cues, not a stamp
-            under every user turn. */}
-        <div
-          className={cn(
-            'w-fit max-w-full rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-2.5',
-            'text-[15px] leading-relaxed text-[var(--chat-text-primary)]',
-            'whitespace-pre-wrap break-words',
-          )}
-        >
-          {message.content}
-        </div>
-        {/* Hover-only copy (web parity: user actions reveal on hover). Copy is
-            fully self-contained; no other user actions are wired on desktop.
-            AUDIT-FIX GOV-30: `opacity-0 group-hover:opacity-100` had no focus
-            counterpart, so a keyboard user tabbed into a fully transparent
-            button — focus ring included. `group-focus-within` reveals it. */}
-        <div className="flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={
-              copied ? t('bubble.copied', 'Copied') : t('bubble.copyMessage', 'Copy message')
-            }
-            onClick={handleCopy}
-            className={cn(
-              // AUDIT-FIX GOV-38: 44px touch target on phones (28px was below
-              // the minimum), compact on pointer viewports.
-              'h-11 w-11 touch-manipulation sm:h-7 sm:w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
-              copied && 'text-[var(--chat-accent-secondary)]',
-            )}
-          >
-            {copied ? <Check size={13} /> : <Copy size={13} />}
-          </Button>
-        </div>
+        {isEditing ? (
+          <div className="flex w-full flex-col items-stretch gap-2">
+            <textarea
+              data-editing="true"
+              aria-label={t('bubble.editMessage', 'Edit message')}
+              value={editDraft ?? ''}
+              onChange={(event) => setEditDraft(event.target.value)}
+              onKeyDown={(event) => {
+                // Enter commits and Escape abandons, matching the composer.
+                // Shift+Enter stays a newline so a multi-line turn is editable.
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  commitEdit();
+                } else if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setEditDraft(null);
+                }
+              }}
+              rows={Math.min(12, (editDraft ?? '').split('\n').length + 1)}
+              autoFocus
+              className={cn(
+                'w-full resize-y rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-2.5',
+                'text-[15px] leading-relaxed text-[var(--chat-text-primary)]',
+                'outline-none ring-1 ring-[var(--chat-accent-secondary)]',
+              )}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setEditDraft(null)}>
+                <X size={13} className="mr-1" />
+                {t('bubble.cancelEdit', 'Cancel')}
+              </Button>
+              <Button variant="default" size="sm" onClick={commitEdit}>
+                {t('bubble.saveEdit', 'Save')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <UserBubbleBody content={message.content} />
+            <UserBubbleActions
+              copied={copied}
+              onCopy={handleCopy}
+              onStartEdit={onEdit ? () => setEditDraft(message.content) : undefined}
+              t={t}
+            />
+          </>
+        )}
       </div>
     );
   }
 
   // Assistant message
   return (
-    <div data-role="assistant" className="message-enter flex flex-col gap-1">
+    <div
+      data-role="assistant"
+      data-testid="message-item"
+      className="message-enter flex flex-col gap-1"
+    >
       {canonicalActivity && (
         <div className="mb-2">
           <AgentActivityTimeline
