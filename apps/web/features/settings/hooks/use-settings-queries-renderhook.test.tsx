@@ -42,10 +42,18 @@ vi.mock('@shared/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
-// Stub @agiworkforce/types so the hooks module loads without full package resolution
-vi.mock('@agiworkforce/types', () => ({
-  requireProviderDefaultModel: vi.fn().mockReturnValue('fixture-model'),
-}));
+// Stub requireProviderDefaultModel so the hooks module loads without full
+// package resolution, but keep every other real export (via importOriginal):
+// use-settings-queries.ts now also pulls in useAuthStore for useDeleteAccount,
+// which transitively needs @agiworkforce/types' CAPABILITY_LAYERS through
+// @agiworkforce/cloud-contracts — a full replacement mock here breaks that.
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  return {
+    ...actual,
+    requireProviderDefaultModel: vi.fn().mockReturnValue('fixture-model'),
+  };
+});
 
 // Stub settingsService (the inline fetch hooks call fetch directly, but
 // useUserSettings/useUserProfile/useAPIKeys use the service · stub it so
@@ -126,30 +134,46 @@ describe('useOrganizationSettings · renderHook (GET /api/settings/organization)
   });
 
   it('calls GET /api/settings/organization with auth header and populates hook data', async () => {
+    // The route's response is validated by OrganizationOverviewSchema, so the
+    // fixture has to be a whole overview envelope, not just an organization.
+    // The previous fixture predated that contract: it used a non-UUID id,
+    // omitted `currentUserRole`, and carried none of `activeOrganizationId`,
+    // `workspaces` or `access` — so safeParse failed, the query threw "The
+    // workspace response was invalid", and `isSuccess` never became true.
+    const ORG_ID = '11111111-1111-4111-8111-111111111111';
     const org = {
-      id: 'org-1',
+      id: ORG_ID,
       name: 'ACME',
       slug: 'acme',
       plan: 'free',
       memberCount: 2,
       maxMembers: 5,
-      logoUrl: null,
-      description: null,
-      website: null,
-      billingEmail: null,
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',
-      settings: {
-        allowMemberInvites: true,
-        requireEmailVerification: false,
-        defaultRole: 'member',
-        allowedDomains: [],
-        enforceSSO: false,
-        auditLogRetention: 90,
-        dataRetention: 365,
+      currentUserRole: 'owner' as const,
+    };
+    const overview = {
+      organization: org,
+      activeOrganizationId: ORG_ID,
+      workspaces: [
+        {
+          id: ORG_ID,
+          name: 'ACME',
+          slug: 'acme',
+          role: 'owner' as const,
+          joinedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+      access: {
+        plan: 'free',
+        canManageTeam: true,
+        maxMembers: 5,
+        seatsConsumed: 2,
+        seatsAvailable: 3,
+        seatSource: 'billing' as const,
       },
     };
-    fetchMock.mockResolvedValue(makeResponse({ organization: org }));
+    fetchMock.mockResolvedValue(makeResponse(overview));
 
     const { useOrganizationSettings } = await import('./use-settings-queries');
     const { result } = renderHook(() => useOrganizationSettings(), {
@@ -164,7 +188,8 @@ describe('useOrganizationSettings · renderHook (GET /api/settings/organization)
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Hook data comes from the server, not from the old `return null` stub.
+    // `select` narrows the overview to its organization, so the hook's data is
+    // the organization — from the server, not from the old `return null` stub.
     expect(result.current.data).toEqual(org);
   });
 

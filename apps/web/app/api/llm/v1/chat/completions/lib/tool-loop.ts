@@ -2479,11 +2479,17 @@ export async function* runToolLoop(
         // can either call another tool or synthesize the final answer instead of
         // being forced into an endless loop. Explicit API tool_choice values
         // remain unchanged on every step.
+        // Optional-chained like every other `processed.chatRequest` read in this
+        // file (427, 1496, 1502, 1765, 2494). These three were the only plain
+        // accesses, so a caller that omits `chatRequest` — which the type allows
+        // and the rest of the file assumes — threw "Cannot read properties of
+        // undefined (reading 'tool_choice')" on the SECOND step, after a tool
+        // had already run and the turn looked healthy.
         ...(step > 1 &&
-        processed.chatRequest.tool_choice === undefined &&
+        processed.chatRequest?.tool_choice === undefined &&
         llmRequest.tool_choice === 'required' &&
-        (processed.chatRequest.code_execution === true ||
-          (processed.chatRequest.web_search === true && processed.resolvedTaskType === 'research'))
+        (processed.chatRequest?.code_execution === true ||
+          (processed.chatRequest?.web_search === true && processed.resolvedTaskType === 'research'))
           ? { tool_choice: 'auto' as const }
           : {}),
         // A composer-selected Skill is forced only on the first provider step

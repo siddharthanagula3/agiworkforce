@@ -120,9 +120,25 @@ describe('public marketing copy regressions', () => {
     const normalizedUpgradeWelcome = upgradeWelcome.replace(/\s+/g, ' ');
 
     expect(upgradeWelcome).not.toContain('Same account, same conversations');
+
+    // The claim is now made structurally by SURFACE_GROUPS rather than as one
+    // sentence: Web/Mobile/Desktop sit under "Same account, same chats", and
+    // CLI/VS Code sit in a SEPARATE group noted as workspace-scoped. Asserting
+    // the old sentence verbatim tested the wording, not the separation — and
+    // the separation is the thing that must not regress.
     expect(normalizedUpgradeWelcome).toContain(
-      'CLI and VS Code developer sessions remain workspace-scoped',
+      "label: 'Developer sessions', surfaces: ['CLI', 'VS Code'], note: 'Scoped to the workspace you run them in.',",
     );
+    expect(normalizedUpgradeWelcome).toContain(
+      "label: 'Same account, same chats', surfaces: ['Web', 'Mobile', 'Desktop'],",
+    );
+    // CLI and VS Code must never appear in the continuity group.
+    const continuityGroup =
+      /surfaces: \[([^\]]*)\], note: 'Cloud conversations follow your signed-in account\.'/.exec(
+        normalizedUpgradeWelcome,
+      );
+    expect(continuityGroup?.[1]).toBeDefined();
+    expect(continuityGroup?.[1]).not.toMatch(/CLI|VS Code/);
     expect(faq).toContain(
       'Moving between Local, BYOK, and managed Cloud is not an ordinary model switch',
     );
