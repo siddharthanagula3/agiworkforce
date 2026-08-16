@@ -14940,7 +14940,8 @@
         "DPDP-58",
         "WEB-51",
         "TEST-18",
-        "WEB-124"
+        "WEB-124",
+        "DPDP-90"
       ],
       "exit_criteria": "Account deletion enumerates every table and local store holding personal data (desktop SQLite emails, contacts, screenshots, OCR text included) and a test asserts zero rows and zero files remain for a deleted principal, including anonymous NULL-user_id rows in waitlist/consent/rights tables and propagation to object storage, vector/search indexes, caches and analytics under a written retention tier policy. Desktop telemetry is constructed disabled, respects the consent gate and does not survive Delete All Data; server and edge Sentry initialise only with consent and carry no stable user id. Cookie and training-preference consent are recorded server-side with timestamp and policy version and re-prompt on version change. The privacy policy 'what we collect' table matches an evidence list derived from code; subprocessor, recipient and Article 50 disclosures are consistent across web, mobile and desktop and the mobile legal page no longer claims provenance marks that do not exist. Waitlist unsubscribe works end to end; a named human is notified when a rights request arrives; retention crons are registered and observed to run. An EU representative is appointed and named; grievance officer is a named individual with a working mailbox reachable from inside the signed-in shell; SDF determination and DPDP annex are recorded as legal decisions with dates; the unqualified store compliance claim is corrected. Support-bundle redaction default is proven by a test that fails if conversation content appears."
     },
@@ -15415,7 +15416,9 @@
         "DESK-123",
         "DESK-124",
         "DESK-125",
-        "DESK-126"
+        "DESK-126",
+        "DESK-201",
+        "DESK-202"
       ],
       "exit_criteria": "A reachability inventory lists every desktop feature directory as wired, deleted, or explicitly deferred with an owner and date; the ~94k unreachable LOC count drops to the inventoried decision set and a guard prevents new orphans. A scheduled trigger fires end to end from a restarted app (registry started from a real caller, triggers persisted); an approval request renders, can be decided, and the turn resumes; a second app instance is refused by an OS-level single-instance guard. Cloud Mode is reachable on a signed build with live Clerk credentials and the callback and update journeys are observed on that build. Notification center is mounted with all four groups able to fire and DND honoured; push-to-talk and wake word have subscribers; the conversational voice loop runs with barge-in. Retry regenerates, new chat clears the draft, sidebar lists all projects by recency, Customize resolves or is removed, project memory is project-scoped with one MemoryCategory model, and no setting toggles a dormant subsystem. Artifacts stream tokens, publish for real or say so, and report true versions. Document/PDF/spreadsheet viewers, git and PR features, and the plugin manager either have entry points and honest state or are deleted; PR creation no longer fakes success. Declined items (DESK-51..54) are recorded as dated wontfix decisions. Icon-only controls have aria-labels."
     },

@@ -45,8 +45,8 @@ This is not a sprint. At a sustained 40 points a day that is roughly **97 workin
 | F13 | **DESK-70**  | W10  | CRIT | Confirm the intended Desktop image/video generation surface before the composer wiring is built.                                                                                                                 |
 | F14 | **SEC-37**   | W1   | HIGH | Configure a repository ruleset on main: required review, required CI check, no force-push or deletion, signed tags.                                                                                              |
 | F15 | **SEC-41**   | W1   | HIGH | Rotate the exposed OpenRouter video credential before any paid smoke test.                                                                                                                                       |
-| F16 | **DPDP-90**  | W—   | HIGH | Land the web_artifact_index erasure classification in the SAME commit as migration 0121.                                                                                                                         |
-| F17 | **DESK-202** | W—   | MEDI | Decide: build the three missing desktop chat affordances, or retire the E2E tests that assert them.                                                                                                              |
+| F16 | **DPDP-90**  | W6   | HIGH | Land the web_artifact_index erasure classification in the SAME commit as migration 0121.                                                                                                                         |
+| F17 | **DESK-202** | W10  | MEDI | Decide: build the three missing desktop chat affordances, or retire the E2E tests that assert them.                                                                                                              |
 
 A further 21 open items name a founder decision, an escrow, or a store/publisher account in their own text. They are marked `HUMAN` in the wave tables below.
 
@@ -470,7 +470,7 @@ _Done when._ One policy evaluator answers every owner/admin and per-tool authori
 
 ### W6 — Privacy, consent, erasure and legal obligations
 
-**57 open · 240 pts · 4C 31H 16M 6L**
+**58 open · 241 pts · 4C 32H 16M 6L**
 
 _Why now._ This wave is grouped by regulator rather than by code path because the obligations interlock: an erasure path is worthless if telemetry survives it, a consent record is worthless if no server-side timestamp or policy version exists, and a privacy policy that omits ten collected categories cannot be corrected without knowing what W1–W5 actually enforce — which is why it runs after them.
 
@@ -514,12 +514,13 @@ _Done when._ Account deletion enumerates every table and local store holding per
 | DPDP-38 | HIGH | M   | EU AI Act Article 50 provenance-marker serialization silently strips every nested key, and web hand-restates the marker shape instead of importing it, |
 | DPDP-42 | HIGH | S   | Both live account-deletion flows have zero test coverage                                                                                               |
 
-**Batch W6.3 — `compliance/dpdp`** · 14 items · 36 pts
+**Batch W6.3 — `compliance/dpdp`** · 14 items · 29 pts
 
 | Item    | Sev  | Eff | Task                                                                                                                                                   |
 | ------- | ---- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | DPDP-53 | HIGH | S   | No designated incident commander and no on-call rota for data-breach response — the founder owns every incident by default                             |
 | DPDP-54 | HIGH | L   | No mass-notification path exists to email an arbitrary list of affected data principals, so individual intimation under DPDP §5 is manual and does not |
+| DPDP-90 | HIGH | S   | The in-flight web_artifact_index table has no account-erasure classification, so committing its migration will fail the erasure guard `HUMAN`          |
 | DPDP-12 | MEDI | S   | The signed-in app shell has no legal footer, so the grievance contact is unreachable from inside the product                                           |
 | DPDP-15 | MEDI | M   | No nomination field exists (DPDP s.14) — nominations are handled manually via the request form                                                         |
 | DPDP-20 | MEDI | S   | /trust and /security omit any Indian data-protection obligation                                                                                        |
@@ -531,18 +532,18 @@ _Done when._ Account deletion enumerates every table and local store holding per
 | DPDP-52 | MEDI | M   | Deleting a project permanently orphans its knowledge files — the soft delete never fires the ON DELETE CASCADE, there is no restore endpoint, and the  |
 | DPDP-55 | MEDI | M   | No breach-notice page and no in-product banner exist, so the delivery method the breach runbook assumes would have to be built during the incident     |
 | DPDP-56 | MEDI | S   | Security audit log 90-day retention is a routine an administrator runs by hand, not a schedule, so the retention actually applied is unknown and a lat |
+
+**Batch W6.4 — `compliance/dpdp`** · 7 items · 23 pts
+
+| Item    | Sev  | Eff | Task                                                                                                                                                   |
+| ------- | ---- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | DPDP-58 | MEDI | L   | Desktop native crash-dump upload was removed for consent reasons and has no consent-safe replacement — rebuilding it requires a typed runtime consent  |
-
-**Batch W6.4 — `compliance/dpdp`** · 6 items · 15 pts
-
-| Item    | Sev | Eff | Task                                                                                                                                                   |
-| ------- | --- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| DPDP-44 | LOW | S   | No disclosure of whether saved memory personalizes outbound tool or web-search queries, and nobody has established whether it does                     |
-| DPDP-46 | LOW | S   | No ad-personalization opt-out exists, and it has never been confirmed whether any advertising vendor receives account data                             |
-| DPDP-48 | LOW | S   | No commercial-tier dispute-resolution stance exists, so consumer arbitration terms apply by default to every paying tier absent a signed MSA           |
-| DPDP-49 | LOW | S   | The privacy notice says nothing about non-account-holder third parties whose personal data enters the product through a user's connectors or conversat |
-| DPDP-50 | LOW | L   | Consumer Terms and Privacy are a single worldwide document with Texas governing law and no EEA/UK/Switzerland variant                                  |
-| DPDP-57 | LOW | M   | Vendor log retention (Vercel, Neon) is set by the vendors, so breach evidence may expire before the investigation reaches it                           |
+| DPDP-44 | LOW  | S   | No disclosure of whether saved memory personalizes outbound tool or web-search queries, and nobody has established whether it does                     |
+| DPDP-46 | LOW  | S   | No ad-personalization opt-out exists, and it has never been confirmed whether any advertising vendor receives account data                             |
+| DPDP-48 | LOW  | S   | No commercial-tier dispute-resolution stance exists, so consumer arbitration terms apply by default to every paying tier absent a signed MSA           |
+| DPDP-49 | LOW  | S   | The privacy notice says nothing about non-account-holder third parties whose personal data enters the product through a user's connectors or conversat |
+| DPDP-50 | LOW  | L   | Consumer Terms and Privacy are a single worldwide document with Texas governing law and no EEA/UK/Switzerland variant                                  |
+| DPDP-57 | LOW  | M   | Vendor log retention (Vercel, Neon) is set by the vendors, so breach evidence may expire before the investigation reaches it                           |
 
 **Batch W6.5 — `mobile`** · 3 items · 26 pts
 
@@ -1155,7 +1156,7 @@ _Done when._ A generated video plays in a browser from persisted storage (media-
 
 ### W10 — Desktop application
 
-**96 open · 413 pts · 6C 19H 50M 21L**
+**97 open · 421 pts · 6C 19H 51M 21L**
 
 _Why now._ Desktop is the surface with the deepest structural debt and must be a single dedicated pass: roughly 35% of the app (20 feature directories, ~94k LOC) is unreachable from the shell, automation triggers can never fire because TriggerRegistry::start() has no caller, approval requests are emitted but not renderable, notification center is unmounted, voice output never runs, and settings expose controls wired to dormant subsystems.
 
@@ -1199,7 +1200,7 @@ _Done when._ A reachability inventory lists every desktop feature directory as w
 | DESK-103 | MEDI | S   | Desktop header falsely claims 'AGI Desktop · Released · v1.2.0'                                                                                               |
 | DESK-104 | MEDI | M   | Desktop bypasses the shared design-token package with 252 hardcoded hex colour literals and no guard                                                          |
 
-**Batch W10.3 — `desktop`** · 14 items · 63 pts
+**Batch W10.3 — `desktop`** · 14 items · 68 pts
 
 | Item     | Sev  | Eff | Task                                                                                                                                                  |
 | -------- | ---- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1211,17 +1212,18 @@ _Done when._ A reachability inventory lists every desktop feature directory as w
 | DESK-124 | MEDI | M   | Two ArtifactPanel implementations and two same-named artifactStore modules that do not share state                                                    |
 | DESK-18  | MEDI | M   | Desktop timeout constants remain duplicated across layers; nested deadlines can outlive their parents                                                 |
 | DESK-19  | MEDI | L   | Desktop keyboard shortcuts: three disconnected default sets and no reconciliation between renderer and native stores                                  |
+| DESK-202 | MEDI | L   | Desktop chat has no message-statistics panel, no reachable message-edit affordance, and no AGI submission indicator `HUMAN`                           |
 | DESK-34  | MEDI | M   | Desktop message Retry is a silent no-op and there is no one-click Regenerate, unlike web                                                              |
 | DESK-35  | MEDI | L   | Desktop settings expose controls wired to dormant subsystems: checkpointing, auto-resume, prompt completion, zoom, Continue Generation, High Contrast |
 | DESK-37  | MEDI | M   | Desktop AI-assisted git features and PR creation are backend-complete with zero callers, and PR creation fakes success                                |
 | DESK-39  | MEDI | L   | Desktop DocumentWorkspace, PDFViewer, FilePreviewModal and spreadsheet viewing are built to the IPC boundary with no UI entry point                   |
 | DESK-41  | MEDI | M   | Desktop Project Settings 'Memory' tab creates account-wide memories under a project heading with no scoping                                           |
-| DESK-42  | MEDI | M   | Desktop project archive and memory-category surfaces remain partly unwired; MemoryCategory is modeled three incompatible ways                         |
 
 **Batch W10.4 — `desktop`** · 14 items · 56 pts
 
 | Item    | Sev  | Eff | Task                                                                                                                                                   |
 | ------- | ---- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DESK-42 | MEDI | M   | Desktop project archive and memory-category surfaces remain partly unwired; MemoryCategory is modeled three incompatible ways                          |
 | DESK-43 | MEDI | S   | Desktop composer draft text is not cleared by 'New chat'                                                                                               |
 | DESK-45 | MEDI | M   | Desktop Customize nav destination is translated in every locale but no such destination exists                                                         |
 | DESK-50 | MEDI | L   | Desktop skill recorder: no macOS Screen Recording preflight, no per-step screenshots, no durable recording asset                                       |
@@ -1235,12 +1237,12 @@ _Done when._ A reachability inventory lists every desktop feature directory as w
 | DESK-76 | MEDI | S   | Local/Cloud mode toggle silently reverts instead of disabling itself when Local mode is unavailable in the Electron renderer                           |
 | DESK-77 | MEDI | M   | Desktop Cloud skill 'download' produces a raw file save, not a working install — nothing writes it into the local skill directory                      |
 | DESK-80 | MEDI | M   | Desktop model-routing setters (default provider, temperature, max tokens, task routing, favorites) have zero call sites                                |
-| DESK-81 | MEDI | M   | Desktop window/session setters (startup position, dock behavior, send shortcut, chat storage mode, feature flags) have zero call sites                 |
 
-**Batch W10.5 — `desktop`** · 14 items · 47 pts
+**Batch W10.5 — `desktop`** · 14 items · 49 pts
 
 | Item     | Sev  | Eff | Task                                                                                                                                                   |
 | -------- | ---- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DESK-81  | MEDI | M   | Desktop window/session setters (startup position, dock behavior, send shortcut, chat storage mode, feature flags) have zero call sites                 |
 | DESK-82  | MEDI | M   | Desktop Cowork settings expose one control against a five-control benchmark, and neither Cowork nor scheduled-task creation has an approval-mode picke |
 | DESK-83  | MEDI | S   | Superseded parallel MCP management UI (~2,000 lines) sits alongside the live MCPWorkspace in the same directory                                        |
 | DESK-84  | MEDI | L   | Typed apps/desktop/src/api/\*.ts wrapper layer is largely bypassed by direct invoke() calls with string-literal command names                          |
@@ -1254,12 +1256,12 @@ _Done when._ A reachability inventory lists every desktop feature directory as w
 | DESK-98  | MEDI | M   | Desktop /git slash panel is archived and not actionable, pending an unmade product decision                                                            |
 | DESK-102 | LOW  | M   | Shared slash-command reconciliation (Ticket 1D) left unfinished after the desktop execute-plan handler was cut                                         |
 | DESK-110 | LOW  | S   | Orphaned legacy memory-browser component family on desktop — five dead files exported but never mounted                                                |
-| DESK-111 | LOW  | S   | Dead local-llm Cargo feature (llama-cpp-2) in Desktop with zero call sites                                                                             |
 
-**Batch W10.6 — `desktop`** · 14 items · 30 pts
+**Batch W10.6 — `desktop`** · 14 items · 28 pts
 
 | Item     | Sev | Eff | Task                                                                                                                             |
 | -------- | --- | --- | -------------------------------------------------------------------------------------------------------------------------------- |
+| DESK-111 | LOW | S   | Dead local-llm Cargo feature (llama-cpp-2) in Desktop with zero call sites                                                       |
 | DESK-121 | LOW | S   | Desktop legacy 'job-based' scheduler UI (SchedulerPanel, JobCreationDialog) is dead code with a self-declared legacy label       |
 | DESK-122 | LOW | S   | Desktop ArtifactsGallery.tsx (580 lines) has zero live importers and still compiles into the shipped bundle                      |
 | DESK-125 | LOW | M   | Shared slash-command reconciliation (Ticket 1D) was deferred during the execute-plan cut and never closed                        |
@@ -1273,12 +1275,12 @@ _Done when._ A reachability inventory lists every desktop feature directory as w
 | DESK-49  | LOW | M   | Desktop uses standard OS window decorations; an orphaned TitleBar.tsx exists but is never mounted                                |
 | DESK-57  | LOW | M   | Desktop usage dashboard, profile and settings surface parity gaps                                                                |
 | DESK-59  | LOW | M   | Desktop misc surface gaps: screen-capture settings, quick-query hotkey, list-panel triple states, licenses view, trace recording |
-| DESK-61  | LOW | M   | Desktop InlineArtifactEditor duplicates the existing Monaco/Canvas editor integration                                            |
 
-**Batch W10.7 — `desktop`** · 3 items · 3 pts
+**Batch W10.7 — `desktop`** · 4 items · 6 pts
 
 | Item    | Sev | Eff | Task                                                                                                                              |
 | ------- | --- | --- | --------------------------------------------------------------------------------------------------------------------------------- |
+| DESK-61 | LOW | M   | Desktop InlineArtifactEditor duplicates the existing Monaco/Canvas editor integration                                             |
 | DESK-78 | LOW | S   | Orphaned legacy memory-browser component family on desktop — 5 dead files exported from a barrel but mounted nowhere              |
 | DESK-91 | LOW | S   | Desktop legacy 'job-based' scheduler UI (SchedulerPanel, JobCreationDialog) is dead code self-labelled as backwards compatibility |
 | DESK-92 | LOW | S   | Desktop ArtifactsGallery.tsx (580 lines) and ArtifactCategoryFilter are dead but still compile into the shipped bundle            |
