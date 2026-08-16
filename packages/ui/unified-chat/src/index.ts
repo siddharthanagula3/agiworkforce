@@ -180,6 +180,9 @@ export {
   summarizeConversationUsage,
 } from './components/ConversationStatsPanel';
 export type { ConversationStats } from './components/ConversationStatsPanel';
+export { GoalHandoffChip } from './components/GoalHandoffChip';
+export { detectGoalIntent } from './lib/goalIntent';
+export type { GoalIntent } from './lib/goalIntent';
 
 export { ThinkingBlock } from './components/ThinkingBlock';
 export { CitationPill } from './components/CitationPill';

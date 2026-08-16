@@ -56,6 +56,7 @@ const DesktopTerminalWorkspace = lazy(() =>
   })),
 );
 import { useArtifactStore } from '../../stores/artifactStore';
+import { useAgentTaskStore } from '../../stores/agentTaskStore';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -510,6 +511,18 @@ export function DesktopShellV3({
     [privacyMode],
   );
 
+  const handleSubmitChatGoal = useCallback(
+    async (goal: string) => {
+      try {
+        await useAgentTaskStore.getState().submitGoal(goal);
+        setActivePanel('agent-tasks');
+      } catch {
+        // agentTaskStore owns the failure toast so every caller reports it once.
+      }
+    },
+    [setActivePanel],
+  );
+
   const conversationActions = useMemo(
     () => ({
       onRename: handleRenameConversation,
@@ -653,6 +666,7 @@ export function DesktopShellV3({
                 currentFolderLabel={folderSeamEnabled ? currentFolderLabel : null}
                 onClearFolder={folderSeamEnabled ? clearFolder : undefined}
                 projectPicker={composerProjectPicker}
+                onSubmitGoal={canUseAgiWork ? handleSubmitChatGoal : undefined}
                 canUseAgiWork={canUseAgiWork}
                 agiWorkUnavailableReason={agiWorkUnavailableReason}
                 composerHostControls={
