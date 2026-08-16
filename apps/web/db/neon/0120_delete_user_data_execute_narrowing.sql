@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration: 0121_delete_user_data_execute_narrowing.sql
+-- Migration: 0120_delete_user_data_execute_narrowing.sql
 -- Purpose  : Close SEC-89 — revoke the PUBLIC EXECUTE grant that 0043 left on
 --            `public.delete_user_data(text)` after making it SECURITY DEFINER.
 --
