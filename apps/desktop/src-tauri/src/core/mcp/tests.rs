@@ -940,11 +940,13 @@ mod credential_tests {
             "Should have default servers"
         );
 
-        // Check filesystem server exists and is enabled by default
+        // The packaged filesystem server ships disabled: starting it runs npx,
+        // which can install code and egress. config.rs::test_default_config
+        // asserts the same thing; this test used to assert the opposite.
         if let Some(fs_server) = config.mcp_servers.get("filesystem") {
             assert!(
-                fs_server.enabled,
-                "Filesystem server should be enabled by default"
+                !fs_server.enabled,
+                "packaged filesystem MCP must be opt-in because starting npx can install code and egress"
             );
         }
     }

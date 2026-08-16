@@ -24,7 +24,7 @@ fn token_prefix_matches(entry: &str, candidate_tokens: &[&str]) -> bool {
 }
 
 fn contains_shell_metachar(tok: &str) -> bool {
-    let bad_single = [';', '&', '|', '>', '<', '`'];
+    let bad_single = [';', '&', '|', '>', '<', '`', '\n', '\r'];
     if tok.chars().any(|c| bad_single.contains(&c)) {
         return true;
     }
@@ -32,7 +32,9 @@ fn contains_shell_metachar(tok: &str) -> bool {
 }
 
 fn command_contains_shell_metachar(command: &str) -> bool {
-    command.split_whitespace().any(contains_shell_metachar)
+    command.contains('\n')
+        || command.contains('\r')
+        || command.split_whitespace().any(contains_shell_metachar)
 }
 
 fn normalize_rule(prefix: &str) -> Option<String> {
@@ -179,6 +181,14 @@ impl PermissionStore {
     /// Returns Some(true) if allowed, Some(false) if denied, None if no match.
     #[allow(dead_code)]
     pub fn check(&self, command: &str) -> Option<bool> {
+        // `split_whitespace` eats newlines, so `git status\nrm -rf ./src`
+        // tokenized to [git, status, rm, -rf, ./src] and prefix-matched a
+        // stored `git status` rule with no metachar in any trailing token —
+        // the prompt was skipped and sh -c ran both lines. A stored rule can
+        // never span lines, so a multi-line command has no stored decision.
+        if command.contains('\n') || command.contains('\r') {
+            return None;
+        }
         let trimmed = command.trim();
         let candidate_tokens: Vec<&str> = trimmed.split_whitespace().collect(); // AUDIT-FIX: C-2
 
@@ -487,6 +497,34 @@ impl PermissionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_newline_cannot_ride_a_stored_allow() {
+        let mut store = PermissionStore::default();
+        store.allow_always("git status");
+
+        assert_eq!(store.check("git status"), Some(true));
+        // The payload the old tokenizer flattened into [git, status, rm, -rf, ./src].
+        assert_eq!(store.check("git status\nrm -rf ./src"), None);
+        assert_eq!(store.check("git status\r\nrm -rf ./src"), None);
+        assert_eq!(store.check("git status\rrm -rf ./src"), None);
+    }
+
+    #[test]
+    fn a_newline_reads_as_a_metachar_in_the_raw_string_guard() {
+        assert!(command_contains_shell_metachar("git status\nrm -rf ./src"));
+        assert!(command_contains_shell_metachar("git status\rrm -rf ./src"));
+        assert!(!command_contains_shell_metachar("git status --short"));
+    }
+
+    #[test]
+    fn a_deny_rule_still_wins_over_an_allow_rule() {
+        let mut store = PermissionStore::default();
+        store.allow_always("git");
+        store.always_deny.insert("git push".to_string());
+
+        assert_eq!(store.check("git push origin main"), Some(false));
+    }
 
     #[test]
     fn test_empty_store_returns_none() {

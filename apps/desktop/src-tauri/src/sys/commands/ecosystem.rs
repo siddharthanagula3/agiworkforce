@@ -538,7 +538,9 @@ mod tests {
         assert_eq!(config.command, "npx");
         assert_eq!(config.args, vec!["-y".to_string(), "some-pkg".to_string()]);
         assert_eq!(config.env, env);
-        assert!(config.enabled);
+        // An imported server arrives disabled: enabling it would start someone
+        // else's `npx` the moment an editor config is imported.
+        assert!(!config.enabled);
         assert!(config.transport.is_none());
     }
 

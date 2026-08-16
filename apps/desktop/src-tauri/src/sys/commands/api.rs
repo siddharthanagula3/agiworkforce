@@ -7,7 +7,7 @@ use crate::sys::api::{
     ApiClient, ApiRequest, ApiResponse, HttpMethod, OAuth2Client, OAuth2Config, PkceChallenge,
     RequestTemplate, ResponseParser, TokenResponse,
 };
-use crate::sys::security::egress_policy::ensure_public_http_destination;
+use crate::sys::security::egress_policy::{judge_destination, HostResolver, SystemResolver};
 
 pub struct ApiState {
     client: OnceCell<ApiClient>,
@@ -107,11 +107,20 @@ impl ApiState {
 /// judged: it is the loopback callback the browser returns to, not a
 /// destination this process connects out to.
 fn ensure_oauth_endpoints_public(config: &OAuth2Config) -> Result<(), String> {
+    ensure_oauth_endpoints_public_with(config, &SystemResolver)
+}
+
+/// [`ensure_oauth_endpoints_public`] with the name resolver injected, so the
+/// policy decision can be tested without depending on what DNS answers.
+fn ensure_oauth_endpoints_public_with(
+    config: &OAuth2Config,
+    resolver: &dyn HostResolver,
+) -> Result<(), String> {
     for (field, value) in [
         ("authUrl", config.auth_url.as_str()),
         ("tokenUrl", config.token_url.as_str()),
     ] {
-        ensure_public_http_destination(value).map_err(|denial| format!("{field}: {denial}"))?;
+        judge_destination(value, resolver).map_err(|denial| format!("{field}: {denial}"))?;
     }
     Ok(())
 }
@@ -447,6 +456,21 @@ mod tests {
         }
     }
 
+    /// Answers for the one example host these cases use, so the policy decision
+    /// under test does not depend on whether `idp.example.com` resolves. The
+    /// egress policy fails closed on an unresolvable host, which is correct and
+    /// is exactly what made this test fail against the real resolver.
+    struct StubResolver;
+
+    impl HostResolver for StubResolver {
+        fn resolve(&self, host: &str, _port: u16) -> std::io::Result<Vec<std::net::IpAddr>> {
+            match host {
+                "idp.example.com" => Ok(vec![std::net::IpAddr::from([93, 184, 216, 34])]),
+                other => Err(std::io::Error::other(format!("unexpected host {other}"))),
+            }
+        }
+    }
+
     /// The token endpoint receives the client secret, so a renderer must not be
     /// able to point it at the local machine or a metadata service.
     #[test]
@@ -462,13 +486,13 @@ mod tests {
             scopes: vec!["read".to_string()],
             use_pkce: true,
         };
-        assert!(ensure_oauth_endpoints_public(&public).is_ok());
+        assert!(ensure_oauth_endpoints_public_with(&public, &StubResolver).is_ok());
 
         let stolen_secret = OAuth2Config {
             token_url: "http://127.0.0.1:9/token".to_string(),
             ..public.clone()
         };
-        let error = ensure_oauth_endpoints_public(&stolen_secret)
+        let error = ensure_oauth_endpoints_public_with(&stolen_secret, &StubResolver)
             .expect_err("a loopback token endpoint must be refused");
         assert!(error.starts_with("tokenUrl:"), "got: {error}");
 
@@ -476,7 +500,7 @@ mod tests {
             auth_url: "http://169.254.169.254/latest/meta-data/".to_string(),
             ..public
         };
-        let error = ensure_oauth_endpoints_public(&metadata_auth)
+        let error = ensure_oauth_endpoints_public_with(&metadata_auth, &StubResolver)
             .expect_err("a link-local auth endpoint must be refused");
         assert!(error.starts_with("authUrl:"), "got: {error}");
     }

@@ -1,6 +1,7 @@
 use mailparse::{parse_mail, MailHeaderMap, ParsedMail};
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::path::Path;
 use tokio::fs;
 use tracing::debug;
 
@@ -225,6 +226,11 @@ pub async fn save_attachment<'a>(
         })
         .unwrap_or_else(|| format!("attachment_{}", uuid::Uuid::new_v4()));
 
+    // The name comes straight out of MIME headers a sender controls, and
+    // `Path::join` discards the base when the joined component is absolute —
+    // `filename="/Users/x/Library/LaunchAgents/e.plist"` wrote exactly there.
+    // Keep the last path segment only, and never `.`, `..` or an embedded NUL.
+    let filename = sanitize_attachment_filename(&filename);
     let file_path = temp_dir.join(&filename);
     let content = attachment_part
         .get_body_raw()
@@ -235,6 +241,18 @@ pub async fn save_attachment<'a>(
         .map_err(|e| Error::Generic(format!("Failed to save attachment: {}", e)))?;
 
     Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Reduces a sender-supplied attachment name to a single safe path segment.
+/// Returns a generated name when nothing usable survives.
+fn sanitize_attachment_filename(raw: &str) -> String {
+    Path::new(raw)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.trim())
+        .filter(|name| !name.is_empty() && *name != "." && *name != ".." && !name.contains('\0'))
+        .map(|name| name.to_string())
+        .unwrap_or_else(|| format!("attachment_{}", uuid::Uuid::new_v4()))
 }
 
 fn find_attachment_recursive<'a>(
@@ -277,6 +295,45 @@ pub fn sanitize_html(html: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn an_absolute_attachment_name_is_reduced_to_its_last_segment() {
+        assert_eq!(
+            sanitize_attachment_filename("/Users/x/Library/LaunchAgents/evil.plist"),
+            "evil.plist"
+        );
+    }
+
+    #[test]
+    fn a_traversing_attachment_name_keeps_only_the_name() {
+        assert_eq!(
+            sanitize_attachment_filename("../../../etc/cron.d/evil"),
+            "evil"
+        );
+        assert_eq!(
+            sanitize_attachment_filename("a/../b/report.pdf"),
+            "report.pdf"
+        );
+    }
+
+    #[test]
+    fn a_name_with_nothing_usable_gets_a_generated_one() {
+        for hostile in ["..", ".", "", "   ", "/", "with\0nul"] {
+            let safe = sanitize_attachment_filename(hostile);
+            assert!(
+                safe.starts_with("attachment_"),
+                "{hostile:?} produced {safe:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_ordinary_name_is_left_alone() {
+        assert_eq!(
+            sanitize_attachment_filename("quarterly report.pdf"),
+            "quarterly report.pdf"
+        );
+    }
     use super::*;
 
     #[test]
