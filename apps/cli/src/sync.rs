@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,6 +95,27 @@ pub struct SyncReport {
 // ---------------------------------------------------------------------------
 // ConfigSync
 // ---------------------------------------------------------------------------
+
+/// True only when `candidate` is a relative path built entirely from ordinary
+/// names — no `..`, no root, no drive prefix, no bare `.`. Everything a sync
+/// bundle is allowed to write must satisfy this before it is joined onto home.
+pub fn is_contained_relative_path(candidate: &str) -> bool {
+    if candidate.is_empty() || candidate.contains('\0') {
+        return false;
+    }
+    let path = Path::new(candidate);
+    if path.is_absolute() {
+        return false;
+    }
+    let mut has_name = false;
+    for component in path.components() {
+        match component {
+            Component::Normal(_) => has_name = true,
+            _ => return false,
+        }
+    }
+    has_name
+}
 
 pub struct ConfigSync;
 
@@ -269,6 +290,18 @@ impl ConfigSync {
             // Build abs_path from the canonical home so both paths share the same
             // symlink-resolved prefix — avoids false positives when the target file
             // doesn't exist yet (canonicalize would fail on a non-existent path).
+            // `starts_with` is a lexical component compare and `canonicalize`
+            // fails on a target that does not exist yet, so the old guard let
+            // `.agiworkforce/../Library/LaunchAgents/x.plist` through: its
+            // components literally begin with home's. Reject anything that is
+            // not a plain relative name before the join, so no `..`, no root
+            // and no Windows prefix can reach the filesystem at all.
+            if !is_contained_relative_path(rel_path) {
+                anyhow::bail!(
+                    "Sync bundle contains path traversal: '{}' is not a relative path inside the home directory",
+                    rel_path
+                );
+            }
             let abs_path = canonical_home.join(rel_path);
             let canonical_abs = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());
             if !canonical_abs.starts_with(&canonical_home) {
@@ -475,6 +508,86 @@ mod tests {
 
     fn setup_home(dir: &Path) {
         fs::create_dir_all(dir.join("memories")).unwrap();
+    }
+
+    fn bundle_with(path: &str, content: &str) -> SyncBundle {
+        let mut files = HashMap::new();
+        files.insert(
+            path.to_string(),
+            SyncedFile {
+                content: content.to_string(),
+                sha256: ConfigSync::sha256_hex(content.as_bytes()),
+            },
+        );
+        SyncBundle {
+            device_id: "test-device".to_string(),
+            exported_at: "2026-08-16T00:00:00Z".to_string(),
+            files,
+        }
+    }
+
+    #[test]
+    fn a_traversing_bundle_path_is_refused_and_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let outside = dir.path().join("outside");
+        fs::create_dir_all(&home).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        setup_home(&home);
+
+        // The target does not exist, so canonicalize() fails and the old
+        // fallback compared the raw join — whose components do start with
+        // home's, so the lexical starts_with check passed.
+        let escape = "../outside/pwned.plist";
+        let result = ConfigSync::import(&home, &bundle_with(escape, "payload"));
+
+        assert!(result.is_err(), "traversing path was accepted");
+        assert!(!outside.join("pwned.plist").exists(), "wrote outside home");
+    }
+
+    #[test]
+    fn an_absolute_bundle_path_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        fs::create_dir_all(&home).unwrap();
+        setup_home(&home);
+        let absolute = dir.path().join("absolute.plist");
+
+        let result = ConfigSync::import(&home, &bundle_with(absolute.to_str().unwrap(), "payload"));
+
+        assert!(result.is_err(), "absolute path was accepted");
+        assert!(
+            !absolute.exists(),
+            "join discarded the base and wrote there"
+        );
+    }
+
+    #[test]
+    fn an_ordinary_nested_path_still_imports() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        fs::create_dir_all(&home).unwrap();
+        setup_home(&home);
+
+        let report = ConfigSync::import(&home, &bundle_with("memories/notes.md", "kept")).unwrap();
+
+        assert_eq!(report.files_updated, vec!["memories/notes.md".to_string()]);
+        assert_eq!(
+            fs::read_to_string(home.join("memories/notes.md")).unwrap(),
+            "kept"
+        );
+    }
+
+    #[test]
+    fn containment_check_accepts_names_and_rejects_everything_else() {
+        assert!(is_contained_relative_path("config.toml"));
+        assert!(is_contained_relative_path("memories/notes.md"));
+        assert!(!is_contained_relative_path(""));
+        assert!(!is_contained_relative_path("."));
+        assert!(!is_contained_relative_path(".."));
+        assert!(!is_contained_relative_path("a/../../b"));
+        assert!(!is_contained_relative_path("/etc/passwd"));
+        assert!(!is_contained_relative_path("a\0b"));
     }
 
     #[test]

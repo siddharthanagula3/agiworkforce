@@ -38,6 +38,7 @@ class SkillspectorState(TypedDict, total=False):
 
     # build_context node populates these
     components: list[str]
+    escaping_symlinks: list[str]
     file_cache: dict[str, str]
     ast_cache: dict[str, str]
     manifest: dict[str, object]
