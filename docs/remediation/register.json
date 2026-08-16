@@ -3984,7 +3984,7 @@
       "title": "No way to stop a video generation — the fully implemented cancel route has zero client callers and Stop is suppressed in video mode",
       "domain": "web",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "/api/media/video/cancel/route.ts is fully implemented with its own test suite (cancelRequestedAt, provider cancel attempts, requested/unconfirmed state machine) but no client anywhere calls it; ChatComposerNew.tsx actively suppresses the Stop button and disables the textarea in video mode, making a 1-2 minute generation uninterruptible on both Web and Mobile. Verified during this merge: grep for 'media/video/cancel' across apps/ and packages/ returns only .next build artifacts, no source callers.",
       "fix": "The composer's Stop control is reachable during a video generation and calls the existing cancel route, so a user can abort a run in progress.",
@@ -3999,6 +3999,11 @@
         "method": "read the cited files at the cited lines in the working tree",
         "prior_severity": "HIGH",
         "prior_effort": "S"
+      },
+      "resolution": {
+        "fixed_in": "583176d61",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
       }
     },
     {
@@ -4006,15 +4011,22 @@
       "title": "Video model picker lists a preview-only model as selectable, which 400s immediately on submit",
       "domain": "web",
       "severity": "LOW",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "VIDEO_MODELS filters only on status==='deprecated', not on availability, so a preview-availability video model renders as pickable; generate/route.ts then rejects it with 'Unknown or unavailable video model'.",
+      "evidence": "VIDEO_MODELS filters only on status==='deprecated', not on availability, so a preview-availability video model renders as pickable; generate/route.ts then rejects it with 'Unknown or unavailable video model'.\n\nREFUTED 2026-08-16. Refuted. The composer builds its video list from isExecutableVideoModel, which requires catalog availability to be live, so the preview-only and unavailable entries were never selectable. A second gate (mediaAdmissionFor) sits behind it. Pinned by apps/web/__tests__/video-model-selectability.test.ts so the filter cannot be loosened silently.",
       "fix": "The video model picker offers only models the generate route will accept — availability is part of the filter, not just deprecation status.",
       "code_refs": [
         "apps/web/features/chat/components/Composer/ChatComposerNew.tsx:309-315",
         "apps/web/app/api/media/video/generate/route.ts:162"
       ],
-      "sources": ["phase4-capability-audit.md (PP-19)"]
+      "sources": ["phase4-capability-audit.md (PP-19)"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_severity": "LOW",
+        "prior_effort": "S"
+      }
     },
     {
       "id": "WEB-06",
@@ -4053,7 +4065,7 @@
       "title": "Public /skills page is sitemap-indexed and the CTA target of marketing pages but redirects anonymous visitors straight to /login with no explanation",
       "domain": "web",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
       "evidence": "apps/web/app/skills/page.tsx redirects any anonymous visitor to /login?redirectTo=%2Fskills, while sitemap.ts lists /skills at priority 0.8 and the features/plugins page links 'Browse Skills' to it. Search traffic and marketing clicks both land on an unexplained login wall.",
       "fix": "An anonymous visitor to /skills either sees a public read-only catalogue or an explicit explanation of why sign-in is required; the sitemap and marketing CTAs match whichever is chosen.",
@@ -4065,6 +4077,11 @@
         "method": "read the cited files at the cited lines in the working tree",
         "prior_severity": "MEDIUM",
         "prior_effort": "S"
+      },
+      "resolution": {
+        "fixed_in": "583176d61",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
       }
     },
     {
@@ -12487,7 +12504,7 @@
       "title": "/skills, /connectors, /apps, /device-auth and /user render the app-wide default <title>",
       "domain": "web",
       "severity": "LOW",
-      "status": "open",
+      "status": "resolved",
       "evidence": "SHELL-NAV-IA-007: none of these five route files exports a metadata object, so each shows the generic app title in the tab and in shared links.",
       "fix": "Add a metadata export with a short specific title to each file — one line per file, no behavioural risk.",
       "sources": ["audit/parity-2026-08-15 — SHELL-NAV-IA-007"],
@@ -12498,7 +12515,12 @@
         "apps/web/app/device-auth/page.tsx",
         "apps/web/app/user/page.tsx"
       ],
-      "effort": "S"
+      "effort": "S",
+      "resolution": {
+        "fixed_in": "110922a2e",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "WEB-48",
@@ -12603,24 +12625,36 @@
       "title": "/ai-skills redirects with a ?tab=agents query param that /skills never reads",
       "domain": "web",
       "severity": "LOW",
-      "status": "open",
+      "status": "resolved",
       "evidence": "duplication/extension-surfaces.md §2.6: /ai-skills redirects to /skills?tab=agents while /features/ai-skills redirects to bare /skills; /skills's route component never reads any tab search param, so the query string is silently dropped.",
       "fix": "Reconcile the two redirect targets; only meaningful if a real Skills sub-tab is ever built.",
       "sources": ["audit/competitive-gap-2026-08-15/duplication/extension-surfaces.md §2.6"],
       "code_refs": ["apps/web/app/ai-skills/page.tsx", "apps/web/app/skills/page.tsx:14-27"],
-      "effort": "S"
+      "effort": "S",
+      "resolution": {
+        "fixed_in": "110922a2e",
+        "fixed_on": "2026-08-16",
+        "verified_by": "a test that fails without the fix"
+      }
     },
     {
       "id": "WEB-58",
       "title": "qa-artifacts dev harness is still present with a stale 'Delete after QA' comment",
       "domain": "web",
       "severity": "LOW",
-      "status": "open",
-      "evidence": "duplication/content-surfaces.md and all-axes#library-artifacts-gallery[3]: apps/web/app/qa-artifacts/layout.tsx notFound()s in production, is gitignored and robots-disallowed — inert, but its own header comment says 'Delete after QA' and it was never removed.",
+      "status": "resolved",
+      "evidence": "duplication/content-surfaces.md and all-axes#library-artifacts-gallery[3]: apps/web/app/qa-artifacts/layout.tsx notFound()s in production, is gitignored and robots-disallowed — inert, but its own header comment says 'Delete after QA' and it was never removed.\n\nREFUTED 2026-08-16. Refuted. apps/web/app/qa-artifacts/ is gitignored and untracked, so it reaches no deploy at all; its layout.tsx 404s the segment under NODE_ENV=production, and /qa-artifacts is in robots DISALLOW. The only survivor was a stale \"Delete after QA\" comment inside an untracked local file.",
       "fix": "Delete apps/web/app/qa-artifacts/ now that its QA purpose is served.",
       "sources": ["audit/competitive-gap-2026-08-15/duplication/content-surfaces.md"],
       "code_refs": ["apps/web/app/qa-artifacts/"],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_severity": "LOW",
+        "prior_effort": "S"
+      }
     },
     {
       "id": "WEB-61",
