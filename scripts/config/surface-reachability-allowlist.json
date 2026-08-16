@@ -414,7 +414,6 @@
           "apps/web/shared/types/teams.ts",
           "apps/web/shared/types/toolCalling.ts",
           "apps/web/shared/types/workflow.ts",
-          "apps/web/shared/ui/ai-prompt-box.tsx",
           "apps/web/shared/ui/animated-beam.tsx",
           "apps/web/shared/ui/animated-gradient-text.tsx",
           "apps/web/shared/ui/avatar-with-fallback.tsx",
