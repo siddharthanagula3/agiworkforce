@@ -1,10 +1,9 @@
-
-import { View, Pressable } from 'react-native';
+import { Alert, View, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { ExternalLink, Film } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, radii } from '@/src/ui/theme';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 
 export interface GeneratedVideoProps {
   videoUrl: string;
@@ -21,7 +20,16 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
     <View testID="generated-video" style={{ marginTop: 8, gap: 6 }}>
       <Pressable
         onPress={() => {
-          void openExternalUrl(videoUrl);
+          void (async () => {
+            // The generated video is auth-gated, so it has to open in the
+            // in-app browser, which carries the session. The system browser
+            // would 401 — and before the URL was resolved to an absolute one,
+            // the allowlist refused it outright and the tap did nothing at all.
+            const opened = await openInAppBrowser(videoUrl);
+            if (!opened) {
+              Alert.alert('Could not open the video', 'Try again from your library.');
+            }
+          })();
         }}
         accessibilityRole="button"
         accessibilityLabel={

@@ -1,4 +1,3 @@
-
 import type {
   ChatRuntime,
   Artifact,
@@ -387,6 +386,13 @@ export class TauriRuntime implements ChatRuntime {
   readonly supportsExplicitLocalWebSearch = true;
 
   readonly supportsAgentControl = false;
+
+  // ChatInterface falls back to supportsAgentControl when this is undefined,
+  // and this runtime sets that to false, so both the effort chip and the
+  // thinking control were hidden on Tauri — while sendMessage forwarded
+  // `effort` and `thinkingEnabled` all the way to reasoningEffort on the Rust
+  // command. Declared explicitly so the two cannot disagree again.
+  readonly supportsReasoningEffort = true;
 
   private readonly _stopFlags = new Map<string, boolean>();
   private readonly _stopSettlers = new Map<string, () => void>();

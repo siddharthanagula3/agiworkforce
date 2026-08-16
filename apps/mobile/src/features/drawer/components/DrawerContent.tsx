@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'expo-router';
 import { type DrawerContentComponentProps } from 'expo-router/drawer';
 import {
   BookImage,
+  BookOpen,
   Bot,
   CalendarClock,
   FolderOpen,
@@ -18,7 +19,7 @@ import {
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
-import { canUseBillingPlanCapability } from '@agiworkforce/types';
+import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/src/features/projects/store';
@@ -52,7 +53,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'chats' | 'projects' | 'library' | 'schedules' | 'remote';
+  key: 'chats' | 'projects' | 'library' | 'skills' | 'schedules' | 'remote';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -84,6 +85,17 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: BookImage,
     route: '/(app)/library',
   },
+  // Collateral damage from the 2026-08-13 consolidation, not a deliberate
+  // de-listing like Artifacts/Tasks above: FEATURES.skills is still on, the
+  // /(app)/skills route and its Clerk-gated Managed Cloud catalog screen are
+  // still live, and nothing replaced this row's function. Restored.
+  {
+    key: 'skills',
+    label: 'Skills',
+    icon: BookOpen,
+    route: '/(app)/skills',
+    cloud: true,
+  },
   {
     key: 'schedules',
     label: 'Schedules',
@@ -93,7 +105,9 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
   },
   {
     key: 'remote',
-    label: 'Remote',
+    // Desktop's pairing card tells people to open this screen by name, so the
+    // label is shared rather than typed twice.
+    label: MOBILE_REMOTE_SCREEN_LABEL,
     icon: MonitorSmartphone,
     route: '/(app)/companion',
   },
@@ -339,6 +353,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         // Cloud mode exposes the shared cloud surfaces (Tasks, Schedules). Local
         // mode keeps only on-device surfaces and hides every cloud-only item.
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
+        if (item.key === 'skills' && !FEATURES.skills) return false;
         if (item.key === 'remote' && !FEATURES.companion) return false;
         if (appMode === 'cloud') return true;
         return !item.cloud;
@@ -352,6 +367,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'projects') return p.includes('/projects');
       if (key === 'chats') return p.includes('/chats');
       if (key === 'library') return p.includes('/library');
+      if (key === 'skills') return p.includes('/skills');
       if (key === 'schedules') return p.includes('/schedules');
       if (key === 'remote') return p.includes('/companion');
       return false;
