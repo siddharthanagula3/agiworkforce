@@ -82,7 +82,10 @@
       "providerShortName": "D2PR62RLT4",
       "signingIdentity": "Developer ID Application: AGI AUTOMATION LLC (D2PR62RLT4)",
       "infoPlist": "Info.plist"
-    }
+    },
+    "resources": [
+      "mcp-allowlist.json"
+    ]
   },
   "plugins": {
     "deep-link": {
