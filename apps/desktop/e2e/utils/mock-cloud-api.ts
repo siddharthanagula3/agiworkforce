@@ -57,6 +57,8 @@ export interface CloudMessageWire {
 export interface MockCloudApiOptions extends MockCloudAuthOptions {
   /** Models returned by `GET /api/models`; empty deliberately makes the managed picker unavailable. */
   models?: Array<{ id: string; name: string; provider: string }>;
+  /** Text the mocked managed-cloud completion streams back, word by word. */
+  assistantReply?: string;
   /** Conversation list returned by `GET /api/chat/conversations`. */
   conversations?: CloudConversationWire[];
   /** Messages returned by `GET /api/chat/conversations/:id`, keyed by id. */
@@ -133,6 +135,7 @@ export function cloudMessageFixture(
  */
 export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}): Promise<void> {
   const models = options.models ?? [];
+  const assistantReply = options.assistantReply ?? 'Mocked managed cloud reply.';
   const conversations = options.conversations ?? [];
   const messagesByConversation = options.messagesByConversation ?? {};
   const projects = options.projects ?? [];
@@ -224,6 +227,31 @@ export async function mockCloudApi(page: Page, options: MockCloudApiOptions = {}
       return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
     }
     return fulfillJson(route, { projects });
+  });
+
+  // Managed-cloud chat completion. `cloudApi.streamCloudChat` POSTs here and
+  // reads the reply as an SSE stream; the catch-all's `{}` produced a response
+  // body with no events at all, so every send ended in "AGI Cloud completed
+  // without returning a response. Please retry." — an error banner that looked
+  // like a broken chat rather than an unimplemented mock.
+  //
+  // Registered before the `/runs` route below so that route still wins for its
+  // own path: Playwright matches the most recently registered handler first.
+  await page.route('**/api/llm/v1/chat/completions', (route) => {
+    if (isPreflight(route)) {
+      return route.fulfill({ status: 204, headers: mockCloudCorsHeaders(route) });
+    }
+    const frames = assistantReply
+      .split(' ')
+      .map((word, index) => (index === 0 ? word : ` ${word}`))
+      .map((piece) => `data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\n`)
+      .join('');
+    return route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      headers: mockCloudCorsHeaders(route),
+      body: `${frames}data: [DONE]\n\n`,
+    });
   });
 
   await page.route('**/api/llm/v1/chat/completions/runs**', (route) => {
