@@ -59,12 +59,18 @@ export function MemoryEditor({
     void hydrateFromServer().catch(() => undefined);
   }, [hydrateFromServer]);
 
+  // An optimistic adapter has already applied the change by the time this
+  // awaits, so `mutating` gates only the control that started the request. It
+  // used to disable every row's Save and Delete until the round trip finished,
+  // which is the exact latency an optimistic update exists to remove.
   const runMutation = useCallback(async (action: () => Promise<unknown> | unknown) => {
     setMutating(true);
     setMutationError(null);
     try {
       await action();
     } catch (error) {
+      // The adapter has already put the list back; this says why, so a row that
+      // reappears (or vanishes again) is not mistaken for a glitch.
       setMutationError(error instanceof Error ? error.message : 'Could not update memory.');
     } finally {
       setMutating(false);
@@ -76,9 +82,18 @@ export function MemoryEditor({
       event.preventDefault();
       const next = draft.trim();
       if (!next) return;
+      // Cleared up front, not after the round trip. With an optimistic adapter
+      // the row is already in the list, so leaving the text in the box showed
+      // it twice and read as a double submit.
+      setDraft('');
       void runMutation(async () => {
-        await add(next);
-        setDraft('');
+        try {
+          await add(next);
+        } catch (error) {
+          // Handed back so the user can retry without retyping.
+          setDraft(next);
+          throw error;
+        }
       });
     },
     [draft, add, runMutation],
@@ -92,14 +107,18 @@ export function MemoryEditor({
   const onSaveEdit = useCallback(
     (id: string) => {
       const next = editDraft.trim();
+      // Closed up front for the same reason: the adapter has already applied
+      // the new text to the row behind it, and an editor left open over a row
+      // that disagrees with it is the confusing state. A failure rolls the row
+      // back and says so, and the row is editable again.
+      setEditingId(null);
+      setEditDraft('');
       void runMutation(async () => {
         if (!next) {
           await remove(id);
         } else {
           await update(id, next);
         }
-        setEditingId(null);
-        setEditDraft('');
       });
     },
     [editDraft, remove, update, runMutation],
@@ -213,7 +232,7 @@ export function MemoryEditor({
                         <button
                           type="button"
                           onClick={() => void onSaveEdit(fact.id)}
-                          disabled={mutating}
+                          disabled={fact.pending}
                           className="rounded bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-white hover:opacity-90"
                         >
                           Save
@@ -225,22 +244,29 @@ export function MemoryEditor({
                       <button
                         type="button"
                         onClick={() => onBeginEdit(fact)}
-                        className="text-left text-sm text-[var(--chat-text-primary)] focus:outline-none"
+                        disabled={fact.pending}
+                        className="text-left text-sm text-[var(--chat-text-primary)] focus:outline-none disabled:cursor-default"
                         aria-label={`Edit memory: ${fact.text}`}
                       >
                         {fact.text}
                       </button>
                       <div className="flex items-center justify-between text-[10px] text-[var(--chat-text-muted)]">
                         <span>
-                          Added {formatRelativeDate(fact.createdAt)}
-                          {fact.updatedAt !== fact.createdAt
-                            ? ` · edited ${formatRelativeDate(fact.updatedAt)}`
-                            : ''}
+                          {fact.pending ? (
+                            'Saving…'
+                          ) : (
+                            <>
+                              Added {formatRelativeDate(fact.createdAt)}
+                              {fact.updatedAt !== fact.createdAt
+                                ? ` · edited ${formatRelativeDate(fact.updatedAt)}`
+                                : ''}
+                            </>
+                          )}
                         </span>
                         <button
                           type="button"
                           onClick={() => void runMutation(() => remove(fact.id))}
-                          disabled={mutating}
+                          disabled={fact.pending}
                           className="rounded p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive)]"
                           aria-label={`Delete memory fact`}
                         >

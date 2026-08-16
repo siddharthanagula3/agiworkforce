@@ -309,23 +309,41 @@ export const useChatMessageStore = create<MessageState>()(
         if (!localConversation) {
           const cloudStore = getCloudStore();
           const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
-          if (cloudConversation && shouldSyncConversationRemote(cloudConversation)) {
-            const deleted = await deleteCloudConversationWithRetry(id);
-            if (!deleted) {
-              Alert.alert(
-                'Could not delete conversation',
-                'We could not delete this conversation from the cloud. Check your connection and try again.',
-              );
-              return;
-            }
-            cloudStore.getState().removeCloudConversation(id);
-          } else {
-            cloudStore.getState().removeCloudConversation(id);
-          }
+          const needsRemoteDelete =
+            cloudConversation !== undefined && shouldSyncConversationRemote(cloudConversation);
+
+          // Remove first. deleteCloudConversationWithRetry backs off across
+          // three attempts, so waiting for it left the row on screen for the
+          // best part of a second after the user tapped Delete, which reads as
+          // the tap not registering.
+          const removedIndex = cloudStore
+            .getState()
+            .conversations.findIndex((c) => c.id === id);
+          const removedMessages = cloudStore.getState().messages[id];
+          cloudStore.getState().removeCloudConversation(id);
+          const previousConversationId = get().currentConversationId;
           set((state) => ({
             currentConversationId:
               state.currentConversationId === id ? null : state.currentConversationId,
           }));
+
+          if (!needsRemoteDelete || !cloudConversation) return;
+
+          const deleted = await deleteCloudConversationWithRetry(id);
+          if (deleted) return;
+
+          // Put the conversation back where it was and say so, rather than
+          // leaving the user believing it is gone until the next sync.
+          cloudStore
+            .getState()
+            .restoreCloudConversation(cloudConversation, removedIndex, removedMessages);
+          if (previousConversationId === id) {
+            set({ currentConversationId: id });
+          }
+          Alert.alert(
+            'Could not delete conversation',
+            'We could not delete this conversation from the cloud, so it has been restored. Check your connection and try again.',
+          );
           return;
         }
         set((state) => {
@@ -515,7 +533,13 @@ export const useChatMessageStore = create<MessageState>()(
                 ManagedCloudUpdateConversationRequestSchema.parse({ pinned }),
               );
             } catch {
+              // The row visibly flips back; without a word for it the user is
+              // left thinking they mis-tapped.
               cloudStore.getState().patchCloudConversation(id, { pinned: !pinned });
+              Alert.alert(
+                pinned ? 'Could not pin conversation' : 'Could not unpin conversation',
+                'The change has been undone. Check your connection and try again.',
+              );
             }
           }
           return;

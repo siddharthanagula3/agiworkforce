@@ -8,6 +8,13 @@ export interface MemoryFact {
   createdAt: string;
   updatedAt: string;
   serverId?: string;
+  /**
+   * Shown immediately from an optimistic add, before the server has assigned a
+   * real id. Editing or deleting one is refused because there is nothing
+   * addressable to send yet; it clears when the create resolves, or the row
+   * disappears when it fails.
+   */
+  pending?: boolean;
 }
 
 export type MemorySyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
