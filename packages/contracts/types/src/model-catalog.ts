@@ -2276,6 +2276,11 @@ export function getProviderModelCatalog(provider: Provider | string): readonly M
       id: meta.id,
       ...(meta.name !== undefined ? { name: meta.name } : {}),
       provider: meta.provider,
+      // Every registry entry declares a modelType. Dropping it here made every
+      // projected ModelInfo answer `undefined` to "is this a chat/reasoning
+      // model", which is not a distinction a caller can rebuild from the rest
+      // of the shape.
+      ...(meta.modelType !== undefined ? { modelType: meta.modelType } : {}),
       ...(meta.contextWindow !== undefined ? { contextWindow: meta.contextWindow } : {}),
       ...(meta.maxOutputTokens !== undefined ? { maxOutputTokens: meta.maxOutputTokens } : {}),
       ...(meta.capabilities ? { capabilities: meta.capabilities } : {}),
