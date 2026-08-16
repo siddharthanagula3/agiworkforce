@@ -427,6 +427,7 @@ export default function ProjectsPage() {
             }}
             project={editProject}
             onUpdate={(id, updates) => updateProject(id, updates)}
+            onDuplicated={retry}
             onDelete={(id) => {
               removeProject(id);
               setEditProject(null);

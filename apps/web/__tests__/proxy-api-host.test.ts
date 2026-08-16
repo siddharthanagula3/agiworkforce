@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { API_HOST_REWRITE_ROUTES } from '../lib/api-host-route-contract';
@@ -86,5 +85,36 @@ describe('API host does not serve the app', () => {
     const response = await requestFrom(host, '/chat');
     const location = response?.headers.get('location') ?? null;
     expect(location === null || !location.startsWith('https://agiworkforce.com/chat')).toBe(true);
+  });
+});
+
+describe('buildApiHostRedirectTarget · protocol-relative paths', () => {
+  async function build(pathname: string, search = '') {
+    vi.resetModules();
+    process.env['NEXT_PUBLIC_APP_URL'] = 'https://agiworkforce.com';
+    const { buildApiHostRedirectTarget } = await import('../proxy');
+    return buildApiHostRedirectTarget(pathname, search, 'agiworkforce.com');
+  }
+
+  it('sends an ordinary path to the app host', async () => {
+    const target = await build('/pricing', '?plan=pro');
+    expect(target?.toString()).toBe('https://agiworkforce.com/pricing?plan=pro');
+  });
+
+  it('keeps a protocol-relative path on the app host instead of the attacker one', async () => {
+    const target = await build('//evil.example/steal');
+    expect(target?.origin).toBe('https://agiworkforce.com');
+    expect(target?.toString()).toBe('https://agiworkforce.com/evil.example/steal');
+  });
+
+  it('collapses any run of leading slashes, not just two', async () => {
+    const target = await build('/////evil.example/steal');
+    expect(target?.origin).toBe('https://agiworkforce.com');
+  });
+
+  it('refuses rather than redirecting when the resolved origin is not the app host', async () => {
+    vi.resetModules();
+    const { buildApiHostRedirectTarget } = await import('../proxy');
+    expect(buildApiHostRedirectTarget('/ok', '', 'not a valid host')).toBeNull();
   });
 });

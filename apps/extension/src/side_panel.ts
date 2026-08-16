@@ -8875,7 +8875,7 @@ function buildUI(): void {
 
   const sendBtn = el('button', {
     id: 'sp-send-btn',
-    title: 'Send (Cmd+Enter)',
+    title: 'Send (Enter — Shift+Enter for a new line)',
     'aria-label': 'Send message',
     'data-mode': 'send',
   });
