@@ -12,6 +12,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 const HEALTH_CHECK_TIMEOUT_MS = 8_000;
+const PAGER_TIMEOUT_MS = 5_000;
 
 const TIMED_OUT = Symbol('health-check-timeout');
 
@@ -23,6 +24,7 @@ interface ProbeSummary {
   delivery: 'not_needed' | 'delivered' | 'undeliverable';
   severity?: AlertSeverity;
   reason?: string;
+  paged?: 'paged' | 'unconfigured' | 'failed';
 }
 
 function environmentLabel(): string {
@@ -87,27 +89,74 @@ function buildAlert(
   };
 }
 
+/**
+ * Posts the alert to a pager webhook when one is configured. Email alone waits
+ * for someone to read it; a health probe firing at 06:15 needs to wake a
+ * person. Best-effort by design — a pager that is down must not stop the email
+ * from going out, so this never throws.
+ */
+async function pageOnCall(
+  severity: AlertSeverity,
+  subject: string,
+  text: string,
+): Promise<'paged' | 'unconfigured' | 'failed'> {
+  const webhook = process.env['PAGER_WEBHOOK_URL'];
+  if (!webhook) return 'unconfigured';
+
+  try {
+    const response = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ severity, subject, text, source: 'health-probe' }),
+      signal: AbortSignal.timeout(PAGER_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      logger.error({ severity, status: response.status }, 'Pager webhook rejected the alert');
+      return 'failed';
+    }
+    return 'paged';
+  } catch (error) {
+    logger.error({ severity, error }, 'Pager webhook could not be reached');
+    return 'failed';
+  }
+}
+
 async function dispatchAlert(
   severity: AlertSeverity,
   result: HealthCheckResult,
   failed: string[],
 ): Promise<ProbeSummary> {
   const { subject, text, html } = buildAlert(severity, result, failed);
-  const sent = await sendSupportEmail({
-    to: getHandoffConfig().fallbackEmail,
-    subject,
-    text,
-    html,
-  });
+  const [sent, paged] = await Promise.all([
+    sendSupportEmail({
+      to: getHandoffConfig().fallbackEmail,
+      subject,
+      text,
+      html,
+    }),
+    pageOnCall(severity, subject, text),
+  ]);
+
+  if (paged === 'unconfigured') {
+    logger.warn(
+      { severity },
+      'PAGER_WEBHOOK_URL is unset · this alert reached an inbox and nothing else',
+    );
+  }
 
   if (sent.delivered) {
-    logger.error({ severity, status: result.status, failed }, 'Health probe alert dispatched');
-    return { status: result.status, alerted: true, delivery: 'delivered', severity };
+    logger.error(
+      { severity, status: result.status, failed, paged },
+      'Health probe alert dispatched',
+    );
+    return { status: result.status, alerted: true, delivery: 'delivered', severity, paged };
   }
 
   logger.error(
-    { severity, status: result.status, failed, reason: sent.reason },
-    'Health probe alert could NOT be delivered · no human has been told',
+    { severity, status: result.status, failed, reason: sent.reason, paged },
+    paged === 'paged'
+      ? 'Health probe alert email failed · the pager was reached'
+      : 'Health probe alert could NOT be delivered · no human has been told',
   );
   return {
     status: result.status,
@@ -115,6 +164,7 @@ async function dispatchAlert(
     delivery: 'undeliverable',
     severity,
     reason: sent.reason,
+    paged,
   };
 }
 
