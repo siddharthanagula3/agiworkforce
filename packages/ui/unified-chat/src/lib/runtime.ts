@@ -27,6 +27,22 @@ export interface CloudMessageProjection {
     returnCode: number;
     images?: Array<{ mediaType: string; data: string }>;
   };
+  /**
+   * Token counts the provider reported for this turn, as they arrive on the
+   * OpenAI-wire `usage` object of the final stream chunk. Every field is
+   * optional because coverage is uneven across providers: cache and reasoning
+   * breakdowns only exist where the provider bills for them, so the stats
+   * panel omits a row rather than printing a fabricated zero.
+   *
+   * Durable, so a reopened conversation still shows what a turn cost.
+   */
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+    reasoningTokens?: number;
+  };
   research?: {
     phase: 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error';
     label?: string;

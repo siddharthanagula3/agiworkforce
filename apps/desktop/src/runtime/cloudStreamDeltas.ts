@@ -294,6 +294,11 @@ export function createCloudStreamDeltaSink(
   const projectedSearches = new Map<string, WebSearchResult>();
   const projectedFiles = new Map<string, GeneratedFileEntry>();
   let codeExecutionResult: CloudStreamMessageProjection['codeExecutionResult'];
+  // Provider token counts, carried on the OpenAI-wire `usage` object of the
+  // final chunk (`stream_options.include_usage`). A server tool loop emits more
+  // than one usage object across its rounds, so these accumulate rather than
+  // overwrite: the panel reports what the whole turn cost, not its last leg.
+  let usage: CloudStreamMessageProjection['usage'];
   // Deep Research status carries forward across deltas (some fields, e.g.
   // `sources`/`iteration`, are only present on SOME status updates) — mirrors
   // apps/web/lib/hooks/useChatStream.ts's currentResearch merge exactly.
@@ -339,6 +344,49 @@ export function createCloudStreamDeltaSink(
     emit({ type: inThinkingBlock ? 'thinking' : 'content', content: text });
   };
 
+  // A server tool loop reports usage once per round, so sum rather than
+  // overwrite. Absent fields stay absent: a provider that does not bill for
+  // cache reads reports nothing, and inventing a 0 would read as a measurement.
+  const accumulateUsage = (raw: unknown): void => {
+    if (!raw || typeof raw !== 'object') return;
+    const source = raw as Record<string, unknown>;
+    const read = (...keys: string[]): number | undefined => {
+      for (const key of keys) {
+        const value = source[key];
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+      }
+      return undefined;
+    };
+    const details = (key: string, field: string): number | undefined => {
+      const bag = source[key];
+      if (!bag || typeof bag !== 'object') return undefined;
+      const value = (bag as Record<string, unknown>)[field];
+      return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+    };
+
+    const next = {
+      inputTokens: read('prompt_tokens', 'input_tokens'),
+      outputTokens: read('completion_tokens', 'output_tokens'),
+      cacheReadTokens:
+        details('prompt_tokens_details', 'cached_tokens') ??
+        details('input_tokens_details', 'cached_tokens') ??
+        read('cache_read_input_tokens', 'prompt_cache_hit_tokens'),
+      cacheWriteTokens: read('cache_creation_input_tokens'),
+      reasoningTokens:
+        details('completion_tokens_details', 'reasoning_tokens') ??
+        details('output_tokens_details', 'reasoning_tokens'),
+    };
+    if (Object.values(next).every((value) => value === undefined)) return;
+
+    const merged = { ...(usage ?? {}) };
+    for (const [key, value] of Object.entries(next)) {
+      if (value === undefined) continue;
+      const field = key as keyof NonNullable<CloudStreamMessageProjection['usage']>;
+      merged[field] = (merged[field] ?? 0) + value;
+    }
+    usage = merged;
+  };
+
   const onEvent = (payload: Record<string, unknown>): void => {
     const choices = Array.isArray(payload['choices']) ? payload['choices'] : [];
     const delta =
@@ -355,6 +403,11 @@ export function createCloudStreamDeltaSink(
     if (typeof rawFinishReason === 'string' && rawFinishReason) {
       finishReason = rawFinishReason;
     }
+
+    // Provider token counts. Sits at the TOP level of the chunk, beside
+    // `choices`, not inside a delta — and the chunk that carries it has an
+    // empty `choices` array, so it is only reachable here.
+    accumulateUsage(payload['usage']);
 
     // Canonical managed-cloud activity. Validate at the untrusted SSE boundary
     // before either the UI or persistence layer can observe it, then maintain
@@ -675,6 +728,7 @@ export function createCloudStreamDeltaSink(
       ...(projectedArtifacts.size > 0 ? { artifacts: [...projectedArtifacts.values()] } : {}),
       ...(codeExecutionResult ? { codeExecutionResult } : {}),
       ...(researchStatus ? { research: { ...researchStatus } } : {}),
+      ...(usage ? { usage: { ...usage } } : {}),
     }),
   };
 }
