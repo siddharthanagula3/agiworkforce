@@ -19,6 +19,20 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
   const requestedPort = Number(env['VITE_DEV_PORT']) || DEFAULT_DEV_PORT;
   const tauriDevHost = env['TAURI_DEV_HOST'] || '127.0.0.1';
 
+  const devHmrOrigins = [`ws://127.0.0.1:${requestedPort}`, `ws://localhost:${requestedPort}`];
+  const devWebAppOrigin = (() => {
+    const configured = env['VITE_WEB_APP_URL'] || process.env['VITE_WEB_APP_URL'];
+    if (!configured) return null;
+    try {
+      const origin = new URL(configured).origin;
+      return origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')
+        ? origin
+        : null;
+    } catch {
+      return null;
+    }
+  })();
+
   const isWindows = env['TAURI_PLATFORM'] === 'windows';
   const isDebug = Boolean(env['TAURI_DEBUG']);
   const browserShimDir = (module: string) =>
@@ -106,7 +120,19 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           "style-src 'self' 'unsafe-inline' 'unsafe-hashes' https://fonts.googleapis.com",
           'img-src * data: blob:',
           "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:",
-          "connect-src 'self' ws://127.0.0.1:5173 ws://localhost:5173 ipc: https://api.agiworkforce.com https://agiworkforce.com https://api.stripe.com https://agiworkforce-signaling.fly.dev wss://agiworkforce-signaling.fly.dev http://localhost:11434 http://127.0.0.1:11434",
+          [
+            "connect-src 'self'",
+            ...devHmrOrigins,
+            'ipc:',
+            'https://api.agiworkforce.com',
+            'https://agiworkforce.com',
+            'https://api.stripe.com',
+            'https://agiworkforce-signaling.fly.dev',
+            'wss://agiworkforce-signaling.fly.dev',
+            'http://localhost:11434',
+            'http://127.0.0.1:11434',
+            ...(devWebAppOrigin ? [devWebAppOrigin] : []),
+          ].join(' '),
           "frame-src 'self' https://js.stripe.com",
           "frame-ancestors 'none'",
           "media-src 'self' blob:",

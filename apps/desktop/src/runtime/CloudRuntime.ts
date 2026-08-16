@@ -1039,10 +1039,12 @@ export class CloudRuntime implements ChatRuntime {
           }
           const finishReason = sink.getFinishReason();
           const streamError = sink.getStreamError();
+          const streamedUsage = sink.getMessageProjection().usage;
           this.emitForConversation(conversationId, {
             type: 'done',
             ...(finishReason ? { finishReason } : {}),
             ...(streamError ? { streamError } : {}),
+            ...(streamedUsage ? { usage: streamedUsage } : {}),
           });
         },
         (err: Error) => {
@@ -1274,6 +1276,7 @@ export class CloudRuntime implements ChatRuntime {
           type: 'done',
           ...(outcome.finishReason ? { finishReason: outcome.finishReason } : {}),
           ...(outcome.streamError ? { streamError: outcome.streamError } : {}),
+          ...(outcome.messageProjection?.usage ? { usage: outcome.messageProjection.usage } : {}),
         });
       }
     } finally {

@@ -659,6 +659,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               doneUpdates.metadata = {
                 ...msg.metadata,
                 ...(completedActivity ? { agentActivity: completedActivity } : {}),
+                ...(event.usage ? { usage: event.usage } : {}),
                 finishReason: event.finishReason,
                 streamError: event.streamError,
               };
