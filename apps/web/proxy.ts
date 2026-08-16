@@ -137,11 +137,27 @@ function apiHostRedirect(request: NextRequest): NextResponse | null {
   if (host !== `api.${appHost}`) return null;
   if (request.nextUrl.pathname.startsWith('/api/')) return null;
   if (isApiHostRewriteSource(request.nextUrl.pathname)) return null;
-  const target = new URL(
-    `${request.nextUrl.pathname}${request.nextUrl.search}`,
-    `https://${appHost}`,
+  const target = buildApiHostRedirectTarget(
+    request.nextUrl.pathname,
+    request.nextUrl.search,
+    appHost,
   );
+  if (!target) return null;
   return NextResponse.redirect(target, 307);
+}
+
+export function buildApiHostRedirectTarget(
+  pathname: string,
+  search: string,
+  appHost: string,
+): URL | null {
+  const origin = `https://${appHost}`;
+  try {
+    const target = new URL(`${pathname.replace(/^\/+/, '/')}${search}`, origin);
+    return target.origin === origin ? target : null;
+  } catch {
+    return null;
+  }
 }
 
 export const proxy: NextMiddleware = async (request, event) => {

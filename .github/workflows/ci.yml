@@ -336,6 +336,10 @@ jobs:
         if: steps.scope.outputs.native == 'true'
         run: rustup show active-toolchain && rustc --version && cargo --version
 
+      - name: Rust formatting gate
+        if: steps.scope.outputs.native == 'true'
+        run: cargo fmt --all -- --check
+
       - name: Verify generated protocol bindings are current
         if: steps.scope.outputs.native == 'true'
         # Generates into an isolated staging directory and compares against the

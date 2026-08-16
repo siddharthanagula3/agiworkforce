@@ -723,6 +723,7 @@ export default function ProjectDetailPage() {
             onOpenChange={setSettingsOpen}
             project={project}
             onUpdate={updateProject}
+            onDuplicated={retryProjects}
             onDelete={handleDeleteProject}
           />
         )}

@@ -1,4 +1,3 @@
-
 import { getAllRegisteredPriceIds } from './price-tier-mapping';
 import { STRIPE_PRICE_IDS } from './pricing';
 
@@ -41,6 +40,7 @@ export function validateRequiredEnvVars(): ValidationResult {
     'GITHUB_WEBHOOK_SECRET',
     'GITHUB_TOKEN_ENCRYPTION_KEY',
     'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY',
+    'CLERK_AUTHORIZED_PARTIES',
     'LOG_SALT',
     'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
   ];
@@ -266,6 +266,34 @@ export function validateStripeKeyModeConsistency(): ValidationResult {
   return { valid: errors.length === 0, errors, warnings };
 }
 
+const SECURITY_ESCAPE_HATCHES: Array<{ env: string; impact: string }> = [
+  {
+    env: 'ACCOUNT_STATUS_FAIL_OPEN',
+    impact:
+      'a failed account-status lookup admits the request, so suspended and banned accounts keep ' +
+      'working for as long as the lookup is failing. The default is fail-closed; this turns it off.',
+  },
+];
+
+export function validateSecurityEscapeHatches(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const enabled = (value: string | undefined) =>
+    ['1', 'true', 'on'].includes((value ?? '').toLowerCase());
+
+  for (const { env, impact } of SECURITY_ESCAPE_HATCHES) {
+    if (!enabled(process.env[env])) continue;
+    const message = `${env} is enabled — ${impact}`;
+    if (process.env['VERCEL_ENV'] === 'production' || process.env['NODE_ENV'] === 'production') {
+      errors.push(message);
+    } else {
+      warnings.push(message);
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
 export function validateAppUrl(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -302,6 +330,7 @@ export function validateEnvironment(): ValidationResult {
     validateAppUrl(),
     validateProductionKeyTypes(),
     validateStripeKeyModeConsistency(),
+    validateSecurityEscapeHatches(),
   ];
 
   const allErrors = results.flatMap((r) => r.errors);

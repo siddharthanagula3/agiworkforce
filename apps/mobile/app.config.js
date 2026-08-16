@@ -123,6 +123,7 @@ const config = {
         },
       ],
       NSPrivacyTracking: false,
+      NSPrivacyTrackingDomains: [],
     },
   },
   android: {
