@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Package, Pencil, Share2, X } from 'lucide-react';
+import { BarChart3, Check, Package, Pencil, Share2, X } from 'lucide-react';
 import { useUiTranslation } from '@agiworkforce/ui';
 import { useChatStore } from '../stores/chatStore';
 
@@ -9,6 +9,8 @@ export interface ConversationHeaderProps {
   onToggleArtifacts?: () => void;
   artifactsOpen?: boolean;
   artifactCount?: number;
+  onToggleStats?: () => void;
+  statsOpen?: boolean;
 }
 
 export function ConversationHeader({
@@ -17,6 +19,8 @@ export function ConversationHeader({
   onToggleArtifacts,
   artifactsOpen = false,
   artifactCount = 0,
+  onToggleStats,
+  statsOpen = false,
 }: ConversationHeaderProps = {}) {
   const { t } = useUiTranslation('chat');
   const currentId = useChatStore((s) => s.activeConversationId);
@@ -109,6 +113,14 @@ export function ConversationHeader({
                 icon={Package}
                 pressed={artifactsOpen}
                 badge={artifactCount > 0 ? artifactCount : undefined}
+              />
+            ) : null}
+            {onToggleStats ? (
+              <HeaderAction
+                label={t('header.toggleStats', 'Stats')}
+                onClick={onToggleStats}
+                icon={BarChart3}
+                pressed={statsOpen}
               />
             ) : null}
             {onShare ? (

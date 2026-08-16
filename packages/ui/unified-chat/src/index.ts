@@ -175,6 +175,11 @@ export type { ThinkingControlProps } from './components/ThinkingControl';
 export { ActionBar } from './components/ActionBar';
 export { ConversationHeader } from './components/ConversationHeader';
 export type { ConversationHeaderProps } from './components/ConversationHeader';
+export {
+  ConversationStatsPanel,
+  summarizeConversationUsage,
+} from './components/ConversationStatsPanel';
+export type { ConversationStats } from './components/ConversationStatsPanel';
 
 export { ThinkingBlock } from './components/ThinkingBlock';
 export { CitationPill } from './components/CitationPill';

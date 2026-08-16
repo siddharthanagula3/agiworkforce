@@ -172,7 +172,12 @@ test.describe('Chat Workflow', () => {
     ).toContainText('Edited message content');
   });
 
-  test.fixme('should display message statistics', async ({ page }) => {
+  test('should display message statistics', async ({ page }) => {
+    const chatInput = page.getByRole('textbox', { name: /message/i });
+    await chatInput.fill('How many tokens does this cost?');
+    await page.getByRole('button', { name: /send/i }).click();
+    await expect(page.locator('[data-role="assistant"]').last()).toBeVisible({ timeout: 30000 });
+
     const statsButton = page.getByRole('button', { name: /stats/i });
     await expect(statsButton, 'Stats button not available').toBeVisible();
 
@@ -181,6 +186,8 @@ test.describe('Chat Workflow', () => {
     const statsPanel = page.getByTestId('stats-panel');
     await expect(statsPanel).toBeVisible();
     await expect(statsPanel).toContainText(/tokens|cost/i);
+    await expect(statsPanel).toContainText('128');
+    await expect(statsPanel).toContainText('64');
   });
 
   test('should handle offline state gracefully', async ({ page }) => {
