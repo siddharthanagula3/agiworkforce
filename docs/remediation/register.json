@@ -5,7 +5,7 @@
       "title": "Supabase personal access token was committed to .mcp.json and is still reachable from history; the product does not use Supabase, so the exposure is the token itself, not this codebase",
       "domain": "security/secrets",
       "severity": "MEDIUM",
-      "status": "in-progress",
+      "status": "resolved",
       "effort": "M",
       "evidence": "An `sbp_` + 40-hex Supabase PAT was hardcoded as a Bearer credential in tracked `.mcp.json:7`. A later commit (72da83757) substituted `${SUPABASE_ACCESS_TOKEN}`, but the blob is still retrievable via `git log --all -S sbp_ -p` from commits that are ancestors of `main`.\n\nSEVERITY CORRECTED 2026-08-16 (was CRITICAL). The original finding read this as \"account-level compromise\" of a project this product depends on. It does not: **this repository does not use Supabase at all**. There is no `@supabase/*` dependency in any package.json or Cargo.toml; the only source references are two historical comments (`/auth/update-password` documents itself as the former \"Supabase email-link callback\", `/forgot-password` refers to the \"Supabase-era\" route as now absent), a sponsor name on the buildathon page, and `public-billing-copy.test.ts:309` which ASSERTS the absence: \"No Supabase client, key, or dependency exists anywhere in this repo.\"\n\nThe token lived in `.mcp.json` — a developer MCP-server config — so it was local tooling, never a product credential. What remains true: it is a real credential for whatever Supabase account issued it, and the Management API it authenticates is account-scoped. Nothing in THIS codebase is exposed by it.",
       "fix": "Revoke the token at the Supabase account tokens page — two minutes, and correct hygiene for any live credential regardless of whether this product uses it. If that account holds no projects, there is nothing further to do; if it does, rotate their keys. History purge is optional at this severity: the credential is dead once revoked.\n\nThe detection half is already CLOSED (164a1c614): check-secrets.mjs carries the `sbp_[a-f0-9]{40}` pattern, scans untracked-but-not-ignored files, and has `--history` (pnpm check:secrets:history) that walks every blob reachable from any ref. Kept regardless of this downgrade — the pattern costs nothing and the history mode is generic.",
@@ -16,7 +16,7 @@
         "scripts/secret-scan-allowlist.json"
       ],
       "merged_from": ["No CI secret scanner existed (CRIT-017)"],
-      "resolution_note": "[2026-08-16] Downgraded CRITICAL -> MEDIUM after the founder said the product does not use Supabase, and I verified it: no dependency in any manifest, and a test that asserts the absence. The register's original framing (\"account-level compromise of project ref ...\") described a dependency that does not exist. Detection work stands; revocation is still worth doing and is no longer a wave-1 gate."
+      "resolution_note": "[2026-08-16] Downgraded CRITICAL -> MEDIUM after the founder said the product does not use Supabase, and I verified it: no dependency in any manifest, and a test that asserts the absence. The register's original framing (\"account-level compromise of project ref ...\") described a dependency that does not exist. Detection work stands; revocation is still worth doing and is no longer a wave-1 gate. [2026-08-16] CLOSED: founder confirmed on the Supabase access-token page that zero tokens exist on the account. The credential is revoked, and this repository never depended on the project it belonged to."
     },
     {
       "id": "SEC-02",
@@ -684,7 +684,7 @@
       "severity": "CRITICAL",
       "status": "open",
       "effort": "M",
-      "evidence": "ExecutionPlan founder item 4: TAURI_SIGNING_PRIVATE_KEY's public half is baked into every shipped binary while the private half exists solely as a single CI secret with no backup and no escrow. Losing it bricks auto-update for every installed copy permanently; leaking it lets an attacker sign updates that every install accepts. This is the highest-blast-radius single credential in the repository and it currently has neither a recovery path nor a compromise-response plan.",
+      "evidence": "[2026-08-16 CORRECTION] The claim that the private half exists solely as one CI secret with no backup is FALSE. Verified: ~/.tauri/agiworkforce.key is the live key (public id 30AA2B90F9DB6B65, matching tauri.conf.json), passphrase at ~/.tauri/agiworkforce.key.password, prior key under ~/.tauri/backup/. GitHub Actions holds TAURI_SIGNING_PRIVATE_KEY and _PASSWORD (set 2026-07-28). Separately, apps/desktop/src-tauri/tauri-signing is in git history and byte-identical to the file still on disk, but it is the RETIRED key (418034B749732381) that no shipped client trusts. What is owed is OFF-LAPTOP escrow: every copy of the live key sits on one machine plus GitHub secrets, and neither is escrow. The stale tauri-signing/.pub pair should also be deleted from the working tree so it cannot be re-committed.",
       "fix": "The signing key is escrowed to a documented secure location with a named recovery holder, a key-compromise and key-rotation runbook exists (including how installed clients migrate to a new public key), and the escrow is tested by a restore drill.",
       "sources": ["ExecutionPlan.md (founder action 4)"],
       "blocked_by": "Founder must establish key escrow and name a recovery holder"
@@ -9224,7 +9224,7 @@
       "title": "delete_user_data(text) is SECURITY DEFINER with EXECUTE still open to public, so any grantee can purge any user's audit rows by passing their id",
       "domain": "security/auth",
       "severity": "CRITICAL",
-      "status": "in-progress",
+      "status": "resolved",
       "evidence": "AUDIT-IMMUT-01 residue (2), recorded in docs/agent-context/risk-map.json under enterprise-control-plane: 'delete_user_data(text) is now SECURITY DEFINER with EXECUTE still open to public, so any grantee can purge any user's audit rows by p_user_id until EXECUTE is narrowed to the GDPR job role.' The SECURITY DEFINER conversion was made deliberately so 90-day retention and GDPR erasure still purge after the immutability REVOKE, but the EXECUTE grant was never narrowed — the immutability control and the erasure path now cancel each other out.",
       "fix": "Narrow EXECUTE on delete_user_data(text) from public to the dedicated GDPR job role only, and add a test asserting a non-privileged role cannot call it.",
       "code_refs": [
@@ -9235,7 +9235,7 @@
         "docs/agent-context/risk-map.json (enterprise-control-plane, AUDIT-IMMUT-01 residue 2)"
       ],
       "effort": "S",
-      "resolution_note": "[2026-08-16] Migration written in 2eee8a12b as 0120_delete_user_data_execute_narrowing.sql with its reversal: `revoke execute on function public.delete_user_data(text) from public`. Safe now because the legacy caller is dead — apps/web/app/api/user/data/route.ts calls it only when the durable-video schema is unprovisioned, and 0105 provisions it. cleanup_old_security_logs() deliberately untouched: it has a live caller and takes no user id. NOT YET APPLIED to any database — applying is the remaining step."
+      "resolution_note": "[2026-08-16] Migration written in 2eee8a12b as 0120_delete_user_data_execute_narrowing.sql with its reversal: `revoke execute on function public.delete_user_data(text) from public`. Safe now because the legacy caller is dead — apps/web/app/api/user/data/route.ts calls it only when the durable-video schema is unprovisioned, and 0105 provisions it. cleanup_old_security_logs() deliberately untouched: it has a live caller and takes no user id. NOT YET APPLIED to any database — applying is the remaining step. [2026-08-16] APPLIED TO PRODUCTION. Backup branch backup-pre-0120-20260816 taken; verified on a throwaway branch first, then applied. Live production reports public_execute=false, app_rls_execute=false, video_generation_jobs provisioned=true. 0121_artifact_index.sql was deliberately held back: the runner applies ALL pending migrations, and landing web_artifact_index before its erasure classification (DPDP-90) would create user data with no deletion path."
     },
     {
       "id": "SEC-90",
@@ -14642,7 +14642,7 @@
       "title": "Desktop chat has no message-statistics panel, no reachable message-edit affordance, and no AGI submission indicator",
       "domain": "desktop",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "L",
       "evidence": "Four E2E chat tests describe capabilities absent from the product. (1) 'should display message statistics' drives a stats button and data-testid=\"stats-panel\" — zero occurrences in apps/desktop/src, and desktop surfaces no per-message token or cost figure for such a panel to read. (2) 'should edit a message' drives data-testid=\"message-item\", a per-message edit control, and textarea[data-editing=\"true\"] — all zero occurrences; chatStore.editMessage is defined and re-exported through unifiedChatStore with no caller, i.e. a stranded store half. (3) 'should detect and submit goal-like messages' expects data-testid=\"agi-submitted\" — zero occurrences, and no goal-detection path exists. (4) 'should not submit non-goal messages to AGI' reported GREEN, which is worse: with the indicator absent for every input it cannot distinguish 'correctly did not submit' from 'feature does not exist'.",
       "fix": "Founder decision 2026-08-16: build all three affordances. Wire an editor UI to the existing chatStore.editMessage action, add a per-message stats panel over real token/cost data, and add AGI goal detection with a submission indicator. The four tests are marked test.fixme with the specific missing selector named in each, so the suite reports them as pending instead of deleting the only written record of the intent — and the vacuous negative test no longer reports false confidence. Remove each fixme in the same change that builds its capability.",
@@ -14656,7 +14656,7 @@
         "apps/desktop/src/stores/unifiedChatStore.ts:413"
       ],
       "merged_from": [],
-      "resolution_note": "[2026-08-16] Raised this session. Founder called it the same day: build all three. Marked the four tests test.fixme to unblock E2E in the meantime, each comment naming the exact missing selector. Item stays OPEN until the affordances ship and the fixmes come off."
+      "resolution_note": "[2026-08-16] Raised this session. Founder called it the same day: build all three. Marked the four tests test.fixme to unblock E2E in the meantime, each comment naming the exact missing selector. Item stays OPEN until the affordances ship and the fixmes come off. [2026-08-16] RESOLVED. All three built; all four E2E tests live, no fixme remains. Edit: chatStore.editMessage was inert with no caller, now wired as edit-and-resend via planEditRollback, user turns only, gated on runtime.deleteMessages. Stats: the OpenAI-wire usage object arrived on the final SSE chunk and was discarded (agentActivity listed usage among handled types and returned state unchanged; the delta sink never read the top-level field); now accumulated across tool-loop rounds and shown in a header-toggled panel, tokens only - a cost figure would need per-model pricing the client lacks. Goal handoff: detectGoalIntent plus an explicit offer that does NOT auto-submit, because launching an agent task from a message meant as chat spends the user budget unasked."
     },
     {
       "id": "DPDP-90",
