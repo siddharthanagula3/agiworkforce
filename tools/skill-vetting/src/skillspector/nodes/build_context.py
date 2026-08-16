@@ -75,13 +75,34 @@ def _resolve_skill_dir(state: SkillspectorState) -> Path:
     return resolved
 
 
-def _walk_skill_files(skill_dir: Path) -> list[str]:
-    """Walk skill directory and return sorted relative path strings.
+def _walk_skill_files(skill_dir: Path) -> tuple[list[str], list[str]]:
+    """Walk skill directory and return sorted relative paths plus escaping links.
 
     Skips _SKIP_DIRS and hidden files except those starting with .claude.
+
+    Symlinks are never followed. ``Path.is_file()`` returns True for a link to a
+    file, and ``relative_to`` compares the *link* path, so a skill shipping
+    ``notes.txt -> ~/.ssh/id_rsa`` used to have the key read into ``file_cache``
+    and transmitted to the analyzers. The second return value names every link
+    that pointed outside the skill so the caller can report it rather than
+    silently dropping it.
     """
     paths: list[str] = []
+    escaping_links: list[str] = []
+    skill_root = skill_dir.resolve()
     for item in skill_dir.rglob("*"):
+        if item.is_symlink():
+            try:
+                rel = item.relative_to(skill_dir).as_posix()
+            except ValueError:
+                rel = str(item)
+            try:
+                inside = item.resolve().is_relative_to(skill_root)
+            except (OSError, RuntimeError):
+                inside = False
+            if not inside:
+                escaping_links.append(rel)
+            continue
         if not item.is_file():
             continue
         if any(skip in item.parts for skip in _SKIP_DIRS):
@@ -98,7 +119,8 @@ def _walk_skill_files(skill_dir: Path) -> list[str]:
             logger.debug("Skipping path (not under skill_dir): %s", item)
             continue
     paths.sort()
-    return paths
+    escaping_links.sort()
+    return paths, escaping_links
 
 
 def _infer_file_type(path: str) -> str:
@@ -227,13 +249,20 @@ def build_context(state: SkillspectorState) -> dict[str, object]:
     """
     skill_dir = _resolve_skill_dir(state)
 
-    components = _walk_skill_files(skill_dir)
+    components, escaping_links = _walk_skill_files(skill_dir)
+    if escaping_links:
+        logger.warning(
+            "Skipped %d symlink(s) pointing outside the skill directory: %s",
+            len(escaping_links),
+            ", ".join(escaping_links),
+        )
     file_cache = _read_file_cache(skill_dir, components)
     manifest = _parse_manifest(skill_dir)
     component_metadata, has_executable_scripts = _build_component_metadata(skill_dir, components)
 
     return {
         "components": components,
+        "escaping_symlinks": escaping_links,
         "file_cache": file_cache,
         "ast_cache": {},
         "manifest": manifest,

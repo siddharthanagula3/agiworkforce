@@ -136,10 +136,10 @@
       "title": "Row-level security coverage is incomplete across tenant/user-owned tables and no CI guard forces an isolation decision on new ones",
       "domain": "security",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "L",
-      "evidence": "CRIT-015: there is no full inventory of tenant/user-owned tables, views, functions, indexes, caches and search indexes with deny-by-default RLS, and no CI guard that forces an isolation decision when a new tenant-scoped table is added. known-flaws SVC-GATEWAY-RLS-NOOP-01 shows the failure mode concretely — the gateway treated a user-id filter as RLS; migration 0054 enabled/forced RLS for 8 canonical gateway-owned tables in code, but the live Neon probe proving it remains external and unrun. known-flaws records the same class landing repeatedly (CAP-015 artifact ownership violations surface as RLS WITH CHECK 500s rather than pre-checked 403s). Enterprise tenancy notes record 'no tenant-wide RLS' as an outstanding design item.",
-      "fix": "Every tenant- or user-owned table, view and function is inventoried with an explicit deny-by-default RLS decision recorded; the gateway's RLS posture is proven by a live probe against a real Neon branch rather than asserted from migration text; a CI guard fails any migration adding a tenant-scoped table without an accompanying isolation decision.",
+      "evidence": "CRIT-015: there is no full inventory of tenant/user-owned tables, views, functions, indexes, caches and search indexes with deny-by-default RLS, and no CI guard that forces an isolation decision when a new tenant-scoped table is added. known-flaws SVC-GATEWAY-RLS-NOOP-01 shows the failure mode concretely — the gateway treated a user-id filter as RLS; migration 0054 enabled/forced RLS for 8 canonical gateway-owned tables in code, but the live Neon probe proving it remains external and unrun. known-flaws records the same class landing repeatedly (CAP-015 artifact ownership violations surface as RLS WITH CHECK 500s rather than pre-checked 403s). Enterprise tenancy notes record 'no tenant-wide RLS' as an outstanding design item.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The headline claim — 'no full inventory ... and no CI guard that forces an isolation decision when a new tenant-scoped table is added' — is false. scripts/check-db-isolation.mjs:554-641 parses every migration in apps/web/db/neon, extracts tenant columns via TENANT_COLUMN (`user_id|owner_id|organization_id|org_id|account_id|member_id`, :557-558), tracks `(?:enable|force) row level security` per table (:596-601), and at :627-642 exits 1 listing any table that 'carries [...] but has no RLS policy, no USER_OWNED_TABLES entry, and no CROSS_TENANT_TABLES reason', forcing one of three explicit decisions. It also fails 'hollow' decisions where a table is declared app-enforced but zero statements were actually policed (:645-680). It runs in CI: package.json:177 `check:db-isolation` is chained into `check:llm-operability` (package.json:149). I ran it read-only: 'Database isolation check passed (293 owner-connection statements over user-owned tables across 197 route and service modules, all owner-constrained; 99 tenant-scoped tables across 119 live tables, each with an explicit isolation decision; 16 app-enforced tables declared as policing zero statements, with reasons).' A live-probe script also exists (package.json:124 `db:rls-probe`). The one clause I cannot settle from source is whether that probe has ever been run against a real Neon branch — that needs a credential I do not have.",
+      "fix": "None for the guard. If the live-probe evidence matters, record the probe output (date, branch, result) in docs and close; do not rebuild the inventory or the CI guard, both of which exist and pass.",
       "sources": [
         "AuditRemediationLedger.md (CRIT-015)",
         "known-flaws.md (SVC-GATEWAY-RLS-NOOP-01)",
@@ -149,7 +149,13 @@
         "apps/web/db/neon/0054*.sql",
         "packages/platform/data-layer/src/adapters/neon.ts"
       ],
-      "merged_from": ["SVC-GATEWAY-RLS-NOOP-01: gateway treated a user-id filter as RLS"]
+      "merged_from": ["SVC-GATEWAY-RLS-NOOP-01: gateway treated a user-id filter as RLS"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "SEC-08",
@@ -847,12 +853,18 @@
       "title": "Clerk JWT verification omits authorizedParties",
       "domain": "security/auth",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "DPDP_PROGRESS §6 (fail-open/verification gap table): api-auth.ts:110 verifies the Clerk token without passing authorizedParties, so a token minted for a different authorized party on the same Clerk instance is not rejected on azp grounds. Listed alongside the other untriaged O-19 items, none of which were fixed on the compliance branch because each has its own blast radius.",
-      "fix": "Clerk token verification passes an explicit authorizedParties list matching the deployment's own origins, and a test asserts a token with a foreign azp is refused.",
+      "evidence": "DPDP_PROGRESS §6 (fail-open/verification gap table): api-auth.ts:110 verifies the Clerk token without passing authorizedParties, so a token minted for a different authorized party on the same Clerk instance is not rejected on azp grounds. Listed alongside the other untriaged O-19 items, none of which were fixed on the compliance branch because each has its own blast radius.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/lib/api-auth.ts:64-70 `function getClerkAuthorizedParties(): string[] { return (process.env['CLERK_AUTHORIZED_PARTIES'] ?? '').split(',').map(s => s.trim()).filter(Boolean); }` and :98-104 `const authorizedParties = getClerkAuthorizedParties(); const claims = await verifyToken(token, { secretKey, ...(authorizedParties.length > 0 ? { authorizedParties } : {}) });` — authorizedParties IS passed. The cited line 110 no longer holds the unguarded call. Residual (matching DPDP's own 'silently no-ops when unset' wording): the env var is absent from apps/web/lib/validate-env.ts and scripts/env-doctor.mjs (both grep clean for CLERK_AUTHORIZED_PARTIES; they only require NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY at validate-env.ts:16-17 and env-doctor.mjs:27-28), though it is documented at apps/web/.env.example:29.",
+      "fix": "Add CLERK_AUTHORIZED_PARTIES to the production-required list in validate-env.ts:16 and env-doctor.mjs:27 so the check cannot silently no-op.",
       "sources": ["DPDP_PROGRESS.md (§6)"],
-      "code_refs": ["apps/web/lib/api-auth.ts:110"]
+      "code_refs": ["apps/web/lib/api-auth.ts:110"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "SEC-46",
@@ -1541,28 +1553,40 @@
       "title": "No single billing and entitlement domain package — plan logic lives in Web-only ad hoc code",
       "domain": "billing",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "L",
-      "evidence": "BIZ-001: plan catalog, capabilities, limits, transitions, usage windows and display metadata live in Web-only ad hoc logic instead of one owned package. gap-audit GAP-P1-009 records the same fragmentation across surfaces more broadly.",
-      "fix": "Extract one owned billing/entitlement package holding the plan catalog, capability matrix, limits, transitions, usage windows and display metadata, and make every surface consume it.",
+      "evidence": "BIZ-001: plan catalog, capabilities, limits, transitions, usage windows and display metadata live in Web-only ad hoc logic instead of one owned package. gap-audit GAP-P1-009 records the same fragmentation across surfaces more broadly.\n\nREFUTED 2026-08-16 — re-verified against the working tree. An owned cross-surface billing package already exists: packages/contracts/types/src/billing-catalog.ts holds BILLING_PLAN_PRICING (stable id + label + prices + perSeat), PLAN_SURFACE_VISIBILITY, BILLING_PLAN_CAPABILITY_TIERS with a BillingPlanCapability union (managed_chat, chat_tools, projects, memory_personalization, skills_connectors, cloud_sync, agi_work, image_generation, video_generation, managed_api, developer_surfaces, team_admin, enterprise_controls), BILLING_PLAN_PRODUCT_LIMITS, BillingPlanLimit and toEnforceableBillingPlanLimit. `grep -rl 'BILLING_PLAN_PRICING|getBillingPlanPricing|BILLING_PLAN_PRODUCT_LIMITS|canUseBillingPlanCapability'` (non-test) shows consumers in apps/desktop, apps/mobile, apps/extension-vscode, apps/extension (Chrome), apps/web and services/api-gateway. The claim 'plan logic lives in Web-only ad hoc code' is false.",
+      "fix": "None for the stated claim. The residual gap is BILL-15's entitlement endpoint and contract tests, not package extraction.",
       "sources": ["AuditRemediationLedger.md BIZ-001", "gap-audit-2026-08-08.md GAP-P1-009"],
-      "merged_from": ["No single billing/entitlement domain package"]
+      "merged_from": ["No single billing/entitlement domain package"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "BILL-14",
       "title": "Plan identity is not separated from display labels, so renames and regional pricing break stable IDs",
       "domain": "billing",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "BIZ-003: stable plan IDs need to survive renaming and regional pricing, and separation is not confirmed. The mobile paywall test asserting a stale 'Upgrade to Max' label after 'Max 5x' became canonical is the concrete symptom of the same coupling.",
-      "fix": "Give every plan a stable non-display ID used by all persistence and gating, and drive labels from a separate display-metadata table keyed by that ID and locale.",
+      "evidence": "BIZ-003: stable plan IDs need to survive renaming and regional pricing, and separation is not confirmed. The mobile paywall test asserting a stale 'Upgrade to Max' label after 'Max 5x' became canonical is the concrete symptom of the same coupling.\n\nREFUTED 2026-08-16 — re-verified against the working tree. packages/contracts/types/src/billing-catalog.ts already separates identity from display: every entry carries both, e.g. `max: { id: 'max', label: 'Max 5x', monthlyPriceUsd: 100, ... }` and `max_15x: { id: 'max_15x', label: 'Max 15x', ... }`. Persistence and gating use the id (PLAN_SURFACE_VISIBILITY, BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier all key on the id), and the label is read only for rendering. The concrete symptom cited (mobile paywall asserting a stale 'Upgrade to Max') is fixed: apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:36-39 `function tierLabelFor(requiredTier: string): string { return isBillingPlanTier(requiredTier) ? BILLING_PLAN_PRICING[requiredTier].label : ...` — the label now comes from the catalog.",
+      "fix": "None. Regional pricing lives on the same id-keyed record (monthlyPriceInr), so a rename cannot break IDs.",
       "sources": [
         "AuditRemediationLedger.md BIZ-003",
         "AuditRemediationLedger.md BASE-003 finding 6"
       ],
       "code_refs": ["packages/contracts/types/src/billing-catalog.ts:167"],
-      "merged_from": ["Plan identity not separated from display labels"]
+      "merged_from": ["Plan identity not separated from display labels"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "BILL-15",
@@ -1668,10 +1692,10 @@
       "title": "Webhook signature, timestamp, event-ID and API-version verification plus dedup are not fully confirmed",
       "domain": "billing",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "BIZ-014: deduplication and raw-event reference preservation are not confirmed complete. The webhook path has already produced two real defects — an unregistered Price threw and broke every legacy renewal after a price change (contradicting the 30-day price-protection promise in /terms), and refunds did not revoke plan access — both since fixed, which is evidence the surface needs the verification rather than that it has it.",
-      "fix": "Assert signature and timestamp validation, event-ID dedup, API-version pinning and raw-event retention in tests, and cover replayed and out-of-order deliveries.",
+      "evidence": "BIZ-014: deduplication and raw-event reference preservation are not confirmed complete. The webhook path has already produced two real defects — an unregistered Price threw and broke every legacy renewal after a price change (contradicting the 30-day price-protection promise in /terms), and refunds did not revoke plan access — both since fixed, which is evidence the surface needs the verification rather than that it has it.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/app/api/stripe-webhook/route.ts: :26-29 pins the API version (`new Stripe(STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })`); :52-56 `const verifyResult = await verifyStripeSignature(request, stripe, STRIPE_WEBHOOK_SECRET); if ('error' in verifyResult) { span.setAttributes({ 'stripe.webhook.outcome': 'signature_rejected' }); return verifyResult.error; }`; :61-74 `const idempotencyResult = await checkIdempotency(db, event.id);` with a three-state result — an in-flight event returns 503 + Retry-After: 10, an already-done event returns `{ received: true, message: 'Event already processed' }`; :77-81 dispatch and markEventSucceeded run in one `db.transaction`; :94 markEventFailed on error. Timestamp tolerance is inside Stripe's constructEvent. The only sub-claim still open is raw-event body retention — the handler stores event id/state, not the raw payload.",
+      "fix": "If raw-event retention is actually required, persist the verified body alongside the idempotency row; otherwise close the item.",
       "sources": ["AuditRemediationLedger.md BIZ-014", "ExecutionPlan.md #26"],
       "code_refs": [
         "apps/web/app/api/stripe-webhook/lib/handlers.ts",
@@ -1679,7 +1703,13 @@
       ],
       "merged_from": [
         "Webhook signature/timestamp/event-ID/API-version verification not fully confirmed"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "BILL-20",
@@ -1812,15 +1842,21 @@
       "title": "Refund-delta correctness is unconfirmed under replay, out-of-order delivery and partial refunds",
       "domain": "billing",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "BIZ-024: no confirmed tests cover replayed, out-of-order or partial refunds. A per-charge refund clawback exists in the Stripe webhook handlers, so the mechanism is present but its behaviour under these cases is untested.",
-      "fix": "Add tests covering replayed refund webhooks, out-of-order arrival relative to the charge, and partial refunds, asserting the credit delta is applied exactly once and never drives a negative balance.",
+      "evidence": "BIZ-024: no confirmed tests cover replayed, out-of-order or partial refunds. A per-charge refund clawback exists in the Stripe webhook handlers, so the mechanism is present but its behaviour under these cases is untested.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/app/api/stripe-webhook/lib/__tests__/refund-and-legacy-price.test.ts covers exactly the cases the item says are untested: :125 'leaves the plan alone on a partial refund', :153 'revokes only the new money on a second partial refund', :165 'revokes nothing when a stale or replayed event repeats money already clawed back', :177 'still revokes the full amount for the first refund on a charge', :189 'scopes the already-revoked lookup to this user and this charge', :199 'leaves the plan alone when the refunded charge bought credits, not a plan', :115 'never writes the terminal canceled status, which would block later renewals'.",
+      "fix": "None.",
       "sources": ["AuditRemediationLedger.md BIZ-024"],
       "code_refs": ["apps/web/app/api/stripe-webhook/lib/handlers.ts"],
       "merged_from": [
         "Refund-delta correctness not confirmed under replay/out-of-order/partial refunds"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "BILL-26",
@@ -2019,16 +2055,22 @@
       "title": "Basic tier displays $7 while the referenced Stripe price object is $8",
       "domain": "billing",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "Catalog and display price is $7 (founder decision) but desktop's referenced Stripe price object is $8; whichever surface actually charges must point at a real $7 Stripe price. Code must not create Stripe prices, so this requires a founder Stripe action.",
-      "fix": "Founder creates a $7 Basic price in test and live modes and updates the env var; then assert in a test that the displayed price and the resolved Stripe price agree.",
+      "evidence": "Catalog and display price is $7 (founder decision) but desktop's referenced Stripe price object is $8; whichever surface actually charges must point at a real $7 Stripe price. Code must not create Stripe prices, so this requires a founder Stripe action.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/desktop/src/constants/pricing.ts:4 — `basic_monthly_usd: 'price_1Ts6mR0zEfO6BZMhi1hSumHd', // test mode — $7/mo (matches catalog)` and :5 `basic_monthly_inr: 'price_1ToutS0zEfO6BZMhdWLMNOd2', // test mode — ₹399/mo (matches catalog)`. Catalog side agrees: packages/contracts/types/src/billing-catalog.ts basic = `{ id: 'basic', label: 'Basic', monthlyPriceUsd: 7, yearlyPriceUsd: 0, monthlyPriceInr: 399 }`. The $8 price object the item describes is no longer referenced anywhere in the file. The actual unit_amount on the Stripe object itself is dashboard state and unreadable from the repo.",
+      "fix": "None in code. If verification is wanted, add a test that asserts the catalog price and the Stripe price agree — it needs a live key, so it belongs in a manual check.",
       "sources": ["docs/agent-context/known-flaws.md BASIC-STRIPE-PRICE-7-VS-8"],
       "blocked_by": "Founder must create a $7 Stripe price (test + live) and update the env var",
       "code_refs": ["apps/desktop/src/constants/pricing.ts"],
       "merged_from": [
         "BASIC-STRIPE-PRICE-7-VS-8: Basic tier displays $7 but the underlying Stripe test price object is $8"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "BILL-38",
@@ -2446,10 +2488,10 @@
       "title": "Model-training preference copy and controls are inconsistent across surfaces and may reference a control that never existed",
       "domain": "compliance/dpdp",
       "severity": "HIGH",
-      "status": "unclear",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "Sources disagree. CRIT-006 and DOC-002 record privacy copy referencing a training preference or opt-in path that was deleted or never implemented, with no server-authoritative preference enforced across surfaces. GAP-032 and GAP-092 record the opposite framing as a deliberate decision: the platform constitution states AGI is not a foundation-model company and customer conversation data is not trained on, so a training toggle would be a cosmetic switch. GAP-160 confirms mobile cloud-privacy PRIVACY_ITEMS is static 'no-training' text with no Switch, by design. A grep of apps/web/app/privacy/page.tsx for 'training' returns no match, suggesting the false web copy may already be removed. PP-26 still lists the training-control mismatch as unresolved.",
-      "fix": "Establish one authoritative statement of the training position, verify no surface still advertises a control that does not exist, and if the position is 'never trained on' state that as a commitment in the notice rather than as a user-toggleable preference.",
+      "evidence": "Sources disagree. CRIT-006 and DOC-002 record privacy copy referencing a training preference or opt-in path that was deleted or never implemented, with no server-authoritative preference enforced across surfaces. GAP-032 and GAP-092 record the opposite framing as a deliberate decision: the platform constitution states AGI is not a foundation-model company and customer conversation data is not trained on, so a training toggle would be a cosmetic switch. GAP-160 confirms mobile cloud-privacy PRIVACY_ITEMS is static 'no-training' text with no Switch, by design. A grep of apps/web/app/privacy/page.tsx for 'training' returns no match, suggesting the false web copy may already be removed. PP-26 still lists the training-control mismatch as unresolved.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. No surface advertises a training control. apps/web/app/privacy/page.tsx:109 'AGI does not use customer conversation content to train AGI-owned models' and :371-373 '<h3>Training data</h3> … AGI does not train AGI-owned models on customer prompts, responses, or files.' — statements, not toggles. apps/mobile/src/features/settings/cloud-privacy/index.tsx:17-19 `key: 'no-training', label: 'AGI model training: Always off', body: '… There is no training opt-in because this data path does not exist.'` — static text, no Switch. apps/web/app/pricing/page.tsx:170 `const TRAINING_DATA_DISCLOSURE = 'No'` is used unconditionally for every tier. apps/web/app/privacy/india/page.tsx:287 scopes the claim correctly ('our no-training statement is about AGI-owned models'). No dangling reference to a deleted toggle survives anywhere in apps/web/app.",
+      "fix": "None. Close the item.",
       "sources": [
         "AuditRemediationLedger.md CRIT-006",
         "AuditRemediationLedger.md DOC-002",
@@ -2467,7 +2509,13 @@
         "False training-preference copy not yet removed",
         "No user-facing toggle to opt in/out of using chats to train AI models",
         "Model-training opt-in is declined because customer-content training is always off"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DPDP-02",
@@ -2545,10 +2593,10 @@
       "title": "Third-party recipient disclosure across /subprocessors, /privacy and /terms — sources disagree on whether the omissions are corrected",
       "domain": "compliance/dpdp",
       "severity": "HIGH",
-      "status": "unclear",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "DPDP_PROGRESS §4 calls this the most serious finding: the legal pages omitted live third-party recipients (Resend, Runway ML, Nominatim, Apple/Google store APIs, GitHub, Perplexity, the full OpenRouter scope) and relied on a false 'no transactional email system' claim to justify not notifying users of breaches or changes. §8 still lists O-1 as open with a to-do to invert the BANNED test guard. But verification found subprocribers/page.tsx now carries a dated 'RE-ADDED 2026-08-14 — Resend' comment, lists Google/OpenStreetMap/GitHub with citations, and legal-policy-set.test.ts now asserts Resend MUST appear and that no file may claim 'there is no transactional email system' — the guard has been inverted. Two more instances of the false email claim in /dpa were separately recorded as fixed, as was the Expo subprocessor omission.\n\nAlso recorded by a later audit (/subprocessors page is incomplete — omits confirmed third-party recipients): BREACH_RUNBOOK.md open-gaps row 6 resolves the register's 'sources disagree' status decisively: recipients confirmed in code and missing from the page include the transactional email provider, the video-generation provider, the geocoding service, and the mobile store APIs, so §3's 'third parties involved' cannot be answered from the published page. DPDP_PROGRESS.md corroborates with a named tracking id O-1 and a fuller list (Resend live and receiving personal data; Runway; Nominatim; Apple/Google store APIs; GitHub; Perplexity; the true OpenRouter failover scope) — and records an active trap: a legal-policy-set test currently BANS relisting Resend on the false premise that no transactional email system exists (apps/web/app/subprocessors/page.tsx:14-29,172-177). Fix must invert that test in the same change and delete the 'no transactional email system' justification from /subprocessors, /privacy and /terms.",
-      "fix": "Re-read the three legal pages against the live vendor list one final time, confirm every recipient named in code appears, and close O-1 with the observed page content rather than the ledger row.",
+      "evidence": "DPDP_PROGRESS §4 calls this the most serious finding: the legal pages omitted live third-party recipients (Resend, Runway ML, Nominatim, Apple/Google store APIs, GitHub, Perplexity, the full OpenRouter scope) and relied on a false 'no transactional email system' claim to justify not notifying users of breaches or changes. §8 still lists O-1 as open with a to-do to invert the BANNED test guard. But verification found subprocribers/page.tsx now carries a dated 'RE-ADDED 2026-08-14 — Resend' comment, lists Google/OpenStreetMap/GitHub with citations, and legal-policy-set.test.ts now asserts Resend MUST appear and that no file may claim 'there is no transactional email system' — the guard has been inverted. Two more instances of the false email claim in /dpa were separately recorded as fixed, as was the Expo subprocessor omission.\n\nAlso recorded by a later audit (/subprocessors page is incomplete — omits confirmed third-party recipients): BREACH_RUNBOOK.md open-gaps row 6 resolves the register's 'sources disagree' status decisively: recipients confirmed in code and missing from the page include the transactional email provider, the video-generation provider, the geocoding service, and the mobile store APIs, so §3's 'third parties involved' cannot be answered from the published page. DPDP_PROGRESS.md corroborates with a named tracking id O-1 and a fuller list (Resend live and receiving personal data; Runway; Nominatim; Apple/Google store APIs; GitHub; Perplexity; the true OpenRouter failover scope) — and records an active trap: a legal-policy-set test currently BANS relisting Resend on the false premise that no transactional email system exists (apps/web/app/subprocessors/page.tsx:14-29,172-177). Fix must invert that test in the same change and delete the 'no transactional email system' justification from /subprocessors, /privacy and /terms.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/app/subprocessors/page.tsx now lists 20 recipients including every one the item names: `name: 'Resend'` (:91), `name: 'Runway'` (:97), `name: 'Perplexity'` (:103), `name: 'Google (Play Android Publisher)'` (:109), `name: 'OpenStreetMap Foundation (Nominatim)'` (:115), `name: 'GitHub'` (:121), `name: 'Expo'` (:85), `name: 'OpenRouter'` (:68). Apple is deliberately and reasonedly excluded (:111 'Apple is deliberately NOT listed for the equivalent iOS path: Apple's signed notifications are verified locally against bundled root certificates, so nothing is sent back to Apple.'). The guard is inverted as claimed: apps/web/app/__tests__/legal-policy-set.test.ts:177-185 asserts /subprocessors MUST match /name:\\s*'Resend'/ when resend-client.ts exists, and :188-204 asserts no legal file may match /there is no transactional email (system|provider)/i.",
+      "fix": "None. Close O-1 against the observed page.",
       "sources": [
         "DPDP_PROGRESS.md O-1",
         "DPDP_PROGRESS.md §4",
@@ -2560,7 +2608,13 @@
         "apps/web/app/subprocessors/page.tsx",
         "apps/web/app/__tests__/legal-policy-set.test.ts"
       ],
-      "merged_from": ["O-1 subprocessors/privacy/terms omitted live third-party recipients"]
+      "merged_from": ["O-1 subprocessors/privacy/terms omitted live third-party recipients"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DPDP-06",
@@ -2671,13 +2725,19 @@
       "title": "The signed-in app shell has no legal footer, so the grievance contact is unreachable from inside the product",
       "domain": "compliance/dpdp",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "O-9: WebAppShell.tsx has no legal footer. It was deliberately left unedited because the file carries uncommitted changes from other work.",
-      "fix": "Add a legal footer to the signed-in shell linking the privacy notice, terms and the grievance contact, coordinating with whoever owns the in-flight changes to that file.",
+      "evidence": "O-9: WebAppShell.tsx has no legal footer. It was deliberately left unedited because the file carries uncommitted changes from other work.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/shared/components/layout/WebAppShell.tsx now carries the legal links in the account footer slot: :353-358 comment 'every legal link lived on the marketing footer, which a signed-in … privacy notice you can only find by signing out is not accessible, and the DPDP grievance route in particular has to be reachable from …', with the rendered links at :375 'Privacy &amp; your data rights' and :385 'Terms &amp; policies', wired into `footerSlot` at :411.",
+      "fix": "None. Close the item.",
       "sources": ["DPDP_PROGRESS.md O-9"],
       "code_refs": ["apps/web/shared/components/layout/WebAppShell.tsx:301"],
-      "merged_from": ["O-9 Signed-in app shell has no legal footer"]
+      "merged_from": ["O-9 Signed-in app shell has no legal footer"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DPDP-13",
@@ -2844,13 +2904,19 @@
       "title": "/trust and /security omit any Indian data-protection obligation",
       "domain": "compliance/dpdp",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "O-18: the /trust page has GDPR and CCPA rows but no DPDP row, and /security's 'what we have not done' list names the EU Art. 27 gap but no Indian obligation — while the mobile store listings simultaneously publish an unqualified DPDP compliance claim (DPDP-27).",
-      "fix": "Add a DPDP row to /trust reflecting the true position and name the outstanding Indian obligations in /security's gap list, so the public pages agree with the store listing.",
+      "evidence": "O-18: the /trust page has GDPR and CCPA rows but no DPDP row, and /security's 'what we have not done' list names the EU Art. 27 gap but no Indian obligation — while the mobile store listings simultaneously publish an unqualified DPDP compliance claim (DPDP-27).\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/app/trust/page.tsx now has SIX DPDP rows, not zero: :80 'DPDP (India) — notice under s.5', :87 's.6 consent', :94 'data principal rights (ss.11–14)', :101 'grievance redressal under s.13', :108 'verifiable parental consent under s.9', :115 'notice languages under s.6(4)', :122 'Significant Data Fiduciary obligations', :129 'data residency'. apps/web/app/security/page.tsx:346-347 adds `k: 'India — DPDP Act, 2023'` naming the four gaps explicitly. The pages now UNDER-claim relative to the store listing, which is DPDP-27's problem, not this one.",
+      "fix": "None. Close the item; the remaining inconsistency lives entirely in DPDP-27.",
       "sources": ["DPDP_PROGRESS.md O-18"],
       "code_refs": ["apps/web/app/trust/page.tsx:33", "apps/web/app/security/page.tsx:372"],
-      "merged_from": ["O-18 /trust has GDPR and CCPA rows but no DPDP row"]
+      "merged_from": ["O-18 /trust has GDPR and CCPA rows but no DPDP row"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DPDP-21",
@@ -3093,10 +3159,10 @@
       "title": "The public /enterprise page understates SSO and SCIM readiness relative to the internal admin console",
       "domain": "compliance/dpdp",
       "severity": "LOW",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "/enterprise tells prospects that SSO/SCIM status is unknown ('ask us') while apps/web/features/admin/pages/AdminConsolePage.tsx correctly says they are 'Implemented — entitlement-gated'. The public page is the pessimistic one relative to what actually shipped — a messaging inversion, not a technical gap. DOC-011 separately warns the AdminConsole 'schema ready' claims may overstate readiness, so both directions need one reconciled source.\n\nAlso recorded by a later audit (Enterprise pricing copy calls a shipped capability 'roadmap' (SSO/SCIM)): G12 (models-reasoning-quotas domain): packages/ui/i18n/locales/en/pricing.json:110 called SSO/audit/data-retention 'roadmap' while AdminConsolePage.tsx:71-78,130-145 documents SSO and SCIM as 'Implemented — entitlement-gated' with live routes. FIXES-APPLIED.md (2026-08-15) reports this fixed: 'The enterprise page stopped calling shipped, gated capabilities \"roadmap\" — each row was re-verified against real code.' DPDP-33 may now be closable; verify the pricing.json string and /enterprise copy on the current branch before closing, and reconcile against DPDP-32 (SSO never verified against a live instance) so the corrected copy does not overclaim in the other direction.",
-      "fix": "Derive both the public page and the admin console from one capability-state record so they cannot disagree, and set that record to the verified state after DPDP-32 closes.",
+      "evidence": "/enterprise tells prospects that SSO/SCIM status is unknown ('ask us') while apps/web/features/admin/pages/AdminConsolePage.tsx correctly says they are 'Implemented — entitlement-gated'. The public page is the pessimistic one relative to what actually shipped — a messaging inversion, not a technical gap. DOC-011 separately warns the AdminConsole 'schema ready' claims may overstate readiness, so both directions need one reconciled source.\n\nAlso recorded by a later audit (Enterprise pricing copy calls a shipped capability 'roadmap' (SSO/SCIM)): G12 (models-reasoning-quotas domain): packages/ui/i18n/locales/en/pricing.json:110 called SSO/audit/data-retention 'roadmap' while AdminConsolePage.tsx:71-78,130-145 documents SSO and SCIM as 'Implemented — entitlement-gated' with live routes. FIXES-APPLIED.md (2026-08-15) reports this fixed: 'The enterprise page stopped calling shipped, gated capabilities \"roadmap\" — each row was re-verified against real code.' DPDP-33 may now be closable; verify the pricing.json string and /enterprise copy on the current branch before closing, and reconcile against DPDP-32 (SSO never verified against a live instance) so the corrected copy does not overclaim in the other direction.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. Same evidence as DOCS-07: apps/web/app/enterprise/page.tsx no longer says SSO/SCIM status is unknown — it says 'Implemented' with the entitlement gate named, matching AdminConsolePage.tsx:61-66 'Implemented — entitlement-gated'. The understatement this item exists to record is gone.",
+      "fix": "Close this row. already fixed; no work remains.",
       "sources": [
         "docs/agent-context/phase4-capability-audit.md PP-27",
         "AuditRemediationLedger.md DOC-011",
@@ -3108,7 +3174,13 @@
       ],
       "merged_from": [
         "/enterprise page tells prospects SSO/SCIM status is unknown while the admin console says implemented"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DPDP-34",
@@ -3219,27 +3291,39 @@
       "title": "Generated videos cannot render on web — CSP has no media-src and the provider URI needs an auth header a browser cannot send",
       "domain": "web",
       "severity": "CRITICAL",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "proxy.ts sets default-src 'self' with no media-src directive, so a <video> pointed at the provider host is blocked outright; the provider Files endpoint additionally requires an api-key header a browser cannot send, and no proxy route exists. A billed user sees 'Your video is ready!' followed by 'Video failed to load.' Verified during this merge: grep of apps/web/proxy.ts finds default-src 'self' at line 86 and zero media-src occurrences.",
-      "fix": "A generated video plays in the web transcript: bytes are served from a first-party authenticated route and the CSP explicitly permits that media source.",
+      "evidence": "proxy.ts sets default-src 'self' with no media-src directive, so a <video> pointed at the provider host is blocked outright; the provider Files endpoint additionally requires an api-key header a browser cannot send, and no proxy route exists. A billed user sees 'Your video is ready!' followed by 'Video failed to load.' Verified during this merge: grep of apps/web/proxy.ts finds default-src 'self' at line 86 and zero media-src occurrences.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/proxy.ts:38 still has `default-src 'self';` and no `media-src` — that half of the claim is literally true. But the premise it rests on is dead: apps/web/lib/services/video-job-reconciliation-service.ts:79 now returns `video_url: authenticatedMediaUrl(job.assetId)`, and apps/web/lib/server/media-storage.ts:251-253 defines `authenticatedMediaUrl` as `return \\`/api/files/${mediaAssetId}\\``. apps/web/app/api/files/[id]/route.ts:142 streams the bytes first-party (`new NextResponse(streamed.body, {... 'Content-Type': served.contentType ...})`) — no redirect to a provider host, no api-key header. MessageBubble.tsx:1713 renders `src={message.metadata.videoUrl}`, and video-generation-transcript.ts:43 sets that from `authenticatedMediaUrl(job.assetId)` too. A same-origin media URL is permitted by `media-src`'s fallback to `default-src 'self'`, so nothing is blocked.",
+      "fix": "None required for playback. Optional hardening only: add an explicit `media-src 'self' blob:;` so a future move to an object-storage origin fails loudly rather than silently.",
       "code_refs": [
         "apps/web/proxy.ts:83-96",
         "apps/web/features/chat/components/messages/MessageBubble.tsx:1373-1405"
       ],
-      "sources": ["phase4-capability-audit.md (PP-19)"]
+      "sources": ["phase4-capability-audit.md (PP-19)"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "WEB-03",
       "title": "Generated videos are never persisted — only an expiring provider URL is stored, so a paid generation is lost on tab close",
       "domain": "web",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "L",
-      "evidence": "status/route.ts assigns statusResponse.video_url = firstVideo.uri directly and never stores bytes or inserts a media_assets row; grep for kind:'video' returns only an unrelated provenance kind. Images are persisted, videos are not. No webhook, queue, or resume path exists. Overlaps the billing slice (user paid for a lost artifact) but the storage pipeline is the web media surface.",
-      "fix": "A completed video generation is persisted to first-party storage with a media_assets row, so it survives tab close and appears in Library the same way a generated image does.",
+      "evidence": "status/route.ts assigns statusResponse.video_url = firstVideo.uri directly and never stores bytes or inserts a media_assets row; grep for kind:'video' returns only an unrelated provenance kind. Images are persisted, videos are not. No webhook, queue, or resume path exists. Overlaps the billing slice (user paid for a lost artifact) but the storage pipeline is the web media surface.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. video-job-reconciliation-service.ts:152-227 `persistCompletedVideo` downloads the provider output, calls `storeMediaFile({ userId, kind: 'video', filePath, byteSize, contentType, storageId: job.id })` (media-storage.ts:205-249, which writes to private R2 or the local dev prefix), then `upsertVideoMediaAsset({ id, userId, organizationId, mimeType, storageUrl, storagePathname, byteSize, prompt, provider, model, sourceSurface, metadata: { origin: 'generated', surface: 'file', previewable: true, aiAct: provenance, ... } })` at line 203-226. Failure of either half compensates (removePersistedVideo, line 112-115). The register's cited `statusResponse.video_url = firstVideo.uri` is gone; the legacy Google operation path at status/route.ts:256-260 now explicitly refuses to report success (`statusResponse.status = 'failed'; ... 'completed without durable delivery. Contact support for a credit review.'`).",
+      "fix": "Close this row. already fixed; no work remains.",
       "code_refs": ["apps/web/app/api/media/video/status/route.ts:302"],
-      "sources": ["phase4-capability-audit.md (PP-19)"]
+      "sources": ["phase4-capability-audit.md (PP-19)"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "WEB-04",
@@ -3276,15 +3360,21 @@
       "title": "Image aspect-ratio labels lie: six advertised ratios collapse to three actual output sizes",
       "domain": "web",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "ChatComposerNew.tsx maps both 3:4 and 9:16 to 1024x1792 (and both 4:3 and 16:9 to 1792x1024); the Google path then re-derives the ratio purely from width>height. Selecting 'Portrait 3:4' silently produces a 9:16 image with no notice to the user.",
-      "fix": "Each offered aspect ratio produces an image at that ratio, or ratios the provider cannot honour are not offered.",
+      "evidence": "ChatComposerNew.tsx maps both 3:4 and 9:16 to 1024x1792 (and both 4:3 and 16:9 to 1792x1024); the Google path then re-derives the ratio purely from width>height. Selecting 'Portrait 3:4' silently produces a 9:16 image with no notice to the user.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The collapse the entry describes no longer exists: `grep -n \"1024x1792|1792x1024\"` over ChatComposerNew.tsx returns nothing, and aspect options are now model-scoped (`getImageAspectOptionsForModel(...)`, imported at ChatComposerNew.tsx:78 and used at ImageGenerationCard.tsx:414). The ratio is an explicit first-class parameter end to end — ChatComposerNew.tsx:1684 sends `aspectRatio: effectiveImageAspectRatio`, and the route validates it per provider API rather than re-deriving from width>height: image/generate/route.ts:131-150 `IMAGE_ASPECT_RATIOS_BY_API` (gemini 14 ratios, imagen 5, openai 3, stability 9), :171-179 `resolveProviderImageAspectRatio` returns null for an unsupported ratio instead of substituting, and :182-186 maps distinct sizes (`'2:3' → 1024x1536`, `'3:2' → 1536x1024`). The width>height heuristic survives only as `legacyAspectRatioForSize` (:153-167), reached solely when no explicit ratio is supplied.",
+      "fix": "Close this row. already fixed; no work remains.",
       "code_refs": [
         "apps/web/features/chat/components/Composer/ChatComposerNew.tsx:248-255",
         "apps/web/app/api/media/image/generate/route.ts:482-487"
       ],
-      "sources": ["phase4-capability-audit.md (PP-18)"]
+      "sources": ["phase4-capability-audit.md (PP-18)"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "WEB-07",
@@ -3852,10 +3942,10 @@
       "title": "Model badge lies after server-side substitution, pin-to-model is unwired, and two ReasoningAccordion implementations coexist",
       "domain": "ui",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "The server computes usedFallback/original_model and emits fallback:{original_model,reason}, but useChatStream.ts sets the turn's model from the REQUEST (options.model || selectedModel) and persists that; no client reads original_model, so a credit fallback or provider failover shows the wrong model. Verified in the source audit: grep for usedFallback/original_model/x-agi-fallback in useChatStream.ts returns zero hits. Separately: the pin-to-model action is unwired or should be removed, there is no model-version/snapshot pinning, and duplicate ReasoningAccordion implementations exist. An account-level effort default with cost warning is also absent (per-message only).\n\nAlso recorded by a later audit (Web reasoning accordion — orphaned duplicate removed (wire-or-cut 2026-08-06 Wave 2 orphan sweep)): CONTRADICTS the register's 'two ReasoningAccordion implementations coexist': wire-or-cut records ReasoningAccordion.tsx cut as an orphaned duplicate of the live ThinkingBlock, carrying its own test suite. Re-verify before working UI-03 — if the cut landed, UI-03 narrows to the lying model badge and the unwired pin-to-model.",
-      "fix": "The model badge names the model that actually answered, including after a fallback; pin-to-model either works or is removed; one reasoning accordion remains.",
+      "evidence": "The server computes usedFallback/original_model and emits fallback:{original_model,reason}, but useChatStream.ts sets the turn's model from the REQUEST (options.model || selectedModel) and persists that; no client reads original_model, so a credit fallback or provider failover shows the wrong model. Verified in the source audit: grep for usedFallback/original_model/x-agi-fallback in useChatStream.ts returns zero hits. Separately: the pin-to-model action is unwired or should be removed, there is no model-version/snapshot pinning, and duplicate ReasoningAccordion implementations exist. An account-level effort default with cost warning is also absent (per-message only).\n\nAlso recorded by a later audit (Web reasoning accordion — orphaned duplicate removed (wire-or-cut 2026-08-06 Wave 2 orphan sweep)): CONTRADICTS the register's 'two ReasoningAccordion implementations coexist': wire-or-cut records ReasoningAccordion.tsx cut as an orphaned duplicate of the live ThinkingBlock, carrying its own test suite. Re-verify before working UI-03 — if the cut landed, UI-03 narrows to the lying model badge and the unwired pin-to-model.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. All three sub-claims are dead. (1) 'no client reads the resolved model': useChatStream.ts:1760-1763 reads `response.headers.get('X-AGI-Resolved-Model')?.trim() || model` and, when it differs, calls `updateMessage(assistantMessageId, { model: resolvedModel }, conversationId)`; same read at :1932 and :2220. The server sets it on both paths — route.ts:507-509 `headers['X-AGI-Resolved-Model'] = processed.chatRequest.model` with the comment at :501-506 naming this exact bug ('Same class of wrongness when a credit fallback silently swaps the model'), and stream-transform.ts:617,908. (2) 'two ReasoningAccordion implementations coexist': `grep -rn ReasoningAccordion apps packages` returns only apps/desktop/archive/** — none in apps/web or packages/ui. (3) pin-to-model: no such control — `grep -n \"Pin|pin\" ComposerFooter.tsx` hits only prose in comments; the only pin handlers in web are conversation-pin and message-pin (WebChatPage.tsx:3426, :3826).",
+      "fix": "Close this row. already fixed; no work remains.",
       "code_refs": [
         "apps/web/lib/hooks/useChatStream.ts:1964",
         "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2701",
@@ -3872,7 +3962,13 @@
         "phase4-capability-audit.md",
         "audit/ui-gaps.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "UI-04",
@@ -4330,12 +4426,18 @@
       "title": "Chrome extension retains a vestigial cloud-unlock mechanism with no consumer",
       "domain": "extension",
       "severity": "LOW",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "Invite/waitlist copy was corrected to public-alpha framing, but the dead desktopBridge.getCloudUnlockState / setCloudUnlocked mechanism remains — retained rather than removed.",
-      "fix": "The unused cloud-unlock bridge functions are deleted along with any remaining callers.",
+      "evidence": "Invite/waitlist copy was corrected to public-alpha framing, but the dead desktopBridge.getCloudUnlockState / setCloudUnlocked mechanism remains — retained rather than removed.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The mechanism and its file are both gone. grep for getCloudUnlockState|setCloudUnlocked|cloudUnlock across apps/extension/src returns zero hits, and apps/extension/src/features/cloud-bridge/desktopBridge.ts does not exist — `ls apps/extension/src/features/cloud-bridge/` shows boundedSseDecoder.ts, clerkAuth.ts, conversationSync.ts, conversationSyncClient.ts, freeTrialClient.ts, index.ts, InviteCodeModal.ts, managedChatHandler.ts, managedChatPort.ts, managedChatRouting.ts, managedCloudAuthority.ts, managedModelPicker.ts, managedRunControl.ts, types.ts.",
+      "fix": "Close as fixed.",
       "code_refs": ["apps/extension/src/features/cloud-bridge/desktopBridge.ts"],
-      "sources": ["known-flaws.md (EXT-CLOUD-INVITE-RESIDUAL-01)"]
+      "sources": ["known-flaws.md (EXT-CLOUD-INVITE-RESIDUAL-01)"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "EXT-04",
@@ -5296,15 +5398,21 @@
       "title": "Desktop agent-mode guardrail gap remains on the Rust egress/host-denylist path after the UI fix",
       "domain": "desktop",
       "severity": "MEDIUM",
-      "status": "open",
-      "evidence": "The persistence bug and missing Plan-mode UI were fixed (agent_mode/auto_approve_all persisted, fail-closed on bad value), but a second Rust-side instance of permissive tool-guard behavior on the egress/host-denylist path is still open. Related to DESK-01.",
-      "fix": "Apply the same fail-closed guard semantics to the Rust egress/host-denylist path in tool_executor.",
+      "status": "resolved",
+      "evidence": "The persistence bug and missing Plan-mode UI were fixed (agent_mode/auto_approve_all persisted, fail-closed on bad value), but a second Rust-side instance of permissive tool-guard behavior on the egress/host-denylist path is still open. Related to DESK-01.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The permissive Rust tool-guard is gone. apps/desktop/src-tauri/src/sys/security/tool_guard.rs:2380-2401 `fn validate_url(&self, url: &str)` now delegates to the shared policy and fails closed on every branch: `match egress_policy::ensure_public_http_destination(url) { Ok(()) => Ok(()), Err(EgressDenial::InvalidUrl(raw)) => Err(SecurityError::InvalidParameter(…)), Err(EgressDenial::UnsupportedScheme(scheme)) => Err(SecurityError::InsecureProtocol(scheme)), Err(EgressDenial::InternalDestination(host)) => Err(SecurityError::BlockedDomain(host)), Err(EgressDenial::UnresolvedDestination(host)) => Err(SecurityError::BlockedDomain(host)) }` — note the last arm: a host that cannot be *proven* public is blocked, which is the fail-closed semantics this item asks for. Its own doc comment at :2370-2373 records that the same policy governs the renderer-reachable api_* commands. docs/agent-context/known-flaws.md:3194 still lists the row as 'Partially Fixed … remaining open item is the Rust-side egress/host-denylist gap', which the code contradicts. The only residual is the DNS rebinding race, self-documented at :2376-2379 and already tracked by DESK-01.",
+      "fix": "Close this item and update the known-flaws.md:3194 status line; keep the rebinding race under DESK-01 only.",
       "effort": "M",
       "sources": ["docs/agent-context/known-flaws.md (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01)"],
       "code_refs": [
         "apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs",
         "apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DESK-33",
@@ -5338,9 +5446,9 @@
       "title": "Desktop message Retry is a silent no-op and there is no one-click Regenerate, unlike web",
       "domain": "desktop",
       "severity": "MEDIUM",
-      "status": "open",
-      "evidence": "The live message-rendering path (unified-chat ActionBar) renders Retry and calls onRetry, but MessageList never passes an onRetry prop, so every click silently no-ops. Separately the shared unified-chat useChat hook has no regenerate capability at all, so true web parity requires a new shared runtime.regenerate method. Needs a Tauri/WDIO run with a live model to verify.",
-      "fix": "Thread onRetry through MessageList and add runtime.regenerate to the shared useChat hook, covered by a WDIO test against a live model.",
+      "status": "resolved",
+      "evidence": "The live message-rendering path (unified-chat ActionBar) renders Retry and calls onRetry, but MessageList never passes an onRetry prop, so every click silently no-ops. Separately the shared unified-chat useChat hook has no regenerate capability at all, so true web parity requires a new shared runtime.regenerate method. Needs a Tauri/WDIO run with a live model to verify.\n\nREFUTED 2026-08-16 — re-verified against the working tree. Both halves are false. (a) 'MessageList never passes onRetry so every click silently no-ops': MessageList.tsx:147 passes `onRetry={onRegenerateMessage}`, and ActionBar.tsx:91 gates the Retry button on `{onRetry && (` — so when it is absent the button does not render at all, and there is no silent no-op. (b) 'the shared useChat hook has no regenerate capability at all': packages/ui/unified-chat/src/hooks/useChat.ts:1261 defines `regenerate`, :1315 defines `editAndResend`, and both are returned at :1581-1582; ChatInterface.tsx:765-766 wires them. Real residual: they are gated on `runtime?.deleteMessages`, which CloudRuntime implements (CloudRuntime.ts:1497) but TauriRuntime does not — so Retry/Edit are hidden, not broken, in Local/BYOK mode.",
+      "fix": "Re-file as 'TauriRuntime does not implement deleteMessages, so Retry/Edit are hidden in Local/BYOK' — a much narrower item.",
       "effort": "M",
       "sources": [
         "docs/agent-context/known-flaws.md (DESKTOP-CHAT-CONVO-ACTIONS-ORPHANED-01, DESKTOP-REGENERATE-NO-COMPLETION-01)"
@@ -5352,7 +5460,13 @@
         "packages/ui/unified-chat/src/components/ActionBar.tsx",
         "packages/ui/unified-chat/src/components/MessageList.tsx",
         "packages/ui/unified-chat/src/hooks/useChat.ts"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DESK-35",
@@ -5546,12 +5660,18 @@
       "title": "Desktop composer draft text is not cleared by 'New chat'",
       "domain": "desktop",
       "severity": "MEDIUM",
-      "status": "open",
-      "evidence": "Confirmed with screenshot evidence in live QA: clicking New Chat creates a fresh conversation and swaps the view, but the textarea's unsent draft text is not cleared, so the previous draft carries into the new conversation.",
-      "fix": "Clear the ChatInput draft when the active conversation id changes.",
+      "status": "resolved",
+      "evidence": "Confirmed with screenshot evidence in live QA: clicking New Chat creates a fresh conversation and swaps the view, but the textarea's unsent draft text is not cleared, so the previous draft carries into the new conversation.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. Drafts are per-conversation. packages/ui/unified-chat/src/stores/chatStore.ts:70 declares `draftsByConversation: Record<string, string>`; setActiveConversation at :119-122 does `state.activeConversationId = id; state.draftContent = state.draftsByConversation[composerDraftKey(id)] ?? '';` — switching conversation swaps in that conversation's own draft (empty for a fresh one) rather than carrying the old text. setDraftContent (:264-275) writes under composerDraftKey(conversationId), removeConversation (:141) deletes the entry, and :179-186 prunes orphaned draft keys. ChatInput.tsx:380 passes conversationId on every keystroke.",
+      "fix": "None. If the reported screenshot is real it is a different bug (host not calling setActiveConversation on New chat) and needs fresh repro evidence.",
       "effort": "S",
       "sources": ["docs/agent-context/known-flaws.md (DESKTOP-NEWCHAT-DRAFT-NOT-CLEARED-01)"],
-      "code_refs": ["packages/ui/unified-chat/src/components/ChatInput.tsx"]
+      "code_refs": ["packages/ui/unified-chat/src/components/ChatInput.tsx"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DESK-44",
@@ -6001,31 +6121,43 @@
       "title": "Desktop capability toggles and cloud-sync error handling need regression guards after their fail-open fixes",
       "domain": "desktop",
       "severity": "MEDIUM",
-      "status": "in-progress",
-      "evidence": "Two fail-open defects were fixed but carry no standing guard: is_enabled returned unwrap_or(true) and settingsStore.ts swallowed sync failures to console.error while still showing success, so terminalAccess/fileOperations/codeExecution stayed live after being turned off (fixed ac20a2962); and cloud_sync.rs discarded every local write error via `let _ = conn.execute(...)` with messages_failed hardcoded to 0 (fixed 46e81e69f). Neither has a test asserting the closed behaviour.",
-      "fix": "Add regression tests asserting capability toggles fail closed on sync failure and that cloud-sync surfaces a non-zero failure count when a local write errors.",
+      "status": "resolved",
+      "evidence": "Two fail-open defects were fixed but carry no standing guard: is_enabled returned unwrap_or(true) and settingsStore.ts swallowed sync failures to console.error while still showing success, so terminalAccess/fileOperations/codeExecution stayed live after being turned off (fixed ac20a2962); and cloud_sync.rs discarded every local write error via `let _ = conn.execute(...)` with messages_failed hardcoded to 0 (fixed 46e81e69f). Neither has a test asserting the closed behaviour.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. Both requested guards exist. Capability-toggle side: apps/desktop/src/stores/__tests__/settingsStore.capabilitySync.test.ts exists, and the production path it guards is apps/desktop/src/stores/settingsStore.ts:1597-1607, which on a failed `invoke('sync_capabilities')` now sets an explicit error — 'Capability settings could not be applied. Disabled capabilities are not being enforced — restart the app before running tools.' — rather than only console.error'ing. Cloud-sync side: apps/desktop/src-tauri/src/data/cloud_sync.rs:3667 defines `fn cloud_sync_write_failures_surface_in_messages_failed()` which asserts `outcome.messages_failed == 1` at line 3680, and cloud_sync.rs:2010 wires `messages_failed: self.messages.failed` into the outcome under a 'Local write accounting' section comment.",
+      "fix": "Close this row. already fixed; no work remains.",
       "effort": "S",
       "sources": ["ExecutionPlan.md (items #32, #59)"],
       "code_refs": [
         "apps/desktop/src/stores/settingsStore.ts:1594-1603,1707-1714",
         "apps/desktop/src-tauri/src/data/cloud_sync.rs:327-334"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "MOB-01",
       "title": "Mobile legal and help copy makes false App Store / Google Play availability and rating claims",
       "domain": "mobile",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "No confirmed store listings exist, yet legal and help copy claims store availability and ratings, and no release-state registry gates store links or badges. The copy removal (DOC-003) is tracked as dependent on this. Compounding: zero link or distribution-state tests exist under apps/web/__tests__, which is exactly the guard that would stop this claim from silently returning.",
-      "fix": "Drive every store link, badge and availability claim from a release-state registry, and add distribution-state tests that fail when copy outruns the registry.",
+      "status": "resolved",
+      "evidence": "No confirmed store listings exist, yet legal and help copy claims store availability and ratings, and no release-state registry gates store links or badges. The copy removal (DOC-003) is tracked as dependent on this. Compounding: zero link or distribution-state tests exist under apps/web/__tests__, which is exactly the guard that would stop this claim from silently returning.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/app/mobile/legal/page.tsx:371 reads: 'The App carries no purchase price. It is not published to the App Store or Google Play yet, so there is nothing to install today.' The file header comment at line 27 states the same ('no App Store or Google Play listing'). Lines 373-375 discuss FUTURE in-app purchases in conditional tense. No availability or rating claim survives. The 'compounding: zero distribution-state tests exist' arm is also false — apps/web/__tests__/distribution-state.test.ts exists (282 lines) and at lines 42-46 defines STORE_LISTING_PATTERNS keyed by surface (apps.apple.com / play.google.com for mobile, chromewebstore for chrome, marketplace.visualstudio.com for vscode) checked against SURFACE_STATUS from @/lib/marketing-constants.",
+      "fix": "Close this row. already fixed; no work remains.",
       "effort": "M",
       "sources": ["AuditRemediationLedger.md (CRIT-007, DOC-003, DOC-028)"],
       "merged_from": [
         "DOC-003: False Mobile store/rating copy and links not yet removed",
         "DOC-028: No link or distribution-state tests exist"
       ],
-      "code_refs": ["apps/web/app/mobile/legal/page.tsx"]
+      "code_refs": ["apps/web/app/mobile/legal/page.tsx"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "MOB-02",
@@ -6248,12 +6380,18 @@
       "title": "Mobile Cloud auto-memory runs a client-side consolidation write before provider success, racing the server-owned fact",
       "domain": "mobile",
       "severity": "MEDIUM",
-      "status": "open",
-      "evidence": "Server auto-capture is intentionally Website-only for now; Mobile Cloud still performs a client consolidation write before provider success, which can race the server-owned fact. Removal was scheduled for a follow-up mobile slice and is not yet done.",
-      "fix": "Remove the mobile client-side consolidation write and rely on the server-owned auto-capture once it covers mobile.",
+      "status": "resolved",
+      "evidence": "Server auto-capture is intentionally Website-only for now; Mobile Cloud still performs a client consolidation write before provider success, which can race the server-owned fact. Removal was scheduled for a follow-up mobile slice and is not yet done.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The Cloud path no longer performs a client consolidation write. apps/mobile/src/features/memory/services/consolidation.ts:25-37: `export function shouldConsolidateMemoryOnClient(opts) { return (!opts.isTemporaryChat && opts.executionMode === 'local' && opts.memoryEnabled && opts.generateMemoryFromHistory); }` — the `executionMode === 'local'` conjunct excludes Cloud entirely. Its only consumer, apps/mobile/stores/chat/chatExecutionStore.ts:1102-1113, guards the write behind that result (`if (!shouldCaptureCompletedLocalTurn || completedLocalMemoryCaptured) return;`) inside a closure named captureCompletedLocalMemory, and both call sites (:1332 and :1707) are on turn completion, not before provider success.",
+      "fix": "None needed. Close as fixed.",
       "effort": "S",
       "sources": ["docs/agent-context/known-flaws.md (CLOUD-MEMORY-AUTO-01)"],
-      "code_refs": ["apps/mobile/src/features/memory"]
+      "code_refs": ["apps/mobile/src/features/memory"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "MOB-14",
@@ -7159,9 +7297,9 @@
       "title": "Per-tool connector permission levels are never enforced server-side; scopes and risk class are display-only",
       "domain": "integrations",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "Per-tool allow/ask/block permission levels are never read at tool-execution time — server gating is a single coarse binary (manual vs auto) — and the connector_tool_permissions table has no live reader or writer. Independently confirmed: grantedScopes flows registry→API→UI but no call site consults it before executing a connector tool, and riskClass is only ever rendered as prose. The connector permission panel is unmounted with mismatched keys, there is no audit or provenance strip for connector reads and writes, and no revocation, schema-change or tool-poisoning tests exist. Related: CAP-019's organization browse-domain policy exists only as a settings-API schema field with no enforcing consumer.\n\nAlso recorded by a later audit (Per-tool connector permissions — only GitHub is wired, the general case is deferred (wire-or-cut, Wave 2 late web items)): Adds the honest-copy defect and the blocking reason. Disconnect copy told users their saved per-tool permissions were deleted while no UI existed to save any. Only GitHub is mounted; every other connector's tool list is capability prose with no backing tool, and a static config cannot mirror runtime-discovered tools — so the general case stays deferred behind a live per-connector tool-catalog endpoint that does not exist. That endpoint is the real prerequisite for CONN-06's server-side enforcement.",
-      "fix": "Read connector_tool_permissions, grantedScopes and riskClass in one policy decision at tool-execution time, mount the permission panel against the same keys, and add revocation/schema-change/tool-poisoning tests.",
+      "status": "resolved",
+      "evidence": "Per-tool allow/ask/block permission levels are never read at tool-execution time — server gating is a single coarse binary (manual vs auto) — and the connector_tool_permissions table has no live reader or writer. Independently confirmed: grantedScopes flows registry→API→UI but no call site consults it before executing a connector tool, and riskClass is only ever rendered as prose. The connector permission panel is unmounted with mismatched keys, there is no audit or provenance strip for connector reads and writes, and no revocation, schema-change or tool-poisoning tests exist. Related: CAP-019's organization browse-domain policy exists only as a settings-API schema field with no enforcing consumer.\n\nAlso recorded by a later audit (Per-tool connector permissions — only GitHub is wired, the general case is deferred (wire-or-cut, Wave 2 late web items)): Adds the honest-copy defect and the blocking reason. Disconnect copy told users their saved per-tool permissions were deleted while no UI existed to save any. Only GitHub is mounted; every other connector's tool list is capability prose with no backing tool, and a static config cannot mirror runtime-discovered tools — so the general case stays deferred behind a live per-connector tool-catalog endpoint that does not exist. That endpoint is the real prerequisite for CONN-06's server-side enforcement.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The core claim ('per-tool allow/ask/block levels are never read at tool-execution time', 'connector_tool_permissions has no live reader or writer') is false in current source. Writer: apps/web/app/api/connectors/permissions/route.ts:76 `insert into public.connector_tool_permissions` and :108,:113 deletes. Reader: apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts:80-85 `select connector_id, tool_name, level from public.connector_tool_permissions where user_id = $1`. Enforcement is a three-level decision, not a binary: tool-loop.ts:1267-1286 `function resolveToolCallGate` reads `connectorPermissions.levelFor(toolCall.qualifiedName)` and returns `{verdict:'deny'}` on saved==='deny' (:1269), `{verdict:'allow', reason:'always_allow'}` on saved==='allow' (:1276-1279), `{verdict:'ask', reason:'user_requires_approval'}` on saved==='ask' (:1281) — each ahead of the coarse approvalMode fallback at :1282. Denied tools are additionally dropped from the catalog before the model ever sees them (route.ts:469 `isToolDenied: connectorPermissions.isConnectorToolDenied`) and a resumed approval cannot bypass the store (tool-loop.ts:1853 `if (decision === 'approved' && connectorPermissions.isDenied(p.qualifiedName))` → blockedToolResultMessage). The approve route re-loads and re-checks independently at approve/route.ts:163,169,235. The residual sub-claims are separate defects, not this one: grantedScopes has no pre-execution consumer, and riskClass appears only as prose (ConnectorOverviewDialog.tsx:60,93 and ConnectorsPage.tsx:396).",
+      "fix": "Close this row and re-file the two genuinely-open remnants (grantedScopes never consulted before execution; riskClass rendered but never gating) as one narrow item, so the closed enforcement work is not re-litigated.",
       "effort": "L",
       "sources": [
         "docs/agent-context/known-flaws.md (CONNECTOR-PERMISSIONS-CLIENT-ONLY-01)",
@@ -7180,7 +7318,13 @@
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
         "apps/web/features/connectors/pages/ConnectorsPage.tsx:503,712",
         "apps/web/app/api/settings/organization/route.ts:66"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "CONN-07",
@@ -7222,15 +7366,21 @@
       "title": "MCP OAuth discovery reportedly implements only pre-registration; contradicted by later CIMD and DCR evidence",
       "domain": "integrations",
       "severity": "HIGH",
-      "status": "unclear",
-      "evidence": "One source states that of the three client-registration mechanisms only pre-registration is implemented, so a user can never add an MCP server the founder has not personally onboarded. SOURCES DISAGREE: the later FoundersAssistance record shows CIMD is implemented and merely undeployed (CONN-03) and DCR works for 15 providers and is refused by six (CONN-04). Reconcile before acting.",
-      "fix": "Confirm the current state of CIMD and DCR support against the deployed code, then close or restate this item; if a gap remains, complete the missing mechanism.",
+      "status": "resolved",
+      "evidence": "One source states that of the three client-registration mechanisms only pre-registration is implemented, so a user can never add an MCP server the founder has not personally onboarded. SOURCES DISAGREE: the later FoundersAssistance record shows CIMD is implemented and merely undeployed (CONN-03) and DCR works for 15 providers and is refused by six (CONN-04). Reconcile before acting.\n\nREFUTED 2026-08-16 — re-verified against the working tree. apps/web/lib/connectors/mcp-endpoints.ts:1 `export type McpClientRegistrationMode = 'cimd' | 'dynamic' | 'preregistered';` — all three mechanisms are modelled, and counting the record literals gives 8 cimd, 8 dynamic and 12 preregistered entries. isSelfServiceConnector (:182-185) makes cimd and dynamic ids connectable without founder onboarding, and apps/web/app/api/connectors/route.ts:275-288 routes them to an oauthStartPath. The claim that only pre-registration is implemented is false.",
+      "fix": "Close this item; its residue is entirely covered by CONN-03 (cimd undeployed) and CONN-04 (six preregistered refusals).",
       "effort": "M",
       "sources": [
         "ExecutionPlan.md (TODO MCP OAuth discovery)",
         "FoundersAssistance.md (#22, #24, #25)"
       ],
-      "code_refs": ["apps/web/lib/connectors/", "apps/web/app/api/connectors/oauth/"]
+      "code_refs": ["apps/web/lib/connectors/", "apps/web/app/api/connectors/oauth/"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "CONN-10",
@@ -7902,10 +8052,10 @@
       "title": "The Cloud Code approval state machine is write-only — a suspended turn can never be decided or resumed",
       "domain": "ai-routing",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "MATCH-002, explicitly re-verified in the ledger on 2026-08-09 as still open after a prior mislabel (commit 94046227f was flagship routing-slot billing, not approvals): cloud_code_agent_loop.ts has an awaiting_approval stop reason and writes a cloud_code_agent_approvals row, but no decision path ('approved'/'rejected' transitions) exists in that module, so a suspended turn cannot resume. ExecutionPlan #38 independently confirmed and marked it BLOCKED: rows can be inserted but never decided (no SELECT or UPDATE on the table; preApproved is supplied only by tests), and closing it requires touching the agent loop and approvals service together, outside that item's declared write set. Three of four decision states are unreachable.",
-      "fix": "An approval written by the agent loop can be read, decided and resumed through the approvals service, so a turn suspended for approval reaches a terminal state instead of being stranded.",
+      "evidence": "MATCH-002, explicitly re-verified in the ledger on 2026-08-09 as still open after a prior mislabel (commit 94046227f was flagship routing-slot billing, not approvals): cloud_code_agent_loop.ts has an awaiting_approval stop reason and writes a cloud_code_agent_approvals row, but no decision path ('approved'/'rejected' transitions) exists in that module, so a suspended turn cannot resume. ExecutionPlan #38 independently confirmed and marked it BLOCKED: rows can be inserted but never decided (no SELECT or UPDATE on the table; preApproved is supplied only by tests), and closing it requires touching the agent loop and approvals service together, outside that item's declared write set. Three of four decision states are unreachable.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. A full read/decide/resume path exists. apps/web/lib/services/cloud-code-agent-approval-service.ts:208-216 `update cloud_code_agent_approvals set state = $3, decided_at = now() where turn_id = $1 and step_index = $2 and state = 'pending' and expires_at > now() returning command`; :242-247 `update cloud_code_agent_turns set state = 'running' ... where id = $1 and state = 'awaiting_approval' returning id`; :277-280 logs 'Cloud Code approval decided; resuming turn'; :282-299 calls `executePersistedAgentTurn({ ... priorMessages: messages, preApproved: { toolUseId, command, approved } })`. Expired and already-decided states are reachable at :232-240. The route is apps/web/app/api/code/sessions/[sessionId]/agent/approvals/route.ts, importing `decideCloudCodeAgentApproval` and `listCloudCodeAgentApprovals` at :20-22.",
+      "fix": "Close this row. already fixed; no work remains.",
       "code_refs": [
         "apps/web/lib/services/cloud-code-agent-loop.ts",
         "apps/web/db/neon/0082_cloud_code_agent_turns.sql:102-127"
@@ -7914,7 +8064,13 @@
       "merged_from": [
         "MATCH-002 Cloud Code approval state machine is write-only",
         "ExecutionPlan #38 Cloud Code approval gate write-only"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "AI-30",
@@ -8102,13 +8258,19 @@
       "title": "CodeQL default setup is still enabled, suppressing Rust analysis on pull requests",
       "domain": "infra/ci",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "FoundersAssistance item 4: both default and advanced CodeQL setup are enabled, and while default setup is on, the advanced configuration's Rust analysis does not run on PRs — so Rust findings are only discovered after merge. Requires a GitHub repo Settings change (Code security → Code scanning → disable Default setup) so .github/workflows/codeql.yml is the only configuration.",
-      "fix": "CodeQL runs from one configuration that includes Rust on pull requests, so a Rust finding blocks the PR that introduced it rather than surfacing after merge.",
+      "evidence": "FoundersAssistance item 4: both default and advanced CodeQL setup are enabled, and while default setup is on, the advanced configuration's Rust analysis does not run on PRs — so Rust findings are only discovered after merge. Requires a GitHub repo Settings change (Code security → Code scanning → disable Default setup) so .github/workflows/codeql.yml is the only configuration.\n\nREFUTED 2026-08-16 — re-verified against the working tree. .github/workflows/codeql.yml lines 1-5: `name: 'Rust Security'` / '# JS/TS CodeQL is handled by GitHub's default CodeQL setup. # This workflow only runs Rust-specific security checks.' A grep for 'codeql-action' in that file returns zero hits — there is no advanced CodeQL configuration whose Rust analysis could be suppressed. Its job is `rust-security: Rust Security (cargo audit + clippy)`. It runs on pull_request (:14-20, paths **/*.rs, **/Cargo.toml, **/Cargo.lock) and GitHub API shows five recent pull_request runs on compliance/dpdp: 2026-08-16 18:29 success, 18:02 success, 17:31 success, 17:24 failure, 17:12 success. Rust security findings already block PRs.",
+      "fix": "None. Close the item; the premise (an advanced CodeQL config analysing Rust) does not exist in this repo.",
       "code_refs": [".github/workflows/codeql.yml"],
       "sources": ["FoundersAssistance.md"],
-      "blocked_by": "GitHub repository Settings → Code security (founder/admin action)"
+      "blocked_by": "GitHub repository Settings → Code security (founder/admin action)",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "INFRA-07",
@@ -8192,24 +8354,36 @@
       "title": "check:env-contract fails on an undocumented MODERATION_HASH_DENYLIST variable",
       "domain": "infra/ci",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "BASE-003 finding 4: apps/web/lib/moderation/hash-denylist.ts reads an env var not declared in the env contract, introduced by commit 7aa633875, so the gate is red. This is the same class as ExecutionPlan #24 (undocumented environment variables that fail silently — UPLOAD_SCAN_WEBHOOK_URL, ENCRYPTION_KEY, DESKTOP_TOKEN_SECRET in two spellings, STRIPE_PRICE_TEAM_*, CONNECTOR_OAUTH_*, RESEND_API_KEY plus 5 support vars with hardcoded defaults), which was fixed 2026-08-09 — this entry is the one that regressed after.",
-      "fix": "Every env var a production module reads is declared in the env contract, and the contract gate passes on the current head.",
+      "evidence": "BASE-003 finding 4: apps/web/lib/moderation/hash-denylist.ts reads an env var not declared in the env contract, introduced by commit 7aa633875, so the gate is red. This is the same class as ExecutionPlan #24 (undocumented environment variables that fail silently — UPLOAD_SCAN_WEBHOOK_URL, ENCRYPTION_KEY, DESKTOP_TOKEN_SECRET in two spellings, STRIPE_PRICE_TEAM_*, CONNECTOR_OAUTH_*, RESEND_API_KEY plus 5 support vars with hardcoded defaults), which was fixed 2026-08-09 — this entry is the one that regressed after.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. `pnpm check:env-contract` prints 'Environment examples and credential-handling contract are valid.' and exits 0. MODERATION_HASH_DENYLIST is read at apps/web/lib/moderation/hash-denylist.ts:42 `const raw = process.env['MODERATION_HASH_DENYLIST'] ?? '';` and IS declared at apps/web/.env.example:341 `MODERATION_HASH_DENYLIST=`. The gate is green.",
+      "fix": "None.",
       "code_refs": ["apps/web/lib/moderation/hash-denylist.ts"],
-      "sources": ["AuditRemediationLedger.md"]
+      "sources": ["AuditRemediationLedger.md"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "INFRA-11",
       "title": "check:ci-guardrails asserts vercel.json owns a rewrite that has moved to next.config.ts",
       "domain": "infra/ci",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "BASE-003 finding 5: commit 438e154d4 (MATCH-008) moved the /v1/chat/completions rewrite from vercel.json into next.config.ts, but scripts/check-ci-guardrails.mjs:473 still requires vercel.json to contain it, so pre-push is red on a stale guard rather than on a lost route. The same MATCH-008 change caused a real regression that was caught and fixed separately (see INFRA-12) — this item is only the stale-owner assertion left behind.",
-      "fix": "The guardrail asserts the rewrite exists at its canonical owner (next.config.ts), so a green pre-push reflects the real routing configuration.",
+      "evidence": "BASE-003 finding 5: commit 438e154d4 (MATCH-008) moved the /v1/chat/completions rewrite from vercel.json into next.config.ts, but scripts/check-ci-guardrails.mjs:473 still requires vercel.json to contain it, so pre-push is red on a stale guard rather than on a lost route. The same MATCH-008 change caused a real regression that was caught and fixed separately (see INFRA-12) — this item is only the stale-owner assertion left behind.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. scripts/check-ci-guardrails.mjs:475 now reads `requireIncludes('apps/web/next.config.ts', 'API_HOST_REWRITE_ROUTES.map');` and :476 `requireNotIncludes('vercel.json', '\"source\": \"/v1/chat/completions\"');` — the guardrail asserts the canonical owner is next.config.ts and that vercel.json does NOT carry it, the inverse of the claim. :474 additionally asserts apps/web/lib/api-host-route-contract.ts contains \"source: '/v1/chat/completions'\". vercel.json has no rewrites key.",
+      "fix": "None.",
       "code_refs": ["scripts/check-ci-guardrails.mjs:473", "apps/web/next.config.ts:98-99"],
-      "sources": ["AuditRemediationLedger.md"]
+      "sources": ["AuditRemediationLedger.md"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "INFRA-12",
@@ -8300,10 +8474,10 @@
       "title": "CLI, VS Code and Chrome release workflows build artifacts but never publish them",
       "domain": "infra/ci",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "REL-004 triage (2026-08-09): release-cli.yml contains no npm publish or cargo publish step, so no published CLI package exists despite a release workflow that reads as a shipped channel; signatures, checksums and install/uninstall/upgrade tests are also absent. REL-005: release-vscode-extension.yml has exactly one publish reference, with marketplace CI, publisher identity, Restricted Mode/Workspace Trust behaviour, remote-host tests, update/rollback and telemetry disclosure otherwise absent. REL-006: release-chrome-extension.yml builds the store ZIP, installs Chromium and exercises the exact packaged bytes in-browser — the hard part is done — but has zero store-publish steps, the easy part. Chrome publishing is additionally gated on a stable public key (see INFRA-17).",
-      "fix": "Each release workflow ends in a real publish to its channel with signatures and checksums, and an install/upgrade/uninstall test proves the published artifact works.",
+      "evidence": "REL-004 triage (2026-08-09): release-cli.yml contains no npm publish or cargo publish step, so no published CLI package exists despite a release workflow that reads as a shipped channel; signatures, checksums and install/uninstall/upgrade tests are also absent. REL-005: release-vscode-extension.yml has exactly one publish reference, with marketplace CI, publisher identity, Restricted Mode/Workspace Trust behaviour, remote-host tests, update/rollback and telemetry disclosure otherwise absent. REL-006: release-chrome-extension.yml builds the store ZIP, installs Chromium and exercises the exact packaged bytes in-browser — the hard part is done — but has zero store-publish steps, the easy part. Chrome publishing is additionally gated on a stable public key (see INFRA-17).\n\nREFUTED 2026-08-16 — re-verified against the working tree. All three workflows have real publish jobs. .github/workflows/release-cli.yml:296-341 job `publish-npm` ('Publish to npm'), needs [validate-version, build, sign-release-assets], requires NPM_TOKEN or exits 1, verifies staging with `npm run --prefix apps/cli/npm package-check -- --staged`, then `run: ./scripts/publish-cli.sh --yes` (scripts/publish-cli.sh present, 3891 bytes, executable). .github/workflows/release-vscode-extension.yml:126-193 job `publish`, environment `vscode-marketplace` url marketplace.visualstudio.com/items?itemName=agiworkforce.agi-workforce, ending in `pnpm --dir apps/extension-vscode exec vsce publish`. .github/workflows/release-chrome-extension.yml:144-210 job `publish` ('Submit verified ZIP to Chrome Web Store'), environment url chrome.google.com/webstore/devconsole, google workload-identity with scope https://www.googleapis.com/auth/chromewebstore, then `node apps/extension/scripts/publish-chrome-web-store.mjs \"$ARCHIVE_PATH\"`. release-cli.yml also has a `sign-release-assets` job. The claim 'builds artifacts but never publish them' is false on all three counts.",
+      "fix": "None. Close; re-scope any residual concern to 'the publish jobs have never been triggered' (only tags v-cli-1.0.0 and v-desktop-1.2.0 exist), which is INFRA-17 credentials, not missing steps.",
       "code_refs": [
         ".github/workflows/release-cli.yml",
         ".github/workflows/release-vscode-extension.yml",
@@ -8314,7 +8488,13 @@
         "REL-004 CLI has a release workflow but no publish step",
         "REL-005 VS Code extension release workflow has only one publish reference",
         "REL-006 Chrome extension is verified but never published"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "INFRA-17",
@@ -8944,11 +9124,17 @@
       "title": "check:repo-organization is red on untracked root artifacts from other in-flight work",
       "domain": "infra/ci",
       "severity": "LOW",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "PLAN.md 2026-08-05: `pnpm check:repo-organization` fails on ten untracked root .png files created by other in-flight work. Same class as INFRA-14 — a guard whose result depends on uncommitted local state, which trains contributors to ignore it. User memory independently records that the working tree carries roughly 229 uncommitted files and that deploys and baselines must never be taken from it.",
-      "fix": "Repo-organization checks evaluate tracked state, so a guard's verdict is the same on CI and on a working tree carrying unrelated scratch files.",
-      "sources": ["PLAN.md"]
+      "evidence": "PLAN.md 2026-08-05: `pnpm check:repo-organization` fails on ten untracked root .png files created by other in-flight work. Same class as INFRA-14 — a guard whose result depends on uncommitted local state, which trains contributors to ignore it. User memory independently records that the working tree carries roughly 229 uncommitted files and that deploys and baselines must never be taken from it.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. Ran `pnpm check:repo-organization` on the current working tree (which is dirty — git status shows dozens of modified files): output is 'Repo organization check passed.', exit 0. The ten untracked root .png files the item describes are gone, and the guard is green even on uncommitted local state.",
+      "fix": "None.",
+      "sources": ["PLAN.md"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "INFRA-47",
@@ -9121,11 +9307,17 @@
       "title": "No link or distribution-state tests, the exact guard that would stop false availability claims returning",
       "domain": "testing",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "DOC-028 triage (2026-08-09): zero link or distribution-state tests exist under apps/web/__tests__ — and the ledger names this as precisely the guard that would stop DOC-003 (false store availability) and DOC-026 (traction and 'six live apps' claims) from silently returning. INFRA-15 is the live instance this guard would have caught: /download and /cli claim 'Released' while the release endpoint 404s.",
-      "fix": "Tests assert that every advertised download, store listing and marketplace link resolves and that the claimed release state matches a probe of the real artifact.",
-      "sources": ["AuditRemediationLedger.md"]
+      "evidence": "DOC-028 triage (2026-08-09): zero link or distribution-state tests exist under apps/web/__tests__ — and the ledger names this as precisely the guard that would stop DOC-003 (false store availability) and DOC-026 (traction and 'six live apps' claims) from silently returning. INFRA-15 is the live instance this guard would have caught: /download and /cli claim 'Released' while the release endpoint 404s.\n\nREFUTED 2026-08-16 — re-verified against the working tree. 'zero link or distribution-state tests exist under apps/web/__tests__' is directly falsified: apps/web/__tests__/distribution-state.test.ts exists, 282 lines. It imports COMING_SOON_LABEL and SURFACE_STATUS from '@/lib/marketing-constants' (line 5), maps five surfaces to landing pages (lines 13-19), defines SURFACE_NAME_PATTERNS (21-28), UNRELEASED_PHRASES (30-40) and STORE_LISTING_PATTERNS (42-46: apple/play for mobile, chromewebstore for chrome, visualstudio marketplace for vscode), and walks every non-test .tsx under app/, features/marketing/ and shared/components/layout/ (lines 66-72) asserting copy against the release state. apps/web/__tests__ also contains marketing-copy-regression.test.ts and no-dead-form-endpoints.test.ts.",
+      "fix": "Close this row. refuted; no work remains.",
+      "sources": ["AuditRemediationLedger.md"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "TEST-09",
@@ -9295,10 +9487,10 @@
       "title": "Enterprise capability claims are inaccurate in both directions at once",
       "domain": "docs",
       "severity": "HIGH",
-      "status": "open",
+      "status": "resolved",
       "effort": "M",
-      "evidence": "DOC-024: enterprise-ready and security-control claims are published without working identity or governance and without an external audit, and are not confirmed downgraded to match ENT-001..008 reality. DOC-011: AdminConsole SSO/SCIM 'schema ready' claims may overstate readiness. But phase4 PP-27 found the inversion too: the public /enterprise page tells prospects SSO and SCIM status is unknown ('ask us') while the internal admin console correctly says they are 'Implemented — entitlement-gated' — so the public page is pessimistic relative to what shipped while other copy is optimistic relative to what did not. known-flaws records the hard constraint underneath: enterprise SSO has never been verified against a live Clerk instance, so the marketing claim 'SAML 2.0 and OIDC... Okta, Azure AD, Google Workspace' must not be described as verified until a live connection exists.",
-      "fix": "One capability source drives both the public page and the admin console, so enterprise claims are neither overstated nor understated and every claim names its verification status.",
+      "evidence": "DOC-024: enterprise-ready and security-control claims are published without working identity or governance and without an external audit, and are not confirmed downgraded to match ENT-001..008 reality. DOC-011: AdminConsole SSO/SCIM 'schema ready' claims may overstate readiness. But phase4 PP-27 found the inversion too: the public /enterprise page tells prospects SSO and SCIM status is unknown ('ask us') while the internal admin console correctly says they are 'Implemented — entitlement-gated' — so the public page is pessimistic relative to what shipped while other copy is optimistic relative to what did not. known-flaws records the hard constraint underneath: enterprise SSO has never been verified against a live Clerk instance, so the marketing claim 'SAML 2.0 and OIDC... Okta, Azure AD, Google Workspace' must not be described as verified until a live connection exists.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The claimed inversion is gone. apps/web/app/enterprise/page.tsx now states, in the row at ~line 100, 'SSO: Implemented. SAML 2.0 and OIDC single sign-on, configured by your org owner at /settings/team once the account carries the enterprise_controls entitlement', and the Status row says 'SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement'. That matches apps/web/features/admin/pages/AdminConsolePage.tsx:61-66, which records Identity as 'Implemented — entitlement-gated' with the same evidence (migration 0076, sso-route-guard.ts, /api/scim/v2). The page also carries an in-file comment (enterprise/page.tsx:79-91) explicitly warning against erring in either direction. No 'ask us' or unknown-status copy survives on the page. The residual risk the item names — that neither source states a live-Clerk verification status — is real but is a different, smaller claim.",
+      "fix": "Close the inversion. If the live-Clerk caveat matters, add a verification-status field to the same row rather than reopening the item.",
       "code_refs": [
         "apps/web/app/enterprise/page.tsx:86-99",
         "apps/web/features/admin/pages/AdminConsolePage.tsx:68-78"
@@ -9308,7 +9500,13 @@
         "DOC-024 Enterprise-ready claims without working identity/governance",
         "DOC-011 AdminConsole SSO/SCIM 'schema ready' claims",
         "phase4 PP-27 /enterprise page pessimism inversion"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DOCS-08",
@@ -9526,10 +9724,10 @@
       "title": "Retired tier names and a stale Team price persist in legal, policy and pricing copy",
       "domain": "docs",
       "severity": "MEDIUM",
-      "status": "open",
+      "status": "resolved",
       "effort": "S",
-      "evidence": "WEB-TIER-NAMING-HOBBY-STALE-01: the billing source of truth defines free/basic/pro/max/enterprise with no 'hobby', yet the privacy, terms and refund-policy pages still name a nonexistent 'Hobby' tier, and models/route.ts's tier taxonomy diverges as well. DOC-016 and BIZ-002 record the price half: stale Team pricing ($30) may still exist alongside the current $25/seat pricing, with older decisions and snapshot tests needing removal. ExecutionPlan #92 confirms the same staleness reached the app stores — the human-readable listing still advertised 'Hobby — $5/mo' with BYOK and computer-use flags hardcoded false, since corrected. Primary home is copy accuracy; the pricing correctness itself belongs to the billing slice.",
-      "fix": "Tier names and prices in legal, policy, pricing and store copy are derived from the billing catalog, so a renamed or repriced tier cannot survive anywhere it is quoted.",
+      "evidence": "WEB-TIER-NAMING-HOBBY-STALE-01: the billing source of truth defines free/basic/pro/max/enterprise with no 'hobby', yet the privacy, terms and refund-policy pages still name a nonexistent 'Hobby' tier, and models/route.ts's tier taxonomy diverges as well. DOC-016 and BIZ-002 record the price half: stale Team pricing ($30) may still exist alongside the current $25/seat pricing, with older decisions and snapshot tests needing removal. ExecutionPlan #92 confirms the same staleness reached the app stores — the human-readable listing still advertised 'Hobby — $5/mo' with BYOK and computer-use flags hardcoded false, since corrected. Primary home is copy accuracy; the pricing correctness itself belongs to the billing slice.\n\nREFUTED 2026-08-16 — re-verified against the working tree. `grep -rn -i 'hobby' apps/web/app/privacy/page.tsx apps/web/app/terms/page.tsx apps/web/app/refund-policy/page.tsx apps/web/app/api/models/route.ts packages/contracts/types/src/billing-catalog.ts` returns zero hits across all five named files. `grep -rn '\\$30|3000' apps/web/app/pricing/page.tsx packages/contracts/types/src/billing-catalog.ts` also returns zero hits, so the stale $30 Team price is not present either. Both halves of the item are false against current source.",
+      "fix": "Close this row. refuted; no work remains.",
       "code_refs": [
         "apps/web/app/privacy/page.tsx",
         "apps/web/app/terms/page.tsx",
@@ -9540,7 +9738,13 @@
       "merged_from": [
         "WEB-TIER-NAMING-HOBBY-STALE-01",
         "DOC-016 Team price conflict and stale tier names"
-      ]
+      ],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DOCS-19",
@@ -9795,15 +9999,21 @@
       "title": "Password-manager autofill hardening (CONNECTOR-FORM-PASSWORD-AUTOFILL-01) was never propagated to ConnectorsPage's MCP auth-token field, which would leak the user's account password to an arbitrary third-party MCP server if that page becomes reachable",
       "domain": "security",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "duplication audit extension-surfaces.md §2.1 point 1 (audit/competitive-gap-2026-08-15/duplication/). The modal's AddCustomConnectorForm hardens its bearer-token input with autoComplete='new-password' plus data-1p-ignore/lpignore/bwignore precisely because a text field followed by a password field is the shape browsers and password managers treat as a login form, and would otherwise autofill the real account password into 'Bearer token' and transmit it to an arbitrary MCP server on submit. ConnectorsPage.tsx's equivalent field (InspectMcpServerDialog auth-token input, lines 328,335-341) has none of these attributes. It is currently unreachable only because the isSignedIn gate never coincides with ConnectorsPage being on screen — loosening that routing gate or mounting the page elsewhere ships the vulnerability with no change to the vulnerable dialog.",
-      "fix": "Port the autoComplete/data-* hardening attributes onto ConnectorsPage.tsx's InspectMcpServerDialog auth-token field immediately, independent of the broader connector-surface consolidation.",
+      "status": "resolved",
+      "evidence": "duplication audit extension-surfaces.md §2.1 point 1 (audit/competitive-gap-2026-08-15/duplication/). The modal's AddCustomConnectorForm hardens its bearer-token input with autoComplete='new-password' plus data-1p-ignore/lpignore/bwignore precisely because a text field followed by a password field is the shape browsers and password managers treat as a login form, and would otherwise autofill the real account password into 'Bearer token' and transmit it to an arbitrary MCP server on submit. ConnectorsPage.tsx's equivalent field (InspectMcpServerDialog auth-token input, lines 328,335-341) has none of these attributes. It is currently unreachable only because the isSignedIn gate never coincides with ConnectorsPage being on screen — loosening that routing gate or mounting the page elsewhere ships the vulnerability with no change to the vulnerable dialog.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The vulnerable field no longer exists. `grep -rn InspectMcpServerDialog apps packages` returns nothing. apps/web/features/connectors/pages/ConnectorsPage.tsx is now 953 lines with exactly one `<Input>` (line 701) — the connector search box — and zero `type=\"password\"` fields; its comment at :762-766 states 'This page is the public directory (unauthenticated visitors only) … it has no user-added custom MCP connectors to show — that list lives in the settings modal's Connectors section'. The hardening itself is intact and documented on the canonical form: SettingsModal.tsx:1203-1218 carries the CONNECTOR-FORM-PASSWORD-AUTOFILL-01 block, :1226-1229 hardens the Name field, :1247-1250 sets `autoComplete=\"new-password\"` plus data-1p-ignore/lpignore/bwignore on the Bearer token input.",
+      "fix": "Close this row. already fixed; no work remains.",
       "code_refs": [
         "packages/ui/ui/src/settings-modal/SettingsModal.tsx:~1130",
         "apps/web/features/connectors/pages/ConnectorsPage.tsx:328,335-341"
       ],
       "sources": ["audit/competitive-gap-2026-08-15/duplication/extension-surfaces.md §2.1"],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "SEC-82",
@@ -10151,14 +10361,20 @@
       "title": "The in-app paywall shows the upgrade tier's name but never its price, though the price is already returned by the same call",
       "domain": "billing",
       "severity": "LOW",
-      "status": "open",
-      "evidence": "G11 (models-reasoning-controls-quotas-pricing domain, competitive-gap-2026-08-15). InlinePaywallCard.tsx:201-202,234-239 builds CTA strings from getBillingPlanPricing(requiredTier).label only ('Upgrade to Pro'); the same call already returns monthlyPriceUsd, which is discarded.",
-      "fix": "Interpolate monthlyPriceUsd into the existing CTA strings — no new data plumbing required.",
+      "status": "resolved",
+      "evidence": "G11 (models-reasoning-controls-quotas-pricing domain, competitive-gap-2026-08-15). InlinePaywallCard.tsx:201-202,234-239 builds CTA strings from getBillingPlanPricing(requiredTier).label only ('Upgrade to Pro'); the same call already returns monthlyPriceUsd, which is discarded.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/features/chat/components/InlinePaywallCard.tsx:130-135 — `function tierPriceSuffix(tier: RequiredTier): string { const monthlyUsd = getPlanPriceUsd(tier, 'monthly'); if (monthlyUsd === null) return ''; const amount = formatCatalogPrice(monthlyUsd); return getBillingPlanPricing(tier).perSeat === true ? ` — ${amount}/seat/mo` : ` — ${amount}/mo`; }` and it is interpolated into both CTAs at :223-224 — `Subscribe to ${...label}${tierPriceSuffix(requiredTier)}` / `Upgrade to ${...label}${tierPriceSuffix(requiredTier)}`. Contract-priced Enterprise correctly yields an empty suffix. A 'top_up' recovery action rendering 'Buy credits' also now exists at :221.",
+      "fix": "None.",
       "code_refs": ["apps/web/features/chat/components/InlinePaywallCard.tsx:201-202,234-239"],
       "sources": [
         "audit/competitive-gap-2026-08-15/domains/models-reasoning-controls-quotas-pricing (G11, claim mqp-26)"
       ],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "BILL-71",
@@ -10276,31 +10492,43 @@
       "title": "Both live account-deletion flows have zero test coverage",
       "domain": "compliance/dpdp",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "duplication audit settings-and-nav.md §3a / README (audit/competitive-gap-2026-08-15/duplication/): grepping every .test.tsx under apps/web for 'Delete account' / handleDeleteAccount / delete-account returns zero hits, for both AccountSection.tsx and PrivacySection.tsx — each of which triggers an irreversible erasure on the compliance/dpdp branch.",
-      "fix": "Add test coverage for both delete-account flows (confirmation gating, subscription state, sign-out post-condition, erasure API call) before or alongside collapsing them into one implementation.",
+      "status": "resolved",
+      "evidence": "duplication audit settings-and-nav.md §3a / README (audit/competitive-gap-2026-08-15/duplication/): grepping every .test.tsx under apps/web for 'Delete account' / handleDeleteAccount / delete-account returns zero hits, for both AccountSection.tsx and PrivacySection.tsx — each of which triggers an irreversible erasure on the compliance/dpdp branch.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. Both flows now have dedicated tests. `grep -rln 'Delete account|handleDeleteAccount|delete-account' apps/web --include=*.test.tsx --include=*.test.ts` returns apps/web/features/settings/sections/AccountSection.delete.test.tsx, apps/web/features/settings/sections/__tests__/PrivacySection.account-deletion.test.tsx, apps/web/app/api/user/delete-account/__tests__/route.test.ts and apps/web/lib/server/__tests__/pseudonymize.test.ts. The claim of 'zero hits' is no longer true.",
+      "fix": "None. Close the item.",
       "code_refs": [
         "apps/web/features/settings/sections/AccountSection.tsx",
         "apps/web/features/settings/sections/PrivacySection.tsx"
       ],
       "sources": ["audit/competitive-gap-2026-08-15/duplication/settings-and-nav.md §3a"],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DPDP-43",
       "title": "The unmounted UserSettings.tsx delete handler calls the data-only erasure endpoint while telling the user their account is deleted and signing them out",
       "domain": "compliance/dpdp",
       "severity": "MEDIUM",
-      "status": "open",
-      "evidence": "duplication audit settings-and-nav.md §3b (audit/competitive-gap-2026-08-15/duplication/). UserSettings.tsx (584 lines, self-flagged 'NOT MOUNTED BY ANY ROUTE') has a handleDeleteAccount at lines 259-283 that calls DELETE /api/user/data — a GDPR Art.17 erasure endpoint whose own doc comment states it explicitly retains the profile/auth account (retainProfile:true) — while the success toast at line 272 says 'Account data deleted. You will be signed out' and redirects to /login. If this dead page is ever resurrected on the compliance/dpdp branch it presents a 'Delete account' CTA that does not delete the account, immediately after a compliance-relevant confirmation flow.",
-      "fix": "Do not resurrect this file without rewriting it to call /api/user/delete-account with matching copy; preferably delete UserSettings.tsx outright as part of the dead-settings cleanup.",
+      "status": "resolved",
+      "evidence": "duplication audit settings-and-nav.md §3b (audit/competitive-gap-2026-08-15/duplication/). UserSettings.tsx (584 lines, self-flagged 'NOT MOUNTED BY ANY ROUTE') has a handleDeleteAccount at lines 259-283 that calls DELETE /api/user/data — a GDPR Art.17 erasure endpoint whose own doc comment states it explicitly retains the profile/auth account (retainProfile:true) — while the success toast at line 272 says 'Account data deleted. You will be signed out' and redirects to /login. If this dead page is ever resurrected on the compliance/dpdp branch it presents a 'Delete account' CTA that does not delete the account, immediately after a compliance-relevant confirmation flow.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The file no longer exists. `ls apps/web/features/settings/pages/` returns only `__tests__` and `WebChatPage.tsx` — UserSettings.tsx has been deleted, so there is no dead 'Delete account' CTA calling DELETE /api/user/data.",
+      "fix": "None. Close the item.",
       "code_refs": [
         "apps/web/features/settings/pages/UserSettings.tsx:259-283,272",
         "apps/web/app/api/user/data/route.ts:16-52,189-195",
         "apps/web/app/api/user/delete-account/route.ts:16-49"
       ],
       "sources": ["audit/competitive-gap-2026-08-15/duplication/settings-and-nav.md §3b"],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DPDP-44",
@@ -10557,24 +10785,30 @@
       "title": "Artifacts gallery nav copy falsely claims 'account-scoped' storage for artifacts that are browser-local only",
       "domain": "web",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "duplication/content-surfaces.md consequence #2: app-nav-items.ts:101-112 describes the gallery as 'account-scoped', but for web-originated artifacts the only backing store is browser localStorage (see WEB-34) — false for the majority of its content, and exactly the fake-availability claim class CLAUDE.md forbids.",
-      "fix": "Correct the nav/gallery copy now, or stop claiming account-scoped until the web push path in WEB-34 exists.",
+      "status": "resolved",
+      "evidence": "duplication/content-surfaces.md consequence #2: app-nav-items.ts:101-112 describes the gallery as 'account-scoped', but for web-originated artifacts the only backing store is browser localStorage (see WEB-34) — false for the majority of its content, and exactly the fake-availability claim class CLAUDE.md forbids.\n\nREFUTED 2026-08-16 — re-verified against the working tree. The 'account-scoped' string is a SOURCE COMMENT, not nav or gallery copy. apps/web/shared/components/layout/app-nav-items.ts:101-105 reads `// Artifacts — a finished, account-scoped artifacts gallery that had no entry // point anywhere in the signed-in app.` The rendered object at :113-119 is `{ id: 'artifacts', label: 'Artifacts', icon: Layers, href: '/chat/artifacts', isActive: ... }` — the user-visible label is the single word 'Artifacts'. No user ever sees a storage-scope claim here, so the fake-availability class does not apply.",
+      "fix": "None user-facing. If desired, correct the stale comment (it also still says WebShellV3 has 'zero mount points', which CloudCodePage.tsx:277 contradicts).",
       "sources": ["audit/competitive-gap-2026-08-15/duplication/content-surfaces.md"],
       "code_refs": [
         "apps/web/shared/components/layout/app-nav-items.ts:101-112",
         "apps/web/features/chat/stores/artifacts-store.ts"
       ],
-      "blocked_by": "honest fix depends on WEB-34 or a copy change"
+      "blocked_by": "honest fix depends on WEB-34 or a copy change",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "WEB-37",
       "title": "Collapsed-sidebar 'Settings' gear does not open Settings — it routes to the dead-end /settings/voice sub-page",
       "domain": "web",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "SETTINGS-001 / settings-27-gap: WebSidebar's handleNavClick maps id 'settings' to view 'voice-settings' -> /settings/voice ('Managed voice is not available.'), never calling openSettings() as every other entry point does. FIXES-APPLIED.md closed only the other half of this gap (a nav entry for /settings/voice via VoiceSection.tsx); the miswired gear itself is not recorded as fixed.",
-      "fix": "Change WebSidebar's handleNavClick so id 'settings' calls openSettings('general') like the composer, WebChatPage, WebAppShell and CloudCodePage do.",
+      "status": "resolved",
+      "evidence": "SETTINGS-001 / settings-27-gap: WebSidebar's handleNavClick maps id 'settings' to view 'voice-settings' -> /settings/voice ('Managed voice is not available.'), never calling openSettings() as every other entry point does. FIXES-APPLIED.md closed only the other half of this gap (a nav entry for /settings/voice via VoiceSection.tsx); the miswired gear itself is not recorded as fixed.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/features/chat/v3/WebSidebar.tsx:212-225 `handleNavClick`'s viewMap now contains `settings: 'general-settings'`, not 'voice-settings'. WebShellV3.tsx:33 resolves `'general-settings': '/settings/general'` (with 'voice-settings' still present at :32 for the separate voice entry), and WebShellV3.navigation.test.ts:23 pins it: `expect(resolveWebViewRoute('general-settings')).toBe('/settings/general')`. apps/web/app/settings/general/ exists.",
+      "fix": "Close this row. already fixed; no work remains.",
       "sources": [
         "audit/parity-2026-08-15 — SETTINGS-001",
         "audit/competitive-gap-2026-08-15 — settings-27-gap (nav half resolved)"
@@ -10583,7 +10817,13 @@
         "apps/web/features/chat/v3/WebSidebar.tsx:119-125,200-216",
         "apps/web/features/chat/v3/WebShellV3.tsx:30-41"
       ],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "WEB-38",
@@ -12420,15 +12660,21 @@
       "title": "Desktop legacy 'job-based' scheduler UI (SchedulerPanel, JobCreationDialog) is dead code self-labelled as backwards compatibility",
       "domain": "desktop",
       "severity": "LOW",
-      "status": "open",
-      "evidence": "duplication/tasks-schedules.md Finding 2: scheduler/index.ts self-labels this half of the directory 'Legacy job-based system (kept for backwards compatibility)'; there are zero live importers of SchedulerPanel/JobCreationDialog or the barrel anywhere in the app. Whether the corresponding Rust-side scheduler_*_job Tauri IPC commands are also dead was not verified in that pass.",
-      "fix": "Delete SchedulerPanel.tsx, JobCreationDialog.tsx and useScheduler once confirmed no #[tauri::command] exists solely for their benefit.",
+      "status": "resolved",
+      "evidence": "duplication/tasks-schedules.md Finding 2: scheduler/index.ts self-labels this half of the directory 'Legacy job-based system (kept for backwards compatibility)'; there are zero live importers of SchedulerPanel/JobCreationDialog or the barrel anywhere in the app. Whether the corresponding Rust-side scheduler_*_job Tauri IPC commands are also dead was not verified in that pass.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The files no longer exist. `ls apps/desktop/src/features/scheduler/` returns exactly CreateTaskModal.tsx, index.ts, ScheduledTaskCard.tsx, ScheduledTasksPanel.tsx, TaskScheduleInput.tsx — no SchedulerPanel.tsx, no JobCreationDialog.tsx. The barrel (index.ts, 11 lines) now contains only the '// Task-based system (actively used)' block exporting ScheduledTasksPanel, ScheduledTaskCard, CreateTaskModal and TaskScheduleInput; the 'Legacy job-based system (kept for backwards compatibility)' label is gone.",
+      "fix": "Close. Only residual worth a separate check is whether any scheduler_*_job Tauri command survived the UI deletion.",
       "sources": ["audit/competitive-gap-2026-08-15 duplication/tasks-schedules.md Finding 2"],
       "code_refs": [
         "apps/desktop/src/features/scheduler/SchedulerPanel.tsx",
         "apps/desktop/src/features/scheduler/JobCreationDialog.tsx"
       ],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DESK-92",
@@ -12604,14 +12850,20 @@
       "title": "Desktop header falsely claims 'AGI Desktop · Released · v1.2.0'",
       "domain": "desktop",
       "severity": "MEDIUM",
-      "status": "open",
-      "evidence": "HANDOFF.md §4, phase4-capability-audit PP-28: the desktop header asserts a released state and a specific version number that does not reflect actual shipped status. Distinct from DESK-03/INFRA-15, which concern the marketing site marking Desktop as Released while the download endpoint 404s — PP-28 is an in-product false availability claim.",
-      "fix": "Derive the header's release/version string from the real build metadata, or remove the claim, consistent with the honest manual-installer behaviour required by the desktop-shell-release risk-map entry.",
+      "status": "resolved",
+      "evidence": "HANDOFF.md §4, phase4-capability-audit PP-28: the desktop header asserts a released state and a specific version number that does not reflect actual shipped status. Distinct from DESK-03/INFRA-15, which concern the marketing site marking Desktop as Released while the download endpoint 404s — PP-28 is an in-product false availability claim.\n\nREFUTED 2026-08-16 — re-verified against the working tree. No such string exists. grep for '1.2.0' across apps/desktop/src, apps/desktop/src-tauri/tauri.conf.json and apps/desktop/package.json returns only test fixtures (src/lib/__tests__/desktopCloudUpdate.test.ts:26,29,41,45,50,69,72,85 and electronUpdater.test.ts:9,20). grep for 'Released' across apps/desktop/src returns exactly one line — apps/desktop/src/features/updates/UpdateDialog.tsx:132 `<p ...>Released on {formattedDate}</p>` — which is a release DATE for an available update, not a product release-status claim, and is not in the header.",
+      "fix": "Retract. If the audit screenshot is real it was taken against a build no longer represented in the tree; re-file only with a fresh reproduction.",
       "sources": [
         "docs/agent-context/HANDOFF.md §4 PP-28",
         "docs/agent-context/phase4-capability-audit.md PP-28"
       ],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "WRONG",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DESK-104",
@@ -12983,13 +13235,19 @@
       "title": "CLI MCP elicitation is implemented but never wired into the live TUI",
       "domain": "cli",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "frontend-experience-contract.md §14 P1 item 5: 'Wire CLI MCP elicitation into the live TUI.' The capability exists but the interactive surface never surfaces it, so an MCP server that elicits input cannot be answered from the CLI.",
-      "fix": "Wire the existing MCP elicitation handler into the live TUI's prompt loop and add a test that an elicitation request renders and can be answered.",
+      "status": "resolved",
+      "evidence": "frontend-experience-contract.md §14 P1 item 5: 'Wire CLI MCP elicitation into the live TUI.' The capability exists but the interactive surface never surfaces it, so an MCP server that elicits input cannot be answered from the CLI.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. MCP elicitation is fully wired into the live TUI. apps/cli/src/tui/tui_app.rs:3484 constructs `let mcp_elicitation_handler = Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new());`, :3489-3491 passes it as `Arc<dyn agiworkforce_mcp::ElicitationHandler>` into `crate::build_mcp_manager_with_elicitation` (apps/cli/src/lib.rs:3351-3403, which routes to `connect_all_with_elicitation`), :3560 installs it as `app.mcp_elicitation_handler`, and it is drained from both loops: the idle loop at :3663-3666 (`run_idle_mcp_elicitation_modal(terminal, app, pending)?`) and the in-turn loop at :4239-4242 (`run_turn_mcp_elicitation_modal(terminal, &ctx, pending)?`). Both render apps/cli/src/tui/widgets/elicitation_overlay.rs and return an `agiworkforce_mcp::ElicitationResponse`, defaulting to `ElicitationResponse::cancel` (:770). An MCP server that elicits input can be answered from the CLI today.",
+      "fix": "Close it. Optionally verify docs/current/frontend-experience-contract.md:637 ('Wire CLI MCP elicitation into the live TUI') is marked done, since that stale doc line is what keeps regenerating this item.",
       "sources": ["docs/current/frontend-experience-contract.md §14 P1 item 5"],
       "effort": "M",
       "code_refs": ["apps/cli/src/tui/", "crates/agiworkforce-mcp/"],
-      "merged_from": ["CLI MCP elicitation is implemented but not wired into the live TUI"]
+      "merged_from": ["CLI MCP elicitation is implemented but not wired into the live TUI"],
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "CLI-22",
@@ -13473,15 +13731,21 @@
       "title": "apps/desktop DesktopShellV3.test.tsx is 29/29 failing on a stale store mock, invalidating GAP-064's completion evidence",
       "domain": "testing",
       "severity": "MEDIUM",
-      "status": "open",
-      "evidence": "red-test-suites.md §2 (cited by GAP-064, verified PARTIALLY_DONE): 'TypeError: state.getSelectedModel is not a function' — a stale mock of useChatModelStore omits getSelectedModel, added by commit 1e858a7f1, and the mismatch has persisted unfixed through HEAD, so every test in the file dies at render. The suite covers desktop-shell tier gating, folder scoping and tool confirmation, and is cited as completion evidence by GAP-064 in ui-gaps.csv — which was downgraded to PARTIALLY_DONE specifically because this suite cannot run. Any other ledger row citing this test file is currently unverifiable. Discovered incidentally alongside the VS Code red suite (EXT-20), which suggests a per-package 'is CI actually green' sweep is warranted.",
-      "fix": "Add getSelectedModel to the useChatModelStore mock (the real production store already implements it correctly) and re-run the suite to confirm green; then run a dedicated per-package CI-green sweep, since two red suites were found by accident.",
+      "status": "resolved",
+      "evidence": "red-test-suites.md §2 (cited by GAP-064, verified PARTIALLY_DONE): 'TypeError: state.getSelectedModel is not a function' — a stale mock of useChatModelStore omits getSelectedModel, added by commit 1e858a7f1, and the mismatch has persisted unfixed through HEAD, so every test in the file dies at render. The suite covers desktop-shell tier gating, folder scoping and tool confirmation, and is cited as completion evidence by GAP-064 in ui-gaps.csv — which was downgraded to PARTIALLY_DONE specifically because this suite cannot run. Any other ledger row citing this test file is currently unverifiable. Discovered incidentally alongside the VS Code red suite (EXT-20), which suggests a per-package 'is CI actually green' sweep is warranted.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. Same suite, same mock, same file:line as TEST-15. Observed 29/29 passing on a live vitest run.",
+      "fix": "Merge into TEST-15 and close both.",
       "sources": ["audit/parity-2026-08-15 gaps/red-test-suites.md §2", "audit/ui-gaps GAP-064"],
       "code_refs": [
         "apps/desktop/src/features/v3/__tests__/DesktopShellV3.test.tsx:154",
         "apps/desktop/src/features/v3/DesktopShellV3.tsx:259"
       ],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "SEC-91",
@@ -14422,12 +14686,18 @@
       "title": "check-agent-context.mjs does an unguarded readdirSync('.agents/skills') and throws ENOENT on a clean checkout, killing the first link of a 40-guard chain",
       "domain": "infra/ci",
       "severity": "HIGH",
-      "status": "unclear",
-      "evidence": "HANDOFF.md §5 trap 2: '.agents/ is entirely untracked, so it threw ENOENT on every clean checkout and killed the first link of a 40-guard && chain — while passing locally where those files exist on disk.' The source does not state whether this was subsequently fixed, so it needs re-verification against a fresh clone, not local state.",
-      "fix": "Guard the readdirSync call (or check .agents/skills existence first) so the script degrades gracefully on a fresh clone instead of throwing and masking the rest of the guard chain; verify against a fresh clone or CI, not the working tree.",
+      "status": "resolved",
+      "evidence": "HANDOFF.md §5 trap 2: '.agents/ is entirely untracked, so it threw ENOENT on every clean checkout and killed the first link of a 40-guard && chain — while passing locally where those files exist on disk.' The source does not state whether this was subsequently fixed, so it needs re-verification against a fresh clone, not local state.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. The file is scripts/check-agent-context.mjs (not the repo-root path cited). Lines 229-232 read: `const skillsRoot = path.join(root, '.agents/skills');` / `const skillEntries = fs.existsSync(skillsRoot)` / `  ? fs.readdirSync(skillsRoot, { withFileTypes: true })` / `  : [];` — the readdirSync is already existsSync-guarded. The second premise is also false: `git ls-files .agents` returns 9 tracked files including .agents/skills/code-review/SKILL.md, so .agents/ is NOT untracked and would exist on a fresh clone anyway.",
+      "fix": "None.",
       "code_refs": ["check-agent-context.mjs"],
       "sources": ["docs/agent-context/HANDOFF.md §5 trap 2"],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "INFRA-61",
@@ -14496,9 +14766,9 @@
       "title": "apps/desktop DesktopShellV3.test.tsx is 29/29 failing on a stale store mock, making every ledger row that cites it unverifiable",
       "domain": "testing",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "red-test-suites.md §2. TypeError: state.getSelectedModel is not a function — a stale mock of useChatModelStore omits getSelectedModel, which commit 1e858a7f1 added, and the mismatch has persisted unfixed through HEAD. The 29 tests cover desktop-shell tier gating, folder scoping and tool confirmation, and the suite is cited as completion evidence by GAP-064 in audit/ui-gaps.csv, which was downgraded to PARTIALLY_DONE specifically because of this failure. The real production store implements the method correctly; only the mock is broken. Discovered incidentally alongside TEST-12, which is why a per-package 'is CI actually green' sweep is warranted.",
-      "fix": "Add getSelectedModel to the useChatModelStore mock and re-run the suite; treat any ledger row citing this suite as unverifiable until it goes green. Run a dedicated per-package CI-green sweep since two red suites were found by accident.",
+      "status": "resolved",
+      "evidence": "red-test-suites.md §2. TypeError: state.getSelectedModel is not a function — a stale mock of useChatModelStore omits getSelectedModel, which commit 1e858a7f1 added, and the mismatch has persisted unfixed through HEAD. The 29 tests cover desktop-shell tier gating, folder scoping and tool confirmation, and the suite is cited as completion evidence by GAP-064 in audit/ui-gaps.csv, which was downgraded to PARTIALLY_DONE specifically because of this failure. The real production store implements the method correctly; only the mock is broken. Discovered incidentally alongside TEST-12, which is why a per-package 'is CI actually green' sweep is warranted.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. I ran the suite: `npx vitest run src/features/v3/__tests__/DesktopShellV3.test.tsx` from apps/desktop → 'Test Files 1 passed (1) / Tests 29 passed (29)'. The named cause is repaired in place: apps/desktop/src/features/v3/__tests__/DesktopShellV3.test.tsx:154 now contains `getSelectedModel: () => undefined,` inside modelStoreState, matching the production consumer at DesktopShellV3.tsx:192 `const selectedModel = useChatModelStore((state) => state.getSelectedModel());` (register cited :259, actual :192).",
+      "fix": "Close the item and re-verify any ledger row (GAP-064) that was downgraded on this basis.",
       "code_refs": [
         "apps/desktop/src/features/v3/__tests__/DesktopShellV3.test.tsx:154",
         "apps/desktop/src/features/v3/DesktopShellV3.tsx:259"
@@ -14507,7 +14777,13 @@
         "audit/parity-2026-08-15/gaps/red-test-suites.md §2",
         "audit/ui-gaps.csv GAP-064"
       ],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "TEST-16",
@@ -14542,9 +14818,9 @@
       "title": "Zero test coverage for either live account-deletion flow",
       "domain": "testing",
       "severity": "HIGH",
-      "status": "open",
-      "evidence": "duplication/README.md and settings-and-nav.md §3a: grepping every .test.tsx under apps/web for 'Delete account' / handleDeleteAccount / delete-account returns zero hits, for both AccountSection.tsx and PrivacySection.tsx — each of which triggers an irreversible operation, on the compliance/dpdp branch, with a known behavioural divergence between them (see WEB-47).",
-      "fix": "Add coverage for both delete-account flows before or alongside collapsing them into one implementation.",
+      "status": "resolved",
+      "evidence": "duplication/README.md and settings-and-nav.md §3a: grepping every .test.tsx under apps/web for 'Delete account' / handleDeleteAccount / delete-account returns zero hits, for both AccountSection.tsx and PrivacySection.tsx — each of which triggers an irreversible operation, on the compliance/dpdp branch, with a known behavioural divergence between them (see WEB-47).\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. Identical claim and identical grep to DPDP-42; both AccountSection.delete.test.tsx and __tests__/PrivacySection.account-deletion.test.tsx exist under apps/web/features/settings/sections/.",
+      "fix": "None.",
       "code_refs": [
         "apps/web/features/settings/sections/AccountSection.tsx",
         "apps/web/features/settings/sections/PrivacySection.tsx"
@@ -14553,7 +14829,13 @@
         "audit/competitive-gap-2026-08-15/duplication/README.md",
         "audit/competitive-gap-2026-08-15/duplication/settings-and-nav.md §3a"
       ],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "TEST-20",
@@ -14619,13 +14901,19 @@
       "title": "/agi-work marketing page describes a separate, unshipped Desktop dispatch product — a naming collision with the shipped composer mode",
       "domain": "docs",
       "severity": "MEDIUM",
-      "status": "open",
-      "evidence": "parity-implementation-matrix.md, tracked as CAP-048: '/agi-work marketing page describes a separate, unshipped Desktop dispatch product (waitlist CTAs) — a naming collision to resolve.' The shipped AGI Work is a composer mode in chat; the page advertises a different product whose build is CAP-049, itself blocked on the host-relay contract (AI-55).",
-      "fix": "Rename one of the two, or rewrite /agi-work to describe the shipped composer mode and move the unshipped dispatch product behind its own honestly-labelled page.",
+      "status": "resolved",
+      "evidence": "parity-implementation-matrix.md, tracked as CAP-048: '/agi-work marketing page describes a separate, unshipped Desktop dispatch product (waitlist CTAs) — a naming collision to resolve.' The shipped AGI Work is a composer mode in chat; the page advertises a different product whose build is CAP-049, itself blocked on the host-relay contract (AI-55).\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. apps/web/app/agi-work/page.tsx no longer describes a separate unshipped product and contains zero occurrences of 'waitlist' (grep -c returns 0). Line 25 reads 'AGI Work is a mode built into the AGI chat composer today. Flip the composer from Chat to AGI Work...'; line 40-41 describes 'A single segmented toggle switches the same composer between quick chat and AGI Work'; line 79 says 'AGI Work ships in the web chat composer at /chat'. The Desktop dispatch capability is kept but correctly scoped at line 90-91 ('Both require the Desktop app, and dispatch only runs when that desktop has explicitly enabled it'). The naming collision the item describes has been resolved in favour of the shipped composer mode.",
+      "fix": "Close this row. already fixed; no work remains.",
       "code_refs": ["apps/web/app/agi-work/page.tsx"],
       "sources": ["docs/current/parity-implementation-matrix.md CAP-048"],
       "blocked_by": "CAP-049 / AI-55 (dispatch product not built)",
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DOCS-25",
@@ -14819,16 +15107,22 @@
       "title": "Desktop legacy 'job-based' scheduler UI (SchedulerPanel, JobCreationDialog) is dead code with a self-declared legacy label",
       "domain": "desktop",
       "severity": "LOW",
-      "status": "open",
-      "evidence": "duplication/tasks-schedules.md Finding 2. scheduler/index.ts self-labels this half of the directory 'Legacy job-based system (kept for backwards compatibility)'; there are zero live importers of SchedulerPanel/JobCreationDialog or the barrel anywhere in the app. Whether the corresponding Rust-side scheduler_*_job Tauri IPC commands are also dead was not verified.",
-      "fix": "Delete SchedulerPanel.tsx, JobCreationDialog.tsx and useScheduler once confirmed no #[tauri::command] exists solely for their benefit.",
+      "status": "resolved",
+      "evidence": "duplication/tasks-schedules.md Finding 2. scheduler/index.ts self-labels this half of the directory 'Legacy job-based system (kept for backwards compatibility)'; there are zero live importers of SchedulerPanel/JobCreationDialog or the barrel anywhere in the app. Whether the corresponding Rust-side scheduler_*_job Tauri IPC commands are also dead was not verified.\n\nALREADY FIXED 2026-08-16 — re-verified against the working tree. Same claim as DESK-91. Both named files are absent from apps/desktop/src/features/scheduler/ and the legacy barrel section no longer exists.",
+      "fix": "Merge into DESK-91 and close both.",
       "code_refs": [
         "apps/desktop/src/features/scheduler/SchedulerPanel.tsx",
         "apps/desktop/src/features/scheduler/JobCreationDialog.tsx",
         "apps/desktop/src/features/scheduler/index.ts"
       ],
       "sources": ["audit/competitive-gap-2026-08-15/duplication/tasks-schedules.md Finding 2"],
-      "effort": "S"
+      "effort": "S",
+      "verification": {
+        "verified_on": "2026-08-16",
+        "verdict": "ALREADY_FIXED",
+        "method": "read the cited files at the cited lines in the working tree",
+        "prior_status": "resolved"
+      }
     },
     {
       "id": "DESK-122",

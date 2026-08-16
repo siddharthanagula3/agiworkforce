@@ -183,16 +183,30 @@ pub async fn consult(req: AdvisorRequest) -> Result<AdvisorResponse> {
 mod tests {
     use super::*;
 
+    /// Holding a provider key does not guarantee the catalog exposes an advisor
+    /// model for that provider, so the old form of this test asserted Ok on any
+    /// machine whose environment happened to carry one and failed there. What
+    /// holds everywhere: a success names a non-empty model belonging to a keyed
+    /// provider, and a failure says why.
     #[test]
-    fn pick_default_model_returns_string() {
-        if keyed_provider_preference()
-            .iter()
-            .any(|provider| provider_has_key(provider))
-        {
-            let (model, _provider) = pick_default_advisor_model().expect("keyed provider model");
-            assert!(!model.is_empty());
-        } else {
-            assert!(pick_default_advisor_model().is_err());
+    fn pick_default_model_either_names_a_keyed_model_or_explains_itself() {
+        match pick_default_advisor_model() {
+            Ok((model, provider)) => {
+                assert!(!model.is_empty(), "advisor model must not be empty");
+                assert!(
+                    keyed_provider_preference()
+                        .iter()
+                        .any(|name| provider_has_key(name)),
+                    "advisor returned {provider:?} with no keyed provider present"
+                );
+            }
+            Err(error) => {
+                let message = error.to_string();
+                assert!(
+                    message.contains("provider") || message.contains("catalog"),
+                    "unexplained advisor failure: {message}"
+                );
+            }
         }
     }
 

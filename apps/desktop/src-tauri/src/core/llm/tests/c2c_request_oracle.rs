@@ -266,6 +266,13 @@ enum Delta {
     /// through verbatim; new hardens them to `{}` (mirrors the c2a decode-side
     /// invalid-args policy — Ollama 400s non-object arguments).
     OllamaNonObjectToolArgs,
+    /// Old identified a tool result with OpenAI's `tool_call_id`; new sends
+    /// Ollama's documented native field, `tool_name`. Ollama's `/api/chat`
+    /// reference shows `{"role": "tool", "content": ..., "tool_name": ...}`
+    /// and does not document `tool_call_id`, so OLD was addressing a field the
+    /// endpoint ignores. Validated by requiring NEW's `tool_name` to equal the
+    /// name of the assistant tool_call whose id OLD referenced.
+    OllamaToolNameOnToolMessage,
     /// The crate normalizes bare array tool schemas (`items: {}` injection —
     /// required by OpenAI-compatible servers, harmless for Ollama); the
     /// retired desktop builder passed schemas verbatim. Validated by applying
@@ -405,6 +412,62 @@ fn apply_delta(name: &str, delta: Delta, old: &mut Value, new: &mut Value) -> bo
                         fired = true;
                     }
                 }
+            }
+            fired
+        }
+        Delta::OllamaToolNameOnToolMessage => {
+            let old_msgs = old["messages"].as_array_mut().expect("messages array");
+            let new_msgs = new["messages"].as_array().cloned().unwrap_or_default();
+            assert_eq!(
+                old_msgs.len(),
+                new_msgs.len(),
+                "[{name}] message counts must align"
+            );
+            // Map every tool_call id the assistant turns declared to its name,
+            // so the rewrite below is checked against the conversation rather
+            // than assumed.
+            let mut name_by_call_id: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            for message in &new_msgs {
+                for call in message
+                    .get("tool_calls")
+                    .and_then(Value::as_array)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default()
+                {
+                    if let (Some(id), Some(tool)) = (
+                        call.get("id").and_then(Value::as_str),
+                        call.pointer("/function/name").and_then(Value::as_str),
+                    ) {
+                        name_by_call_id.insert(id.to_string(), tool.to_string());
+                    }
+                }
+            }
+
+            let mut fired = false;
+            for (o, n) in old_msgs.iter_mut().zip(new_msgs.iter()) {
+                if o["role"] != "tool" {
+                    continue;
+                }
+                let Some(call_id) = o.get("tool_call_id").and_then(Value::as_str) else {
+                    continue;
+                };
+                let expected = name_by_call_id
+                    .get(call_id)
+                    .unwrap_or_else(|| panic!("[{name}] tool result cites unknown call {call_id}"));
+                assert_eq!(
+                    n.get("tool_name").and_then(Value::as_str),
+                    Some(expected.as_str()),
+                    "[{name}] tool_name must name the tool the call declared"
+                );
+                assert!(
+                    n.get("tool_call_id").is_none(),
+                    "[{name}] the OpenAI-only field must be gone"
+                );
+                let object = o.as_object_mut().expect("tool message object");
+                object.remove("tool_call_id");
+                object.insert("tool_name".to_string(), json!(expected));
+                fired = true;
             }
             fired
         }
@@ -860,7 +923,10 @@ fn ollama_native_tools_and_tool_history() {
         "ollama_tools_history",
         old,
         new,
-        &[Delta::OllamaAssistantEmptyContent],
+        &[
+            Delta::OllamaAssistantEmptyContent,
+            Delta::OllamaToolNameOnToolMessage,
+        ],
     );
 }
 
@@ -909,7 +975,10 @@ fn ollama_non_object_tool_args_are_hardened() {
         "ollama_non_object_args",
         old,
         new,
-        &[Delta::OllamaNonObjectToolArgs],
+        &[
+            Delta::OllamaNonObjectToolArgs,
+            Delta::OllamaToolNameOnToolMessage,
+        ],
     );
 }
 

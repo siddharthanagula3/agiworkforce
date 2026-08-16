@@ -84,6 +84,48 @@ pub(super) fn is_private_or_internal_ip(ip: &std::net::IpAddr) -> bool {
     }
 }
 
+/// Resolves a redirect hop and refuses it when any address is internal.
+///
+/// This is a blocking lookup because reqwest's redirect policy is synchronous.
+/// The cost is one DNS query per hop, bounded by the five-redirect limit and
+/// the client's 30s timeout; the alternative is following the hop unresolved.
+fn redirect_target_resolves_publicly(url: &reqwest::Url) -> std::result::Result<(), String> {
+    use std::net::ToSocketAddrs;
+
+    let host = url
+        .host_str()
+        .ok_or_else(|| "redirect has no host".to_string())?;
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return if is_private_or_internal_ip(&ip) {
+            Err(format!("redirect target is an internal IP: {ip}"))
+        } else {
+            Ok(())
+        };
+    }
+
+    let port = url
+        .port_or_known_default()
+        .ok_or_else(|| "redirect has no port".to_string())?;
+    let addrs = (host, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("redirect DNS resolution failed for {host}: {e}"))?;
+
+    let mut any = false;
+    for addr in addrs {
+        any = true;
+        if is_private_or_internal_ip(&addr.ip()) {
+            return Err(format!(
+                "redirect target {host} resolves to internal IP {}",
+                addr.ip()
+            ));
+        }
+    }
+    if !any {
+        return Err(format!("redirect DNS returned no addresses for {host}"));
+    }
+    Ok(())
+}
+
 pub(super) async fn resolve_and_validate_for_pinning(
     url_str: &str,
 ) -> std::result::Result<Vec<std::net::SocketAddr>, String> {
@@ -277,13 +319,23 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
             return attempt.error("too many redirects (limit: 5)");
         }
         let url_str = attempt.url().as_str().to_string();
-        match validate_fetch_url(&url_str) {
-            Ok(()) => attempt.follow(),
-            Err(reason) => attempt.error(format!(
+        if let Err(reason) = validate_fetch_url(&url_str) {
+            return attempt.error(format!(
                 "redirect blocked by SSRF policy: {} ({})",
                 url_str, reason
-            )),
+            ));
         }
+        // validate_fetch_url does no DNS — it only rejects IP *literals*. The
+        // initial host is pinned to validated addresses, but a redirect target
+        // resolves normally, so `http://metadata.attacker.test` pointing at
+        // 169.254.169.254 sailed through. Resolve the hop before following it.
+        if let Err(reason) = redirect_target_resolves_publicly(attempt.url()) {
+            return attempt.error(format!(
+                "redirect blocked by SSRF policy: {} ({})",
+                url_str, reason
+            ));
+        }
+        attempt.follow()
     });
 
     let mut client_builder = reqwest::Client::builder()
@@ -390,6 +442,39 @@ pub(super) async fn execute_tool_search(args: &HashMap<String, String>) -> Resul
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn a_redirect_to_a_literal_internal_ip_is_refused() {
+        for hostile in [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://127.0.0.1:8080/admin",
+            "http://10.0.0.5/",
+            "http://[::1]/",
+        ] {
+            let url = reqwest::Url::parse(hostile).unwrap();
+            assert!(
+                redirect_target_resolves_publicly(&url).is_err(),
+                "{hostile} was allowed"
+            );
+        }
+    }
+
+    #[test]
+    fn a_redirect_to_a_public_literal_is_allowed() {
+        let url = reqwest::Url::parse("https://93.184.216.34/").unwrap();
+        assert!(redirect_target_resolves_publicly(&url).is_ok());
+    }
+
+    #[test]
+    fn a_hostname_that_resolves_to_loopback_is_refused() {
+        // localhost is the one name guaranteed to resolve internally on any
+        // machine, so this exercises the DNS branch without a network.
+        let url = reqwest::Url::parse("http://localhost:9/").unwrap();
+        let refused = redirect_target_resolves_publicly(&url);
+        assert!(refused.is_err(), "localhost redirect was allowed");
+        assert!(refused.unwrap_err().contains("internal IP"));
+    }
     use super::{tavily_search_body, validate_fetch_url};
 
     #[test]
