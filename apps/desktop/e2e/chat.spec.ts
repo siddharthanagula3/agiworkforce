@@ -1,6 +1,59 @@
 import { test, expect } from '@playwright/test';
+import modelsCatalogJson from '@agiworkforce/types/models.json' with { type: 'json' };
 import { injectMockCloudAuth } from './utils/mock-cloud-auth';
 import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
+
+interface CatalogFixtureModel {
+  name: string;
+  provider: string;
+  modelType: string;
+  status?: string;
+  availability?: string;
+}
+
+/**
+ * The managed models `GET /api/models` must report for this suite to be able to
+ * chat at all.
+ *
+ * `mockCloudApi` defaults to `models: []`, and its own comment says that empty
+ * "deliberately makes the managed picker unavailable" — a useful default for
+ * suites asserting the degraded path, and exactly wrong here. With no models,
+ * `resolveDesktopCloudPickerModels` returns [], App.tsx throws "No managed
+ * models are available for this account and Desktop", the shell renders "The
+ * managed model catalog is unavailable", `selectedModelId` stays '', and the
+ * composer's Send button is disabled forever. Every test that types a message
+ * then failed on a disabled button, which reads as a broken composer rather
+ * than an unseeded fixture.
+ *
+ * Derived from the catalog rather than written as literals: concrete model ids
+ * belong only to the registry (AGENTS.md), and a hardcoded id here would rot
+ * silently the next time the economy tier moves. The economy tier is the one
+ * every plan is entitled to, so this seeds a picker for any seeded plan.
+ */
+const DESKTOP_CHAT_MODEL_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal', 'search']);
+
+function resolveEconomyChatModels(): Array<{ id: string; name: string; provider: string }> {
+  const catalog = modelsCatalogJson as unknown as {
+    models: Record<string, CatalogFixtureModel>;
+    tierAllowedModels: Record<string, string[]>;
+  };
+  const economyIds = catalog.tierAllowedModels['economy'] ?? [];
+  const seeded = economyIds.flatMap((id) => {
+    const model = catalog.models[id];
+    if (!model) return [];
+    if (!DESKTOP_CHAT_MODEL_TYPES.has(model.modelType)) return [];
+    if (model.status === 'deprecated') return [];
+    if ((model.availability ?? 'live') !== 'live') return [];
+    return [{ id, name: model.name, provider: model.provider }];
+  });
+
+  if (seeded.length === 0) {
+    throw new Error('The economy tier has no live chat-capable model to seed the picker with.');
+  }
+  return seeded;
+}
+
+const SEEDED_MODELS = resolveEconomyChatModels();
 
 /**
  * Chat workflow E2E.
@@ -24,7 +77,7 @@ import { expectCloudShellReady, mockCloudApi } from './utils/mock-cloud-api';
 test.describe('Chat Workflow', () => {
   test.beforeEach(async ({ page }) => {
     await injectMockCloudAuth(page);
-    await mockCloudApi(page);
+    await mockCloudApi(page, { models: SEEDED_MODELS });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expectCloudShellReady(page);
   });
@@ -209,8 +262,15 @@ test.describe('Chat Workflow', () => {
 
 test.describe('Chat AGI Integration', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    // Same seeded session as the suite above, and for the same reason: this
+    // block used to `goto('/')` and nothing else, so the app rendered
+    // <AuthPage /> and every control these two tests look for was behind a
+    // login screen. Seeding auth and the model catalog is what puts a composer
+    // on the page at all.
+    await injectMockCloudAuth(page);
+    await mockCloudApi(page, { models: SEEDED_MODELS });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expectCloudShellReady(page);
   });
 
   test('should detect and submit goal-like messages', async ({ page }) => {
