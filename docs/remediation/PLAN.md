@@ -28,25 +28,44 @@ This is not a sprint. At a sustained 40 points a day that is roughly **97 workin
 
 ## Track F — founder actions
 
-| #   | Item         | Wave | Sev  | What you need to do                                                                                                                                                                                              |
-| --- | ------------ | ---- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1  | **SEC-38**   | W1   | CRIT | Decide repository visibility. Private until the open exploitable findings are closed, or close them before publishing. Record the decision either way.                                                           |
-| F2  | **SEC-39**   | W1   | CRIT | Escrow the Tauri update-signing private key to a documented location with a named recovery holder, and run a restore drill.                                                                                      |
-| F3  | **SEC-40**   | W1   | CRIT | Choose a KMS/vault and move the five AES-256-GCM keys and the JWT secret into it, with a written rotation procedure.                                                                                             |
-| F4  | **INFRA-15** | W3   | CRIT | Decide: ship a real download path for Desktop and CLI, or stop marketing them as Released.                                                                                                                       |
-| F5  | **INFRA-17** | W3   | CRIT | Provision publishing credentials and environments for the five release surfaces that lack them.                                                                                                                  |
-| F6  | **SEC-89**   | W5   | CRIT | Apply migration 0120 to the databases (written and reversible; not yet applied anywhere).                                                                                                                        |
-| F7  | **DPDP-21**  | W6   | CRIT | Appoint a GDPR Article 27 EU representative, or remove the claim that the obligation is met.                                                                                                                     |
-| F8  | **DPDP-19**  | W6   | CRIT | Supply the mobile privacy notice, correct the iOS privacy manifest, and fix the store privacy declarations.                                                                                                      |
-| F9  | **DPDP-04**  | W6   | CRIT | Decide the verifiable parental-consent mechanism, then it can be built.                                                                                                                                          |
-| F10 | **BILL-01**  | W7   | CRIT | Move production Stripe out of TEST mode and reconcile the live catalog with published pricing.                                                                                                                   |
-| F11 | **DESK-02**  | W10  | CRIT | Confirm whether Desktop Cloud Mode ships now; the "coming soon" toast contradicts the founder spec.                                                                                                              |
-| F12 | **DESK-70**  | W10  | CRIT | Confirm the intended Desktop image/video generation surface before the composer wiring is built.                                                                                                                 |
-| F13 | **SEC-37**   | W1   | HIGH | Configure a repository ruleset on main: required review, required CI check, no force-push or deletion, signed tags.                                                                                              |
-| F14 | **SEC-41**   | W1   | HIGH | Rotate the exposed OpenRouter video credential before any paid smoke test.                                                                                                                                       |
-| F15 | **DPDP-90**  | W6   | HIGH | Land the web_artifact_index erasure classification in the SAME commit as migration 0121.                                                                                                                         |
-| F16 | **SEC-01**   | W1   | MEDI | Revoke the Supabase PAT, review the account audit log since 2026-02-03, rotate the project anon/service_role keys and Postgres password, then purge the blob from history or declare it permanently compromised. |
-| F17 | **DESK-202** | W10  | MEDI | Decide: build the three missing desktop chat affordances, or retire the E2E tests that assert them.                                                                                                              |
+The founder answered every open question on 2026-08-16. Three items are closed,
+eleven now carry a recorded decision and have become engineering work, and **four
+still need something only the founder can supply**. Decisions live on each
+register item under `founder_decision`.
+
+### Still needs the founder
+
+| #   | Item         | Sev  | What is still needed                                                                                                                                                                     |
+| --- | ------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F2  | **SEC-39**   | CRIT | A named off-laptop escrow location and recovery holder for the Tauri signing key, plus a restore drill. The key itself is NOT lost — it is at `~/.tauri/agiworkforce.key` with its passphrase, and in GitHub Actions secrets. Every copy is on one machine plus CI, and neither is escrow. |
+| F3  | **SEC-40**   | CRIT | Which KMS or vault. The five keys and the JWT secret now exist for local dev in `~/.agiworkforce/secrets.env`, which is not a KMS and has no rotation procedure.                          |
+| F5  | **INFRA-17** | CRIT | Publishing credentials and environments for the five release surfaces that have none. Blocks F4's download path.                                                                          |
+| —   | **env**      | HIGH | The real `NEXT_PUBLIC_API_URL`, and a go-ahead to write `CRON_SECRET`, `DEVICE_TOKEN_ENCRYPTION_KEY`, `TOTP_ENCRYPTION_KEY` and `LOG_SALT` into Vercel production. 2FA setup and desktop device pairing are broken in production until then. |
+
+### Decided — now engineering work
+
+| #   | Item         | Sev  | Decision                                                                                                    |
+| --- | ------------ | ---- | ----------------------------------------------------------------------------------------------------------- |
+| F1  | **SEC-38**   | CRIT | Make the repo public. Delete the retired `tauri-signing` pair from the working tree first.                   |
+| F4  | **INFRA-15** | CRIT | Ship a real Desktop/CLI download path AND stop marketing them as Released until it exists.                    |
+| F7  | **DPDP-21**  | CRIT | There is no EU representative and none is being appointed — remove the claim that the obligation is met.      |
+| F8  | **DPDP-19**  | CRIT | Supply the mobile privacy notice, correct the iOS privacy manifest, fix the store privacy declarations.       |
+| F9  | **DPDP-04**  | CRIT | Follow ChatGPT's parental-consent mechanism; read the live corpus before building.                            |
+| F10 | **BILL-01**  | CRIT | Founder moves Stripe out of TEST once billing is correct — the gate is now on us, not them.                   |
+| F11 | **DESK-02**  | CRIT | Desktop Cloud Mode ships now on both Electron and Tauri, downloadable, after a verification pass.             |
+| F12 | **DESK-70**  | CRIT | Build the Desktop image/video generation surface.                                                             |
+| F13 | **SEC-37**   | HIGH | Configure the ruleset on main. A public repo makes rulesets available on the free plan.                        |
+| F14 | **SEC-41**   | HIGH | Founder is rotating the OpenRouter credential; awaiting confirmation.                                          |
+| F15 | **DPDP-90**  | HIGH | Land the `web_artifact_index` erasure classification in the same commit as migration 0121. Ours, not theirs.   |
+| —   | **DOC-200**  | MEDI | One home for audits, research and gaps; restructure the folders. New, from the same conversation.              |
+
+### Closed
+
+| #   | Item         | Outcome                                                                                                  |
+| --- | ------------ | -------------------------------------------------------------------------------------------------------- |
+| F6  | **SEC-89**   | Migration 0120 applied to production and verified live: `public_execute=false`, `app_rls_execute=false`.  |
+| F16 | **SEC-01**   | Supabase PAT revoked — the account shows zero access tokens. The repo never depended on that project.      |
+| F17 | **DESK-202** | All three desktop chat affordances built; all four E2E tests live, no `fixme` left.                        |
 
 A further 21 open items name a founder decision, an escrow, or a store/publisher account in their own text. They are marked `HUMAN` in the wave tables below.
 

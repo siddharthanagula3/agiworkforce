@@ -24,7 +24,7 @@ export function GoalHandoffChip({ messages, onSubmitGoal }: GoalHandoffChipProps
       <div
         data-testid="agi-submitted"
         role="status"
-        className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface)] px-3 py-2 text-[13px] text-[var(--chat-text-secondary)]"
+        className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-3 py-2 text-[13px] text-[var(--chat-text-secondary)]"
       >
         <Check size={14} className="text-[var(--chat-accent-secondary)]" aria-hidden />
         {t('goalHandoff.submitted', 'Sent to Agent Tasks. Track it in the Agent Tasks panel.')}
@@ -35,7 +35,7 @@ export function GoalHandoffChip({ messages, onSubmitGoal }: GoalHandoffChipProps
   return (
     <div
       data-testid="agi-goal-detected"
-      className="mx-4 mb-2 flex items-center justify-between gap-3 rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface)] px-3 py-2"
+      className="mx-4 mb-2 flex items-center justify-between gap-3 rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-3 py-2"
     >
       <span className="flex items-center gap-2 text-[13px] text-[var(--chat-text-secondary)]">
         <Sparkles size={14} aria-hidden />

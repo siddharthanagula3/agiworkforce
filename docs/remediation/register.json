@@ -663,7 +663,8 @@
       "fix": "A main ruleset requires PR review, the final CI aggregate check, and resolved conversations; force-push and branch deletion are denied; release tags must be signed; and a logged break-glass exception path is documented.",
       "sources": ["gap-audit-2026-08-08.md (GAP-P0-004)"],
       "code_refs": [".github/workflows/ci.yml"],
-      "blocked_by": "GitHub repository Settings change (founder/admin)"
+      "blocked_by": "GitHub repository Settings change (founder/admin)",
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] Configure the ruleset on main: required review, required CI check, no force-push or deletion, signed tags. Interacts with SEC-38 - a public repository makes rulesets available on the free plan."
     },
     {
       "id": "SEC-38",
@@ -675,7 +676,8 @@
       "evidence": "ExecutionPlan founder item 11: siddharthanagula3/agiworkforce is public. Findings such as the db_query allowlist bypass, the Safe/Plan mode gate, the local-mode prompt egress and the missing gateway usage caps were readable with exact locations while still exploitable. This register itself, and the security scan that fed it, describe currently-unfixed exploitable defects (SEC-01 through SEC-34) at file and line — every hour the repository stays public with them open is free reconnaissance. SEC-01 compounds it: a live account credential is recoverable from history by anyone who can clone.",
       "fix": "The repository is made private until the open exploitable findings in this register are closed, or each is closed before publication; the decision is recorded either way.",
       "sources": ["ExecutionPlan.md (founder action 11)"],
-      "blocked_by": "Founder decision on repository visibility"
+      "blocked_by": "Founder decision on repository visibility",
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] Make the repository PUBLIC - the founder is not paying for GitHub and wants CI to stop failing on private-repo limits. History was scanned first: the only real credentials recoverable from it are the revoked Supabase PAT and a RETIRED Tauri signing key (418034B749732381) that no shipped client trusts. Delete apps/desktop/src-tauri/tauri-signing and .pub from the working tree before flipping, so the dead key cannot be re-committed. Decision recorded; the flip itself is still to do."
     },
     {
       "id": "SEC-39",
@@ -712,7 +714,8 @@
       "merged_from": [
         "Ciphertext envelopes carry no key id or version (ExecutionPlan #88, envelope half resolved)",
         "ENCRYPTION_KEY is boot-warning-only, not critical (DPDP §6)"
-      ]
+      ],
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] The five AES-256-GCM keys and the JWT secret are now generated and available for LOCAL development, sourced from ~/.agiworkforce/secrets.env (chmod 600) via ~/.zshrc. That closes the developer-cannot-run-it problem, NOT this item: a shell profile is not a KMS, has no escrow and no rotation procedure. Still owed: the KMS/vault choice, the re-encryption job and the written rotation runbook."
     },
     {
       "id": "SEC-41",
@@ -724,7 +727,8 @@
       "evidence": "FoundersAssistance #8: the existing local OpenRouter credential was surfaced by an earlier broad local search and must be treated as exposed; no paid request has been sent with it. It blocks the paid Seedance end-to-end generation and the signed-webhook smoke test. Same class as SEC-01 (credential reachable beyond its intended holder) but caught before use.",
       "fix": "The exposed credential is revoked at OpenRouter, a minimum-scope replacement is issued, OPENROUTER_API_KEY and OPENROUTER_WEBHOOK_SECRET are set from it, and only then is a single paid smoke test authorized.",
       "sources": ["FoundersAssistance.md (#8)"],
-      "blocked_by": "OpenRouter dashboard credential rotation (founder action)"
+      "blocked_by": "OpenRouter dashboard credential rotation (founder action)",
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] The founder is rotating the OpenRouter video credential immediately. Awaiting confirmation before any paid smoke test."
     },
     {
       "id": "SEC-42",
@@ -1194,7 +1198,8 @@
       "sources": ["FoundersAssistance.md #26"],
       "blocked_by": "Founder decision to go live plus creation of matching live Stripe products/prices",
       "code_refs": ["packages/contracts/types/src/billing-catalog.ts"],
-      "merged_from": ["Production Stripe is in TEST mode — no real customer can be charged"]
+      "merged_from": ["Production Stripe is in TEST mode — no real customer can be charged"],
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] The founder will move production Stripe out of TEST mode once the whole billing flow is corrected. The gate has moved from them to us: this now depends on the billing defects closing, not on a founder decision."
     },
     {
       "id": "BILL-02",
@@ -2343,7 +2348,8 @@
         "apps/mobile/app/(public)/age-gate.tsx:17",
         "apps/mobile/src/features/settings/parental-controls/index.tsx:36"
       ],
-      "merged_from": ["No verifiable parental consent (DPDP s.9)"]
+      "merged_from": ["No verifiable parental consent (DPDP s.9)"],
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] Follow ChatGPT's parental-consent mechanism. The reference is the live-observed corpus at ~/Downloads/competitive-product-research (01-chatgpt/, plus 04-cross-product-comparison/08-settings-and-permission-architecture.md); read what ChatGPT actually does before building rather than inventing a flow."
     },
     {
       "id": "DPDP-05",
@@ -2606,7 +2612,8 @@
         "O-17 Mobile presents no privacy notice; manifest under-declares; unread Contacts permission",
         "App Store / Play privacy declarations misstate what data is shared",
         "MOBILE-PRIVACY-MANIFEST-LOCKED-COPY-DRIFT-01"
-      ]
+      ],
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] Do it: supply the mobile privacy notice, correct the iOS privacy manifest and fix the store privacy declarations. Engineering work, no longer blocked."
     },
     {
       "id": "DPDP-20",
@@ -2633,7 +2640,8 @@
       "sources": ["ExecutionPlan.md Founder actions #10"],
       "blocked_by": "Founder must appoint an EU representative",
       "code_refs": ["apps/web/app/legal/eu-representative"],
-      "merged_from": ["GDPR Art. 27 EU representative not appointed"]
+      "merged_from": ["GDPR Art. 27 EU representative not appointed"],
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] There is NO EU representative and none will be appointed for now. The obligation is therefore not met, so every claim that it is must be removed from the policy pages rather than left standing. This is now a copy-correction task, not a decision."
     },
     {
       "id": "DPDP-22",
@@ -4327,7 +4335,8 @@
         "apps/desktop/src/stores/appModeStore.ts",
         "apps/desktop/src-tauri/src/sys/commands/chat/cloud.rs:59",
         "apps/desktop/src/lib/cloudChatPersistence.ts"
-      ]
+      ],
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] Desktop Cloud Mode ships now, for BOTH the Electron and Tauri shells, and must be downloadable. Before that download is offered, verify image/video generation, inline tools UI, connectors, skills, plugins and local-folder selection actually work on Desktop."
     },
     {
       "id": "DESK-03",
@@ -7723,7 +7732,8 @@
         "ExecutionPlan founder item 3 desktop release manifests 404",
         "REL-011 Store/marketplace listings inferred rather than measured",
         "SCALE-VER-008 Release claims not verified from deployed artifacts"
-      ]
+      ],
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] Do both - ship a real download path for Desktop and CLI, and stop marketing them as Released until it exists. Engineering work, no longer blocked on a decision."
     },
     {
       "id": "INFRA-16",
@@ -11288,7 +11298,8 @@
         "packages/ui/unified-chat/src/lib/slashCommands.ts:75-81"
       ],
       "merged_from": ["VOICE-MEDIA-001", "COMPOSER-004"],
-      "effort": "L"
+      "effort": "L",
+      "founder_decision": "[2026-08-16 FOUNDER DECISION] Build the Desktop image/video generation surface; it is in scope for the pre-download verification pass above."
     },
     {
       "id": "DESK-71",
@@ -14674,6 +14685,21 @@
       ],
       "merged_from": [],
       "resolution_note": "[2026-08-16] Raised this session. Verified both directions on a clean checkout: the entry alone fails CI, the migration alone fails locally. They must land together."
+    },
+    {
+      "id": "DOC-200",
+      "title": "Audits, research and gap analyses are scattered across the repo root and Downloads with no single home",
+      "domain": "docs",
+      "severity": "MEDIUM",
+      "status": "open",
+      "effort": "M",
+      "evidence": "Founder request 2026-08-16: 'all audits at one place, all research at one place, all gaps at one place, all properly make the folders like an enterprise software, restructure all the places'. Today: audit/parity-2026-08-15/ and audit/competitive-gap-2026-08-15/ sit UNTRACKED at the repo root; docs/remediation/ holds the register and waves; the live-observed competitive corpus lives entirely OUTSIDE the repo at ~/Downloads/competitive-product-research and is invisible to repo search and to git. Two of those untracked trees fail check:model-id-literals and check:non-md-artifacts LOCALLY. They do not affect CI, which checks out committed state only, so committing them as-is would turn a local-only failure into a CI failure.",
+      "fix": "Agree one taxonomy and move everything into it, then make the guards pass on the result rather than by exclusion. The competitive corpus needs an explicit decision: bring it in-repo (it holds no secrets but does hold third-party UI observations) or leave it out and commit a pointer file so a reader can find it. Sequence AFTER the untracked audit trees are either committed or removed, since they are the current guard failures.",
+      "sources": ["founder request 2026-08-16"],
+      "code_refs": ["audit/parity-2026-08-15", "audit/competitive-gap-2026-08-15", "docs/remediation"],
+      "merged_from": [],
+      "wave": "W2",
+      "resolution_note": "[2026-08-16] Raised by the founder alongside the other decisions."
     }
   ],
   "waves": [
