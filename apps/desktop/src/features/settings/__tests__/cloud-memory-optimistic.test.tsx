@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 /**
@@ -43,6 +43,12 @@ beforeEach(() => {
   listCloudMemories.mockResolvedValue([fact('m1', 'likes espresso')]);
 });
 
+afterEach(() => cleanup());
+
+// Deferred promises plus a full settings-tab render; the default 5s is not
+// enough when the whole desktop suite is competing for the same cores.
+vi.setConfig({ testTimeout: 30_000 });
+
 async function renderCloudMemory(firstText = 'likes espresso') {
   const { MemoryTab } = await import('../tabs/Memory');
   render(<MemoryTab scope="cloud" />);
@@ -53,10 +59,10 @@ describe('cloud memory add', () => {
   it('shows the new fact before the server responds', async () => {
     const pending = deferred<ReturnType<typeof fact>>();
     createCloudMemory.mockReturnValue(pending.promise);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await renderCloudMemory();
 
-    await user.type(screen.getByRole('textbox'), 'drinks oat milk');
+    await user.type(screen.getByRole('textbox', { name: /add a new fact/i }), 'drinks oat milk');
     await user.click(screen.getByRole('button', { name: /^add$/i }));
 
     // Still in flight, and already on screen.
@@ -70,10 +76,10 @@ describe('cloud memory add', () => {
 
   it('removes the fact again and says why when the server refuses', async () => {
     createCloudMemory.mockRejectedValue(new Error('quota reached'));
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await renderCloudMemory();
 
-    await user.type(screen.getByRole('textbox'), 'drinks oat milk');
+    await user.type(screen.getByRole('textbox', { name: /add a new fact/i }), 'drinks oat milk');
     await user.click(screen.getByRole('button', { name: /^add$/i }));
 
     const alert = await screen.findByRole('alert');
@@ -84,7 +90,7 @@ describe('cloud memory add', () => {
     expect(screen.queryByRole('button', { name: /edit memory: drinks oat milk/i })).toBeNull();
     // ...and the text is back in the composer so the user can retry without
     // retyping it.
-    expect(screen.getByRole('textbox')).toHaveValue('drinks oat milk');
+    expect(screen.getByRole('textbox', { name: /add a new fact/i })).toHaveValue('drinks oat milk');
     // The untouched fact is undisturbed.
     expect(screen.getByText('likes espresso')).toBeTruthy();
   });
@@ -94,7 +100,7 @@ describe('cloud memory delete', () => {
   it('removes the row before the server responds', async () => {
     const pending = deferred<void>();
     deleteCloudMemory.mockReturnValue(pending.promise);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await renderCloudMemory();
 
     await user.click(screen.getByRole('button', { name: /delete memory fact/i }));
@@ -111,7 +117,7 @@ describe('cloud memory delete', () => {
       fact('m3', 'third'),
     ]);
     deleteCloudMemory.mockRejectedValue(new Error('offline'));
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     await renderCloudMemory('second');
 
@@ -129,11 +135,11 @@ describe('cloud memory delete', () => {
 describe('cloud memory edit', () => {
   it('restores the earlier text when the edit fails', async () => {
     updateCloudMemory.mockRejectedValue(new Error('conflict'));
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await renderCloudMemory();
 
     await user.click(screen.getByRole('button', { name: /edit memory: likes espresso/i }));
-    const editor = screen.getByDisplayValue('likes espresso');
+    const editor = screen.getByRole('textbox', { name: /editing memory: likes espresso/i });
     await user.clear(editor);
     await user.type(editor, 'likes decaf');
     await user.click(screen.getByRole('button', { name: /^save$/i }));

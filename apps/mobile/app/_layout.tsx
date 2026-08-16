@@ -413,7 +413,21 @@ export default function RootLayout() {
     }
   }, [isClerkSignedIn, isClerkLoaded, isInitialized, isMmkvReady, segments, router, authEnabled]);
 
+  // C1: Deep linking — handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
+  // Required for QR desktop pairing when app is backgrounded or closed
+  //
+  // MOB-2 (audit 2026-05-03): the previous check validated the pairing
+  // code regex but allowed ANY URL whose path matched. On Android any
   // app can register a custom scheme — `myapp://pair/XXXXXXXX` would
+  // satisfy the test. Universal links over `https://` were not gated at
+  // all. We now require either:
+  //   1. scheme = `agiworkforce` AND hostname = exactly `pair`, OR
+  //   2. scheme = `https` AND hostname is one of the two verified AGI
+  //      domains, with the pair route as the leading segment.
+  //
+  // #386: gated on isClerkSignedIn instead of the legacy session, which
+  // `useAuthStore.initialize()` never assigns — it is null for the life of the
+  // process, so this effect returned on its first line for every URL.
   useEffect(() => {
     if (!url || !isClerkSignedIn || !isInitialized) return;
 

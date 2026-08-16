@@ -62,7 +62,8 @@
       "aria": "在本地与云端之间切换",
       "switchTo": "切换到{{mode}}",
       "soon": "即将推出",
-      "cloudUnavailable": "AGI Cloud 可在桌面端使用——登录后即可使用托管模型和同步的对话。"
+      "cloudUnavailable": "AGI Cloud 可在桌面端使用——登录后即可使用托管模型和同步的对话。",
+      "localUnavailable": "本地模式在 AGI Workforce 桌面应用中运行。下载后即可将对话和文件保留在本机。"
     },
     "groups": {
       "lastHour": "Last hour",

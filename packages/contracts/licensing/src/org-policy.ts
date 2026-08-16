@@ -1,3 +1,27 @@
+/**
+ * Signed **org policy** fixture contract retained under
+ * `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`.
+ *
+ * An org policy is a signed data document that admins distribute (file drop,
+ * MDM, or self-hosted gateway) and every all-mode surface enforces locally. It
+ * lives with the offline licensing boundary because its root of trust is an org
+ * license. It is NOT a cloud endpoint — it is a signed file, verified fully
+ * offline.
+ *
+ * Root of trust: the org LICENSE. The policy signature must verify against a key
+ * listed in the (already-verified) license's `policyKeys[]`, so a forged policy
+ * cannot loosen anything the license did not authorize.
+ *
+ * Monotonic tightening: a policy may only RESTRICT relative to product defaults
+ * (or a prior policy), never GRANT. See `checkPolicyTightening` for the exact
+ * lattice and `DEFAULT_POLICY_BASELINE` for the product-default baseline it
+ * tightens against.
+ *
+ * Scope note: this pass ships the schema + verifier + fixtures only. It is not
+ * wired into any surface's enforcement path. Any future enforcement path
+ * requires the complete design and superseding ADR described by the retention
+ * decision.
+ */
 
 import { z } from 'zod';
 

@@ -62,7 +62,8 @@
       "aria": "Cambiar entre Local y Nube",
       "switchTo": "Cambiar a {{mode}}",
       "soon": "Pronto",
-      "cloudUnavailable": "AGI Cloud está disponible en el escritorio: inicia sesión para usar modelos gestionados y chats sincronizados."
+      "cloudUnavailable": "AGI Cloud está disponible en el escritorio: inicia sesión para usar modelos gestionados y chats sincronizados.",
+      "localUnavailable": "El modo local funciona en la app de escritorio de AGI Workforce. Descárgala para mantener los chats y archivos en este equipo."
     },
     "groups": {
       "lastHour": "Última hora",

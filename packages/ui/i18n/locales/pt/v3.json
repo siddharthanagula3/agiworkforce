@@ -62,7 +62,8 @@
       "aria": "Alternar entre Local e Nuvem",
       "switchTo": "Alternar para {{mode}}",
       "soon": "Em breve",
-      "cloudUnavailable": "O AGI Cloud está disponível no desktop — entre para usar modelos gerenciados e chats sincronizados."
+      "cloudUnavailable": "O AGI Cloud está disponível no desktop — entre para usar modelos gerenciados e chats sincronizados.",
+      "localUnavailable": "O modo local funciona no app de desktop do AGI Workforce. Baixe-o para manter conversas e arquivos nesta máquina."
     },
     "groups": {
       "lastHour": "Last hour",
