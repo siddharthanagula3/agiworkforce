@@ -164,6 +164,7 @@ export function MemoryEditor({
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value.slice(0, MAX_FACT_CHARS))}
+            aria-label="Add a new fact"
             placeholder="Example: I prefer Python over JavaScript for data work."
             rows={2}
             className="flex-1 resize-none rounded-md border bg-[var(--chat-surface-base)] px-3 py-2 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
@@ -218,6 +219,7 @@ export function MemoryEditor({
                       <textarea
                         value={editDraft}
                         onChange={(e) => setEditDraft(e.target.value.slice(0, MAX_FACT_CHARS))}
+                        aria-label={`Editing memory: ${fact.text}`}
                         rows={2}
                         className="resize-none rounded-sm border-0 bg-transparent text-sm text-[var(--chat-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
                       />

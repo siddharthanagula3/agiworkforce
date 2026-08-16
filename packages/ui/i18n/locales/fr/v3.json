@@ -62,7 +62,8 @@
       "aria": "Basculer entre Local et Cloud",
       "switchTo": "Basculer vers {{mode}}",
       "soon": "Bientôt",
-      "cloudUnavailable": "AGI Cloud est disponible sur le bureau — connectez-vous pour utiliser les modèles gérés et les chats synchronisés."
+      "cloudUnavailable": "AGI Cloud est disponible sur le bureau — connectez-vous pour utiliser les modèles gérés et les chats synchronisés.",
+      "localUnavailable": "Le mode local fonctionne dans l'application de bureau AGI Workforce. Téléchargez-la pour garder vos chats et fichiers sur cette machine."
     },
     "groups": {
       "lastHour": "Last hour",

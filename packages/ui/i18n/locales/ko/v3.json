@@ -62,7 +62,8 @@
       "aria": "로컬과 클라우드 전환",
       "switchTo": "{{mode}}(으)로 전환",
       "soon": "곧 제공",
-      "cloudUnavailable": "AGI Cloud는 데스크톱에서 사용할 수 있습니다. 로그인하면 관리형 모델과 동기화된 채팅을 이용할 수 있습니다."
+      "cloudUnavailable": "AGI Cloud는 데스크톱에서 사용할 수 있습니다. 로그인하면 관리형 모델과 동기화된 채팅을 이용할 수 있습니다.",
+      "localUnavailable": "로컬 모드는 AGI Workforce 데스크톱 앱에서 실행됩니다. 채팅과 파일을 이 기기에 보관하려면 앱을 내려받으세요."
     },
     "groups": {
       "lastHour": "Last hour",

@@ -1,4 +1,3 @@
-
 import type {
   ConnectionStatus,
   ExtensionMessage,
@@ -501,6 +500,7 @@ async function invalidateRejectedManagedCloudCredential(
   }
 }
 
+// Pending requests waiting for responses
 const pendingRequests = new Map<
   string,
   {
@@ -2381,6 +2381,23 @@ async function executeScheduledTask(
   }
 }
 
+// EXT-1, EXT-2 (audit 2026-05-03): allowlist-based sender validation.
+//
+// The previous implementation accepted any tab as a valid sender. Combined
+// with the content-script `<all_urls>` match, every web page the user
+// visits could fire privileged background commands. This meant any XSS
+// on any visited page = full extension takeover.
+//
+// We now gate by an explicit user-managed origin allowlist stored under
+// `chrome.storage.local.agi_site_allowlist`. Extension pages (popup,
+// side panel, options) remain trusted; tab-originated messages are
+// trusted only if the tab's origin is on the list.
+// SECURITY (H-1): PING and GET_AGI_BRIDGE_URL previously bypassed origin checks.
+// Removed both from the discovery bypass set. Extension-origin senders (popup,
+// side panel) are already trusted via the `!sender.tab` branch in
+// isAllowlistedSender(). Content scripts on arbitrary pages must NOT receive
+// responses to fingerprinting probes.
+// DISCOVERY_MESSAGE_TYPES now imported from `./background/policy` (audit 2026-05-19).
 let siteAllowlistCache = new Set<string>();
 chrome.storage.local
   .get(SITE_ALLOWLIST_STORAGE_KEY)
