@@ -14,7 +14,13 @@ import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  useConfirm,
+} from '@agiworkforce/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import {
   Copy,
@@ -104,6 +110,45 @@ import { CodeExecutionBlock } from './CodeExecutionBlock';
 import { detectCardType } from '../cards';
 import { MessageFormatCard } from '../cards/MessageFormatCard';
 import { VideoGenerationPlaceholder } from './VideoGenerationPlaceholder';
+import { EditableMessage } from './EditableMessage';
+
+/**
+ * Inline user-message editing (CLR-05).
+ *
+ * ChatGPT parity: clicking Edit on a sent message turns THAT bubble into a
+ * pre-filled textarea with Cancel/Save. Web used to prefill the composer at the
+ * bottom of the page instead, leaving the original message sitting untouched in
+ * the transcript above while you typed somewhere else — and `EditableMessage`,
+ * a complete inline editor, sat in this folder with zero importers.
+ *
+ * Wired the same way tool approval is: a context the chat page mounts, read here
+ * via `useContext`, so MessageBubble stays provider-independent and renderable
+ * standalone. With no provider the Edit action falls back to whatever `onEdit`
+ * the surface passed (the composer-prefill path), so nothing regresses.
+ */
+export interface MessageInlineEditController {
+  /**
+   * Guard + permission to open the editor. Returns false when the surface
+   * refuses this edit (a turn is streaming, an image turn is mid-save, the free
+   * trial is spent) — the controller has already told the user why, so the
+   * caller must simply not enter edit mode.
+   */
+  beginEdit: (messageId: string) => boolean;
+  /**
+   * Resubmit `content` in place of `messageId`. The surface owns the rollback:
+   * the edited message and everything after it are replaced only once the new
+   * turn is durable.
+   */
+  submitEdit: (messageId: string, content: string) => void;
+}
+
+const MessageInlineEditContext = React.createContext<MessageInlineEditController | null>(null);
+export const MessageInlineEditProvider = MessageInlineEditContext.Provider;
+
+/** `null` when no provider is mounted (standalone render / tests). */
+export function useMessageInlineEdit(): MessageInlineEditController | null {
+  return React.useContext(MessageInlineEditContext);
+}
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -298,6 +343,8 @@ interface Message {
     videoStatus?: 'queued' | 'processing' | 'completed' | 'failed';
     videoProvider?: 'google' | 'runway' | 'openrouter';
     videoModel?: string;
+    /** Aspect ratio requested when the video was generated; sizes the shimmer placeholder. */
+    videoAspect?: string;
     videoProgress?: number;
     videoError?: string;
     videoRetryable?: boolean;
@@ -447,6 +494,59 @@ const MessageBubbleComponent = function MessageBubble({
     });
   }, []);
   const isUser = message.role === 'user';
+
+  /**
+   * Delete confirmation (shell-nav-ia-gap-01). This used to be a native
+   * `window.confirm()` — an OS alert with a browser-chrome "OK", in the middle
+   * of a transcript, for the one action here that destroys content. `useConfirm`
+   * is the shared wrapper around the AlertDialog primitive already used for
+   * delete-schedule and delete-project, so the message delete now reads the same
+   * as every other destructive confirm and its confirm button is red.
+   */
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+  const handleDeleteWithConfirm = useCallback(() => {
+    if (!onDelete) return;
+    void (async () => {
+      const confirmed = await confirmDestructive({
+        title: 'Delete message?',
+        // Only this one message is removed (deletePersistedMessages([id])) — the
+        // rest of the turn stays, so the copy must not imply a cascade.
+        description: isUser
+          ? 'This message is removed from the conversation. The reply it produced stays. This cannot be undone.'
+          : 'This response is removed from the conversation. The message that prompted it stays. This cannot be undone.',
+        confirmText: 'Delete message',
+        variant: 'destructive',
+      });
+      if (confirmed) onDelete(message.id);
+    })();
+  }, [confirmDestructive, isUser, message.id, onDelete]);
+
+  // ---- Inline edit (CLR-05) -------------------------------------------------
+  // `beginEdit` runs the surface's guards and answers whether the editor may
+  // open; `submitEdit` performs the replacing resend. Absent provider => the
+  // legacy `onEdit` (composer prefill) still runs, so no surface loses Edit.
+  const inlineEdit = useMessageInlineEdit();
+  const [isEditing, setIsEditing] = useState(false);
+  const handleBeginEdit = useCallback(() => {
+    if (inlineEdit) {
+      if (inlineEdit.beginEdit(message.id)) setIsEditing(true);
+      return;
+    }
+    onEdit?.(message.id);
+  }, [inlineEdit, message.id, onEdit]);
+  const handleCancelEdit = useCallback(() => setIsEditing(false), []);
+  const handleSaveEdit = useCallback(
+    (next: string) => {
+      setIsEditing(false);
+      inlineEdit?.submitEdit(message.id, next);
+    },
+    [inlineEdit, message.id],
+  );
+  // A streaming turn started elsewhere (queued follow-up, regenerate) makes an
+  // open editor stale — close it rather than let Save race the live turn.
+  useEffect(() => {
+    if (message.isStreaming) setIsEditing(false);
+  }, [message.isStreaming]);
 
   // Manual tool-approval wiring: an awaiting_approval tool card's approve/reject
   // buttons drive the resume request. The resolver comes from ToolApprovalContext
@@ -1040,6 +1140,9 @@ const MessageBubbleComponent = function MessageBubble({
         isUser ? 'message-row-user' : 'message-row-assistant',
       )}
     >
+      {/* Delete confirmation. Rendered outside the dropdown so closing the menu
+          on select cannot unmount the dialog that the select just opened. */}
+      {destructiveConfirmDialog}
       {/* Inner content row · constrained to max-w-3xl. No avatars: user messages
           read as a right-aligned bubble, assistant messages as a flat left column. */}
       <div className={cn('message-inner', isUser && 'flex-row-reverse')}>
@@ -1048,6 +1151,9 @@ const MessageBubbleComponent = function MessageBubble({
           className={cn(
             'message-body',
             isUser ? 'flex max-w-[85%] flex-col items-end' : 'flex-1 min-w-0',
+            // The inline editor needs the full column, not the 85% a short
+            // right-aligned bubble happens to occupy.
+            isEditing && 'w-full max-w-full items-stretch',
           )}
         >
           {/* Slim badge row · only rendered when a marker is present (no name/timestamp) */}
@@ -1228,6 +1334,20 @@ const MessageBubbleComponent = function MessageBubble({
               />
             )}
 
+          {/* Inline edit (CLR-05): the bubble ITSELF becomes the editor, so the
+              message being revised never sits stale above a composer at the far
+              end of the page. Replaces the rendered body rather than sitting
+              beside it — two copies of the same message is the bug, not the fix. */}
+          {isEditing && (
+            <div className="w-full min-w-0 text-left">
+              <EditableMessage
+                message={{ id: message.id, content: message.content }}
+                onSave={handleSaveEdit}
+                onCancel={handleCancelEdit}
+              />
+            </div>
+          )}
+
           {/* Message Content · 15 px body matching desktop .message-text */}
           <div
             className={cn(
@@ -1236,6 +1356,7 @@ const MessageBubbleComponent = function MessageBubble({
               'break-words overflow-wrap-anywhere text-left',
               isUser && 'user-bubble', // right-aligned rounded bubble (assistant stays flat)
               !isUser && message.metadata?.comparisonOptions && 'hidden',
+              isEditing && 'hidden',
             )}
           >
             {message.isStreaming &&
@@ -1477,7 +1598,15 @@ const MessageBubbleComponent = function MessageBubble({
             message.isStreaming === true &&
             !message.metadata?.videoUrl &&
             !videoError && (
-              <VideoGenerationPlaceholder startedAt={message.timestamp.toISOString()} />
+              <VideoGenerationPlaceholder
+                startedAt={message.timestamp.toISOString()}
+                aspectRatio={message.metadata?.videoAspect}
+                taskId={
+                  typeof message.metadata?.videoTaskId === 'string'
+                    ? message.metadata.videoTaskId
+                    : undefined
+                }
+              />
             )}
 
           {!isUser &&
@@ -1747,7 +1876,9 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Action row visibility (claude.ai parity): ASSISTANT actions (copy /
               read-aloud / thumbs / retry) are ALWAYS visible below the message;
               USER actions are HOVER-ONLY. Do not invert this. */}
-          {!message.isStreaming && (
+          {/* The editor carries its own Cancel / Save, so the transcript action
+              row would only offer a second, conflicting set of controls. */}
+          {!message.isStreaming && !isEditing && (
             <div
               className={cn(
                 // AUDIT-FIX GOV-30: `opacity-0 group-hover:opacity-100` with no
@@ -1935,6 +2066,37 @@ const MessageBubbleComponent = function MessageBubble({
                     </Tooltip>
                   )}
 
+                {/*
+                  Branch / fork — a persistent icon in the action row, not a
+                  dropdown entry (shell-nav-ia-gap-08). Manus puts "Continue in
+                  new task" directly under every completed response; this was the
+                  same wired `onBranch` handler, just buried one click deeper
+                  inside "More actions". The assistant row is always visible, so
+                  on a response this is now a persistent affordance. It is NOT
+                  duplicated in the menu below — one control, one place.
+                */}
+                {onBranch && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={ACTION_BUTTON_SIZE}
+                        disabled={isBranching}
+                        onClick={() => onBranch(message.id)}
+                        aria-label={
+                          isBranching ? 'Creating branch…' : 'Branch conversation from here'
+                        }
+                      >
+                        <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isBranching ? 'Creating branch…' : 'Branch conversation'}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
                 {/* More actions menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1949,7 +2111,7 @@ const MessageBubbleComponent = function MessageBubble({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align={isUser ? 'end' : 'start'}>
                     {isUser && onEdit && (
-                      <DropdownMenuItem onClick={() => onEdit(message.id)}>
+                      <DropdownMenuItem onClick={handleBeginEdit}>
                         <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
                         Edit
                       </DropdownMenuItem>
@@ -1974,12 +2136,8 @@ const MessageBubbleComponent = function MessageBubble({
                             : 'Report this response'}
                       </DropdownMenuItem>
                     )}
-                    {onBranch && (
-                      <DropdownMenuItem disabled={isBranching} onClick={() => onBranch(message.id)}>
-                        <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {isBranching ? 'Creating branch…' : 'Branch conversation'}
-                      </DropdownMenuItem>
-                    )}
+                    {/* Branch moved OUT of this menu into the persistent action
+                        row above (shell-nav-ia-gap-08). Do not re-add it here. */}
                     {message.metadata?.tokensUsed ? (
                       <>
                         <DropdownMenuSeparator />
@@ -2019,19 +2177,7 @@ const MessageBubbleComponent = function MessageBubble({
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          onClick={() => {
-                            // Confirm before deleting so a stray click in the ... menu
-                            // can never silently drop a message — matches the
-                            // conversation/project delete guard (WebChatPage
-                            // handleDeleteSession/handleProjectDelete).
-                            if (
-                              typeof window !== 'undefined' &&
-                              !window.confirm("Delete this message? This can't be undone.")
-                            ) {
-                              return;
-                            }
-                            onDelete(message.id);
-                          }}
+                          onClick={handleDeleteWithConfirm}
                           className="text-destructive focus:text-destructive"
                         >
                           <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />

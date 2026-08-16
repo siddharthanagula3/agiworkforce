@@ -2,21 +2,14 @@
 
 import { Suspense } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
+import { SignedOutSkills } from './SignedOutSkills';
 
 function SkillsRoute() {
   const { isSignedIn, isLoaded } = useAuth();
-  const router = useRouter();
 
-  useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      router.replace('/login?redirectTo=%2Fskills');
-    }
-  }, [isLoaded, isSignedIn, router]);
-
-  if (!isLoaded || !isSignedIn) return null;
+  if (!isLoaded) return null;
+  if (!isSignedIn) return <SignedOutSkills />;
 
   return <SettingsModalRedirect section="skills" />;
 }
