@@ -105,6 +105,7 @@ export interface ScheduledExecutionResult {
   text: string;
   model: string;
   provider?: string;
+  toolsUsed?: string[];
   usage?: Record<string, unknown>;
   billingStatus?: string;
 }

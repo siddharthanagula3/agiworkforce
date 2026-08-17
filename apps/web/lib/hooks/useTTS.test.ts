@@ -168,6 +168,18 @@ describe('useTTS — voice selection', () => {
     expect(second.result.current.voiceUri).toBe(ALICE.voiceURI);
   });
 
+  it('applies a voice picked in settings to a chat instance already mounted', () => {
+    const chat = renderHook(() => useTTS());
+    const settings = renderHook(() => useTTS());
+    emitVoicesChanged([ALICE, BRUNO]);
+
+    act(() => settings.result.current.setVoiceUri(BRUNO.voiceURI));
+
+    expect(chat.result.current.voiceUri).toBe(BRUNO.voiceURI);
+    act(() => chat.result.current.speak('hallo'));
+    expect(spoken[0]!.voice).toBe(BRUNO);
+  });
+
   it('clears back to the default', () => {
     const { result } = renderHook(() => useTTS());
     emitVoicesChanged([ALICE]);

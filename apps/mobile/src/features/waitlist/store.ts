@@ -76,17 +76,30 @@ export const useWaitlistStore = create<WaitlistState>()(
       name: 'waitlist-store',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
+      // Managed-cloud entitlement is never persisted: it is a mirror of the
+      // Clerk-authenticated session (setCloudAccess from the token bridge), and
+      // a rehydrated `true` would route chats to managed cloud on cold start
+      // before — or without — that session being proven.
       partialize: (state) => ({
         joined: state.joined,
         email: state.email,
         country: state.country,
         rank: state.rank,
         joinedAt: state.joinedAt,
-        cloudUnlocked: state.cloudUnlocked,
-        inviteId: state.inviteId,
-        inviteCode: state.inviteCode,
-        cloudUnlockedAt: state.cloudUnlockedAt,
       }),
+      // Legacy blobs written before that rule still carry the entitlement, so
+      // rehydration takes only the signup record and never the cloud grant.
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<WaitlistState>;
+        return {
+          ...current,
+          joined: saved.joined === true,
+          email: saved.email,
+          country: saved.country,
+          rank: saved.rank,
+          joinedAt: saved.joinedAt,
+        };
+      },
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[waitlistStore] Hydration failed:', error);
       },

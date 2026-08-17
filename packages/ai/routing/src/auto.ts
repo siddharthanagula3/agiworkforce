@@ -308,6 +308,26 @@ function normalizeTier(
   }
 }
 
+const tierGatedSlotsByModelKey = ((): Map<string, string[]> => {
+  const policy = registry.policies.auto;
+  const tierGatedSlots = new Set(Object.values(policy.tierAllowedSlots).flat());
+  const slotsByModelKey = new Map<string, string[]>();
+  for (const [slotId, slot] of Object.entries(policy.slots)) {
+    if (!tierGatedSlots.has(slotId)) continue;
+    slotsByModelKey.set(slot.modelKey, [...(slotsByModelKey.get(slot.modelKey) ?? []), slotId]);
+  }
+  return slotsByModelKey;
+})();
+
+function tierAdmissionRejection(modelKey: string, tier: string): string | null {
+  const gatedSlots = tierGatedSlotsByModelKey.get(modelKey);
+  if (!gatedSlots) return null;
+  const policy = registry.policies.auto;
+  const allowedSlots = policy.tierAllowedSlots[tier] ?? [policy.fallbackSlot];
+  if (gatedSlots.some((slotId) => allowedSlots.includes(slotId))) return null;
+  return `routing slot ${gatedSlots.join(', ')} for model ${modelKey} is not allowed for tier ${tier}`;
+}
+
 function clampProfile(
   requested: RoutingProfile,
   maximum: RoutingProfile,
@@ -332,6 +352,8 @@ function evaluateEligibility(
   }
   if (model.lifecycle.deprecated) reasons.push(`model ${modelKey} is deprecated`);
   const tier = normalizeTier(request.subscriptionTier);
+  const tierRejection = tierAdmissionRejection(modelKey, tier);
+  if (tierRejection) reasons.push(tierRejection);
   const usOnlyPolicy = registry.policies.auto.providerPolicies.usOnly;
   if (
     request.usOnly &&

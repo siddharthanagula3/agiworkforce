@@ -86,6 +86,7 @@ function makeSkill(root: string): Skill {
 function makeProcessed(root: string, offerSkill = true): ProcessedRequest {
   const skill = makeSkill(root);
   return {
+    chatSurface: 'web' as const,
     requestId: 'req-skill',
     chatRequest: {
       model: 'test-model',

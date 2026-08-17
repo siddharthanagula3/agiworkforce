@@ -26,8 +26,8 @@ describe('mobile CapabilityProvider (RN adapter)', () => {
     expect(cap('desktop', 'canUseTerminal')).toBe(true);
   });
 
-  it('web override → desktop-only absent, camera absent', () => {
+  it('web override → desktop-only absent, camera present', () => {
     expect(cap('web', 'canUseWorkingDirectory')).toBe(false);
-    expect(cap('web', 'canUseCamera')).toBe(false);
+    expect(cap('web', 'canUseCamera')).toBe(true);
   });
 });

@@ -73,9 +73,16 @@ struct PairRequestBody {
     extension_id: Option<String>,
 }
 
-fn parse_pair_extension_id(raw_request: &str) -> Result<Option<String>, String> {
+#[derive(serde::Deserialize)]
+struct PairConfirmBody {
+    #[serde(rename = "requestId")]
+    request_id: Option<String>,
+    code: Option<String>,
+}
+
+fn http_request_body(raw_request: &str) -> Result<&str, String> {
     let Some((headers, body)) = raw_request.split_once("\r\n\r\n") else {
-        return Ok(None);
+        return Ok("");
     };
 
     let content_length = headers
@@ -91,14 +98,23 @@ fn parse_pair_extension_id(raw_request: &str) -> Result<Option<String>, String> 
         .unwrap_or(0);
 
     if content_length == 0 || body.trim().is_empty() {
-        return Ok(None);
+        return Ok("");
     }
 
     if body.len() < content_length {
         return Err("Pairing request body was truncated".to_string());
     }
 
-    let body = &body[..content_length];
+    body.get(..content_length)
+        .ok_or_else(|| "Pairing request body was not valid UTF-8".to_string())
+}
+
+fn parse_pair_extension_id(raw_request: &str) -> Result<Option<String>, String> {
+    let body = http_request_body(raw_request)?;
+    if body.is_empty() {
+        return Ok(None);
+    }
+
     let parsed: PairRequestBody =
         serde_json::from_str(body).map_err(|e| format!("Invalid pairing JSON: {}", e))?;
 
@@ -111,6 +127,140 @@ fn parse_pair_extension_id(raw_request: &str) -> Result<Option<String>, String> 
     }
 
     Ok(Some(extension_id))
+}
+
+// ── SEC-11 handshake: Desktop-displayed, user-confirmed short code ───────────
+//
+// `/pair/request` mints nothing and installs nothing. It parks a short code in
+// memory and hands the caller only an opaque request id; the code is delivered
+// exclusively to the Desktop's own UI. `/pair/confirm` requires that code back,
+// so a caller that can reach the loopback port but cannot see the Desktop
+// screen has no way to complete the handshake.
+
+const PAIR_CODE_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const PAIR_CODE_LEN: usize = 8;
+const PAIR_REQUEST_TTL: Duration = Duration::from_secs(120);
+const MAX_PENDING_PAIR_REQUESTS: usize = 8;
+const MAX_PAIR_CONFIRM_ATTEMPTS: u32 = 3;
+
+struct PendingPairRequest {
+    extension_id: String,
+    code: String,
+    created_at: Instant,
+    failed_attempts: u32,
+}
+
+type PendingPairRequests = Arc<TokioMutex<HashMap<String, PendingPairRequest>>>;
+
+#[derive(Clone)]
+struct PairEndpointState {
+    pair_token: Arc<TokioRwLock<String>>,
+    bridge_token: Arc<TokioRwLock<String>>,
+    pending: PendingPairRequests,
+    app_handle: Option<tauri::AppHandle>,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct PairRequestPrompt {
+    #[serde(rename = "requestId")]
+    pub request_id: String,
+    #[serde(rename = "extensionId")]
+    pub extension_id: String,
+    pub code: String,
+    #[serde(rename = "expiresInMs")]
+    pub expires_in_ms: u64,
+}
+
+fn random_hex(byte_len: usize) -> String {
+    use rand::RngCore;
+    let mut bytes = vec![0u8; byte_len];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    hex::encode(bytes)
+}
+
+fn generate_pair_code() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; PAIR_CODE_LEN];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    bytes
+        .iter()
+        .map(|byte| PAIR_CODE_ALPHABET[*byte as usize % PAIR_CODE_ALPHABET.len()] as char)
+        .collect()
+}
+
+fn normalize_pair_code(raw: &str) -> String {
+    raw.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_uppercase())
+        .collect()
+}
+
+fn pair_code_matches(supplied: &str, expected: &str) -> bool {
+    supplied.len() == expected.len()
+        && bool::from(supplied.as_bytes().ct_eq(expected.as_bytes()))
+}
+
+fn drop_expired_pair_requests(pending: &mut HashMap<String, PendingPairRequest>, now: Instant) {
+    pending.retain(|_, request| now.duration_since(request.created_at) < PAIR_REQUEST_TTL);
+}
+
+async fn open_pair_request(
+    pending: &PendingPairRequests,
+    extension_id: String,
+) -> Result<PairRequestPrompt, String> {
+    let mut requests = pending.lock().await;
+    let now = Instant::now();
+    drop_expired_pair_requests(&mut requests, now);
+
+    if requests.len() >= MAX_PENDING_PAIR_REQUESTS {
+        return Err("Too many pending pairing requests".to_string());
+    }
+
+    let request_id = random_hex(16);
+    let code = generate_pair_code();
+    requests.insert(
+        request_id.clone(),
+        PendingPairRequest {
+            extension_id: extension_id.clone(),
+            code: code.clone(),
+            created_at: now,
+            failed_attempts: 0,
+        },
+    );
+
+    Ok(PairRequestPrompt {
+        request_id,
+        extension_id,
+        code,
+        expires_in_ms: PAIR_REQUEST_TTL.as_millis() as u64,
+    })
+}
+
+async fn take_confirmed_pair_request(
+    pending: &PendingPairRequests,
+    request_id: &str,
+    supplied_code: &str,
+) -> Result<String, String> {
+    let mut requests = pending.lock().await;
+    drop_expired_pair_requests(&mut requests, Instant::now());
+
+    let Some(request) = requests.get_mut(request_id) else {
+        return Err("Unknown or expired pairing request".to_string());
+    };
+
+    if !pair_code_matches(&normalize_pair_code(supplied_code), &request.code) {
+        request.failed_attempts += 1;
+        let attempts_exhausted = request.failed_attempts >= MAX_PAIR_CONFIRM_ATTEMPTS;
+        if attempts_exhausted {
+            requests.remove(request_id);
+        }
+        return Err("Pairing code did not match".to_string());
+    }
+
+    Ok(requests
+        .remove(request_id)
+        .map(|request| request.extension_id)
+        .unwrap_or_default())
 }
 
 fn request_header<'a>(raw_request: &'a str, header_name: &str) -> Option<&'a str> {
@@ -129,14 +279,14 @@ fn request_header<'a>(raw_request: &'a str, header_name: &str) -> Option<&'a str
     })
 }
 
-fn is_pair_manifest_install_authorized(raw_request: &str, existing_pair_token: &str) -> bool {
+fn is_pair_manifest_install_authorized(raw_request: &str, local_bridge_secret: &str) -> bool {
     let Some(sent_token) = request_header(raw_request, "x-bridge-token") else {
         return false;
     };
 
-    !existing_pair_token.is_empty()
-        && sent_token.len() == existing_pair_token.len()
-        && bool::from(sent_token.as_bytes().ct_eq(existing_pair_token.as_bytes()))
+    !local_bridge_secret.is_empty()
+        && sent_token.len() == local_bridge_secret.len()
+        && bool::from(sent_token.as_bytes().ct_eq(local_bridge_secret.as_bytes()))
 }
 
 // ── RT-04: WebSocket Origin allow-list ───────────────────────────────────────
@@ -230,6 +380,7 @@ pub struct RealtimeServer {
     /// E2 fix: token issued by POST /pair and stored for subsequent
     /// X-Bridge-Token validation. Empty string means no pairing has occurred.
     pair_token: Arc<TokioRwLock<String>>,
+    pending_pair_requests: PendingPairRequests,
 }
 
 impl RealtimeServer {
@@ -247,6 +398,7 @@ impl RealtimeServer {
             connection_semaphore: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
             auth_failures: Arc::new(TokioMutex::new(HashMap::new())),
             pair_token: Arc::new(TokioRwLock::new(String::new())),
+            pending_pair_requests: Arc::new(TokioMutex::new(HashMap::new())),
         }
     }
 
@@ -254,6 +406,43 @@ impl RealtimeServer {
     /// Returns an empty string if no pairing has been performed yet.
     pub async fn get_pair_token(&self) -> String {
         self.pair_token.read().await.clone()
+    }
+
+    /// Pairing requests awaiting the user's confirmation, newest first. The
+    /// short code is included: this is the Desktop UI's own read of the value
+    /// it must display, and it is the only channel that ever carries the code.
+    pub async fn pending_pair_requests(&self) -> Vec<PairRequestPrompt> {
+        let mut requests = self.pending_pair_requests.lock().await;
+        let now = Instant::now();
+        drop_expired_pair_requests(&mut requests, now);
+
+        let mut prompts: Vec<(Instant, PairRequestPrompt)> = requests
+            .iter()
+            .map(|(request_id, request)| {
+                let remaining = PAIR_REQUEST_TTL.saturating_sub(now.duration_since(request.created_at));
+                (
+                    request.created_at,
+                    PairRequestPrompt {
+                        request_id: request_id.clone(),
+                        extension_id: request.extension_id.clone(),
+                        code: request.code.clone(),
+                        expires_in_ms: remaining.as_millis() as u64,
+                    },
+                )
+            })
+            .collect();
+        prompts.sort_by(|a, b| b.0.cmp(&a.0));
+        prompts.into_iter().map(|(_, prompt)| prompt).collect()
+    }
+
+    /// Drop a pending pairing request the user denied. Returns true if a
+    /// request was actually removed.
+    pub async fn cancel_pair_request(&self, request_id: &str) -> bool {
+        self.pending_pair_requests
+            .lock()
+            .await
+            .remove(request_id)
+            .is_some()
     }
 
     /// Report whether an authenticated realtime client is connected for the
@@ -447,7 +636,12 @@ impl RealtimeServer {
                     let token = self.token.read().await.clone();
                     let app_handle = self.app_handle.clone();
                     let auth_failures = self.auth_failures.clone();
-                    let pair_token = self.pair_token.clone();
+                    let pair_endpoint = PairEndpointState {
+                        pair_token: self.pair_token.clone(),
+                        bridge_token: self.token.clone(),
+                        pending: self.pending_pair_requests.clone(),
+                        app_handle: self.app_handle.clone(),
+                    };
 
                     tokio::spawn(async move {
                         // The permit is held for the entire connection lifetime;
@@ -455,8 +649,8 @@ impl RealtimeServer {
                         let _permit = permit;
 
                         if is_plain_http {
-                            // Route plain HTTP POST /pair to the pairing handler.
-                            Self::handle_http_pair(stream, peer, pair_token).await;
+                            // Route plain HTTP POST /pair* to the pairing handler.
+                            Self::handle_http_pair(stream, peer, pair_endpoint).await;
                         } else if let Err(e) = Self::handle_connection_wrapper(
                             stream,
                             peer,
@@ -488,27 +682,63 @@ impl RealtimeServer {
     // lock, and returns {"token":"…","fingerprint":"…"} as JSON.
     //
     // If the request asks to install/refresh a native messaging manifest for
-    // an extension ID, it must include X-Bridge-Token matching the currently
-    // stored pair token. This keeps first-time unauthenticated token pairing
-    // available while preventing any local webpage/process from adding an
-    // attacker-controlled extension ID to the native host manifest.
+    // an extension ID, it must include X-Bridge-Token matching the desktop
+    // bridge secret (the `.ipc_token` value, readable only through the Tauri
+    // UI or the 0600 file). SEC-11: the pair token this endpoint mints must
+    // never authorize the install — a caller could obtain one by posting an
+    // empty body, making the credential self-issuing and letting any local
+    // page or process add an attacker-controlled extension ID to the native
+    // host manifest.
     //
     // Calling /pair a second time ROTATES the token (idempotent success, new value).
     // Non-loopback source IPs and wrong paths both receive 403 / 404 respectively.
 
-    async fn handle_http_pair(
+    async fn handle_http_pair(stream: TcpStream, peer: SocketAddr, state: PairEndpointState) {
+        Self::handle_http_pair_with(stream, peer, state, |extension_id| {
+            install_manifests(extension_id)
+                .map(|paths| paths.len())
+                .map_err(|error| error.to_string())
+        })
+        .await
+    }
+
+    async fn write_http(stream: &mut TcpStream, status: &str, content_type: &str, body: &str) {
+        let response = format!(
+            "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            status,
+            content_type,
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.shutdown().await;
+    }
+
+    async fn write_http_json(stream: &mut TcpStream, status: &str, body: &str) {
+        let response = format!(
+            "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
+            status,
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.shutdown().await;
+    }
+
+    async fn handle_http_pair_with<F>(
         mut stream: TcpStream,
         peer: SocketAddr,
-        pair_token: Arc<TokioRwLock<String>>,
-    ) {
+        state: PairEndpointState,
+        install: F,
+    ) where
+        F: Fn(Option<&str>) -> Result<usize, String>,
+    {
         use tokio::io::AsyncReadExt;
 
         // Loopback-only: reject any non-127.0.0.1 source immediately.
         if !peer.ip().is_loopback() {
             tracing::warn!("E2: /pair rejected from non-loopback source {}", peer);
-            let response = b"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
-            let _ = stream.write_all(response).await;
-            let _ = stream.shutdown().await;
+            Self::write_http(&mut stream, "403 Forbidden", "text/plain", "Forbidden").await;
             return;
         }
 
@@ -524,28 +754,27 @@ impl RealtimeServer {
         let header_section = match std::str::from_utf8(raw) {
             Ok(s) => s,
             Err(_) => {
-                let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 11\r\nConnection: close\r\n\r\nBad Request").await;
-                let _ = stream.shutdown().await;
+                Self::write_http(
+                    &mut stream,
+                    "400 Bad Request",
+                    "text/plain",
+                    "Bad Request",
+                )
+                .await;
                 return;
             }
         };
 
         let first_line = header_section.lines().next().unwrap_or("");
-        // Expect "POST /pair HTTP/1.1" (path segment only; ignore query string).
         let parts: Vec<&str> = first_line.splitn(3, ' ').collect();
         let method = parts.first().copied().unwrap_or("");
         let path = parts.get(1).copied().unwrap_or("");
         let path_no_query = path.split('?').next().unwrap_or(path);
 
-        if method != "POST" || path_no_query != "/pair" {
+        let is_known_route = matches!(path_no_query, "/pair" | "/pair/request" | "/pair/confirm");
+        if method != "POST" || !is_known_route {
             let body = format!("Not found: {} {}", method, path_no_query);
-            let response = format!(
-                "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            let _ = stream.write_all(response.as_bytes()).await;
-            let _ = stream.shutdown().await;
+            Self::write_http(&mut stream, "404 Not Found", "text/plain", &body).await;
             return;
         }
 
@@ -564,49 +793,201 @@ impl RealtimeServer {
         });
         if !is_origin_allowed(origin) {
             tracing::warn!("E2: /pair rejected — disallowed Origin {:?}", origin);
-            let response =
-                b"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
-            let _ = stream.write_all(response).await;
-            let _ = stream.shutdown().await;
+            Self::write_http(&mut stream, "403 Forbidden", "text/plain", "Forbidden").await;
             return;
         }
 
+        match path_no_query {
+            "/pair/request" => {
+                Self::handle_pair_request_route(&mut stream, header_section, &state).await
+            }
+            "/pair/confirm" => {
+                Self::handle_pair_confirm_route(&mut stream, header_section, &state, install).await
+            }
+            _ => Self::handle_pair_legacy_route(&mut stream, header_section, &state, install).await,
+        }
+    }
+
+    async fn handle_pair_request_route(
+        stream: &mut TcpStream,
+        header_section: &str,
+        state: &PairEndpointState,
+    ) {
+        let extension_id = match parse_pair_extension_id(header_section) {
+            Ok(Some(extension_id)) => extension_id,
+            Ok(None) => {
+                Self::write_http(
+                    stream,
+                    "400 Bad Request",
+                    "text/plain",
+                    "extensionId is required",
+                )
+                .await;
+                return;
+            }
+            Err(error) => {
+                Self::write_http(stream, "400 Bad Request", "text/plain", &error).await;
+                return;
+            }
+        };
+
+        let prompt = match open_pair_request(&state.pending, extension_id).await {
+            Ok(prompt) => prompt,
+            Err(error) => {
+                Self::write_http(stream, "429 Too Many Requests", "text/plain", &error).await;
+                return;
+            }
+        };
+
+        if let Some(app_handle) = state.app_handle.as_ref() {
+            let _ = app_handle.emit("bridge:pair-request", &prompt);
+        }
+
+        tracing::info!(
+            "SEC-11: /pair/request parked a confirmation code for extension {} (request {})",
+            prompt.extension_id,
+            prompt.request_id
+        );
+
+        // The code is deliberately absent: it reaches the user through the
+        // Desktop UI only, so reaching this port is not enough to pair.
+        let body = serde_json::json!({
+            "requestId": prompt.request_id,
+            "expiresInMs": prompt.expires_in_ms,
+            "codeLength": PAIR_CODE_LEN,
+        })
+        .to_string();
+        Self::write_http_json(stream, "200 OK", &body).await;
+    }
+
+    async fn handle_pair_confirm_route<F>(
+        stream: &mut TcpStream,
+        header_section: &str,
+        state: &PairEndpointState,
+        install: F,
+    ) where
+        F: Fn(Option<&str>) -> Result<usize, String>,
+    {
+        let body = match http_request_body(header_section) {
+            Ok(body) => body,
+            Err(error) => {
+                Self::write_http(stream, "400 Bad Request", "text/plain", &error).await;
+                return;
+            }
+        };
+
+        let parsed: PairConfirmBody = match serde_json::from_str(body) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                let message = format!("Invalid pairing JSON: {}", error);
+                Self::write_http(stream, "400 Bad Request", "text/plain", &message).await;
+                return;
+            }
+        };
+
+        let (Some(request_id), Some(code)) = (parsed.request_id, parsed.code) else {
+            Self::write_http(
+                stream,
+                "400 Bad Request",
+                "text/plain",
+                "requestId and code are required",
+            )
+            .await;
+            return;
+        };
+
+        let extension_id =
+            match take_confirmed_pair_request(&state.pending, request_id.trim(), &code).await {
+                Ok(extension_id) => extension_id,
+                Err(error) => {
+                    tracing::warn!("SEC-11: /pair/confirm rejected — {}", error);
+                    Self::write_http(stream, "401 Unauthorized", "text/plain", &error).await;
+                    return;
+                }
+            };
+
+        match install(Some(&extension_id)) {
+            Ok(installed_locations) => {
+                tracing::info!(
+                    "SEC-11: /pair/confirm installed the native messaging manifest for extension {} at {} location(s)",
+                    extension_id,
+                    installed_locations
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    "SEC-11: /pair/confirm could not install the manifest for extension {}: {}",
+                    extension_id,
+                    error
+                );
+                Self::write_http(
+                    stream,
+                    "500 Internal Server Error",
+                    "text/plain",
+                    "Could not install the native messaging manifest",
+                )
+                .await;
+                return;
+            }
+        }
+
+        let new_token = random_hex(32);
+        let fingerprint = new_token[..8].to_string();
+        *state.pair_token.write().await = new_token.clone();
+
+        if let Some(app_handle) = state.app_handle.as_ref() {
+            let _ = app_handle.emit("bridge:pair-request-confirmed", &request_id);
+        }
+
+        let body = serde_json::json!({
+            "token": new_token,
+            "fingerprint": fingerprint,
+            "nativeHostManifestInstalled": true,
+        })
+        .to_string();
+        Self::write_http_json(stream, "200 OK", &body).await;
+    }
+
+    async fn handle_pair_legacy_route<F>(
+        stream: &mut TcpStream,
+        header_section: &str,
+        state: &PairEndpointState,
+        install: F,
+    ) where
+        F: Fn(Option<&str>) -> Result<usize, String>,
+    {
         let extension_id = match parse_pair_extension_id(header_section) {
             Ok(extension_id) => extension_id,
             Err(error) => {
-                let response = format!(
-                    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    error.len(),
-                    error
-                );
-                let _ = stream.write_all(response.as_bytes()).await;
-                let _ = stream.shutdown().await;
+                Self::write_http(stream, "400 Bad Request", "text/plain", &error).await;
                 return;
             }
         };
 
         if extension_id.is_some() {
-            let existing_pair_token = pair_token.read().await.clone();
-            if !is_pair_manifest_install_authorized(header_section, &existing_pair_token) {
-                let body = "Unauthorized manifest install";
-                let response = format!(
-                    "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    body.len(),
-                    body
+            let local_bridge_secret = state.bridge_token.read().await.clone();
+            if !is_pair_manifest_install_authorized(header_section, &local_bridge_secret) {
+                tracing::warn!(
+                    "SEC-11: /pair manifest install rejected — X-Bridge-Token did not match the desktop bridge secret"
                 );
-                let _ = stream.write_all(response.as_bytes()).await;
-                let _ = stream.shutdown().await;
+                Self::write_http(
+                    stream,
+                    "401 Unauthorized",
+                    "text/plain",
+                    "Unauthorized manifest install",
+                )
+                .await;
                 return;
             }
         }
 
         let native_host_manifest_installed = if let Some(extension_id) = extension_id.as_deref() {
-            match install_manifests(Some(extension_id)) {
-                Ok(paths) => {
+            match install(Some(extension_id)) {
+                Ok(installed_locations) => {
                     tracing::info!(
                         "E2: /pair refreshed native messaging manifest for extension {} at {} location(s)",
                         extension_id,
-                        paths.len()
+                        installed_locations
                     );
                     true
                 }
@@ -623,17 +1004,10 @@ impl RealtimeServer {
             false
         };
 
-        // Generate a 32-byte (64 hex chars) cryptographically random token.
-        let new_token = {
-            use rand::RngCore;
-            let mut bytes = [0u8; 32];
-            rand::thread_rng().fill_bytes(&mut bytes);
-            hex::encode(bytes)
-        };
+        let new_token = random_hex(32);
         let fingerprint = new_token[..8].to_string();
 
-        // Store (rotate) the pair token.
-        *pair_token.write().await = new_token.clone();
+        *state.pair_token.write().await = new_token.clone();
 
         tracing::info!(
             "E2: /pair issued new token with fingerprint {}",
@@ -646,14 +1020,7 @@ impl RealtimeServer {
             "nativeHostManifestInstalled": native_host_manifest_installed,
         })
         .to_string();
-
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
-            body.len(),
-            body
-        );
-        let _ = stream.write_all(response.as_bytes()).await;
-        let _ = stream.shutdown().await;
+        Self::write_http_json(stream, "200 OK", &body).await;
     }
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -2056,15 +2423,112 @@ mod tests {
 
     /// Spawn handle_http_pair on a fresh loopback listener; return (addr, pair_token_arc).
     async fn spawn_pair_handler() -> (SocketAddr, Arc<TokioRwLock<String>>) {
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let bridge_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let (addr, _installs) = spawn_pair_handler_with(pair_token.clone(), bridge_token).await;
+        (addr, pair_token)
+    }
+
+    fn new_pending_pair_requests() -> PendingPairRequests {
+        Arc::new(TokioMutex::new(HashMap::new()))
+    }
+
+    fn pair_endpoint_state(
+        pair_token: Arc<TokioRwLock<String>>,
+        bridge_token: Arc<TokioRwLock<String>>,
+        pending: PendingPairRequests,
+    ) -> PairEndpointState {
+        PairEndpointState {
+            pair_token,
+            bridge_token,
+            pending,
+            app_handle: None,
+        }
+    }
+
+    /// Spawn one handler bound to caller-owned pending-request state so a test
+    /// can read the code exactly where the Desktop UI reads it.
+    async fn spawn_handshake_handler(
+        pair_token: Arc<TokioRwLock<String>>,
+        pending: PendingPairRequests,
+    ) -> (SocketAddr, InstallLog) {
+        let state = pair_endpoint_state(
+            pair_token,
+            Arc::new(TokioRwLock::new("desktop-bridge-secret".to_string())),
+            pending,
+        );
+        spawn_pair_handler_state(state).await
+    }
+
+    async fn spawn_pair_handler_state(state: PairEndpointState) -> (SocketAddr, InstallLog) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
-        let pair_token_clone = pair_token.clone();
+        let installs: InstallLog = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorder = installs.clone();
         tokio::spawn(async move {
             let (stream, peer) = listener.accept().await.unwrap();
-            RealtimeServer::handle_http_pair(stream, peer, pair_token_clone).await;
+            RealtimeServer::handle_http_pair_with(stream, peer, state, move |extension_id| {
+                recorder
+                    .lock()
+                    .unwrap()
+                    .push(extension_id.unwrap_or_default().to_string());
+                Ok(1)
+            })
+            .await;
         });
-        (addr, pair_token)
+        (addr, installs)
+    }
+
+    async fn read_displayed_code(pending: &PendingPairRequests, request_id: &str) -> String {
+        pending
+            .lock()
+            .await
+            .get(request_id)
+            .expect("desktop must hold the pending request")
+            .code
+            .clone()
+    }
+
+    fn json_body(response: &str) -> serde_json::Value {
+        serde_json::from_str(&response[response.find("\r\n\r\n").unwrap() + 4..]).unwrap()
+    }
+
+    fn pair_request_http(extension_id: &str) -> String {
+        let body = format!(r#"{{"extensionId":"{extension_id}"}}"#);
+        format!(
+            "POST /pair/request HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )
+    }
+
+    fn pair_confirm_http(request_id: &str, code: &str) -> String {
+        let body = format!(r#"{{"requestId":"{request_id}","code":"{code}"}}"#);
+        format!(
+            "POST /pair/confirm HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )
+    }
+
+    /// Extension ids handed to the manifest installer by one /pair request.
+    type InstallLog = Arc<std::sync::Mutex<Vec<String>>>;
+
+    const TEST_EXTENSION_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    /// Spawn handle_http_pair against caller-supplied pair/bridge token state,
+    /// recording every manifest install the handler authorizes instead of
+    /// writing real native-messaging manifests.
+    async fn spawn_pair_handler_with(
+        pair_token: Arc<TokioRwLock<String>>,
+        bridge_token: Arc<TokioRwLock<String>>,
+    ) -> (SocketAddr, InstallLog) {
+        spawn_pair_handler_state(pair_endpoint_state(
+            pair_token,
+            bridge_token,
+            new_pending_pair_requests(),
+        ))
+        .await
     }
 
     #[tokio::test]
@@ -2138,13 +2602,11 @@ mod tests {
         let token1 = b1["token"].as_str().unwrap().to_string();
 
         // Second call on a new handler sharing the same pair_token arc
-        let listener2 = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr2 = listener2.local_addr().unwrap();
-        let pair_token2 = pair_token1.clone();
-        tokio::spawn(async move {
-            let (stream, peer) = listener2.accept().await.unwrap();
-            RealtimeServer::handle_http_pair(stream, peer, pair_token2).await;
-        });
+        let (addr2, _installs) = spawn_pair_handler_with(
+            pair_token1.clone(),
+            Arc::new(TokioRwLock::new(String::new())),
+        )
+        .await;
         let resp2 = send_http(
             addr2,
             "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
@@ -2199,6 +2661,428 @@ mod tests {
         );
     }
 
+    fn manifest_install_request(extension_id: &str, bridge_token: Option<&str>) -> String {
+        let body = format!(r#"{{"extensionId":"{extension_id}"}}"#);
+        let authorization = bridge_token
+            .map(|token| format!("X-Bridge-Token: {token}\r\n"))
+            .unwrap_or_default();
+        format!(
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n{}Content-Length: {}\r\n\r\n{}",
+            authorization,
+            body.len(),
+            body
+        )
+    }
+
+    async fn mint_pair_token(pair_token: Arc<TokioRwLock<String>>, bridge_token: &str) -> String {
+        let (addr, _installs) = spawn_pair_handler_with(
+            pair_token,
+            Arc::new(TokioRwLock::new(bridge_token.to_string())),
+        )
+        .await;
+        let resp = send_http(
+            addr,
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
+        let resp = String::from_utf8_lossy(&resp);
+        assert!(resp.starts_with("HTTP/1.1 200"), "bootstrap failed: {resp}");
+        let body: serde_json::Value =
+            serde_json::from_str(&resp[resp.find("\r\n\r\n").unwrap() + 4..]).unwrap();
+        body["token"].as_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn pair_minted_token_cannot_authorize_manifest_install() {
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let bridge_token: Arc<TokioRwLock<String>> =
+            Arc::new(TokioRwLock::new("desktop-bridge-secret".to_string()));
+
+        let minted = mint_pair_token(pair_token.clone(), "desktop-bridge-secret").await;
+        assert_eq!(*pair_token.read().await, minted);
+
+        let (addr, installs) =
+            spawn_pair_handler_with(pair_token.clone(), bridge_token.clone()).await;
+        let resp = send_http(
+            addr,
+            &manifest_install_request("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Some(&minted)),
+        )
+        .await;
+        let resp = String::from_utf8_lossy(&resp);
+
+        assert!(
+            resp.starts_with("HTTP/1.1 401"),
+            "a token minted by /pair must not authorize a manifest install, got: {resp}"
+        );
+        assert!(
+            installs.lock().unwrap().is_empty(),
+            "rejected request must never reach install_manifests"
+        );
+        assert_eq!(
+            *pair_token.read().await,
+            minted,
+            "rejected install must not rotate the pair token"
+        );
+    }
+
+    #[tokio::test]
+    async fn pair_manifest_install_accepts_the_desktop_bridge_secret() {
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let bridge_token: Arc<TokioRwLock<String>> =
+            Arc::new(TokioRwLock::new("desktop-bridge-secret".to_string()));
+
+        let (addr, installs) = spawn_pair_handler_with(pair_token, bridge_token).await;
+        let resp = send_http(
+            addr,
+            &manifest_install_request(
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                Some("desktop-bridge-secret"),
+            ),
+        )
+        .await;
+        let resp = String::from_utf8_lossy(&resp);
+
+        assert!(
+            resp.starts_with("HTTP/1.1 200"),
+            "expected 200, got: {resp}"
+        );
+        assert_eq!(
+            *installs.lock().unwrap(),
+            vec!["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()]
+        );
+    }
+
+    // ── SEC-11 handshake: Desktop-displayed, user-confirmed code ─────────────
+
+    #[tokio::test]
+    async fn pair_request_hands_back_only_an_opaque_request_id() {
+        let pending = new_pending_pair_requests();
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let (addr, installs) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+
+        let response = send_http(addr, &pair_request_http(TEST_EXTENSION_ID)).await;
+        let response = String::from_utf8_lossy(&response);
+        assert!(
+            response.starts_with("HTTP/1.1 200"),
+            "expected 200, got: {response}"
+        );
+
+        let body = json_body(&response);
+        let request_id = body["requestId"].as_str().unwrap().to_string();
+        let code = read_displayed_code(&pending, &request_id).await;
+
+        assert!(body.get("code").is_none(), "response must not carry the code");
+        assert!(
+            !response.contains(&code),
+            "the confirmation code must never appear on the HTTP channel"
+        );
+        assert!(
+            installs.lock().unwrap().is_empty(),
+            "/pair/request must not install anything"
+        );
+        assert!(
+            pair_token.read().await.is_empty(),
+            "/pair/request must not mint a bridge token"
+        );
+    }
+
+    #[tokio::test]
+    async fn pair_confirm_with_the_code_the_desktop_displayed_installs_and_mints() {
+        let pending = new_pending_pair_requests();
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+
+        let (addr, _) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let requested = send_http(addr, &pair_request_http(TEST_EXTENSION_ID)).await;
+        let request_id = json_body(&String::from_utf8_lossy(&requested))["requestId"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let code = read_displayed_code(&pending, &request_id).await;
+
+        let (addr, installs) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let response = send_http(addr, &pair_confirm_http(&request_id, &code)).await;
+        let response = String::from_utf8_lossy(&response);
+        assert!(
+            response.starts_with("HTTP/1.1 200"),
+            "expected 200, got: {response}"
+        );
+
+        let body = json_body(&response);
+        let token = body["token"].as_str().unwrap();
+        assert_eq!(token.len(), 64);
+        assert_eq!(body["fingerprint"].as_str().unwrap(), &token[..8]);
+        assert_eq!(body["nativeHostManifestInstalled"], serde_json::json!(true));
+        assert_eq!(
+            *installs.lock().unwrap(),
+            vec![TEST_EXTENSION_ID.to_string()]
+        );
+        assert_eq!(*pair_token.read().await, token);
+    }
+
+    /// The security property: the code travels Desktop → human → extension,
+    /// never over HTTP. A caller that reaches the loopback port but cannot see
+    /// the Desktop screen holds the request id and nothing else, so it cannot
+    /// confirm — and its guesses are exhausted long before the code space is.
+    #[tokio::test]
+    async fn pair_confirm_refuses_a_caller_that_cannot_see_the_desktop_screen() {
+        let pending = new_pending_pair_requests();
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+
+        let (addr, _) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let requested = send_http(addr, &pair_request_http(TEST_EXTENSION_ID)).await;
+        let requested = String::from_utf8_lossy(&requested).to_string();
+        let request_id = json_body(&requested)["requestId"].as_str().unwrap().to_string();
+
+        let displayed_code = read_displayed_code(&pending, &request_id).await;
+
+        let mut attempts: Vec<String> = json_body(&requested)
+            .as_object()
+            .unwrap()
+            .values()
+            .filter_map(|value| value.as_str())
+            .map(normalize_pair_code)
+            .filter(|candidate| candidate.len() == PAIR_CODE_LEN)
+            .collect();
+        attempts.push("AAAAAAAA".to_string());
+        attempts.push("BBBBBBBB".to_string());
+        attempts.push("CCCCCCCC".to_string());
+        attempts.truncate(MAX_PAIR_CONFIRM_ATTEMPTS as usize);
+
+        for attempt in &attempts {
+            let (addr, installs) =
+                spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+            let response = send_http(addr, &pair_confirm_http(&request_id, attempt)).await;
+            let response = String::from_utf8_lossy(&response);
+            assert!(
+                response.starts_with("HTTP/1.1 401"),
+                "a caller with only the HTTP response must not confirm, got: {response}"
+            );
+            assert!(
+                installs.lock().unwrap().is_empty(),
+                "a rejected confirm must never reach install_manifests"
+            );
+        }
+
+        assert!(
+            !requested.contains(&displayed_code),
+            "the code must not be recoverable from the /pair/request response"
+        );
+
+        let (addr, installs) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let response = send_http(addr, &pair_confirm_http(&request_id, &displayed_code)).await;
+        let response = String::from_utf8_lossy(&response);
+        assert!(
+            response.starts_with("HTTP/1.1 401"),
+            "the request must be burned after {MAX_PAIR_CONFIRM_ATTEMPTS} wrong codes, got: {response}"
+        );
+        assert!(installs.lock().unwrap().is_empty());
+        assert!(
+            pair_token.read().await.is_empty(),
+            "no token may be minted without the displayed code"
+        );
+    }
+
+    #[tokio::test]
+    async fn pair_confirm_is_single_use() {
+        let pending = new_pending_pair_requests();
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+
+        let (addr, _) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let requested = send_http(addr, &pair_request_http(TEST_EXTENSION_ID)).await;
+        let request_id = json_body(&String::from_utf8_lossy(&requested))["requestId"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let code = read_displayed_code(&pending, &request_id).await;
+
+        let (addr, _) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let first = send_http(addr, &pair_confirm_http(&request_id, &code)).await;
+        assert!(String::from_utf8_lossy(&first).starts_with("HTTP/1.1 200"));
+        let minted = pair_token.read().await.clone();
+
+        let (addr, installs) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let replay = send_http(addr, &pair_confirm_http(&request_id, &code)).await;
+        let replay = String::from_utf8_lossy(&replay);
+
+        assert!(
+            replay.starts_with("HTTP/1.1 401"),
+            "a confirmed code must not be replayable, got: {replay}"
+        );
+        assert!(installs.lock().unwrap().is_empty());
+        assert_eq!(*pair_token.read().await, minted);
+    }
+
+    #[tokio::test]
+    async fn pair_confirm_rejects_an_expired_request() {
+        let pending = new_pending_pair_requests();
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let expired_at = Instant::now()
+            .checked_sub(PAIR_REQUEST_TTL + Duration::from_secs(1))
+            .expect("clock must support the TTL window");
+
+        pending.lock().await.insert(
+            "expired-request".to_string(),
+            PendingPairRequest {
+                extension_id: TEST_EXTENSION_ID.to_string(),
+                code: "ABCDEFGH".to_string(),
+                created_at: expired_at,
+                failed_attempts: 0,
+            },
+        );
+
+        let (addr, installs) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let response = send_http(addr, &pair_confirm_http("expired-request", "ABCDEFGH")).await;
+        let response = String::from_utf8_lossy(&response);
+
+        assert!(
+            response.starts_with("HTTP/1.1 401"),
+            "expected 401, got: {response}"
+        );
+        assert!(installs.lock().unwrap().is_empty());
+        assert!(pair_token.read().await.is_empty());
+        assert!(pending.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn pair_confirm_accepts_the_code_as_the_user_would_type_it() {
+        let pending = new_pending_pair_requests();
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+
+        let (addr, _) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
+        let requested = send_http(addr, &pair_request_http(TEST_EXTENSION_ID)).await;
+        let request_id = json_body(&String::from_utf8_lossy(&requested))["requestId"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let code = read_displayed_code(&pending, &request_id).await;
+        let typed = format!("{}-{}", &code[..4], &code[4..]).to_lowercase();
+
+        let (addr, installs) = spawn_handshake_handler(pair_token, pending).await;
+        let response = send_http(addr, &pair_confirm_http(&request_id, &typed)).await;
+        let response = String::from_utf8_lossy(&response);
+
+        assert!(
+            response.starts_with("HTTP/1.1 200"),
+            "dashes and lower case must normalize, got: {response}"
+        );
+        assert_eq!(
+            *installs.lock().unwrap(),
+            vec![TEST_EXTENSION_ID.to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn pair_request_requires_a_valid_extension_id() {
+        let pending = new_pending_pair_requests();
+        let (addr, installs) =
+            spawn_handshake_handler(Arc::new(TokioRwLock::new(String::new())), pending.clone())
+                .await;
+
+        let response = send_http(
+            addr,
+            "POST /pair/request HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n",
+        )
+        .await;
+        let response = String::from_utf8_lossy(&response);
+
+        assert!(
+            response.starts_with("HTTP/1.1 400"),
+            "expected 400, got: {response}"
+        );
+        assert!(pending.lock().await.is_empty());
+        assert!(installs.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn pair_confirm_without_a_prior_request_is_rejected() {
+        let pair_token: Arc<TokioRwLock<String>> = Arc::new(TokioRwLock::new(String::new()));
+        let (addr, installs) =
+            spawn_handshake_handler(pair_token.clone(), new_pending_pair_requests()).await;
+
+        let response = send_http(addr, &pair_confirm_http("deadbeef", "ABCDEFGH")).await;
+        let response = String::from_utf8_lossy(&response);
+
+        assert!(
+            response.starts_with("HTTP/1.1 401"),
+            "expected 401, got: {response}"
+        );
+        assert!(installs.lock().unwrap().is_empty());
+        assert!(pair_token.read().await.is_empty());
+    }
+
+    #[test]
+    fn pair_code_uses_an_unambiguous_alphabet() {
+        assert!(
+            !PAIR_CODE_ALPHABET.iter().any(|c| b"IO01".contains(c)),
+            "the alphabet must not pair I/1 or O/0"
+        );
+        assert!(
+            PAIR_CODE_ALPHABET.len().is_power_of_two(),
+            "a non power-of-two alphabet biases the modulo draw"
+        );
+
+        for _ in 0..64 {
+            let code = generate_pair_code();
+            assert_eq!(code.len(), PAIR_CODE_LEN);
+            assert!(
+                code.chars().all(|c| PAIR_CODE_ALPHABET.contains(&(c as u8))),
+                "code {code} left the alphabet"
+            );
+        }
+    }
+
+    #[test]
+    fn pair_code_normalization_strips_formatting_only() {
+        assert_eq!(normalize_pair_code(" ab3d-ef4h "), "AB3DEF4H");
+        assert_eq!(normalize_pair_code("AB3DEF4H"), "AB3DEF4H");
+        assert!(pair_code_matches(&normalize_pair_code("ab3d ef4h"), "AB3DEF4H"));
+        assert!(!pair_code_matches(&normalize_pair_code("ab3def4"), "AB3DEF4H"));
+    }
+
+    #[tokio::test]
+    async fn pending_pair_requests_expose_the_code_to_the_desktop_ui() {
+        let database = Arc::new(TokioMutex::new(
+            rusqlite::Connection::open_in_memory().expect("in-memory presence database"),
+        ));
+        let server = RealtimeServer::new(
+            Arc::new(PresenceManager::new(database)),
+            Arc::new(TokioRwLock::new(String::new())),
+            None,
+        );
+
+        let prompt = open_pair_request(
+            &server.pending_pair_requests,
+            TEST_EXTENSION_ID.to_string(),
+        )
+        .await
+        .unwrap();
+
+        let prompts = server.pending_pair_requests().await;
+        assert_eq!(prompts.len(), 1);
+        assert_eq!(prompts[0].request_id, prompt.request_id);
+        assert_eq!(prompts[0].extension_id, TEST_EXTENSION_ID);
+        assert_eq!(prompts[0].code, prompt.code);
+        assert!(prompts[0].expires_in_ms > 0);
+
+        assert!(server.cancel_pair_request(&prompt.request_id).await);
+        assert!(server.pending_pair_requests().await.is_empty());
+        assert!(!server.cancel_pair_request(&prompt.request_id).await);
+    }
+
+    #[tokio::test]
+    async fn pending_pair_requests_are_capped() {
+        let pending = new_pending_pair_requests();
+        for _ in 0..MAX_PENDING_PAIR_REQUESTS {
+            open_pair_request(&pending, TEST_EXTENSION_ID.to_string())
+                .await
+                .unwrap();
+        }
+        assert!(open_pair_request(&pending, TEST_EXTENSION_ID.to_string())
+            .await
+            .is_err());
+    }
+
     #[test]
     fn pair_manifest_install_auth_accepts_matching_bridge_token() {
         let request = "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Bridge-Token: secret-token\r\nContent-Length: 0\r\n\r\n";
@@ -2222,7 +3106,16 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _real_peer) = listener.accept().await.unwrap();
             let fake_peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 54321);
-            RealtimeServer::handle_http_pair(stream, fake_peer, pair_token_clone).await;
+            RealtimeServer::handle_http_pair(
+                stream,
+                fake_peer,
+                pair_endpoint_state(
+                    pair_token_clone,
+                    Arc::new(TokioRwLock::new(String::new())),
+                    new_pending_pair_requests(),
+                ),
+            )
+            .await;
         });
 
         let mut client = tokio::net::TcpStream::connect(addr).await.unwrap();

@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -12,6 +11,20 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+type MemoryRow = UserMemoryRow & { pinned: boolean };
+
+function serializeMemory(row: MemoryRow) {
+  return {
+    id: row.id,
+    content: row.content,
+    category: row.category,
+    source: row.source,
+    pinned: row.pinned,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 async function handleGetMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -20,8 +33,8 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
   const db = getNeonDb();
   const { id } = await context.params;
 
-  const [data] = await db.query<UserMemoryRow>(
-    `select id, content, category, source, created_at, updated_at
+  const [data] = await db.query<MemoryRow>(
+    `select id, content, category, source, pinned, created_at, updated_at
      from user_memories
      where id = $1 and user_id = $2 and is_deleted = false
      limit 1`,
@@ -32,16 +45,7 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
     throw createError.notFound('Memory not found');
   }
 
-  return NextResponse.json({
-    memory: {
-      id: data.id,
-      content: data.content,
-      category: data.category,
-      source: data.source,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    },
-  });
+  return NextResponse.json({ memory: serializeMemory(data) });
 }
 
 async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
@@ -55,43 +59,54 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
   const db = getNeonDb();
   const { id } = await context.params;
 
-  let body: { content?: string };
+  let body: { content?: string; pinned?: boolean };
   try {
     body = await request.json();
   } catch {
     throw createError.validation('Invalid request body');
   }
 
-  if (!body.content || typeof body.content !== 'string' || body.content.trim().length === 0) {
-    throw createError.validation('Content is required');
+  if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
+    throw createError.validation('pinned must be a boolean');
   }
 
-  if (body.content.length > 10_000) {
-    throw createError.validation('Content must be 10,000 characters or less');
+  const togglesPin = typeof body.pinned === 'boolean';
+  const editsContent = body.content !== undefined || !togglesPin;
+
+  const assignments: string[] = [];
+  const params: unknown[] = [];
+
+  if (editsContent) {
+    if (!body.content || typeof body.content !== 'string' || body.content.trim().length === 0) {
+      throw createError.validation('Content is required');
+    }
+    if (body.content.length > 10_000) {
+      throw createError.validation('Content must be 10,000 characters or less');
+    }
+    params.push(body.content.trim());
+    assignments.push(`content = $${params.length}`);
   }
 
-  const [data] = await db.query<UserMemoryRow>(
+  if (togglesPin) {
+    params.push(body.pinned);
+    assignments.push(`pinned = $${params.length}`);
+  }
+
+  params.push(id, userId);
+
+  const [data] = await db.query<MemoryRow>(
     `update user_memories
-     set content = $1, updated_at = now()
-     where id = $2 and user_id = $3 and is_deleted = false
-     returning *`,
-    [body.content.trim(), id, userId],
+     set ${assignments.join(', ')}, updated_at = now()
+     where id = $${params.length - 1} and user_id = $${params.length} and is_deleted = false
+     returning id, content, category, source, pinned, created_at, updated_at`,
+    params,
   );
 
   if (!data) {
     throw createError.notFound('Memory not found');
   }
 
-  return NextResponse.json({
-    memory: {
-      id: data.id,
-      content: data.content,
-      category: data.category,
-      source: data.source,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
-    },
-  });
+  return NextResponse.json({ memory: serializeMemory(data) });
 }
 
 async function handleDeleteMemory(request: NextRequest, context: RouteContext) {

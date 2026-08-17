@@ -57,25 +57,40 @@ describe('schedule cadence floor', () => {
   });
 
   it('rejects a cron that fires more often than the deployed sweep', () => {
-    for (const expression of ['*/5 * * * *', '*/30 * * * *']) {
-      expect(() =>
-        assertDeliverableCadence(
-          { scheduleType: 'cron', cronExpression: expression, timezone: 'UTC' },
-          new Date('2026-07-26T00:00:00Z'),
-        ),
-      ).toThrow(/cannot fire more often/);
-    }
+    const tooOften = SWEEP_INTERVAL_MS / 60_000 > 5 ? '*/5 * * * *' : '* * * * *';
+    expect(() =>
+      assertDeliverableCadence(
+        { scheduleType: 'cron', cronExpression: tooOften, timezone: 'UTC' },
+        new Date('2026-07-26T00:00:00Z'),
+      ),
+    ).toThrow(/cannot fire more often/);
   });
 
-  it('rejects hourly and twice-daily crons while the deployed sweep is daily', () => {
-    for (const expression of ['0 * * * *', '0 0,12 * * *']) {
-      expect(() =>
-        assertDeliverableCadence(
-          { scheduleType: 'cron', cronExpression: expression, timezone: 'UTC' },
-          new Date('2026-07-26T00:00:00Z'),
-        ),
-      ).toThrow(/cannot fire more often/);
-    }
+  it('accepts a cron exactly at the deployed sweep and rejects one just under it', () => {
+    const sweepMinutes = SWEEP_INTERVAL_MS / 60_000;
+    expect(sweepMinutes).toBeLessThanOrEqual(60);
+
+    expect(() =>
+      assertDeliverableCadence(
+        {
+          scheduleType: 'cron',
+          cronExpression: `*/${sweepMinutes} * * * *`,
+          timezone: 'UTC',
+        },
+        new Date('2026-07-26T00:00:00Z'),
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      assertDeliverableCadence(
+        {
+          scheduleType: 'cron',
+          cronExpression: `*/${Math.max(1, Math.floor(sweepMinutes / 2))} * * * *`,
+          timezone: 'UTC',
+        },
+        new Date('2026-07-26T00:00:00Z'),
+      ),
+    ).toThrow(/cannot fire more often/);
   });
 
   it('accepts daily, weekly, and monthly crons', () => {

@@ -51,7 +51,7 @@ export function ChatTopBar({
   };
 
   return (
-    <div className="flex items-center justify-between border-b border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+    <div className="flex items-center justify-between border-b border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4">
       {/* Left Section */}
       <div className="flex items-center space-x-4">
         {/* Back Button */}
@@ -60,7 +60,7 @@ export function ChatTopBar({
             variant="ghost"
             size="sm"
             onClick={onRestoreCheckpoint}
-            className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+            className="text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]"
           >
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back
@@ -88,7 +88,7 @@ export function ChatTopBar({
             </div>
           ) : (
             <div className="flex items-center space-x-2">
-              <h1 className="max-w-xs truncate text-lg font-semibold text-gray-900 dark:text-white">
+              <h1 className="max-w-xs truncate text-lg font-semibold text-[var(--chat-text-primary)]">
                 {sessionTitle}
               </h1>
               <Button
@@ -120,7 +120,7 @@ export function ChatTopBar({
           variant="ghost"
           size="sm"
           onClick={() => window.open('https://docs.mgx.dev/', '_blank')}
-          className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+          className="text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]"
         >
           <HelpCircle className="mr-1 h-4 w-4" />
           Docs
@@ -130,7 +130,7 @@ export function ChatTopBar({
         <Button
           variant="ghost"
           size="sm"
-          className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+          className="text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]"
         >
           <Settings className="h-4 w-4" />
         </Button>
@@ -138,7 +138,7 @@ export function ChatTopBar({
         {/* Dashboard Button */}
         <Button
           onClick={onNavigateToDashboard}
-          className="bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600"
+          className="bg-[var(--chat-accent-primary)] text-[var(--chat-accent-primary-contrast)] hover:opacity-90"
         >
           <BarChart3 className="mr-2 h-4 w-4" />
           Dashboard

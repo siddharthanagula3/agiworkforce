@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockExecute, mockEraseUserAccountData, mockDeleteUser } = vi.hoisted(() => ({
-  mockExecute: vi.fn(),
-  mockEraseUserAccountData: vi.fn(),
-  mockDeleteUser: vi.fn(),
-}));
+const { mockExecute, mockEraseUserAccountData, mockDeleteUser, mockGetSubscription } = vi.hoisted(
+  () => ({
+    mockExecute: vi.fn(),
+    mockEraseUserAccountData: vi.fn(),
+    mockDeleteUser: vi.fn(),
+    mockGetSubscription: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
@@ -51,6 +54,12 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(async () => ({ users: { deleteUser: mockDeleteUser } })),
 }));
 
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: {
+    getSubscription: (...args: unknown[]) => mockGetSubscription(...args),
+  },
+}));
+
 import { DELETE } from '../route';
 
 function deleteRequest() {
@@ -72,11 +81,27 @@ const completeErasure = {
   complete: true,
 };
 
+function subscription(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sub_row_1',
+    user_id: 'user_deleting',
+    plan_tier: 'pro',
+    status: 'active',
+    current_period_start: new Date('2026-08-01T00:00:00.000Z'),
+    current_period_end: new Date('2026-09-01T00:00:00.000Z'),
+    cancel_at_period_end: false,
+    stripe_subscription_id: null,
+    stripe_price_id: null,
+    ...overrides,
+  };
+}
+
 describe('DELETE /api/user/delete-account', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEraseUserAccountData.mockResolvedValue(completeErasure);
     mockDeleteUser.mockResolvedValue(undefined);
+    mockGetSubscription.mockResolvedValue(null);
   });
 
   it('schedules deletion when the update touches the profile row', async () => {
@@ -137,6 +162,63 @@ describe('DELETE /api/user/delete-account', () => {
 
     expect(response.status).toBe(500);
     expect(body.scheduledFor).toBeUndefined();
+    expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+    expect(mockDeleteUser).not.toHaveBeenCalled();
+  });
+
+  it.each(['active', 'trialing', 'past_due'])(
+    'refuses deletion with 409 while a paid subscription is %s',
+    async (status) => {
+      mockExecute.mockResolvedValue(1);
+      mockGetSubscription.mockResolvedValue(subscription({ status }));
+
+      const response = await DELETE(deleteRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(body.reason).toBe('active_subscription');
+      expect(body.error).toMatch(/cancel/i);
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+      expect(mockDeleteUser).not.toHaveBeenCalled();
+    },
+  );
+
+  it('tells a user whose plan is already cancelled when it ends instead of asking again', async () => {
+    mockGetSubscription.mockResolvedValue(subscription({ cancel_at_period_end: true }));
+
+    const response = await DELETE(deleteRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.cancelAtPeriodEnd).toBe(true);
+    expect(body.error).toContain('2026-09-01');
+  });
+
+  it.each([
+    ['no subscription row', null],
+    ['a free plan', subscription({ plan_tier: 'free' })],
+    ['a canceled paid plan', subscription({ status: 'canceled' })],
+  ])('schedules deletion for %s', async (_label, sub) => {
+    mockExecute.mockResolvedValue(1);
+    mockGetSubscription.mockResolvedValue(sub);
+
+    const response = await DELETE(deleteRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.scheduledFor).toBeTruthy();
+  });
+
+  it('does not delete anything when the subscription lookup fails', async () => {
+    mockGetSubscription.mockRejectedValue(new Error('connection terminated'));
+
+    const response = await DELETE(deleteRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toMatch(/nothing was deleted/i);
+    expect(mockExecute).not.toHaveBeenCalled();
     expect(mockEraseUserAccountData).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
   });

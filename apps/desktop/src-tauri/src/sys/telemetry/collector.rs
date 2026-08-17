@@ -1,3 +1,4 @@
+use super::consent::{process_consent, TelemetryConsent};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -63,6 +64,7 @@ impl Default for CollectorConfig {
 
 pub struct TelemetryCollector {
     config: CollectorConfig,
+    consent: TelemetryConsent,
     events: Arc<RwLock<Vec<TelemetryEvent>>>,
     session_id: String,
     user_id: Arc<RwLock<Option<String>>>,
@@ -70,14 +72,40 @@ pub struct TelemetryCollector {
 
 impl TelemetryCollector {
     pub fn new(config: CollectorConfig) -> Self {
+        Self::with_consent(config, process_consent())
+    }
+
+    pub fn with_consent(config: CollectorConfig, consent: TelemetryConsent) -> Self {
         let session_id = Uuid::new_v4().to_string();
 
         Self {
             config,
+            consent,
             events: Arc::new(RwLock::new(Vec::new())),
             session_id,
             user_id: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub fn consent(&self) -> &TelemetryConsent {
+        &self.consent
+    }
+
+    pub fn grant_consent(&self) {
+        self.consent.grant();
+    }
+
+    pub async fn withdraw_consent(&self) {
+        self.consent.withdraw();
+        self.clear().await;
+    }
+
+    /// DPDP: every emit path routes through here. A collector constructed with
+    /// `enabled: true` still emits nothing until consent is positively recorded,
+    /// and a withdrawal recorded on any clone of the handle stops emission on the
+    /// very next call.
+    fn emission_allowed(&self) -> bool {
+        self.config.enabled && self.consent.is_granted() && !self.is_local_trust_boundary()
     }
 
     /// True when the configured privacy mode is a Local trust boundary in which
@@ -92,10 +120,7 @@ impl TelemetryCollector {
     }
 
     pub async fn track(&self, event: TelemetryEvent) -> Result<()> {
-        if self.is_local_trust_boundary() {
-            return Ok(());
-        }
-        if !self.config.enabled {
+        if !self.emission_allowed() {
             return Ok(());
         }
 
@@ -111,10 +136,8 @@ impl TelemetryCollector {
     }
 
     pub async fn flush(&self) -> Result<()> {
-        if self.is_local_trust_boundary() {
-            return Ok(());
-        }
-        if !self.config.enabled {
+        if !self.emission_allowed() {
+            self.events.write().await.clear();
             return Ok(());
         }
 
@@ -256,7 +279,7 @@ impl TelemetryCollector {
     }
 
     pub async fn set_user_property(&self, _key: String, _value: Value) -> Result<()> {
-        if !self.config.enabled {
+        if !self.emission_allowed() {
             return Ok(());
         }
 
@@ -283,7 +306,7 @@ impl TelemetryCollector {
     }
 
     pub fn is_enabled(&self) -> bool {
-        self.config.enabled
+        self.emission_allowed()
     }
 
     pub async fn delete_all_data(&self) -> Result<()> {
@@ -306,51 +329,59 @@ impl Default for TelemetryCollector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sys::telemetry::consent::ConsentDecision;
+    use tempfile::TempDir;
 
-    #[tokio::test]
-    async fn test_track_event() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 3,
+    fn config(enabled: bool, batch_size: usize) -> CollectorConfig {
+        CollectorConfig {
+            enabled,
+            batch_size,
             flush_interval_secs: 30,
             app_data_dir: None,
             privacy_mode: None,
-        };
-        let collector = TelemetryCollector::new(config);
+        }
+    }
 
-        let event = TelemetryEvent {
-            name: "test_event".to_string(),
+    fn consented(config: CollectorConfig) -> TelemetryCollector {
+        let consent = TelemetryConsent::default();
+        consent.grant();
+        TelemetryCollector::with_consent(config, consent)
+    }
+
+    fn event(name: &str, session_id: String) -> TelemetryEvent {
+        TelemetryEvent {
+            name: name.to_string(),
             properties: HashMap::new(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
-            session_id: collector.get_session_id(),
+            session_id,
             user_id: None,
-        };
+        }
+    }
 
-        collector.track(event).await.unwrap();
+    #[tokio::test]
+    async fn test_track_event() {
+        let collector = consented(config(true, 3));
+
+        collector
+            .track(event("test_event", collector.get_session_id()))
+            .await
+            .unwrap();
 
         assert_eq!(collector.get_event_count().await, 1);
     }
 
     #[tokio::test]
     async fn test_auto_flush_on_batch_size() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 2,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: None,
-        };
-        let collector = TelemetryCollector::new(config);
+        let collector = consented(config(true, 2));
 
         for i in 0..2 {
-            let event = TelemetryEvent {
-                name: format!("test_event_{}", i),
-                properties: HashMap::new(),
-                timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                session_id: collector.get_session_id(),
-                user_id: None,
-            };
-            collector.track(event).await.unwrap();
+            collector
+                .track(event(
+                    &format!("test_event_{}", i),
+                    collector.get_session_id(),
+                ))
+                .await
+                .unwrap();
         }
 
         assert_eq!(collector.get_event_count().await, 0);
@@ -358,24 +389,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_manual_flush() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 10,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: None,
-        };
-        let collector = TelemetryCollector::new(config);
+        let collector = consented(config(true, 10));
 
-        let event = TelemetryEvent {
-            name: "test_event".to_string(),
-            properties: HashMap::new(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-            session_id: collector.get_session_id(),
-            user_id: None,
-        };
-
-        collector.track(event).await.unwrap();
+        collector
+            .track(event("test_event", collector.get_session_id()))
+            .await
+            .unwrap();
         assert_eq!(collector.get_event_count().await, 1);
 
         collector.flush().await.unwrap();
@@ -397,48 +416,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_disabled_collector() {
-        let config = CollectorConfig {
-            enabled: false,
-            batch_size: 10,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: None,
-        };
-        let collector = TelemetryCollector::new(config);
+        let collector = consented(config(false, 10));
 
-        let event = TelemetryEvent {
-            name: "test_event".to_string(),
-            properties: HashMap::new(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-            session_id: collector.get_session_id(),
-            user_id: None,
-        };
-
-        collector.track(event).await.unwrap();
+        collector
+            .track(event("test_event", collector.get_session_id()))
+            .await
+            .unwrap();
 
         assert_eq!(collector.get_event_count().await, 0);
     }
 
     #[tokio::test]
     async fn test_clear() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 10,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: None,
-        };
-        let collector = TelemetryCollector::new(config);
+        let collector = consented(config(true, 10));
 
         for i in 0..5 {
-            let event = TelemetryEvent {
-                name: format!("test_event_{}", i),
-                properties: HashMap::new(),
-                timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                session_id: collector.get_session_id(),
-                user_id: None,
-            };
-            collector.track(event).await.unwrap();
+            collector
+                .track(event(
+                    &format!("test_event_{}", i),
+                    collector.get_session_id(),
+                ))
+                .await
+                .unwrap();
         }
 
         assert_eq!(collector.get_event_count().await, 5);
@@ -449,25 +448,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_all_data() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 10,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: None,
-        };
-        let collector = TelemetryCollector::new(config);
+        let collector = consented(config(true, 10));
 
         collector.set_user_id(Some("test_user".to_string())).await;
-
-        let event = TelemetryEvent {
-            name: "test_event".to_string(),
-            properties: HashMap::new(),
-            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-            session_id: collector.get_session_id(),
-            user_id: None,
-        };
-        collector.track(event).await.unwrap();
+        collector
+            .track(event("test_event", collector.get_session_id()))
+            .await
+            .unwrap();
 
         collector.delete_all_data().await.unwrap();
 
@@ -475,28 +462,144 @@ mod tests {
         assert_eq!(collector.get_user_id().await, None);
     }
 
+    // CONSENT-GATE tests ---------------------------------------------------------
+
+    #[tokio::test]
+    async fn constructs_disabled_until_consent_is_recorded() {
+        let collector = TelemetryCollector::new(config(true, 100));
+
+        assert!(
+            !collector.is_enabled(),
+            "CONSENT: a collector must construct with emission off even when the config enables it"
+        );
+
+        for i in 0..5 {
+            collector
+                .track(event(&format!("event_{}", i), collector.get_session_id()))
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(collector.get_event_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn consent_gate_is_consulted_before_every_emit() {
+        let collector =
+            TelemetryCollector::with_consent(config(true, 100), TelemetryConsent::default());
+
+        collector
+            .track(event("before_consent", collector.get_session_id()))
+            .await
+            .unwrap();
+        assert_eq!(collector.get_event_count().await, 0);
+
+        collector.grant_consent();
+        assert!(collector.is_enabled());
+
+        collector
+            .track(event("after_consent", collector.get_session_id()))
+            .await
+            .unwrap();
+        assert_eq!(collector.get_event_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn withdrawn_consent_stops_emitting_and_drops_pending_events() {
+        let dir = TempDir::new().unwrap();
+        let mut cfg = config(true, 100);
+        cfg.app_data_dir = Some(dir.path().to_path_buf());
+        let collector = consented(cfg);
+
+        for i in 0..3 {
+            collector
+                .track(event(&format!("event_{}", i), collector.get_session_id()))
+                .await
+                .unwrap();
+        }
+        assert_eq!(collector.get_event_count().await, 3);
+
+        collector.withdraw_consent().await;
+
+        collector.flush().await.unwrap();
+        collector
+            .track(event("after_withdrawal", collector.get_session_id()))
+            .await
+            .unwrap();
+        collector.flush().await.unwrap();
+
+        assert!(!collector.is_enabled());
+        assert_eq!(collector.get_event_count().await, 0);
+        assert!(
+            !dir.path().join(LOCAL_EVENTS_FILE).exists(),
+            "CONSENT: nothing may be written after consent is withdrawn"
+        );
+    }
+
+    #[tokio::test]
+    async fn granted_consent_still_writes_the_local_events_file() {
+        let dir = TempDir::new().unwrap();
+        let mut cfg = config(true, 100);
+        cfg.app_data_dir = Some(dir.path().to_path_buf());
+        let collector = consented(cfg);
+
+        collector
+            .track(event("event", collector.get_session_id()))
+            .await
+            .unwrap();
+        collector.flush().await.unwrap();
+
+        assert!(dir.path().join(LOCAL_EVENTS_FILE).exists());
+    }
+
+    #[tokio::test]
+    async fn withdrawal_through_a_shared_handle_stops_emission() {
+        let consent = TelemetryConsent::default();
+        consent.grant();
+        let collector = TelemetryCollector::with_consent(config(true, 100), consent.clone());
+
+        collector
+            .track(event("granted", collector.get_session_id()))
+            .await
+            .unwrap();
+        assert_eq!(collector.get_event_count().await, 1);
+
+        consent.set(false);
+
+        collector
+            .track(event("withdrawn", collector.get_session_id()))
+            .await
+            .unwrap();
+        assert_eq!(collector.get_event_count().await, 1);
+        assert_eq!(collector.consent().decision(), ConsentDecision::Withdrawn);
+    }
+
+    #[tokio::test]
+    async fn consent_alone_does_not_enable_a_disabled_collector() {
+        let collector = consented(config(false, 100));
+
+        collector
+            .track(event("event", collector.get_session_id()))
+            .await
+            .unwrap();
+
+        assert!(!collector.is_enabled());
+        assert_eq!(collector.get_event_count().await, 0);
+    }
+
     // TRUST-BOUNDARY tests -------------------------------------------------------
 
     #[tokio::test]
     async fn local_mode_blocks_track_even_when_enabled() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 100,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: Some("local".to_string()),
-        };
-        let collector = TelemetryCollector::new(config);
+        let mut cfg = config(true, 100);
+        cfg.privacy_mode = Some("local".to_string());
+        let collector = consented(cfg);
 
         for i in 0..10 {
-            let event = TelemetryEvent {
-                name: format!("event_{}", i),
-                properties: HashMap::new(),
-                timestamp: 0,
-                session_id: collector.get_session_id(),
-                user_id: None,
-            };
-            collector.track(event).await.unwrap();
+            collector
+                .track(event(&format!("event_{}", i), collector.get_session_id()))
+                .await
+                .unwrap();
         }
 
         assert_eq!(
@@ -508,28 +611,15 @@ mod tests {
 
     #[tokio::test]
     async fn byok_mode_blocks_track_even_when_enabled() {
-        // BYOK is a Local trust boundary (user's own keys, client-direct). Per
-        // "Local Mode (on-device + BYOK) = zero cloud telemetry", BYOK telemetry
-        // must NEVER reach our cloud. This is the regression guard for a leak
-        // where the gate only checked "local" and let "byok" through.
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 100,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: Some("byok".to_string()),
-        };
-        let collector = TelemetryCollector::new(config);
+        let mut cfg = config(true, 100);
+        cfg.privacy_mode = Some("byok".to_string());
+        let collector = consented(cfg);
 
         for i in 0..10 {
-            let event = TelemetryEvent {
-                name: format!("event_{}", i),
-                properties: HashMap::new(),
-                timestamp: 0,
-                session_id: collector.get_session_id(),
-                user_id: None,
-            };
-            collector.track(event).await.unwrap();
+            collector
+                .track(event(&format!("event_{}", i), collector.get_session_id()))
+                .await
+                .unwrap();
         }
 
         assert_eq!(
@@ -538,67 +628,41 @@ mod tests {
             "TRUST-BOUNDARY: byok mode must produce zero buffered events"
         );
 
-        // flush() must also be a no-op in BYOK mode.
         collector.flush().await.unwrap();
     }
 
     #[tokio::test]
     async fn cloud_mode_allows_track_when_enabled() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 100,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: Some("cloud".to_string()),
-        };
-        let collector = TelemetryCollector::new(config);
+        let mut cfg = config(true, 100);
+        cfg.privacy_mode = Some("cloud".to_string());
+        let collector = consented(cfg);
 
-        let event = TelemetryEvent {
-            name: "test_event".to_string(),
-            properties: HashMap::new(),
-            timestamp: 0,
-            session_id: collector.get_session_id(),
-            user_id: None,
-        };
-        collector.track(event).await.unwrap();
+        collector
+            .track(event("test_event", collector.get_session_id()))
+            .await
+            .unwrap();
 
         assert_eq!(collector.get_event_count().await, 1);
     }
 
     #[tokio::test]
     async fn none_mode_allows_track_when_enabled() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 100,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: None,
-        };
-        let collector = TelemetryCollector::new(config);
+        let collector = consented(config(true, 100));
 
-        let event = TelemetryEvent {
-            name: "test_event".to_string(),
-            properties: HashMap::new(),
-            timestamp: 0,
-            session_id: collector.get_session_id(),
-            user_id: None,
-        };
-        collector.track(event).await.unwrap();
+        collector
+            .track(event("test_event", collector.get_session_id()))
+            .await
+            .unwrap();
 
         assert_eq!(collector.get_event_count().await, 1);
     }
 
     #[tokio::test]
     async fn local_mode_flush_is_noop() {
-        let config = CollectorConfig {
-            enabled: true,
-            batch_size: 100,
-            flush_interval_secs: 30,
-            app_data_dir: None,
-            privacy_mode: Some("local".to_string()),
-        };
-        let collector = TelemetryCollector::new(config);
-        // flush() on a local-mode collector must return Ok(()) without panicking
+        let mut cfg = config(true, 100);
+        cfg.privacy_mode = Some("local".to_string());
+        let collector = consented(cfg);
+
         collector.flush().await.unwrap();
         assert_eq!(collector.get_event_count().await, 0);
     }

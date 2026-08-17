@@ -9,7 +9,8 @@ export type SecurityEventType =
   | 'suspicious_activity'
   | 'admin_action'
   | 'csrf_validation_failed'
-  | 'invalid_signature';
+  | 'invalid_signature'
+  | 'content_notice';
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high' | 'critical';
 

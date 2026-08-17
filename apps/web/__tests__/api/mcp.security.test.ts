@@ -115,7 +115,16 @@ describe('POST /api/mcp security gate', () => {
         transport: 'streamable-http',
         connectionTimeoutMs: 30_000,
       },
+      egressPolicy: { assertAllowedUrl: expect.any(Function) },
     });
+
+    const [connectArgs] = mcpMocks.connectMcpServer.mock.calls[0] as [
+      { egressPolicy?: { assertAllowedUrl?: unknown } },
+    ];
+    expect(
+      connectArgs.egressPolicy?.assertAllowedUrl,
+      'the pre-flight DNS check is worthless if redirects are not re-validated on every hop',
+    ).toBeTypeOf('function');
     expect(mcpMocks.close).toHaveBeenCalled();
   });
 });

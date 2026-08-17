@@ -71,6 +71,39 @@ far more than 906.
 | `docs/design/cap-052-*-security-review-2026-08-05.md` + `bug-finding-guide.md`               | 18        |
 | Claude Security scan `docs/remediation/security-scan-2026-08-16/` (F1–F30, panel-verified)   | 30        |
 
+## Where the source corpora live, and why some are not in git
+
+Five of the sources above are on disk but outside git, so repo search will not
+find them and CI has never seen them. This is the index for them.
+
+| Corpus                                             | Location                                     | In git                                |
+| -------------------------------------------------- | -------------------------------------------- | ------------------------------------- |
+| Surface parity audit, 2026-08-15                   | `audit/parity-2026-08-15/`                   | no                                    |
+| Competitive gap audit, 2026-08-15                  | `audit/competitive-gap-2026-08-15/`          | no                                    |
+| Manual QA pass, 2026-08-15                         | `audit/manual-qa-2026-08-15.md`              | no                                    |
+| Claude Security scan, 2026-08-16                   | `docs/remediation/security-scan-2026-08-16/` | no, held out by a nested `.gitignore` |
+| Live-observed ChatGPT/Claude/Gemini/Manus research | `~/Downloads/competitive-product-research`   | no, outside the repo entirely         |
+
+Committing the three `audit/` entries as they stand converts two local-only
+guard failures into CI failures:
+
+- `pnpm check:non-md-artifacts` reports 47 unclassified live non-Markdown
+  artifacts — the `.json`, `.py` and `.tsv` files sitting beside the Markdown.
+  Classifying them is the same one-line move that classified
+  `audit/desktop-ui-computer-use/screenshots/`: add the tree's prefix to
+  `allowedLiveNonMarkdownPrefixes` in `scripts/check-non-md-artifacts.mjs`.
+- `pnpm check:model-id-literals` reports 191 occurrences across 24 files,
+  because live-observed research quotes competitors' model names verbatim.
+  There is no classification escape for this one: concrete model IDs are
+  allowed only in the model registry and its generated mirrors. The Downloads
+  corpus has the same shape — 15 of its 68 files carry 149 such literals — so
+  importing it verbatim inherits the failure.
+
+So bringing this evidence in-repo costs a redaction pass that trades away the
+exact wording of what was observed in a competitor's UI, which is the thing the
+research exists to record. That trade is unmade. Until it is made, these
+corpora stay out of git and this table is how a reader finds them.
+
 ## What this register is not
 
 It is not a verification pass. Items were extracted from documents that made

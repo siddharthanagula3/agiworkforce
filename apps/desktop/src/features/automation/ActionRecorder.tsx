@@ -47,7 +47,7 @@ interface ActionRecorderProps {
   onClose?: () => void;
 }
 
-type PermissionKind = 'accessibility' | 'input_monitoring';
+type PermissionKind = 'accessibility' | 'input_monitoring' | 'screen_recording';
 
 function normalizeRecordedAction(payload: unknown): RecordedAction | null {
   if (!payload || typeof payload !== 'object') return null;
@@ -137,6 +137,8 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
     if (!permissions.inputMonitoring) missing.push('input_monitoring');
     return missing;
   }, [permissions]);
+
+  const replayNeedsScreenRecording = Boolean(permissions && !permissions.screenRecording);
 
   const applyCompletedRecording = useCallback((recording: Recording) => {
     setHasConsented(true);
@@ -243,6 +245,11 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
     } finally {
       setIsCheckingPermissions(false);
     }
+  };
+
+  const requestScreenRecording = async () => {
+    await automation.requestAutomationPermission('screen_recording').catch(() => undefined);
+    await checkPermissions();
   };
 
   const startRecording = async () => {
@@ -515,6 +522,23 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
               ))}
               <Button variant="ghost" size="sm" onClick={() => void checkPermissions()}>
                 Check again
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {replayNeedsScreenRecording && !isRecording && (
+          <div className="mb-4 rounded-xl border border-border bg-muted/40 p-4">
+            <h3 className="text-sm font-medium">Replaying this skill needs Screen Recording</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Capture only reads clicks and keystrokes, so you can record without it. When AGI
+              replays the saved skill it checks the live screen against your steps, and macOS hands
+              back blank frames until Screen Recording is allowed.
+            </p>
+            <div className="mt-3">
+              <Button variant="outline" size="sm" onClick={() => void requestScreenRecording()}>
+                <ExternalLink className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                Allow Screen Recording
               </Button>
             </div>
           </div>

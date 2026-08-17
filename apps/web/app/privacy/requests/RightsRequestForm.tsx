@@ -51,6 +51,7 @@ export function RightsRequestForm() {
   const [state, setState] = useState<FormState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [reference, setReference] = useState<string | null>(null);
+  const [operatorNotified, setOperatorNotified] = useState(false);
 
   const selected = REQUEST_TYPES.find((entry) => entry.id === requestType);
 
@@ -96,8 +97,9 @@ export function RightsRequestForm() {
         return;
       }
 
-      const body = (await res.json()) as { reference?: string };
+      const body = (await res.json()) as { reference?: string; operatorNotified?: boolean };
       setReference(body.reference ?? null);
+      setOperatorNotified(body.operatorNotified === true);
       setState('idle');
       setDetails('');
     } catch {
@@ -111,11 +113,20 @@ export function RightsRequestForm() {
       <div className="agi-callout" role="status">
         <h3 className="agi-callout-h">Request recorded — reference {reference}</h3>
         <p className="agi-callout-p">
-          Keep that reference; quoting it saves you describing the request again. Two things to be
-          clear about, because a compliance page that overstates itself is worthless:{' '}
-          <strong>this recorded your request, it did not email anyone</strong>, and nothing in the
-          product pages a person when a request arrives. If it is urgent, or if you want a human to
-          confirm receipt, email the grievance contact above and quote the reference.
+          Keep that reference; quoting it saves you describing the request again.{' '}
+          {operatorNotified ? (
+            <>
+              Your request is queued and{' '}
+              <strong>the grievance contact has been notified by email</strong>. Nobody is paged, so
+              if it is urgent, email the contact above and quote the reference.
+            </>
+          ) : (
+            <>
+              Your request is recorded, but{' '}
+              <strong>the notification to the grievance contact could not be delivered</strong>.
+              Email the contact above and quote the reference so a person sees it.
+            </>
+          )}
         </p>
       </div>
     );

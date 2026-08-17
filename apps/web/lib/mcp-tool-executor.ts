@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { z } from 'zod';
@@ -13,6 +12,7 @@ import {
 } from '@agiworkforce/mcp';
 
 import { assertResolvedPublicHostname } from '@/lib/egress-policy';
+import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import { logger } from '@/lib/logger';
 import { withSpan } from '@/lib/observability/span';
 
@@ -177,6 +177,7 @@ export async function executeWebMcpTool(
         }
         await assertResolvedPublicHostname(entry.transport.url);
         handle = await connectMcpServer({
+          egressPolicy: MCP_EGRESS_POLICY,
           serverName: serverId,
           config: entryToConfig(entry),
         });

@@ -34,6 +34,7 @@ import {
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@agiworkforce/ui';
 import {
   getBillingPlanPricing,
+  getPlanPriceUsd,
   isBillingPlanTier,
   normalizePaywallFeature,
   paywallLimitHeadline,
@@ -46,6 +47,7 @@ export { normalizePaywallFeature };
 import { Button } from '@shared/components/ui/button';
 import { Badge } from '@shared/components/ui/badge';
 import { cn } from '@shared/lib/utils';
+import { formatCatalogPrice } from '@features/billing/lib/plan-display';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,6 +112,26 @@ export function normalizeRequiredTier(value: string): RequiredTier {
     return 'basic';
   }
   return value;
+}
+
+/**
+ * G11 — every CTA below used to build its string from `.label` alone
+ * ("Upgrade to Pro"), even though `getBillingPlanPricing` already returns
+ * `monthlyPriceUsd`. Gemini's benchmark upsell discloses the exact price
+ * ("Get 5x more usage with AI Ultra — $99.99/month"); this is that price,
+ * read from the same catalog call every caller here already makes.
+ *
+ * Returns '' for a tier with no published amount (Enterprise is
+ * contract-priced — `getPlanPriceUsd` returns null on purpose, and printing
+ * a number for it would be exactly the "$0" bug `monthlyPriceUsd` being
+ * optional was introduced to prevent). Team is per-seat, so its suffix says
+ * "/seat/mo" per the catalog's own rendering rule.
+ */
+function tierPriceSuffix(tier: RequiredTier): string {
+  const monthlyUsd = getPlanPriceUsd(tier, 'monthly');
+  if (monthlyUsd === null) return '';
+  const amount = formatCatalogPrice(monthlyUsd);
+  return getBillingPlanPricing(tier).perSeat === true ? ` — ${amount}/seat/mo` : ` — ${amount}/mo`;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,8 +220,8 @@ const CtaButtons = memo(function CtaButtons({
               : recoveryAction === 'top_up'
                 ? 'Buy credits'
                 : recoveryAction === 'subscribe'
-                  ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}`
-                  : `Upgrade to ${getBillingPlanPricing(requiredTier).label}`}
+                  ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)}`
+                  : `Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)}`}
         </Button>
       ) : null}
 
@@ -235,8 +257,8 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       : recoveryAction === 'view_usage'
         ? paywallLimitHeadline(feature)
         : recoveryAction === 'subscribe'
-          ? `Subscribe to ${getBillingPlanPricing(requiredTier).label} for ${paywallUpgradeLabel(feature)}`
-          : `Upgrade to ${getBillingPlanPricing(requiredTier).label} for ${paywallUpgradeLabel(feature)}`;
+          ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`
+          : `Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`;
 
   return (
     <Card

@@ -1,0 +1,304 @@
+[
+  {
+    "id": "CROSS-SURFACE-001",
+    "domain": "cross-surface",
+    "surface": "web",
+    "feature": "Primary chat surface bypasses the shared chat UI package",
+    "screen": "/, /chat, /chat/[sessionId] (WebChatPage)",
+    "files": [
+      "apps/web/features/chat/pages/WebChatPage.tsx",
+      "apps/web/features/chat/components/messages/MessageBubble.tsx:1-2254",
+      "apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1-3621",
+      "apps/web/features/chat/components/messages/ChatMessageList.tsx:1-1593",
+      "packages/ui/unified-chat/src/components/MessageBubble.tsx:1-924",
+      "packages/ui/unified-chat/src/components/ChatInput.tsx:1-1422",
+      "apps/web/features/chat/v3/WebShellV3.tsx:5-9",
+      "apps/desktop/src/features/v3/DesktopShellV3.tsx:7-13"
+    ],
+    "currentState": "There are four independent chat-rendering implementations in the repo: (1) apps/web's primary route (WebChatPage.tsx, 4,407 lines) with its own MessageBubble (2,254 lines, 2.4x the shared component), ChatComposerNew (3,621 lines, 2.5x the shared ChatInput), and ChatMessageList (1,593 lines) -- all confirmed by wc -l; (2) apps/desktop, which genuinely imports ChatInterface/ChatMessage/ChatRuntime from @agiworkforce/unified-chat unconditionally at App.tsx:1976 (verified); (3) apps/web's own secondary /agi-work, /chat/code, /chat/schedules routes via WebShellV3, which also use the shared package; (4) apps/mobile's fully independent React Native components (MessageBubble.tsx 1,124 lines, ChatInput.tsx 1,249 lines) with zero code sharing beyond a comment in capabilities.tsx explaining RN cannot import unified-chat because it pulls react-dom (confirmed by grep). WebChatPage.tsx's only real imports from unified-chat are UsageWarningBanner, LocalByokHandoffDialog, and the ChatMessage type (confirmed at WebChatPage.tsx:17,168) -- none of the message-rendering or composing logic is shared.",
+    "expectedState": "One chat rendering/composing implementation per client runtime family (web+desktop can share a React implementation; mobile RN is legitimately separate), so a bug fix or feature addition lands once and reaches every surface built on that runtime. ChatGPT and Claude each ship one web chat surface that desktop/browser variants wrap, not a legacy 4,400-line parallel implementation living alongside an adopted shared package.",
+    "benchmarkRef": "Claude Desktop + Claude Web share one Artifacts/chat rendering system per Anthropic's cross-surface product design (research/cross-cutting-and-complaints.md); ChatGPT's own cross-surface consistency failures (missing Chat mode on the new unified desktop app, research/cross-cutting-and-complaints.md section 5) are cited there as an anti-pattern to avoid, not a bar to match.",
+    "gapType": "architecture-gap",
+    "severity": "P1",
+    "evidence": "Ran wc -l on all four file pairs and confirmed exact line counts match the inventory (WebChatPage.tsx 4407, web MessageBubble.tsx 2254, ChatComposerNew.tsx 3621, ChatMessageList.tsx 1593, unified-chat MessageBubble.tsx 924, ChatInput.tsx 1422). Grepped WebChatPage.tsx and ChatComposerNew.tsx for 'unified-chat' imports and confirmed only 3-4 named type/component imports, no shared message-rendering or composer logic. Confirmed apps/desktop/src/features/v3/DesktopShellV3.tsx imports ChatInterface from the shared package and App.tsx:1976 mounts it unconditionally. Confirmed apps/mobile/src/lib/capabilities.tsx:6 comment explaining the RN/react-dom incompatibility.",
+    "priorArtId": null,
+    "recommendation": "Migrate WebChatPage.tsx's message list and composer to render via @agiworkforce/unified-chat's MessageList/ChatInput, moving web-primary-only behavior (if any exists that the shared package genuinely lacks) into the shared package as an optional prop/slot rather than a fork. Track this as a single tracked migration item in PLAN.md with a shrink-only allowlist (similar in spirit to wiring-allowlist.json) so the legacy web components cannot silently regrow features the shared package already has."
+  },
+  {
+    "id": "CROSS-SURFACE-002",
+    "domain": "cross-surface",
+    "surface": "extension-chrome",
+    "feature": "Composer hand-mirrors the shared ChatInput instead of importing it, and has already drifted",
+    "screen": "Side panel composer",
+    "files": [
+      "apps/extension/src/side_panel.ts:9352-9354",
+      "apps/extension/src/side_panel.ts:9412-9477",
+      "packages/ui/unified-chat/src/components/ChatInput.tsx",
+      "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx"
+    ],
+    "currentState": "side_panel.ts (10,933 lines, zero React imports, vanilla DOM) contains a comment at line 9352-9354 stating its paste-image handler 'Mirrors packages/ui/unified-chat/ChatInput.tsx and the VS Code webview composer wire' -- confirmed present verbatim by direct read. There is no import of @agiworkforce/unified-chat anywhere in the file (confirmed by import-block inspection). Feature-by-feature comparison against the shared ChatInput.tsx + ChatInputToolbar.tsx shows side_panel.ts is missing: the Ask/Auto/Plan/Bypass agent-mode control row, the Skill @mention picker, the explicit Research toggle, the explicit one-shot web-search toggle, the code-execution ('Run code') toggle, and the writing-style picker -- all confirmed absent by grep (zero matches for AgentControl/PlanMode/SkillMention/etc.). The attachment menu offers only 2 items (screenshot, file upload) vs the shared AttachmentMenu's ~7.",
+    "expectedState": "Either the extension imports the shared composer primitives directly (accepting some UI adaptation for the DOM/vanilla-TS host), or a single typed composer-capability manifest is shared so a control added to unified-chat surfaces automatically as a tracked gap in the extension rather than requiring a human to notice and hand-port it.",
+    "benchmarkRef": "Claude in Chrome's side panel (research/claude-code-chrome-ide.md) exposes the same skill/connector surface as claude.ai proper; a browser extension composer missing controls the desktop/web composer has (that are not desktop-specific, e.g. Skills, Research) reads as an inconsistent product.",
+    "gapType": "partial-implementation",
+    "severity": "P2",
+    "evidence": "Read side_panel.ts:9340-9365 directly and confirmed the exact mirror comment. Grepped side_panel.ts for AgentControl, PlanMode, SkillMention, workMode, research toggle strings -- zero matches for each, matching inventory/extension-chrome.md section 11's table. Confirmed apps/extension/package.json has no react dependency (grep for '\"react\"' returned no hits).",
+    "priorArtId": null,
+    "recommendation": "Port the missing composer controls (Skill @mentions, Research toggle, explicit web-search toggle, code-execution toggle, writing-style picker) into side_panel.ts as the smallest slice, and add a CI check that fails when unified-chat's exported composer-feature list grows without a corresponding side_panel.ts acknowledgment (an allowlist-diff check, mirroring the desktop wiring-allowlist.json pattern) so future drift is caught mechanically instead of by manual comparison."
+  },
+  {
+    "id": "CROSS-SURFACE-003",
+    "domain": "cross-surface",
+    "surface": "desktop-electron",
+    "feature": "Electron IPC bridge and deep-link SSO are dead in the shipped default configuration",
+    "screen": "n/a (main process / preload wiring)",
+    "files": [
+      "apps/desktop/electron/main.ts:14,336-346,477-483",
+      "apps/desktop/electron/preload.ts:26-83",
+      "apps/desktop/electron/quickAsk.ts:39-45",
+      "apps/desktop/src/services/desktopSocialSignIn.ts:50-52"
+    ],
+    "currentState": "The Electron shell's default renderer is the hosted web app loaded top-level (confirmed by reading main.ts:1-40's own header comment: 'the renderer is the HOSTED cloud web app at agiworkforce.com'). The 9-channel IPC bridge (window-control, dialog, notify, relaunch, check-update, open-update-installer, deep-link, invoke-bridge, open-external) is only attached via preload.ts when AGI_CLOUD_RENDERER=bundled; the default (remote) BrowserWindow and the quick-ask panel both use webPreferences with no preload key at all, so window.agiHost is undefined in the shipped default build. deliverDeepLink() is still called unconditionally from app.on('open-url'/'second-instance') and pushes over an IPC channel nothing can receive in remote mode (no contextBridge ever runs), so agiworkforce-cloud:// deep links are silently dropped whenever the app runs in its default configuration. CHANGELOG.md additionally lists 'allowlist agiworkforce-cloud://sso-callback as a Clerk redirect URL' as an un-actioned ops TODO, meaning even the bundled-mode escape hatch's native SSO return may not resolve in production Clerk config.",
+    "expectedState": "Either the IPC bridge/deep-link receiver is genuinely reachable in whichever mode ships by default, or the dead paths are removed/documented as intentionally inert so a future engineer does not assume agiworkforce-cloud:// deep links work in production. If the bundled fallback renderer is the intended escape hatch for auth failures, its SSO return path should be operationally complete (Clerk redirect URL allowlisted) before being relied upon during an incident.",
+    "benchmarkRef": "n/a -- this is an internal architecture/reliability finding, not a feature-parity gap against ChatGPT/Claude.",
+    "gapType": "dead-code",
+    "severity": "P2",
+    "evidence": "Read apps/desktop/electron/main.ts:1-40 confirming the hosted-web-app-by-default header comment. Cross-checked against inventory/desktop-electron.md sections 1-2, which independently traced main.ts:477-483 (no preload key on the default BrowserWindow) and quickAsk.ts:39-45 (same for the quick-ask panel), and confirmed deliverDeepLink() fires unconditionally from main.ts:336-346 with no listener in remote mode.",
+    "priorArtId": null,
+    "recommendation": "Land the CHANGELOG-tracked ops TODO (allowlist agiworkforce-cloud://sso-callback with Clerk) so the documented escape hatch actually works, and add a startup log line (not user-visible) when deliverDeepLink() fires with no registered receiver so an incident responder relying on the bundled fallback discovers the gap before a live outage, not during one."
+  },
+  {
+    "id": "CROSS-SURFACE-004",
+    "domain": "cross-surface",
+    "surface": "desktop-electron",
+    "feature": "Local/Cloud mode toggle silently no-ops instead of disabling itself when Local mode is unavailable",
+    "screen": "Sidebar — Local/Cloud toggle",
+    "files": [
+      "apps/desktop/src/features/shell/LocalCloudToggle.tsx",
+      "apps/desktop/src/stores/appModeStore.ts:52,65,72"
+    ],
+    "currentState": "LocalCloudToggle.tsx renders unconditionally in the shared sidebar (used by both the Tauri app and the Electron-bundled renderer) and calls appModeStore.setMode('local'|'cloud'). Inside the Electron-bundled renderer, appModeStore.ts:52,65,72 force-coerces mode back to 'cloud' whenever supportsLocalAppMode is false (always true for Electron, since isTauri is false). The toggle itself has no visible affordance change when this happens -- it does not disable, hide, or grey out the Local segment; a user tapping 'Local' inside the Electron-bundled renderer sees the control silently revert with no toast or explanation.",
+    "expectedState": "A control that cannot honor a selection in the current shell should either not render that option at all, or render it disabled with an explanatory tooltip -- never accept a tap and silently discard it. This is the same class of anti-pattern cross-cutting-and-complaints.md flags against both ChatGPT and Claude ('don't bury a control behind a UX that discovers its own limits only by hitting a wall').",
+    "benchmarkRef": "General UX-honesty bar established in research/cross-cutting-and-complaints.md section 8 ('don't make usage limits/mode restrictions a black box') -- applied here to a mode toggle rather than a usage meter.",
+    "gapType": "ux-gap",
+    "severity": "P2",
+    "evidence": "Confirmed via inventory/desktop-electron.md section 5's Local/Cloud toggle row, which traced appModeStore.ts:52,65,72's coercion logic and noted LocalCloudToggle.tsx has no visible affordance change; flagged there as NEEDS_VALIDATION pending a live-build check, which I did not additionally re-run in this pass (static-code finding only).",
+    "priorArtId": null,
+    "recommendation": "In the Electron-bundled renderer build, either hide the Local segment of LocalCloudToggle.tsx entirely (supportsLocalAppMode already exists as the gating signal) or render it disabled with a one-line explanation ('Local mode requires the native app'), and add a toast/inline message on the coerced setMode('local') attempt if the segment remains visible for any reason."
+  },
+  {
+    "id": "CROSS-SURFACE-005",
+    "domain": "cross-surface",
+    "surface": "cross-surface",
+    "feature": "Article 50 AI-generated-content provenance marker is broken between surfaces and inconsistently applied",
+    "screen": "n/a (compliance metadata attached to generated content)",
+    "files": [
+      "packages/contracts/compliance/src/article50-marker.ts:137-138",
+      "apps/web/lib/compliance/ai-act.ts:16-38,192-201",
+      "apps/mobile (11 consumers of @agiworkforce/compliance, per package.json import count)"
+    ],
+    "currentState": "packages/contracts/compliance is the canonical EU AI Act Article 50 disclosure/provenance-marker package; mobile genuinely imports and uses it (11 files, including a dedicated /legal/article-50 screen). apps/web/lib/compliance/ai-act.ts is a hand-restated duplicate of the marker shape, self-documented as existing because @agiworkforce/compliance is not a declared dependency of @agiworkforce/web (ai-act.ts:35-38). The shared package's own serialiseClaim function (article50-marker.ts:138) does JSON.stringify(claim, Object.keys(claim).sort()) -- an array replacer used as a global key allowlist applied at every nesting depth, not just the top level -- so nested assertions[].label/.action keys get silently stripped and mobile's real emitted sidecar serializes assertions as [{}]. Web's own hasAiGeneratedProvenance() would therefore reject mobile's own output if the two were ever compared, despite ai-act.ts's comment claiming wire-compatibility. Web's file additionally self-documents: streamed chat text is not marked on any surface, there is no web audio-generation route, and the Article 50(1) explicit-disclosure sentence was removed from web's composer on 2026-08-14 based on an unreviewed legal carve-out, while mobile keeps its explicit disclosure screen.",
+    "expectedState": "One canonical, correctly-serializing provenance-marker implementation that every surface imports (or, at minimum, that every surface's independent implementation is contract-tested against), so a compliance claim generated on one surface validates correctly when read by another, and the explicit-disclosure requirement is applied consistently (or its removal is a reviewed, product-wide decision, not a single surface's unreviewed change).",
+    "benchmarkRef": "n/a -- this is a regulatory-compliance correctness gap, not a competitor feature-parity gap; the standard is the EU AI Act Article 50 text itself.",
+    "gapType": "integration-gap",
+    "severity": "P1",
+    "evidence": "Read packages/contracts/compliance/src/article50-marker.ts around line 138 (via shared-packages.md's direct citation, cross-checked against the file's own header) confirming the JSON.stringify(claim, Object.keys(claim).sort()) call and its top-level-only key list. Read apps/web/lib/compliance/ai-act.ts's self-documented rationale (lines 16-38, 192-201) for why it duplicates rather than imports the package, and its explicit statement that streamed text and audio-gen are unmarked and the Article 50(1) sentence was removed 2026-08-14.",
+    "priorArtId": null,
+    "recommendation": "Fix serialiseClaim to apply the key allowlist only at the top level (or recursively include nested-object keys), add a cross-surface fixture-replay contract test (mirroring packages/client/sync's pattern) asserting a marker generated on mobile validates on web and vice versa, and route web's compliance logic through the shared package once it becomes a declared dependency -- the manifest/lockfile change ai-act.ts says is blocking this should be scheduled explicitly rather than left open-ended."
+  },
+  {
+    "id": "CROSS-SURFACE-006",
+    "domain": "cross-surface",
+    "surface": "extension-vscode",
+    "feature": "Local/BYOK/Managed-Cloud trust-boundary regression tests are currently red",
+    "screen": "n/a (chat participant model resolution + usage-meter trust-boundary pill)",
+    "files": [
+      "apps/extension-vscode/src/platform/config.ts:191-196",
+      "apps/extension-vscode/src/__tests__/chatParticipant.test.ts:64-73",
+      "apps/extension-vscode/src/__tests__/usageMeterTrustBoundary.test.ts:96-105"
+    ],
+    "currentState": "A real, well-reasoned security hardening change (commit 1e858a7f1, 2026-08-13) switched Config.model() from reading VS Code's merged/workspace config to getUserScoped() (globalValue only via .inspect()), specifically to stop a checked-out repo's .vscode/settings.json from silently moving a user's Local/BYOK/Managed-Cloud trust boundary. The two test files that exercise exactly this trust-boundary logic (chatParticipant.test.ts's local-model authority resolution and usageMeterTrustBoundary.test.ts's Local/BYOK/Managed-Cloud usage-meter pill) mock only .get(), not the new .inspect() code path, so under the new implementation Config.model() silently falls back to 'auto' inside the tests. Running `npx vitest run` at apps/extension-vscode reproduces 17 failing / 862 passing tests, with 6+6 of the failures specifically in the two trust-boundary-relevant files.",
+    "expectedState": "The regression-test safety net for trust-boundary labeling (which surface a request's cost/privacy characteristics are attributed to) should be green, since this is precisely the class of defect (Local session data or cost silently mislabeled as a different trust tier) the repo's own AGENTS.md rules treat as critical.",
+    "benchmarkRef": "n/a -- internal reliability finding on the repo's own trust-boundary invariant, which the domain brief explicitly asks to verify is enforced at runtime and not just documented.",
+    "gapType": "reliability-gap",
+    "severity": "P1",
+    "evidence": "Ran the failure trace as documented in inventory/extension-vscode.md section 0 (git show 1e858a7f1 confirms the production change; the test mocks at chatParticipant.test.ts:64-73 and usageMeterTrustBoundary.test.ts:96-105 only stub .get(), not .inspect()). I did not independently re-run `npx vitest run` in this pass (relying on the inventory's documented reproduction), but the root-cause trace (production code change + unmigrated test mock) is internally consistent and specific enough to be verifiable by any engineer running the two named commands.",
+    "priorArtId": null,
+    "recommendation": "Update mockConfiguredModel() and configuredModel() in the two test files to also stub .inspect() returning the intended globalValue, restoring the 12 failing assertions to green before treating VS Code's trust-boundary labeling as verified. This is a self-contained, low-risk fix (test-only change) that should ship ahead of any further work in this area."
+  },
+  {
+    "id": "CROSS-SURFACE-007",
+    "domain": "cross-surface",
+    "surface": "cross-surface",
+    "feature": "Desktop-companion pairing instructions do not match Mobile's real navigation labels",
+    "screen": "Desktop remote-pairing modal / Mobile Remote screen",
+    "files": [
+      "apps/desktop/src/features/mobile-companion/QRPairingCard.tsx:113-117",
+      "apps/mobile/src/features/drawer/components/DrawerContent.tsx:94-99"
+    ],
+    "currentState": "Desktop's pairing card instructs the user to navigate to 'AGI Workforce -> Desktop Companion' on their phone. Mobile has no destination by that name: the drawer entry is labelled 'Remote' (route /(app)/companion), and the settings entry point is labelled 'Desktop control'. Two of the three copy claims in the original GAP-210 fix check out (the QR-scan step and the manual-code-entry step), but the top-level navigation label a user is told to look for does not exist on the device they are holding, so a user following the printed instructions literally cannot find the screen.",
+    "expectedState": "Desktop's printed instructions should name the exact, current label a user will see in Mobile's drawer/settings, verified by a cross-surface copy-consistency test (the repo already has one such test for the deep-link URL contract -- app-intents-deeplink.test.ts -- this needs the equivalent for pairing-instruction copy).",
+    "benchmarkRef": "n/a -- internal cross-surface consistency defect.",
+    "gapType": "ux-gap",
+    "severity": "P2",
+    "evidence": "This was independently found and adversarially re-verified in audit/parity-2026-08-15/gaps/done-claim-verification.md ('GAP-210 -- pairing instructions: cross-surface copy drift breaks the flow'), which traced QRPairingCard.tsx:113-117 against DrawerContent.tsx:94-99 and confirmed the label mismatch survives despite ui-gaps.csv marking the row Done. I did not re-open the two files independently in this pass; citing the already-verified finding per the audit's prior-art-reconciliation instructions.",
+    "priorArtId": "GAP-210",
+    "recommendation": "Change QRPairingCard.tsx's instruction copy to say 'AGI Workforce -> Remote' (matching the live drawer label) or, better, rename both surfaces to the same term and add a test asserting the string Desktop prints for the mobile destination matches a value mobile's own navigation exports, so this class of drift cannot silently reoccur if either label changes again."
+  },
+  {
+    "id": "CROSS-SURFACE-008",
+    "domain": "cross-surface",
+    "surface": "backend",
+    "feature": "services/api-gateway's REST surface duplicates apps/web's Next.js API routes with unclear live ownership",
+    "screen": "n/a (backend topology)",
+    "files": [
+      "services/api-gateway/src/app.ts:5-20,140",
+      "apps/mobile/lib/constants.ts:18",
+      "apps/extension/src/background/policy.ts:642-649",
+      "docs/agent-context/known-flaws.md (entry SVC-DEPLOY-TOPOLOGY-VERCEL-SINGLE, 2026-07-19)"
+    ],
+    "currentState": "services/api-gateway is a real, tested, now-deployed (as of 2026-08-09, per its Fly.io CI/CD jobs) Express service exposing agents/auth/chat/cloudChat/credits/desktop/deviceAuth/enterprise/llm/mobile/models/pair/providerStream/sync/usage routes -- the same route families apps/web's Next.js API already serves. apps/mobile's EXPO_PUBLIC_GATEWAY_URL defaults to api.agiworkforce.com, which per a still-open known-flaws entry is a DNS alias for the same Vercel/Next.js deployment (host-rewritten in next.config.ts), not the Fly-hosted Express gateway -- i.e. mobile's primary named consumer likely never talks to this service for ordinary chat/sync traffic. A separate, genuinely-distinct host (gateway.agiworkforce.com) is used by the desktop/extension companion-pairing feature, which is itself currently disabled behind a feature flag. The known-flaws entry records this as a 'PENDING founder decision: retire the whole api-gateway... vs. keep only its WebSocket + QR-pairing core' -- an open architectural decision, not newly discovered here.",
+    "expectedState": "Either the general REST surface (chat/sync/credits/llm/usage/models) is retired since apps/web's Next.js routes are the ones actually serving production traffic, or a clear routing decision moves real traffic onto the gateway and the Next.js duplicate routes are retired instead -- not both maintained indefinitely with no verified live consumer for one of them.",
+    "benchmarkRef": "n/a -- internal backend-topology finding.",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Read inventory/runtime-infra.md section 2 in full, which cross-references the known-flaws.md entry SVC-DEPLOY-TOPOLOGY-VERCEL-SINGLE (dated 2026-07-19) and traces apps/mobile/lib/constants.ts:18's default gateway URL against next.config.ts's host-rewrite behavior, plus confirms the companion-only distinct host (gateway.agiworkforce.com) used by apps/extension/src/background/policy.ts:642-649. Did not independently re-run the DNS/rewrite trace in this pass; relying on the already-cited file:line evidence.",
+    "priorArtId": null,
+    "recommendation": "Resolve the pending founder decision cited in known-flaws.md: instrument api.agiworkforce.com and gateway.agiworkforce.com traffic in production logs for one release cycle to determine which routes are actually hit, then retire the unused half (either the Express gateway's general REST duplication, or the Next.js routes it duplicates) rather than carrying both indefinitely."
+  },
+  {
+    "id": "CROSS-SURFACE-009",
+    "domain": "cross-surface",
+    "surface": "shared",
+    "feature": "Enterprise licensing exists as two independently-implemented, unverified-parity packages",
+    "screen": "n/a (licensing verification primitives)",
+    "files": [
+      "packages/contracts/licensing/src/index.ts:9-11",
+      "crates/agiworkforce-licensing/src/lib.rs:6",
+      "packages/client/sync/src/__fixtures__/cursor-compare.json"
+    ],
+    "currentState": "packages/contracts/licensing provides EditionSchema/LicenseClaimsSchema, verifySignedContainer, verifyLicense, and org-policy tightening checks, self-documented in its own index.ts as 'NOT wired into any app runtime, UI, or enforcement path.' Zero consumers across every app surface (web/desktop/mobile/extension/extension-vscode/cli all show 0 imports). A separate Rust crate, crates/agiworkforce-licensing, independently implements the same signed-container/claims-verification concept (its own doc comment says it 'mirrors' the TS package's design), but unlike packages/client/sync -- which keeps its TS and Rust implementations honest via a shared golden-fixture replay test suite -- there is no fixture-replay contract test between the TS licensing package and the Rust licensing crate. Neither implementation is wired into any runtime enforcement path.",
+    "expectedState": "If enterprise licensing is a near-term roadmap item, the two implementations should share a fixture-replay contract test now (before either is wired into a real enforcement path) so parity is provable from day one, following the pattern packages/client/sync already established for a structurally identical two-language problem.",
+    "benchmarkRef": "n/a -- internal architecture-risk finding; this is preemptive given neither implementation ships to users yet.",
+    "gapType": "architecture-gap",
+    "severity": "P3",
+    "evidence": "Read packages/contracts/licensing/src/index.ts's self-documented unwired status and crates/agiworkforce-licensing/src/lib.rs:6's mirroring doc comment, per shared-packages.md sections 1 and 4. Confirmed packages/client/sync/src/ contains __fixtures__ (cursor-compare.json, pull-apply.json, push-body.json per shared-packages.md) as the comparison case of what a fixture-replay contract test looks like in this repo; did not locate an equivalent fixtures directory under packages/contracts/licensing (not independently re-verified by direct grep in this pass).",
+    "priorArtId": null,
+    "recommendation": "Before wiring either licensing implementation into a runtime enforcement path, add a shared fixture set (signed license containers + expected verify results) and a replay test on both the TS and Rust sides, mirroring packages/client/sync/src/__fixtures__'s pattern, so a future divergence is caught by CI rather than discovered in production."
+  },
+  {
+    "id": "CROSS-SURFACE-010",
+    "domain": "cross-surface",
+    "surface": "cross-surface",
+    "feature": "Model retirement/migration logic is reimplemented per-surface instead of centralized",
+    "screen": "n/a (stored conversation model-ID migration on retirement)",
+    "files": [
+      "apps/web/shared/stores/model-store.ts:85-105",
+      "apps/desktop/src/__tests__/lib/cloudChatPersistence.test.ts",
+      "apps/mobile/__tests__/model-display-name.test.ts",
+      "packages/ai/model-registry/catalog/retired-models.json"
+    ],
+    "currentState": "retired-models.json lists ~30 explicitly retired model IDs plus a guardedNonCanonicalModelIds allowlist, enforced only as a CI/authoring-time guard (scripts/check-model-catalog-integrity.mjs, scripts/check-no-hardcoded-model-ids.mjs) -- there is no packages-level runtime function that migrates a persisted conversation's stored modelId when its model retires. That logic is implemented ad hoc inside apps/web/shared/stores/model-store.ts (confirmed present: deprecated/status==='deprecated'/deprecation_date checks at lines 88-105), with desktop and mobile each carrying their own equivalent (evidenced by dedicated test files -- cloudChatPersistence.test.ts, model-display-name.test.ts) rather than sharing one migration function from @agiworkforce/model-registry or @agiworkforce/types.",
+    "expectedState": "A single, shared 'is this stored model ID still current, and what should the UI show/do if not' function in @agiworkforce/model-registry or @agiworkforce/types, imported by every surface, so a change to retirement-handling behavior (e.g. what UI copy to show for a conversation pinned to a retired model) lands once.",
+    "benchmarkRef": "n/a -- internal architecture-consistency finding.",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Read apps/web/shared/stores/model-store.ts's deprecated/deprecation_date checks directly (lines 88-105 per the comment block copied into shared-packages.md, cross-checked structurally against the file). Confirmed apps/desktop/src/__tests__/lib/cloudChatPersistence.test.ts and apps/mobile/__tests__/model-display-name.test.ts both exist via `ls` (present, not fabricated citations).",
+    "priorArtId": null,
+    "recommendation": "Extract model-store.ts's retirement-check logic into a pure function in @agiworkforce/model-registry (e.g. resolveModelForConversation(storedModelId, catalog) -> { current: boolean, replacement?, uiCopy }), have web adopt it first, then port desktop's and mobile's equivalents to call the same function, retiring the per-surface duplicates."
+  },
+  {
+    "id": "CROSS-SURFACE-011",
+    "domain": "cross-surface",
+    "surface": "shared",
+    "feature": "Desktop's Rust cloud-sync reimplementation has no confirmed CI gate running both sides of its fixture-replay parity test",
+    "screen": "n/a (packages/client/sync vs desktop's cloud_sync.rs)",
+    "files": [
+      "packages/client/sync/src/index.ts:1-14",
+      "packages/client/sync/src/cursor.ts",
+      "apps/desktop/src-tauri/src/data/cloud_sync.rs"
+    ],
+    "currentState": "packages/client/sync is the canonical TS delta-sync apply-logic package (cursor comparison, merge-by-id message/conversation application, three-way settings JSON merge). Rust cannot import a TS module, so desktop's cloud_sync.rs independently reimplements the same rules, with parity kept honest 'by replaying shared golden fixtures... against both the TS tests and cloud_sync.rs's #[cfg(test)] fixture-replay module' (per the package's own index.ts comment). Whether the CI pipeline actually runs both the TS vitest suite and the Rust cfg(test) suite on every change that touches either side (as opposed to only one being wired into the default CI gate) was flagged in shared-packages.md as 'not verified in this pass, out of scope' and I did not independently confirm it in this pass either.",
+    "expectedState": "A CI job that fails if packages/client/sync's fixtures change without cloud_sync.rs's tests also running against the updated fixtures (and vice versa), so this cross-language contract cannot silently drift the way the egress-policy allowlist previously did before being reconciled into trust-boundaries.",
+    "benchmarkRef": "n/a -- internal CI-completeness question.",
+    "gapType": "reliability-gap",
+    "severity": "P3",
+    "evidence": "Read packages/client/sync/src/index.ts's header comment describing the fixture-replay parity mechanism. Ran `wc -l` on the package's source files confirming it is real (717 lines across cursor/conversations/messages/memory/projects/settings). Did not locate or inspect the specific CI workflow file that would confirm both suites run together (out of scope for this pass's tool budget) -- this finding is explicitly flagged NEEDS_VALIDATION in the underlying inventory and I am carrying that status forward rather than asserting a confirmed gap.",
+    "priorArtId": null,
+    "recommendation": "Locate the CI workflow(s) that run apps/desktop's Rust test suite and packages/client/sync's vitest suite; confirm both execute whenever either packages/client/sync/src/__fixtures__/*.json or apps/desktop/src-tauri/src/data/cloud_sync.rs changes. If they run independently rather than as a single gated pair, add a path-based CI trigger requiring both to pass together."
+  },
+  {
+    "id": "CROSS-SURFACE-012",
+    "domain": "cross-surface",
+    "surface": "cross-surface",
+    "feature": "Design-token package exists but both of its heaviest adopters routinely bypass it with hardcoded hex colors",
+    "screen": "n/a (visual design-system coherence)",
+    "files": [
+      "packages/ui/design-tokens/src/index.ts",
+      "apps/desktop/src (252+ hardcoded #rrggbb literals, spot-check grep)",
+      "apps/web/features + apps/web/shared (95+ hardcoded #rrggbb literals, spot-check grep)"
+    ],
+    "currentState": "@agiworkforce/design-tokens is real (437-line index.ts of CSS variable definitions) and genuinely consumed by web (114 files via @agiworkforce/ui), desktop (55 files), and the Chrome extension (real, non-decorative usage via tokens.ts's cssVarsToString). Despite this, a repo-wide grep for #rrggbb hex literals found 252 occurrences in apps/desktop/src and 95 in apps/web/features + apps/web/shared (my own spot-check grep, same order of magnitude as shared-packages.md's independently-run 294/119 count) -- i.e. both of the two surfaces that most heavily adopt the design-token system also routinely bypass it with inline hex colors rather than referencing a token.",
+    "expectedState": "A lint rule (or a periodic CI count-and-fail-on-increase gate) that flags new hardcoded hex-color literals in files that already import @agiworkforce/design-tokens or @agiworkforce/ui, so the two systems stop drifting apart and dark/light theme changes do not require hunting down hundreds of untracked literals.",
+    "benchmarkRef": "n/a -- internal design-system-coherence finding; loosely related to prior-art-reconciliation.md's observation that 'design-system coherence is 8 rows' in the existing tracker, i.e. largely unaudited.",
+    "gapType": "visual-gap",
+    "severity": "P2",
+    "evidence": "Ran `grep -rEo \"#[0-9a-fA-F]{6}\\b\" apps/desktop/src --include=\"*.tsx\" --include=\"*.ts\"` (252 hits) and the equivalent for apps/web/features + apps/web/shared (95 hits) myself; both confirm the same order of magnitude as shared-packages.md's independently-run count (294/119), with the small difference explained by grep scope/pattern variance, not a contradiction.",
+    "priorArtId": null,
+    "recommendation": "Add an eslint rule (e.g. a custom no-restricted-syntax pattern matching hex-literal color strings) scoped to apps/desktop/src and apps/web/features+shared, allowlisted at today's count and shrink-only from there -- mirroring the wiring-allowlist.json 'may only shrink' pattern already used elsewhere in this repo for exactly this kind of tracked-debt problem."
+  },
+  {
+    "id": "CROSS-SURFACE-013",
+    "domain": "cross-surface",
+    "surface": "shared",
+    "feature": "packages/tools/browser-tool is dead code with a stale dependency reference",
+    "screen": "n/a",
+    "files": ["packages/tools/browser-tool/README.md", "apps/extension/package.json:41"],
+    "currentState": "packages/tools/browser-tool provides real, tested Playwright-core-backed browser automation primitives (snapshot.ts, profile.ts), but its own README states outright that it has zero consumers repo-wide: its only prior importer in apps/extension was deleted with its bridge in commit bfce749b3 (2026-08-09) because the bridge had no caller. apps/extension/package.json:41 still lists \"@agiworkforce/browser-tool\": \"workspace:*\" as a dependency despite nothing importing it.",
+    "expectedState": "A package with zero consumers should either be removed from the workspace (if genuinely superseded by desktop's separate Rust/CDP automation stack and the extension's own CDP driver) or have a concrete adoption plan; the stale package.json entry should be removed regardless, since CLAUDE.md flags lockfile/manifest cleanliness as something to fix opportunistically.",
+    "benchmarkRef": "n/a -- internal dead-code finding.",
+    "gapType": "dead-code",
+    "severity": "P3",
+    "evidence": "Read packages/tools/browser-tool/README.md's own 'Consumers: None today' statement (per shared-packages.md's direct citation) and confirmed apps/extension/package.json:41 still lists the workspace dependency -- did not independently re-open package.json myself in this pass, relying on the inventory's specific line citation which is consistent with the package's own README claim.",
+    "priorArtId": null,
+    "recommendation": "Remove @agiworkforce/browser-tool from apps/extension/package.json in the next lockfile-touching change (per CLAUDE.md's lockfile-edit hook constraints, this cannot be a standalone Edit -- it needs to go through the package manager), and either archive the package or file a concrete adoption ticket if it is intended for a near-term use case."
+  },
+  {
+    "id": "CROSS-SURFACE-014",
+    "domain": "cross-surface",
+    "surface": "shared",
+    "feature": "packages/ai/agent-core is a thin context/memory utility, not a shared agent runtime -- the real planning/tool-loop/approval logic has zero cross-surface parity test",
+    "screen": "n/a (agentic execution loop)",
+    "files": [
+      "packages/ai/agent-core/src/{index,context,memory}.ts",
+      "apps/desktop/src-tauri/src/core/agi/",
+      "packages/ai/provider-runtime/src/"
+    ],
+    "currentState": "Despite its name, packages/ai/agent-core contains only two substantive files (context.ts for context-window budgeting/compaction, memory.ts for memory-relevance scoring) -- confirmed no planning loop, tool-call loop, subagent orchestration, checkpoint/resume, or approval-gate code exists anywhere in packages/ai/*. The AGENTS.md for packages/ai/provider-runtime describes it as owning 'AGI-owned tool-loop scaffolding,' but that package's actual contents are streaming/retry/failover/fallback/gateway/watchdog modules, not loop control flow. The real agent loop, approvals, and checkpoint/resume logic live inside each app's native layer independently -- Desktop's Rust core/agi/ and CLI's Rust src/agent/ -- with no shared TS package and, unlike packages/client/sync's cross-language cursor/settings merge logic, no fixture-replay contract test verifying that Desktop's agentic loop behaves the same way (same approval gates, same checkpoint semantics, same tool-call retry policy) as any other surface's equivalent.",
+    "expectedState": "Either the package is renamed to reflect what it actually is (context/memory utilities) so a reader does not assume a shared agent runtime exists, or the genuinely-shared pieces of agentic behavior (approval-gate semantics, checkpoint/resume state machine shape) are extracted into a real shared contract with a cross-language parity test, following the packages/client/sync precedent.",
+    "benchmarkRef": "Both ChatGPT Work and Claude Cowork present one consistent agentic execution model across their surfaces (research/cross-cutting-and-complaints.md section 1, 'Agentic work modes' row) -- a repo where each surface's agent loop is an independent, unverified reimplementation risks exactly the kind of surface-specific behavioral inconsistency that undermines that consistency.",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Read packages/ai/agent-core's file listing (confirmed only context.ts/memory.ts/index.ts + tests per shared-packages.md's direct grep for tool.?loop|subagent|checkpoint.*resume|approval.*gate across packages/ai/*, which found only incidental string matches, not an implementation). Cross-referenced against inventory/desktop-tauri.md's confirmation that Desktop's real agent/checkpoint/approval logic lives in Rust (core/agi/, sys/commands/checkpoints.rs) with its own independent command surface. Did not independently re-run the tool-loop/subagent grep myself in this pass.",
+    "priorArtId": null,
+    "recommendation": "Rename packages/ai/agent-core to something accurate (e.g. @agiworkforce/context-memory) to stop it reading as a shared runtime that doesn't exist, and scope a follow-up to identify which specific agentic-loop invariants (approval-gate trigger conditions, checkpoint data shape) are load-bearing enough to warrant extraction into a real cross-language contract test."
+  },
+  {
+    "id": "CROSS-SURFACE-015",
+    "domain": "cross-surface",
+    "surface": "shared",
+    "feature": "Provider request-shaping (OpenAI wire-compat, reasoning-effort normalization) is web-only with unverified parity elsewhere",
+    "screen": "n/a (LLM request construction)",
+    "files": [
+      "packages/ai/provider-protocol/AGENTS.md",
+      "packages/ai/provider-protocol (13 web consumers, 0 desktop/mobile/extension)"
+    ],
+    "currentState": "packages/ai/provider-protocol provides pure request-shaping functions -- OpenAI Responses-API policy, reasoning-effort resolution, system-prompt cache-boundary splitting, byte-identical openai-wire-compat.ts -- consumed by 13 files in apps/web and zero files in desktop/mobile/extension/cli. Whether desktop (which talks to providers from Rust), mobile (TS, same runtime family as web), and the extension (also TS) have independently-built equivalents that produce the same wire format and reasoning-effort resolution as web's, or instead diverge silently, was not established in this pass -- this is flagged as an open question in shared-packages.md rather than a confirmed duplication.",
+    "expectedState": "If mobile/extension send requests to the same providers with the same reasoning-effort concept, they should either import this package (both are TS, so unlike desktop's Rust boundary there is no language barrier) or have their equivalent logic identified and contract-tested against web's for parity.",
+    "benchmarkRef": "n/a -- internal architecture-completeness question, explicitly flagged as unverified rather than a confirmed gap.",
+    "gapType": "architecture-gap",
+    "severity": "P3",
+    "evidence": "Confirmed via shared-packages.md section 1's provider-protocol entry (13 web consumers, 0 elsewhere) and section 3's explicit framing as an open question ('unless they each have independent equivalents not covered in this scope'). Did not independently grep mobile/extension for reasoning-effort or OpenAI wire-format logic in this pass to confirm whether an equivalent exists -- this finding is intentionally conservative and flagged NEEDS_VALIDATION in spirit.",
+    "priorArtId": null,
+    "recommendation": "Grep apps/mobile and apps/extension for reasoning-effort/cache-boundary/OpenAI-wire-format logic to determine whether an independent equivalent exists. If it does, add a parity check; if it does not (i.e. those surfaces simply don't need this normalization, or silently send un-normalized requests), document which case applies so this stops being an open question."
+  }
+]

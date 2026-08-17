@@ -35,6 +35,16 @@ export interface AIModel {
   availability?: ModelAvailability;
   /** Reason shown on the coming_soon/unavailable row tooltip. */
   unavailableReason?: string;
+  /**
+   * ISO date this model is scheduled to retire. Only ever set when the date
+   * is still in the future — `isCurrentModel()` already drops the model
+   * entirely once its `deprecation_date` has passed, so a defined value here
+   * always describes a still-selectable model with a scheduled end date.
+   * Consumers (ComposerFooter's ModelRow) use this to render an advance
+   * "Leaving on <date>" warning instead of letting the model vanish with no
+   * notice on the deadline (CLR-01 / mqp-08).
+   */
+  deprecationDate?: string;
 }
 
 export type { RoutingTaskType };
@@ -91,14 +101,27 @@ function describeModel(metadata: ModelMetadata): string {
  * version must never appear in the list. Future-dated `deprecation_date`s are
  * still current (the model is scheduled but not yet retired).
  */
-function isCurrentModel(metadata: ModelMetadata): boolean {
-  // These lifecycle fields exist in the canonical models.json but are not part of
-  // the web's narrower local ModelMetadata interface — read them defensively.
-  const lifecycle = metadata as unknown as {
+/**
+ * These lifecycle fields exist in the canonical models.json but are not part
+ * of the web's narrower local ModelMetadata interface — read them
+ * defensively. Shared by `isCurrentModel` (the on/off gate) and
+ * `futureDeprecationDate` (the advance-warning label) so both read the exact
+ * same catalog value.
+ */
+function lifecycleFields(metadata: ModelMetadata): {
+  deprecated?: boolean;
+  status?: string;
+  deprecation_date?: string | null;
+} {
+  return metadata as unknown as {
     deprecated?: boolean;
     status?: string;
     deprecation_date?: string | null;
   };
+}
+
+function isCurrentModel(metadata: ModelMetadata): boolean {
+  const lifecycle = lifecycleFields(metadata);
   if (lifecycle.deprecated === true) return false;
   if (lifecycle.status === 'deprecated') return false;
   if (lifecycle.deprecation_date) {
@@ -106,6 +129,22 @@ function isCurrentModel(metadata: ModelMetadata): boolean {
     if (!Number.isNaN(retiresAt) && retiresAt <= Date.now()) return false;
   }
   return true;
+}
+
+/**
+ * The model's scheduled retirement date, IFF it is still in the future.
+ * Callers only ever reach this after `isCurrentModel()` has already admitted
+ * the model, so in practice this always returns either undefined (nothing
+ * scheduled) or a future date — never a date that has already passed. Exists
+ * so the picker can render an advance "Leaving on <date>" warning (CLR-01 /
+ * mqp-08) instead of the model just vanishing the instant the deadline hits.
+ */
+function futureDeprecationDate(metadata: ModelMetadata): string | undefined {
+  const { deprecation_date } = lifecycleFields(metadata);
+  if (!deprecation_date) return undefined;
+  const retiresAt = Date.parse(deprecation_date);
+  if (Number.isNaN(retiresAt) || retiresAt <= Date.now()) return undefined;
+  return deprecation_date;
 }
 
 function buildAvailableModels(): AIModel[] {
@@ -134,18 +173,26 @@ function buildAvailableModels(): AIModel[] {
       (metadata): metadata is ModelMetadata =>
         !!metadata && CHAT_MODEL_TYPES.has(metadata.modelType) && isCurrentModel(metadata),
     )
-    .map((metadata) => ({
-      id: metadata.id,
-      name: metadata.name,
-      provider: PROVIDER_LABELS[metadata.provider] ?? metadata.provider,
-      providerKey: metadata.provider,
-      description: describeModel(metadata),
-      // Propagate env requirement so pickers can gate without extra catalog lookup.
-      // All current models have this absent; Phase B will surface models that set it.
-      ...(metadata.requiresEnvironment !== undefined
-        ? { requiresEnvironment: metadata.requiresEnvironment }
-        : {}),
-    }));
+    .map((metadata) => {
+      const deprecationDate = futureDeprecationDate(metadata);
+      return {
+        id: metadata.id,
+        name: metadata.name,
+        provider: PROVIDER_LABELS[metadata.provider] ?? metadata.provider,
+        providerKey: metadata.provider,
+        description: describeModel(metadata),
+        // Propagate env requirement so pickers can gate without extra catalog lookup.
+        // All current models have this absent; Phase B will surface models that set it.
+        ...(metadata.requiresEnvironment !== undefined
+          ? { requiresEnvironment: metadata.requiresEnvironment }
+          : {}),
+        // Propagate a scheduled-but-not-yet-passed retirement date so the
+        // picker can warn ahead of time (CLR-01 / mqp-08). Absent on every
+        // model today (no non-null deprecation_date in the catalog yet), so
+        // this is a no-op until the catalog schedules one.
+        ...(deprecationDate ? { deprecationDate } : {}),
+      };
+    });
 
   // Coming-soon (announced-but-unprovisioned) chat models. These are DELIBERATELY
   // absent from every routable/tier set by the availability invariant, so they

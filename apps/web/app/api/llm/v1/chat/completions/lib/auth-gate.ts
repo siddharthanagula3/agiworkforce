@@ -10,10 +10,10 @@ import { requireCsrfToken } from '@/lib/csrf';
 import {
   canUseManagedCloudChatSurface,
   getCloudChatSurfaceCapability,
-  resolveCloudChatSurface,
   type AuthenticatedSurfaceClass,
 } from '@/lib/free-chat-surface-policy';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { resolveAuthenticatedSurface } from './request-surface';
 
 export type AuthGateSuccess = {
   ok: true;
@@ -36,8 +36,7 @@ function enforceManagedCloudSurface(
   request: NextRequest,
   success: AuthGateSuccess,
 ): AuthGateResult {
-  const isApiKey = success.token.startsWith('sk_live_') || success.token.startsWith('sk_test_');
-  const surface = isApiKey ? 'api' : resolveCloudChatSurface(request, success.surfaceClass);
+  const surface = resolveAuthenticatedSurface(request, success);
   if (canUseManagedCloudChatSurface(success.subscription.plan_tier, surface)) return success;
 
   const capability = getCloudChatSurfaceCapability(surface);

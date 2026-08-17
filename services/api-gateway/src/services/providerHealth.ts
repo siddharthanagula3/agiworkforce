@@ -1,7 +1,7 @@
-
 import { Router, type Request, type Response } from 'express';
 import { ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
 import { createRateLimiter } from '../middleware/rateLimit';
+import { providerHealthBreaker } from '../lib/dependencies';
 import { logger } from '../lib/logger';
 
 interface ProviderHealthStatus {
@@ -141,45 +141,49 @@ const CACHE_TTL_MS = 60_000;
 let cachedResults: ProviderHealthStatus[] | null = null;
 let cacheTimestamp = 0;
 
-const PING_TIMEOUT_MS = 8_000;
-
 async function pingProvider(entry: ProviderEntry): Promise<ProviderHealthStatus> {
-  const start = Date.now();
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
+  const breaker = providerHealthBreaker(entry.id);
+  return breaker.execute<ProviderHealthStatus>(
+    async (signal) => {
+      const response = await fetch(entry.pingUrl, {
+        method: 'HEAD',
+        signal,
+        headers: { 'User-Agent': 'AGIWorkforce-HealthCheck/1.0' },
+      });
 
-    const response = await fetch(entry.pingUrl, {
-      method: 'HEAD',
-      signal: controller.signal,
-      headers: { 'User-Agent': 'AGIWorkforce-HealthCheck/1.0' },
-    });
+      if (response.status >= 500) {
+        throw new Error(`HTTP ${response.status}`);
+      }
 
-    clearTimeout(timeout);
-
-    const available = response.status < 500;
-
-    return {
-      provider: entry.id,
-      available,
-      configured: true, // We know about this provider
-      error: available ? undefined : `HTTP ${response.status}`,
-      healthCheckedAt: Date.now(),
-    };
-  } catch (err) {
-    const elapsed = Date.now() - start;
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    const isTimeout = errorMessage.includes('abort') || elapsed >= PING_TIMEOUT_MS - 500;
-
-    return {
-      provider: entry.id,
-      available: false,
-      configured: true,
-      error: isTimeout ? 'Timeout' : errorMessage,
-      healthCheckedAt: Date.now(),
-    };
-  }
+      return {
+        provider: entry.id,
+        available: true,
+        configured: true,
+        healthCheckedAt: Date.now(),
+      } satisfies ProviderHealthStatus;
+    },
+    {
+      fallback: (rejection) => ({
+        provider: entry.id,
+        available: false,
+        configured: true,
+        error:
+          rejection.reason === 'open'
+            ? 'Circuit open'
+            : rejection.reason === 'timeout'
+              ? 'Timeout'
+              : rejection.reason === 'overloaded'
+                ? 'Health check shed'
+                : rejection.error instanceof Error
+                  ? rejection.error.message
+                  : 'Unknown error',
+        healthCheckedAt: Date.now(),
+      }),
+    },
+  );
 }
+
+let inFlightCheck: Promise<ProviderHealthStatus[]> | null = null;
 
 export async function checkAllProviders(): Promise<ProviderHealthStatus[]> {
   const now = Date.now();
@@ -188,19 +192,32 @@ export async function checkAllProviders(): Promise<ProviderHealthStatus[]> {
     return cachedResults;
   }
 
+  // Single-flight: without it every concurrent caller that misses the cache
+  // fans out its own round of upstream pings, so a slow provider multiplies
+  // into one stalled request handler per client.
+  if (inFlightCheck) return inFlightCheck;
+
   logger.info('Running provider health checks');
 
-  const results = await Promise.all(PROVIDERS.map(pingProvider));
+  inFlightCheck = (async () => {
+    try {
+      const results = await Promise.all(PROVIDERS.map(pingProvider));
 
-  cachedResults = results;
-  cacheTimestamp = now;
+      cachedResults = results;
+      cacheTimestamp = Date.now();
 
-  const downCount = results.filter((r) => !r.available).length;
-  if (downCount > 0) {
-    logger.warn({ downCount, total: results.length }, 'Some providers are down');
-  }
+      const downCount = results.filter((r) => !r.available).length;
+      if (downCount > 0) {
+        logger.warn({ downCount, total: results.length }, 'Some providers are down');
+      }
 
-  return results;
+      return results;
+    } finally {
+      inFlightCheck = null;
+    }
+  })();
+
+  return inFlightCheck;
 }
 
 export function getProviderHealth(providerId: string): ProviderHealthStatus | null {

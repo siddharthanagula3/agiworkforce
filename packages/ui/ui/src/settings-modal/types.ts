@@ -1,4 +1,3 @@
-
 import type { SettingsNavKey } from '../settings-nav';
 
 export type SettingsSectionKey = SettingsNavKey | 'billing' | 'usage' | 'capabilities';
@@ -46,6 +45,8 @@ export interface SettingsPlugin {
   error?: string;
   author?: string;
   skillCount?: number;
+  declaredSkills?: string[];
+  requiredConnectors?: string[];
   updatedAt?: string;
   statusLabel?: string;
   detailsHref?: string;

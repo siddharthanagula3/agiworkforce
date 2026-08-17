@@ -64,12 +64,19 @@ export default function Article50Screen() {
             {ARTICLE_50_2_VERBATIM}
           </Text>
           <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 12 }}>
-            How AGI complies: every AI-generated text, audio, image or video you export is marked
-            with a C2PA-style provenance claim and an HTML{' '}
+            How AGI complies: generated images and video carry a C2PA-style provenance claim naming
+            the provider, the model and the time of generation.
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 12 }}>
+            Your on-device data export marks each chat transcript with that same claim and an HTML{' '}
             <Text variant="mono" style={{ color: colors.textPrimary }}>
               {'<meta name="agi:ai-generated">'}
             </Text>
-            tag so downstream tools can detect it as machine-generated.
+            tag.
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 12 }}>
+            Chat text you copy or share by any other route is not marked, and AGI does not generate
+            audio.
           </Text>
         </Section>
 

@@ -10,6 +10,7 @@ vi.mock('@/lib/client/csrf', () => ({
 
 import { WebChatRuntime } from '../WebChatRuntime';
 import { resetMemoryCapabilityCache } from '../memory-capability';
+import { useChatStore } from '@shared/stores/web-chat-store';
 
 function stubFetch(opts?: { memory?: boolean }): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (url: unknown) => {
@@ -33,6 +34,7 @@ function completionsBody(fetchMock: ReturnType<typeof vi.fn>): Record<string, un
 describe('WebChatRuntime memory injection', () => {
   beforeEach(() => {
     useMemoryStore.getState().clear();
+    useChatStore.getState().setConversations([]);
     resetMemoryCapabilityCache();
     vi.restoreAllMocks();
   });
@@ -82,6 +84,47 @@ describe('WebChatRuntime memory injection', () => {
     }>;
     expect(messages.every((m) => m.role !== 'system')).toBe(true);
     expect(messages).toEqual([{ role: 'user', content: 'hello' }]);
+  });
+
+  it('omits saved facts in a temporary chat even with the Memory toggle on', async () => {
+    useMemoryStore.getState().add('Prefers concise answers');
+    useChatStore.getState().setConversations([
+      {
+        id: 'conv-1',
+        title: 'Temporary',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        isTemporary: true,
+      },
+    ]);
+    const fetchMock = stubFetch({ memory: true });
+
+    await new WebChatRuntime().sendMessage('conv-1', 'hello', { messageHistory: [] });
+
+    expect(completionsBody(fetchMock)['messages']).toEqual([{ role: 'user', content: 'hello' }]);
+  });
+
+  it('still injects saved facts in a non-temporary conversation', async () => {
+    useMemoryStore.getState().add('Prefers concise answers');
+    useChatStore.getState().setConversations([
+      {
+        id: 'conv-1',
+        title: 'Normal',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        isTemporary: false,
+      },
+    ]);
+    const fetchMock = stubFetch({ memory: true });
+
+    await new WebChatRuntime().sendMessage('conv-1', 'hello', { messageHistory: [] });
+
+    const messages = completionsBody(fetchMock)['messages'] as Array<{
+      role: string;
+      content: string;
+    }>;
+    expect(messages[0]?.role).toBe('system');
+    expect(messages[0]?.content).toContain('- Prefers concise answers');
   });
 
   it('fails closed when the capability preference cannot be loaded', async () => {

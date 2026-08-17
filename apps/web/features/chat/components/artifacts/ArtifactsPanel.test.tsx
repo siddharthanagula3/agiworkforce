@@ -121,6 +121,40 @@ describe('ArtifactsPanel · live artifact streaming', () => {
     expect(screen.getByText('Sync retrying')).toHaveAttribute('title', 'network unavailable');
   });
 
+  it('sizes the panel header to the panel, not the viewport', () => {
+    ['First', 'Second'].forEach((title, index) => {
+      useArtifactsStore.getState().addArtifactForMessage(
+        `msg-${index}`,
+        {
+          id: `artifact-${index}`,
+          type: 'html',
+          language: 'html',
+          title,
+          content: '<h1>x</h1>',
+        },
+        CONVERSATION_ID,
+      );
+    });
+
+    render(<ArtifactsPanel />);
+
+    const label = screen.getByText('Download all');
+    expect(label.className).not.toMatch(/(?:^|\s)(?:sm|md|lg|xl|2xl):/);
+    expect(label.className).toContain('@[26rem]:inline');
+
+    let ancestor: HTMLElement | null = label.parentElement;
+    let containerRoot: HTMLElement | null = null;
+    while (ancestor) {
+      if (ancestor.classList.contains('@container')) {
+        containerRoot = ancestor;
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    expect(containerRoot).not.toBeNull();
+    expect(containerRoot?.className).toContain('justify-between');
+  });
+
   it('falls back to the first artifact in the active conversation when selection is stale', () => {
     useArtifactsStore.getState().addArtifactForMessage(
       'old-message',

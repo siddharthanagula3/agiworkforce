@@ -1,4 +1,6 @@
-use crate::integrations::realtime::{PresenceManager, RealtimeServer, UserActivity, UserPresence};
+use crate::integrations::realtime::{
+    PairRequestPrompt, PresenceManager, RealtimeServer, UserActivity, UserPresence,
+};
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tokio::sync::RwLock as TokioRwLock;
@@ -90,6 +92,28 @@ pub async fn get_user_presence(
     user_id: String,
 ) -> Result<Option<UserPresence>, String> {
     Ok(state.presence.get_user_presence(&user_id).await)
+}
+
+/// Pairing requests the extension opened and the user has not answered yet.
+///
+/// SEC-11: this is the only channel that carries the confirmation code. It is
+/// readable exclusively through Tauri IPC — the Desktop's own window — so the
+/// user reads the code off their screen and types it into the extension. The
+/// loopback HTTP endpoint never returns it.
+#[tauri::command]
+pub async fn bridge_pending_pair_requests(
+    server_handle: State<'_, RealtimeServerHandle>,
+) -> Result<Vec<PairRequestPrompt>, String> {
+    Ok(server_handle.0.pending_pair_requests().await)
+}
+
+/// Drop a pairing request the user did not recognize.
+#[tauri::command]
+pub async fn bridge_deny_pair_request(
+    server_handle: State<'_, RealtimeServerHandle>,
+    request_id: String,
+) -> Result<bool, String> {
+    Ok(server_handle.0.cancel_pair_request(&request_id).await)
 }
 
 // ── RT-04 Bridge token management ────────────────────────────────────────────

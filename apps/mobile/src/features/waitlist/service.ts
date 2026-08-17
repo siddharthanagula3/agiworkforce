@@ -1,9 +1,5 @@
 import { api } from '@/services/api';
 import type { InviteCodeError } from '@/src/features/cloud-bridge/types';
-import type {
-  WaitlistSubmission,
-  WaitlistResult,
-} from '@/src/features/waitlist/CloudWaitlistSheet';
 
 export interface JoinWaitlistInput {
   email: string;
@@ -96,16 +92,4 @@ export async function redeemInviteCode(
     return { success: true, inviteId: LOCAL_ALPHA_INVITE_ID };
   }
   return { success: false, error: 'invalid_code' };
-}
-
-export async function submitWaitlistForSource(
-  submission: WaitlistSubmission,
-  source: string,
-): Promise<WaitlistResult> {
-  const csrfToken = await fetchCsrfToken();
-  return api.post<WaitlistResult>(
-    '/api/waitlist',
-    { ...submission, source },
-    { headers: { 'x-csrf-token': csrfToken } },
-  );
 }

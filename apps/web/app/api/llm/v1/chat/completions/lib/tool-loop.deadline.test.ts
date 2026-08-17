@@ -38,6 +38,7 @@ function chunk(delta: Record<string, unknown>, finishReason: string | null = nul
 
 function makeProcessed(): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'req-deadline-1',
     chatRequest: { model: 'gpt-test', messages: [], stream: true } as never,
     conversationId: undefined,

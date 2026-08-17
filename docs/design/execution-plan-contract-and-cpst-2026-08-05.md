@@ -1,8 +1,8 @@
 # ExecutionPlan Contract And Cost-Per-Successful-Task (CPST)
 
-Status: Draft — design spec, nothing implemented
+Status: Active — Stage 0 and the Stage-2 selection mechanism have landed; Stage 1 (shadow mode) has not
 Owner: Platform lead
-Last updated: 2026-08-05
+Last updated: 2026-08-16
 
 Design spec for (a) a single `ExecutionPlan` value that names every knob a
 request is executed with, expressed as an extension of the routing types that
@@ -12,6 +12,30 @@ was worth making. It also fixes the staged rollout and the gates.
 This document changes no code. Every statement about current behaviour is
 anchored to a file and, where useful, a line. Everything not proven by a repo
 file is in "Open Questions" and is marked unknown — it is never asserted.
+
+IMPLEMENTATION STATUS (2026-08-16). The original slice was docs-only; parts of
+the rollout have since shipped, so read §5 against this list before building
+anything from it:
+
+- Stage 0 telemetry: **shipped.** `apps/web/lib/cpst-telemetry.ts` builds the
+  fields and every managed-cloud finalize seam passes them into the `usage`
+  jsonb of `public.managed_usage_requests` — `lib/managed-agent-stream.ts` via
+  the `cpst` argument of `finalizeObservedManagedUsage`
+  (`apps/web/lib/services/managed-usage-accounting-service.ts`), and
+  `lib/response-builder.ts`, `lib/stream-transform.ts`, and `route.ts` by
+  spreading them into the `usage` argument of `finalizeManagedUsageRequest`.
+  The two-week non-null-rate exit criterion is an operational measurement and is
+  still open.
+- Stage-2 selection mechanism: **shipped, flag-off.**
+  `packages/ai/routing/src/task-family-routing.ts` (eligibility floor + cost
+  ordering) and `task-family-continuity.ts` (session stickiness, escalation-only)
+  behind `AGI_ROUTING_TASK_FAMILY_STAGE`, with the twelve `auto.taskFamilies`
+  entries in `routing-policies.json`. Live routing is still gated on Stage 1.
+- Stage 1 shadow mode: **not built.** The blocker recorded in §5 still holds —
+  `taskFamilyDecision` is attached to `SelectedAutoRoute` and dropped; the
+  persisted `taskFamily` key carries `RoutingTaskType`, not the stage's
+  `TaskFamily`.
+- Eval corpus (§6): **seeded, not complete.** See the amendment in §6.
 
 ## 1. Why This Exists
 
@@ -388,8 +412,17 @@ wrong.
 3. A recorded balanced-profile baseline (the control for the ≥ 98% gate).
 4. A risk label (`low` / `high`) that decides its rollout stage.
 
-There is **no eval corpus and no `evals` directory in the repo today.** This is
-net-new work, and the eval corpus is a prerequisite for Stage 2, not a
+AMENDED 2026-08-16 (the original sentence, "there is no eval corpus and no
+`evals` directory in the repo today", is no longer accurate): two pieces exist
+and neither closes this section. `tools/evals` is a safety and answer-quality
+harness (`golden`/`refusal`/`jailbreak`) with declared thresholds, not a
+per-family routing corpus. `packages/ai/routing/src/__tests__/fixtures/task-family-corpus.ts`
+pins requirement 1 — fixed structural inputs per family — plus the route the
+current policy resolves for each; requirement 4 is carried separately as
+`auto.taskFamilies.<family>.riskLabel` in `routing-policies.json`, `low` for
+seven families and `high` for five. Requirements 2 and 3, a grader and a recorded
+balanced-profile quality baseline, do not exist, and a resolved route is not a
+quality measurement. The eval corpus remains a prerequisite for Stage 2, not a
 parallel nice-to-have.
 
 ## 7. Non-Goals

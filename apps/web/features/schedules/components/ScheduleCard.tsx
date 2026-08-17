@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge, Button, Card, CardContent, Switch } from '@agiworkforce/ui';
-import { CalendarClock, History, Pencil, Play, Trash2 } from 'lucide-react';
+import { CalendarClock, History, Pencil, Play, Trash2, X } from 'lucide-react';
 import type { ScheduleTask } from '../types';
 import {
   DAYS_OF_WEEK,
@@ -18,6 +18,13 @@ interface ScheduleCardProps {
   schedule: ScheduleTask;
   operation: ScheduleOperation;
   error: string | null;
+  /**
+   * True while a run for this schedule is actually in flight — either a
+   * manual "Run Now" the user just triggered, or a cron-triggered run the
+   * page detected by polling. Drives the row's transient status dot; it has
+   * nothing to do with `schedule.status`, whose enum has no 'running' value.
+   */
+  isRunningNow: boolean;
   historyExpanded: boolean;
   history: ScheduleHistoryState;
   onToggleEnabled: (schedule: ScheduleTask) => void;
@@ -69,6 +76,7 @@ export function ScheduleCard({
   schedule,
   operation,
   error,
+  isRunningNow,
   historyExpanded,
   history,
   onToggleEnabled,
@@ -103,6 +111,13 @@ export function ScheduleCard({
               >
                 {schedule.name}
               </h2>
+              {isRunningNow && (
+                <span className="relative flex h-2.5 w-2.5 shrink-0" title="Running now">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75 motion-reduce:animate-none" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" />
+                  <span className="sr-only">Running now</span>
+                </span>
+              )}
               <Badge variant={statusVariant(schedule.status)} className="capitalize">
                 {schedule.status}
               </Badge>
@@ -234,7 +249,22 @@ export function ScheduleCard({
             aria-label={`Run History for ${schedule.name}`}
             className="border-t border-border/70 bg-muted/20 p-5"
           >
-            <h3 className="mb-3 text-sm font-semibold text-foreground">Run History</h3>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Run History</h3>
+              {/* Non-destructive dismiss, distinct from the destructive Delete
+                  Schedule action below: this only collapses the panel, it
+                  never touches the schedule or its history (sched-gap-11). */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onToggleHistory(schedule)}
+                aria-label={`Close Run History for ${schedule.name}`}
+              >
+                <X className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                Close
+              </Button>
+            </div>
             <ScheduleRunHistory
               state={history}
               timezone={schedule.timezone}

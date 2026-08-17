@@ -283,6 +283,79 @@ function languageLabel(lang: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Search + filters
+// ---------------------------------------------------------------------------
+
+type TypeFilter = 'all' | ArtifactData['type'];
+type DateFilter = 'all' | '7d' | '30d';
+
+const DATE_WINDOW_MS: Record<Exclude<DateFilter, 'all'>, number> = {
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+const DATE_FILTER_OPTIONS: { value: DateFilter; label: string }[] = [
+  { value: 'all', label: 'Any time' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' },
+];
+
+function matchesSearch(query: string, fields: (string | undefined)[]): boolean {
+  if (!query) return true;
+  return fields.some((field) => field?.toLowerCase().includes(query));
+}
+
+const controlStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  background: 'var(--agi-bg-2)',
+  border: '1px solid var(--agi-rule)',
+  borderRadius: 9,
+  color: 'var(--agi-ink)',
+  fontSize: 13,
+  fontFamily: 'inherit',
+  outline: 'none',
+};
+
+function NoMatchesState({ onClear }: { onClear: () => void }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        padding: '80px 24px',
+        border: '1px dashed var(--agi-rule)',
+        borderRadius: 16,
+        textAlign: 'center',
+      }}
+    >
+      <Layers size={32} color="var(--agi-ink-faint)" />
+      <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--agi-ink-2)', margin: 0 }}>
+        No artifacts match your search.
+      </p>
+      <button
+        type="button"
+        onClick={onClear}
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: 'var(--agi-amber)',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          padding: 0,
+          fontFamily: 'inherit',
+        }}
+      >
+        Clear filters
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Skeleton card (Fix 38)
 // ---------------------------------------------------------------------------
 
@@ -1025,6 +1098,9 @@ export interface GalleryClientProps {
 export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>('yours');
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [mounted, setMounted] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | InspirationCard | null>(null);
   const [overlay, setOverlay] = useState<OverlayState>({ kind: 'none' });
@@ -1077,6 +1153,55 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
     }
     return [...byId.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }, [artifacts, indexedArtifacts]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const visibleArtifacts = useMemo(() => {
+    const window = dateFilter === 'all' ? null : DATE_WINDOW_MS[dateFilter];
+    const cutoff = window === null ? null : Date.now() - window;
+    return sortedArtifacts.filter((artifact) => {
+      if (typeFilter !== 'all' && artifact.type !== typeFilter) return false;
+      if (cutoff !== null && artifact.createdAt.getTime() < cutoff) return false;
+      return matchesSearch(normalizedQuery, [artifact.title, artifact.language, artifact.type]);
+    });
+  }, [sortedArtifacts, normalizedQuery, typeFilter, dateFilter]);
+
+  const visibleInspiration = useMemo(
+    () =>
+      INSPIRATION.filter((card) => {
+        if (typeFilter !== 'all' && card.type !== typeFilter) return false;
+        return matchesSearch(normalizedQuery, [
+          card.title,
+          card.language,
+          card.type,
+          card.description,
+        ]);
+      }),
+    [normalizedQuery, typeFilter],
+  );
+
+  // Offering a type the current tab has none of would silently empty the grid,
+  // so the options come from the data the tab actually shows.
+  const typeOptions = useMemo(() => {
+    const source: ArtifactData['type'][] =
+      activeTab === 'yours' ? sortedArtifacts.map((a) => a.type) : INSPIRATION.map((c) => c.type);
+    return [...new Set(source)].sort();
+  }, [activeTab, sortedArtifacts]);
+
+  const filtersActive = normalizedQuery !== '' || typeFilter !== 'all' || dateFilter !== 'all';
+
+  const clearFilters = () => {
+    setQuery('');
+    setTypeFilter('all');
+    setDateFilter('all');
+  };
+
+  const selectTab = (tab: TabId) => {
+    setActiveTab(tab);
+    // The two tabs carry different type sets; keeping a type the new tab lacks
+    // would show an empty grid under a filter the user cannot see the cause of.
+    setTypeFilter('all');
+  };
 
   const handleCategorySelect = (category: ArtifactCategory) => {
     if (category.id === 'scratch') {
@@ -1199,18 +1324,83 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
               background: 'var(--agi-bg-2)',
               border: '1px solid var(--agi-rule)',
               borderRadius: 10,
-              marginBottom: 32,
+              marginBottom: 20,
             }}
           >
-            <TabButton active={activeTab === 'yours'} onClick={() => setActiveTab('yours')}>
+            <TabButton active={activeTab === 'yours'} onClick={() => selectTab('yours')}>
               Your artifacts
             </TabButton>
             <TabButton
               active={activeTab === 'inspiration'}
-              onClick={() => setActiveTab('inspiration')}
+              onClick={() => selectTab('inspiration')}
             >
               Inspiration
             </TabButton>
+          </div>
+
+          {/* Search + filters */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              marginBottom: 32,
+            }}
+          >
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search artifacts"
+              aria-label="Search artifacts"
+              style={{ ...controlStyle, flex: '1 1 240px', minWidth: 200, boxSizing: 'border-box' }}
+            />
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+              aria-label="Filter by type"
+              style={controlStyle}
+            >
+              <option value="all">All types</option>
+              {typeOptions.map((type) => (
+                <option key={type} value={type}>
+                  {languageLabel(type)}
+                </option>
+              ))}
+            </select>
+            {activeTab === 'yours' && (
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+                aria-label="Filter by date"
+                style={controlStyle}
+              >
+                {DATE_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {filtersActive && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: 13,
+                  color: 'var(--agi-ink-quiet)',
+                  textDecoration: 'underline',
+                  padding: 0,
+                }}
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         </div>
 
@@ -1278,9 +1468,11 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                     Create your first artifact
                   </button>
                 </div>
+              ) : visibleArtifacts.length === 0 ? (
+                <NoMatchesState onClear={clearFilters} />
               ) : (
                 <div style={cardGridStyle}>
-                  {sortedArtifacts.map((artifact) => (
+                  {visibleArtifacts.map((artifact) => (
                     <ArtifactCard
                       key={artifact.id}
                       title={artifact.title}
@@ -1314,21 +1506,24 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
           )}
 
           {/* Inspiration tab */}
-          {activeTab === 'inspiration' && (
-            <div style={cardGridStyle}>
-              {INSPIRATION.map((card) => (
-                <ArtifactCard
-                  key={card.id}
-                  title={card.title}
-                  language={card.language}
-                  subtitle={card.description}
-                  type={card.type}
-                  content={card.content}
-                  onClick={() => setSelectedArtifact(card)}
-                />
-              ))}
-            </div>
-          )}
+          {activeTab === 'inspiration' &&
+            (visibleInspiration.length === 0 ? (
+              <NoMatchesState onClear={clearFilters} />
+            ) : (
+              <div style={cardGridStyle}>
+                {visibleInspiration.map((card) => (
+                  <ArtifactCard
+                    key={card.id}
+                    title={card.title}
+                    language={card.language}
+                    subtitle={card.description}
+                    type={card.type}
+                    content={card.content}
+                    onClick={() => setSelectedArtifact(card)}
+                  />
+                ))}
+              </div>
+            ))}
         </div>
       </div>
 

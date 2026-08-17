@@ -1,4 +1,3 @@
-
 import type {
   Personalization,
   PersonalizationStyle,
@@ -29,6 +28,12 @@ export interface CloudPersonalization {
   emoji?: number;
 }
 
+export interface CloudGeneral {
+  preferredName?: string;
+  workDescription?: string;
+  instructions?: string;
+}
+
 export interface CloudNotifications {
   enabled?: boolean;
 }
@@ -50,6 +55,7 @@ export interface CloudCapabilities {
 export interface CloudSettings {
   appearance?: CloudAppearance;
   personalization?: CloudPersonalization;
+  general?: CloudGeneral;
   notifications?: CloudNotifications;
   language?: CloudLanguage;
   capabilities?: CloudCapabilities;
@@ -113,6 +119,11 @@ export function toCloudSettings(
       headersLists: personalization.headersLists,
       emoji: personalization.emoji,
     },
+    general: {
+      preferredName: personalization.nickname,
+      workDescription: personalization.occupation,
+      instructions: personalization.instructions,
+    },
     notifications: {
       enabled: notificationsEnabled,
     },
@@ -167,6 +178,15 @@ export function applyCloudSettings(partial: CloudSettings): void {
     if (enthusiasm !== undefined) patch.enthusiasm = enthusiasm;
     if (headersLists !== undefined) patch.headersLists = headersLists;
     if (emoji !== undefined) patch.emoji = emoji;
+    if (Object.keys(patch).length > 0) store.setPersonalization(patch);
+  }
+
+  if (partial.general) {
+    const { preferredName, workDescription, instructions } = partial.general;
+    const patch: Partial<Personalization> = {};
+    if (preferredName !== undefined) patch.nickname = preferredName;
+    if (workDescription !== undefined) patch.occupation = workDescription;
+    if (instructions !== undefined) patch.instructions = instructions;
     if (Object.keys(patch).length > 0) store.setPersonalization(patch);
   }
 

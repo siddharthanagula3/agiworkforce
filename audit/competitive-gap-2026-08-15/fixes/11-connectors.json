@@ -1,0 +1,29 @@
+[
+  {
+    "id": "CPS-03",
+    "title": "Custom connector and Plugin removal bypass the confirmation dialog that catalog connectors correctly use",
+    "claimId": "connectors-20",
+    "benchmark": "Claude requires a consequence-explaining confirmation dialog before removing an installed plugin/connector (02-claude/settings.md)",
+    "ourState": "PRESENT_WORSE",
+    "ourEvidence": "Catalog connectors: apps/web/features/connectors/pages/ConnectorsPage.tsx:767-795 renders a real confirm Dialog with per-connector consequence copy from describeDisconnect() (line 491) before disconnecting. Custom (self-added MCP) connectors: the 'Remove' X button at ConnectorsPage.tsx:1190-1203 calls handleRemoveCustomConnector(c.id) directly onClick, no confirmation. Plugins: packages/ui/ui/src/settings-modal/SettingsModal.tsx:1921-1932's 'Remove' button calls adapter.removePlugin?.(plugin.id) directly onClick, also no confirmation.",
+    "severity": "P2",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "Wrap the custom-connector 'Remove' button and the Plugins panel's 'Remove' button in the same confirm-Dialog pattern ConnectorsPage.tsx already built and shipped for catalog connectors one component away \u2014 this is a small, low-risk fix reusing existing UI.",
+    "_domain": "Connectors, plugins, skills, MCP & custom assistants"
+  },
+  {
+    "id": "agentic-modes-gap-14",
+    "title": "Custom MCP import supports URL-based add only, not raw-JSON-config import",
+    "claimId": "agentic-20",
+    "benchmark": "Manus offers three separate custom-MCP actions: 'Custom MCP' / 'Import MCP by JSON' / 'Add MCP by URL'. (ChatGPT and Claude offer neither variant \u2014 only vendor-curated integrations \u2014 a claim already beaten on the URL-based half.)",
+    "ourState": "PARTIAL",
+    "ourEvidence": "apps/web/app/api/connectors/custom/route.ts is a live-validating add-a-custom-MCP-by-URL API (connectMcpServer from @agiworkforce/mcp called at save time, ':9-13'), HTTPS-only with DNS-resolved-public-hostname validation (validateHttpsMcpUrl) and encrypted-at-rest bearer tokens; wired to apps/web/features/connectors/pages/ConnectorsPage.tsx (POST /api/connectors/custom at :220); confirmed live on Desktop (apps/desktop/src/api/cloudConnectors.ts) and Mobile (AddCustomConnectorModal.tsx) per prior audit's domain-extensibility.md:79,84. The form takes a URL + optional bearer token only \u2014 no arbitrary pasted-JSON server config variant exists.",
+    "severity": "P3",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "priorAuditRef": "",
+    "recommendation": "Add a raw-JSON-config import variant alongside the existing URL-based custom-MCP form (apps/web/app/api/connectors/custom/route.ts, ConnectorsPage.tsx:220) to match Manus's third action \u2014 the core capability (and its validation/security model) is already ahead of ChatGPT and Claude; this closes the remaining gap against Manus specifically. [severity inferred by recovery pass]",
+    "_domain": "Agentic modes: Work / Cowork / Codex / Spark / Manus Agent"
+  }
+]

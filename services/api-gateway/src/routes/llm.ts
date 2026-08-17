@@ -1,4 +1,3 @@
-
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import {
@@ -35,9 +34,16 @@ import {
   isCanonicalStreamChunk,
   isFailoverEligibleFailure,
   malformedStreamFailure,
+  providerUnavailableFailure,
   toSafeProviderFailure,
   type SafeProviderFailure,
 } from '../lib/providerStreamSafety';
+import {
+  isDependencyUnavailableError,
+  providerBreaker,
+  retryAfterSeconds,
+} from '../lib/dependencies';
+import type { CircuitLease } from '@agiworkforce/utils';
 import { createStreamLifecycle, StreamClientAbortError } from '../lib/streamLifecycle';
 import {
   estimateAbandonedStreamUsage,
@@ -60,6 +66,23 @@ const router: Router = Router();
 
 router.use(authenticateToken);
 router.use(createRateLimiter('default'));
+
+// Only an upstream fault may move a provider's circuit. A gateway-side failure
+// (usage settlement, local stream bookkeeping) says nothing about the provider,
+// and scoring it would open a circuit against a dependency that is fine.
+function settleProviderLease(
+  lease: CircuitLease | null,
+  failure: SafeProviderFailure | null,
+  succeeded: boolean,
+): void {
+  if (!lease) return;
+  if (failure && failure.category !== 'gateway') {
+    lease.failed(new Error(failure.chunk.message));
+  } else if (succeeded) {
+    lease.succeeded();
+  }
+  lease.release();
+}
 
 /**
  * Models allowed on the Basic tier — derived from the shared model catalog.
@@ -529,6 +552,13 @@ router.post(
             );
             continue;
           }
+          if (!providerBreaker(candidateProvider).isAvailable()) {
+            logger.warn(
+              { userId: user.userId, model: candidate, provider: candidateProvider },
+              'LLM managed failover candidate skipped: provider circuit is open',
+            );
+            continue;
+          }
           await enforcePlanTier(user.userId, user.token, candidate, user.surface);
           const candidateAdapter = buildProviderAdapter(candidateProvider);
           if (!candidateAdapter) {
@@ -651,15 +681,18 @@ router.post(
           let attemptFailure: { failure: SafeProviderFailure; phase: string } | null = null;
           let succeeded = false;
           let clientGone = false;
+          let lease: CircuitLease | null = null;
 
           try {
+            lease = await providerBreaker(attempt.provider).begin({ signal: lifecycle.signal });
             iterator = attempt.adapter
-              .stream(buildChatRequest(attempt.model), lifecycle.signal)
+              .stream(buildChatRequest(attempt.model), lease.signal)
               [Symbol.asyncIterator]();
 
             while (!attemptFailure) {
               const next: IteratorResult<StreamChunk> = await lifecycle.next(iterator);
               if (next.done) break;
+              lease.succeeded();
 
               if (!isCanonicalStreamChunk(next.value)) {
                 attemptFailure = { failure: malformedStreamFailure(), phase: 'invalid-event' };
@@ -742,6 +775,11 @@ router.post(
                 },
                 phase: 'billing-finalization',
               };
+            } else if (isDependencyUnavailableError(err)) {
+              attemptFailure = {
+                failure: providerUnavailableFailure(retryAfterSeconds(err)),
+                phase: 'provider-circuit',
+              };
             } else {
               attemptFailure = { failure: toSafeProviderFailure(err), phase: 'thrown-error' };
             }
@@ -754,6 +792,7 @@ router.post(
               await settleAbandonedStream();
             }
           } finally {
+            settleProviderLease(lease, attemptFailure?.failure ?? null, succeeded);
             if (iterator) lifecycle.release(iterator);
           }
 
@@ -840,15 +879,18 @@ router.post(
         let attemptFailure: { failure: SafeProviderFailure; phase: string } | null = null;
         let succeeded = false;
         let clientGone = false;
+        let lease: CircuitLease | null = null;
 
         try {
+          lease = await providerBreaker(attempt.provider).begin({ signal: lifecycle.signal });
           iterator = attempt.adapter
-            .stream(buildChatRequest(attempt.model), lifecycle.signal)
+            .stream(buildChatRequest(attempt.model), lease.signal)
             [Symbol.asyncIterator]();
 
           while (!attemptFailure) {
             const next = await lifecycle.next(iterator);
             if (next.done) break;
+            lease.succeeded();
 
             if (!isCanonicalStreamChunk(next.value)) {
               attemptFailure = { failure: malformedStreamFailure(), phase: 'invalid-event' };
@@ -916,10 +958,16 @@ router.post(
             routeError = err;
           } else if (err instanceof ManagedUsageBillingError) {
             routeError = new AppError(err.message, err.statusCode);
+          } else if (isDependencyUnavailableError(err)) {
+            attemptFailure = {
+              failure: providerUnavailableFailure(retryAfterSeconds(err)),
+              phase: 'provider-circuit',
+            };
           } else {
             attemptFailure = { failure: toSafeProviderFailure(err), phase: 'thrown-error' };
           }
         } finally {
+          settleProviderLease(lease, attemptFailure?.failure ?? null, succeeded);
           if (iterator) lifecycle.release(iterator);
         }
 

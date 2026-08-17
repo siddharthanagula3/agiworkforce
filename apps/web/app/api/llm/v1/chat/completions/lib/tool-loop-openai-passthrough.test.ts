@@ -62,6 +62,7 @@ function fakeAdapterStream(chunks: unknown[]) {
 
 function makeProcessed(): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'req-openai-1',
     chatRequest: { model: OPENAI_MODEL, messages: [], stream: true } as never,
     conversationId: undefined,

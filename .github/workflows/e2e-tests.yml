@@ -1,4 +1,8 @@
-name: E2E Tests - Comprehensive Flow Testing
+# Desktop only, and only the smoke/chat/v3-locks Playwright projects. Do not
+# read this workflow as cross-surface coverage — the per-surface E2E lanes are
+# jobs in ci.yml (desktop deterministic mocks, Chrome extension, VS Code + CLI,
+# mobile, web).
+name: Desktop E2E Tests
 
 on:
   push:
@@ -10,6 +14,8 @@ on:
     branches: [main, develop]
     paths:
       - 'apps/desktop/**'
+      # A pull request that edits this gate must be checked by this gate.
+      - '.github/workflows/e2e-tests.yml'
   workflow_dispatch:
   schedule:
     # Weekly coverage supplements the path-filtered PR/main runs without
@@ -18,7 +24,10 @@ on:
 
 concurrency:
   group: desktop-e2e-${{ github.ref }}
-  cancel-in-progress: true
+  # Only superseded pull-request pushes may be cancelled. Cancelling on
+  # main/develop would leave a merged commit with no E2E verdict, which is the
+  # same outcome as continue-on-error the M22 note below forbids.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Limit GITHUB_TOKEN permissions to minimum required
 permissions:
@@ -92,33 +101,25 @@ jobs:
           exit 1
         working-directory: apps/desktop
 
-      - name: Run smoke E2E tests
-        # M22: No continue-on-error — smoke failures block CI
+      # M22: No continue-on-error — E2E failures intentionally block CI.
+      #
+      # One invocation for all three projects: separate invocations each
+      # overwrote the same results.json, so the gate below could only ever see
+      # the last one. There is deliberately no --reporter flag — passing it
+      # replaces the reporters in playwright.config.ts and sends the JSON to
+      # stdout, which is what left the results gate reading a file that was
+      # never written.
+      #
+      # v3-locks/v3-reachability/v3-smoke were dev-local-only until 2026-07-03
+      # (fixed to mount deterministically via mock cloud auth, see git history
+      # on these spec files) — kept in CI so v3 shell regressions block the
+      # pipeline instead of only surfacing to whoever happens to run them locally.
+      - name: Run desktop E2E projects (smoke, chat, v3-locks)
         run: |
-          pnpm exec playwright test --project=smoke \
-            --reporter=html,json \
-            --retries=2 \
-            --workers=1
-        working-directory: apps/desktop
-
-      - name: Run chat E2E tests
-        if: success()
-        run: |
-          pnpm exec playwright test --project=chat \
-            --reporter=html,json \
-            --retries=2 \
-            --workers=1
-        working-directory: apps/desktop
-
-      - name: Run v3 shell E2E tests
-        # v3-locks/v3-reachability/v3-smoke were dev-local-only until 2026-07-03
-        # (fixed to mount deterministically via mock cloud auth, see git history
-        # on these spec files) — added to CI so v3 shell regressions block the
-        # pipeline instead of only surfacing to whoever happens to run them locally.
-        if: success()
-        run: |
-          pnpm exec playwright test --project=v3-locks \
-            --reporter=html,json \
+          pnpm exec playwright test \
+            --project=smoke \
+            --project=chat \
+            --project=v3-locks \
             --retries=2 \
             --workers=1
         working-directory: apps/desktop
@@ -128,15 +129,17 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: apps/desktop/test-results/
+          path: apps/desktop/playwright-report/
           retention-days: 30
 
-      - name: Upload test videos on failure
+      - name: Upload test videos and traces on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: test-videos
-          path: apps/desktop/test-results/**/*.webm
+          path: |
+            apps/desktop/test-results/**/*.webm
+            apps/desktop/test-results/**/*.zip
           retention-days: 7
 
       - name: Upload app logs on failure
@@ -147,18 +150,40 @@ jobs:
           path: apps/desktop/app.log
           retention-days: 7
 
+      # A missing or empty report fails this step. Treating "no report" as
+      # success is how a skipped E2E run reports green.
       - name: Check test results
         if: always()
         run: |
-          if [ -f apps/desktop/test-results/results.json ]; then
-            FAILED=$(grep -o '"status":"failed"' apps/desktop/test-results/results.json | wc -l)
-            if [ "$FAILED" -gt 0 ]; then
-              echo "Tests failed: $FAILED failures detected"
-              exit 1
-            else
-              echo "All tests passed"
-            fi
-          fi
+          set -euo pipefail
+          cat > check-e2e-results.mjs <<'EOF'
+          import { readFileSync } from 'node:fs';
+
+          const reportPath = 'apps/desktop/playwright-report/results.json';
+          let report;
+          try {
+            report = JSON.parse(readFileSync(reportPath, 'utf8'));
+          } catch (error) {
+            console.error(`No readable Playwright report at ${reportPath}: ${error.message}`);
+            process.exit(1);
+          }
+
+          const stats = report.stats ?? {};
+          const expected = stats.expected ?? 0;
+          const unexpected = stats.unexpected ?? 0;
+          const flaky = stats.flaky ?? 0;
+
+          if (expected + unexpected + flaky === 0) {
+            console.error('Playwright report contains zero executed tests');
+            process.exit(1);
+          }
+          if (unexpected > 0) {
+            console.error(`Tests failed: ${unexpected} unexpected failure(s)`);
+            process.exit(1);
+          }
+          console.log(`All tests passed: ${expected} expected, ${flaky} flaky`);
+          EOF
+          node check-e2e-results.mjs
 
       - name: Stop app server
         if: always()

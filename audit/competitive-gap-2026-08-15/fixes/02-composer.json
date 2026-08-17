@@ -1,0 +1,57 @@
+[
+  {
+    "id": "MEDIA-VIDEO-01",
+    "title": "Staged attachments are silently discarded when sending in image- or video-generation mode",
+    "claimId": "media-13",
+    "benchmark": "Gemini's video composer shows an image-attach ('+') icon next to the Videos pill implying image-to-video support (03-gemini/media-generation.md, media-13)",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx: the 'Add photos & files' menu item (2413-2424) is available unconditionally in image/video mode; setImageMode/setVideoMode (524-531) never clear staged attachments and AttachmentPreview keeps rendering them (2077-2082); but sendImageMode's branch (1601-1627) and the videoMode branch (1632-1669) build their request from prompt + generation options only, never referencing `attachments`; clearComposerState() (943-1030, clearAttachments() at 948) then wipes the attachment on send with no error/toast. hasAttachmentConflict (691) only checks whether the selected TEXT model can read images, so it never fires for imageMode/videoMode. Missing link in the chain: client options type -> request contract never carries `attachments`/`source_image` for these two send paths, and no UI signal tells the user their attachment was dropped.",
+    "severity": "P1",
+    "effort": "M",
+    "priorAudit": "CONFIRMS_PRIOR",
+    "priorAuditRef": "VOICE-MEDIA-010",
+    "recommendation": "Short term: either disable/hide the attach affordance while imageMode/videoMode is active, or show an explicit warning (reusing the hasAttachmentConflict pattern) that attachments are not used in this mode. Longer term, to actually deliver media-13/VOICE-MEDIA-010: add an optional source_image field to ManagedMediaVideoGenerationRequestSchema (managed-media.ts:167-186, mirroring the image contract's existing source_image shape), thread it through the videoMode send path, and pass it to providers that accept a reference image.",
+    "_domain": "Image, video & voice generation"
+  },
+  {
+    "id": "shell-nav-ia-gap-03",
+    "title": "Composer-embedded Chat/AGI-Work mode toggle exists but its placeholder text never changes and it's invisible to free/basic-tier users",
+    "claimId": "shell-01",
+    "benchmark": "Claude's composer-embedded Chat/Cowork axis shifts placeholder copy ('Write a message...' -> 'Describe a task or ask a question') on toggle and is visible regardless of plan tier \u2014 frontend-overview.md, comparative-design-system.md.",
+    "ourState": "PARTIAL",
+    "ourEvidence": "Toggle exists and is functionally real: apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2895-2921 (inline) and :2377-2409 (overflow-menu variant for narrow widths), explicitly commented 'claude.ai Chat/Cowork parity.' But the textarea placeholder at ChatComposerNew.tsx:2258-2266 branches only on isTurnActive/imageMode/videoMode, never workMode -- switching to AGI Work never changes the placeholder. Visibility is gated: canUseAgiWork requires billingPolicyReady && !isFreeTrial && canUseBillingPlanCapability(tier, 'agi_work') (ChatComposerNew.tsx:455-456), so free/basic-tier users never see this axis at all. Separately, there is no global-chrome-level axis (ChatGPT top-bar pill / Gemini sidebar-content-swap pattern) at all -- 'Code' in the sidebar (WebAppShell.tsx:251-256) is a plain route navigation to a different feature page, not a sidebar-content swap of the same shell.",
+    "severity": "P2",
+    "effort": "M",
+    "priorAudit": "CONFIRMS_PRIOR",
+    "priorAuditRef": "audit/parity-2026-08-15/gaps/domain-agentic-work.json AGENTIC-WORK-006 (re-confirms P2-001): 'AGI Work exists as a mode toggle on the ordinary chat composer... no independent, deep-linkable workspace object.' This finding adds the placeholder-non-reactivity and tier-gating angles that prior pass did not check.",
+    "recommendation": "Wire ChatComposerNew's placeholder prop to workMode (small, isolated change). Separately evaluate whether AGI Work's paid-tier gate should also gate its visibility, or whether it should render (disabled, with an upgrade nudge) for free/basic users the way the other benchmarked products keep their mode switch visible regardless of plan.",
+    "_domain": "Shell, global nav, IA & design system"
+  },
+  {
+    "id": "MEDIA-PLACEHOLDER-10",
+    "title": "Generation placeholders are not pre-sized to the requested aspect ratio",
+    "claimId": "media-01",
+    "benchmark": "ChatGPT's generation placeholder is pre-sized to the target image's eventual aspect ratio (01-chatgpt/images-media.md, media-01)",
+    "ourState": "PARTIAL",
+    "ourEvidence": "apps/web/features/chat/components/ImageGenerationCard.tsx:139-178 \u2014 GeneratingCard() takes no aspectRatio prop and is always h-[280px] w-full max-w-[420px]. apps/web/features/chat/components/messages/VideoGenerationPlaceholder.tsx:50 hardcodes Tailwind's aspect-video (16:9) regardless of the requested ratio, and the component has no aspectRatio prop to receive one.",
+    "severity": "P3",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "Pass the requested aspectRatio into GeneratingCard and VideoGenerationPlaceholder and size the placeholder box (e.g. via CSS aspect-ratio) to match, instead of a fixed box/16:9 default.",
+    "_domain": "Image, video & voice generation"
+  },
+  {
+    "id": "orch-gap-03",
+    "title": "Deep Research on the DEFAULT model silently takes the single-turn path \u2014 no plan card, no process narration, no signal to the user",
+    "claimId": "dr-27",
+    "benchmark": "ChatGPT and Gemini both gate Deep Research on a reviewable plan card before spending research budget, and all three products narrate live progress once a research mode is invoked \u2014 Gemini narrates through titled sub-sections with a consulted-site grid and a numeric 'Researching 10 websites\u2026' count; ChatGPT shows a task-level progress bar and streaming status line with a stop control (04-cross-product-comparison/04-deep-research-comparison.md).",
+    "ourState": "PARTIAL",
+    "ourEvidence": "VERIFIED LIVE: with the composer's default model (Claude Sonnet 5, an Anthropic model) and 'Deep Research' toggled on from the '+' menu, a real research query returned a substantive answer with 10 real numbered citations to genuine sources (Solid Power, BMW Group press, GreenCars, Finimize, TechCrunch) \u2014 so the path is NOT dead and does real cited work. But a DOM probe of the completed response found no plan card, no research-activity narration, and no 'Thought for Ns' disclosure. Cause: apps/web/app/api/llm/v1/chat/completions/route.ts:313-317 gates runResearchLoop behind `processed.provider.toLowerCase() !== 'anthropic'`, documented in its own comment as deliberate (the loop consumes OpenAI-compatible SSE; Anthropic keeps 'the existing single-turn research behavior (research prompt + forced web_search) unchanged'). Meanwhile ChatComposerNew.tsx:732-733 computes modelSupportsResearch with no provider exclusion, so the toggle renders, enables and shows its active badge identically for Anthropic models. The defect is not that the fallback exists \u2014 it is that one control yields two materially different experiences with zero disclosure, on the model the product ships as default. CORRECTION TO A DOMAIN AGENT: the search-deep-research agent's notWorthCopying entry asserts 'our loop always performs a real planning turn and real search rounds by default \u2026 so a user who enables Deep Research always gets genuine multi-round work'. That is false for Anthropic providers, i.e. for the default model, and contradicts the P1 gap the same agent filed.",
+    "severity": "P1",
+    "effort": "M",
+    "priorAudit": "SUPERSEDES_PRIOR",
+    "priorAuditRef": "search-deep-research P1 (Deep Research silently degrades\u2026)",
+    "recommendation": "Pick one and make it honest. Either (a) normalize the Anthropic stream so runResearchLoop can consume it and every provider gets the same multi-round experience, or (b) have the composer disclose the lighter path for providers the loop does not cover \u2014 e.g. label the toggle 'Research' rather than 'Deep Research' when the selected model will take the single-turn path, the way the model picker already discloses cache/pricing consequences on model switch. Do not leave the same badge meaning two things. Re-verify by running the identical query on an Anthropic and a non-Anthropic model and diffing what the transcript shows.",
+    "_domain": "Orchestrator live verification (browser-observed)"
+  }
+]

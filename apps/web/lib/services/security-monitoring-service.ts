@@ -184,6 +184,7 @@ export class SecurityMonitoringService {
         admin_action: 0,
         csrf_validation_failed: 0,
         invalid_signature: 0,
+        content_notice: 0,
       };
 
       const uniqueIps = new Set<string>();

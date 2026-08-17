@@ -308,6 +308,21 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ url: checkoutSession.url });
   } catch (error) {
+    if (error instanceof Stripe.errors.StripeError) {
+      logger.error(
+        {
+          userId: user.id,
+          priceId,
+          plan,
+          stripeErrorType: error.type,
+          stripeErrorCode: error.code,
+          stripeErrorParam: error.param,
+          stripeErrorMessage: error.message,
+        },
+        'Stripe rejected checkout session creation',
+      );
+    }
+
     if (error instanceof Stripe.errors.StripeCardError) {
       throw createError.validation(error.message);
     } else if (error instanceof Stripe.errors.StripeInvalidRequestError) {

@@ -1,7 +1,6 @@
-
 import * as vscode from 'vscode';
 
-import { declarationSpan } from './declarationSpan';
+import { declarationSpan, type DeclarationSpan } from './declarationSpan';
 
 interface CachedLensesEntry {
   version: number;
@@ -85,7 +84,103 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
     }
   }
 
+  for (const note of commentNoteLenses(lines)) {
+    const anchor = lines[note.anchorLine]!;
+    const lensRange = new vscode.Range(note.anchorLine, 0, note.anchorLine, anchor.length);
+    const noteRange = new vscode.Range(
+      note.target.startLine,
+      0,
+      note.target.endLine,
+      note.target.endCharacter,
+    );
+
+    for (const action of noteActions(note.keyword)) {
+      lenses.push(
+        new vscode.CodeLens(lensRange, {
+          title: action.title,
+          tooltip: action.tooltip,
+          command: action.command,
+          arguments: [noteRange],
+        }),
+      );
+    }
+  }
+
   return lenses;
+}
+
+const NOTE_KEYWORD = /\b(TODO|FIXME|HACK|BUG|XXX)\b/;
+
+const COMMENT_PREFIXES = ['//', '/*', '*', '#', '--', '<!--'];
+
+export interface CommentNote {
+  keyword: string;
+  anchorLine: number;
+  target: DeclarationSpan;
+}
+
+function isCommentLine(line: string | undefined): boolean {
+  const trimmed = (line ?? '').trimStart();
+  if (trimmed === '') return false;
+  return COMMENT_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
+function noteActions(keyword: string): ReadonlyArray<{
+  title: string;
+  tooltip: string;
+  command: string;
+}> {
+  return [
+    {
+      title: `$(wrench) Resolve ${keyword}`,
+      tooltip: `Have AGI Workforce carry out this ${keyword}`,
+      command: 'agi-workforce.fix',
+    },
+    {
+      title: '$(hubot) Ask AI',
+      tooltip: 'Explain this note and the code it annotates',
+      command: 'agi-workforce.explain',
+    },
+  ];
+}
+
+function noteTarget(
+  lines: readonly string[],
+  blockStart: number,
+  blockEnd: number,
+): DeclarationSpan {
+  const annotated = lines[blockEnd + 1];
+  if (annotated !== undefined && annotated.trim() !== '' && !isCommentLine(annotated)) {
+    const span = declarationSpan(lines, blockEnd + 1);
+    return { startLine: blockStart, endLine: span.endLine, endCharacter: span.endCharacter };
+  }
+  return { startLine: blockStart, endLine: blockEnd, endCharacter: (lines[blockEnd] ?? '').length };
+}
+
+export function commentNoteLenses(lines: readonly string[]): CommentNote[] {
+  const notes: CommentNote[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!isCommentLine(lines[i])) continue;
+
+    let blockEnd = i;
+    while (isCommentLine(lines[blockEnd + 1])) blockEnd++;
+
+    for (let j = i; j <= blockEnd; j++) {
+      const match = NOTE_KEYWORD.exec(lines[j] ?? '');
+      if (match === null) continue;
+      notes.push({
+        keyword: match[1]!,
+        anchorLine: j,
+        target: noteTarget(lines, i, blockEnd),
+      });
+      break;
+    }
+
+    i = blockEnd;
+  }
+
+  return notes;
 }
 
 function isFunctionOrClassLine(line: string, languageId: string): boolean {

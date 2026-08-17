@@ -38,6 +38,57 @@ interface Invoice {
   invoice_pdf: string | null;
 }
 
+// Real per-task credit ledger rows from apps/web/app/api/billing/credit-history
+// (backed by public.credit_transactions — settings-12-gap). `deduction` is
+// the per-task debit every managed-cloud request writes; the other four are
+// the money-affecting events (top-up, refund, bonus grant, manual
+// adjustment). See that route for why `allocation`/`reset` are excluded.
+type CreditTransactionType = 'purchase' | 'adjustment' | 'refund' | 'bonus' | 'deduction';
+
+interface CreditHistoryEntry {
+  id: string;
+  transaction_type: CreditTransactionType | string;
+  amount_cents: number;
+  description: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+const CREDIT_TRANSACTION_LABELS: Record<string, string> = {
+  purchase: 'Top-up purchase',
+  deduction: 'Usage',
+  refund: 'Refund',
+  bonus: 'Bonus credit',
+  adjustment: 'Adjustment',
+};
+
+/**
+ * `credit_transactions.amount_cents` is stored positive for `deduction` (an
+ * "amount spent" magnitude — see db/neon/0020_functions.sql:643-657) but as a
+ * signed balance delta for every other type (positive = credited, negative =
+ * revoked — see the `refund` caller at db/neon/0020_functions.sql:355). Flip
+ * only the verified case so a per-task debit reads as a debit instead of a
+ * false "credit added" row; every other type is shown exactly as stored.
+ */
+function signedCreditCents(entry: CreditHistoryEntry): number {
+  return entry.transaction_type === 'deduction'
+    ? -Math.abs(entry.amount_cents)
+    : entry.amount_cents;
+}
+
+function formatSignedMoney(cents: number): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      signDisplay: 'exceptZero',
+    }).format(cents / 100);
+  } catch {
+    const amount = (Math.abs(cents) / 100).toFixed(2);
+    return cents < 0 ? `-$${amount}` : `+$${amount}`;
+  }
+}
+
 type BillingListState<T> =
   | { status: 'idle' | 'loading'; items: T[] }
   | { status: 'ready'; items: T[] }
@@ -339,6 +390,14 @@ export function BillingSection() {
     status: 'idle',
     items: [],
   });
+  // Credit ledger, unlike payment methods/invoices above, is NOT Stripe-only:
+  // every managed-cloud request debits credits regardless of billing source
+  // (including the free tier's limited managed chat), so it is fetched in its
+  // own effect below rather than gated behind `hasStripeBilling`.
+  const [creditHistory, setCreditHistory] = useState<BillingListState<CreditHistoryEntry>>({
+    status: 'idle',
+    items: [],
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -414,6 +473,36 @@ export function BillingSection() {
       cancelled = true;
     };
   }, [billingDetailsRefresh, billingInitialized, billingLoading, hasStripeBilling]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!billingInitialized || billingLoading) {
+      setCreditHistory({ status: 'idle', items: [] });
+      return;
+    }
+    setCreditHistory({ status: 'loading', items: [] });
+    void fetch('/api/billing/credit-history', { credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error(`Credit history could not be loaded (${response.status}).`);
+        const json = (await response.json()) as { transactions?: CreditHistoryEntry[] };
+        return json.transactions ?? [];
+      })
+      .then((items) => {
+        if (!cancelled) setCreditHistory({ status: 'ready', items });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setCreditHistory({
+          status: 'error',
+          items: [],
+          message: error instanceof Error ? error.message : 'Credit history could not be loaded.',
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [billingDetailsRefresh, billingInitialized, billingLoading]);
 
   const defaultCard =
     paymentMethods.items.find((pm) => pm.is_default)?.card ?? paymentMethods.items[0]?.card;
@@ -956,6 +1045,113 @@ export function BillingSection() {
           </div>
         </section>
       )}
+
+      {/* Credit history section (settings-12-gap): the real per-task credit
+          ledger from public.credit_transactions, surfaced next to the
+          balance/top-up UI above. Never seeded or mocked — an empty table
+          means this account has no transactions yet. */}
+      <section
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          overflow: 'hidden',
+        }}
+      >
+        <SectionHeader title="Credit history" />
+        {creditHistory.status === 'ready' && creditHistory.items.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: '1px solid var(--settings-border)',
+                    background: 'var(--bg-hover, rgba(255,255,255,0.03))',
+                  }}
+                >
+                  {['Date', 'Description', 'Amount'].map((col) => (
+                    <th
+                      key={col}
+                      style={{
+                        padding: '10px 16px',
+                        textAlign: col === 'Amount' ? 'right' : 'left',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        color: 'var(--text-3)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {creditHistory.items.map((entry, idx) => {
+                  const cents = signedCreditCents(entry);
+                  return (
+                    <tr
+                      key={entry.id}
+                      style={{
+                        borderBottom:
+                          idx < creditHistory.items.length - 1
+                            ? '1px solid var(--settings-border)'
+                            : 'none',
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: '12px 16px',
+                          color: 'var(--text-1)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {formatIsoDate(entry.created_at)}
+                      </td>
+                      <td style={{ padding: '12px 16px', color: 'var(--text-2)' }}>
+                        {entry.description ||
+                          CREDIT_TRANSACTION_LABELS[entry.transaction_type] ||
+                          entry.transaction_type}
+                      </td>
+                      <td
+                        style={{
+                          padding: '12px 16px',
+                          textAlign: 'right',
+                          color: cents < 0 ? 'var(--text-2)' : 'var(--text-1)',
+                          fontFamily: 'var(--mono)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {formatSignedMoney(cents)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : creditHistory.status === 'error' ? (
+          <div
+            role="alert"
+            style={{ padding: '16px 20px', color: 'var(--danger, #b3261e)', fontSize: 13 }}
+          >
+            {creditHistory.message}{' '}
+            <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
+              Try again
+            </button>
+          </div>
+        ) : (
+          <div style={{ padding: '16px 20px' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+              {creditHistory.status === 'loading' || creditHistory.status === 'idle'
+                ? 'Loading credit history…'
+                : 'No credit activity yet. Purchases, refunds, bonus grants, adjustments, and per-task usage debits will appear here as they happen.'}
+            </p>
+          </div>
+        )}
+      </section>
 
       {/* Invoices section */}
       <section

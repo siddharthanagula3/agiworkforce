@@ -12,7 +12,13 @@ import {
   CreditService,
 } from './db';
 import { toStoredSubscriptionStatus } from './subscription-status';
+import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
 import { isValidTopUpPurchase } from '@agiworkforce/types';
+
+function getCustomerId(customer: Stripe.PaymentIntent['customer']): string | null {
+  if (typeof customer === 'string') return customer;
+  return customer?.id ?? null;
+}
 
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const current = invoice.parent?.subscription_details?.subscription;
@@ -161,6 +167,55 @@ export async function dispatchStripeEvent(
           [stripeCustomerId],
         );
       }
+      break;
+    }
+    case 'payment_intent.processing': {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const preDebitWindow = readPreDebitWindow(paymentIntent);
+      if (!preDebitWindow) break;
+
+      logger.info(
+        {
+          paymentIntentId: paymentIntent.id,
+          customerId: getCustomerId(paymentIntent.customer),
+          approvalRequested: preDebitWindow.approvalRequested,
+          completesAt: preDebitWindow.completesAt,
+        },
+        'India e-mandate pre-debit notification sent; the charge settles after the notification window and cannot be canceled, so entitlement stays untouched until it resolves',
+      );
+      break;
+    }
+    case 'payment_intent.payment_failed': {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const mandateCode = readUnrecoverableMandateCode(paymentIntent.last_payment_error);
+      if (!mandateCode) break;
+
+      const stripeCustomerId = getCustomerId(paymentIntent.customer);
+      logger.error(
+        { paymentIntentId: paymentIntent.id, stripeCustomerId, mandateCode },
+        'India e-mandate is no longer chargeable; Stripe retries cannot succeed until the customer authorizes a new mandate through a fresh subscription',
+      );
+      if (!stripeCustomerId) break;
+
+      const [profile] = await db.query<{ id: string }>(
+        'select id from profiles where stripe_customer_id = $1 limit 1',
+        [stripeCustomerId],
+      );
+      if (!profile?.id) break;
+
+      await recordAuditEvent({
+        userId: profile.id,
+        eventType: 'plan_changed',
+        severity: 'warning',
+        endpoint: '/api/stripe-webhook',
+        surface: 'stripe_webhook',
+        detail: {
+          resourceType: 'subscription',
+          resourceId: paymentIntent.id,
+          source: 'stripe_webhook',
+          reason: `india_mandate_unrecoverable:${mandateCode}`,
+        },
+      });
       break;
     }
     case 'charge.refunded': {

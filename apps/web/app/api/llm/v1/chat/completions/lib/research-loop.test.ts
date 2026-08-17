@@ -1003,3 +1003,64 @@ describe('retry with carried sources', () => {
     expect(firstPlan.map((s) => s['description'])).toEqual(['already ran', 'fresh query']);
   });
 });
+
+describe('empty synthesis — attributing the cause honestly', () => {
+  /**
+   * Observed locally with an Anthropic key at $0: every upstream call was
+   * rejected with "Your credit balance is too low to access the Anthropic API",
+   * the run gathered nothing, synthesis came back empty, and the user was told
+   * "the model returned an empty report. Try running the research again." Both
+   * halves were wrong — the model never got a chance to speak, and the retry
+   * could not have succeeded. Zero sources plus a captured upstream error is an
+   * infrastructure failure, not a shy model.
+   */
+  it('names the upstream provider error instead of blaming the model when nothing was gathered', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      // Round 1: real content, but no search results at all.
+      .mockResolvedValueOnce(sseStream([contentEvent('no luck this round'), finishEvent()]))
+      // Round 2: the provider rejects outright.
+      .mockRejectedValueOnce(
+        new Error('400 Your credit balance is too low to access the Anthropic API.'),
+      )
+      // Synthesis: nothing to say, so it says nothing.
+      .mockResolvedValueOnce(sseStream([contentEvent(''), finishEvent()]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { maxIterations: 6, maxSearches: 15 }),
+    );
+
+    const content = forwardedContent(run);
+    expect(content).toContain('credit balance is too low');
+    expect(content).toContain('every provider call failed');
+    expect(content).toContain('Retrying will not help');
+    // The two misattributions this test exists to prevent.
+    expect(content).not.toContain('the model returned an empty report');
+    expect(content).not.toContain('Try running the research again');
+
+    const statuses = researchStatuses(run);
+    const last = statuses[statuses.length - 1];
+    expect(last?.['phase']).toBe('error');
+    expect(last?.['label']).toBe('Report generation failed upstream');
+  });
+
+  it('still blames the model when sources WERE gathered and no upstream error was captured', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        sseStream([
+          contentEvent(`gathered fine\n${READY_MARKER}`),
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent(''), finishEvent()]));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    const content = forwardedContent(run);
+    expect(content).toContain('the model returned an empty report');
+    expect(content).toContain('Try running the research again');
+    expect(content).not.toContain('every provider call failed');
+  });
+});

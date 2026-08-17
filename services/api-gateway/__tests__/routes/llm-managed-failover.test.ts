@@ -529,6 +529,44 @@ describe('Managed gateway failover — resolver fallback plan consumption', () =
     expect(state.buildCalls).toEqual([]);
   });
 
+  it('routes past a provider whose circuit has opened instead of dialling it again', async () => {
+    vi.stubEnv('CB_PROVIDER_VOLUME_THRESHOLD', '2');
+    vi.stubEnv('CB_PROVIDER_OPEN_MS', '10000');
+
+    for (let i = 0; i < 2; i++) {
+      state.adapterModes.push('throw-503', 'success');
+      const warmup = await request(createApp())
+        .post('/api/llm/v1/chat/completions')
+        .set(MANAGED_FALLBACK_MODELS_HEADER, FALLBACK_FLAGSHIP)
+        .send({
+          model: PRIMARY_FLAGSHIP,
+          messages: [{ role: 'user', content: 'hello' }],
+          stream: false,
+        });
+      expect(warmup.status).toBe(200);
+    }
+
+    state.streamedModels.length = 0;
+    state.adapterModes.push('success');
+
+    const response = await request(createApp())
+      .post('/api/llm/v1/chat/completions')
+      .set(MANAGED_FALLBACK_MODELS_HEADER, FALLBACK_FLAGSHIP)
+      .send({
+        model: PRIMARY_FLAGSHIP,
+        messages: [{ role: 'user', content: 'hello' }],
+        stream: false,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.model).toBe(FALLBACK_FLAGSHIP);
+    // The sick provider is never streamed: the open circuit rotates the request
+    // to the healthy fallback before any upstream socket is opened.
+    expect(state.streamedModels).toEqual([FALLBACK_FLAGSHIP]);
+
+    vi.unstubAllEnvs();
+  });
+
   it('skips catalog-unknown fallback candidates and serves the next admitted route', async () => {
     state.adapterModes.push('throw-503', 'success');
 

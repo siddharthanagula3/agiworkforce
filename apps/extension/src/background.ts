@@ -46,6 +46,11 @@ import {
   type BackgroundChatDelivery,
 } from './features/background/background-results';
 import {
+  deliverPageCapture,
+  pageCaptureFailureMessage,
+  PAGE_CAPTURE_UNDELIVERED_TITLE,
+} from './features/background/page-capture';
+import {
   beginScheduledTaskRunJournal,
   canResumeScheduledTaskRunJournal,
   loadScheduledTaskRunJournals,
@@ -4515,23 +4520,25 @@ async function captureCurrentPage(): Promise<void> {
       quality: 90,
     });
 
-    await sendNativeMessage({
-      type: 'page_capture',
-      dataUrl,
-      tabId: tab.id,
-      timestamp: Date.now(),
-    });
-
-    const stats = await storageUtils.getItem<{ actionCount: number }>('stats', {
-      actionCount: 0,
-    });
-    const actionCount = stats?.actionCount ?? 0;
-
-    await storageUtils.setItem('stats', {
-      actionCount: actionCount + 1,
+    const tabId = tab.id;
+    await deliverPageCapture({
+      send: () =>
+        sendNativeRequest({ type: 'page_capture', dataUrl, tabId, timestamp: Date.now() }),
+      readActionCount: async () => {
+        const stats = await storageUtils.getItem<{ actionCount: number }>('stats', {
+          actionCount: 0,
+        });
+        return stats?.actionCount ?? 0;
+      },
+      writeActionCount: (actionCount) => storageUtils.setItem('stats', { actionCount }),
+      notify: showNotification,
     });
   } catch (error) {
     logger.error('Failed to capture page', error);
+    showNotification(
+      PAGE_CAPTURE_UNDELIVERED_TITLE,
+      pageCaptureFailureMessage(error instanceof Error ? error.message : ''),
+    );
   }
 }
 

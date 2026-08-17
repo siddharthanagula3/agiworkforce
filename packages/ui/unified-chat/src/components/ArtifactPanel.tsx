@@ -863,13 +863,6 @@ export function ArtifactPanel({
               </div>
             )}
           </div>
-        ) : viewMode === 'preview' && canPreview ? (
-          <iframe
-            srcDoc={artifact.content}
-            sandbox=""
-            className="h-full w-full border-0 bg-white"
-            title={artifact.title ?? 'Artifact preview'}
-          />
         ) : (
           <CodeView content={artifact.content} />
         )}

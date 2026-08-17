@@ -155,6 +155,7 @@ pub enum RouteReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnavailableCode {
     UnknownSelection,
+    UnknownTask,
     UnknownRuntimeProfile,
     RuntimeProfileUnavailable,
     RuntimeProfileMismatch,
@@ -718,7 +719,10 @@ fn build_provider_fallbacks(
 pub fn resolve_auto_route(
     request: &AutoRoutingRequest<'_>,
 ) -> Result<AutoRouteDecision, RegistryError> {
-    let registry = registry()?;
+    Ok(resolve_against(registry()?, request))
+}
+
+fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> AutoRouteDecision {
     let policy = &registry.policies.auto;
     let requested_selection = request
         .selection
@@ -726,17 +730,17 @@ pub fn resolve_auto_route(
         .to_ascii_lowercase();
     let runtime_profile = if let Some(profile_id) = request.runtime_profile_id {
         let Some(profile) = registry.runtime_profiles.get(profile_id) else {
-            return Ok(AutoRouteDecision::Unavailable(UnavailableAutoRoute {
+            return AutoRouteDecision::Unavailable(UnavailableAutoRoute {
                 code: UnavailableCode::UnknownRuntimeProfile,
                 requested_selection,
                 requested_profile: None,
                 effective_profile: None,
                 task_type: request.task_type,
                 reasons: vec![format!("unknown runtime profile: {profile_id}")],
-            }));
+            });
         };
         if profile.status != "implemented" {
-            return Ok(AutoRouteDecision::Unavailable(UnavailableAutoRoute {
+            return AutoRouteDecision::Unavailable(UnavailableAutoRoute {
                 code: UnavailableCode::RuntimeProfileUnavailable,
                 requested_selection,
                 requested_profile: None,
@@ -746,10 +750,10 @@ pub fn resolve_auto_route(
                     "runtime profile {profile_id} is {}",
                     profile.status
                 )],
-            }));
+            });
         }
         if profile.trust_mode != request.trust_mode {
-            return Ok(AutoRouteDecision::Unavailable(UnavailableAutoRoute {
+            return AutoRouteDecision::Unavailable(UnavailableAutoRoute {
                 code: UnavailableCode::RuntimeProfileMismatch,
                 requested_selection,
                 requested_profile: None,
@@ -760,17 +764,29 @@ pub fn resolve_auto_route(
                     trust_mode_key(profile.trust_mode),
                     trust_mode_key(request.trust_mode)
                 )],
-            }));
+            });
         }
         Some(profile)
     } else {
         None
     };
-    let task = &policy.tasks[request.task_type.as_key()];
+    let Some(task) = policy.tasks.get(request.task_type.as_key()) else {
+        return AutoRouteDecision::Unavailable(UnavailableAutoRoute {
+            code: UnavailableCode::UnknownTask,
+            requested_selection,
+            requested_profile: None,
+            effective_profile: None,
+            task_type: request.task_type,
+            reasons: vec![format!(
+                "unknown routing task: {}",
+                request.task_type.as_key()
+            )],
+        });
+    };
 
     let Some(alias) = policy.aliases.get(&requested_selection) else {
         if !registry.models.contains_key(&requested_selection) {
-            return Ok(AutoRouteDecision::Unavailable(UnavailableAutoRoute {
+            return AutoRouteDecision::Unavailable(UnavailableAutoRoute {
                 code: UnavailableCode::UnknownSelection,
                 requested_selection,
                 requested_profile: None,
@@ -780,7 +796,7 @@ pub fn resolve_auto_route(
                     "unknown model selection: {}",
                     request.selection.unwrap_or_default()
                 )],
-            }));
+            });
         }
         let eligibility = evaluate_eligibility(
             registry,
@@ -789,7 +805,7 @@ pub fn resolve_auto_route(
             request,
             runtime_profile,
         );
-        return Ok(if eligibility.route.is_some() {
+        return if eligibility.route.is_some() {
             selected_decision(
                 request,
                 &requested_selection,
@@ -811,7 +827,7 @@ pub fn resolve_auto_route(
                 task_type: request.task_type,
                 reasons: eligibility.reasons,
             })
-        });
+        };
     };
 
     let tier = normalize_tier(request.subscription_tier);
@@ -875,7 +891,7 @@ pub fn resolve_auto_route(
                 current_model_key,
                 &selected_provider,
             );
-            return Ok(selected_decision(
+            return selected_decision(
                 request,
                 &requested_selection,
                 Some(requested_profile),
@@ -886,7 +902,7 @@ pub fn resolve_auto_route(
                     reason: RouteReason::Continuity,
                     fallbacks,
                 },
-            ));
+            );
         }
     }
 
@@ -920,7 +936,7 @@ pub fn resolve_auto_route(
                 model_key,
                 &selected_provider,
             );
-            return Ok(selected_decision(
+            return selected_decision(
                 request,
                 &requested_selection,
                 Some(requested_profile),
@@ -931,7 +947,7 @@ pub fn resolve_auto_route(
                     reason: RouteReason::PreferredSlot,
                     fallbacks,
                 },
-            ));
+            );
         }
         reasons.extend(eligibility.reasons);
     }
@@ -957,7 +973,7 @@ pub fn resolve_auto_route(
                 model_key,
                 &selected_provider,
             );
-            return Ok(selected_decision(
+            return selected_decision(
                 request,
                 &requested_selection,
                 Some(requested_profile),
@@ -968,19 +984,109 @@ pub fn resolve_auto_route(
                     reason: RouteReason::FallbackSlot,
                     fallbacks,
                 },
-            ));
+            );
         }
         reasons.extend(eligibility.reasons);
     }
 
     let mut seen = HashSet::new();
     reasons.retain(|reason| seen.insert(reason.clone()));
-    Ok(AutoRouteDecision::Unavailable(UnavailableAutoRoute {
+    AutoRouteDecision::Unavailable(UnavailableAutoRoute {
         code: UnavailableCode::NoEligibleRoute,
         requested_selection,
         requested_profile: Some(requested_profile),
         effective_profile: Some(effective_profile),
         task_type: request.task_type,
         reasons,
-    }))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ALL_TASK_TYPES: [RoutingTaskType; 11] = [
+        RoutingTaskType::SimpleChat,
+        RoutingTaskType::General,
+        RoutingTaskType::Coding,
+        RoutingTaskType::Reasoning,
+        RoutingTaskType::CreativeWriting,
+        RoutingTaskType::Multimodal,
+        RoutingTaskType::LongContext,
+        RoutingTaskType::Research,
+        RoutingTaskType::Agentic,
+        RoutingTaskType::ComputerUse,
+        RoutingTaskType::ImageGeneration,
+    ];
+
+    fn registry_declaring_only_general() -> Registry {
+        serde_json::from_str(
+            r#"{
+              "models": {},
+              "providerModelKeys": {},
+              "routes": {},
+              "harnesses": {},
+              "runtimeProfiles": {},
+              "capabilities": {},
+              "limits": {},
+              "policies": {
+                "auto": {
+                  "defaultAlias": "auto",
+                  "fallbackSlot": "workhorse_general",
+                  "profileOrder": ["economy", "balanced", "premium"],
+                  "tierMaximumProfiles": { "free": "economy" },
+                  "tierAllowedSlots": { "free": ["workhorse_general"] },
+                  "providerPolicies": { "usOnly": { "allowedTiers": [], "excludedProviders": [] } },
+                  "aliases": { "auto": { "profile": "balanced", "computeProfile": true } },
+                  "continuity": {
+                    "preferCurrentModelWhenEligible": true,
+                    "preferCurrentRouteForCache": true,
+                    "reevaluateOnTaskChange": true
+                  },
+                  "tasks": {
+                    "general": {
+                      "requiredCapabilities": [],
+                      "requiredHarnessFeatures": [],
+                      "minimumContextTokens": null,
+                      "preferredSlots": {}
+                    }
+                  },
+                  "slots": {}
+                }
+              }
+            }"#,
+        )
+        .expect("fixture registry should deserialize")
+    }
+
+    #[test]
+    fn a_task_the_curated_policy_omits_is_unavailable_not_a_panic() {
+        let registry = registry_declaring_only_general();
+        let request = AutoRoutingRequest {
+            selection: Some("auto"),
+            task_type: RoutingTaskType::Coding,
+            ..Default::default()
+        };
+
+        let AutoRouteDecision::Unavailable(unavailable) = resolve_against(&registry, &request)
+        else {
+            panic!("a task with no curated policy must not resolve to a route");
+        };
+        assert_eq!(unavailable.code, UnavailableCode::UnknownTask);
+        assert_eq!(unavailable.reasons, vec!["unknown routing task: coding"]);
+    }
+
+    #[test]
+    fn every_task_type_the_resolver_accepts_has_a_curated_policy() {
+        let registry = registry().expect("generated registry should load");
+        let missing = ALL_TASK_TYPES
+            .into_iter()
+            .filter(|task| !registry.policies.auto.tasks.contains_key(task.as_key()))
+            .map(RoutingTaskType::as_key)
+            .collect::<Vec<_>>();
+        assert!(
+            missing.is_empty(),
+            "routing-policies.json declares no auto.tasks entry for {missing:?}"
+        );
+    }
 }

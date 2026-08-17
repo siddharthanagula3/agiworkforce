@@ -5,6 +5,9 @@
  * @module features/settings/hooks/use-settings-queries
  */
 
+import { useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useClerk } from '@clerk/nextjs';
 import {
   useQuery,
   useMutation,
@@ -15,6 +18,7 @@ import {
 } from '@tanstack/react-query';
 import { z } from 'zod';
 import { queryKeys } from '@shared/stores/query-client';
+import { useAuthStore } from '@shared/stores/authentication-store';
 import settingsService, {
   type UserProfile,
   type UserSettings,
@@ -25,7 +29,7 @@ import { logger } from '@shared/lib/logger';
 import { TimeoutPresets, withTimeout } from '@shared/lib/error-utils';
 import { requireProviderDefaultModel, type BillingPlanTier } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
-import { getCsrfToken } from '@/lib/client/csrf';
+import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 
 // ============================================================================
@@ -529,6 +533,104 @@ export function useToggle2FA(): UseMutationResult<
       toast.error(error.message || `Failed to ${enabled ? 'enable' : 'disable'} 2FA`);
     },
   });
+}
+
+/**
+ * Parsed response from `DELETE /api/user/delete-account`.
+ *
+ * `scheduledFor` is `null` only on the columns-missing / immediate-erasure
+ * fallback path in `app/api/user/delete-account/route.ts`, where the server
+ * erases the account right away instead of scheduling a grace window.
+ */
+export interface DeleteAccountResult {
+  message: string;
+  scheduledFor: string | null;
+}
+
+function readDeleteAccountMessage(data: unknown, fallback: string): string {
+  if (data !== null && typeof data === 'object' && 'message' in data) {
+    const message = (data as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return fallback;
+}
+
+function readDeleteAccountError(data: unknown, fallback: string): string {
+  if (data !== null && typeof data === 'object' && 'error' in data) {
+    const error = (data as { error?: unknown }).error;
+    if (typeof error === 'string' && error.trim()) return error;
+  }
+  return fallback;
+}
+
+/**
+ * Delete-account mutation — the single implementation behind the account
+ * deletion flow (AccountSection is the only caller; PrivacySection used to
+ * duplicate this with its own fetch and has been collapsed onto this hook).
+ *
+ * Owns everything the duplicate PrivacySection implementation used to get
+ * wrong on its own:
+ *   - CSRF headers on the DELETE call
+ *   - parsing the server's real `{ message, scheduledFor }` body instead of
+ *     rendering a hardcoded "24 hours" string that can drift from server
+ *     policy
+ *   - the post-success sign-out sequence, so a successful deletion can never
+ *     leave a live client session behind against an account scheduled for
+ *     erasure
+ *
+ * Sign-out is exposed as a separate `signOutAfterDeletion` step rather than
+ * run automatically on mutation success, because the UI shows a confirmation
+ * dialog with a "Continue" button first — the caller decides when to sign out.
+ */
+export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error, void> & {
+  signOutAfterDeletion: () => Promise<void>;
+} {
+  const logout = useAuthStore((s) => s.logout);
+  const { signOut: clerkSignOut } = useClerk();
+  const router = useRouter();
+
+  const mutation = useMutation<DeleteAccountResult, Error, void>({
+    mutationFn: async (): Promise<DeleteAccountResult> => {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+      const res = await fetch('/api/user/delete-account', { method: 'DELETE', headers });
+      const data: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(readDeleteAccountError(data, 'Account deletion failed.'));
+      }
+      const scheduledFor =
+        data !== null && typeof data === 'object' && 'scheduledFor' in data
+          ? (data as { scheduledFor?: unknown }).scheduledFor
+          : undefined;
+      return {
+        message: readDeleteAccountMessage(
+          data,
+          'Your account deletion has been scheduled. You will be signed out now.',
+        ),
+        scheduledFor: typeof scheduledFor === 'string' ? scheduledFor : null,
+      };
+    },
+    onError: (error: Error): void => {
+      logger.error('Error deleting account:', error);
+    },
+  });
+
+  const signOutAfterDeletion = useCallback(async (): Promise<void> => {
+    try {
+      await logout();
+      await clerkSignOut({ redirectUrl: '/' });
+    } catch (err) {
+      // The account is already deleted server-side by the time this runs
+      // (it only fires after the mutation above succeeded) — if
+      // logout()/clerkSignOut() fail here (e.g. a network blip), fall back
+      // to a hard navigation instead of leaving the user stuck on a dead
+      // settings screen with no feedback and no way to reach '/'.
+      console.warn('[useDeleteAccount] Post-deletion sign-out failed, forcing navigation:', err);
+    } finally {
+      router.replace('/');
+    }
+  }, [logout, clerkSignOut, router]);
+
+  return { ...mutation, signOutAfterDeletion };
 }
 
 /**

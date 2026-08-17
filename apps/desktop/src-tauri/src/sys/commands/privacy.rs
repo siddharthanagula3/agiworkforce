@@ -1,4 +1,5 @@
 use crate::sys::commands::chat::AppDatabase;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 
@@ -9,48 +10,24 @@ const ACCOUNT_DELETION_GRACE_DAYS: i64 = 7;
 /// Filename for the pending-deletion marker stored in the app data directory.
 const PENDING_DELETION_FILE: &str = "pending_deletion.json";
 
-/// AUDIT-003-001 fix: Enum of allowed tables for privacy deletion.
-/// Using an enum prevents SQL injection by ensuring only known table names
-/// can be used in DELETE queries.
-#[derive(Debug, Clone, Copy)]
-enum PrivacyTable {
-    Messages,
-    Conversations,
-    Projects,
-    MessageDrafts,
-    CustomInstructions,
-    SettingsV2,
-    UsageStats,
-}
+/// Migration bookkeeping. Clearing it makes every migration re-run against an
+/// already-migrated database on the next launch, which breaks the install.
+/// It holds version numbers and timestamps, never user content.
+const SCHEMA_BOOKKEEPING_TABLES: &[&str] = &["schema_version"];
 
-impl PrivacyTable {
-    /// Returns all tables that should be cleared during account deletion.
-    const fn all() -> &'static [PrivacyTable] {
-        &[
-            PrivacyTable::Messages,
-            PrivacyTable::Conversations,
-            PrivacyTable::Projects,
-            PrivacyTable::MessageDrafts,
-            PrivacyTable::CustomInstructions,
-            PrivacyTable::SettingsV2,
-            PrivacyTable::UsageStats,
-        ]
-    }
-
-    /// Returns the table name as a static string.
-    /// This is safe because we control all variants.
-    const fn as_str(&self) -> &'static str {
-        match self {
-            PrivacyTable::Messages => "messages",
-            PrivacyTable::Conversations => "conversations",
-            PrivacyTable::Projects => "projects",
-            PrivacyTable::MessageDrafts => "message_drafts",
-            PrivacyTable::CustomInstructions => "custom_instructions",
-            PrivacyTable::SettingsV2 => "settings_v2",
-            PrivacyTable::UsageStats => "usage_stats",
-        }
-    }
-}
+/// Private storage FTS5 attaches to a virtual table. Rows here are index
+/// internals rewritten by clearing the virtual table itself; writing to them
+/// directly corrupts the index.
+const FTS_SHADOW_SUFFIXES: &[&str] = &[
+    "_data",
+    "_idx",
+    "_docsize",
+    "_config",
+    "_content",
+    "_segments",
+    "_segdir",
+    "_stat",
+];
 
 /// Privacy preferences structure matching the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +60,8 @@ pub async fn settings_update_privacy(
         rusqlite::params!["privacy_preferences", prefs_json, "privacy"],
     )
     .map_err(|e| format!("Failed to save privacy preferences: {}", e))?;
+
+    crate::sys::telemetry::process_consent().set(preferences.telemetry_enabled);
 
     tracing::info!(
         "[Privacy] Updated privacy preferences: telemetry={}, crash_reporting={}, ai_sharing={}, analytics={}, usage_data={}",
@@ -229,6 +208,126 @@ pub async fn privacy_export_data(state: State<'_, AppDatabase>) -> Result<String
     Ok(result)
 }
 
+fn is_safe_identifier(name: &str) -> bool {
+    name.chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+#[derive(Debug, Default)]
+pub struct LocalUserTables {
+    pub rows: Vec<String>,
+    pub search_indexes: Vec<String>,
+    pub preserved: Vec<String>,
+}
+
+fn is_fts_shadow_of(name: &str, virtual_tables: &[String]) -> bool {
+    virtual_tables.iter().any(|owner| {
+        name.len() > owner.len()
+            && name.starts_with(owner.as_str())
+            && FTS_SHADOW_SUFFIXES.contains(&&name[owner.len()..])
+    })
+}
+
+pub fn classify_local_tables(conn: &Connection) -> Result<LocalUserTables, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT name, COALESCE(sql, '') FROM sqlite_master \
+             WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )
+        .map_err(|e| format!("Failed to read local schema: {}", e))?;
+
+    let tables = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| format!("Failed to read local schema: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to read local schema: {}", e))?;
+
+    let search_indexes: Vec<String> = tables
+        .iter()
+        .filter(|(_, sql)| sql.to_ascii_uppercase().contains("CREATE VIRTUAL TABLE"))
+        .map(|(name, _)| name.clone())
+        .collect();
+
+    let mut classified = LocalUserTables {
+        search_indexes: search_indexes.clone(),
+        ..LocalUserTables::default()
+    };
+
+    for (name, _) in &tables {
+        if !is_safe_identifier(name) {
+            return Err(format!(
+                "Refusing to purge: local table name '{}' is not a plain identifier",
+                name
+            ));
+        }
+        if SCHEMA_BOOKKEEPING_TABLES.contains(&name.as_str()) {
+            classified.preserved.push(name.clone());
+        } else if !search_indexes.contains(name) && !is_fts_shadow_of(name, &search_indexes) {
+            classified.rows.push(name.clone());
+        }
+    }
+
+    Ok(classified)
+}
+
+fn clear_search_index(conn: &Connection, name: &str) -> Result<(), String> {
+    let command_error = match conn.execute(
+        &format!("INSERT INTO \"{0}\"(\"{0}\") VALUES ('delete-all')", name),
+        [],
+    ) {
+        Ok(_) => return Ok(()),
+        Err(e) => e,
+    };
+
+    conn.execute(&format!("DELETE FROM \"{}\"", name), [])
+        .map(|_| ())
+        .map_err(|e| {
+            format!(
+                "Failed to clear search index {}: {} (delete-all: {})",
+                name, e, command_error
+            )
+        })
+}
+
+pub fn purge_local_user_data(conn: &Connection) -> Result<(usize, usize), String> {
+    let tables = classify_local_tables(conn)?;
+
+    conn.execute_batch("BEGIN IMMEDIATE; PRAGMA defer_foreign_keys = ON;")
+        .map_err(|e| format!("Failed to open deletion transaction: {}", e))?;
+
+    let purged = (|| -> Result<usize, String> {
+        let mut deleted_rows = 0usize;
+        for name in &tables.rows {
+            deleted_rows += conn
+                .execute(&format!("DELETE FROM \"{}\"", name), [])
+                .map_err(|e| format!("Failed to clear {}: {}", name, e))?;
+        }
+        for name in &tables.search_indexes {
+            clear_search_index(conn, name)?;
+        }
+        Ok(deleted_rows)
+    })();
+
+    match purged {
+        Ok(deleted_rows) => {
+            conn.execute_batch("COMMIT")
+                .map_err(|e| format!("Failed to commit account deletion: {}", e))?;
+            Ok((
+                deleted_rows,
+                tables.rows.len() + tables.search_indexes.len(),
+            ))
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn privacy_delete_account(
     user_id: String,
@@ -239,77 +338,23 @@ pub async fn privacy_delete_account(
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    // AUDIT-003-001 fix: Delete all user data using type-safe table enum.
-    // Each table uses a dedicated parameterized query to prevent SQL injection.
-    for table in PrivacyTable::all() {
-        // Use match to select the correct parameterized query for each table.
-        // This ensures we never use format!() with table names, eliminating
-        // any possibility of SQL injection even if the enum were somehow extended.
-        let result = match table {
-            PrivacyTable::Messages => {
-                conn.execute("DELETE FROM messages WHERE user_id = ?1", [&user_id])
-            }
-            PrivacyTable::Conversations => {
-                conn.execute("DELETE FROM conversations WHERE user_id = ?1", [&user_id])
-            }
-            PrivacyTable::Projects => {
-                conn.execute("DELETE FROM projects WHERE user_id = ?1", [&user_id])
-            }
-            PrivacyTable::MessageDrafts => {
-                conn.execute("DELETE FROM message_drafts WHERE user_id = ?1", [&user_id])
-            }
-            PrivacyTable::CustomInstructions => conn.execute(
-                "DELETE FROM custom_instructions WHERE user_id = ?1",
-                [&user_id],
-            ),
-            PrivacyTable::SettingsV2 => {
-                conn.execute("DELETE FROM settings_v2 WHERE user_id = ?1", [&user_id])
-            }
-            PrivacyTable::UsageStats => {
-                conn.execute("DELETE FROM usage_stats WHERE user_id = ?1", [&user_id])
-            }
-        };
+    let (deleted_rows, cleared_tables) = purge_local_user_data(&conn)?;
 
-        match result {
-            Ok(rows) => {
-                tracing::info!(
-                    "[Privacy] Deleted {} rows from table {} for user {}",
-                    rows,
-                    table.as_str(),
-                    user_id
-                );
-            }
-            Err(e) => {
-                // Log but continue - some tables might not exist or have user_id column
-                tracing::warn!("[Privacy] Could not delete from {}: {}", table.as_str(), e);
-            }
-        }
-    }
-
-    // Clear MCP credentials from database (stored encrypted)
-    // Delete any credentials that might be user-specific
-    let delete_patterns = ["api_key_%".to_string(), "mcp_credential_%".to_string()];
-
-    for pattern in &delete_patterns {
-        match conn.execute("DELETE FROM settings_v2 WHERE key LIKE ?1", [pattern]) {
-            Ok(rows) => {
-                if rows > 0 {
-                    tracing::info!(
-                        "[Privacy] Deleted {} credential entries matching pattern: {}",
-                        rows,
-                        pattern
-                    );
-                }
-            }
-            Err(e) => tracing::warn!("[Privacy] Could not delete credentials: {}", e),
-        }
+    if let Err(e) = conn.execute_batch("VACUUM") {
+        tracing::warn!("[Privacy] Deleted pages not reclaimed: {}", e);
     }
 
     tracing::info!(
-        "[Privacy] Account data deletion completed for user: {}",
-        user_id
+        "[Privacy] Account data deletion completed for user {}: {} rows across {} local tables",
+        user_id,
+        deleted_rows,
+        cleared_tables
     );
-    Ok("Account data deleted successfully".to_string())
+
+    Ok(format!(
+        "Deleted {} local records across {} tables",
+        deleted_rows, cleared_tables
+    ))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -443,4 +488,164 @@ pub async fn privacy_cancel_pending_deletion(app_handle: tauri::AppHandle) -> Re
         tracing::info!("[Privacy] Pending account deletion cancelled");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::db::migrations::run_migrations;
+
+    fn migrated_conn() -> Connection {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        run_migrations(&conn).expect("run migrations");
+        conn
+    }
+
+    fn count(conn: &Connection, table: &str) -> i64 {
+        conn.query_row(&format!("SELECT COUNT(*) FROM \"{}\"", table), [], |row| {
+            row.get(0)
+        })
+        .unwrap_or_else(|e| panic!("count {}: {}", table, e))
+    }
+
+    fn seed_local_content(conn: &Connection) {
+        conn.execute(
+            "INSERT INTO conversations (id, title) VALUES (1, 'Local chat')",
+            [],
+        )
+        .expect("seed conversation");
+        conn.execute(
+            "INSERT INTO messages (conversation_id, role, content) VALUES (1, 'user', 'my private note')",
+            [],
+        )
+        .expect("seed message");
+        conn.execute(
+            "INSERT INTO email_accounts (id, provider, email, imap_host, imap_port, smtp_host, smtp_port, password_encrypted, created_at)
+             VALUES (1, 'imap', 'owner@example.test', 'imap.example.test', 993, 'smtp.example.test', 465, 'ciphertext', 1)",
+            [],
+        )
+        .expect("seed email account");
+        conn.execute(
+            "INSERT INTO emails (id, account_id, message_id, subject, from_email, to_emails, date, body_text, size, created_at)
+             VALUES ('e1', 1, 'm1', 'Payslip', 'payroll@example.test', 'owner@example.test', 1, 'net pay', 10, 1)",
+            [],
+        )
+        .expect("seed email");
+        conn.execute(
+            "INSERT INTO contacts (email, display_name, phone, created_at, updated_at)
+             VALUES ('friend@example.test', 'Friend', '000', 1, 1)",
+            [],
+        )
+        .expect("seed contact");
+        conn.execute(
+            "INSERT INTO captures (id, capture_type, file_path, ocr_text, created_at)
+             VALUES ('c1', 'fullscreen', '/local/captures/c1.png', 'bank balance', 1)",
+            [],
+        )
+        .expect("seed capture");
+    }
+
+    #[test]
+    fn purge_clears_local_content_the_old_allowlist_missed() {
+        let conn = migrated_conn();
+        seed_local_content(&conn);
+
+        let (deleted_rows, cleared_tables) = purge_local_user_data(&conn).expect("purge");
+
+        assert!(deleted_rows >= 6, "expected seeded rows to be deleted");
+        assert!(cleared_tables > 50, "expected the whole schema to be swept");
+        for table in [
+            "conversations",
+            "messages",
+            "emails",
+            "contacts",
+            "captures",
+        ] {
+            assert_eq!(count(&conn, table), 0, "{} still holds user content", table);
+        }
+    }
+
+    #[test]
+    fn purge_covers_a_table_added_after_this_code_was_written() {
+        let conn = migrated_conn();
+        conn.execute(
+            "CREATE TABLE desk22_future_feature (id INTEGER PRIMARY KEY, secret TEXT NOT NULL)",
+            [],
+        )
+        .expect("create future table");
+        conn.execute(
+            "INSERT INTO desk22_future_feature (secret) VALUES ('unlisted user content')",
+            [],
+        )
+        .expect("seed future table");
+
+        purge_local_user_data(&conn).expect("purge");
+
+        assert_eq!(
+            count(&conn, "desk22_future_feature"),
+            0,
+            "a table added without editing privacy.rs kept its rows"
+        );
+    }
+
+    #[test]
+    fn purge_leaves_no_populated_table_except_migration_bookkeeping() {
+        let conn = migrated_conn();
+        seed_local_content(&conn);
+
+        purge_local_user_data(&conn).expect("purge");
+
+        let tables = classify_local_tables(&conn).expect("classify");
+        assert!(
+            tables.rows.len() > 50,
+            "expected the whole schema to be swept"
+        );
+        for table in &tables.rows {
+            assert_eq!(count(&conn, table), 0, "{} survived the purge", table);
+        }
+        assert_eq!(tables.preserved, vec!["schema_version".to_string()]);
+        assert!(
+            count(&conn, "schema_version") > 0,
+            "migration history must survive so the app still boots"
+        );
+    }
+
+    #[test]
+    fn purge_clears_full_text_search_indexes() {
+        let conn = migrated_conn();
+        let has_fts: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'messages_fts'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("probe fts");
+        if has_fts == 0 {
+            return;
+        }
+
+        conn.execute(
+            "INSERT INTO messages_fts (message_id, conversation_id, content, sender, message_type, timestamp)
+             VALUES ('1', '1', 'my private note', 'user', 'text', '1')",
+            [],
+        )
+        .expect("seed fts row");
+
+        purge_local_user_data(&conn).expect("purge");
+
+        assert_eq!(count(&conn, "messages_fts"), 0, "search index kept content");
+    }
+
+    #[test]
+    fn classification_skips_fts_shadow_tables() {
+        let conn = migrated_conn();
+        let tables = classify_local_tables(&conn).expect("classify");
+        for name in &tables.rows {
+            assert!(
+                !is_fts_shadow_of(name, &tables.search_indexes),
+                "{} is an fts shadow table and must not be deleted directly",
+                name
+            );
+        }
+    }
 }

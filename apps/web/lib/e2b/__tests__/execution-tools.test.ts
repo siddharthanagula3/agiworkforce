@@ -6,6 +6,7 @@ import {
   isExecutionTool,
   e2bExecutionToolDefs,
   resolveCodeExecutionTools,
+  resolveTurnCodeExecutionTools,
   routeExecutionTool,
   providerRoutesToE2B,
 } from '../execution-tools';
@@ -114,8 +115,10 @@ describe('routeExecutionTool — output cap', () => {
 });
 
 describe('resolveCodeExecutionTools — native-always / fail-closed', () => {
-  it('openai → provider-native code_interpreter', () => {
-    expect(resolveCodeExecutionTools('openai')).toEqual([{ type: 'code_interpreter' }]);
+  it('openai → provider-native code_interpreter carrying the required container', () => {
+    expect(resolveCodeExecutionTools('openai')).toEqual([
+      { type: 'code_interpreter', container: { type: 'auto' } },
+    ]);
   });
   it('anthropic → provider-native code_execution_20260120', () => {
     expect(resolveCodeExecutionTools('anthropic')).toEqual([
@@ -160,4 +163,77 @@ describe('providerRoutesToE2B — §8 routing table', () => {
       expect(providerRoutesToE2B(p)).toBe(true);
     },
   );
+});
+
+describe('resolveTurnCodeExecutionTools — reports a dropped "Run code" turn', () => {
+  const base = {
+    stream: true as boolean | undefined,
+    e2bEnabled: false,
+    toolsCapable: true,
+    codeExecutionCapable: true,
+  };
+
+  it('E2B cutover on + streaming → platform execution tools, never unavailable', () => {
+    const resolved = resolveTurnCodeExecutionTools({
+      ...base,
+      provider: 'deepseek',
+      e2bEnabled: true,
+    });
+    expect(resolved.tools.map((t) => (t as { function: { name: string } }).function.name)).toEqual([
+      EXECUTE_CODE_TOOL,
+      WRITE_FILE_TOOL,
+      CREATE_FOLDER_TOOL,
+    ]);
+    expect(resolved.unavailable).toBe(false);
+  });
+
+  it('E2B cutover on but the model cannot call tools → unavailable, not a silent no-op', () => {
+    const resolved = resolveTurnCodeExecutionTools({
+      ...base,
+      provider: 'deepseek',
+      e2bEnabled: true,
+      toolsCapable: false,
+    });
+    expect(resolved.tools).toEqual([]);
+    expect(resolved.unavailable).toBe(true);
+  });
+
+  it.each(['deepseek', 'moonshot', 'kimi', 'zhipu', 'glm', 'minimax', 'xai', 'qwen'])(
+    'E2B cutover off + %s (no native interpreter) → unavailable',
+    (provider) => {
+      const resolved = resolveTurnCodeExecutionTools({ ...base, provider });
+      expect(resolved.tools).toEqual([]);
+      expect(resolved.unavailable).toBe(true);
+    },
+  );
+
+  it.each(['openai', 'anthropic', 'google'])(
+    'E2B cutover off + %s → provider-native tool, available',
+    (provider) => {
+      const resolved = resolveTurnCodeExecutionTools({ ...base, provider });
+      expect(resolved.tools).toHaveLength(1);
+      expect(resolved.unavailable).toBe(false);
+    },
+  );
+
+  it('catalog says the model cannot execute code → unavailable', () => {
+    const resolved = resolveTurnCodeExecutionTools({
+      ...base,
+      provider: 'openai',
+      codeExecutionCapable: false,
+    });
+    expect(resolved.tools).toEqual([]);
+    expect(resolved.unavailable).toBe(true);
+  });
+
+  it('non-streaming turns fall back to the native path rather than E2B', () => {
+    const resolved = resolveTurnCodeExecutionTools({
+      ...base,
+      provider: 'deepseek',
+      e2bEnabled: true,
+      stream: false,
+    });
+    expect(resolved.tools).toEqual([]);
+    expect(resolved.unavailable).toBe(true);
+  });
 });

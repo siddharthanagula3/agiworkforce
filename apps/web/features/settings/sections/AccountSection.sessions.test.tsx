@@ -30,6 +30,22 @@ vi.mock('../components/Settings/ApiKeys', () => ({
   ApiKeysManager: () => <div>Scoped API key manager</div>,
 }));
 
+// This suite only exercises session management, not account deletion (see
+// AccountSection.delete.test.tsx for the real useDeleteAccount integration,
+// including a QueryClientProvider). Stub the hook here so mounting
+// AccountSection doesn't require a QueryClient just to render session rows.
+vi.mock('../hooks/use-settings-queries', () => ({
+  useDeleteAccount: () => ({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+    isSuccess: false,
+    error: null,
+    data: undefined,
+    signOutAfterDeletion: vi.fn(async () => {}),
+  }),
+}));
+
 const sessions = [
   {
     id: 'sess_current',

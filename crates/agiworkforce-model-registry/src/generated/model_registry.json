@@ -1080,7 +1080,7 @@
     "google/embeddings": {
       "provider": "google",
       "apiFamily": "embed_content",
-      "adapter": "desktop-google-batch",
+      "adapter": "apps/web/app/api/llm/v1/embeddings",
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },

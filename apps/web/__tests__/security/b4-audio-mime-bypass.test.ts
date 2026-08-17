@@ -15,16 +15,16 @@ const TRANSCRIPTION_MODEL = (() => {
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn().mockResolvedValue({ userId: 'u1', email: 'test@example.com' }),
+  getClerkAuthUser: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
-  withRateLimit: vi.fn().mockResolvedValue(null),
+  withRateLimit: vi.fn(),
 }));
 vi.mock('@/lib/cors', () => ({
-  handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
-  getCorsHeaders: vi.fn().mockReturnValue({}),
-  getSecurityHeaders: vi.fn().mockReturnValue({}),
+  handleCorsPreflightRequest: vi.fn(),
+  getCorsHeaders: vi.fn(),
+  getSecurityHeaders: vi.fn(),
 }));
 vi.mock('@/lib/error-handler', () => ({
   withErrorHandler: <T extends (...a: unknown[]) => unknown>(handler: T) => handler,
@@ -35,15 +35,12 @@ vi.mock('@/lib/logger', () => ({
 
 process.env['OPENAI_API_KEY'] = 'sk-test';
 
-// globals — direct assignment to `global.fetch` doesn't always reach the
-const fetchSpy = vi.fn().mockResolvedValue(
-  new Response(JSON.stringify({ text: 'transcribed' }), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  }),
-);
+const fetchSpy = vi.fn();
 vi.stubGlobal('fetch', fetchSpy);
 
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { withRateLimit } from '@/lib/rate-limit';
+import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { POST } from '@/app/api/llm/v1/audio/transcriptions/route';
 
 function makeRequest(file: File): NextRequest {
@@ -67,7 +64,17 @@ function mp3Blob(): Blob {
 
 describe('B4: audio MIME + magic-bytes validation', () => {
   beforeEach(() => {
-    fetchSpy.mockClear();
+    vi.mocked(getClerkAuthUser).mockResolvedValue({ userId: 'u1', email: 'test@example.com' });
+    vi.mocked(withRateLimit).mockResolvedValue(null);
+    vi.mocked(handleCorsPreflightRequest).mockReturnValue(null);
+    vi.mocked(getCorsHeaders).mockReturnValue({});
+    vi.mocked(getSecurityHeaders).mockReturnValue({});
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ text: 'transcribed' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
   });
 
   it('rejects upload with empty MIME type (was the bypass)', async () => {

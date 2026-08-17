@@ -15,6 +15,37 @@ function readText(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
+function ownedPatterns(body) {
+  const patterns = [];
+  for (const rawLine of body.split('\n')) {
+    const line = rawLine.trim();
+    if (line === '' || line.startsWith('#')) continue;
+    const [pattern] = line.split(/\s+/);
+    if (pattern && pattern !== '*') patterns.push(pattern);
+  }
+  return patterns;
+}
+
+function resolvesOnDisk(pattern) {
+  const relativePath = pattern.replace(/^\/+/, '').replace(/\/+$/, '');
+  if (relativePath === '') return { resolved: true };
+  const directory = path.dirname(relativePath);
+  const base = path.basename(relativePath);
+  if (directory.includes('*')) {
+    return { resolved: false, reason: 'only the last path segment may contain a wildcard' };
+  }
+  if (!base.includes('*')) return { resolved: exists(relativePath) };
+  const matcher = new RegExp(
+    `^${base
+      .split('*')
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('[^/]*')}$`,
+  );
+  const absoluteDirectory = path.join(root, directory);
+  if (!fs.existsSync(absoluteDirectory)) return { resolved: false };
+  return { resolved: fs.readdirSync(absoluteDirectory).some((entry) => matcher.test(entry)) };
+}
+
 if (!exists(codeownersPath)) {
   errors.push('Missing .github/CODEOWNERS.');
 } else {
@@ -34,7 +65,6 @@ if (!exists(codeownersPath)) {
     '/AGENTS.md',
     '/CLAUDE.md',
     '/PLAN.md',
-    '/TODO.md',
     '/CHANGELOG.md',
     '/docs/agent-context/',
     '/docs/engineering/',
@@ -65,6 +95,16 @@ if (!exists(codeownersPath)) {
   ]) {
     if (!body.includes(requiredPath)) {
       errors.push(`${codeownersPath} missing required owned path: ${requiredPath}`);
+    }
+  }
+
+  for (const pattern of ownedPatterns(body)) {
+    const { resolved, reason } = resolvesOnDisk(pattern);
+    if (!resolved) {
+      errors.push(
+        `${codeownersPath} owns a path that does not exist: ${pattern}` +
+          (reason ? ` (${reason})` : ''),
+      );
     }
   }
 }

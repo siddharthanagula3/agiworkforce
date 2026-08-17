@@ -57,6 +57,7 @@ function mapToolCallStream() {
 
 function makeProcessed(): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'fixture-map-request',
     chatRequest: {
       model: 'fixture-model',

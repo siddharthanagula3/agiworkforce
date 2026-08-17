@@ -12,6 +12,9 @@ const {
   publishArtifactRecord,
   requiresSandboxedRender,
   unpublishArtifactRecord,
+  MAX_PUBLISHED_PER_USER,
+  PublishedArtifactOwnershipError,
+  PublishedArtifactQuotaError,
   PublishedArtifactValidationError,
 } = await import('./published-artifact-service');
 
@@ -21,6 +24,40 @@ interface FakeDb {
 
 function makeDb(rows: unknown[] = []): FakeDb {
   return { query: vi.fn(async () => rows) };
+}
+
+const INSERT_SQL = 'insert into public.published_artifacts';
+
+function isInsert(sql: unknown): boolean {
+  return String(sql).includes(INSERT_SQL);
+}
+
+function insertCall(db: FakeDb): [string, unknown[]] {
+  const call = db.query.mock.calls.find(([sql]) => isInsert(sql));
+  if (!call) throw new Error('publishArtifactRecord never issued the insert');
+  return call as [string, unknown[]];
+}
+
+function makeRoutedDb(options: {
+  otherPublished?: number | string;
+  ownedConversations?: number | string;
+  insertRows?: unknown[];
+  insertError?: unknown;
+}): FakeDb {
+  return {
+    query: vi.fn(async (sql: unknown) => {
+      if (isInsert(sql)) {
+        if (options.insertError) throw options.insertError;
+        return options.insertRows ?? [row()];
+      }
+      return [
+        {
+          other_published: options.otherPublished ?? 0,
+          owned_conversations: options.ownedConversations ?? 0,
+        },
+      ];
+    }),
+  };
 }
 
 function row(overrides: Record<string, unknown> = {}) {
@@ -90,7 +127,7 @@ describe('publishArtifactRecord', () => {
     });
 
     expect(published.token).toBe('aaaaaaaaaaaaaaaaaaaaaaaa');
-    const [sql, params] = db.query.mock.calls[0]!;
+    const [sql, params] = insertCall(db);
     expect(sql).toContain('insert into public.published_artifacts');
     expect(PUBLISHED_TOKEN_REGEX.test((params as unknown[])[0] as string)).toBe(true);
     expect((params as unknown[])[1]).toBe('user-1');
@@ -104,7 +141,7 @@ describe('publishArtifactRecord', () => {
       kind: 'html',
       content: '<h1>hi</h1>',
     });
-    const [sql] = db.query.mock.calls[0]!;
+    const [sql] = insertCall(db);
     expect(sql).toContain('on conflict (user_id, artifact_id) do update set');
     expect(sql).not.toMatch(/do update set[\s\S]*token = excluded\.token/);
   });
@@ -146,6 +183,113 @@ describe('publishArtifactRecord', () => {
       }),
     ).rejects.toThrow(/exceeds/);
     expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses another users conversation before the insert, not after RLS raises', async () => {
+    const foreign = makeRoutedDb({ ownedConversations: 0 });
+    await expect(
+      publishArtifactRecord(foreign as never, {
+        userId: 'user-1',
+        artifactId: 'artifact-1',
+        conversationId: '11111111-1111-4111-8111-111111111111',
+        title: 'Someone elses chat',
+        kind: 'html',
+        content: '<h1>hi</h1>',
+      }),
+    ).rejects.toBeInstanceOf(PublishedArtifactOwnershipError);
+    expect(foreign.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+  });
+
+  it('checks ownership against the callers own user id and the given conversation', async () => {
+    const owned = makeRoutedDb({ ownedConversations: 1 });
+    await publishArtifactRecord(owned as never, {
+      userId: 'user-1',
+      artifactId: 'artifact-1',
+      conversationId: '11111111-1111-4111-8111-111111111111',
+      title: 'Dashboard',
+      kind: 'html',
+      content: '<h1>hi</h1>',
+    });
+    const [sql, params] = owned.query.mock.calls[0]! as [string, unknown[]];
+    expect(sql).toContain('public.web_conversations');
+    expect(params).toEqual(['user-1', 'artifact-1', '11111111-1111-4111-8111-111111111111']);
+    expect(owned.query.mock.calls.some(([s]) => isInsert(s))).toBe(true);
+  });
+
+  it('never asks about conversation ownership when no conversation was given', async () => {
+    const anonymous = makeRoutedDb({ ownedConversations: 0 });
+    await publishArtifactRecord(anonymous as never, {
+      userId: 'user-1',
+      artifactId: 'artifact-1',
+      title: 'Dashboard',
+      kind: 'html',
+      content: '<h1>hi</h1>',
+    });
+    expect(anonymous.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(true);
+  });
+
+  it('bounds how many pages one user can leave published', async () => {
+    const full = makeRoutedDb({ otherPublished: MAX_PUBLISHED_PER_USER });
+    await expect(
+      publishArtifactRecord(full as never, {
+        userId: 'user-1',
+        artifactId: 'artifact-999',
+        title: 'One too many',
+        kind: 'code',
+        content: 'print(1)',
+      }),
+    ).rejects.toBeInstanceOf(PublishedArtifactQuotaError);
+    expect(full.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+  });
+
+  it('excludes the artifact being republished from the quota count', async () => {
+    const atCap = makeRoutedDb({ otherPublished: MAX_PUBLISHED_PER_USER - 1 });
+    await expect(
+      publishArtifactRecord(atCap as never, {
+        userId: 'user-1',
+        artifactId: 'artifact-1',
+        title: 'Dashboard',
+        kind: 'html',
+        content: '<h1>hi</h1>',
+      }),
+    ).resolves.toMatchObject({ token: 'aaaaaaaaaaaaaaaaaaaaaaaa' });
+    const [sql] = atCap.query.mock.calls[0]! as [string, unknown[]];
+    expect(sql).toContain('artifact_id <> $2');
+  });
+
+  it('turns a racing RLS denial into an ownership refusal, not an unhandled 500', async () => {
+    const denied = makeRoutedDb({
+      ownedConversations: 1,
+      insertError: Object.assign(
+        new Error('new row violates row-level security policy for table "published_artifacts"'),
+        { code: '42501' },
+      ),
+    });
+    await expect(
+      publishArtifactRecord(denied as never, {
+        userId: 'user-1',
+        artifactId: 'artifact-1',
+        conversationId: '11111111-1111-4111-8111-111111111111',
+        title: 'Dashboard',
+        kind: 'html',
+        content: '<h1>hi</h1>',
+      }),
+    ).rejects.toBeInstanceOf(PublishedArtifactOwnershipError);
+  });
+
+  it('still surfaces a missing-table error so the route can answer 503', async () => {
+    const missing = makeRoutedDb({
+      insertError: Object.assign(new Error('relation does not exist'), { code: '42P01' }),
+    });
+    await expect(
+      publishArtifactRecord(missing as never, {
+        userId: 'user-1',
+        artifactId: 'artifact-1',
+        title: 'Dashboard',
+        kind: 'html',
+        content: '<h1>hi</h1>',
+      }),
+    ).rejects.toMatchObject({ code: '42P01' });
   });
 
   it('reports an RLS-denied write instead of claiming success', async () => {

@@ -112,6 +112,27 @@ fn initialize_embedding_service_state(
     }
 }
 
+pub fn focus_running_instance<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> bool {
+    let Some(window) = app.get_webview_window("main") else {
+        return false;
+    };
+
+    #[cfg(target_os = "macos")]
+    if let Err(error) = app.set_dock_visibility(true) {
+        tracing::warn!("[single-instance] failed to restore dock visibility: {error}");
+    }
+
+    if let Err(error) = window
+        .unminimize()
+        .and_then(|()| window.show())
+        .and_then(|()| window.set_focus())
+    {
+        tracing::warn!("[single-instance] failed to focus the running window: {error}");
+    }
+
+    true
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // FIX-F10 (audit 2026-05-19): only load `.env` files in debug builds.
@@ -173,6 +194,12 @@ pub fn run() {
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
+        // DESK-09: must stay ahead of every other plugin. A second launch exits
+        // inside this plugin's setup hook, before any later setup opens the
+        // encrypted SQLite database that has no cross-process lock.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            focus_running_instance(app);
+        }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
@@ -515,6 +542,29 @@ pub fn run() {
             let telemetry_collector = TelemetryCollector::new(telemetry_config);
             let analytics_metrics = AnalyticsMetricsCollector::new();
             app.manage(TelemetryState::new(telemetry_collector, analytics_metrics));
+
+            {
+                let granted = db_conn_arc
+                    .lock()
+                    .ok()
+                    .and_then(|conn| {
+                        conn.query_row(
+                            "SELECT value FROM settings_v2 WHERE key = 'privacy_preferences'",
+                            [],
+                            |row| row.get::<_, String>(0),
+                        )
+                        .ok()
+                    })
+                    .and_then(|raw| {
+                        serde_json::from_str::<crate::sys::commands::privacy::PrivacyPreferences>(
+                            &raw,
+                        )
+                        .ok()
+                    })
+                    .map(|prefs| prefs.telemetry_enabled)
+                    .unwrap_or(false);
+                crate::sys::telemetry::process_consent().set(granted);
+            }
 
             let llm_state = tauri::async_runtime::block_on(LLMState::with_cache(db_conn_arc.clone()));
             let llm_router_for_byok_rehydration = llm_state.router.clone();
@@ -2223,7 +2273,9 @@ pub fn run() {
             crate::sys::commands::realtime::set_user_online,
             crate::sys::commands::realtime::set_user_offline,
             crate::sys::commands::realtime::update_user_activity,
-            // RT-04: Bridge token management
+            // SEC-11: browser-extension pairing handshake
+            crate::sys::commands::realtime::bridge_pending_pair_requests,
+            crate::sys::commands::realtime::bridge_deny_pair_request,
 
             // Privacy
             crate::sys::commands::privacy::privacy_delete_account,

@@ -1,15 +1,28 @@
 import {
   AlertTriangle,
+  BookOpen,
+  Brain,
   Download,
   ExternalLink,
+  FileOutput,
+  Folder,
+  Globe,
   ListChecks,
   Loader2,
+  MousePointerClick,
+  Plug,
   RefreshCw,
   RotateCcw,
+  Search,
+  SquareTerminal,
+  Terminal,
+  Wrench,
   X,
+  type LucideProps,
 } from 'lucide-react';
+import type { ComponentType } from 'react';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
-import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { AgentEventEnvelope, AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import {
   applyAgentActivityEvent,
   type AgentActivityArtifactEntry,
@@ -76,21 +89,54 @@ function progressStatus(entry: AgentActivityProgressEntry | AgentActivityToolEnt
   return 'Pending';
 }
 
+const TOOL_CATEGORY_ICON: Record<AgentEventToolCategory, ComponentType<LucideProps>> = {
+  'web-search': Search,
+  'web-fetch': Globe,
+  'code-execution': SquareTerminal,
+  filesystem: Folder,
+  shell: Terminal,
+  skill: BookOpen,
+  memory: Brain,
+  connector: Plug,
+  mcp: Plug,
+  'computer-use': MousePointerClick,
+  artifact: FileOutput,
+  other: Wrench,
+};
+
+function statusToneClass(status: AgentActivityToolEntry['status']): string {
+  if (status === 'completed') return 'text-emerald-500';
+  if (status === 'failed') return 'text-destructive';
+  if (status === 'cancelled') return 'text-muted-foreground';
+  if (status === 'running' || status === 'awaiting-approval') return 'text-primary';
+  return 'text-muted-foreground/50';
+}
+
 function ProgressRow({ entry }: { entry: AgentActivityProgressEntry | AgentActivityToolEntry }) {
   const summary = entry.kind === 'progress' ? entry.summary : entry.summary || entry.name;
+  const tool = entry.kind === 'tool' ? entry : null;
+  const ToolIcon = tool ? TOOL_CATEGORY_ICON[tool.category] : null;
   return (
     <li className="flex gap-2 text-xs">
-      <span
-        aria-hidden
-        className={cn(
-          'mt-1 h-2 w-2 shrink-0 rounded-full',
-          entry.status === 'completed' && 'bg-emerald-500',
-          entry.status === 'failed' && 'bg-destructive',
-          entry.status === 'cancelled' && 'bg-muted-foreground',
-          (entry.status === 'running' || entry.status === 'awaiting-approval') && 'bg-primary',
-          entry.status === 'pending' && 'bg-muted-foreground/50',
-        )}
-      />
+      {tool && ToolIcon ? (
+        <ToolIcon
+          aria-hidden
+          data-tool-category={tool.category}
+          className={cn('mt-0.5 h-3 w-3 shrink-0', statusToneClass(entry.status))}
+        />
+      ) : (
+        <span
+          aria-hidden
+          className={cn(
+            'mt-1 h-2 w-2 shrink-0 rounded-full',
+            entry.status === 'completed' && 'bg-emerald-500',
+            entry.status === 'failed' && 'bg-destructive',
+            entry.status === 'cancelled' && 'bg-muted-foreground',
+            (entry.status === 'running' || entry.status === 'awaiting-approval') && 'bg-primary',
+            entry.status === 'pending' && 'bg-muted-foreground/50',
+          )}
+        />
+      )}
       <span className="min-w-0">
         <span className="block text-foreground">{summary}</span>
         <span className="text-[11px] text-muted-foreground">{progressStatus(entry)}</span>

@@ -145,6 +145,12 @@ jobs:
         # R27-PARITY: extension must use var(--agi-ext-*) design tokens; no hex/rgb/hsl literals.
         run: pnpm --filter @agiworkforce/extension check:no-hex
 
+      - name: Web AP-02 — no new hardcoded color literals
+        # DESIGN-SYSTEM-004: ratchet guard over apps/web app/components/lib/features.
+        # Pre-existing literals are grandfathered in apps/web/scripts/.no-hex-baseline.json;
+        # anything new fails here.
+        run: pnpm --filter @agiworkforce/web check:no-hex-web
+
       - name: Extension AP-10 — no direct cloud-IPC in v1
         # R27-PARITY / v1-local-only: cloud feature paths must gate through InviteCodeModal.
         run: pnpm --filter @agiworkforce/extension check:no-cloud-ipc
@@ -983,3 +989,27 @@ jobs:
       - name: Clippy (default features, Windows)
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --workspace --lib -- -D warnings -D unsafe-code
+
+  ci-complete:
+    name: CI complete
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - check
+      - desktop-e2e
+      - browser-extension-e2e
+      - vscode-extension-e2e
+      - mobile-e2e
+      - web-a11y
+      - clippy-all-features
+      - macos-smoke
+      - windows-smoke
+    steps:
+      - name: Fail if any lane failed or was cancelled
+        run: |
+          results='${{ toJSON(needs) }}'
+          echo "$results"
+          if echo "$results" | grep -qE '"result": *"(failure|cancelled)"'; then
+            echo "::error::At least one CI lane did not succeed"
+            exit 1
+          fi

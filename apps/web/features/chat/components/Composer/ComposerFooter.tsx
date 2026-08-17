@@ -222,6 +222,36 @@ function isHighUsageRateModel(model: AIModel): boolean {
   return getPickerModelTier(model.id) === 'premium';
 }
 
+// ---------------------------------------------------------------------------
+// Deprecation advance-warning (CLR-01 / mqp-08). `model.deprecationDate`
+// (model-store.ts) is only ever set to a date still in the future — the
+// picker already drops a model outright once its deprecation_date has
+// passed (isCurrentModel). This renders the advance notice for the window
+// leading up to that deadline, matching ChatGPT's in-picker "Leaving on
+// <date>" countdown instead of letting the model vanish with zero warning.
+// ---------------------------------------------------------------------------
+
+/** How many days ahead of the scheduled retirement the picker starts warning. */
+const DEPRECATION_WARNING_WINDOW_DAYS = 30;
+
+/** Inline "Leaving on <date>" label for a model within its warning window. */
+function deprecationWarningFor(model: AIModel): { shortLabel: string; fullLabel: string } | null {
+  if (!model.deprecationDate) return null;
+  const retiresAt = Date.parse(model.deprecationDate);
+  if (Number.isNaN(retiresAt)) return null;
+  const daysUntil = (retiresAt - Date.now()) / (1000 * 60 * 60 * 24);
+  if (daysUntil <= 0 || daysUntil > DEPRECATION_WARNING_WINDOW_DAYS) return null;
+  const date = new Date(retiresAt);
+  return {
+    shortLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    fullLabel: date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+  };
+}
+
 /** Short capability badges for a picker row (AUDIT-FIX CMP-30). */
 function modelCapabilityBadges(modelId: string): string[] {
   const capabilities = getModelMetadata(modelId)?.capabilities;
@@ -385,6 +415,7 @@ function ModelRow({
   const isEnvLocked = isLocked && lockKind === 'env';
   const isComingSoon = isLocked && lockKind === 'coming_soon';
   const capabilityBadges = modelCapabilityBadges(model.id);
+  const deprecationWarning = deprecationWarningFor(model);
   // Env-locked and coming_soon rows are HARD-disabled: not clickable, not
   // focusable, no upgrade CTA (upgrading can't satisfy either). Only tier-locked
   // rows are clickable (they open the upgrade dialog).
@@ -395,13 +426,16 @@ function ModelRow({
     onUpgradeRequest?.();
   };
 
-  const ariaLabel = isComingSoon
+  const baseAriaLabel = isComingSoon
     ? `${model.name} - ${lockReason ?? 'coming soon'} (not yet available)`
     : isEnvLocked
       ? `${model.name} - ${lockReason ?? 'environment not available'}`
       : isLocked
         ? `${model.name} - requires upgrade`
         : model.name;
+  const ariaLabel = deprecationWarning
+    ? `${baseAriaLabel} - Leaving on ${deprecationWarning.fullLabel}`
+    : baseAriaLabel;
 
   const rowContent = (
     <button
@@ -456,6 +490,15 @@ function ModelRow({
           </span>
         )}
       </span>
+      {deprecationWarning && (
+        <span
+          className="ml-auto shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400"
+          aria-label={`Leaving on ${deprecationWarning.fullLabel}`}
+          title={`Leaving on ${deprecationWarning.fullLabel}`}
+        >
+          Leaving {deprecationWarning.shortLabel}
+        </span>
+      )}
       {isComingSoon && (
         <span
           className="ml-auto shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"

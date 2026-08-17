@@ -2895,4 +2895,558 @@ mod tests {
         assert_eq!(session.messages.len(), len_before);
         assert_eq!(session.messages.last().unwrap().text_content(), "done");
     }
+
+    // -----------------------------------------------------------------------
+    // Live-turn coverage of the real `TurnHostAdapter`
+    //
+    // The engine's own fixtures (`crates/agiworkforce-agent-core/tests/
+    // turn_loop.rs`) script a stand-in host, and the CLI's JSONL byte-identity
+    // gate only walks the demo/fallback ladder — neither ever reaches the
+    // adapter's classification, hook, plan-gate, subagent or MCP branches.
+    // `LiveTurnHost` runs the real engine over a real session-backed adapter,
+    // substituting only `complete`, the one method that would contact a
+    // provider. Everything downstream of it — partitioning, pre-dispatch
+    // checks, `sh`-backed hooks, real tool execution, history mutation — is
+    // production code.
+    // -----------------------------------------------------------------------
+
+    struct LiveTurnHost<'a> {
+        adapter: TurnHostAdapter<'a>,
+        scripted: std::collections::VecDeque<models::CompletionResult>,
+        events: Vec<TurnEvent>,
+    }
+
+    #[async_trait]
+    impl TurnHost for LiveTurnHost<'_> {
+        async fn complete(
+            &mut self,
+            _phase: TurnPhase,
+            _sink: &mut (dyn FnMut(StreamEvent) + Send),
+        ) -> Result<Completion> {
+            let next = self
+                .scripted
+                .pop_front()
+                .expect("engine requested more completions than were scripted");
+            Ok(completion_from_result(next))
+        }
+
+        fn record_assistant(&mut self, completion: &Completion) {
+            self.adapter.record_assistant(completion);
+        }
+
+        fn classify(&self, call: &ToolCallResponse) -> ToolClass {
+            self.adapter.classify(call)
+        }
+
+        async fn run_task_batch(&mut self, calls: &[ToolCallResponse]) -> Vec<ResultBlock> {
+            self.adapter.run_task_batch(calls).await
+        }
+
+        async fn prepare_tool(&mut self, call: &ToolCallResponse, mode: DispatchMode) -> Prepared {
+            self.adapter.prepare_tool(call, mode).await
+        }
+
+        fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
+            self.adapter.parallel_future(prepared)
+        }
+
+        async fn finish_parallel_tool(
+            &mut self,
+            prepared: PreparedCall,
+            result: ExecResult,
+        ) -> ResultBlock {
+            self.adapter.finish_parallel_tool(prepared, result).await
+        }
+
+        async fn execute_sequential_tool(
+            &mut self,
+            call: &ToolCallResponse,
+            args: serde_json::Value,
+        ) -> ExecResult {
+            self.adapter.execute_sequential_tool(call, args).await
+        }
+
+        async fn finish_sequential_tool(
+            &mut self,
+            call: &ToolCallResponse,
+            args: serde_json::Value,
+            result: ExecResult,
+        ) -> ResultBlock {
+            self.adapter
+                .finish_sequential_tool(call, args, result)
+                .await
+        }
+
+        async fn commit_tool_results(&mut self, blocks: Vec<ResultBlock>, iteration: usize) {
+            self.adapter.commit_tool_results(blocks, iteration).await;
+        }
+
+        async fn confirm_tool_runaway(
+            &mut self,
+            tracker: &mut RunawayTracker,
+            calls: &[ToolCallResponse],
+        ) -> LoopControl {
+            self.adapter.confirm_tool_runaway(tracker, calls).await
+        }
+
+        async fn confirm_content_loop(
+            &mut self,
+            tracker: &mut RunawayTracker,
+            text: &str,
+        ) -> LoopControl {
+            self.adapter.confirm_content_loop(tracker, text).await
+        }
+
+        fn turn_cost_usd(&self, totals: &agiworkforce_agent_core::UsageTotals) -> f64 {
+            self.adapter.turn_cost_usd(totals)
+        }
+
+        fn on_event(&mut self, event: &TurnEvent) {
+            self.events.push(event.clone());
+            self.adapter.on_event(event);
+        }
+    }
+
+    struct LiveTurnTools<'a> {
+        available: &'a [&'a str],
+        concurrency_safe: &'a [&'a str],
+        plan_mode_mutating: &'a [&'a str],
+    }
+
+    fn name_set(values: &[&str]) -> HashSet<String> {
+        values.iter().map(|value| value.to_string()).collect()
+    }
+
+    fn live_session() -> AgentSession {
+        let mut session = make_local_session();
+        session.quiet = true;
+        session.skip_permissions = true;
+        // The constructor loads whatever hooks and rules the developer's machine
+        // happens to have; a live-turn assertion must only see what it scripts.
+        session.hooks_config = hooks::HooksConfig::default();
+        session.workspace_rules.clear();
+        session
+    }
+
+    fn hook_config(entries: &[(&str, String)]) -> hooks::HooksConfig {
+        let mut hooks_by_event: HashMap<String, Vec<hooks::Hook>> = HashMap::new();
+        for (event, command) in entries {
+            hooks_by_event
+                .entry((*event).to_string())
+                .or_default()
+                .push(hooks::Hook {
+                    command: command.clone(),
+                    args: Vec::new(),
+                    timeout: 5,
+                    blocking: true,
+                    matcher: None,
+                    if_condition: None,
+                });
+        }
+        hooks::HooksConfig {
+            hooks: hooks_by_event,
+        }
+    }
+
+    fn live_call(id: &str, name: &str, arguments: serde_json::Value) -> ToolCallResponse {
+        ToolCallResponse {
+            id: id.to_string(),
+            name: name.to_string(),
+            arguments,
+        }
+    }
+
+    fn live_completion(text: &str, tool_calls: Vec<ToolCallResponse>) -> models::CompletionResult {
+        models::CompletionResult {
+            text: text.to_string(),
+            tool_calls,
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            via_subscription: false,
+            stop_reason: Some("end_turn".to_string()),
+            reasoning_output_tokens: 0,
+        }
+    }
+
+    /// A scratch directory inside the workspace root. The read tools refuse
+    /// paths outside the project, so a live dispatch has to read from here.
+    fn workspace_scratch() -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix("agi-live-turn-")
+            .tempdir_in(std::env::current_dir().expect("cwd"))
+            .expect("scratch dir inside the workspace")
+    }
+
+    async fn run_live_turn(
+        session: &mut AgentSession,
+        tools: LiveTurnTools<'_>,
+        completions: Vec<models::CompletionResult>,
+    ) -> Vec<TurnEvent> {
+        let config = CliConfig::default();
+        let mut host = LiveTurnHost {
+            adapter: TurnHostAdapter {
+                session,
+                config: &config,
+                tool_defs: Vec::new(),
+                available_tool_names: name_set(tools.available),
+                concurrency_safe_names: name_set(tools.concurrency_safe),
+                plan_mode_mutating_names: name_set(tools.plan_mode_mutating),
+                max_tokens: 1_024,
+                first_on_chunk: None,
+                hook_additional_contexts: Vec::new(),
+                completion_usage: Vec::new(),
+            },
+            scripted: completions.into(),
+            events: Vec::new(),
+        };
+        let mut tracker = RunawayTracker::new();
+        run_turn(
+            &mut host,
+            TurnParams {
+                effective_max: MAX_AGENTIC_ITERATIONS,
+                max_budget_usd: None,
+            },
+            &mut tracker,
+        )
+        .await
+        .expect("a scripted live turn must not error");
+        host.events
+    }
+
+    /// Every tool-result block the turn wrote back into the conversation, in
+    /// history order: `(tool_use_id, content, is_error)`.
+    fn committed_tool_results(session: &AgentSession) -> Vec<(String, String, bool)> {
+        session
+            .messages
+            .iter()
+            .flat_map(|message| match &message.content {
+                crate::models::MessageContent::Blocks(blocks) => blocks.clone(),
+                crate::models::MessageContent::Text(_) => Vec::new(),
+            })
+            .filter_map(|block| match block {
+                ContentBlock::ToolResult {
+                    tool_use_id,
+                    content,
+                    is_error,
+                } => Some((tool_use_id, content, is_error)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn committed_result(session: &AgentSession, tool_use_id: &str) -> (String, bool) {
+        committed_tool_results(session)
+            .into_iter()
+            .find(|(id, ..)| id == tool_use_id)
+            .map(|(_, content, is_error)| (content, is_error))
+            .unwrap_or_else(|| panic!("no tool result was committed for {tool_use_id}"))
+    }
+
+    #[tokio::test]
+    async fn live_turn_keeps_mcp_out_of_the_parallel_batch() {
+        let scratch = workspace_scratch();
+        let readable = scratch.path().join("notes.txt");
+        std::fs::write(&readable, "parallel-body").unwrap();
+
+        let mut session = live_session();
+        let events = run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["mcp_docs_search", "read_file"],
+                // The MCP tool is deliberately declared concurrency-safe: the
+                // partition must still refuse to fan it out, because an MCP
+                // call leaves the process and cannot ride the read-only batch.
+                concurrency_safe: &["mcp_docs_search", "read_file"],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "using tools",
+                    vec![
+                        live_call(
+                            "mcp-1",
+                            "mcp_docs_search",
+                            serde_json::json!({"query": "x"}),
+                        ),
+                        live_call(
+                            "read-1",
+                            "read_file",
+                            serde_json::json!({"path": readable.to_string_lossy()}),
+                        ),
+                    ],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        let batch = events
+            .iter()
+            .find_map(|event| match event {
+                TurnEvent::ParallelBatchStarted { names } => Some(names.clone()),
+                _ => None,
+            })
+            .expect("the read-only tool must still form a parallel batch");
+        assert_eq!(
+            batch,
+            vec!["read_file".to_string()],
+            "an MCP tool must never join the parallel read-only batch"
+        );
+
+        let mcp_mode = events
+            .iter()
+            .find_map(|event| match event {
+                TurnEvent::ToolStarted { name, mode, .. } if name == "mcp_docs_search" => {
+                    Some(*mode)
+                }
+                _ => None,
+            })
+            .expect("the MCP call must still be dispatched");
+        assert_eq!(mcp_mode, DispatchMode::Sequential);
+
+        let (mcp_output, mcp_is_error) = committed_result(&session, "mcp-1");
+        assert!(
+            mcp_output.contains("No MCP connection available for this tool"),
+            "the sequential MCP branch must actually run; got: {mcp_output}"
+        );
+        assert!(mcp_is_error);
+
+        let (read_output, read_is_error) = committed_result(&session, "read-1");
+        assert!(
+            read_output.contains("parallel-body"),
+            "the parallel batch must execute the real read tool; got: {read_output}"
+        );
+        assert!(!read_is_error);
+    }
+
+    #[tokio::test]
+    async fn live_turn_plan_gate_blocks_mutation_and_subagent_before_any_spawn() {
+        let mut session = live_session();
+        session.permission_mode = crate::cli_options::PermissionMode::Plan;
+        session.plan_approved = false;
+
+        let events = run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["edit_file", "task"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &["edit_file"],
+            },
+            vec![
+                live_completion(
+                    "acting before approval",
+                    vec![
+                        live_call(
+                            "edit-1",
+                            "edit_file",
+                            serde_json::json!({
+                                "path": "src/main.rs",
+                                "old_string": "a",
+                                "new_string": "b"
+                            }),
+                        ),
+                        live_call(
+                            "task-1",
+                            "task",
+                            serde_json::json!({"description": "explore", "prompt": "go"}),
+                        ),
+                    ],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, TurnEvent::ToolStarted { .. })),
+            "an unapproved plan must pre-empt both calls before dispatch"
+        );
+        for tool_use_id in ["edit-1", "task-1"] {
+            let (content, is_error) = committed_result(&session, tool_use_id);
+            assert!(
+                content.contains("plan_mode_unapproved"),
+                "{tool_use_id} was not plan-gated; got: {content}"
+            );
+            assert!(is_error);
+        }
+        assert!(
+            session.subagent_manager.is_none(),
+            "an unapproved plan must not spawn a subagent"
+        );
+    }
+
+    #[tokio::test]
+    async fn live_turn_applies_pre_and_post_tool_hooks_on_the_sequential_path() {
+        let scratch = workspace_scratch();
+        let redirected = scratch.path().join("redirected.txt");
+        std::fs::write(&redirected, "hook-redirected-body").unwrap();
+
+        let mut session = live_session();
+        session.hooks_config = hook_config(&[
+            (
+                "PreToolUse",
+                format!(
+                    "printf '%s' '{{\"updated_input\":{{\"path\":\"{}\"}}}}'",
+                    redirected.display()
+                ),
+            ),
+            (
+                "PostToolUse",
+                "printf '%s' '{\"updated_mcp_tool_output\":\"scrubbed\",\"additional_context\":\"hook-note\"}'"
+                    .to_string(),
+            ),
+        ]);
+
+        let events = run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["read_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "reading",
+                    vec![live_call(
+                        "read-1",
+                        "read_file",
+                        serde_json::json!({"path": "does-not-exist.txt"}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        let dispatched_path = events
+            .iter()
+            .find_map(|event| match event {
+                TurnEvent::ToolStarted { args, .. } => Some(args.clone()),
+                _ => None,
+            })
+            .expect("the tool must be dispatched");
+        assert_eq!(
+            dispatched_path.get("path").and_then(|value| value.as_str()),
+            Some(redirected.display().to_string().as_str()),
+            "the hook's rewritten arguments must be what actually reaches dispatch"
+        );
+
+        let (content, is_error) = committed_result(&session, "read-1");
+        assert_eq!(
+            content, "scrubbed",
+            "the sequential path must apply the PostToolUse output transform"
+        );
+        assert!(!is_error);
+        assert!(
+            session
+                .messages
+                .iter()
+                .any(|message| message.role == "system"
+                    && message.text_content().contains("hook-note")),
+            "accrued hook context must be flushed as a system message on commit"
+        );
+    }
+
+    #[tokio::test]
+    async fn live_turn_parallel_batch_forwards_raw_output_without_hook_transforms() {
+        let scratch = workspace_scratch();
+        let readable = scratch.path().join("notes.txt");
+        std::fs::write(&readable, "raw-parallel-body").unwrap();
+
+        let mut session = live_session();
+        session.hooks_config = hook_config(&[(
+            "PostToolUse",
+            "printf '%s' '{\"updated_mcp_tool_output\":\"scrubbed\",\"additional_context\":\"hook-note\"}'"
+                .to_string(),
+        )]);
+
+        run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["read_file"],
+                concurrency_safe: &["read_file"],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "reading",
+                    vec![live_call(
+                        "read-1",
+                        "read_file",
+                        serde_json::json!({"path": readable.to_string_lossy()}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        let (content, _) = committed_result(&session, "read-1");
+        assert!(
+            content.contains("raw-parallel-body"),
+            "the parallel path forwards the raw tool output; got: {content}"
+        );
+        assert_ne!(
+            content, "scrubbed",
+            "PostToolUse output transforms must not apply to the parallel batch"
+        );
+        assert!(
+            !session
+                .messages
+                .iter()
+                .any(|message| message.text_content().contains("hook-note")),
+            "the parallel path runs post-hooks for side effects only"
+        );
+    }
+
+    #[tokio::test]
+    async fn live_turn_subagent_batch_rejects_an_unknown_named_agent_without_spawning() {
+        let mut session = live_session();
+
+        let events = run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["agent"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "delegating",
+                    vec![live_call(
+                        "agent-1",
+                        "agent",
+                        serde_json::json!({
+                            "action": "run",
+                            "name": "agi-fixture-missing-agent",
+                            "prompt": "do it"
+                        }),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, TurnEvent::ToolStarted { .. })),
+            "subagent calls are never bracketed as tool cells"
+        );
+        let (content, is_error) = committed_result(&session, "agent-1");
+        assert!(
+            content.contains("agent_not_found"),
+            "an unknown agent must be reported, not spawned; got: {content}"
+        );
+        assert!(is_error);
+        assert!(
+            session.subagent_manager.is_none(),
+            "a rejected agent name must not initialize the subagent manager"
+        );
+    }
 }

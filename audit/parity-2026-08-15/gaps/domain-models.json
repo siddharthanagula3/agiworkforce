@@ -1,0 +1,145 @@
+[
+  {
+    "id": "MODELS-001",
+    "domain": "models",
+    "surface": "desktop-tauri",
+    "feature": "Reasoning-effort / extended-thinking control",
+    "screen": "Chat composer (model badge)",
+    "files": [
+      "apps/desktop/src/features/v3/DesktopShellV3.tsx:259-260",
+      "apps/desktop/src/App.tsx:1986-1988",
+      "apps/desktop/src/runtime/TauriRuntime.ts:583-592,675,1116",
+      "apps/desktop/src/types/chat.ts:150-151",
+      "packages/ui/unified-chat/src/stores/modelStore.ts:25,35-36,133,184,186",
+      "apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx"
+    ],
+    "currentState": "The Tauri desktop app's chat composer only exposes model selection, and even that routes the user away from the composer into Settings > Models & Keys (`onModelSelectorClick` calls `openSettingsDialog('models-keys')` — App.tsx:1986-1988) rather than an inline picker. There is no effort/thinking control anywhere: the shared `useChatModelStore` (aliased from `packages/ui/unified-chat/src/stores/modelStore.ts`) exposes `thinkingEnabled`/`toggleThinking`/`setThinking`, but grep across every `apps/desktop/src/**/*.tsx` file finds zero call sites for any of the three. `TauriRuntime.ts` forwards `options?.effort` and `options?.thinkingEnabled` to the backend on every send (lines 587, 675, 1116, with the comment 'Forward the composer controls that were previously dropped here'), and `apps/desktop/src/types/chat.ts:150-151` carries a typed `reasoningEffort?: Effort` field end-to-end — but nothing in any `.tsx` file ever sets a non-undefined value into either. `ModelsKeys/index.tsx` (the settings tab the model badge routes to) has zero mentions of effort/reasoning/thinking. Every message the Desktop Tauri app sends therefore always uses each model's server-side default effort; a user cannot ask for a quicker/cheaper answer or a deeper one.",
+    "expectedState": "The Desktop composer exposes the same model + effort control as Web (or a native-styled equivalent), reading `supportedEfforts`/`defaultEffort`/`canDisableThinking` from the same catalog `ComposerFooter.tsx` already derives affordances from, and actually threading a user-chosen value into the `effort`/`thinkingEnabled` parameters `TauriRuntime.ts` already has ready to receive it.",
+    "benchmarkRef": "Claude Desktop and ChatGPT macOS both show an inline model+effort control at the composer (`shots-claude-desktop.md:205-212` — 'Model / Effect / Thinking' via the `+` menu; `shots-chatgpt-web-macos.md:62-76` — Intelligence tier list + nested model submenu, right in the composer footer, not behind a settings dialog).",
+    "gapType": "partial-implementation",
+    "severity": "P1",
+    "evidence": "Read apps/desktop/src/features/v3/DesktopShellV3.tsx and App.tsx around the model-selector click handler; grepped 'effort' and 'thinking' case-insensitively across every .tsx under apps/desktop/src (only test/comment hits, e.g. 'best-effort' in unrelated code comments). Read TauriRuntime.ts's sendMessage/streamMessage builder confirming effort/thinkingEnabled are pass-through parameters with no producer. Traced useChatModelStore to packages/ui/unified-chat/src/stores/modelStore.ts and grepped toggleThinking/setThinking/thinkingEnabled across apps/desktop/src — zero matches outside the store definition itself. Read ModelsKeys/index.tsx and LocalRuntimeSettings.tsx in full — no effort-related UI. Confirmed apps/desktop/electron loads the hosted Web app directly (per desktop-electron.md §1), so this gap is specific to the native Tauri shell, not the Electron/'AGI Cloud' build.",
+    "priorArtId": null,
+    "recommendation": "Add an effort control to the Tauri composer (reuse `getModelReasoning`/`effortChipsFor`/`EFFORT_LABEL` logic already built in `ComposerFooter.tsx`, or a native-styled port of it), wire its onChange into the existing `effort`/`thinkingEnabled` fields `TauriRuntime.sendMessage`/`streamMessage` already accept, and drop the settings-dialog-only routing for the composer's own model badge in favor of an inline picker."
+  },
+  {
+    "id": "MODELS-002",
+    "domain": "models",
+    "surface": "backend",
+    "feature": "Workspace/organization model access policy",
+    "screen": "Admin console (no dedicated screen exists)",
+    "files": [
+      "packages/contracts/types/src/enterprise/index.ts:61-70,286",
+      "packages/contracts/licensing/src/org-policy.ts:1-22",
+      "apps/web/features/admin/pages/AdminConsolePage.tsx:1-336"
+    ],
+    "currentState": "Two separate contract layers already model per-org model restriction, and neither is wired to anything. (1) `enterprise/index.ts` defines `ProviderPolicy { allowedModels: string[]; blockedModels: string[]; ... }` (lines 61-70) and an audit-event type `'model_blocked'` (line 286) — grepping `allowedModels|blockedModels` across every `apps/**` and `packages/**` non-type file finds zero consumers of this specific interface (a *different* `allowedModels` field exists in `packages/contracts/licensing/src/org-policy.ts` for the offline MDM-style license policy, unrelated to this one). (2) `org-policy.ts` itself is a signed, offline org-policy schema with its own `allowedModels`/`allowedProviders` fields, but its file header states plainly: 'this pass ships the schema + verifier + fixtures only. It is not wired into any surface's enforcement path.' (3) `apps/web/features/admin/pages/AdminConsolePage.tsx` — the only enterprise admin console in the repo — has zero mentions of 'model' anywhere in its 336 lines; its `DEFAULT_ENTERPRISE_ADMIN_POLICY` usage only drives privacy-mode/managed-compute/SSO/audit-log status rows, not model access.",
+    "expectedState": "An organization owner/admin can restrict which models members may select (or set a workspace default model/reasoning level), enforced server-side on every managed-chat request the same way tier gating already is, with the restriction visible in the picker (grayed rows, same `modelLock()` pattern already used for tier/coming-soon gating).",
+    "benchmarkRef": "ChatGPT Business/Enterprise/Edu — 'workspace admins can set the starting chat model and reasoning level at the workspace level' (Aug 13, 2026 release, `chatgpt-web-desktop.md:219,333`).",
+    "gapType": "backend-gap",
+    "severity": "P1",
+    "evidence": "Read enterprise/index.ts's AdminPolicy and ProviderPolicy interfaces in full. Grepped 'ProviderPolicy\\b' and 'allowedModels|blockedModels' across packages/ and apps/ (excluding .d.ts and the org-policy.ts family) — only type declarations and unrelated licensing fixtures matched. Read org-policy.ts's file-header 'Scope note' explicitly stating it is unwired. Read the full 336-line AdminConsolePage.tsx and grepped it for 'model' — no matches. Grepped for 'defaultModel|startingModel' across apps/web/app and apps/web/features — no workspace-scoped hit.",
+    "priorArtId": null,
+    "recommendation": "Pick one policy layer as authoritative (the live `ProviderPolicy` type, since org-policy.ts is explicitly deferred to a future ADR), add a route to read/write it from the admin console, enforce it in `request-processor.ts`'s existing tier-gate call site (`canAccessModel`), and reflect a blocked model as a locked row in `ComposerFooter.tsx`'s `modelLock()` the same way tier/env locks already render."
+  },
+  {
+    "id": "MODELS-003",
+    "domain": "models",
+    "surface": "web",
+    "feature": "Context-window usage visibility",
+    "screen": "Chat composer",
+    "files": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/context-window.ts:1-60",
+      "apps/web/features/chat/components/tokens/TokenUsageDisplay.tsx:1-134",
+      "apps/web/features/chat/components/Composer/ComposerFooter.tsx"
+    ],
+    "currentState": "Server-side, `context-window.ts` computes an estimated token budget per resolved model and silently drops the oldest turns once a long conversation exceeds it (inserting a `[Earlier messages ... were omitted]` marker). This works correctly (degrades rather than 500s) but nothing on Web tells the user it is happening or how close they are to it. `TokenUsageDisplay.tsx` — the only token-related UI component in `apps/web/features/chat` — shows per-message input/output token counts and cost in a tooltip (a ChatGPT/Claude.ai-style per-turn cost badge), not a running percentage of the model's context window. Grepping `apps/web/features/chat` and `apps/web/shared` for `contextWindow`/`context window`/`context-window` finds only the internal trimming logic and one unrelated hit in `shared/config/llm.ts` — no picker-level context-size badge and no live composer indicator exist. Mobile already ships a comparable warning (`apps/mobile/src/features/chat/components/ContextWarningChip.tsx` — a dismissible banner once `computeContextBudget()` crosses 70% of the model's context window), so this is a real Web-specific gap, not a missing concept.",
+    "expectedState": "The Web composer shows the user, before they hit the wall, that a long conversation is approaching the selected model's context window — at minimum a lightweight warning chip mirroring Mobile's `ContextWarningChip`, ideally a live percentage/remaining-tokens indicator in the composer footer.",
+    "benchmarkRef": "Codex (VS Code extension and macOS) — 'Show context window usage' toggle surfaces remaining context directly in the composer (`shots-codex-vscode-ios.md:157,352,496,500`); Claude Code sessions show a context-window/token indicator per the desktop changelog (`shots-claude-desktop.md` cross-ref in `claude-web-desktop.md:92`).",
+    "gapType": "ux-gap",
+    "severity": "P2",
+    "evidence": "Read context-window.ts in full (server-side trim-and-mark logic, no client signal emitted about it). Read TokenUsageDisplay.tsx in full and its one call site in MessageBubble.tsx:1998 — confirmed per-message, not running-total. Grepped 'contextWindow|context window|context-window' across apps/web/features/chat and apps/web/shared, and 'ComposerFooter.tsx' specifically for the same terms — no matches. Read apps/mobile/src/features/chat/components/ContextWarningChip.tsx confirming the 70%-threshold pattern already ships on Mobile and finding no equivalent import anywhere under apps/web or apps/desktop/src via grep for 'ContextWarningChip|computeContextBudget'.",
+    "priorArtId": null,
+    "recommendation": "Estimate live context usage client-side the same way context-window.ts does server-side (or thread a computed percentage back via a response header/field), and render a warning chip above the composer once usage crosses a threshold, porting the Mobile `ContextWarningChip` pattern and copy rather than inventing a new one."
+  },
+  {
+    "id": "MODELS-004",
+    "domain": "models",
+    "surface": "web",
+    "feature": "Provider-outage / fallback transparency",
+    "screen": "Chat message (model badge)",
+    "files": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/managed-failover.ts:86,108,250",
+      "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:635,2376,2701,2989",
+      "apps/web/app/api/llm/v1/chat/completions/lib/response-builder.ts:281-299",
+      "apps/web/lib/hooks/useChatStream.ts:2219-2234"
+    ],
+    "currentState": "When a request fails over to a different model — either an availability-class provider outage (`managed-failover.ts`, `fallbackReason: 'managed_failover'`/`'openrouter_route_failover'`) or an insufficient-credits downgrade (`request-processor.ts:2701`, `fallbackReason = 'Insufficient credits for X, switched to Y'`) — the reason is threaded all the way to `response-builder.ts`'s `x_agi_workforce.fallback.reason` field (lines 281-299) in the non-streaming JSON response. On the streaming path (what the chat UI actually uses), only the resolved model *id* reaches the client via the `X-AGI-Resolved-Model` header; `useChatStream.ts:2222-2234` reads that header and silently relabels the message's model badge, with no reason text carried at all. Grepping `x_agi_workforce` across apps/web finds exactly two producers (response-builder.ts, models/route.ts) and zero consumers — the field is computed and then never rendered anywhere.",
+    "expectedState": "When agiworkforce automatically switches a user's model mid-turn — for a provider outage or a credit-driven downgrade — the UI shows a brief, honest inline note (e.g. under the model badge: 'Switched to <model> — <reason>'), using the `fallbackReason` data that already exists server-side.",
+    "benchmarkRef": "General transparency bar implied by the ChatGPT complaint that model switches feel 'decorative' (`chatgpt-web-desktop.md:343`) — agiworkforce already avoids the dishonest half of that complaint (the badge does update correctly) but stops short of explaining *why*, which is the informative half users are asking for.",
+    "gapType": "integration-gap",
+    "severity": "P2",
+    "evidence": "Read managed-failover.ts's fallbackReason assignment sites and request-processor.ts's credit-downgrade branch. Read response-builder.ts:281-299 confirming x_agi_workforce.fallback.reason is populated on the JSON path. Grepped 'x_agi_workforce' across apps/web/**/*.ts(x) excluding tests/node_modules — only the two producer files matched, no consumer. Read useChatStream.ts:2219-2234 confirming the streaming path only propagates the resolved model id via header, never a reason string.",
+    "priorArtId": null,
+    "recommendation": "Add an `X-AGI-Fallback-Reason` (or similar) header alongside the existing `X-AGI-Resolved-Model` on the streaming response path, populated from the same `processed.fallbackReason` value response-builder.ts already reads for the JSON path, and render it as a small dismissible note on the affected message in MessageBubble.tsx when present."
+  },
+  {
+    "id": "MODELS-005",
+    "domain": "models",
+    "surface": "shared",
+    "feature": "Ultra / Pro reasoning modes and reasoning-dots capability metadata",
+    "screen": "n/a — schema-only, no screen exists yet",
+    "files": [
+      "packages/contracts/types/src/model-catalog.ts:179,209-215,609",
+      "packages/contracts/types/src/models.json:550-558,647-655,744-752",
+      "apps/web/features/chat/components/Composer/ComposerFooter.tsx"
+    ],
+    "currentState": "The registry schema defines a structured `ultraMode` contract (`ReasoningUltraMode`: `param`/`concurrencyParam`/`beta`/`endpoint`/`responseItems` — model-catalog.ts:179) and a `proMode` contract (`param: 'reasoning.mode', value: 'pro', endpoint: 'responses'` — model-catalog.ts:215) per model, populated for the current OpenAI reasoning family (gpt-5.6-sol/terra/luna, models.json:550-558 etc. — `ultraMode.enabled: false` for all three, `proMode` object present unconditionally). A separate `reasoningDots?: number` field (model-catalog.ts:609) is also populated (e.g. `5` for gpt-5.6-sol) but is a pure display hint with no schema-declared consumer. Grepping `ultraMode|proMode` across every non-type, non-catalog `.ts`/`.tsx` file in apps/ and packages/ finds zero consumers — no request builder ever reads `proMode.param` to send `reasoning.mode=pro`, and no UI ever renders a parallel-agent/Ultra toggle or a Pro-mode option. Grepping `reasoningDots` finds only its own type declaration, never read by any picker component.",
+    "expectedState": "Either these fields drive real product surfaces (a parallel multi-agent 'Ultra' mode and an OpenAI-Pro-mode reasoning tier selectable in the composer, plus a dot-count visual indicator in the effort picker matching the catalog's `reasoningDots`), or — if not planned for the near term — the schema is annotated as forward-looking/unimplemented so a future reader does not assume it is live.",
+    "benchmarkRef": "ChatGPT web General settings 'Enable Ultra effort — uses multiple agents in parallel for your most ambitious tasks' (`shots-chatgpt-web-macos.md:170`); Codex's five-level Light/Medium/High/Extra High/Ultra ladder (`shots-codex-vscode-ios.md:108-122`); OpenAI's separate Pro Standard/Pro Extended tier for Plus/Pro users (`chatgpt-web-desktop.md:214`).",
+    "gapType": "missing-capability",
+    "severity": "P2",
+    "evidence": "Read model-catalog.ts's ReasoningUltraMode interface and the reasoning field's ultraMode/proMode/reasoningDots members. Read the populated values for gpt-5.6-sol/terra/luna in models.json via a Python json.load, confirming ultraMode.enabled is false for every model in the catalog (34 models total) and proMode is an unconditional object for the three OpenAI reasoning models. Grepped 'ultraMode|proMode' and 'reasoningDots' across apps/web, apps/mobile, apps/desktop, packages/ai — matches were exclusively the type declaration file and models.json itself; canonical-request.ts and request-processor.ts (the actual outgoing-request builders) were read directly and contain no reference to either field.",
+    "priorArtId": null,
+    "recommendation": "If Ultra/Pro modes are on the near-term roadmap, wire proMode/ultraMode into canonical-request.ts's request-building path and add a composer control gated on `reasoning.ultraMode`/`proMode` presence, matching the existing effort-chip pattern. If not imminent, add a one-line schema comment marking these fields speculative/unused so future readers (human or agent) do not assume a live capability."
+  },
+  {
+    "id": "MODELS-006",
+    "domain": "models",
+    "surface": "web",
+    "feature": "Retired-model conversation migration notice",
+    "screen": "Chat page (opening an old conversation)",
+    "files": [
+      "apps/web/shared/stores/model-store.ts:82-99,204-210",
+      "apps/web/features/chat/pages/WebChatPage.tsx:1211-1220"
+    ],
+    "currentState": "`isCurrentModel()` and `resolveSelectableModelId()` correctly prevent a deprecated/retired model from ever being selected or routed to — but the substitution is silent. `WebChatPage.tsx:1211-1220`'s hydration effect reads a conversation's persisted `model` field, passes it through `resolveSelectableModelId()`, and calls `setSelectedModelId()` with whatever comes back (the catalog default/Auto if the original model is gone) — with no toast, banner, or inline message-thread notice telling the user their old conversation's model changed. A user reopening a six-month-old chat has no way to know the model badge they now see is not the one that generated the earlier messages in that thread.",
+    "expectedState": "Opening a conversation whose persisted model has since been deprecated/retired shows a brief, honest notice (e.g. a small inline banner: 'This chat used <old model>, which is no longer available. Now using <new model>.') rather than a silent substitution.",
+    "benchmarkRef": "cross-cutting-and-complaints.md's general deprecation-communication theme: 'a deprecation timeline communicated up front, features vanishing for some users on some app versions' is treated as a design failure mode across both competitors (§ synthesis around line 253) — the fix pattern is explicit first-party disclosure, not silent substitution.",
+    "gapType": "ux-gap",
+    "severity": "P2",
+    "evidence": "Read model-store.ts's isCurrentModel/resolveSelectableModelId functions confirming they filter deprecated models but return only a string id, no diagnostic. Read WebChatPage.tsx's conversation-hydration effect (lines 1211-1220) confirming it calls setSelectedModelId directly off resolveSelectableModelId's return with no branch that compares the persisted model against the resolved one or surfaces a difference to the user.",
+    "priorArtId": null,
+    "recommendation": "In the same hydration effect, compare `persistedModel` against the resolved id; when they differ because of deprecation (not because of a private user re-selection), set a one-time dismissible banner state read by the chat header, reusing the resolved-model relabel infrastructure already built for the fallback-header case."
+  },
+  {
+    "id": "MODELS-007",
+    "domain": "models",
+    "surface": "desktop-tauri",
+    "feature": "Embedded local-model inference (dead Cargo feature)",
+    "screen": "n/a — no UI references it",
+    "files": [
+      "apps/desktop/src-tauri/Cargo.toml:240,301,309",
+      "apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs:410-413",
+      "apps/desktop/src/features/settings/tabs/ModelsKeys/LocalRuntimeSettings.tsx:1-60"
+    ],
+    "currentState": "`llama-cpp-2` is an `optional = true` Cargo dependency gated behind a `local-llm` feature (Cargo.toml:240,309), intended for in-process/embedded model inference. It has zero call sites anywhere in `apps/desktop/src-tauri/src` (verified directly: `grep -rn \"llama_cpp_2::\" src/` returns nothing), and `local-llm` is absent from the shipped binary's `default` feature set (`default = [\"shell\", \"updater\", \"billing\", \"vad\"]`, Cargo.toml:301) — it is only ever compiled in a clippy-lint-only CI lane, never a release build. The product's actual, shipped 'local model' story is honest and different: `Provider::LlamaCpp` is an HTTP client pointed at `http://localhost:8080/v1` (direct_api_provider.rs:411) — i.e. connecting to a llama.cpp *server* the user runs separately, identical in kind to the LM Studio and vLLM options. `LocalRuntimeSettings.tsx` correctly labels this as an external runtime (docs link to `github.com/ggml-org/llama.cpp`, the server project) — the UI never promises embedded/in-process inference, so this dead code is not a broken user-facing promise, just dormant scaffolding.",
+    "expectedState": "Either the `local-llm` embedded-inference path is finished and shipped (giving users a true no-external-process local model option), or the dead Cargo feature and dependency are removed to reduce maintenance surface, since nothing currently references it.",
+    "benchmarkRef": "N/A — neither ChatGPT nor Claude ship any local/on-device model execution in their official desktop apps; this is purely an internal code-hygiene note, included because it sits squarely in the 'local-model...provider compatibility' axis of this domain.",
+    "gapType": "dead-code",
+    "severity": "P3",
+    "evidence": "Read Cargo.toml's dependency and feature declarations directly. Ran `grep -rn \"llama_cpp_2::\" apps/desktop/src-tauri/src` myself — zero matches. Read direct_api_provider.rs's provider-URL table confirming LlamaCpp/LmStudio/Vllm are all treated identically as loopback HTTP targets. Read LocalRuntimeSettings.tsx confirming the shipped UI copy and docs links describe an external runtime, not embedded inference, so no user-facing claim is being broken by the dead code.",
+    "priorArtId": null,
+    "recommendation": "Remove the `local-llm` feature flag and `llama-cpp-2` dependency if embedded inference is not on the near-term roadmap; if it is, finish the integration (load a local `.gguf` model in-process, surface it in LocalRuntimeSettings.tsx as a distinct 'Run a model directly in AGI' option) and add it to the shipped default feature set."
+  }
+]

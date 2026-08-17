@@ -59,8 +59,13 @@ jest.mock('lucide-react-native', () => {
     Eye: factory('eye'),
     Code: factory('code'),
     Download: factory('download'),
+    Globe: factory('globe'),
   };
 });
+
+jest.mock('@/services/api', () => ({
+  api: { post: jest.fn() },
+}));
 
 jest.mock('react-native-reanimated', () => {
   const RN = require('react-native');

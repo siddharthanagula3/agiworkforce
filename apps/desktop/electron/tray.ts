@@ -1,7 +1,9 @@
 import { Menu, Tray, app, nativeImage } from 'electron';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { getShortcuts } from './settingsStore';
+import { getShortcuts, saveSettings } from './settingsStore';
+import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcuts';
+import { describeAccelerator, shortcutChoices, type ShortcutKey } from './garnishCore';
 
 export interface TrayHandlers {
   onOpen: () => void;
@@ -35,6 +37,29 @@ function trayImage(): Electron.NativeImage {
   }
 }
 
+function applyShortcut(key: ShortcutKey, value: string, handlers: TrayHandlers): void {
+  saveSettings({ [key]: value });
+  unregisterGarnishShortcuts();
+  registerGarnishShortcuts({
+    onQuickAsk: handlers.onQuickAsk,
+    onScreenshot: handlers.onScreenshot,
+  });
+  refreshTrayMenu(handlers);
+}
+
+function shortcutChoiceItems(
+  key: ShortcutKey,
+  current: string,
+  handlers: TrayHandlers,
+): Electron.MenuItemConstructorOptions[] {
+  return shortcutChoices(key, current).map((value) => ({
+    label: describeAccelerator(value, process.platform),
+    type: 'radio',
+    checked: value === current,
+    click: () => applyShortcut(key, value, handlers),
+  }));
+}
+
 function buildMenu(handlers: TrayHandlers): Electron.Menu {
   const { quickAskShortcut, screenshotShortcut } = getShortcuts();
   return Menu.buildFromTemplate([
@@ -52,6 +77,17 @@ function buildMenu(handlers: TrayHandlers): Electron.Menu {
       accelerator: screenshotShortcut,
       registerAccelerator: false,
       click: handlers.onScreenshot,
+    },
+    { type: 'separator' },
+    {
+      label: 'Shortcuts',
+      submenu: [
+        { label: 'Quick Ask', enabled: false },
+        ...shortcutChoiceItems('quickAskShortcut', quickAskShortcut, handlers),
+        { type: 'separator' },
+        { label: 'Screenshot to Chat', enabled: false },
+        ...shortcutChoiceItems('screenshotShortcut', screenshotShortcut, handlers),
+      ],
     },
     { type: 'separator' },
     { label: 'Check for Updates…', click: handlers.onCheckForUpdates },

@@ -1,0 +1,224 @@
+[
+  {
+    "id": "RENDERING-001",
+    "domain": "rendering",
+    "surface": "cross-surface",
+    "feature": "Markdown rendering engine",
+    "screen": "chat transcript (all surfaces)",
+    "files": [
+      "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:1-297",
+      "apps/web/features/chat/components/messages/MessageBubble.tsx:65-66",
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:1-642",
+      "apps/extension/src/features/side-panel/markdown.ts:1-179"
+    ],
+    "currentState": "Web and Desktop share one real remark/rehype-based markdown pipeline (MarkdownContent.tsx: remark-gfm+remark-math+remarkBreaks, rehype-raw->rehype-sanitize->rehype-katex->rehype-highlight). Mobile has an independent 642-line hand-written regex parser (MessageContentRenderer.tsx). The Chrome extension has a third, independently written 179-line regex parser (markdown.ts). None of the three share code, and grep confirms zero references to MarkdownContent outside apps/web and packages/ui/unified-chat.",
+    "expectedState": "A single AST-based markdown engine (or a thin per-platform renderer over one shared parse tree) so a fix or feature (new sanitizer rule, new GFM feature, new highlight theme) lands on every surface at once, the way any single ChatGPT or Claude surface behaves identically across screens.",
+    "benchmarkRef": "Claude Desktop/Web/iOS and ChatGPT Web/Desktop each render markdown consistently within their own product; per shots-claude-desktop.md and shots-chatgpt-web-macos.md no surface-specific markdown feature gaps were observed within a single vendor's product family",
+    "gapType": "architecture-gap",
+    "severity": "P1",
+    "evidence": "Read MarkdownContent.tsx in full (297 lines, uses react-markdown+remark-gfm/math/breaks+rehype-raw/sanitize/katex/highlight). Read MessageContentRenderer.tsx in full (642 lines, custom renderTextSegment/renderInlineMarkdown regex functions). Read markdown.ts in full (179 lines, custom renderMarkdown regex function). grep -rn \"MarkdownContent\" apps/mobile apps/extension returned zero hits, confirming no shared code path.",
+    "priorArtId": null,
+    "recommendation": "Adopt one shared parse layer (e.g. micromark/mdast) with three thin render-target adapters (React DOM for web/desktop, React Native primitives for mobile, vanilla DOM builder for the extension), replacing the two independent regex engines. Ship incrementally: fix the two concrete correctness bugs in RENDERING-002/003 first, then converge the parsers."
+  },
+  {
+    "id": "RENDERING-002",
+    "domain": "rendering",
+    "surface": "extension-chrome",
+    "feature": "Markdown rendering — tables, images, math, syntax highlighting",
+    "screen": "side panel chat transcript",
+    "files": [
+      "apps/extension/src/features/side-panel/markdown.ts:96-179",
+      "apps/extension/src/features/side-panel/bubbles.ts:231,677"
+    ],
+    "currentState": "renderMarkdown() in markdown.ts has no table handling (a markdown table renders as literal pipe characters), no image handling (sanitizeHtml explicitly FORBID_TAGS 'img' and FORBID_ATTR 'src'), no math/LaTeX handling at all, and code fences render as bare <pre><code> with no language class and no highlighting library wired anywhere in bubbles.ts.",
+    "expectedState": "The extension side panel renders the same markdown feature set as the web/desktop pipeline: tables, inline images with loading/error states, KaTeX math, and syntax-highlighted code blocks with a per-block copy button.",
+    "benchmarkRef": "ChatGPT for Chrome and Claude in Chrome extensions render full markdown including tables, images, and highlighted code, per shots-chatgpt-web-macos.md Part 3 and shots-claude-web.md Claude-in-Chrome settings sections",
+    "gapType": "partial-implementation",
+    "severity": "P1",
+    "evidence": "Read markdown.ts in full: no `|` table regex anywhere; ALLOWED_TAGS in sanitizeHtml (lines 33-65) omits 'img' and FORBID_TAGS (67-79) explicitly includes 'img'; no $ or $$ math regex; code fence handling (lines 99-101) produces plain <pre><code> with no class attribute. grep -n \"pre\\b|code-block|highlight\" bubbles.ts returned zero hits, confirming no post-processing enhances the raw output.",
+    "priorArtId": null,
+    "recommendation": "Wire a lightweight syntax highlighter (e.g. highlight.js, already a dependency in packages/ui/unified-chat) into the extension's code-fence path, add a table regex/renderer, relax the img FORBID_TAGS entry to an allowed tag scoped to http(s)/data sources with a DOMPurify hook, and add $...$ math via a bundled KaTeX render-to-string call before sanitization."
+  },
+  {
+    "id": "RENDERING-003",
+    "domain": "rendering",
+    "surface": "mobile",
+    "feature": "Markdown rendering — nested lists and table cell formatting",
+    "screen": "chat transcript (MessageBubble)",
+    "files": [
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:262-263,307,356-371,449-461"
+    ],
+    "currentState": "The unordered/ordered list regexes are anchored ^[-*]\\s+ / ^(\\d+)\\.\\s+ with no leading-whitespace tolerance, so an indented sub-item (e.g. '  - nested') matches none of the block branches and silently degrades to a plain paragraph, losing its bullet and indentation. Separately, the markdown-table renderer (parseTableRow + the table JSX at lines 402-467) renders each cell as the raw string `row[colIdx]` without passing it through renderInlineMarkdown, unlike every other text branch in the same file, so bold/links/inline-code inside a table cell render as literal markdown syntax characters instead of formatted text.",
+    "expectedState": "Nested lists render as nested lists (matching CommonMark/GFM behavior); table cells run through the same inline-markdown formatter used for headers, list items, and paragraphs.",
+    "benchmarkRef": "Web's own remark-gfm-based table+list rendering (packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx) is the in-house reference implementation this should match",
+    "gapType": "partial-implementation",
+    "severity": "P2",
+    "evidence": "Read MessageContentRenderer.tsx in full. Traced ulMatch/olMatch regex definitions (lines 262, 307) — both anchored at line start with no \\s* prefix. Traced the table row-rendering JSX (lines 449-461) — `{row[colIdx] || ''}` is passed directly to <Text>, never through renderInlineMarkdown, in contrast to every sibling branch (headers line 204, list items 297/342, blockquotes 254, plain paragraphs 497) which all call renderInlineMarkdown.",
+    "priorArtId": null,
+    "recommendation": "Extend the list-detection regex to tolerate leading whitespace and track indent depth for nesting; change the table cell render to `renderInlineMarkdown(row[colIdx] || '', ...)` matching the pattern already used everywhere else in the file. Both are localized, low-risk fixes to the existing hand-rolled parser, not a rewrite."
+  },
+  {
+    "id": "RENDERING-004",
+    "domain": "rendering",
+    "surface": "desktop-tauri",
+    "feature": "Response actions — feedback, edit, share, read aloud, branch, report",
+    "screen": "chat transcript action row",
+    "files": [
+      "packages/ui/unified-chat/src/components/ActionBar.tsx:54-57,88-90",
+      "packages/ui/unified-chat/src/components/MessageList.tsx:210-216",
+      "apps/desktop/src/stores/chat/chatStore.ts:271,1360"
+    ],
+    "currentState": "Desktop's chat renders through packages/ui/unified-chat's MessageBubble/ActionBar. ActionBar's thumbs-up/down block is only rendered when an onFeedback prop is passed; MessageList.tsx (the only caller) never passes onFeedback anywhere (grep confirmed zero hits), so the feedback UI can never render in production. A fully implemented editMessage(messageId, newContent) action exists in apps/desktop/src/stores/chat/chatStore.ts (lines 271, 1360) but has zero callers anywhere in the desktop UI tree outside the store definition itself, per grep -rn \"editMessage(\" apps/desktop/src excluding stores/. Share, Read Aloud, Branch/Fork, and Report have no prop, callback, or component anywhere in ActionBar.tsx or MessageBubble.tsx in the shared package.",
+    "expectedState": "Desktop's per-message action row matches what Web already built: Copy, thumbs feedback (persisted), Regenerate, Edit (for user messages), Share, Read Aloud, Branch conversation, and Report.",
+    "benchmarkRef": "apps/web/features/chat/components/messages/MessageBubble.tsx (the in-house reference implementation); ChatGPT and Claude desktop apps both support message feedback and editing per research/chatgpt-web-desktop.md §4 and research/claude-web-desktop.md",
+    "gapType": "dead-code",
+    "severity": "P1",
+    "evidence": "Read ActionBar.tsx in full (105 lines) — comments at lines 54-57 and 88-90 explicitly state desktop does not persist reactions and does not wire regenerate (regenerate is in fact wired via onRetry, feedback is not). Read MessageList.tsx lines 190-225 — only onRetry, onToolApprove, onToolReject, approvalTurnExpired, onResendApproval are passed to MessageBubble; no onFeedback. grep -n \"editMessage(\" apps/desktop/src --include=\"*.ts\" --include=\"*.tsx\" excluding the stores directory returned zero results. grep -n \"onBranch|BranchNavigator|readAloud|onShare\" across packages/ui/unified-chat/src/components/*.tsx returned zero hits.",
+    "priorArtId": null,
+    "recommendation": "Wire onFeedback from DesktopShellV3 through ChatInterface -> MessageList -> MessageBubble -> ActionBar to the existing feedback-persistence backend (already used by web). Add an Edit affordance to ActionBar (or MessageBubble) that calls the already-implemented chatStore.editMessage. Port web's onReadAloud/onBranch/report patterns into the shared package behind optional props, matching the existing 'omit the prop, hide the control' pattern already used for onFeedback/onRetry."
+  },
+  {
+    "id": "RENDERING-005",
+    "domain": "rendering",
+    "surface": "extension-chrome",
+    "feature": "Response actions",
+    "screen": "side panel chat transcript",
+    "files": ["apps/extension/src/features/side-panel/bubbles.ts:241-262,705-724"],
+    "currentState": "The only response action rendered anywhere in the side panel is a whole-message Copy button, duplicated at two separate bubble-construction sites (lines 241-262 and 705-724). grep for regenerate/edit/share/readAloud/feedback/fork across the entire side-panel source tree returns zero hits.",
+    "expectedState": "At minimum: Regenerate and thumbs feedback should exist in the side panel, matching the baseline response-action set present on every other surface in this product (web, mobile) and on both benchmark products' Chrome extensions.",
+    "benchmarkRef": "ChatGPT for Chrome and Claude in Chrome both expose response actions beyond copy in their side panels, per shots-chatgpt-web-macos.md Part 3 (task overflow menu, feedback icons) and shots-claude-web.md (Claude in Chrome settings implying a full parity feature set with the main app)",
+    "gapType": "missing-capability",
+    "severity": "P1",
+    "evidence": "Read bubbles.ts in full for both bubble-construction code paths (lines 1-262 and the second builder around 677-729). grep -n \"onRegenerate|Regenerat|onEdit|onShare|handleShare|onReadAloud|onFeedback|thumbsUp|thumbsDown|onFork\" apps/extension/src/features/side-panel/*.ts returned zero matches outside the icon-import list and a single unrelated 'edit' substring match on a tool-icon heuristic (line 275, `n.includes('edit')` for choosing a file-edit icon, not a response action).",
+    "priorArtId": null,
+    "recommendation": "Add a Regenerate button that resends the same request through the existing side-panel send path, and a thumbs up/down pair persisted through the same feedback endpoint web/mobile already call. Both can reuse bubbles.ts's existing copy-button pattern (icon + click handler + brief 'done' state) rather than introducing new UI primitives."
+  },
+  {
+    "id": "RENDERING-006",
+    "domain": "rendering",
+    "surface": "desktop-tauri",
+    "feature": "Code execution output rendering",
+    "screen": "chat transcript",
+    "files": [
+      "packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx:126-138",
+      "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx:1-131"
+    ],
+    "currentState": "Web renders code-execution stdout, stderr (visually distinct), inline plot images, and a non-zero exit-code line via CodeExecutionBlock.tsx. Desktop's shared package has MessageGeneratedFiles.tsx, which tracks a running/pending state for generated FILES only (hasRunningExecutionTool, lines 126-138) but contains no stdout/stderr rendering anywhere (grep confirmed zero hits for either string in the file).",
+    "expectedState": "A code_execution turn that only prints text (no file produced) should show its console output on Desktop the same way it does on Web, not render nothing beyond the generic tool-call name.",
+    "benchmarkRef": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx is the in-house reference; ChatGPT Code Interpreter and Claude's code execution tool both surface console output inline per research/cross-cutting-and-complaints.md §1",
+    "gapType": "broken-workflow",
+    "severity": "P1",
+    "evidence": "Read MessageGeneratedFiles.tsx and CodeExecutionBlock.tsx in full. grep -n \"stdout|stderr\" packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx returned zero hits; grep -n \"CodeExecutionBlock\" packages/ui/unified-chat/src/components/MessageBubble.tsx also returned zero hits, confirming no equivalent component is imported into the desktop message renderer at all.",
+    "priorArtId": null,
+    "recommendation": "Port CodeExecutionBlock.tsx (or a shared version of it) into packages/ui/unified-chat and wire it into the desktop MessageBubble the same way it is wired into web's, keyed off the same isExecuting/result shape already used by the runtime."
+  },
+  {
+    "id": "RENDERING-007",
+    "domain": "rendering",
+    "surface": "cross-surface",
+    "feature": "File diff rendering",
+    "screen": "chat transcript, tool-call result",
+    "files": [
+      "packages/ui/unified-chat/src/components/ToolCallCard.tsx:333-342",
+      "apps/desktop/src/features/editing/EnhancedDiffViewer.tsx",
+      "apps/desktop/src/features/git/GitDiffViewer.tsx"
+    ],
+    "currentState": "The only rendering a file-edit tool's result ever gets inside a chat turn is a generic <pre>{result}</pre> JSON/text dump inside ToolCallCard's collapsed 'Response' section (packages/ui/unified-chat/src/components/ToolCallCard.tsx:333-342), identical treatment to any other tool's plain-text output. Desktop does have real diff viewers (EnhancedDiffViewer.tsx, GitDiffViewer.tsx) but they live in the separate Code/Git workspace views per audit/parity-2026-08-15/inventory/desktop-tauri.md, not the chat transcript, so a file edit surfaced inside an agentic chat turn has no path to either.",
+    "expectedState": "A file-edit tool call inside the chat transcript renders a proper red/green line-diff view (added/removed lines, syntax-highlighted), not a raw text/JSON dump.",
+    "benchmarkRef": "Claude Code's setup screen preview shows an inline 'Files Changed 3' diff card (research/shots-claude-web.md screen 169); Codex's PR/diff review UI is documented in research/chatgpt-web-desktop.md §3 with collapsible inline comments and inline/detached modes",
+    "gapType": "missing-capability",
+    "severity": "P2",
+    "evidence": "Read ToolCallCard.tsx (both the web adapter apps/web/features/chat/components/ToolCallCard.tsx and the canonical packages/ui/unified-chat/src/components/ToolCallCard.tsx) in full — the 'Response' section (lines 333-342 in the shared version) is a plain <pre> block for any string result, with no diff-aware branch. grep -rliE \"filediff|file-diff\" across apps/web/features/chat, apps/mobile/src/features/chat, packages/ui/unified-chat/src/components, apps/extension/src returned zero results.",
+    "priorArtId": null,
+    "recommendation": "Detect file-edit-shaped tool results (old/new content or a unified-diff string in the parameters/result) in ToolCallCard, similar to the existing detectCodeBlock heuristic, and render through a shared lightweight diff component (reusing desktop's existing EnhancedDiffViewer logic where practical) instead of the generic <pre> dump."
+  },
+  {
+    "id": "RENDERING-008",
+    "domain": "rendering",
+    "surface": "cross-surface",
+    "feature": "Citation / source card UX",
+    "screen": "chat transcript, response citations",
+    "files": [
+      "apps/web/features/chat/components/messages/InlineSourceTags.tsx:1-54",
+      "apps/mobile/src/features/chat/components/CitationChip.tsx:1-47"
+    ],
+    "currentState": "Web's InlineSourceTags renders every citation as a small pill in a trailing flex-wrap row after the message body, with only a native `title` attribute for extra detail — no popover, no favicon, no snippet beyond the tooltip, no pagination for multi-source claims, and no claim-adjacent positioning (always trailing the whole message, never after the specific sentence). Mobile's CitationChip is the same shape. The Chrome extension has no citation component at all (grep -rliE \"citation|source.card\" apps/extension/src returned zero files) — any citation in an extension response is whatever raw markdown link the model emitted.",
+    "expectedState": "Claim-adjacent inline citation chips (positioned at the end of the sentence/bullet they support), a rich hover/click popover (publisher, headline, snippet, N/M pagination for multi-source chips), and a persistent 'Sources' list/panel, on every surface — matching web's own InteractiveCardBlock quality bar for structured rendering.",
+    "benchmarkRef": "ChatGPT's citation chip + popover + Sources panel architecture, documented in detail in research/chatgpt-web-desktop.md §3 (aiuxplayground.com citations teardown, updated Jul 10 2026)",
+    "gapType": "ux-gap",
+    "severity": "P2",
+    "evidence": "Read InlineSourceTags.tsx and CitationChip.tsx in full (54 and 47 lines respectively) — both are single-row pill lists with a native title tooltip as the only extra-detail affordance. grep -rliE \"citation|source.card|sourcecard\" apps/extension/src/features/side-panel apps/extension/src returned zero results.",
+    "priorArtId": null,
+    "recommendation": "Add a rich hover/focus popover component (favicon, title, snippet, pagination) to the existing InlineSourceTags/CitationChip components on web/mobile; port the pill-plus-popover pattern to the extension side panel; consider repositioning citation markers claim-adjacent in the markdown pipeline rather than only trailing the message."
+  },
+  {
+    "id": "RENDERING-009",
+    "domain": "rendering",
+    "surface": "cross-surface",
+    "feature": "Branch / fork conversation UI",
+    "screen": "chat transcript, message action row",
+    "files": [
+      "apps/web/features/chat/components/messages/MessageBubble.tsx:369-374,1062-1069,1977-1981"
+    ],
+    "currentState": "Web has a real branch switcher: onBranch prop, a BranchNavigator component rendered inline (lines 1062-1069), and a 'Branch conversation' item in the message overflow menu (lines 1977-1981). Desktop's shared MessageBubble, mobile's MessageBubble, and the extension's bubbles.ts have no equivalent — grep for onBranch/BranchNavigator/GitFork across all three returned zero hits.",
+    "expectedState": "A user who edits an earlier message and creates an implicit branch on Desktop or Mobile should be able to see and switch branches the same way Web already allows.",
+    "benchmarkRef": "Internal consistency — web's own implementation is the reference. Notably this already beats Claude's benchmark: research/claude-web-desktop.md documents Claude's own branching as fully invisible everywhere and an actively-requested open GitHub issue (#59029)",
+    "gapType": "parity-gap",
+    "severity": "P2",
+    "evidence": "grep -n \"onBranch|GitFork|branchNavigation|BranchNavigator\" apps/mobile/src/features/chat/components/MessageBubble.tsx apps/extension/src/features/side-panel/bubbles.ts packages/ui/unified-chat/src/components/MessageBubble.tsx returned zero results across all three files. Confirmed the feature is real and wired on web by reading MessageBubble.tsx lines 369-374 (prop definitions), 1062-1069 (BranchNavigator render), and 1977-1981 (menu item).",
+    "priorArtId": null,
+    "recommendation": "Port the onBranch prop and BranchNavigator rendering into packages/ui/unified-chat's MessageBubble (covering Desktop), and add the equivalent affordance to mobile's MessageBubble and the extension's bubbles.ts, reusing whatever backend branch-storage web already calls."
+  },
+  {
+    "id": "RENDERING-010",
+    "domain": "rendering",
+    "surface": "web",
+    "feature": "Rich message card detection architecture",
+    "screen": "chat transcript",
+    "files": [
+      "apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:33-42",
+      "apps/web/features/chat/components/cards/index.tsx:26-77",
+      "apps/web/features/chat/components/messages/MessageBubble.tsx:1267-1274"
+    ],
+    "currentState": "Two independent mechanisms decide whether to render a rich card for the same message. InteractiveCardBlock.tsx uses a schema-versioned, backend-emitted InteractiveCard object (kind/body/fallback) looked up in a typed registry — cannot false-positive by construction. cards/index.tsx's detectCardType() is a completely separate regex heuristic that scans the raw markdown TEXT of the message for structural signals (headers matching /ingredients/i, 'vs' in a heading, 'step N' patterns, etc.) to decide whether to render a Recipe/Comparison/Steps/Calculation card, with no backend signal at all. Both run on every assistant message in MessageBubble.tsx (lines 1267-1274).",
+    "expectedState": "One consistent mechanism for deciding when to render a structured card, ideally the schema-driven InteractiveCard approach extended to cover Recipe/Comparison/Steps/Calculation, rather than a second, less reliable heuristic layer.",
+    "benchmarkRef": "n/a — internal architecture inconsistency, not a competitor gap",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Read InteractiveCardBlock.tsx (full file, 119 lines) and cards/index.tsx (full file, 107 lines). Confirmed detectCardType's regex-based detection (lines 26-77) and its own comment acknowledging the false-positive risk ('Detection is intentionally conservative'). Confirmed both paths execute for every message by reading MessageBubble.tsx around lines 1267-1274 where MessageFormatCard/detectCardType wraps the markdown output independently of the separate InteractiveCardBlock render for message.interactiveCards.",
+    "priorArtId": null,
+    "recommendation": "Migrate Recipe/Comparison/Steps/Calculation into the same InteractiveCard schema-versioned registry as clarify.v1/map-search.v1 (backend emits a typed card object) and retire the regex-based detectCardType heuristic, or at minimum gate detectCardType to only fire when no structured card was already emitted for the message, to avoid double-guessing."
+  },
+  {
+    "id": "RENDERING-011",
+    "domain": "rendering",
+    "surface": "web",
+    "feature": "Structured interactive card coverage",
+    "screen": "chat transcript",
+    "files": ["apps/web/features/chat/components/messages/InteractiveCardBlock.tsx:33-42"],
+    "currentState": "Only two InteractiveCard kinds have live producers: clarify.v1 and map-search.v1. itinerary.v1 is declared in the shared type registry with no producer (an explicit, honest non-implementation per the code's own comment). No weather/stocks/shopping/local-business/reservations/jobs card kind exists at all, in the registry or otherwise.",
+    "expectedState": "Broader coverage of common rich-card categories as the product matures, built on the existing schema-versioned registry (the right foundation, per its honest-fallback design).",
+    "benchmarkRef": "Weak/unverified for both benchmark products — research/cross-cutting-and-complaints.md marks ChatGPT's rich card support for weather/stocks/sports as UNVERIFIED and found no evidence Claude has any of these",
+    "gapType": "missing-capability",
+    "severity": "P3",
+    "evidence": "Read InteractiveCardBlock.tsx lines 33-42 including the inline comment about itinerary.v1 having no producer. grep -rliE \"WeatherCard|StockCard|SportsCard|ShoppingCard|ProductCard|LocalBusinessCard|TravelCard|ReservationCard|JobCard|MapSearchCard\" across apps/web, apps/mobile, apps/desktop, packages/ui, packages/platform returned only the two live kinds (MapSearchCard.tsx and its test) and build-artifact false positives.",
+    "priorArtId": null,
+    "recommendation": "Not urgent given weak benchmark pressure. When prioritized, add producers behind the existing InteractiveCard registry pattern (already proven safe with clarify.v1/map-search.v1) rather than inventing a new mechanism."
+  },
+  {
+    "id": "RENDERING-012",
+    "domain": "rendering",
+    "surface": "cross-surface",
+    "feature": "Native/interactive chart rendering",
+    "screen": "chat transcript, code execution output",
+    "files": ["apps/web/features/chat/components/messages/CodeExecutionBlock.tsx:112-122"],
+    "currentState": "No interactive/native chart or graph component exists anywhere in the product. A generated chart (e.g. matplotlib output from code execution) only ever reaches the user as a static base64 PNG rendered via CodeExecutionBlock.tsx's image-output path (lines 112-122) — functional, but never an interactive/native chart type.",
+    "expectedState": "At minimum an equivalent raster fallback everywhere (already the case); optionally a native interactive chart component for structured numeric data the model emits directly rather than only via a Python plotting library round-trip.",
+    "benchmarkRef": "ChatGPT Code Interpreter's inline charts (matplotlib/pandas workflow), per research/cross-cutting-and-complaints.md §1",
+    "gapType": "missing-capability",
+    "severity": "P3",
+    "evidence": "grep -rln \"recharts|Chart\\b\" apps/web/features/chat/components returned nothing, corroborating the same finding already recorded in audit/parity-2026-08-15/inventory/web-frontend.md §3.3 ('Gap, not a bug'). Confirmed the raster fallback exists and works by reading CodeExecutionBlock.tsx lines 112-122 (safeImages rendering).",
+    "priorArtId": null,
+    "recommendation": "Low priority given the raster fallback already covers the common case gracefully. If pursued, add a native chart card driven by structured JSON the model can emit directly (bar/line/pie), reusing the InteractiveCard registry pattern rather than a bespoke component."
+  }
+]

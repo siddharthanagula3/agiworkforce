@@ -42,6 +42,7 @@ function makeAgiWorkProcessed(goal?: {
   deliverable?: string;
 }): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'req-agiwork',
     chatRequest: {
       model: 'gpt-test',

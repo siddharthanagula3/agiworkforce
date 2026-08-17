@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { ipKeyGenerator } from 'express-rate-limit';
+import { ipKeyGenerator, type Store } from 'express-rate-limit';
 import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 import {
+  RATE_LIMIT_OUTAGE_POLICY_ENV,
   createRateLimiter,
+  limiterFailsClosed,
   rateLimitConfigs,
+  resolveRateLimitOutagePolicy,
   resolveRateLimitRedisUrl,
   resolveTierRateLimitMax,
 } from '../../src/middleware/rateLimit';
@@ -194,6 +197,136 @@ describe('Rate Limiter Middleware', () => {
 
     it('reports an unset variable distinctly from a misconfigured one', () => {
       expect(resolveRateLimitRedisUrl({})).toEqual({ url: null, reason: 'unset' });
+    });
+  });
+
+  describe('resolveRateLimitOutagePolicy', () => {
+    it('defaults to fail-closed wherever Redis is configured or production is running', () => {
+      expect(resolveRateLimitOutagePolicy({ RATE_LIMIT_REDIS_URL: 'rediss://host:6379' })).toBe(
+        'fail-closed',
+      );
+      expect(resolveRateLimitOutagePolicy({ NODE_ENV: 'production' })).toBe('fail-closed');
+    });
+
+    it('leaves a Redis-less development box fail-open', () => {
+      expect(resolveRateLimitOutagePolicy({ NODE_ENV: 'development' })).toBe('fail-open');
+    });
+
+    it('honours an explicit operator choice and refuses to guess from a typo', () => {
+      expect(
+        resolveRateLimitOutagePolicy({
+          [RATE_LIMIT_OUTAGE_POLICY_ENV]: 'fail-open',
+          RATE_LIMIT_REDIS_URL: 'rediss://host:6379',
+        }),
+      ).toBe('fail-open');
+      expect(resolveRateLimitOutagePolicy({ [RATE_LIMIT_OUTAGE_POLICY_ENV]: 'FAIL-CLOSED' })).toBe(
+        'fail-closed',
+      );
+      expect(resolveRateLimitOutagePolicy({ [RATE_LIMIT_OUTAGE_POLICY_ENV]: 'maybe' })).toBe(
+        'fail-closed',
+      );
+    });
+
+    it('scopes fail-closed to metered ceilings', () => {
+      const env = { [RATE_LIMIT_OUTAGE_POLICY_ENV]: 'fail-closed' };
+      expect(limiterFailsClosed('llm-completions', env)).toBe(true);
+      expect(limiterFailsClosed('cloud-chat-send', env)).toBe(true);
+      expect(limiterFailsClosed('credits-deduct', env)).toBe(true);
+      expect(limiterFailsClosed('health', env)).toBe(false);
+      expect(limiterFailsClosed('llm-completions', { NODE_ENV: 'development' })).toBe(false);
+    });
+  });
+
+  describe('metered ceilings when the shared store is unavailable', () => {
+    afterEach(() => {
+      delete process.env[RATE_LIMIT_OUTAGE_POLICY_ENV];
+    });
+
+    const countingStore = (): Store => {
+      const hits = new Map<string, number>();
+      return {
+        increment: async (key: string) => {
+          const totalHits = (hits.get(key) ?? 0) + 1;
+          hits.set(key, totalHits);
+          return { totalHits, resetTime: new Date(Date.now() + 60_000) };
+        },
+        decrement: async (key: string) => {
+          hits.set(key, Math.max(0, (hits.get(key) ?? 0) - 1));
+        },
+        resetKey: async (key: string) => {
+          hits.delete(key);
+        },
+      };
+    };
+
+    const brokenStore = (): Store => ({
+      increment: async () => {
+        throw new Error('redis unavailable');
+      },
+      decrement: async () => {},
+      resetKey: async () => {},
+    });
+
+    const appWith = (handler: express.RequestHandler) => {
+      const app = express();
+      app.use(handler);
+      app.get('/test', (_req, res) => res.json({ ok: true }));
+      return app;
+    };
+
+    it('serves and still enforces the ceiling while the store answers', async () => {
+      process.env[RATE_LIMIT_OUTAGE_POLICY_ENV] = 'fail-closed';
+      const app = appWith(createRateLimiter('credits-deduct', countingStore()));
+
+      const statuses: number[] = [];
+      for (let i = 0; i < rateLimitConfigs['credits-deduct'].max + 1; i++) {
+        statuses.push((await request(app).get('/test')).status);
+      }
+
+      expect(statuses.filter((status) => status === 200)).toHaveLength(
+        rateLimitConfigs['credits-deduct'].max,
+      );
+      expect(statuses.at(-1)).toBe(429);
+    });
+
+    it('refuses a metered request when the store errors', async () => {
+      process.env[RATE_LIMIT_OUTAGE_POLICY_ENV] = 'fail-closed';
+      const app = appWith(createRateLimiter('llm-completions', brokenStore()));
+
+      const response = await request(app).get('/test');
+
+      expect(response.status).toBe(503);
+      expect(response.body).toHaveProperty('error', 'RATE_LIMITER_UNAVAILABLE');
+      expect(response.headers['retry-after']).toBe('30');
+    });
+
+    it('refuses a metered request when no shared store exists at all', async () => {
+      process.env[RATE_LIMIT_OUTAGE_POLICY_ENV] = 'fail-closed';
+      const app = appWith(createRateLimiter('llm-completions'));
+
+      const response = await request(app).get('/test');
+
+      expect(response.status).toBe(503);
+      expect(response.body).toHaveProperty('error', 'RATE_LIMITER_UNAVAILABLE');
+    });
+
+    it('admits on a store error only when an operator configured fail-open', async () => {
+      process.env[RATE_LIMIT_OUTAGE_POLICY_ENV] = 'fail-open';
+      const app = appWith(createRateLimiter('llm-completions', brokenStore()));
+
+      const response = await request(app).get('/test');
+
+      expect(response.status).toBe(200);
+      expect(response.body.ok).toBe(true);
+    });
+
+    it('keeps unmetered endpoints available when the store errors', async () => {
+      process.env[RATE_LIMIT_OUTAGE_POLICY_ENV] = 'fail-closed';
+      const app = appWith(createRateLimiter('health', brokenStore()));
+
+      const response = await request(app).get('/test');
+
+      expect(response.status).toBe(200);
     });
   });
 });

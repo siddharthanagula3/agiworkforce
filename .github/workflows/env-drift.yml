@@ -1,0 +1,56 @@
+name: Environment Drift
+
+on:
+  schedule:
+    - cron: '41 */6 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/check-env-drift.mjs'
+      - 'scripts/check-env-drift.test.mjs'
+      - 'scripts/env-doctor.mjs'
+      - '.github/workflows/env-drift.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: env-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-logic:
+    name: Self-test the drift comparison
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - run: node --test scripts/check-env-drift.test.mjs
+
+  reconcile-production:
+    name: Reconcile production env against the declared contract
+    needs: contract-logic
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: production-web
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      PAGER_WEBHOOK_URL: ${{ secrets.PAGER_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Reconcile the production environment
+        run: node scripts/check-env-drift.mjs --scope web --target production

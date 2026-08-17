@@ -9,6 +9,7 @@ interface MessageFormatCardProps {
   content: string;
   cardType: Exclude<CardType, null>;
   children: React.ReactNode;
+  messageId?: string;
 }
 
 const LABELS: Record<Exclude<CardType, null>, string> = {
@@ -18,7 +19,12 @@ const LABELS: Record<Exclude<CardType, null>, string> = {
   calculation: 'Calculation',
 };
 
-export function MessageFormatCard({ content, cardType, children }: MessageFormatCardProps) {
+export function MessageFormatCard({
+  content,
+  cardType,
+  children,
+  messageId,
+}: MessageFormatCardProps) {
   const [showOriginal, setShowOriginal] = useState(false);
 
   return (
@@ -62,7 +68,15 @@ export function MessageFormatCard({ content, cardType, children }: MessageFormat
         </div>
       </div>
 
-      {showOriginal ? children : <MessageCardRenderer content={content} cardType={cardType} />}
+      {showOriginal ? (
+        children
+      ) : (
+        <MessageCardRenderer
+          content={content}
+          cardType={cardType}
+          {...(messageId ? { messageId } : {})}
+        />
+      )}
     </div>
   );
 }

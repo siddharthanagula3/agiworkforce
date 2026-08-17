@@ -62,11 +62,14 @@ export function VideoGenCard({
               'motion-safe:animate-[shimmer_1.8s_ease-in-out_infinite]',
             )}
           />
-          {/* Reduced-motion and no-animation fallback: without this the block is
-              indistinguishable from a failed render. */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 motion-safe:opacity-0">
+          {/* Unconditional: behind `motion-safe:opacity-0` this label was hidden
+              from everyone except prefers-reduced-motion readers, leaving the
+              in-flight state as a blank shimmering box that reads as a broken
+              render. The shimmer is decoration behind the message, not the
+              message. */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
             <Film size={20} className="text-[var(--chat-text-muted)]" aria-hidden="true" />
-            <span className="text-[13px] text-[var(--chat-text-muted)]">
+            <span className="text-[13px] text-[var(--chat-text-primary)]">
               Generating your video…
             </span>
           </div>

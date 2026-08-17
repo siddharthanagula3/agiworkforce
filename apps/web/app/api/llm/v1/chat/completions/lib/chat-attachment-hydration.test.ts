@@ -99,6 +99,99 @@ describe('hydrateChatAttachments', () => {
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 
+  it('extracts a notebook to text so base64 output images never reach the model', async () => {
+    const assetId = '32b71cf4-c0d1-4cc7-b6c4-776ece82f137';
+    const imageBlob = 'A'.repeat(2048);
+    const notebook = Buffer.from(
+      JSON.stringify({
+        cells: [
+          { cell_type: 'markdown', source: ['# Revenue\n', 'Quarterly rollup.'] },
+          {
+            cell_type: 'code',
+            source: 'df.plot()\n',
+            outputs: [
+              { output_type: 'stream', text: ['rows: 12\n'] },
+              {
+                output_type: 'display_data',
+                data: { 'image/png': imageBlob, 'text/plain': '<Figure size 640x480>' },
+              },
+              { output_type: 'error', ename: 'ValueError', evalue: 'bad axis' },
+            ],
+          },
+        ],
+      }),
+      'utf8',
+    );
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'application/x-ipynb+json',
+      byteSize: notebook.byteLength,
+      storageUrl: 'https://files.example.test/key',
+      storagePathname: 'chat-attachments/user-1/key.ipynb',
+      metadata: { filename: 'revenue.ipynb' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue({
+      data: notebook,
+      contentType: 'application/x-ipynb+json',
+    });
+    const messages = [
+      {
+        role: 'user',
+        content: [{ type: 'file', file: { asset_id: assetId } }],
+      },
+    ];
+
+    await hydrateChatAttachments(messages, 'user-1');
+
+    const part = messages[0]?.content[0] as unknown as {
+      type: string;
+      file: { filename: string; mime_type: string; file_data: string };
+    };
+    expect(part.type).toBe('file');
+    expect(part.file.mime_type).toBe('text/plain');
+    const wireText = Buffer.from(part.file.file_data.split(',')[1] ?? '', 'base64').toString(
+      'utf8',
+    );
+    expect(wireText).not.toContain(imageBlob);
+    expect(wireText).toContain('# Revenue');
+    expect(wireText).toContain('```\ndf.plot()\n```');
+    expect(wireText).toContain('Output:\nrows: 12');
+    expect(wireText).toContain('Output:\n<Figure size 640x480>');
+    expect(wireText).toContain('Error: ValueError: bad axis');
+    expect(part.file.file_data.length).toBeLessThan(notebook.byteLength);
+  });
+
+  it('rejects an attachment that claims to be a notebook but is not readable', async () => {
+    const assetId = '32b71cf4-c0d1-4cc7-b6c4-776ece82f137';
+    const bytes = Buffer.from('not a notebook', 'utf8');
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'application/x-ipynb+json',
+      byteSize: bytes.byteLength,
+      storageUrl: 'https://files.example.test/key',
+      storagePathname: 'chat-attachments/user-1/key.ipynb',
+      metadata: { filename: 'broken.ipynb' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue({
+      data: bytes,
+      contentType: 'application/x-ipynb+json',
+    });
+    const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
+
+    await expect(hydrateChatAttachments(messages, 'user-1')).rejects.toEqual(
+      expect.objectContaining<Partial<ChatAttachmentHydrationError>>({
+        status: 400,
+        code: 'unreadable_attachment',
+      }),
+    );
+  });
+
   it('fails closed before reading storage for an asset owned by another user', async () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: '32b71cf4-c0d1-4cc7-b6c4-776ece82f137',

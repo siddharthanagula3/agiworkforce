@@ -22,6 +22,7 @@ import type {
   AgentActivityStepStatus,
 } from '@agiworkforce/client-runtime';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import type { Message } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -39,6 +40,9 @@ type ProgressStatus =
   | 'failed'
   | 'cancelled'
   | 'awaiting-approval';
+
+export const AGI_WORK_MATURITY_LABEL = 'Alpha';
+export const AGI_WORK_MATURITY_TITLE = `AGI Work runs on Managed Cloud, which is in ${MANAGED_CLOUD_STATUS}. Runs can fail or stall, and behaviour may change.`;
 
 export interface WorkSessionProgressItem {
   id: string;
@@ -68,10 +72,23 @@ export interface WorkSessionContextItem {
 
 export interface WorkSessionSummary {
   status: AgentActivityRunStatus | 'idle';
+  /**
+   * The run's own goal, used as the panel heading. Every session used to be
+   * headed with the literal string "AGI Work session" (agentic-modes-gap-04),
+   * so a user with several sessions could not tell them apart. This is the same
+   * `agiwork:goal` progress entry TaskDetailPanel already renders as "Goal" —
+   * no second title source, and no title where the run never declared a goal.
+   */
+  title: string | null;
   progress: WorkSessionProgressItem[];
   outputs: WorkSessionOutput[];
   context: WorkSessionContextItem[];
 }
+
+/** Mirrors AGIWORK_GOAL_PROGRESS_ID; the constant itself lives behind `server-only`. */
+const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
+
+export const WORK_SESSION_FALLBACK_TITLE = 'AGI Work session';
 
 interface WorkSessionPanelProps {
   messages: Message[];
@@ -197,6 +214,7 @@ export function buildWorkSessionSummary(
   const outputs = new Map<string, WorkSessionOutput>();
   const context = new Map<string, WorkSessionContextItem>();
   let status: WorkSessionSummary['status'] = 'idle';
+  let title: string | null = null;
 
   for (const artifact of artifacts) {
     addOutput(outputs, outputFromArtifact(artifact));
@@ -220,6 +238,9 @@ export function buildWorkSessionSummary(
     if (activity) {
       status = activity.status;
       for (const entry of activity.entries) {
+        if (entry.kind === 'progress' && entry.progressId === AGIWORK_GOAL_PROGRESS_ID) {
+          if (entry.summary.trim()) title = entry.summary.trim();
+        }
         const progressItem = progressFromActivity(message.id, entry);
         if (progressItem) progress.push(progressItem);
 
@@ -296,6 +317,7 @@ export function buildWorkSessionSummary(
 
   return {
     status,
+    title,
     progress,
     outputs: Array.from(outputs.values()),
     context: Array.from(context.values()),
@@ -492,7 +514,21 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
           <div className="flex items-center gap-2">
             <PanelRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold text-foreground">AGI Work session</h2>
+              <div className="flex items-center gap-1.5">
+                <h2
+                  className="truncate text-sm font-semibold text-foreground"
+                  title={summary.title ?? undefined}
+                >
+                  {summary.title ?? WORK_SESSION_FALLBACK_TITLE}
+                </h2>
+                <span
+                  data-testid="agi-work-maturity-badge"
+                  title={AGI_WORK_MATURITY_TITLE}
+                  className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300"
+                >
+                  {AGI_WORK_MATURITY_LABEL}
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground">{statusLabel(summary.status)}</p>
             </div>
             <Button

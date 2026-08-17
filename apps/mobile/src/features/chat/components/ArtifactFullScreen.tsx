@@ -1,6 +1,6 @@
 import { View, ScrollView, Pressable, Modal, Share, Alert, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { X, Copy, Check, Share2, RefreshCw, Eye, Code, Download } from 'lucide-react-native';
+import { X, Copy, Check, Share2, RefreshCw, Eye, Code, Download, Globe } from 'lucide-react-native';
 import { useState, useCallback, useMemo } from 'react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
+import { api } from '@/services/api';
 import {
   shareFile,
   exportToText,
@@ -68,6 +69,44 @@ function typeLabel(artifact: Artifact): string {
   return raw.toUpperCase();
 }
 
+/**
+ * Mirrors web's `resolvePublishableKind` against the mobile artifact shape,
+ * where every code-ish artifact carries `type: 'code'` and distinguishes
+ * itself by `language`. Prose types resolve to `markdown` because the mobile
+ * source view already renders them through the markdown renderer.
+ * Returns null for kinds `/api/artifacts/publish` has no safe renderer for.
+ */
+export function publishableKindFor(artifact: Artifact): string | null {
+  const lang = artifact.language?.toLowerCase() ?? '';
+  if (lang === 'html') return 'html';
+  if (lang === 'svg') return 'svg';
+  if (lang === 'mermaid') return 'mermaid';
+  if (lang === 'jsx' || lang === 'tsx') return 'react';
+  if (artifact.type === 'code') return 'code';
+  if (artifact.type === 'document' || artifact.type === 'research') {
+    return lang === 'txt' || lang === 'text' ? 'text' : 'markdown';
+  }
+  return null;
+}
+
+function canPublish(artifact: Artifact): boolean {
+  return publishableKindFor(artifact) !== null && artifact.content.trim().length > 0;
+}
+
+async function confirmPublish(title: string): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    Alert.alert(
+      'Publish to a public link?',
+      `“${title}” will be uploaded to AGI Cloud and served at a URL anyone with the link can open. Do not publish anything you keep on-device only.`,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Publish', style: 'default', onPress: () => resolve(true) },
+      ],
+      { onDismiss: () => resolve(false) },
+    );
+  });
+}
+
 type ViewMode = 'source' | 'preview';
 
 export function ArtifactFullScreen({
@@ -81,6 +120,11 @@ export function ArtifactFullScreen({
   const [copied, setCopied] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('source');
   const [downloading, setDownloading] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState<{ artifactId: string; url: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const publishedUrl = published && published.artifactId === artifact?.id ? published.url : null;
 
   const generatedFileSummary = useMemo(
     () =>
@@ -183,6 +227,50 @@ export function ArtifactFullScreen({
     }
   }, [artifact, downloading]);
 
+  const handlePublish = useCallback(async () => {
+    if (!artifact || publishing) return;
+    const kind = publishableKindFor(artifact);
+    if (!kind) return;
+    if (!(await confirmPublish(artifact.title))) return;
+
+    setPublishing(true);
+    try {
+      const response = await api.post<{ shareUrl?: unknown }>('/api/artifacts/publish', {
+        artifactId: artifact.id,
+        title: artifact.title,
+        kind,
+        ...(artifact.language ? { language: artifact.language } : {}),
+        content: artifact.content,
+      });
+      const shareUrl = typeof response.shareUrl === 'string' ? response.shareUrl.trim() : '';
+      if (!shareUrl) throw new Error('The publish endpoint returned no share URL.');
+
+      setPublished({ artifactId: artifact.id, url: shareUrl });
+      setLinkCopied(await copyToClipboard(shareUrl));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      Alert.alert(
+        'Publish failed',
+        err instanceof Error ? err.message : 'Could not publish this artifact right now.',
+      );
+    } finally {
+      setPublishing(false);
+    }
+  }, [artifact, publishing]);
+
+  const handleCopyLink = useCallback(async () => {
+    if (!publishedUrl) return;
+    if (await copyToClipboard(publishedUrl)) {
+      setLinkCopied(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [publishedUrl]);
+
+  const handleShareLink = useCallback(async () => {
+    if (!publishedUrl || !artifact) return;
+    await Share.share({ title: artifact.title, message: publishedUrl });
+  }, [publishedUrl, artifact]);
+
   if (!artifact) return null;
 
   const canPreview = isPreviewable(artifact);
@@ -282,6 +370,29 @@ export function ArtifactFullScreen({
               <Badge label={generatedFileSummary.privacyShortLabel} color="gray" />
             ) : null}
 
+            {/* Publish to a public link — only kinds the public renderer supports */}
+            {canPublish(artifact) ? (
+              <Pressable
+                onPress={handlePublish}
+                style={{
+                  padding: 8,
+                  borderRadius: 8,
+                  backgroundColor: colors.neutralSurface,
+                  opacity: publishing ? 0.5 : 1,
+                }}
+                accessibilityLabel={
+                  publishedUrl ? 'Republish artifact link' : 'Publish artifact to a public link'
+                }
+                accessibilityRole="button"
+                disabled={publishing}
+              >
+                <Globe
+                  size={17}
+                  color={publishedUrl ? colors.agentSuccess : colors.textSecondary}
+                />
+              </Pressable>
+            ) : null}
+
             {/* Download / export */}
             <Pressable
               onPress={handleDownload}
@@ -371,6 +482,51 @@ export function ArtifactFullScreen({
               <X size={17} color={colors.textSecondary} />
             </Pressable>
           </View>
+
+          {/* Row 2: the hosted link, once published */}
+          {publishedUrl ? (
+            <View
+              style={{
+                marginTop: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingVertical: 8,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                backgroundColor: colors.accentSurface,
+              }}
+            >
+              <Text
+                style={{ flex: 1, fontSize: 12, color: colors.textSecondary }}
+                numberOfLines={1}
+                selectable
+                testID="artifact-published-url"
+              >
+                {publishedUrl}
+              </Text>
+              <Pressable
+                onPress={handleCopyLink}
+                accessibilityLabel="Copy public link"
+                accessibilityRole="button"
+                style={{ padding: 4 }}
+              >
+                {linkCopied ? (
+                  <Check size={15} color={colors.agentSuccess} />
+                ) : (
+                  <Copy size={15} color={colors.textSecondary} />
+                )}
+              </Pressable>
+              <Pressable
+                onPress={handleShareLink}
+                accessibilityLabel="Share public link"
+                accessibilityRole="button"
+                style={{ padding: 4 }}
+              >
+                <Share2 size={15} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
         {/* ── Content ── */}

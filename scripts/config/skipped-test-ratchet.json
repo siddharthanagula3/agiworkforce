@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "reason": "Inventory of skipped or ignored tests that carry no justification at the call site. A skip is self-justifying when it is a Rust #[ignore = \"reason\"] or when an llm-guardrail-allow: comment sits within two lines of it; everything else must be declared here with a reason and an owning register row. check:llm-failures counts the whole tree on every run, fails on any undeclared skip, and fails on any entry whose declared count exceeds what still reproduces — so this list only ratchets down.",
+  "debt": [
+    {
+      "path": "apps/desktop/e2e/settings.spec.ts",
+      "count": 4,
+      "reason": "Self-disabling settings tests: each calls test.skip() when the control it is meant to exercise (resource limits, autonomous mode) is not visible in the build, so the test reports green precisely when the feature is missing. This is the BASE-008 finding about Desktop settings tests silently skipping. Replace the visibility probe with an assertion that the control exists.",
+      "trackedBy": "TEST-01"
+    },
+    {
+      "path": "apps/desktop/src/__tests__/e2e/windows.spec.ts",
+      "count": 8,
+      "reason": "Platform gates: test.skip(process.platform !== 'win32', 'Windows only') on Windows-specific tray, clipboard, terminal and theme suites. Deliberate and correct on non-Windows runners, but they mean the suite is fully exercised only in a Windows CI job; declared here so the count cannot grow unnoticed and so the absence of that job stays visible.",
+      "trackedBy": "TEST-01"
+    }
+  ]
+}

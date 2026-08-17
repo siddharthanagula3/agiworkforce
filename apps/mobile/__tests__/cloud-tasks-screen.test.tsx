@@ -38,6 +38,7 @@ jest.mock('lucide-react-native', () => {
     Clock3: icon,
     Cloud: icon,
     PauseCircle: icon,
+    Plus: icon,
     RefreshCw: icon,
   };
 });
@@ -181,6 +182,49 @@ describe('Mobile Cloud tasks screen', () => {
         expect.objectContaining({ states: ['awaiting_input'] }),
       ),
     );
+  });
+
+  it('dates every run and groups them by day like the Chats list', async () => {
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    jest.useFakeTimers();
+    jest.setSystemTime(now);
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
+    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    mockListRuns.mockResolvedValue({
+      runs: [
+        {
+          ...RUN,
+          id: '33333333-3333-4333-8333-333333333333',
+          conversationId: null,
+          state: 'ready_for_review',
+          updatedAt: fiveDaysAgo,
+          completedAt: fiveDaysAgo,
+        },
+        { ...RUN, updatedAt: twoHoursAgo },
+      ],
+      nextCursor: null,
+    });
+
+    const { getByText } = render(<TasksScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getByText('Updated 2h ago')).toBeTruthy();
+    expect(getByText('Finished 5 days ago')).toBeTruthy();
+    expect(getByText('Today')).toBeTruthy();
+    expect(getByText('This Week')).toBeTruthy();
+  });
+
+  it('starts a new AGI work task from the floating action', async () => {
+    const { getByLabelText } = render(<TasksScreen />);
+    await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(1));
+
+    fireEvent.press(getByLabelText('Start a new task'));
+
+    expect(useChatStore.getState().workMode).toBe('agiwork');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
   });
 
   it('does not contact Cloud while Local mode is active', () => {

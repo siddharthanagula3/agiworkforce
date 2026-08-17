@@ -1,4 +1,3 @@
-
 import { useEffect, useCallback } from 'react';
 import { safePlatform } from '@shared/utils/browser-utils';
 
@@ -37,6 +36,14 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     description: 'Regenerate last message',
     category: 'message',
   },
+  {
+    key: 'A',
+    ctrl: true,
+    meta: true,
+    shift: true,
+    description: 'Toggle artifacts panel',
+    category: 'ui',
+  },
 ];
 
 interface UseKeyboardShortcutsOptions {
@@ -47,6 +54,7 @@ interface UseKeyboardShortcutsOptions {
   onFocusComposer?: () => void;
   onCopyLastMessage?: () => void;
   onRegenerateLastMessage?: () => void;
+  onToggleArtifacts?: () => void;
   enabled?: boolean;
 }
 
@@ -59,6 +67,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     onFocusComposer,
     onCopyLastMessage,
     onRegenerateLastMessage,
+    onToggleArtifacts,
     enabled = true,
   } = options;
 
@@ -72,48 +81,29 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       const isMac = safePlatform.isMac();
       const modifierKey = isMac ? event.metaKey : event.ctrlKey;
+      // Shift makes the browser report the shifted character ('C', not 'c'), so
+      // every Shift binding below has to compare against the unshifted letter.
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
 
-      if (modifierKey && event.key === 'k') {
-        event.preventDefault();
-        onSearch?.();
-        return;
-      }
+      const matched = (
+        [
+          [modifierKey && key === 'k', onSearch],
+          [modifierKey && key === '/', onShowShortcuts],
+          [modifierKey && key === 'n', onNewChat],
+          [modifierKey && key === 'b', onToggleSidebar],
+          [key === 'Escape' && !isInputField, onFocusComposer],
+          [modifierKey && event.shiftKey && key === 'c', onCopyLastMessage],
+          [modifierKey && event.shiftKey && key === 'r', onRegenerateLastMessage],
+          [modifierKey && event.shiftKey && key === 'a', onToggleArtifacts],
+        ] as ReadonlyArray<readonly [boolean, (() => void) | undefined]>
+      ).find(([isMatch]) => isMatch);
 
-      if (modifierKey && event.key === '/') {
-        event.preventDefault();
-        onShowShortcuts?.();
-        return;
-      }
-
-      if (modifierKey && event.key === 'n') {
-        event.preventDefault();
-        onNewChat?.();
-        return;
-      }
-
-      if (modifierKey && event.key === 'b') {
-        event.preventDefault();
-        onToggleSidebar?.();
-        return;
-      }
-
-      if (event.key === 'Escape' && !isInputField) {
-        event.preventDefault();
-        onFocusComposer?.();
-        return;
-      }
-
-      if (modifierKey && event.shiftKey && event.key === 'c') {
-        event.preventDefault();
-        onCopyLastMessage?.();
-        return;
-      }
-
-      if (modifierKey && event.shiftKey && event.key === 'r') {
-        event.preventDefault();
-        onRegenerateLastMessage?.();
-        return;
-      }
+      // Swallowing the browser default for a shortcut this mount does not
+      // implement would break the key for whoever does; only claim what we run.
+      const run = matched?.[1];
+      if (!run) return;
+      event.preventDefault();
+      run();
     },
     [
       enabled,
@@ -124,6 +114,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       onFocusComposer,
       onCopyLastMessage,
       onRegenerateLastMessage,
+      onToggleArtifacts,
     ],
   );
 
@@ -142,6 +133,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     'Focus message composer': onFocusComposer,
     'Copy last message': onCopyLastMessage,
     'Regenerate last message': onRegenerateLastMessage,
+    'Toggle artifacts panel': onToggleArtifacts,
   };
   const shortcuts: KeyboardShortcut[] = KEYBOARD_SHORTCUT_DOCS.map((doc) => ({
     ...doc,

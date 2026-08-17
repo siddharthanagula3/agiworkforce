@@ -16,7 +16,7 @@ import {
   DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
 } from '@/lib/server/device-refresh-token';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
-import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '@/lib/server/terms';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +24,7 @@ const TokenPollSchema = z.object({ device_code: z.string().uuid() });
 
 interface DeviceRow {
   device_id: string;
+  user_code: string;
   expires_at: string;
   status: string;
   user_id: string | null;
@@ -31,6 +32,13 @@ interface DeviceRow {
 }
 
 const noStore = { headers: { 'Cache-Control': 'no-store' } };
+
+function termsAcceptanceUrl(request: NextRequest, userCode: string): string {
+  const returnTo = `/auth/device?${new URLSearchParams({ user_code: userCode }).toString()}`;
+  const url = new URL('/login/complete', new URL(request.url).origin);
+  url.searchParams.set('redirectTo', returnTo);
+  return url.toString();
+}
 
 async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'device-poll');
@@ -50,7 +58,7 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
 
   const db = getNeonDb();
   const rows = await db.query<DeviceRow>(
-    `SELECT device_id, expires_at, status, user_id, user_email
+    `SELECT device_id, user_code, expires_at, status, user_id, user_email
        FROM device_authorization_codes
       WHERE device_id = $1`,
     [deviceCode],
@@ -80,8 +88,17 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     return NextResponse.json({ error: 'authorization_pending' }, { status: 403, ...noStore });
   }
 
+  // The code stays approved and unconsumed so the client can keep polling while the account
+  // re-accepts on web, rather than losing an in-flight sign-in to a terms revision.
   if (!(await hasAcceptedCurrentTerms(record.user_id))) {
-    return NextResponse.json({ error: 'terms_acceptance_required' }, { status: 400, ...noStore });
+    return NextResponse.json(
+      {
+        error: 'terms_acceptance_required',
+        terms_version: CURRENT_TERMS_VERSION,
+        acceptance_url: termsAcceptanceUrl(request, record.user_code),
+      },
+      { status: 403, ...noStore },
+    );
   }
 
   let accessToken: string;

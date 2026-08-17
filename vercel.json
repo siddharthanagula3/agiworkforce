@@ -25,7 +25,7 @@
     },
     {
       "path": "/api/cron/run-schedules",
-      "schedule": "0 1 * * *"
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/reclaim-sandboxes",

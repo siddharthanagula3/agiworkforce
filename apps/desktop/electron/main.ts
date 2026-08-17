@@ -295,12 +295,40 @@ function registerIpcHandlers(): void {
   });
 }
 
+const DEEP_LINK_BRIDGE_ATTACHED = RENDERER_MODE === 'bundled';
+
+function deepLinkRoute(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '') || '/';
+  } catch {
+    return '<unparseable>';
+  }
+}
+
+function focusMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 function deliverDeepLink(url: string): void {
   if (!url.startsWith(`${DEEP_LINK_SCHEME}://`)) return;
+
+  if (!DEEP_LINK_BRIDGE_ATTACHED) {
+    // Route only — an sso-callback query carries a rotating token nonce.
+    console.warn(
+      `[deep-link] dropped ${DEEP_LINK_SCHEME}://${deepLinkRoute(url)}: renderer mode ` +
+        `"${RENDERER_MODE}" loads ${CLOUD_APP_ORIGIN} top-level with no preload, so no IPC ` +
+        'receiver is attached. Relaunch with AGI_CLOUD_RENDERER=bundled for native deep links.',
+    );
+    focusMainWindow();
+    return;
+  }
+
   if (mainWindow && !mainWindow.webContents.isLoading()) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    focusMainWindow();
     mainWindow.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, url);
   } else {
     pendingDeepLink = url;
@@ -445,9 +473,7 @@ function showMainWindow(): void {
     createMainWindow();
     return;
   }
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+  focusMainWindow();
 }
 
 function openNewChat(): void {
@@ -514,14 +540,17 @@ if (!hasSingleInstanceLock) {
   app.setName('AGI Cloud');
   app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
 
+  if (!DEEP_LINK_BRIDGE_ATTACHED) {
+    console.warn(
+      `[deep-link] registered as handler for ${DEEP_LINK_SCHEME}:// but renderer mode ` +
+        `"${RENDERER_MODE}" attaches no IPC bridge — incoming links will be dropped.`,
+    );
+  }
+
   app.on('second-instance', (_event, argv) => {
     const link = argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
     if (link) deliverDeepLink(link);
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    focusMainWindow();
   });
 
   app.on('open-url', (event, url) => {

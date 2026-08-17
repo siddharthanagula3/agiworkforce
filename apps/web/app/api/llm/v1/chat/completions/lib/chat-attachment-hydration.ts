@@ -10,6 +10,8 @@ import {
 
 const MAX_REQUEST_ATTACHMENT_COUNT = 20;
 const MAX_REQUEST_ATTACHMENT_BYTES = 18 * 1024 * 1024;
+const MAX_NOTEBOOK_TEXT_CHARS = 200_000;
+const NOTEBOOK_MIME_TYPE = 'application/x-ipynb+json';
 
 type AttachmentReferencePart = {
   type: string;
@@ -45,6 +47,87 @@ const ATTACHMENT_UNAVAILABLE_PLACEHOLDER =
 function filenameFromMetadata(metadata: Record<string, unknown>, fallback: string): string {
   const filename = metadata['filename'];
   return typeof filename === 'string' && filename.trim() ? filename.trim() : fallback;
+}
+
+function isNotebookAttachment(filename: string, mimeType: string): boolean {
+  return (
+    mimeType.trim().toLowerCase() === NOTEBOOK_MIME_TYPE ||
+    filename.trim().toLowerCase().endsWith('.ipynb')
+  );
+}
+
+function joinNotebookSource(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.filter((line) => typeof line === 'string').join('');
+  return '';
+}
+
+/**
+ * A notebook's `outputs[].data` carries rendered images as base64 blobs. Sending the raw
+ * file would spend the whole request attachment budget on pixels the model cannot use, so
+ * only sources and textual outputs cross the wire.
+ */
+function extractNotebookText(data: Buffer, filename: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data));
+  } catch {
+    throw new ChatAttachmentHydrationError(
+      400,
+      'unreadable_attachment',
+      `${filename} is not a readable Jupyter notebook.`,
+    );
+  }
+
+  const cells = (parsed as { cells?: unknown } | null)?.cells;
+  if (!Array.isArray(cells)) {
+    throw new ChatAttachmentHydrationError(
+      400,
+      'unreadable_attachment',
+      `${filename} does not contain notebook cells.`,
+    );
+  }
+
+  const parts: string[] = [];
+  for (const rawCell of cells) {
+    if (!rawCell || typeof rawCell !== 'object') continue;
+    const cell = rawCell as { cell_type?: unknown; source?: unknown; outputs?: unknown };
+    const source = joinNotebookSource(cell.source).trim();
+
+    if (cell.cell_type === 'markdown') {
+      if (source) parts.push(source);
+      continue;
+    }
+    if (cell.cell_type !== 'code') continue;
+
+    if (source) parts.push(['```', source, '```'].join('\n'));
+    if (!Array.isArray(cell.outputs)) continue;
+
+    for (const rawOutput of cell.outputs) {
+      if (!rawOutput || typeof rawOutput !== 'object') continue;
+      const output = rawOutput as {
+        text?: unknown;
+        data?: Record<string, unknown>;
+        ename?: unknown;
+        evalue?: unknown;
+      };
+
+      const stream = joinNotebookSource(output.text).trim();
+      if (stream) parts.push(`Output:\n${stream}`);
+
+      const plain = joinNotebookSource(output.data?.['text/plain']).trim();
+      if (plain) parts.push(`Output:\n${plain}`);
+
+      if (typeof output.ename === 'string' && output.ename) {
+        const detail = typeof output.evalue === 'string' ? `: ${output.evalue}` : '';
+        parts.push(`Error: ${output.ename}${detail}`);
+      }
+    }
+  }
+
+  const text = parts.join('\n\n').replace(/\r\n?/g, '\n').trim();
+  if (text.length <= MAX_NOTEBOOK_TEXT_CHARS) return text;
+  return `${text.slice(0, MAX_NOTEBOOK_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
 }
 
 export async function hydrateChatAttachments(
@@ -131,23 +214,45 @@ export async function hydrateChatAttachments(
         );
       }
 
-      const encoded = object.data.toString('base64');
       if (isChatImageMimeType(asset.mimeType)) {
         hydrated.push({
           type: 'image_url',
-          image_url: { url: `data:${asset.mimeType};base64,${encoded}` },
+          image_url: {
+            url: `data:${asset.mimeType};base64,${object.data.toString('base64')}`,
+          },
         });
-      } else {
-        const mimeType = normalizeChatDocumentMimeType(asset.mimeType);
+        continue;
+      }
+
+      if (isNotebookAttachment(filename, asset.mimeType)) {
+        const notebookText = extractNotebookText(object.data, filename);
+        if (!notebookText) {
+          hydrated.push({
+            type: 'text',
+            text: `[${filename} contains no readable notebook cells]`,
+          });
+          continue;
+        }
         hydrated.push({
           type: 'file',
           file: {
             filename,
-            mime_type: mimeType,
-            file_data: `data:${mimeType};base64,${encoded}`,
+            mime_type: 'text/plain',
+            file_data: `data:text/plain;base64,${Buffer.from(notebookText, 'utf8').toString('base64')}`,
           },
         });
+        continue;
       }
+
+      const mimeType = normalizeChatDocumentMimeType(asset.mimeType);
+      hydrated.push({
+        type: 'file',
+        file: {
+          filename,
+          mime_type: mimeType,
+          file_data: `data:${mimeType};base64,${object.data.toString('base64')}`,
+        },
+      });
     }
 
     message.content = hydrated;

@@ -786,21 +786,24 @@ describe('MessageBubble', () => {
       expect(onSwitch).toHaveBeenCalledWith('conversation-branch');
     });
 
-    it('creates a branch from the message actions menu', async () => {
+    // shell-nav-ia-gap-08: Branch is a PERSISTENT icon in the action row beside
+    // copy/regenerate (Manus's "Continue in new task" placement), not a
+    // dropdown entry. It must not be in both places — a duplicated control is
+    // its own defect — so these assert the row and the menu's absence.
+    it('creates a branch from the persistent action row, not the overflow menu', async () => {
       const user = userEvent.setup();
       const onBranch = vi.fn();
       const msg = makeMessage({ id: 'fork-point', role: 'assistant', content: 'branch me' });
       render(<MessageBubble message={msg} onBranch={onBranch} />);
 
-      await user.click(screen.getByLabelText('More message actions'));
-      const branchAction = await screen.findByText('Branch conversation');
-      await user.click(branchAction);
-
+      await user.click(screen.getByLabelText('Branch conversation from here'));
       expect(onBranch).toHaveBeenCalledWith('fork-point');
+
+      await user.click(screen.getByLabelText('More message actions'));
+      expect(screen.queryByRole('menuitem', { name: /branch/i })).not.toBeInTheDocument();
     });
 
     it('disables duplicate branch creation while the request is in flight', async () => {
-      const user = userEvent.setup();
       render(
         <MessageBubble
           message={makeMessage({ role: 'assistant' })}
@@ -809,9 +812,7 @@ describe('MessageBubble', () => {
         />,
       );
 
-      await user.click(screen.getByLabelText('More message actions'));
-      const branchAction = await screen.findByText('Creating branch…');
-      expect(branchAction.closest('[role="menuitem"]')).toHaveAttribute('data-disabled');
+      expect(screen.getByLabelText('Creating branch…')).toBeDisabled();
     });
   });
 

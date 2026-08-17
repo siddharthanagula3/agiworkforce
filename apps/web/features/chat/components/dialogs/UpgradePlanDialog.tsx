@@ -238,12 +238,18 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
 export function UpgradePlanDialog({
   open,
   onOpenChange,
-  currentTier = 'free',
+  // NOT defaulted to 'free'. `undefined` means "the plan is not known yet"
+  // (e.g. `/api/me` is refreshing or answered 401) and must stay distinct from
+  // "the user is on Free". Defaulting here is what previously showed a Max 15x
+  // subscriber a Free card marked "Your current plan" next to an
+  // "Upgrade to Basic — $7/month" button.
+  currentTier,
   targetTier = null,
   onUpgrade,
 }: UpgradePlanDialogProps) {
   const [annual, setAnnual] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const tierKnown = typeof currentTier === 'string' && currentTier.length > 0;
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -262,19 +268,27 @@ export function UpgradePlanDialog({
   // Default view: show the current plan card + the next recommended tier.
   // Expanded: show all tiers.
   const tierOrder: PlanCardId[] = ['free', 'basic', 'pro', 'max', 'max_15x', 'team'];
-  const currentIdx = tierOrder.indexOf(currentTier as PlanCardId);
+  const currentIdx = tierKnown ? tierOrder.indexOf(currentTier as PlanCardId) : -1;
   const safeIdx = currentIdx >= 0 ? currentIdx : 0;
 
-  const currentPlan = PLAN_CARDS.find((plan) => plan.id === currentTier) ?? PLAN_CARDS[0];
+  // Only claim a card is the current plan when the tier is actually known.
+  const currentPlan = tierKnown
+    ? (PLAN_CARDS.find((plan) => plan.id === currentTier) ?? PLAN_CARDS[0])
+    : undefined;
   const focusedPlan = targetTier
     ? PLAN_CARDS.find((plan) => plan.id === targetTier)
     : PLAN_CARDS[Math.min(safeIdx + 1, PLAN_CARDS.length - 1)];
-  const compactPlans: PlanCard[] = expanded
-    ? PLAN_CARDS
-    : [currentPlan, focusedPlan].filter(
-        (plan, index, plans): plan is PlanCard =>
-          plan !== undefined && plans.findIndex((candidate) => candidate?.id === plan.id) === index,
-      );
+  // With an unknown tier there is no "current" card to anchor the compact view,
+  // so show the full ladder and let the user choose rather than inventing a
+  // starting point. `expanded` still works normally once the tier is known.
+  const compactPlans: PlanCard[] =
+    expanded || !tierKnown
+      ? PLAN_CARDS
+      : [currentPlan, focusedPlan].filter(
+          (plan, index, plans): plan is PlanCard =>
+            plan !== undefined &&
+            plans.findIndex((candidate) => candidate?.id === plan.id) === index,
+        );
   const focusedPlanLabel = targetTier ? getBillingPlanDisplay(targetTier).pricing.label : null;
 
   return (
@@ -298,8 +312,11 @@ export function UpgradePlanDialog({
         </DialogHeader>
 
         <div className="max-h-[90vh] overflow-y-auto p-6 pb-4">
-          {/* Header */}
-          <div className="mb-6 flex items-start justify-between">
+          {/* pr-10: DialogContent paints its own close control absolutely at
+              right-4 with an h-8 w-8 hit area, so it covers the first 3rem of
+              this row. Without the reserved gutter the × lands on top of the
+              Annual toggle. Same reservation DialogHeader makes. */}
+          <div className="mb-6 flex items-start justify-between pr-10">
             <div>
               <h2 className="text-xl font-semibold text-foreground">
                 {focusedPlanLabel ? `Upgrade to ${focusedPlanLabel}` : 'Upgrade your plan'}
@@ -354,8 +371,11 @@ export function UpgradePlanDialog({
                 key={plan.id}
                 plan={plan}
                 annual={annual}
-                isCurrent={plan.id === (currentTier as PlanCardId)}
-                isUpgrade={isTierUpgrade(currentTier, plan.id)}
+                // With an unknown tier nothing is "current", and every paid
+                // plan is offered neutrally rather than labelled an upgrade
+                // relative to a plan we are only guessing at.
+                isCurrent={tierKnown && plan.id === (currentTier as PlanCardId)}
+                isUpgrade={tierKnown ? isTierUpgrade(currentTier, plan.id) : true}
                 onUpgrade={onUpgrade}
               />
             ))}

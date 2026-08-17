@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
-import { applyResearchMode, RESEARCH_SYSTEM_PROMPT } from './request-processor';
+import {
+  applyResearchMode,
+  researchModeAllowed,
+  RESEARCH_SYSTEM_PROMPT,
+} from './request-processor';
 import type { ChatCompletionRequest } from './request-processor';
 
 const CHAT_MODEL = requireProviderDefaultModel('anthropic');
@@ -70,5 +74,27 @@ describe('applyResearchMode', () => {
   it('RESEARCH_SYSTEM_PROMPT mentions inline citations', () => {
     expect(RESEARCH_SYSTEM_PROMPT).toContain('[1]');
     expect(RESEARCH_SYSTEM_PROMPT).toContain('Sources list');
+  });
+});
+
+describe('researchModeAllowed gates on the capability it names', () => {
+  const asked = { research: true } as ChatCompletionRequest;
+
+  it('grants research to a model that declares research', () => {
+    expect(researchModeAllowed(asked, { research: true, search: false })).toBe(true);
+  });
+
+  it('refuses a model that declares search but not research', () => {
+    expect(researchModeAllowed(asked, { research: false, search: true })).toBe(false);
+  });
+
+  it('refuses when the caller did not ask', () => {
+    expect(
+      researchModeAllowed({ research: false } as ChatCompletionRequest, { research: true }),
+    ).toBe(false);
+  });
+
+  it('refuses when the model has no capability metadata', () => {
+    expect(researchModeAllowed(asked, undefined)).toBe(false);
   });
 });

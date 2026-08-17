@@ -329,4 +329,9 @@ export {
   type SettingsSkill,
   type SettingsPlugin,
   type SettingsSectionKey,
+  parseCustomMcpJsonConfig,
+  describeCustomMcpJsonImportError,
+  type ParsedCustomMcpConfig,
+  type CustomMcpJsonImportError,
+  type CustomMcpJsonImportResult,
 } from './settings-modal';

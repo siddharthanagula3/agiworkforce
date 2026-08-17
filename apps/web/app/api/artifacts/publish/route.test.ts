@@ -30,6 +30,16 @@ const { POST, GET } = await import('./route');
 
 const TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 
+function isInsert(sql: unknown): boolean {
+  return String(sql).includes('insert into public.published_artifacts');
+}
+
+function insertCall(): [string, unknown[]] {
+  const call = mocks.query.mock.calls.find(([sql]) => isInsert(sql));
+  if (!call) throw new Error('the publish route never issued the insert');
+  return call as [string, unknown[]];
+}
+
 function publishRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'row-1',
@@ -126,8 +136,50 @@ describe('POST /api/artifacts/publish', () => {
 
   it('binds the authenticated user id into the write', async () => {
     await POST(postRequest(VALID_BODY));
-    const [, params] = mocks.query.mock.calls[0]!;
-    expect((params as unknown[])[1]).toBe('user-1');
+    const [, params] = insertCall();
+    expect(params[1]).toBe('user-1');
+  });
+
+  it('answers 403, not 500, when the conversation belongs to somebody else', async () => {
+    mocks.query.mockImplementation(async (sql: unknown) =>
+      isInsert(sql) ? [publishRow()] : [{ other_published: 0, owned_conversations: 0 }],
+    );
+
+    const response = await POST(
+      postRequest({ ...VALID_BODY, conversationId: '11111111-1111-4111-8111-111111111111' }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+  });
+
+  it('publishes when the conversation is the callers own', async () => {
+    mocks.query.mockImplementation(async (sql: unknown) =>
+      isInsert(sql) ? [publishRow()] : [{ other_published: 0, owned_conversations: 1 }],
+    );
+
+    const response = await POST(
+      postRequest({ ...VALID_BODY, conversationId: '11111111-1111-4111-8111-111111111111' }),
+    );
+
+    expect(response.status).toBe(201);
+  });
+
+  it('refuses a publish past the per-user cap with an actionable 409', async () => {
+    const { MAX_PUBLISHED_PER_USER } = await import('@/lib/services/published-artifact-service');
+    mocks.query.mockImplementation(async (sql: unknown) =>
+      isInsert(sql)
+        ? [publishRow()]
+        : [{ other_published: MAX_PUBLISHED_PER_USER, owned_conversations: 0 }],
+    );
+
+    const response = await POST(postRequest(VALID_BODY));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { message: expect.stringContaining('Unpublish one') },
+    });
+    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
   });
 
   it('propagates a 401 from the auth boundary instead of publishing anonymously', async () => {

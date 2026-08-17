@@ -1,4 +1,3 @@
-
 import {
   buildMcpToolCatalog,
   connectMcpServer,
@@ -8,6 +7,7 @@ import {
   type McpToolCatalog,
 } from '@agiworkforce/mcp';
 
+import { mcpBreaker } from '../lib/dependencies';
 import { logger } from '../lib/logger';
 import { loadMcpConfig, type McpServerEntry } from './mcpConfig';
 
@@ -53,18 +53,33 @@ export async function getSharedMcpCatalog(cacheTtlMs = 60_000): Promise<McpToolC
   }
   state.catalogBuild = (async () => {
     try {
-      const { catalog, handles } = await buildMcpToolCatalog(configs);
-      const previous = state.handles;
-      state.handles = new Map();
-      for (const handle of handles) {
-        state.handles.set(handle.serverName, handle);
-      }
-      for (const old of previous.values()) {
-        await old.close().catch(() => undefined);
-      }
-      catalogCacheValue = catalog;
-      catalogCacheExpiresAt = Date.now() + cacheTtlMs;
-      return catalog;
+      return await mcpBreaker('catalog').execute(
+        async () => {
+          const { catalog, handles } = await buildMcpToolCatalog(configs);
+          const previous = state.handles;
+          state.handles = new Map();
+          for (const handle of handles) {
+            state.handles.set(handle.serverName, handle);
+          }
+          for (const old of previous.values()) {
+            await old.close().catch(() => undefined);
+          }
+          catalogCacheValue = catalog;
+          catalogCacheExpiresAt = Date.now() + cacheTtlMs;
+          return catalog;
+        },
+        {
+          fallback: (rejection) => {
+            if (!catalogCacheValue) throw rejection.error;
+            logger.warn(
+              { reason: rejection.reason, state: rejection.state },
+              'MCP catalog refresh unavailable — serving the last known catalog',
+            );
+            catalogCacheExpiresAt = Date.now() + cacheTtlMs;
+            return catalogCacheValue;
+          },
+        },
+      );
     } finally {
       state.catalogBuild = null;
     }
@@ -77,16 +92,31 @@ export async function callSharedMcpTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<McpCallToolResult> {
-  let handle = state.handles.get(serverId);
-  if (!handle) {
-    const entry = loadMcpConfig().find((s: McpServerEntry) => s.id === serverId);
-    if (!entry) {
-      throw new Error(`MCP server "${serverId}" is not configured`);
-    }
-    handle = await connectMcpServer({ serverName: serverId, config: toSharedConfig(entry) });
-    state.handles.set(serverId, handle);
+  const entry = loadMcpConfig().find((s: McpServerEntry) => s.id === serverId);
+  if (!state.handles.get(serverId) && !entry) {
+    throw new Error(`MCP server "${serverId}" is not configured`);
   }
-  return handle.callTool(toolName, args);
+
+  return mcpBreaker(serverId).execute(async () => {
+    let handle = state.handles.get(serverId);
+    if (!handle) {
+      handle = await connectMcpServer({
+        serverName: serverId,
+        config: toSharedConfig(entry as McpServerEntry),
+      });
+      state.handles.set(serverId, handle);
+    }
+    try {
+      return await handle.callTool(toolName, args);
+    } catch (error) {
+      // Tool-level failures come back as a result with `isError`. A throw here
+      // means the transport itself broke, and a broken handle fails every later
+      // call, so drop it and let the next call reconnect.
+      state.handles.delete(serverId);
+      await handle.close().catch(() => undefined);
+      throw error;
+    }
+  });
 }
 
 export async function closeAllSharedMcpHandles(): Promise<void> {

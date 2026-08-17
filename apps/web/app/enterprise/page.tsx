@@ -17,7 +17,7 @@ export const metadata = buildMetadata({
  * is the same defect /trust was rewritten to remove (it promised "claims with
  * dates" and rendered none). Change this when you change a row.
  */
-const STATUS_AS_OF = '5 August 2026';
+const STATUS_AS_OF = '15 August 2026';
 
 export default function EnterprisePage() {
   return (
@@ -67,12 +67,27 @@ export default function EnterprisePage() {
               number cannot be planned on one page and promised on another, so
               this page now defers to /sla instead of restating it.
 
-          The remaining identity/audit rows are scoped as contract commitments in
-          progress, not as features you can switch on today, and the section
-          carries a visible status date. CROSS-WORKFLOW DEPENDENCY: the SSO,
-          directory-sync and audit-logging implementations are owned by a
-          concurrent workstream; this wording must be reconciled with whatever
-          that work actually lands before any of it is described as available.
+          AUDIT-FIX (competitive-gap-2026-08-15, G12): the identity/audit rows
+          then swung too far the other way and called SSO, directory sync, and
+          audit logging contract-in-progress commitments you'd have to "ask us
+          about" — that was accurate when written but the concurrent workstream
+          this comment flagged has since landed. AdminConsolePage.tsx's
+          Identity readiness row now reads "Implemented — entitlement-gated":
+          first-party SSO sign-in (lib/server/sso/clerk-enterprise-connections.ts,
+          /api/admin/sso) and SCIM provisioning (/api/scim/v2) are live code
+          paths, gated on the `enterprise_controls` billing capability rather
+          than aspirational. The org audit trail is ALSO implemented and
+          live — services/api-gateway/src/routes/enterprise.ts's
+          `/organizations/:orgId/audit-events` and its `/export` sibling read
+          the (now-writable, see db/neon/0087_enterprise_audit_event_writes.sql)
+          `enterprise_audit_events` table — but it is gated on
+          organization-admin membership, NOT the `enterprise_controls`
+          capability, so its row must not claim that same gate. Only
+          org-configurable RETENTION WINDOWS remain unbuilt — that row is
+          unchanged. Calling shipped, gated controls "roadmap" is the same
+          honesty bug as overclaiming them; this page must not repeat it in
+          either direction, so re-verify each row here against the code
+          before editing.
         */}
         <LedgerSection
           eyebrow="What an enterprise contract covers"
@@ -80,19 +95,19 @@ export default function EnterprisePage() {
           rows={[
             {
               k: 'Status',
-              v: `Reviewed ${STATUS_AS_OF}. Enterprise controls are being built and are scoped per contract. Nothing below is a self-serve toggle you can enable today — treat each as a commitment we make in writing, with dates, during procurement.`,
+              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan — your org's owner configures both directly once that entitlement is on the account. Audit logging and export are implemented too, gated separately on organization-admin membership. Data retention windows and dedicated capacity remain contract-scoped commitments, not self-serve toggles; we state dates for those in writing during procurement.`,
             },
             {
               k: 'SSO',
-              v: 'SAML 2.0 and OIDC single sign-on, scoped and dated in your contract. Ask us for current implementation status before you plan a rollout around it.',
+              v: 'Implemented. SAML 2.0 and OIDC single sign-on, configured by your org owner at /settings/team once the account carries the enterprise_controls entitlement — domain verification and connection activation happen there, not through a separate rollout project.',
             },
             {
               k: 'Directory provisioning',
-              v: 'SCIM user and group provisioning from your IdP, scoped and dated in your contract.',
+              v: 'Implemented. SCIM 2.0 user and group provisioning from your IdP, with token issuance and a provisioning event log at /admin/directory-sync, gated on the same enterprise_controls entitlement as SSO.',
             },
             {
               k: 'Audit',
-              v: 'Administrative and session audit records with export, scoped in your contract. We will tell you precisely which events are captured today rather than implying full coverage.',
+              v: 'Implemented. Organization admins can read and export the audit trail (NDJSON or CSV) covering administrative and identity events, gated on org-admin membership rather than a separate entitlement. We will tell you precisely which events are captured rather than implying full coverage.',
             },
             {
               k: 'Retention',

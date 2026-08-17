@@ -54,6 +54,53 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
           fibonacci.py · PYTHON
         </Text>
         <View
+          accessibilityLabel="Publish artifact to a public link"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": false,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "opacity": 1,
+              "padding": 8,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-globe"
+          />
+        </View>
+        <View
           accessibilityLabel="Download artifact"
           accessibilityRole="button"
           accessibilityState={
@@ -425,6 +472,53 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
         >
           fibonacci.py · PYTHON
         </Text>
+        <View
+          accessibilityLabel="Publish artifact to a public link"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": false,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "opacity": 1,
+              "padding": 8,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-globe"
+          />
+        </View>
         <View
           accessibilityLabel="Download artifact"
           accessibilityRole="button"

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "sched-gap-13",
+    "title": "Status-filter control exists elsewhere in the codebase but not on the web schedules list",
+    "claimId": "sched-18",
+    "benchmark": "ChatGPT has a right-aligned 'Active' filter chip on its Scheduled page (01-chatgpt/tasks.md)",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "apps/web/features/schedules/components/SchedulesPage.tsx has no filter/tab state of any kind (confirmed by full read). The capability is fully built twice elsewhere and never carried to this page: packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:52-55,371-389 (Active/All tabs passing explicit `states` arrays to the server) and apps/desktop/src/features/scheduler/ScheduledTasksPanel.tsx:14-20,126-160 (five-way All/Active/Paused/Completed/Failed tabs with live counts).",
+    "severity": "P3",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "Port the /tasks Active/All filter pattern (or desktop's richer 5-state version) directly onto /chat/schedules \u2014 the implementation already exists twice in-repo.",
+    "_domain": "Scheduled tasks & automation"
+  },
+  {
+    "id": "sched-gap-14",
+    "title": "Suggested-template icon differentiation exists on mobile, absent on web",
+    "claimId": "sched-19",
+    "benchmark": "ChatGPT uses a '+' circle icon on template rows distinct from the plain status icon on real task rows (01-chatgpt/tasks.md)",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "N/A on web (no templates \u2014 see sched-gap-01). Already correctly implemented on mobile: TemplateCard uses a teal '+'-in-circle icon (apps/mobile/app/(app)/schedules/index.tsx:391-396) while real ScheduleCard rows use a text Badge for status (apps/mobile/src/features/schedules/components/ScheduleCard.tsx:124-147,214) \u2014 visually distinct per the claim's intent, just never ported to the web surface where competitors were benchmarked.",
+    "severity": "P3",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "Carries automatically once sched-gap-01 (web templates) is built \u2014 reuse the same icon-differentiation pattern already proven on mobile.",
+    "_domain": "Scheduled tasks & automation"
+  },
+  {
+    "id": "sched-gap-17",
+    "title": "Create-schedule form defaults to a recurring cadence, not on-demand/manual",
+    "claimId": "sched-23",
+    "benchmark": "Claude's Frequency dropdown defaults to 'Manual' (on-demand only) rather than a preset recurring schedule (02-claude/scheduled-tasks.md)",
+    "ourState": "PRESENT_WORSE",
+    "ourEvidence": "apps/web/features/schedules/lib/schedule-form.ts:26-43 \u2014 INITIAL_SCHEDULE_DRAFT defaults recurrence: 'daily', timeOfDay: '09:00', daysOfWeek: [1,2,3,4,5]. A new 'Create Schedule' dialog opens pre-configured as a standing weekday 9am recurring task, the inverse of Claude's on-demand default.",
+    "severity": "P3",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "Default ScheduleDraft.recurrence to 'once' (or force an explicit choice with no default) so accidental creation of a standing recurring automation isn't the path of least resistance.",
+    "_domain": "Scheduled tasks & automation"
+  },
+  {
+    "id": "sched-gap-11",
+    "title": "No surface offers both a non-destructive 'Close' and a destructive 'Delete' for the same task object",
+    "claimId": "sched-15",
+    "benchmark": "Gemini's task overflow menu offers Rename/Pin/Delete/Close as four distinct actions, keeping the lightweight dismiss separate from the destructive delete (03-gemini/spark-task-lifecycle.md)",
+    "ourState": "PARTIAL",
+    "ourEvidence": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:283-291 has a 'Close' (X) button that only clears selectedRunId \u2014 but TasksPage.tsx has no delete action for a task run anywhere (only Stop/cancel for live runs and Open chat). Conversely apps/web/features/schedules/components/ScheduleCard.tsx:215-226 has a destructive 'Delete Schedule' (confirmed via AlertDialog, SchedulesPage.tsx:535-569) but no 'Close' concept since history is a collapse/expand toggle, not a dismissible panel.",
+    "severity": "P2",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "Decide deliberately whether AGI Work task runs should ever be deletable (they may be intentionally immutable as a billing/audit ledger) and document that choice; if deletable, add it explicitly rather than leaving the absence unexplained.",
+    "_domain": "Scheduled tasks & automation"
+  },
+  {
+    "id": "sched-gap-07",
+    "title": "Schedule list rows have no way to show a run is currently in progress",
+    "claimId": "sched-09",
+    "benchmark": "Claude and Gemini (MAJORITY) show a colored dot on an active task's row that clears the instant it completes (04-cross-product-comparison/03-scheduled-tasks-and-automation.md; 03-gemini/spark-task-lifecycle.md)",
+    "ourState": "PARTIAL",
+    "ourEvidence": "Present and correct on /tasks: task-display.ts:79-84 defines a literally-blue badge for queued/running states that flips to green on completion, refreshed via 4s polling (packages/ui/unified-chat/src/components/tasks/TasksPage.tsx TASK_JOURNAL_POLL_INTERVAL_MS). Absent on /chat/schedules: packages/contracts/cloud-contracts/src/schedules.ts:56 defines ManagedCloudScheduleTask.status as z.enum(['active','paused','completed','failed','expired']) \u2014 there is no 'running' value at all, so ScheduleCard.tsx:106-108's collapsed row can structurally never indicate an in-flight run; the running indicator only exists inside expanded run history (ScheduleRunHistory.tsx:38-44).",
+    "severity": "P3",
+    "effort": "M",
+    "priorAudit": "NEW",
+    "recommendation": "Add a transient 'running now' visual state to ScheduleCard driven by whether any run for that schedule is currently in the 'running' run-status, without needing a new schedule-level enum value.",
+    "_domain": "Scheduled tasks & automation"
+  }
+]

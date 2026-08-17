@@ -29,7 +29,10 @@ const NO_ASK: { k: string; v: string }[] = [
   },
   {
     k: 'Create an Office file',
-    v: 'Generates a document, spreadsheet, or deck inside the sandbox for you to download. Reversible, no egress path.',
+    // Only the formats create_office_file's schema accepts may be named here.
+    // apps/web/app/agent-permissions/__tests__/office-file-claims.test.ts
+    // derives that enum and fails this row if it drifts.
+    v: 'Generates a Word document (.docx) or a PowerPoint deck (.pptx) on our servers and attaches it to the conversation for you to download. Those two formats are the whole of it — no other Office format, and no editing of a file you already have. Reversible, no egress path.',
   },
   {
     k: 'Run a skill',

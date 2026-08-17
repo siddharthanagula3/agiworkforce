@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/logger', () => ({
@@ -24,6 +27,21 @@ describe('verifyCronRequest', () => {
     vi.stubEnv('CRON_SECRET', 'cron-secret');
     expect(verifyCronRequest(request('agiworkforce.com', 'Bearer cron-secret'))).toBe(true);
     expect(verifyCronRequest(request('agiworkforce.com', 'Bearer wrong'))).toBe(false);
+    expect(verifyCronRequest(request('agiworkforce.com'))).toBe(false);
+  });
+
+  it('rejects near-miss and truncated secrets', () => {
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
+    expect(verifyCronRequest(request('agiworkforce.com', 'Bearer cron-secrey'))).toBe(false);
+    expect(verifyCronRequest(request('agiworkforce.com', 'Bearer c'))).toBe(false);
+    expect(verifyCronRequest(request('agiworkforce.com', 'cron-secret'))).toBe(false);
+  });
+
+  // Constant-time comparison is not observable from the return value, so the guard is on the source.
+  it('compares the bearer secret without a variable-time equality check', () => {
+    const source = readFileSync(join(import.meta.dirname, 'cron-auth.ts'), 'utf8');
+    expect(source).toMatch(/timingSafeEqual\(/);
+    expect(source).not.toMatch(/authHeader\s*[!=]==|[!=]==\s*`Bearer/);
   });
 
   it('fails closed when no secret or explicit local bypass is configured', () => {

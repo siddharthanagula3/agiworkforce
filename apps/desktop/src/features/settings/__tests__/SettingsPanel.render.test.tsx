@@ -50,10 +50,6 @@ vi.mock('../UsageDashboard', () => ({
   UsageDashboard: () => <div>Usage dashboard</div>,
 }));
 
-vi.mock('../TeamAccountSettings', () => ({
-  TeamAccountSettings: () => <div>Team account settings</div>,
-}));
-
 vi.mock('../CustomModelsSettings', () => ({
   CustomModelsSettings: () => <div>Custom models</div>,
 }));

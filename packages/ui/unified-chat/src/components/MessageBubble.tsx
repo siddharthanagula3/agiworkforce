@@ -18,6 +18,11 @@ import { LegacyWebSearchCard } from './WebSearchCard';
 import { CitationPill } from './CitationPill';
 import { DownloadCard } from './DownloadCard';
 import { MessageGeneratedFiles, hasRunningExecutionTool } from './MessageGeneratedFiles';
+import {
+  CodeExecutionOutput,
+  isExecutingCode,
+  readCodeExecutionResult,
+} from './CodeExecutionOutput';
 import { ToolCallCard } from './ToolCallCard';
 import { AgentActivityTimeline, hasCanonicalToolActivity } from './AgentActivityTimeline';
 import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
@@ -642,6 +647,8 @@ export function MessageBubble({
   const trimmedMetadataFields = isUser ? [] : readTrimmedMetadataFields(message);
   const hostBridge = useHostBridge();
   const paywallBlock = isUser ? null : readMessagePaywall(message.metadata);
+  const codeExecutionResult = isUser ? undefined : readCodeExecutionResult(message.metadata);
+  const codeExecutionRunning = !isUser && !codeExecutionResult && isExecutingCode(message);
   const failureMessage =
     isUser || isStreaming || paywallBlock
       ? undefined
@@ -831,6 +838,10 @@ export function MessageBubble({
         </div>
       )}
 
+      {(codeExecutionRunning || codeExecutionResult) && (
+        <CodeExecutionOutput isExecuting={codeExecutionRunning} result={codeExecutionResult} />
+      )}
+
       {renderedArtifacts && renderedArtifacts.length > 0 && (
         <div className="mt-2" data-testid="message-artifacts">
           {renderedArtifacts.map((artifact) => (
@@ -849,7 +860,9 @@ export function MessageBubble({
           Also renders while an E2B execution tool is still running so the
           user sees an honest "Running code…" strip before any file exists. */}
       {((message.generatedFiles && message.generatedFiles.length > 0) ||
-        hasRunningExecutionTool(message)) && <MessageGeneratedFiles message={message} />}
+        (hasRunningExecutionTool(message) && !codeExecutionRunning)) && (
+        <MessageGeneratedFiles message={message} />
+      )}
 
       {/* Action row (web parity): assistant actions sit below EVERY completed
           message, always visible — not only the last turn. ActionBar renders

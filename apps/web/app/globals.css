@@ -573,8 +573,10 @@
        changes nothing today — they exist so the layers can be retuned from one
        place instead of editing every primitive. Only rungs referenced by CSS
        this app renders are declared; do not add speculative ones.
-       apps/desktop/src/styles/globals.css declares its own set, and nothing
-       enforces the two agree — if you change a value here, check that file. */
+       apps/desktop/src/styles/globals.css declares its own set; every layer
+       both surfaces declare has to hold the same number, because the shared
+       primitives ship one fallback for both. All of the above is enforced by
+       apps/web/shared/lib/__tests__/overlay-z-layers.test.ts. */
     --z-modal: 300;
     --z-popover: 350;
     --z-tooltip: 380;
@@ -2078,6 +2080,10 @@
   min-height: 46px;
   font-size: 13.5px;
 }
+[data-design='agi'] .agi-top-cta-compact {
+  display: none;
+  align-items: center;
+}
 
 /* mobile controls + animated burger */
 [data-design='agi'] .agi-top-mobile-controls {
@@ -2242,12 +2248,15 @@
   }
 }
 
-/* breakpoint: collapse the desktop nav into the drawer */
+/* breakpoint: collapse the desktop nav into the drawer, keeping the primary CTA
+   outside the hamburger so a narrow-viewport visitor never has to open the menu
+   to reach sign-in */
 @media (max-width: 900px) {
   [data-design='agi'] .agi-top-nav-desktop,
   [data-design='agi'] .agi-top-actions-desktop {
     display: none;
   }
+  [data-design='agi'] .agi-top-cta-compact,
   [data-design='agi'] .agi-top-mobile-controls {
     display: inline-flex;
   }

@@ -11,6 +11,7 @@ const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 
 function makeProcessed(): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'agi-work-request-1',
     managedUsage: {
       db: {} as ProcessedRequest['managedUsage'] extends infer T

@@ -1,5 +1,25 @@
 import { useEffect, useRef } from 'react';
-import { useVoiceInputStore } from '../stores/settingsStore';
+import { listen, type UnlistenFn } from '../lib/tauri-mock';
+import { useVoiceInputStore, useVoiceModeStore } from '../stores/settingsStore';
+
+interface WakeEvent {
+  version: number;
+  kind: 'detected' | 'refused' | 'stopped';
+  phrase?: string;
+  detail?: string;
+  confidence: number;
+  timestamp: number;
+}
+
+interface DictationEvent {
+  version: number;
+  kind: string;
+  source?: string;
+  detail?: string;
+}
+
+const WAKE_REFUSED_FALLBACK = 'Wake-phrase detection is not available in this build.';
+const DICTATION_REFUSED_FALLBACK = 'System-wide dictation is not available in this build.';
 
 /**
  * Registers the voice dictation hotkey using keydown/keyup events on document.
@@ -12,6 +32,12 @@ import { useVoiceInputStore } from '../stores/settingsStore';
  * starts listening, second Caps Lock press stops listening. Note that browsers
  * expose CapsLock via KeyboardEvent.code === 'CapsLock' on keydown; the
  * actual lock state is readable via KeyboardEvent.getModifierState('CapsLock').
+ *
+ * The hook is also the single webview subscriber for the two backend
+ * dictation channels, which had none: `wake:event` (a matched wake phrase
+ * starts dictation; `refused`/`stopped` clear the settings "Listening" badge)
+ * and `dictation:event` (a refused global-hotkey session surfaces as a voice
+ * error, which `VoiceInputOverlay` toasts).
  *
  * IMPORTANT: `useVoiceInputStore` here is re-exported from
  * `stores/settingsStore.ts` (defined in `stores/settings/voice.ts`) —
@@ -88,4 +114,46 @@ export function useVoiceHotkey() {
       document.removeEventListener('keyup', handleKeyUp);
     };
   }, [hotkey, startListening, stopListening]);
+
+  useEffect(() => {
+    let disposed = false;
+    const unlisteners: UnlistenFn[] = [];
+
+    const track = (unlisten: UnlistenFn) => {
+      if (disposed) unlisten();
+      else unlisteners.push(unlisten);
+    };
+
+    const fail = (event: string) => (error: unknown) => {
+      console.warn(`Failed to subscribe to ${event}:`, error);
+    };
+
+    void listen<WakeEvent>('wake:event', ({ payload }) => {
+      if (payload.kind === 'detected') {
+        if (useVoiceInputStore.getState().voiceMode !== 'idle') return;
+        void startListening();
+        return;
+      }
+      // Refused and stopped both mean the detector is not running; the mode
+      // store drives the settings toggle's "Listening" badge.
+      useVoiceModeStore.setState({ wakeWordActive: false });
+      if (payload.kind === 'refused') {
+        useVoiceInputStore.setState({ voiceError: payload.detail ?? WAKE_REFUSED_FALLBACK });
+      }
+    })
+      .then(track)
+      .catch(fail('wake:event'));
+
+    void listen<DictationEvent>('dictation:event', ({ payload }) => {
+      if (payload.kind !== 'refused') return;
+      useVoiceInputStore.setState({ voiceError: payload.detail ?? DICTATION_REFUSED_FALLBACK });
+    })
+      .then(track)
+      .catch(fail('dictation:event'));
+
+    return () => {
+      disposed = true;
+      for (const unlisten of unlisteners) unlisten();
+    };
+  }, [startListening]);
 }

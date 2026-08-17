@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import { NotificationsSection } from './NotificationsSection';
 import { SecuritySection } from './SecuritySection';
@@ -52,9 +52,9 @@ describe('Web Settings capability boundaries', () => {
 
     expect(screen.queryByText('Browser replies only')).not.toBeInTheDocument();
     expect(screen.queryByText(/Email, task, schedule, project/)).not.toBeInTheDocument();
-    expect(screen.getByText('Email')).toBeInTheDocument();
-    expect(screen.getByText('Mobile push')).toBeInTheDocument();
-    expect(screen.getAllByText('Scheduled task finished')).toHaveLength(2);
+    const scheduleEvent = screen.getByRole('region', { name: 'Scheduled task finished' });
+    expect(within(scheduleEvent).getByText('Email')).toBeInTheDocument();
+    expect(within(scheduleEvent).getByText('Mobile push')).toBeInTheDocument();
   });
 
   it('does not imply unsupported account factors or trusted contacts', () => {

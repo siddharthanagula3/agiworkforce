@@ -1,4 +1,3 @@
-
 import { invoke, isTauri } from '../lib/tauri-mock';
 
 export interface GitStatus {
@@ -79,24 +78,33 @@ export interface BranchDiffSummary {
 
 export interface GeneratedPrContent {
   title: string;
-  body: string;
+  description: string;
+  suggested_labels: string[];
+  confidence: number;
 }
 
 export interface PrCreationConfig {
   base_branch: string;
   head_branch: string;
-  title?: string;
-  body?: string;
-  auto_generate?: boolean;
+  auto_generate_title?: boolean;
+  auto_generate_description?: boolean;
+  include_diff_summary?: boolean;
+  custom_title?: string | null;
+  custom_description?: string | null;
+  draft?: boolean;
+  labels?: string[];
+  reviewers?: string[];
 }
 
 export interface PrCreationResult {
-  success: boolean;
+  pr_number: number;
+  pr_url: string;
   title: string;
-  body: string;
-  base_branch: string;
-  head_branch: string;
-  error?: string;
+  description: string;
+  draft: boolean;
+  files_changed: number;
+  additions: number;
+  deletions: number;
 }
 
 export interface PrReadinessResult {
@@ -546,7 +554,7 @@ export async function gitGeneratePrDescription(
   baseBranch: string,
   headBranch: string,
 ): Promise<GeneratedPrContent> {
-  if (!isTauri) return { title: '', body: '' };
+  if (!isTauri) return { title: '', description: '', suggested_labels: [], confidence: 0 };
   try {
     return await invoke<GeneratedPrContent>('git_generate_pr_description', {
       path,
@@ -563,14 +571,7 @@ export async function gitCreatePr(
   config: PrCreationConfig,
 ): Promise<PrCreationResult> {
   if (!isTauri) {
-    return {
-      success: false,
-      title: '',
-      body: '',
-      base_branch: config.base_branch,
-      head_branch: config.head_branch,
-      error: 'Not in Tauri environment',
-    };
+    throw new Error('git create PR failed: pull requests can only be opened from the desktop app');
   }
   try {
     return await invoke<PrCreationResult>('git_create_pr', { path, config });

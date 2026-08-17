@@ -1,0 +1,262 @@
+[
+  {
+    "id": "BACKEND-RUNTIME-001",
+    "domain": "backend-runtime",
+    "surface": "web",
+    "feature": "Managed Code (Cloud Code) agent-turn execution",
+    "screen": "/chat/code (CloudCodePage)",
+    "files": [
+      "apps/web/app/api/code/sessions/[sessionId]/agent/route.ts",
+      "apps/web/app/api/code/sessions/[sessionId]/agent/approvals/route.ts",
+      "apps/web/features/code/services/cloud-code-api.ts",
+      "apps/web/features/code/CloudCodePage.tsx:660"
+    ],
+    "currentState": "A complete, separate agentic-turn backend exists for Cloud Code sessions: `agent/route.ts` (124 lines, real `handleAgentTurn`) runs an agent turn against a code session, and `agent/approvals/route.ts` (136 lines) lists/decides pending approvals for it (auth, CSRF, rate limit, subscription-tier check, `decideCloudCodeAgentApproval`). `cloud-code-api.ts` is the only in-repo caller of `/api/code/sessions/**`, and it calls list/get/create/delete/`commands` only — never `.../agent` or `.../agent/approvals`. `CloudCodePage.tsx` renders a raw terminal (`commands`) and its only mention of \"agent\" is a static string pointing users at the VS Code extension instead (line 660).",
+    "expectedState": "Codex (ChatGPT Work/Codex app mode) and Claude Code's IDE/terminal surfaces let a user hand a coding task to an agent that plans, edits files, and asks for approval on risky actions — not just a raw command shell. Since the approval-gated agent-turn backend already exists end-to-end (turn execution + approval resume), the web Cloud Code screen should expose an actual agent entry point (task input, streaming plan/tool-status, approval prompts) wired to the existing endpoints.",
+    "benchmarkRef": "OpenAI Codex (ChatGPT Work/Codex desktop + web) agent task flow; Claude Code CLI/IDE approval flow — research/chatgpt-work-codex.md, research/shots-codex-macos-shell.md",
+    "gapType": "broken-workflow",
+    "severity": "P1",
+    "evidence": "Read apps/web/app/api/code/sessions/[sessionId]/agent/route.ts and .../agent/approvals/route.ts in full (real handlers, not stubs). Ran `grep -n \"fetch(\\|/api/code\" cloud-code-api.ts` → 6 hits, none `/agent`. Repo-wide grep for `sessions/${...}/agent` outside app/api/code and cloud-code-api.ts → zero hits. `grep -n \"agent\" apps/web/features/code/CloudCodePage.tsx` → exactly one hit, a static help string, not a call site. Confirms inventory web-backend.md §3c verbatim.",
+    "priorArtId": null,
+    "recommendation": "Add an agent-turn composer to CloudCodePage (task input → POST .../agent, subscribe to its event stream, render tool status + `x_agent_event`-style updates, surface pending approvals from GET .../agent/approvals with an approve/deny control wired to POST). This closes an already-built backend loop rather than adding new surface area."
+  },
+  {
+    "id": "BACKEND-RUNTIME-002",
+    "domain": "backend-runtime",
+    "surface": "backend",
+    "feature": "services/api-gateway vs apps/web API route duplication",
+    "screen": "n/a",
+    "files": [
+      "services/api-gateway/src/app.ts:5-20,140",
+      "services/api-gateway/src/routes/{agents,chat,cloudChat,credits,llm,usage,models,sync,deviceAuth}.ts",
+      "apps/mobile/lib/constants.ts:18",
+      "apps/web/next.config.ts:94-115",
+      "docs/agent-context/known-flaws.md:2475-2503 (SVC-DEPLOY-TOPOLOGY-VERCEL-SINGLE)"
+    ],
+    "currentState": "`services/api-gateway` is a real, tested Express service with its own `agents`, `chat`, `cloudChat`, `credits`, `deviceAuth`, `llm`, `models`, `sync`, `usage` routers — a REST surface that structurally duplicates apps/web's Next.js API routes for the same concepts. It now has real Fly.io deploy jobs (`infrastructure/api-gateway/fly.{staging,production}.toml`, dated 2026-08-09) and passes CI. Mobile's `GATEWAY_URL` defaults to `https://api.agiworkforce.com`, but `apps/web/next.config.ts:94-115` proves that host is a Host-header rewrite onto the SAME Vercel/Next.js deployment (`api.agiworkforce.com/v1/chat/completions → agiworkforce.com/v1/chat/completions`), not the Fly-hosted gateway. The one distinctive thing the gateway is for — WebSocket + QR-pairing companion/remote-control — is the same feature `services/signaling-server` backs, and known-flaws.md records that feature as flag-gated off in production.",
+    "expectedState": "One documented request path per capability. Either the gateway is retired (its REST duplication deleted, keeping only the WebSocket/QR-pairing core Vercel serverless cannot host) or it is the actual production entry point and the Next.js routes it duplicates are the ones retired — not both maintained in parallel with an ambiguous \"who calls this in prod\" answer.",
+    "benchmarkRef": "n/a — internal architecture; neither ChatGPT nor Claude's backend topology is inspectable, this is a repo-hygiene/architecture finding, not a parity gap",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Read services/api-gateway/src/app.ts route mounts and services/api-gateway/src/middleware/managedComputeGate.ts (confirms it correctly mirrors apps/web's gate). Read apps/web/next.config.ts:80-115 in full — comment explicitly documents `api.agiworkforce.com` resolving to this same Vercel project via a Host-conditioned rewrite (not vercel.json, because \"Vercel ignores vercel.json rewrites for Next.js projects\"). Grepped apps/mobile/lib/constants.ts:18 for the gateway default. Cross-checked against docs/agent-context/known-flaws.md's SVC-DEPLOY-TOPOLOGY-VERCEL-SINGLE entry, which independently reaches the same conclusion and records this as a still-PENDING founder decision.",
+    "priorArtId": null,
+    "recommendation": "Founder decision (already framed in known-flaws.md): pick one. Smallest slice either way — if keeping the gateway, delete its `agents/chat/cloudChat/credits/llm/usage/models` routers and leave only `pair`/`sync`(WebSocket) + `deviceAuth`; if retiring it, stop deploying `infrastructure/api-gateway/fly.*.toml` in CI and delete the Express REST duplication, keeping only the signaling-server for companion mode."
+  },
+  {
+    "id": "BACKEND-RUNTIME-003",
+    "domain": "backend-runtime",
+    "surface": "desktop-tauri",
+    "feature": "Desktop cloud-sync client — duplicate implementations, one dead",
+    "screen": "n/a (background sync)",
+    "files": [
+      "apps/desktop/src-tauri/src/integrations/sync/cloud.rs:22",
+      "apps/desktop/src-tauri/src/integrations/sync/manager.rs",
+      "apps/desktop/src-tauri/src/data/cloud_sync.rs:2087",
+      "apps/web/app/api/chat/sync/route.ts"
+    ],
+    "currentState": "Two independent structs named `CloudSyncClient` exist in the desktop Tauri codebase. `integrations::sync::CloudSyncClient` (`cloud.rs`) defaults its `api_endpoint` to `https://api.agiworkforce.com/api/sync` — a route that does not exist anywhere in `apps/web/app/api` (confirmed: no `app/api/sync` directory). Its owner, `SyncManager`, is instantiated only inside its own module and is never called from any `#[tauri::command]` or app-init path — it is registered (`pub mod integrations;` in lib.rs) but dead beyond compilation. The live path is a *different* `CloudSyncClient` in `data/cloud_sync.rs`, which hits `/api/chat/sync` (a real, existing route) and is genuinely wired into `chat/conversation.rs`, `chat/persistence.rs`, `memory.rs`, `projects.rs`, and `artifacts/persistence.rs`.",
+    "expectedState": "One `CloudSyncClient` per concept. A maintainer searching \"CloudSyncClient\" today gets two same-named, differently-behaved hits, one of which targets a URL that 404s.",
+    "benchmarkRef": "n/a — internal dead-code hygiene, not a competitor comparison",
+    "gapType": "dead-code",
+    "severity": "P2",
+    "evidence": "`grep -rln \"integrations::sync\\|SyncManager\" apps/desktop/src-tauri/src --include=\"*.rs\"` outside `integrations/sync/` itself → zero hits. `find apps/web/app/api/sync -type f` → no such path. `grep -rln \"data::cloud_sync\\|use.*cloud_sync\" apps/desktop/src-tauri/src` → 5 real command-module callers. Independently corroborated: `docs/agent-context/known-flaws.md` entry `BYOK-RUST-EGRESS-01` already traced this exact pair and concluded `integrations/sync` (\"the real cloud-sync/device client... via SyncManager) is DORMANT — declared but never instantiated and not exposed by any #[tauri::command]\" — confirming this finding from an independent (security) audit pass.",
+    "priorArtId": null,
+    "recommendation": "Delete `apps/desktop/src-tauri/src/integrations/sync/{cloud.rs,manager.rs}` (and its dead `SyncManager`/`CloudSyncConfig` types) or, if a second sync transport is genuinely planned, rename it away from the collision and point it at a route that exists."
+  },
+  {
+    "id": "BACKEND-RUNTIME-004",
+    "domain": "backend-runtime",
+    "surface": "backend",
+    "feature": "Device pairing — two parallel, near-identical auth flows",
+    "screen": "n/a",
+    "files": [
+      "apps/web/app/api/auth/device/{code,approve,token,refresh}/route.ts",
+      "apps/web/app/api/device/{link,poll,approve}/route.ts",
+      "apps/web/db/neon/0077_gateway_compatibility_tables.sql:64"
+    ],
+    "currentState": "Two independent device-pairing systems coexist with overlapping purpose: `auth/device/{code,approve,token,refresh}` implements RFC 8628 CLI OAuth device-code flow (`XXXX-XXXX` alphanumeric codes, `device_authorization_codes` table), used by `packages/client/client-runtime/src/deviceAuthorization.ts` and desktop's `accountBridge.ts`/`cloudAccountAuth.ts`. `device/{link,poll,approve}` implements QR-code device linking (hex codes via the `qrcode` package, `device_pairings` table, its own `device-token-crypto.ts`). Both validate CSRF and rate-limit independently, and use distinct code-format regexes (`^[A-Z0-9]{4}-[A-Z0-9]{4}$` vs `^[A-F0-9]+$`).",
+    "expectedState": "A maintainer editing \"device approve\" logic should not be able to silently edit the wrong flow. Either the two flows are consolidated onto one code-format/validation module with a shared regex constant, or the route trees are named distinctly enough (`auth/device/*` vs `pairing/qr/*`) that the near-homograph pairing (`auth/device/approve` vs `device/approve`) cannot be mistaken for the same endpoint.",
+    "benchmarkRef": "n/a — internal architecture; not directly benchmarked against a competitor surface",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Directory listing of both route trees confirmed both exist with the stated shapes. Read `apps/web/db/neon/0077_gateway_compatibility_tables.sql:64` for the `device_pairings` table. This item was explicitly named in the audit brief as requiring verification; confirmed as described in `audit/parity-2026-08-15/inventory/web-backend.md` §10, not merely restated from it — both route directories and both tables were independently listed and read.",
+    "priorArtId": null,
+    "recommendation": "Not proven broken today, so no urgent fix — but consolidate the code-format validation (one shared regex/constant module used by both) as a low-risk hardening step, and rename the QR flow's routes to remove the `device/*` vs `auth/device/*` near-collision."
+  },
+  {
+    "id": "BACKEND-RUNTIME-005",
+    "domain": "backend-runtime",
+    "surface": "backend",
+    "feature": "Organization invitation expiry cron",
+    "screen": "n/a",
+    "files": ["apps/web/app/api/cron/expire-organization-invitations/route.ts", "vercel.json"],
+    "currentState": "`cron/expire-organization-invitations/route.ts` exists, is well-built (idempotent, bounded by `status='pending' and expires_at<=now()`), and its own comment states the stakes precisely: \"A pending invitation HOLDS a licensed seat... If nothing ever flips a lapsed invitation to 'expired', that seat is never returned and a team silently locks itself out of the seats it paid for.\" `vercel.json`'s `crons` array has exactly 9 entries and this route is not one of them — confirmed by listing all 9 scheduled paths directly from the file.",
+    "expectedState": "Every cron route the product depends on for correctness has a schedule entry. The invite-path already does a lazy expire-on-consume as a partial mitigation, but the durable sweep this route exists for never runs, so an organization that stops actively inviting people keeps paying for seats occupied by invitations nobody will ever accept.",
+    "benchmarkRef": "n/a — internal reliability gap, not a competitor feature comparison",
+    "gapType": "reliability-gap",
+    "severity": "P2",
+    "evidence": "Read the full route file (its own docstring states the business impact). Parsed `vercel.json`'s `crons` array with `python3 -c \"json.load(...)\"` and enumerated all 9 paths — `expire-organization-invitations` is absent from the list.",
+    "priorArtId": null,
+    "recommendation": "Add `{\"path\": \"/api/cron/expire-organization-invitations\", \"schedule\": \"0 5 * * *\"}` (or any unused daily slot) to `vercel.json`'s `crons` array — a one-line fix for a self-documented seat-lock bug."
+  },
+  {
+    "id": "BACKEND-RUNTIME-006",
+    "domain": "backend-runtime",
+    "surface": "backend",
+    "feature": "No vector storage / retrieval backend; embeddings endpoint has zero internal callers",
+    "screen": "n/a",
+    "files": [
+      "apps/web/app/api/llm/v1/embeddings/route.ts",
+      "apps/web/app/api/memory/search/route.ts",
+      "apps/web/app/api/search/route.ts",
+      "apps/web/db/neon/*.sql"
+    ],
+    "currentState": "`POST /api/llm/v1/embeddings` (306 lines) is a real, fully-billed OpenAI-compatible embeddings generation endpoint — but grep confirms it has no caller anywhere else in the repo (its own docstring says it \"adds a capability rather than repairing a false claim\"; it exists purely as an external API surface). Search (`/api/search`) and memory search (`/api/memory/search`) are both plain Postgres `ILIKE` text matching — the latter's own docstring says \"Simple ILIKE text search - can be upgraded to vector similarity later.\" No migration under `apps/web/db/neon/*.sql` declares a `vector` column type or a `pgvector` extension. Project knowledge files are parsed and stuffed verbatim (truncated to a budget) into every project turn's prompt rather than retrieved by relevance.",
+    "expectedState": "The raw material for RAG (a working embeddings endpoint) exists but nothing in the product stores or queries a vector index. Closing this at the storage layer (pgvector column + ANN index + a retrieval query path) is the prerequisite every other RAG-shaped gap in this audit round (semantic search, project-knowledge relevance, memory retrieval) is blocked on.",
+    "benchmarkRef": "Claude Projects' auto-RAG beyond the 200K context window; ChatGPT Projects' knowledge-base retrieval — research/cross-cutting-and-complaints.md §1 (\"Projects\" row)",
+    "gapType": "backend-gap",
+    "severity": "P2",
+    "evidence": "Read apps/web/app/api/llm/v1/embeddings/route.ts docstring and confirmed zero internal callers via `grep -rln \"llm/v1/embeddings\"` (only `.next` generated type files and its own route-contract entry matched). Read apps/web/app/api/memory/search/route.ts docstring. Grepped every `apps/web/db/neon/*.sql` for `vector` type declarations — none found. Read the project-knowledge-extraction.ts:270 comment confirming verbatim prompt-stuffing.",
+    "priorArtId": null,
+    "recommendation": "This is the shared backend prerequisite for the sibling gaps SEARCH-RESEARCH-004 (semantic/vector search) and PROJECTS-FILES-002 (silent knowledge-context truncation) filed in this same audit round — build one pgvector-backed store (chunk + embed via the already-built embeddings endpoint + ANN query) and let both consume it, rather than two separate retrieval implementations."
+  },
+  {
+    "id": "BACKEND-RUNTIME-007",
+    "domain": "backend-runtime",
+    "surface": "shared",
+    "feature": "Enterprise-Local licensing verification — built twice, wired nowhere",
+    "screen": "n/a",
+    "files": [
+      "crates/agiworkforce-licensing/src/lib.rs:19-21",
+      "packages/contracts/licensing/src/verify.ts:57",
+      "packages/contracts/licensing/src/container.ts:69",
+      "packages/contracts/licensing/src/org-policy.ts:293"
+    ],
+    "currentState": "A complete offline license/org-policy verification system exists in two languages: TypeScript (`packages/contracts/licensing`: `verifyLicense`, `verifySignedContainer`, `verifyOrgPolicy`, Ed25519-signed JWT-shaped containers) and a byte-for-byte Rust re-implementation (`crates/agiworkforce-licensing`) whose own module doc states plainly: \"It is NOT wired into any app/desktop/CLI/gateway runtime.\" Grep confirms zero non-test callers of `verifyLicense`, `verifySignedContainer`, or `verifyOrgPolicy` anywhere in apps/web, apps/desktop, apps/cli, or services — and zero non-self importers of `@agiworkforce/licensing` or `agiworkforce-licensing` repo-wide.",
+    "expectedState": "Either this feature is on a founder-gated roadmap and should stay exactly as-is (a defensible position, matching the `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md` retention rationale the code cites), or it should be deleted. Today it is fully-built, cross-language-consistent, and completely inert — a real maintenance cost (two implementations must be kept in sync via a shared fixture corpus for a capability nothing calls).",
+    "benchmarkRef": "n/a — no direct competitor equivalent to compare against; this is a repo-hygiene finding",
+    "gapType": "dead-code",
+    "severity": "P3",
+    "evidence": "Read crates/agiworkforce-licensing/src/lib.rs's module doc (self-documents as unwired). Read packages/contracts/licensing/src/{verify,container,org-policy}.ts to confirm the exported function names, then ran `grep -rln \"verifyLicense\\|verifySignedContainer\\|LicenseVerdict\"` and `grep -rl \"@agiworkforce/licensing\"` across apps/web, apps/desktop, apps/cli, services, excluding the package's own directory and test files — zero hits in both languages.",
+    "priorArtId": null,
+    "recommendation": "Confirm with the founder decision referenced in docs/decisions/2026-07-30-enterprise-local-verifier-retention.md whether this is intentionally pre-built-ahead-of-need; if so, record that explicitly in the Rust crate's doc comment (it already says so) and leave as-is with a tracked TODO for activation, rather than letting it read as accidental dead code to the next engineer who finds it."
+  },
+  {
+    "id": "BACKEND-RUNTIME-008",
+    "domain": "backend-runtime",
+    "surface": "web",
+    "feature": "Orphaned billing/usage alias routes",
+    "screen": "n/a",
+    "files": [
+      "apps/web/app/api/usage/analytics/route.ts",
+      "apps/web/app/api/usage/history/route.ts",
+      "apps/web/app/api/usage/providers/route.ts",
+      "apps/web/app/api/billing/analytics/route.ts",
+      "apps/web/lib/services/managed-usage-summary-service.ts"
+    ],
+    "currentState": "Four separate routes (`billing/analytics`, `usage/analytics`, `usage/history`, `usage/providers`) each wrap the identical `getManagedUsageSummary(userId)` call, and each docstrings itself as a \"Legacy alias.\" `billing/analytics` is genuinely called by desktop (`apps/desktop/src/stores/billingUsage.ts`). `usage/analytics`, `usage/history`, and `usage/providers` have zero callers anywhere — confirmed via grep across apps/web, apps/desktop, apps/mobile (only `.next` generated type-check artifacts matched). The live web Settings > Usage panel calls the base `/api/usage` route, none of these three.",
+    "expectedState": "Three routes serving an identical response shape with no caller is unnecessary surface area to keep authenticated, rate-limited, and security-reviewed.",
+    "benchmarkRef": "n/a — internal dead-code hygiene",
+    "gapType": "dead-code",
+    "severity": "P3",
+    "evidence": "Read all four route files' docstrings (self-labeled \"Legacy alias\"). Ran `grep -rln \"<route>\"` for each of the four paths across apps/web, apps/desktop, apps/mobile excluding `.next` build output and test files — only `billing/analytics` matched a real caller (`billingUsage.ts`).",
+    "priorArtId": null,
+    "recommendation": "Delete `usage/analytics`, `usage/history`, `usage/providers` (zero callers, confirmed dead) and keep `billing/analytics` (desktop still depends on it) until desktop migrates to the base `/api/usage` route."
+  },
+  {
+    "id": "BACKEND-RUNTIME-009",
+    "domain": "backend-runtime",
+    "surface": "cli",
+    "feature": "CLI command sandboxing — no OS-level sandbox on Windows",
+    "screen": "n/a",
+    "files": [
+      "apps/cli/src/sandbox.rs:14-35",
+      "apps/cli/src/platform/policy/windows_sandbox.rs:76-91",
+      "apps/cli/src/features/exec/tools/bash/mod.rs:172-211"
+    ],
+    "currentState": "`SandboxType::detect()` (`sandbox.rs:22-35`) only returns a real sandbox type on macOS (Seatbelt) and Linux (bubblewrap, if present); every other platform — including Windows — falls through to `SandboxType::None`. `windows_sandbox.rs`'s `is_available()` unconditionally returns `false`, and `install_filter` bails even when its own feature flag is enabled: \"install_filter is not yet implemented even with the feature flag; tracking issue: AppContainer integration is a v1.8 work item.\" `SandboxManager::for_command_execution` fails closed on `SandboxType::None` (bails with \"sandbox not available on this platform or host\"), and `bash/mod.rs` surfaces that as a hard tool failure — so by default, every shell-command tool call in the CLI's agent loop fails outright on Windows unless the user passes `--no-sandbox`/`AGIWORKFORCE_NO_SANDBOX` (which prints a warning and runs fully unsandboxed).",
+    "expectedState": "The CLI's primary workflow — an agent running shell commands on the user's behalf — works out of the box on a supported OS. Today a Windows user either cannot use the exec tool at all, or must explicitly disable all sandboxing for every command, with no middle ground (no Windows Job Object / restricted-token fallback shipped).",
+    "benchmarkRef": "Codex CLI and Claude Code CLI both run shell commands on Windows without requiring the user to disable all sandboxing — research/chatgpt-work-codex.md, research/shots-codex-macos-shell.md (cross-platform CLI agent baseline)",
+    "gapType": "reliability-gap",
+    "severity": "P1",
+    "evidence": "Read apps/cli/src/sandbox.rs:14-35 (`SandboxType` enum + `detect()`), apps/cli/src/platform/policy/windows_sandbox.rs:76-91 (`is_available`/`install_filter`), and apps/cli/src/features/exec/tools/bash/mod.rs:172-211 (fail-closed surfacing). Cross-checked against runtime-infra.md §4, which reaches the identical conclusion and confirms the `windows-appcontainer` Cargo feature is a \"stub feature gate.\"",
+    "priorArtId": null,
+    "recommendation": "Ship a minimum-viable Windows sandbox (Job Object CPU/memory/process limits + a restricted access token) rather than leaving `SandboxType::None` as the only Windows outcome — even a partial mitigation beats a hard fail-closed block on the CLI's core workflow for an entire supported platform."
+  },
+  {
+    "id": "BACKEND-RUNTIME-010",
+    "domain": "backend-runtime",
+    "surface": "cli",
+    "feature": "Linux seccomp sandbox built and tested but not shipped",
+    "screen": "n/a",
+    "files": [
+      "apps/cli/src/platform/policy/linux_sandbox.rs",
+      "apps/cli/Cargo.toml",
+      ".github/workflows/release-cli.yml:191"
+    ],
+    "currentState": "A second, separate Linux sandbox implementation exists using the `seccompiler` crate for in-process seccomp-BPF filtering (`linux_sandbox.rs`), distinct from the shipped `bwrap`-wrapping path. It sits behind a Cargo feature, `linux-seccomp`, which is not in the crate's default feature set (`default = []`) and is not passed by the release build workflow (`cargo build --release --target ${{ matrix.target }} -p agiworkforce-cli`, no `--features`). The shipped Linux CLI binary therefore relies entirely on an externally-installed `bwrap` binary being present on PATH; if it is absent, `SandboxType::detect()` falls to `None` and the exec tool fails closed (same mechanism as BACKEND-RUNTIME-009, minus the Windows-specific \"never implemented\" caveat — here the code exists, it is simply not compiled in).",
+    "expectedState": "A Linux user without `bwrap` installed (common on minimal containers/distros) gets no sandboxed exec at all, even though a working alternative sandbox implementation exists in the same codebase and is presumably tested.",
+    "benchmarkRef": "n/a — internal build-configuration gap, not a competitor feature comparison",
+    "gapType": "reliability-gap",
+    "severity": "P2",
+    "evidence": "Read apps/cli/Cargo.toml's `default = []` feature declaration and confirmed `linux-seccomp` is a named-but-non-default feature. Read `.github/workflows/release-cli.yml:191`'s exact `cargo build` invocation — no `--features` flag present. Cross-checked against runtime-infra.md §1/§4, which independently reaches the same conclusion.",
+    "priorArtId": null,
+    "recommendation": "Either add `linux-seccomp` to the release build's `--features` list (after confirming its test suite is green) so `bwrap`-less environments get a real fallback, or document explicitly that `bwrap` is a hard runtime dependency on Linux and add an install-time check that surfaces a clear \"install bubblewrap\" message instead of the generic \"sandbox not available\" error."
+  },
+  {
+    "id": "BACKEND-RUNTIME-011",
+    "domain": "backend-runtime",
+    "surface": "cli",
+    "feature": "CI never runs the full Rust workspace test suite",
+    "screen": "n/a",
+    "files": [".github/workflows/ci.yml:396-433", ".github/workflows/ci.yml:929-981"],
+    "currentState": "The main Linux CI job runs `cargo test -p agiworkforce-desktop --lib` and `cargo test -p agiworkforce-cli` only — scoped to two binary crates' own unit tests, with a comment explaining this was to route around \"the 100+ ported codex-rs crates'\" pre-existing test regressions. That comment is now stale: `Cargo.toml:7-13` records the crate count was pruned to 12 on 2026-07-08, and the referenced tracking issue `FIX-021` does not appear anywhere in known-flaws.md, PLAN.md, or CHANGELOG.md. The only wider Rust checks are `cargo check --workspace` (compiles but never runs a test) and a Windows job's `cargo test --workspace --lib` (restricted to in-source `#[cfg(test)]` unit tests only — never the separate `crates/*/tests/*.rs` integration suites for `agiworkforce-mcp`, `agiworkforce-protocol`, `agiworkforce-llm`, `agiworkforce-agent-core`, `agiworkforce-app-server`, `agiworkforce-command-registry`, `agiworkforce-model-registry`, all of which exist on disk).",
+    "expectedState": "No production CI job runs `cargo test --workspace` (all targets, all crates) on any platform. Given `agiworkforce-mcp` carries the RFC 9728/8414/7591 OAuth PKCE flow and `agiworkforce-llm`/`agiworkforce-protocol` carry SSE stream decoding and JSON-RPC framing — both security- and correctness-sensitive — their integration-test suites are compiled but their pass/fail status is not gated anywhere in the release pipeline.",
+    "benchmarkRef": "n/a — internal CI-coverage gap, not a competitor feature comparison",
+    "gapType": "reliability-gap",
+    "severity": "P2",
+    "evidence": "Read .github/workflows/ci.yml:396-433 (the stale \"100+ crates\" comment plus the two scoped `cargo test -p` invocations) and :929-981 (Windows job's `--lib`-restricted `cargo test --workspace`). Confirmed via `grep -c` that Cargo.toml's workspace members list is 12 crates, not 100+. Searched known-flaws.md, PLAN.md, CHANGELOG.md for `FIX-021` — zero hits. Listed `crates/*/tests/*.rs` directories to confirm the integration-test files exist on disk and would be skipped by `--lib`.",
+    "priorArtId": null,
+    "recommendation": "Add one CI step: `cargo test --workspace` (no `--lib` restriction) on at least the primary Linux runner, gated the same way the two scoped `cargo test -p` invocations already are. Update or remove the stale \"100+ crates\" comment either way."
+  },
+  {
+    "id": "BACKEND-RUNTIME-012",
+    "domain": "backend-runtime",
+    "surface": "backend",
+    "feature": "No error-tracking/APM on backend services; api-gateway has no /metrics",
+    "screen": "n/a",
+    "files": [
+      "services/api-gateway/package.json",
+      "services/signaling-server/src/metrics.ts:1-13",
+      "services/api-gateway/src/app.ts"
+    ],
+    "currentState": "`services/signaling-server` exposes real Prometheus-format metrics (`services/signaling-server/src/metrics.ts`: connection/session/message/error/pairing counters, uptime, memory gauges) at `/metrics`. `services/api-gateway` has no equivalent — only `/health`/`/ready`, confirmed by grepping its route/app files for a `/metrics` mount. Neither service's `package.json` references Sentry or any other error-tracking SDK.",
+    "expectedState": "Both backend services should have comparable operational visibility. If api-gateway is kept in production (see BACKEND-RUNTIME-002), it needs the same request/error metrics its sibling service already has; either way, a production Express/Node service handling auth, billing, and chat traffic should forward exceptions to an APM tool rather than only local pino logs.",
+    "benchmarkRef": "n/a — internal observability gap, not a competitor feature comparison",
+    "gapType": "reliability-gap",
+    "severity": "P3",
+    "evidence": "Grepped services/api-gateway/src for `/metrics`, `prom-client`, `register.metrics` — zero hits, versus a direct read of services/signaling-server/src/metrics.ts showing a full metrics implementation. Grepped both services' package.json for `sentry` — zero hits in either.",
+    "priorArtId": null,
+    "recommendation": "Add a `/metrics` endpoint to api-gateway using the same `prom-client`-style pattern signaling-server already uses, and wire a Sentry (or equivalent) DSN into both services' error handlers — small, mechanical additions given the pattern already exists in-repo."
+  },
+  {
+    "id": "BACKEND-RUNTIME-013",
+    "domain": "backend-runtime",
+    "surface": "backend",
+    "feature": "Legacy/dead database tables and an authored-but-unapplied schema migration",
+    "screen": "n/a",
+    "files": [
+      "apps/web/lib/server/account-erasure.ts:60-91",
+      "apps/web/db/neon/0058_drop_legacy_teams.sql:1-30",
+      "apps/web/lib/services/waitlistService.ts:10-12"
+    ],
+    "currentState": "Nine tables (`agent_tools`, `agent_tool_executions`, `agent_approval_requests`, `chat_messages`, `chat_folders`, `message_bookmarks`, `message_reactions`, `user_shortcuts`, `messaging_connections`) are touched by exactly one code path each: the GDPR/DPDP account-erasure sweep in `account-erasure.ts` — confirmed by grepping each table name for non-test/non-migration references (each returns exactly 1: the erasure file). Two tables (`referrals`, `cloud_waitlist`) have zero application-code references at all; `waitlistService.ts:10-12`'s own comment names `cloud_waitlist` as \"the older... table, not `cloud_managed_waitlist`\", confirming it was superseded. A migration, `0058_drop_legacy_teams.sql`, is fully written to drop the also-fully-dead `teams`/`team_members` pair, but its own header states: \"FOUNDER-GATED: this migration is NOT applied by this change... Applying it to any database... is an explicitly-gated, separate, founder-run step.\"",
+    "expectedState": "This is legitimate, well-managed technical debt — the erasure-only tables are correctly kept alive for compliance completeness, and the unapplied migration is correctly gated rather than silently run. The gap is purely tracking risk: an authored-but-never-executed migration is easy to lose track of, and 11 total dead/near-dead tables (9 erasure-only + 2 fully dead) add schema surface with no live feature behind them.",
+    "benchmarkRef": "n/a — internal schema-hygiene finding, explicitly requested for verification in this audit's brief",
+    "gapType": "architecture-gap",
+    "severity": "P3",
+    "evidence": "For each of the 9 tables, ran `grep -rl \"\\b<table>\\b\" apps/web --include=\"*.ts\" --include=\"*.tsx\" | grep -v '\\.test\\.\\|db/neon/'` and confirmed exactly 1 hit (account-erasure.ts) per table. Ran the same for `referrals` (0 hits) and `cloud_waitlist` (1 hit, the comment in waitlistService.ts explaining the supersession, not a query). Read `0058_drop_legacy_teams.sql:1-30` in full for the founder-gate language.",
+    "priorArtId": null,
+    "recommendation": "No urgent action — confirmed correctly gated. Add a single tracked line item (e.g. in known-flaws.md or a schema-debt doc) listing all 11 tables and the pending 0058 migration together, so the founder-run drop step and the erasure-only retention list don't require re-discovery by the next auditor."
+  }
+]

@@ -45,6 +45,12 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import {
+  conversationDeleteConfirm,
+  projectDeleteConfirm,
+} from '@shared/components/layout/sidebar-session-actions';
+import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
+import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
@@ -67,6 +73,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const subscription = useBillingStore((s) => s.subscription);
   const isBillingLoading = useBillingStore((s) => s.isLoading);
   const isBillingInitialized = useBillingStore((s) => s.initialized);
+  const billingPolicyReady = useBillingStore(isBillingPolicyReady);
 
   const [collapsed, setCollapsed] = useState(false);
 
@@ -166,16 +173,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const handleDeleteSession = useCallback(
     async (id: string) => {
       const convo = conversations.find((c) => c.id === id);
-      const label = convo?.title ? `“${convo.title}”` : 'this conversation';
-      // Same dialog and same copy the chat shell uses — delete-conversation is
-      // the app's most frequent destructive action and must not look like a
-      // browser alert on one route and a product dialog on another.
-      const confirmed = await confirmDestructive({
-        title: 'Delete conversation?',
-        description: `Delete ${label} and every message in it. This cannot be undone.`,
-        confirmText: 'Delete conversation',
-        variant: 'destructive',
-      });
+      const confirmed = await confirmDestructive(conversationDeleteConfirm(convo?.title));
       if (!confirmed) return;
       await deleteConversation(id);
     },
@@ -233,13 +231,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
       // project on a single stray click — worse than the native confirm the chat
       // shell at least had. Same dialog and copy as ProjectSettingsDialog.
       const project = storeProjects.find((p) => p.id === projectId);
-      const label = project?.name ? `“${project.name}”` : 'This project';
-      const confirmed = await confirmDestructive({
-        title: 'Delete project?',
-        description: `${label} will be permanently deleted. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
-        confirmText: 'Delete project',
-        variant: 'destructive',
-      });
+      const confirmed = await confirmDestructive(projectDeleteConfirm(project?.name));
       if (!confirmed) return;
       try {
         await webManagedCloudProjects.deleteProject(projectId);
@@ -277,12 +269,17 @@ export function WebAppShell({ children }: WebAppShellProps) {
   // said "Siddhartha". One rule, one source, every surface.
   const displayName = resolveAccountDisplayName(user?.name, user?.email);
   const userInitial = accountInitial(displayName);
-  const currentTier = subscription?.tier ?? 'free';
+  // `?? 'free'` alone would sell an upgrade to a paying subscriber whenever
+  // `/api/me` answers 401 (that path clears `subscription` and records no
+  // error). Gate the Free fallback on the same readiness test the chat shell
+  // and the pricing page use.
+  const currentTier = subscription?.tier ?? (billingPolicyReady ? 'free' : undefined);
+  const isFreeTier = currentTier === 'free';
   // Capitalising the raw tier id rendered "Max_15x" for max_15x, which the
   // badge's `uppercase` class then showed as "MAX_15X". Use the catalog's own
   // label ("Max 15x") — the same source the chat sidebar and shared
   // UserProfile already use, so all three footers agree.
-  const tierLabel = getBillingPlanPricing(currentTier).label;
+  const tierLabel = currentTier ? getBillingPlanPricing(currentTier).label : null;
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -307,6 +304,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
     </div>
   ) : (
     <div className="w-full">
+      {isFreeTier && <SidebarFreePlanNudge onUpgrade={() => openSettings('billing')} />}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -320,9 +318,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
-                <span className="shrink-0 rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {tierLabel}
-                </span>
+                <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={isFreeTier} />
               </div>
               {user?.email && (
                 <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>

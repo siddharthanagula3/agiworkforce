@@ -12,6 +12,8 @@ import { eraseUserAccountData } from '@/lib/server/account-erasure';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
+import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
+import { isActiveSubscriptionStatus } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +27,30 @@ const PG_UNDEFINED_COLUMN = '42703';
 function isMissingDeletionColumns(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_COLUMN;
+}
+
+function isPaidSubscription(
+  subscription: SubscriptionInfo | null,
+): subscription is SubscriptionInfo {
+  if (!subscription) return false;
+  const planTier = (subscription.plan_tier || 'free').trim().toLowerCase();
+  if (planTier === 'free') return false;
+  return isActiveSubscriptionStatus((subscription.status || '').trim().toLowerCase());
+}
+
+function periodEndLabel(subscription: SubscriptionInfo): string {
+  const end = subscription.current_period_end;
+  return end instanceof Date && !Number.isNaN(end.getTime())
+    ? end.toISOString().slice(0, 10)
+    : 'the end of the current billing period';
+}
+
+function activeSubscriptionMessage(subscription: SubscriptionInfo): string {
+  const plan = subscription.plan_tier;
+  if (subscription.cancel_at_period_end) {
+    return `Your ${plan} plan is already cancelled and stays active until ${periodEndLabel(subscription)}. Nothing was deleted — you can delete your account once the plan has ended, or email ${CONTACT_EMAIL} to have it removed sooner.`;
+  }
+  return `Cancel your ${plan} plan before deleting your account. Nothing was deleted, and billing continues until you cancel in Settings > Billing. Email ${CONTACT_EMAIL} if you need help.`;
 }
 
 export async function DELETE(request: NextRequest) {
@@ -42,6 +68,36 @@ export async function DELETE(request: NextRequest) {
     userId = authResult.userId;
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
+  }
+
+  let subscription: SubscriptionInfo | null;
+  try {
+    subscription = await SubscriptionService.getSubscription(userId);
+  } catch (err) {
+    logger.error({ userId, err }, 'Account deletion halted: subscription lookup failed');
+    return NextResponse.json(
+      {
+        error: `Your billing status could not be verified, so nothing was deleted. Please try again, or contact ${CONTACT_EMAIL} if this persists.`,
+      },
+      { status: 503, headers: SECURITY_HEADERS },
+    );
+  }
+
+  if (isPaidSubscription(subscription)) {
+    logger.warn(
+      { userId, planTier: subscription.plan_tier, status: subscription.status },
+      'Account deletion refused while a paid subscription is active',
+    );
+    return NextResponse.json(
+      {
+        error: activeSubscriptionMessage(subscription),
+        reason: 'active_subscription',
+        planTier: subscription.plan_tier,
+        status: subscription.status,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end ?? false,
+      },
+      { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
+    );
   }
 
   const db = getNeonDb();

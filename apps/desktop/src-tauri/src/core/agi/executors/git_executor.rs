@@ -1147,7 +1147,6 @@ impl PrCreationWorkflow {
         tracing::info!("[PrCreationWorkflow] Generated title: {}", title);
 
         // Step 3: Create the PR using gh CLI
-        // Try to create the PR via gh CLI, fall back to returning prepared content if unavailable
         let pr_result = Self::create_pr_via_gh_cli(
             repo_path,
             &config.base_branch,
@@ -1158,42 +1157,55 @@ impl PrCreationWorkflow {
         )
         .await;
 
-        match pr_result {
-            Ok((pr_number, pr_url)) => {
-                tracing::info!(
-                    "[PrCreationWorkflow] Successfully created PR #{}: {}",
-                    pr_number,
-                    pr_url
-                );
-                Ok(PrCreationResult {
-                    pr_number,
-                    pr_url,
-                    title,
-                    description,
-                    draft: config.draft,
-                    files_changed: diff_summary.files_changed.len(),
-                    additions: diff_summary.total_additions,
-                    deletions: diff_summary.total_deletions,
-                })
-            }
+        Self::finish_pr_creation(pr_result, title, description, config, &diff_summary)
+    }
+
+    /// Turn the gh CLI outcome into a result, refusing to report an uncreated PR as a success.
+    ///
+    /// A caller that sees `Ok` must be able to trust `pr_number`/`pr_url`, so a failed or
+    /// URL-less `gh pr create` becomes an error carrying the prepared content for manual use.
+    fn finish_pr_creation(
+        gh_outcome: Result<(u64, String)>,
+        title: String,
+        description: String,
+        config: &PrCreationConfig,
+        diff_summary: &BranchDiffSummary,
+    ) -> Result<PrCreationResult> {
+        let (pr_number, pr_url) = match gh_outcome {
+            Ok(created) => created,
             Err(e) => {
-                // Return the prepared content but note that actual creation failed
                 tracing::warn!("[PrCreationWorkflow] Failed to create PR via gh CLI: {}", e);
-                tracing::info!(
-                    "[PrCreationWorkflow] Returning prepared PR content for manual creation"
-                );
-                Ok(PrCreationResult {
-                    pr_number: 0,
-                    pr_url: String::new(),
-                    title,
-                    description,
-                    draft: config.draft,
-                    files_changed: diff_summary.files_changed.len(),
-                    additions: diff_summary.total_additions,
-                    deletions: diff_summary.total_deletions,
-                })
+                return Err(anyhow!(
+                    "Failed to create PR via gh CLI: {e}\n\n\
+                     No pull request was created. Prepared title:\n{title}\n\n\
+                     Prepared description:\n{description}"
+                ));
             }
+        };
+
+        if pr_url.is_empty() {
+            return Err(anyhow!(
+                "gh pr create reported success but returned no pull request URL; \
+                 cannot confirm the pull request was created"
+            ));
         }
+
+        tracing::info!(
+            "[PrCreationWorkflow] Successfully created PR #{}: {}",
+            pr_number,
+            pr_url
+        );
+
+        Ok(PrCreationResult {
+            pr_number,
+            pr_url,
+            title,
+            description,
+            draft: config.draft,
+            files_changed: diff_summary.files_changed.len(),
+            additions: diff_summary.total_additions,
+            deletions: diff_summary.total_deletions,
+        })
     }
 
     /// Create a PR using the gh CLI tool.
@@ -1285,7 +1297,13 @@ impl PrCreationWorkflow {
             .split('/')
             .next_back()
             .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(0);
+            .unwrap_or_else(|| {
+                tracing::warn!(
+                    "[PrCreationWorkflow] Could not parse a PR number from gh output: {}",
+                    pr_url
+                );
+                0
+            });
 
         Ok((pr_number, pr_url))
     }
@@ -2387,6 +2405,90 @@ mod tests {
             tool_results: vec![],
             context_memory: vec![],
         }
+    }
+
+    fn pr_test_diff_summary() -> BranchDiffSummary {
+        BranchDiffSummary {
+            base_branch: "main".to_string(),
+            head_branch: "feature/x".to_string(),
+            commits_ahead: 2,
+            commits: vec![],
+            files_changed: vec![FileDiffStat {
+                path: "src/main.rs".to_string(),
+                additions: 3,
+                deletions: 1,
+                status: "modified".to_string(),
+                old_path: None,
+            }],
+            total_additions: 3,
+            total_deletions: 1,
+            diff_content: String::new(),
+        }
+    }
+
+    #[test]
+    fn test_finish_pr_creation_errors_when_gh_is_unavailable() {
+        let config = PrCreationConfig {
+            head_branch: "feature/x".to_string(),
+            ..Default::default()
+        };
+
+        let result = PrCreationWorkflow::finish_pr_creation(
+            Err(anyhow!("gh CLI not found: No such file or directory")),
+            "Add widget".to_string(),
+            "## Changes\n\nAdds a widget.".to_string(),
+            &config,
+            &pr_test_diff_summary(),
+        );
+
+        let err = result
+            .expect_err("an unavailable gh CLI must not be reported as a created pull request")
+            .to_string();
+        assert!(err.contains("gh CLI not found"), "error was: {err}");
+        assert!(err.contains("Add widget"), "error was: {err}");
+        assert!(err.contains("Adds a widget."), "error was: {err}");
+    }
+
+    #[test]
+    fn test_finish_pr_creation_errors_when_gh_returns_no_url() {
+        let config = PrCreationConfig::default();
+
+        let result = PrCreationWorkflow::finish_pr_creation(
+            Ok((0, String::new())),
+            "Add widget".to_string(),
+            "body".to_string(),
+            &config,
+            &pr_test_diff_summary(),
+        );
+
+        assert!(
+            result.is_err(),
+            "an empty PR URL must not be reported as a created pull request"
+        );
+    }
+
+    #[test]
+    fn test_finish_pr_creation_returns_created_pr() {
+        let config = PrCreationConfig {
+            draft: true,
+            ..Default::default()
+        };
+
+        let result = PrCreationWorkflow::finish_pr_creation(
+            Ok((42, "https://github.com/acme/app/pull/42".to_string())),
+            "Add widget".to_string(),
+            "body".to_string(),
+            &config,
+            &pr_test_diff_summary(),
+        )
+        .expect("a successful gh pr create must produce a result");
+
+        assert_eq!(result.pr_number, 42);
+        assert_eq!(result.pr_url, "https://github.com/acme/app/pull/42");
+        assert!(result.draft);
+        assert_eq!(result.files_changed, 1);
+        assert_eq!(result.additions, 3);
+        assert_eq!(result.deletions, 1);
     }
 
     #[test]

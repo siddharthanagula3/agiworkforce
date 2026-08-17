@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """CI gate: refuse any commit that contains unresolved git merge markers.
 
-Scans the working tree (excluding generated/vendored trees and this script
-itself) for the canonical Git conflict markers (`<<<<<<<`, `=======`,
-`>>>>>>>`) at the start of a line. Test fixtures that legitimately contain
-these tokens inside string literals are skipped by extension allow-list.
+Scans the files git tracks (index contents, so staged additions count too),
+excluding generated/vendored trees and this script itself, for the canonical
+Git conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) at the start of a line.
+Test fixtures that legitimately contain these tokens inside string literals
+are skipped by extension allow-list.
+
+Enumerating via `git ls-files` rather than walking the working tree keeps the
+result identical on a fresh CI checkout and on a developer machine littered
+with untracked build artifacts and downloaded test harnesses.
 
 Exits 1 on the first match, with the file path and line number printed to
 stderr. Designed to be cheap enough to run in every CI workflow.
@@ -12,7 +17,8 @@ stderr. Designed to be cheap enough to run in every CI workflow.
 
 from __future__ import annotations
 
-import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -46,11 +52,9 @@ ALLOWLIST_SUFFIXES = {
 #   >>>>>>> <ref>     (end)
 # Reject lines that are just `========` section dividers (commonly used in
 # C++ headers / XML privacy manifests).
-import re as _re
-
-START_RE = _re.compile(r"^<{7} \S")
-SEP_RE = _re.compile(r"^={7}\s*$")
-END_RE = _re.compile(r"^>{7} \S")
+START_RE = re.compile(r"^<{7} \S")
+SEP_RE = re.compile(r"^={7}\s*$")
+END_RE = re.compile(r"^>{7} \S")
 
 
 def is_excluded(path: Path) -> bool:
@@ -72,20 +76,34 @@ def scan_file(path: Path) -> list[tuple[int, str]]:
     return hits
 
 
-def walk_files(root: Path):
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
-        for name in filenames:
-            yield Path(dirpath) / name
+def tracked_files(root: Path) -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--cached"],
+        cwd=root,
+        capture_output=True,
+        check=True,
+    )
+    return [Path(name) for name in result.stdout.decode("utf-8").split("\0") if name]
 
 
 def main() -> int:
+    try:
+        candidates = tracked_files(REPO_ROOT)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"conflict-marker gate: unable to enumerate tracked files: {exc}",
+              file=sys.stderr)
+        return 1
+
     failures: list[tuple[Path, int, str]] = []
-    for f in walk_files(REPO_ROOT):
-        rel = f.relative_to(REPO_ROOT)
+    for rel in candidates:
         if is_excluded(rel):
             continue
-        for lineno, line in scan_file(f):
+        absolute = REPO_ROOT / rel
+        # Tracked-but-absent (deleted, sparse-checkout) and gitlink submodule
+        # entries are not readable files; there is nothing to scan.
+        if not absolute.is_file():
+            continue
+        for lineno, line in scan_file(absolute):
             failures.append((rel, lineno, line))
 
     if not failures:

@@ -77,4 +77,22 @@ describe('Gateway health and readiness contracts', () => {
     expect(response.body.status).toBe('not_ready');
     expect(response.body).not.toHaveProperty('error');
   });
+
+  it('reports dependency circuit state without calling any dependency', async () => {
+    const readinessCheck = vi.fn(async () => {
+      throw new Error('database unavailable');
+    });
+    const app = createApp({ readinessCheck });
+
+    const response = await request(app).get('/health/dependencies');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      status: 'ok',
+      service: 'api-gateway',
+      degraded: [],
+    });
+    expect(Array.isArray(response.body.dependencies)).toBe(true);
+    expect(readinessCheck).not.toHaveBeenCalled();
+  });
 });

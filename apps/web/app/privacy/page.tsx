@@ -627,10 +627,13 @@ export default function PrivacyPage() {
               </tr>
               <tr>
                 <td style={{ verticalAlign: 'top' }}>Sandboxes</td>
-                <td style={{ verticalAlign: 'top' }}>Reclaimed once unreachable.</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Within 24 hours of creation, or sooner once its resume mapping is gone.
+                </td>
                 <td>
-                  A daily scheduled job reclaims abandoned sandboxes whose resume mapping has
-                  expired.
+                  A daily scheduled job enforces a 24-hour age cap on every sandbox — matching the
+                  resume mapping&rsquo;s own 24-hour expiry — and reclaims it at that cap or as soon
+                  as the mapping no longer points to it, whichever comes first.
                 </td>
               </tr>
               <tr>

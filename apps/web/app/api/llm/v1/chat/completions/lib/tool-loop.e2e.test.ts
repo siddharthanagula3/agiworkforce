@@ -74,6 +74,7 @@ function chunk(delta: Record<string, unknown>, finishReason: string | null = nul
 
 function makeProcessed(conversationId?: string): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'req-1',
     chatRequest: { model: 'fixture-model', messages: [], stream: true } as never,
     conversationId,

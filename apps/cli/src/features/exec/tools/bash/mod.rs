@@ -31,15 +31,15 @@ pub(super) async fn execute_run_command(
 
     print_tool_status("run_command", &format!("Bash({})", command));
 
-    // C3 execution-policy gate: evaluate every command against the policy BEFORE
-    // running it. A `Forbidden` decision is a hard block that no confirmation can
-    // override — this is the agent-loop's last line of defense against
-    // catastrophic, irrecoverable commands. `Allow`/`Prompt` fall through to the
-    // existing confirmation flow below.
+    // C3 execution-policy gate: every command the string would run — including the
+    // ones after `&&`, `;`, `|` or inside `$(...)` — is evaluated before anything
+    // executes. A `Forbidden` decision is a hard block that no confirmation can
+    // override. Confirmation is only waived when EVERY segment matched an explicit
+    // allow rule.
     {
-        use crate::features::exec::exec_policy::{evaluate_policy, load_policy};
+        use crate::features::exec::exec_policy::{evaluate_command, load_policy};
         use agiworkforce_execpolicy::Decision;
-        let evaluation = evaluate_policy(&load_policy()?, command);
+        let evaluation = evaluate_command(&load_policy()?, command);
         match evaluation.decision {
             Decision::Forbidden => {
                 return Ok(ToolResult {
@@ -51,8 +51,10 @@ pub(super) async fn execute_run_command(
                     ),
                 });
             }
-            Decision::Prompt if evaluation.is_match() => require_confirmation = true,
-            Decision::Allow if evaluation.is_match() => require_confirmation = false,
+            Decision::Prompt if evaluation.matched_rule => require_confirmation = true,
+            Decision::Allow if evaluation.every_segment_matched_rule => {
+                require_confirmation = false
+            }
             Decision::Prompt | Decision::Allow => {}
         }
     }

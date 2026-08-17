@@ -66,6 +66,67 @@ const sessionDetailSchema = z.object({
 const sessionOnlySchema = z.object({ session: sessionSchema });
 const commandSchema = z.object({ session: sessionSchema, terminalEntry: terminalEntrySchema });
 
+// Mirrors `CloudCodeAgentStopReason` in lib/services/cloud-code-agent-loop.ts. That
+// module is `server-only`, so the browser bundle cannot import the union and this
+// list is the wire contract instead.
+const AGENT_STOP_REASONS = [
+  'done',
+  'max_steps',
+  'timeout',
+  'cancelled',
+  'error',
+  'denied',
+  'awaiting_approval',
+] as const;
+
+const pendingApprovalSchema = z.object({
+  stepIndex: z.number().int().nonnegative(),
+  toolUseId: z.string(),
+  command: z.string(),
+  reason: z.string(),
+});
+
+const agentTurnSchema = z.object({
+  turnId: z.string(),
+  stopReason: z.enum(AGENT_STOP_REASONS),
+  stepsUsed: z.number().int().nonnegative(),
+  finalMessage: z.string(),
+  pendingApproval: pendingApprovalSchema.optional(),
+  errorMessage: z.string().optional(),
+});
+
+const agentApprovalsSchema = z.object({
+  approvals: z.array(
+    z.object({
+      turnId: z.string(),
+      stepIndex: z.number().int().nonnegative(),
+      command: z.string(),
+      reason: z.string(),
+      goal: z.string(),
+      expiresAt: z.string(),
+      createdAt: z.string(),
+    }),
+  ),
+});
+
+export type CloudCodeAgentStopReason = (typeof AGENT_STOP_REASONS)[number];
+export type CloudCodeAgentTurn = z.infer<typeof agentTurnSchema>;
+export type CloudCodeAgentApproval = z.infer<typeof agentApprovalsSchema>['approvals'][number];
+export type CloudCodeApprovalDecision = 'approve' | 'reject';
+
+export interface StartCloudCodeAgentTurnRequest {
+  goal: string;
+  model: string;
+  /** Sent as `Idempotency-Key`; the managed-usage ledger refuses the turn without it. */
+  idempotencyKey: string;
+}
+
+export interface DecideCloudCodeApprovalRequest {
+  turnId: string;
+  stepIndex: number;
+  decision: CloudCodeApprovalDecision;
+}
+
 interface CloudCodeApiDependencies {
   fetchImpl?: typeof fetch;
   getCsrfToken?: () => Promise<string>;
@@ -87,6 +148,17 @@ export interface CloudCodeApi {
     signal?: AbortSignal,
   ): Promise<RunCloudCodeCommandResponse>;
   close(sessionId: string, signal?: AbortSignal): Promise<CloudCodeSession>;
+  startAgentTurn(
+    sessionId: string,
+    input: StartCloudCodeAgentTurnRequest,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeAgentTurn>;
+  listApprovals(sessionId: string, signal?: AbortSignal): Promise<CloudCodeAgentApproval[]>;
+  decideApproval(
+    sessionId: string,
+    input: DecideCloudCodeApprovalRequest,
+    signal?: AbortSignal,
+  ): Promise<CloudCodeAgentTurn>;
 }
 
 async function responseBody(response: Response): Promise<unknown> {
@@ -192,6 +264,38 @@ export function createCloudCodeApi(dependencies: CloudCodeApiDependencies = {}):
         sessionOnlySchema,
       );
       return body.session;
+    },
+    async startAgentTurn(sessionId, input, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/agent`,
+        {
+          method: 'POST',
+          headers: { ...(await mutationHeaders()), 'idempotency-key': input.idempotencyKey },
+          body: JSON.stringify({ goal: input.goal, model: input.model }),
+          signal,
+        },
+        agentTurnSchema,
+      );
+    },
+    async listApprovals(sessionId, signal) {
+      const body = await request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/agent/approvals`,
+        { signal },
+        agentApprovalsSchema,
+      );
+      return body.approvals;
+    },
+    async decideApproval(sessionId, input, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/agent/approvals`,
+        {
+          method: 'POST',
+          headers: await mutationHeaders(),
+          body: JSON.stringify(input),
+          signal,
+        },
+        agentTurnSchema,
+      );
     },
   };
 }

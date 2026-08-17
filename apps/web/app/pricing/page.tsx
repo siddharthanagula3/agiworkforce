@@ -8,13 +8,18 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import {
   BILLING_PLAN_PRICING,
+  canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
   formatPrivacyModeLabel,
+  getAllowedModelsForTier,
   getBillingPlanProductLimits,
+  getModelMetadataById,
   isPlanSelectableOnSurface,
   isPerSeatBillingPlan,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
+  PROVIDERS_IN_ORDER,
+  providerLabels,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   SELF_SERVE_PAID_PLAN_TIERS,
   type BillingInterval,
@@ -149,9 +154,20 @@ interface CompareRow {
   apiAccess: string;
   developerSurfaces: string;
   teamControls: string;
+  trainingData: string;
   bestFor: string;
   highlighted?: boolean;
 }
+
+/**
+ * G7 (competitive-gap-2026-08-15): ChatGPT and Claude's pricing tables both
+ * carry a training-data-use row. Ours is unconditional and identical across
+ * every trust mode and plan — apps/web/app/privacy/page.tsx states plainly
+ * that "AGI does not use customer conversation content to train AGI-owned
+ * models" — so the row is a single constant rather than a per-plan
+ * derivation; there is no weaker/stronger variant by tier to compute.
+ */
+const TRAINING_DATA_DISCLOSURE = 'No';
 
 function formatLimit(limit: BillingPlanLimit, singular: string, plural: string): string {
   if (limit === 'unlimited') return 'Unlimited';
@@ -172,8 +188,91 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
     developerSurfaces: canUseBillingPlanCapability(plan, 'developer_surfaces')
       ? 'CLI, Chrome & VS Code'
       : 'No managed access',
-    teamControls: canUseBillingPlanCapability(plan, 'team_admin') ? 'Yes' : 'No',
+    // G12 (competitive-gap-2026-08-15): itemized rather than a bare Yes/No —
+    // SSO and SCIM directory sync are implemented and entitlement-gated on
+    // `enterprise_controls` (apps/web/features/admin/pages/AdminConsolePage.tsx's
+    // "Implemented — entitlement-gated" Identity row; live routes at
+    // /api/admin/sso and /api/scim/v2), which today only the Enterprise plan
+    // carries. Team gets the underlying `team_admin` controls without those.
+    teamControls: canUseBillingPlanCapability(plan, 'enterprise_controls')
+      ? 'SSO, SCIM & admin'
+      : canUseBillingPlanCapability(plan, 'team_admin')
+        ? 'Yes'
+        : 'No',
+    trainingData: TRAINING_DATA_DISCLOSURE,
   };
+}
+
+/**
+ * G1 (competitive-gap-2026-08-15): a per-provider "models included" matrix
+ * generated live from the canonical catalog
+ * (packages/contracts/types/src/models.json's `tierAllowedModels`), through
+ * the SAME `canAccessModelForSubscriptionTier` gate the in-app model picker
+ * enforces (apps/web/features/chat/components/Composer/ComposerFooter.tsx's
+ * `modelLock` -> `isModelSelectableForTier` -> that function). Grouped by
+ * provider rather than one row per model, per the audit recommendation —
+ * models.json's own verificationLog notes the roster changes weekly, and a
+ * hand-typed per-model table would rot the moment it did. Team and Enterprise
+ * are folded onto Pro's and Max's columns respectively because
+ * `canAccessModelForSubscriptionTier` normalizes them to the same access
+ * level (`normalizeSubscriptionAccessTier`: team -> pro, and max/enterprise
+ * both unlock the full flagship roster) — the column headers say so plainly
+ * rather than implying four identical columns are different.
+ */
+const MODEL_ACCESS_COLUMNS: ReadonlyArray<{ label: string; plan: BillingPlanTier }> = [
+  { label: 'Free', plan: 'free' },
+  { label: 'Basic', plan: 'basic' },
+  { label: 'Pro & Team', plan: 'pro' },
+  { label: 'Max, Max 15x & Enterprise', plan: 'max' },
+];
+
+interface ModelAccessRow {
+  provider: string;
+  label: string;
+  total: number;
+  accessByColumn: number[];
+}
+
+function modelAccessByProvider(): ModelAccessRow[] {
+  const rosterModelIds = Array.from(
+    new Set([
+      ...getAllowedModelsForTier('economy'),
+      ...getAllowedModelsForTier('pro_additions'),
+      ...getAllowedModelsForTier('flagship_additions'),
+    ]),
+  );
+
+  const modelIdsByProvider = new Map<string, string[]>();
+  for (const modelId of rosterModelIds) {
+    const metadata = getModelMetadataById(modelId);
+    if (!metadata) continue;
+    const bucket = modelIdsByProvider.get(metadata.provider) ?? [];
+    bucket.push(modelId);
+    modelIdsByProvider.set(metadata.provider, bucket);
+  }
+
+  return PROVIDERS_IN_ORDER.filter((provider) => modelIdsByProvider.has(provider)).map(
+    (provider) => {
+      const providerModelIds = modelIdsByProvider.get(provider) ?? [];
+      return {
+        provider,
+        label: providerLabels[provider] ?? provider,
+        total: providerModelIds.length,
+        accessByColumn: MODEL_ACCESS_COLUMNS.map(
+          (column) =>
+            providerModelIds.filter((modelId) =>
+              canAccessModelForSubscriptionTier(modelId, column.plan),
+            ).length,
+        ),
+      };
+    },
+  );
+}
+
+function formatModelAccess(accessibleCount: number, total: number): string {
+  if (accessibleCount === 0) return '—';
+  if (accessibleCount === total) return total === 1 ? 'Included' : `All ${total}`;
+  return `${accessibleCount} of ${total}`;
 }
 
 export default function PricingPage() {
@@ -531,6 +630,7 @@ export default function PricingPage() {
       apiAccess: 'No managed access',
       developerSurfaces: 'Desktop, CLI & VS Code',
       teamControls: 'No',
+      trainingData: TRAINING_DATA_DISCLOSURE,
       bestFor: t('compareLocalBestFor'),
     },
     {
@@ -548,6 +648,7 @@ export default function PricingPage() {
       apiAccess: 'Your provider API',
       developerSurfaces: 'Desktop, CLI & VS Code',
       teamControls: 'No',
+      trainingData: TRAINING_DATA_DISCLOSURE,
       bestFor: t('compareByokBestFor'),
     },
     {
@@ -860,7 +961,18 @@ export default function PricingPage() {
                 <span className="agi-tier-price-num">{t('custom')}</span>
                 <span className="agi-tier-price-sub">{t('customPricingSub')}</span>
               </p>
-              <p className="agi-tier-body">{t('enterpriseBody')}</p>
+              {/* G12 (competitive-gap-2026-08-15): the `enterpriseBody` key
+                  ("Discuss SSO/SCIM roadmap...") has the same honesty bug as
+                  `enterpriseFeature3` below and sits right above it, so
+                  leaving it untouched would contradict the corrected bullet
+                  two lines down. Stated inline for the same
+                  cross-file-ownership reason — see the fuller note on the
+                  enterpriseFeature3 li. */}
+              <p className="agi-tier-body">
+                SSO, SCIM, and audit are shipped and entitlement-gated; we scope capacity, data
+                retention, and rollout to how your org actually works. Reach out and we will plan it
+                together.
+              </p>
               <ul className="agi-tier-features">
                 <li>
                   <CheckIcon />
@@ -871,8 +983,24 @@ export default function PricingPage() {
                   {t('enterpriseFeature2')}
                 </li>
                 <li>
+                  {/* G12 (competitive-gap-2026-08-15): pricing.json's
+                      `enterpriseFeature3` string calls SSO/audit/retention a
+                      "roadmap" item, but SSO sign-in and SCIM directory sync
+                      are implemented and live — gated on the `enterprise_controls`
+                      entitlement, not aspirational (see
+                      apps/web/features/admin/pages/AdminConsolePage.tsx's
+                      "Implemented — entitlement-gated" Identity row, plus
+                      /api/admin/sso and /api/scim/v2). Only org-configurable
+                      retention windows remain a contract-scoped commitment.
+                      packages/ui/i18n/locales/&lt;lang&gt;/pricing.json is
+                      outside this surface's owned files (11 locales, shared
+                      with other pages), so this bullet is stated directly here instead
+                      of through the still-wrong `enterpriseFeature3` key —
+                      that key should be corrected (or retired in favor of a
+                      new one) by whoever owns packages/ui/i18n next. */}
                   <CheckIcon />
-                  {t('enterpriseFeature3')}
+                  SSO, SCIM directory sync, and audit logs — shipped, gated on the Enterprise
+                  plan&apos;s entitlement. Retention windows stay contract-scoped.
                 </li>
                 <li>
                   <CheckIcon />
@@ -1154,6 +1282,7 @@ export default function PricingPage() {
                     ['apiAccess', 'Managed API'],
                     ['developerSurfaces', 'Developer surfaces'],
                     ['teamControls', 'Team controls'],
+                    ['trainingData', 'Trains on your content'],
                     ['bestFor', 'Best for'],
                   ].map(([col, label]) => (
                     <th
@@ -1238,6 +1367,7 @@ export default function PricingPage() {
                         row.apiAccess,
                         row.developerSurfaces,
                         row.teamControls,
+                        row.trainingData,
                       ].map((value, index) => (
                         <td
                           key={`${row.planId}-capability-${index}`}
@@ -1262,6 +1392,115 @@ export default function PricingPage() {
                       </td>
                     </tr>
                   ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* ──────────────────── Models included, by plan ────────────────────
+            G1 (competitive-gap-2026-08-15): ChatGPT publishes a per-model
+            per-tier access matrix; we did not. This table is generated live
+            from `tierAllowedModels` in the canonical catalog through the same
+            `canAccessModelForSubscriptionTier` gate the model picker and the
+            server enforce (see `modelAccessByProvider` above) — never a
+            hand-typed model list, so it cannot drift from what a plan
+            actually unlocks the way the old relative-usage strings could. */}
+        <section className="agi-fl-section" aria-labelledby="pricing-models-title">
+          <p className="agi-fl-eyebrow">Models</p>
+          <h2 id="pricing-models-title" className="agi-fl-h2">
+            Models included by plan
+          </h2>
+          <p className="agi-fl-section-lede">
+            Auto routing picks the strongest available model for every request. Manual model
+            selection widens as you go up plans — this is how many of each provider&apos;s models
+            are reachable at each level, read live from our model catalog.
+          </p>
+          <div
+            aria-label="Scrollable model access by plan"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto', marginTop: 36 }}
+          >
+            <table
+              aria-label="Model access by plan"
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: 13,
+                color: 'var(--agi-ink)',
+              }}
+            >
+              <thead>
+                <tr>
+                  <th
+                    style={{
+                      textAlign: 'left',
+                      padding: '10px 16px',
+                      borderBottom: '1px solid var(--agi-rule-strong)',
+                      color: 'var(--agi-ink-quiet)',
+                      fontSize: 11,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      fontFamily: 'var(--agi-font-mono)',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Provider
+                  </th>
+                  {MODEL_ACCESS_COLUMNS.map((column) => (
+                    <th
+                      key={column.label}
+                      style={{
+                        textAlign: 'left',
+                        padding: '10px 16px',
+                        borderBottom: '1px solid var(--agi-rule-strong)',
+                        color: 'var(--agi-ink-quiet)',
+                        fontSize: 11,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--agi-font-mono)',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {modelAccessByProvider().map((row, i) => (
+                  <tr
+                    key={row.provider}
+                    style={{ background: i % 2 === 0 ? 'transparent' : 'var(--agi-bg-2)' }}
+                  >
+                    <td
+                      style={{
+                        padding: '14px 16px',
+                        borderBottom: '1px solid var(--agi-rule)',
+                        fontWeight: 600,
+                        color: 'var(--agi-ink)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {row.label}
+                    </td>
+                    {row.accessByColumn.map((accessibleCount, columnIndex) => (
+                      <td
+                        key={`${row.provider}-${MODEL_ACCESS_COLUMNS[columnIndex]?.label}`}
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink-2)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {formatModelAccess(accessibleCount, row.total)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

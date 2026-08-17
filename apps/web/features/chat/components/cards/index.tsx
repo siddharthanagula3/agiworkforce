@@ -1,4 +1,3 @@
-
 'use client';
 
 import { RecipeCard } from './RecipeCard';
@@ -56,16 +55,17 @@ export function detectCardType(content: string): CardType {
 interface MessageCardRendererProps {
   content: string;
   cardType: CardType;
+  messageId?: string;
 }
 
-export function MessageCardRenderer({ content, cardType }: MessageCardRendererProps) {
+export function MessageCardRenderer({ content, cardType, messageId }: MessageCardRendererProps) {
   switch (cardType) {
     case 'recipe':
       return <RecipeCard content={content} />;
     case 'comparison':
       return <ComparisonCard content={content} />;
     case 'steps':
-      return <StepsCard content={content} />;
+      return <StepsCard content={content} {...(messageId ? { messageId } : {})} />;
     case 'calculation':
       return <CalculationCard content={content} />;
     default:

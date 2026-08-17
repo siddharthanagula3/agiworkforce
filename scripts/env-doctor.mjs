@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-const contracts = {
+export const contracts = {
   desktop: {
     productionExample: 'apps/desktop/.env.example',
     developmentExample: 'apps/desktop/.env.local.example',
@@ -61,6 +61,7 @@ const contracts = {
       ],
       development: [['DATABASE_URL', 'AGI_DATABASE_URL']],
     },
+    productionForbiddenKeys: ['ACCOUNT_STATUS_FAIL_OPEN'],
     // or reached through an exported constant (`E2B_COMPUTE_RATE_ENV`). Pinning
     documentedKeys: [
       'AGI_SUPPORT_FROM_EMAIL',
@@ -211,6 +212,10 @@ const staleExampleKeys = new Map([
 
 function isSet(env, name) {
   return typeof env[name] === 'string' && env[name].trim().length > 0;
+}
+
+export function isEscapeHatchEnabled(value) {
+  return ['1', 'true', 'on'].includes((value ?? '').trim().toLowerCase());
 }
 
 function parseArgs(argv) {
@@ -404,6 +409,13 @@ function validateScope(scope, mode, env) {
   }
   for (const name of contract.urlKeys ?? []) {
     if (isSet(env, name)) validateUrl(name, env[name], mode, errors);
+  }
+  if (mode === 'production') {
+    for (const name of contract.productionForbiddenKeys ?? []) {
+      if (isEscapeHatchEnabled(env[name])) {
+        errors.push(`${name} is a security escape hatch and must not be enabled in production`);
+      }
+    }
   }
 
   if (scope === 'web') {
