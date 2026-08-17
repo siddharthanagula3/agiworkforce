@@ -302,12 +302,6 @@
       "purpose": "unknown"
     },
     {
-      "name": "@agiworkforce/api-gateway",
-      "path": "services/api-gateway",
-      "kind": "service",
-      "purpose": "API Gateway for AGI Workforce Mobile Companion"
-    },
-    {
       "name": "@agiworkforce/signaling-server",
       "path": "services/signaling-server",
       "kind": "service",
