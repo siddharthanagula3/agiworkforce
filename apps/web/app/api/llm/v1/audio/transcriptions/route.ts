@@ -67,7 +67,7 @@ function isLikelyAudio(head: Uint8Array): boolean {
   return false;
 }
 
-// OpenAI publishes ~$0.006 per audio minute for gpt-4o-transcribe against the catalog's
+// OpenAI publishes ~$0.006 per audio minute for the transcription model against the catalog's
 // $2.50/1M input-token rate, i.e. ~2,400 audio tokens per minute. Spoken English near
 // 150 wpm lands around 4 transcript tokens per second. Used only to bound the pre-flight
 // reservation and to settle when the provider omits a usage block.
