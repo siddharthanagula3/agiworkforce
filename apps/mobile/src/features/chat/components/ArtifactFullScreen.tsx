@@ -8,7 +8,7 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
-import { api } from '@/services/api';
+import { publishArtifact } from '../services/artifactPublishing';
 import {
   shareFile,
   exportToText,
@@ -235,15 +235,13 @@ export function ArtifactFullScreen({
 
     setPublishing(true);
     try {
-      const response = await api.post<{ shareUrl?: unknown }>('/api/artifacts/publish', {
+      const shareUrl = await publishArtifact({
         artifactId: artifact.id,
         title: artifact.title,
         kind,
         ...(artifact.language ? { language: artifact.language } : {}),
         content: artifact.content,
       });
-      const shareUrl = typeof response.shareUrl === 'string' ? response.shareUrl.trim() : '';
-      if (!shareUrl) throw new Error('The publish endpoint returned no share URL.');
 
       setPublished({ artifactId: artifact.id, url: shareUrl });
       setLinkCopied(await copyToClipboard(shareUrl));
