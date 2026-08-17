@@ -121,20 +121,26 @@ mod tests {
         )
         .with_language(Some("   ".to_string()));
         assert_eq!(request.language, None);
-        assert!(!request
-            .text_fields()
-            .iter()
-            .any(|(name, _)| *name == "language"));
+        assert!(
+            !request
+                .text_fields()
+                .iter()
+                .any(|(name, _)| *name == "language")
+        );
     }
 
     #[test]
     fn a_selected_language_reaches_the_wire() {
-        let request =
-            TranscriptionRequest::new("fixture-transcribe-model", TranscriptionResponseFormat::Json)
-                .with_language(Some("en".to_string()));
-        assert!(request
-            .text_fields()
-            .contains(&("language", "en".to_string())));
+        let request = TranscriptionRequest::new(
+            "fixture-transcribe-model",
+            TranscriptionResponseFormat::Json,
+        )
+        .with_language(Some("en".to_string()));
+        assert!(
+            request
+                .text_fields()
+                .contains(&("language", "en".to_string()))
+        );
         assert_eq!(request.response_format.wire_value(), "json");
     }
 }

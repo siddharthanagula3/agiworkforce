@@ -464,7 +464,8 @@ pub struct RouterPreferences {
 /// selection has to name the boundary and the fork that crosses it properly.
 pub(crate) fn local_only_no_candidate_message(requested: Option<Provider>) -> &'static str {
     let asked_for_byok = requested.is_some_and(|provider| {
-        !provider_matches_trust_mode(provider, TrustMode::Local) && provider != Provider::ManagedCloud
+        !provider_matches_trust_mode(provider, TrustMode::Local)
+            && provider != Provider::ManagedCloud
     });
     if asked_for_byok {
         return "This conversation is Local, so it will not be sent to a BYOK provider. \

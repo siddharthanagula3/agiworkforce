@@ -119,13 +119,17 @@ fn extract_tar_gz(archive_path: &Path, destination: &Path) -> Result<()> {
                 .ok_or_else(|| anyhow!("Piper symlink has no parent directory"))?;
             fs::create_dir_all(parent).context("Failed to create Piper symlink parent")?;
             #[cfg(unix)]
-            std::os::unix::fs::symlink(&target, &destination_path)
-                .context("Failed to create Piper bundle symlink")?;
+            {
+                std::os::unix::fs::symlink(&target, &destination_path)
+                    .context("Failed to create Piper bundle symlink")?;
+                continue;
+            }
             #[cfg(not(unix))]
-            return Err(anyhow!(
-                "Piper tar symlinks are unsupported on this platform"
-            ));
-            continue;
+            {
+                return Err(anyhow!(
+                    "Piper tar symlinks are unsupported on this platform"
+                ));
+            }
         }
 
         if !entry_type.is_file() && !entry_type.is_dir() {
