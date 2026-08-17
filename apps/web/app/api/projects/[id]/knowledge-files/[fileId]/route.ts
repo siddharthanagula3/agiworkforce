@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -14,6 +13,7 @@ import {
   getProjectKnowledgeObject,
 } from '@/lib/server/project-knowledge-object-storage';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
+import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -74,7 +74,7 @@ async function handleGetKnowledgeFile(request: NextRequest, context: RouteContex
   const file = await ownedKnowledgeFile(request, context);
   const objectKey = objectKeyFromStorageUri(file.storageUri);
   if (!objectKey) throw createError.notFound('Knowledge file not found');
-  const object = await getProjectKnowledgeObject(objectKey);
+  const object = await getProjectKnowledgeObject(objectKey, MAX_ATTACHMENT_BYTES);
   if (!object) throw createError.notFound('Knowledge file not found');
   const wantsDownload = request.nextUrl.searchParams.get('download') === 'true';
   const served = servedByteHeaders({

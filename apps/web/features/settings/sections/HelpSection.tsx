@@ -10,6 +10,7 @@ import {
   Scale,
   Signal,
 } from 'lucide-react';
+import { primaryModifierLabel } from '@agiworkforce/ui';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 
 interface HelpLink {
@@ -101,8 +102,12 @@ export function HelpSection() {
           <span className="text-sm font-medium text-[var(--text-1)]">Keyboard shortcuts</span>
         </div>
         <p className="mt-1 text-xs text-[var(--text-3)]">
-          Press <kbd className="rounded border border-[var(--settings-border)] px-1">?</kbd>{' '}
-          anywhere in chat to see the full list.
+          Press{' '}
+          <kbd className="rounded border border-[var(--settings-border)] px-1">
+            {primaryModifierLabel()}
+          </kbd>{' '}
+          + <kbd className="rounded border border-[var(--settings-border)] px-1">/</kbd> anywhere in
+          chat to see the full list.
         </p>
       </div>
     </section>

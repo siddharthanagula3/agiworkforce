@@ -2,7 +2,8 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-09
+Rotation cadence: every 12 months per key, plus immediately on suspected exposure
+Last updated: 2026-08-17
 
 How to rotate one of the AES-256-GCM keys that protect secrets at rest without
 revoking every connector grant and re-enrolling every 2FA user.
@@ -70,6 +71,59 @@ not ring-aware (`versionedReaderReady` in `scripts/reencrypt.mjs`).
 builds one WebCrypto key from `TOTP_ENCRYPTION_KEY`, so rotating that key needs
 a maintenance window for 2FA verification — see step 3.
 
+## Rotation cadence
+
+Scheduled rotation is the same procedure as an incident rotation — every row
+below runs `## Rotating a key` end to end, with `scripts/reencrypt.mjs` as the
+sweep. Nothing here rotates itself; the date is a calendar obligation on the
+Owner named in the header.
+
+| Key env                                 | Interval  | Next due   | Sweep target                            | Downtime                            |
+| --------------------------------------- | --------- | ---------- | --------------------------------------- | ----------------------------------- |
+| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none — ring-aware reader            |
+| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none — ring-aware reader            |
+| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | 2FA verification window, see step 3 |
+| `DEVICE_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | none — no durable column                | in-flight device pairings re-run    |
+
+Rotate ahead of the date, not on it, whenever a key could have been read by
+someone who should not have it: a leaked deployment env, a departing operator
+who held it, a restored backup handled outside the sealed record, or any
+finding that names the key. An unscheduled rotation resets the next-due date.
+
+`DEVICE_TOKEN_ENCRYPTION_KEY` has no sweep because it seals nothing durable —
+rotating it is an env swap and a redeploy, and its 12-month entry exists so the
+key does not outlive every other one by default.
+
+## Accepted risk: no KMS, no escrow
+
+Accepted by: Platform lead
+Reviewed: 2026-08-17
+Next review: with the 2027-08-17 rotation
+
+All four keys live only as deployment environment variables. There is no KMS,
+no hardware-backed custody, and no escrow copy outside the deployment provider.
+
+What this costs, precisely: a database restore taken before a rotation is
+readable only if the key bytes active at backup time still exist. The ring
+(`<NAME>_RETIRED`) is what preserves them, and it is preserved by an operator
+pasting a value into a deployment env — not by a system. Lose those bytes and
+the restored `connector_oauth_grants`, `user_custom_connectors`,
+`github_installations` and `user_two_factor` ciphertexts are unrecoverable.
+Connector grants and GitHub installations can be re-authorized by the user;
+enrolled TOTP secrets cannot, and every affected user must re-enroll 2FA.
+
+This is accepted rather than solved because the mitigations already in place —
+per-key ids, a ring that reads retired keys, a resumable sweep, and the sealed
+record required by step 6 — bound the blast radius to "users re-authorize",
+and because introducing a KMS moves custody to a vendor without removing the
+operator step that actually fails. It is not accepted permanently: revisit it
+at the next review, and revisit it immediately if a restore ever needs a key
+the ring no longer carries.
+
+The one obligation this acceptance creates is step 6's sealed record. A
+rotation that drops `_RETIRED` without writing the old key somewhere durable
+converts this accepted risk into a live one.
+
 ## Rotating a key
 
 1. **Generate the new key.**
@@ -132,9 +186,9 @@ a maintenance window for 2FA verification — see step 3.
 A restore returns rows encrypted under whatever key was active when the backup
 was taken. Put that key in `<NAME>_RETIRED` under the id the restored rows
 carry in their `*_key_version` column, then run the sweep to bring them
-forward. Without the old key bytes those rows are unrecoverable — see the
-KMS/escrow decision in `ExecutionPlan.md` §Founder, which is what makes that
-key custody an operational, not a code, problem.
+forward. Without the old key bytes those rows are unrecoverable — that is the
+accepted risk recorded above, and step 6's sealed record is the only thing
+standing between a restore and permanent loss.
 
 ## Moving a column to the versioned layout
 

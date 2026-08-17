@@ -16,7 +16,13 @@ export function declaredContract(scope, target) {
   return {
     required: contract.required?.[mode] ?? [],
     groups: contract.requiredGroups?.[mode] ?? [],
-    forbidden: target === 'production' ? (contract.productionForbiddenKeys ?? []) : [],
+    forbidden:
+      target === 'production'
+        ? [
+            ...(contract.productionForbiddenKeys ?? []),
+            ...Object.keys(contract.productionForbiddenValues ?? {}),
+          ]
+        : [],
   };
 }
 

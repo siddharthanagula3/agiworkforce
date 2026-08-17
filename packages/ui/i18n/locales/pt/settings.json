@@ -61,5 +61,6 @@
   "saved": "Salvo",
   "saving": "Salvando...",
   "resetToDefaults": "Redefinir para Padrões",
-  "confirmReset": "Tem certeza que deseja redefinir todas as configurações para os padrões?"
+  "confirmReset": "Tem certeza que deseja redefinir todas as configurações para os padrões?",
+  "translationScope": "Traduz o site público, os preços e alguns rótulos do chat. As configurações e a maioria das outras telas continuam em inglês."
 }

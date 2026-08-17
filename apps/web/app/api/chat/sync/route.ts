@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import {
   ChatSyncPullResponseSchema,
@@ -72,8 +71,9 @@ async function handlePull(request: NextRequest) {
   const since = parsedSince.data;
 
   try {
-    const conversations = await db.query<ConversationDelta>(
-      `
+    const [conversations, messages, artifacts] = await Promise.all([
+      db.query<ConversationDelta>(
+        `
         select id, title, model, project_id, pinned,
                created_at, updated_at, deleted_at, server_version
         from web_conversations
@@ -81,11 +81,10 @@ async function handlePull(request: NextRequest) {
         order by server_version asc
         limit ${MAX_CONVERSATIONS_PULL}
       `,
-      [userId, since],
-    );
-
-    const messages = await db.query<MessageDelta>(
-      `
+        [userId, since],
+      ),
+      db.query<MessageDelta>(
+        `
         select m.id, m.conversation_id, m.role, m.content, m.model, m.provider,
                m.input_tokens, m.output_tokens, m.metadata,
                m.created_at, m.updated_at, m.deleted_at, m.server_version
@@ -95,11 +94,10 @@ async function handlePull(request: NextRequest) {
         order by m.server_version asc
         limit ${MAX_MESSAGES_PULL}
       `,
-      [userId, since],
-    );
-
-    const artifacts = await db.query<ArtifactDelta>(
-      `
+        [userId, since],
+      ),
+      db.query<ArtifactDelta>(
+        `
         select id, conversation_id, message_id, title, artifact_type, language, content,
                current_version, pinned, tags, created_at, updated_at, deleted_at, server_version
         from web_artifacts
@@ -107,8 +105,9 @@ async function handlePull(request: NextRequest) {
         order by server_version asc
         limit ${MAX_ARTIFACTS_PULL}
       `,
-      [userId, since],
-    );
+        [userId, since],
+      ),
+    ]);
 
     const convSaturated = conversations.length >= MAX_CONVERSATIONS_PULL;
     const msgSaturated = messages.length >= MAX_MESSAGES_PULL;

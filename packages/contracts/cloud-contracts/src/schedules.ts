@@ -3,6 +3,26 @@ import { stripTrailingSlashes } from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_SCHEDULES_PATH = '/api/schedules';
 
+export const MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE = 50;
+export const MANAGED_CLOUD_SCHEDULES_MAX_PAGE_SIZE = 100;
+export const MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE = 20;
+export const MANAGED_CLOUD_SCHEDULE_RUNS_MAX_PAGE_SIZE = 100;
+export const MANAGED_CLOUD_SCHEDULES_MAX_PAGE_OFFSET = 10_000;
+
+export function clampSchedulePageSize(
+  value: number | null | undefined,
+  defaultSize: number,
+  maxSize: number,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return defaultSize;
+  return Math.min(maxSize, Math.max(1, Math.trunc(value)));
+}
+
+export function clampSchedulePageOffset(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.min(MANAGED_CLOUD_SCHEDULES_MAX_PAGE_OFFSET, Math.max(0, Math.trunc(value)));
+}
+
 const NullableRecordSchema = z.record(z.string(), z.unknown()).nullable();
 
 export const ManagedCloudScheduleRecurrenceSchema = z.enum([

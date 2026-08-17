@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FolderOpen, Loader2, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
@@ -207,7 +208,7 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
   }, [initialQuery]);
 
   useEffect(() => {
-    const handle = setTimeout(() => setQuery(searchInput.trim()), 300);
+    const handle = setTimeout(() => setQuery(searchInput.trim()), SEARCH_INPUT_DEBOUNCE_MS);
     return () => clearTimeout(handle);
   }, [searchInput]);
 

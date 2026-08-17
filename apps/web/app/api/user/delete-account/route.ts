@@ -13,7 +13,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
-import { isActiveSubscriptionStatus } from '@/lib/constants';
+import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
 
 export const runtime = 'nodejs';
 
@@ -35,7 +35,7 @@ function isPaidSubscription(
   if (!subscription) return false;
   const planTier = (subscription.plan_tier || 'free').trim().toLowerCase();
   if (planTier === 'free') return false;
-  return isActiveSubscriptionStatus((subscription.status || '').trim().toLowerCase());
+  return hasLiveBillingRelationship(subscription.status);
 }
 
 function periodEndLabel(subscription: SubscriptionInfo): string {

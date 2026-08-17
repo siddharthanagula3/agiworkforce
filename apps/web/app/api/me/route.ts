@@ -31,6 +31,7 @@ import {
   toWireCapabilityHandshake,
 } from '@/lib/services/capability-handshake-service';
 import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
+import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
 
 const PatchMeSchema = z.object({
   display_name: z.string().min(1).max(120).optional(),
@@ -109,6 +110,7 @@ async function handleGetMe(request: NextRequest) {
       tier: effectiveTier,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
+      resets: await getCapabilityLimitResets(userId, subscription?.current_period_end ?? null),
     });
 
     const subscriptionSource = resolveSubscriptionBillingSource(subscription);

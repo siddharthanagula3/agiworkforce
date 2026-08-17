@@ -91,7 +91,7 @@ export default function Error({
   const errorInfo = getErrorInfo(error);
 
   return (
-    <div className="flex min-h-screen flex-col bg-black text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <main className="flex-1 flex items-center justify-center">
         <div className="container mx-auto px-4 text-center">
           <div className="mb-8">
@@ -99,21 +99,23 @@ export default function Error({
               <AlertTriangle className="h-12 w-12 text-red-500" />
             </div>
             <h1 className="text-3xl font-bold mb-4">{errorInfo.title}</h1>
-            <p className="text-zinc-400 max-w-md mx-auto mb-2">{errorInfo.message}</p>
-            {error.digest && <p className="text-zinc-600 text-sm mb-8">Error ID: {error.digest}</p>}
+            <p className="text-muted-foreground max-w-md mx-auto mb-2">{errorInfo.message}</p>
+            {error.digest && (
+              <p className="text-muted-foreground text-sm mb-8">Error ID: {error.digest}</p>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={reset}
-              className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="inline-flex h-12 items-center justify-center rounded-full bg-blue-600 px-8 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
             </button>
             <Link
               href="/"
-              className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 px-8 text-sm font-medium hover:bg-zinc-800 transition-colors"
+              className="inline-flex h-12 items-center justify-center rounded-full border border-border bg-card px-8 text-sm font-medium text-foreground no-underline hover:bg-muted transition-colors"
             >
               <Home className="h-4 w-4 mr-2" />
               Go Home
@@ -121,17 +123,17 @@ export default function Error({
             {errorInfo.action && (
               <Link
                 href={errorInfo.action.href}
-                className="inline-flex h-12 items-center justify-center rounded-full bg-zinc-700 px-8 text-sm font-medium hover:bg-zinc-600 transition-colors"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-secondary px-8 text-sm font-medium text-secondary-foreground no-underline hover:bg-secondary/80 transition-colors"
               >
                 {errorInfo.action.label}
               </Link>
             )}
           </div>
 
-          <div className="mt-16 pt-8 border-t border-zinc-800">
-            <p className="text-zinc-500 text-sm">
+          <div className="mt-16 pt-8 border-t border-border">
+            <p className="text-muted-foreground text-sm">
               If this problem persists,{' '}
-              <Link href="/contact" className="text-blue-400 hover:text-blue-300">
+              <Link href="/contact" className="text-primary hover:opacity-80">
                 contact our support team
               </Link>
             </p>
@@ -139,13 +141,13 @@ export default function Error({
         </div>
       </main>
 
-      <footer className="border-t border-white/10 bg-black py-8">
+      <footer className="border-t border-border bg-background py-8">
         <div className="container mx-auto px-4 flex flex-col items-center gap-4">
           <div className="flex items-center gap-2 font-bold">
-            <Bot className="h-5 w-5 text-zinc-500" />
-            <span className="text-zinc-500">AGI</span>
+            <Bot className="h-5 w-5 text-muted-foreground" />
+            <span className="text-muted-foreground">AGI</span>
           </div>
-          <div className="text-sm text-zinc-600">
+          <div className="text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
           </div>
         </div>

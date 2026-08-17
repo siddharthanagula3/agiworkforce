@@ -25,12 +25,14 @@ export default function FeaturesError({
         <AlertTriangle className="h-10 w-10 text-red-500" />
       </div>
 
-      <h1 className="text-2xl font-bold text-white mb-3">Unable to Load Features</h1>
-      <p className="text-zinc-400 max-w-sm mx-auto mb-2">
+      <h1 className="text-2xl font-bold text-foreground mb-3">Unable to Load Features</h1>
+      <p className="text-muted-foreground max-w-sm mx-auto mb-2">
         An unexpected error occurred while loading this page. Please try again.
       </p>
 
-      {error.digest && <p className="text-zinc-600 text-xs mb-6">Error ID: {error.digest}</p>}
+      {error.digest && (
+        <p className="text-muted-foreground text-xs mb-6">Error ID: {error.digest}</p>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
         <button
@@ -42,17 +44,20 @@ export default function FeaturesError({
         </button>
         <Link
           href="/"
-          className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 px-6 text-sm font-medium hover:bg-zinc-800 transition-colors text-white"
+          className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium hover:bg-muted transition-colors text-foreground"
         >
           <Home className="h-4 w-4 mr-2" />
           Go Home
         </Link>
       </div>
 
-      <div className="mt-12 pt-6 border-t border-zinc-800 w-full max-w-sm">
-        <p className="text-zinc-500 text-sm">
+      <div className="mt-12 pt-6 border-t border-border w-full max-w-sm">
+        <p className="text-muted-foreground text-sm">
           If this problem persists,{' '}
-          <Link href="/contact" className="text-blue-400 hover:text-blue-300">
+          <Link
+            href="/contact"
+            className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          >
             contact our support team
           </Link>
         </p>

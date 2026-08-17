@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -68,7 +67,7 @@ function makePendingRecord(
 }
 
 describe('Device Approve API', () => {
-  const validCode = 'ABC123DEF456';
+  const validCode = 'ABC123DEF4567890';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -184,6 +183,30 @@ describe('Device Approve API', () => {
 
         const response = await POST(request);
         expect(response.status).toBe(400);
+      });
+
+      it('refuses a CLI XXXX-XXXX user code from the shared table', async () => {
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: 'ABCD-2345', action: 'approve' }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(400);
+        expect(mockQuery).not.toHaveBeenCalled();
+      });
+
+      it('refuses a hex code that is not the generated link-code length', async () => {
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: 'ABC123DEF456', action: 'approve' }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(400);
+        expect(mockQuery).not.toHaveBeenCalled();
       });
 
       it('should accept valid approve action', async () => {

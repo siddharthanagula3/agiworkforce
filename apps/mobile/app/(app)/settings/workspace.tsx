@@ -5,7 +5,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
-import { ArrowLeft, AlertCircle, Users, UserPlus, Trash2 } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  AlertCircle,
+  Building2,
+  Check,
+  Users,
+  UserPlus,
+  UserRound,
+  Trash2,
+} from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -21,11 +30,13 @@ import {
   fetchWorkspaceMembers,
   fetchWorkspaceOverview,
   removeWorkspaceMember,
+  setActiveWorkspace,
   updateWorkspaceMemberRole,
   type WorkspaceMember,
   type WorkspaceOverview,
   type WorkspaceRole,
 } from '@/src/features/team';
+import { useChatStore } from '@/stores/chatStore';
 
 const WEB_TEAM_URL = 'https://agiworkforce.com/settings/team';
 
@@ -53,6 +64,7 @@ export default function WorkspaceScreen() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
+  const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -92,6 +104,27 @@ export default function WorkspaceScreen() {
     await load();
     setRefreshing(false);
   }, [load]);
+
+  const handleSelectWorkspace = useCallback(
+    (organizationId: string | null) => {
+      setSwitchingWorkspace(true);
+      void (async () => {
+        try {
+          await setActiveWorkspace(organizationId);
+          await useChatStore.getState().loadConversations();
+          await load();
+        } catch (error) {
+          Alert.alert(
+            'Could not switch workspace',
+            error instanceof Error ? error.message : 'Please try again.',
+          );
+        } finally {
+          setSwitchingWorkspace(false);
+        }
+      })();
+    },
+    [load],
+  );
 
   const handleAddMember = useCallback(() => {
     if (state.kind !== 'ready' || !state.overview.workspace) return;
@@ -288,6 +321,62 @@ export default function WorkspaceScreen() {
             >
               <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
             </Pressable>
+          </View>
+        )}
+
+        {state.kind === 'ready' && state.overview.workspaces.length > 0 && (
+          <View style={{ marginBottom: 18 }}>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '700',
+                letterSpacing: 1,
+                color: c.textMuted,
+                marginBottom: 8,
+              }}
+            >
+              ACTIVE WORKSPACE
+            </Text>
+            <Card>
+              {[
+                { id: null as string | null, name: 'Personal', Icon: UserRound },
+                ...state.overview.workspaces.map((membership) => ({
+                  id: membership.id as string | null,
+                  name: membership.name,
+                  Icon: Building2,
+                })),
+              ].map((row, index) => {
+                const selected = state.overview.activeWorkspaceId === row.id;
+                return (
+                  <Pressable
+                    key={row.id ?? 'personal'}
+                    onPress={() => {
+                      if (!selected && !switchingWorkspace) handleSelectWorkspace(row.id);
+                    }}
+                    disabled={switchingWorkspace}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected, disabled: switchingWorkspace }}
+                    accessibilityLabel={`Switch to ${row.name}`}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      paddingHorizontal: 14,
+                      paddingVertical: 13,
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: c.border,
+                      opacity: switchingWorkspace && !selected ? 0.5 : 1,
+                    }}
+                  >
+                    <row.Icon size={16} color={c.textSecondary} />
+                    <Text style={{ flex: 1, color: c.textPrimary, fontSize: 15 }} numberOfLines={1}>
+                      {row.name}
+                    </Text>
+                    {selected && <Check size={16} color={c.teal} />}
+                  </Pressable>
+                );
+              })}
+            </Card>
           </View>
         )}
 

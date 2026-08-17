@@ -69,6 +69,35 @@ function singleLine(value: string, max: number): string {
   return truncate(value.replace(/[\r\n\t]+/g, ' ').trim(), max);
 }
 
+function extractQueryTerms(query: string | undefined): string[] {
+  return Array.from(
+    new Set(
+      (query ?? '')
+        .toLowerCase()
+        .match(/[a-z0-9][a-z0-9_-]{2,}/g)
+        ?.filter((term) => !RELEVANCE_STOP_WORDS.has(term)) ?? [],
+    ),
+  ).slice(0, 24);
+}
+
+function scoreKnowledgeFile(
+  file: { fileName: string; summary: string | null; extractedText: string | null },
+  terms: string[],
+): number {
+  if (terms.length === 0) return 0;
+  const fileName = file.fileName.toLowerCase();
+  const summary = (file.summary ?? '').toLowerCase();
+  const body = (file.extractedText ?? '').toLowerCase();
+  return terms.reduce(
+    (score, term) =>
+      score +
+      (fileName.includes(term) ? 6 : 0) +
+      (summary.includes(term) ? 3 : 0) +
+      (body.includes(term) ? 1 : 0),
+    0,
+  );
+}
+
 function isKnowledgeFileSchemaUnavailable(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const code = (error as Record<string, unknown>)['code'];
@@ -163,14 +192,7 @@ export async function loadProjectContext(
       : [params.projectId, params.userId],
   );
 
-  const queryTerms = Array.from(
-    new Set(
-      (params.currentUserQuery ?? '')
-        .toLowerCase()
-        .match(/[a-z0-9][a-z0-9_-]{2,}/g)
-        ?.filter((term) => !RELEVANCE_STOP_WORDS.has(term)) ?? [],
-    ),
-  ).slice(0, 24);
+  const queryTerms = extractQueryTerms(params.currentUserQuery);
   const candidates = new Map<
     string,
     { title: string; updatedAt: number; messages: Array<{ role: string; content: string }> }
@@ -226,11 +248,23 @@ export async function loadProjectContext(
     name: project.name,
     description: project.description,
     instructions: project.instructions,
-    knowledgeFiles: files.map((file) => ({
-      fileName: file.file_name,
-      summary: file.summary,
-      extractedText: file.extracted_text,
-    })),
+    knowledgeFiles: files
+      .map((file, addedIndex) => ({
+        fileName: file.file_name,
+        summary: file.summary,
+        extractedText: file.extracted_text,
+        addedIndex,
+      }))
+      .map((file) => ({ file, relevance: scoreKnowledgeFile(file, queryTerms) }))
+      .sort(
+        (left, right) =>
+          right.relevance - left.relevance || left.file.addedIndex - right.file.addedIndex,
+      )
+      .map(({ file }) => ({
+        fileName: file.fileName,
+        summary: file.summary,
+        extractedText: file.extractedText,
+      })),
     siblingChats,
   };
 }
@@ -274,10 +308,14 @@ export function formatProjectSystemPrompt(context: ProjectContext): string | nul
     let remainingChars = MAX_TOTAL_FILE_CONTENT_CHARS;
     const extractedFiles: Array<{ fileName: string; excerptOf?: string; content: string }> = [];
     const omittedFileNames: string[] = [];
+    const unextractedFileNames: string[] = [];
     for (const file of context.knowledgeFiles) {
       const content = file.extractedText?.trim();
-      if (!content) continue;
       const fileName = singleLine(file.fileName, 200);
+      if (!content) {
+        unextractedFileNames.push(fileName);
+        continue;
+      }
       const limit = Math.min(MAX_FILE_CONTENT_CHARS, remainingChars);
       if (limit <= 0) {
         omittedFileNames.push(fileName);
@@ -311,6 +349,12 @@ export function formatProjectSystemPrompt(context: ProjectContext): string | nul
     if (omittedFileNames.length > 0) {
       sections.push(
         `Project knowledge files whose extracted text did not fit in this turn and was not included at all: ${omittedFileNames.join(', ')}. Tell the user these files were left out rather than answering as if they were empty.`,
+      );
+    }
+
+    if (unextractedFileNames.length > 0) {
+      sections.push(
+        `Project knowledge files with no readable extracted text (extraction failed or is still pending): ${unextractedFileNames.join(', ')}. Say you could not read these files rather than answering as if they were empty or irrelevant.`,
       );
     }
   }

@@ -15,13 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Label } from '@/ui/Label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { useVoiceInputStore, type PostProcessingMode } from '../../stores/settingsStore';
 import {
   useVoiceModeStore,
@@ -115,6 +109,8 @@ export function VoiceSettings() {
   const startGlobalPtt = useVoiceModeStore((s) => s.startGlobalPtt);
   const stopGlobalPtt = useVoiceModeStore((s) => s.stopGlobalPtt);
   const enableBargeIn = useVoiceModeStore((s) => s.enableBargeIn);
+  const speakRepliesEnabled = useVoiceModeStore((s) => s.speakRepliesEnabled);
+  const setSpeakRepliesEnabled = useVoiceModeStore((s) => s.setSpeakRepliesEnabled);
   const listWhisperModels = useVoiceModeStore((s) => s.listWhisperModels);
   const downloadWhisperModel = useVoiceModeStore((s) => s.downloadWhisperModel);
   const listPiperVoices = useVoiceModeStore((s) => s.listPiperVoices);
@@ -608,13 +604,39 @@ export function VoiceSettings() {
             </div>
           </div>
 
+          <div className="space-y-2 pt-2 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Speak Assistant Replies</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Read each finished reply aloud in the active chat, using the voice persona below.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSpeakRepliesEnabled(!speakRepliesEnabled)}
+                className={[
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                  speakRepliesEnabled
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/50'
+                    : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
+                ].join(' ')}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Volume2 size={12} />
+                  {speakRepliesEnabled ? 'Enabled' : 'Enable'}
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* Barge-in Detection */}
           <div className="space-y-2 pt-2 border-t border-border">
             <div className="flex items-center justify-between">
               <div>
                 <Label>Barge-in Detection</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Interrupt AI speech by talking. Requires VAD support.
+                  Interrupt a spoken reply by talking. Requires VAD support and spoken replies.
                 </p>
               </div>
               <button

@@ -3,6 +3,10 @@ import { vi } from 'vitest';
 import { NotificationsSection } from './NotificationsSection';
 import { SecuritySection } from './SecuritySection';
 
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isLoaded: true, user: { publicMetadata: { role: 'member' } } }),
+}));
+
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (
     selector: (state: { subscription: { status: string; tier: string } }) => unknown,
@@ -68,6 +72,17 @@ describe('Web Settings capability boundaries', () => {
     expect(
       screen.getByText(/does not monitor conversations to notify another person/),
     ).toBeInTheDocument();
+  });
+
+  it('leads with the working controls and keeps the boundary notes last', () => {
+    render(<SecuritySection />);
+
+    const controls = screen.getByText('Account controls');
+    const boundary = screen.getByText('Current account boundary');
+    const trustedContact = screen.getByText('Trusted contact · Not configured');
+
+    expect(controls.compareDocumentPosition(boundary)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(boundary.compareDocumentPosition(trustedContact)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('does not deny cross-device session revocation, which is implemented', () => {

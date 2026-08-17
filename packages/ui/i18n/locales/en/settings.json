@@ -61,5 +61,6 @@
   "saved": "Saved",
   "saving": "Saving...",
   "resetToDefaults": "Reset to Defaults",
-  "confirmReset": "Are you sure you want to reset all settings to defaults?"
+  "confirmReset": "Are you sure you want to reset all settings to defaults?",
+  "translationScope": "Translates the public site, pricing, and some chat labels. Settings and most other screens are still English."
 }

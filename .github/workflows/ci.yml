@@ -23,9 +23,10 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  scope:
+    name: Change scope
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 10
     outputs:
       web_changed: ${{ steps.scope.outputs.web }}
       desktop_changed: ${{ steps.scope.outputs.desktop }}
@@ -33,20 +34,6 @@ jobs:
       extension_changed: ${{ steps.scope.outputs.extension }}
       vscode_changed: ${{ steps.scope.outputs.vscode }}
       mobile_changed: ${{ steps.scope.outputs.mobile }}
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: agiworkforce_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d agiworkforce_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
     steps:
       - uses: actions/checkout@v6
         with:
@@ -54,6 +41,10 @@ jobs:
           # insufficient for multi-commit pull requests and silently degrade
           # affected selection to a full or incorrect graph.
           fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
 
       - name: Select expensive CI lanes
         id: scope
@@ -73,14 +64,155 @@ jobs:
             node scripts/production-deploy-scope.mjs --all >> "$GITHUB_OUTPUT"
           fi
 
+  repo-guards:
+    name: Repository guards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Conflict-marker gate
         run: python3 scripts/check-no-conflict-markers.py
 
-      - name: Install system dependencies (Linux)
-        if: steps.scope.outputs.native == 'true'
+      - name: Security gate policy (blocking, INFRA-05)
+        # .github/security-gate-policy.json is the single place every dependency
+        # and static-analysis gate declares the severity it blocks at, and the
+        # only place an exclusion may live. A continue-on-error step that is not
+        # registered there — or a registered exclusion that has gone stale —
+        # fails here instead of quietly weakening the gate.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential curl wget file pkg-config libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev libleptonica-dev libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libwebp-dev tesseract-ocr libtesseract-dev libasound2-dev xvfb libclang-dev
+          node --test scripts/check-security-gates.test.mjs
+          node scripts/check-security-gates.mjs
+
+      - name: Release gate contract (blocking, DESK-25 / INFRA-18 / INFRA-19)
+        # Desktop releases must emit an SBOM, install on a clean machine, and
+        # survive an upgrade plus rollback before publication; mobile releases
+        # must reconcile the iOS privacy manifest with the Play data-safety
+        # declaration and pass a device matrix before either store submission.
+        run: |
+          node --test scripts/check-release-gates.test.mjs
+          node --test scripts/generate-sbom.test.mjs
+          node --test scripts/verify-desktop-upgrade.test.mjs
+          node scripts/check-release-gates.mjs
+
+      - name: Hardcoded-model-id gate (Rust)
+        # Wave 1.5 prevention layer (CLAUDE.md §"Critical rules" #1).
+        # ESLint covers TS/JS in the js-verify lane; this script covers
+        # Rust (CLI + Tauri backend) so the locked rule "never hardcode
+        # model IDs" is enforced uniformly across the repo.
+        run: bash scripts/check-no-hardcoded-models.sh
+
+      - name: HookEvent fire-site gate (AP-07)
+        # AP-07 / R27-PARITY: every HookEvent enum variant must have ≥1
+        # run_hooks() call site in apps/cli/src. Static grep — no cargo build.
+        run: pnpm check:hook-fire-sites
+
+      - name: Rust egress boundary gate
+        # DESK-01: a Rust transport that builds its own reqwest client bypasses
+        # the host-owned egress policy (and its connect-time address pinning).
+        # The allowlist records the transports that predate the boundary and
+        # only ratchets down; a new bare client fails here.
+        run: |
+          node --test scripts/check-rust-egress-boundary.test.mjs
+          pnpm check:rust-egress-boundary
+
+      - name: Module reachability gate
+        # R26-1 prevention layer: Rust files under CLI/Desktop native sources
+        # must be reachable from lib.rs, main.rs, or bin roots. The ratchet test
+        # guards the one rule the baseline itself cannot state: it only shrinks.
+        run: |
+          node --test scripts/check-module-reachability-ratchet.test.mjs
+          pnpm check:module-reachability
+
+      - name: Extension AP-02 — no hardcoded color literals
+        # R27-PARITY: extension must use var(--agi-ext-*) design tokens; no hex/rgb/hsl literals.
+        run: pnpm --filter @agiworkforce/extension check:no-hex
+
+      - name: Web AP-02 — no new hardcoded color literals
+        # DESIGN-SYSTEM-004: ratchet guard over apps/web app/components/lib/features.
+        # Pre-existing literals are grandfathered in apps/web/scripts/.no-hex-baseline.json;
+        # anything new fails here.
+        run: pnpm --filter @agiworkforce/web check:no-hex-web
+
+      - name: Mobile AP-02 — no new hardcoded color literals
+        # DESIGN-SYSTEM-005: ratchet guard over apps/mobile TS/TSX.
+        # Pre-existing literals are grandfathered in apps/mobile/scripts/.no-hex-baseline.json,
+        # whose own _description already promised "New violations will fail CI".
+        run: pnpm check:no-hex-mobile
+
+      - name: Extension AP-10 — no direct cloud-IPC in v1
+        # R27-PARITY / v1-local-only: cloud feature paths must gate through InviteCodeModal.
+        run: pnpm --filter @agiworkforce/extension check:no-cloud-ipc
+
+      - name: Hardcoded-fixture-array gate (AP-08)
+        # R27-PARITY: detects UI components that declare their own copy of
+        # display data (CONNECTORS, SKILLS_LIST, etc.) when a live store
+        # already exists for the same domain. Canonical definition files
+        # (*Definitions.ts, *Catalog.ts) are exempt. Exit 1 = anti-pattern.
+        run: pnpm check:hardcoded-arrays
+
+      - name: Secret scan (CRIT-017)
+        # Repository-owned credential scanning over every tracked file. BLOCKING
+        # on purpose: a committed credential is already in history by the time
+        # anyone reads an advisory warning, so the only useful moment to stop it
+        # is before the merge.
+        #
+        # Not entropy analysis — every pattern matches a vendor-prefixed
+        # credential format, so a hit is a credential SHAPE rather than "this
+        # looks random". Reviewed fixtures live in
+        # scripts/secret-scan-allowlist.json keyed on (path, format), and an
+        # entry that stops matching fails the job as stale.
+        run: pnpm check:secrets
+
+      - name: Lock-vs-build drift check (AP-09, advisory)
+        # R27-PARITY: compares model ID references in Claude memory lock files
+        # against packages/contracts/types/src/models.json. Lock files live in ~/.claude/
+        # (user home — not in repo), so this step exits 0 (skip) in CI and is
+        # only substantive when run locally by a developer. Exit 2 = drift
+        # warnings; non-blocking (continue-on-error).
+        run: pnpm check:lock-drift
+        continue-on-error: true
+
+      - name: Tauri IPC wiring (FIX-023)
+        # Catches two regressions:
+        #   1. Frontend invoke('foo') where lib.rs has no `foo` registered.
+        #   2. #[tauri::command] fn defined in src-tauri but missing from
+        #      the generate_handler!{} list (silently dead — a frontend
+        #      invoke would fail at runtime instead of compile time).
+        run: bash apps/desktop/check-wiring.sh
+
+  database:
+    name: Postgres migrations and RLS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: agiworkforce_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
         with:
@@ -111,11 +243,55 @@ jobs:
           pnpm db:migrate -- verify
           pnpm db:rls-probe -- --target ci
 
-      - name: Dependency audit (JS) — critical (blocking)
-        run: pnpm audit --audit-level=critical
+  js-verify:
+    name: JS lint, typecheck, test, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: agiworkforce_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Turborepo --affected needs the actual merge base. Two commits are
+          # insufficient for multi-commit pull requests and silently degrade
+          # affected selection to a full or incorrect graph.
+          fetch-depth: 0
 
-      - name: Dependency audit (JS) — high (blocking, FIX-043)
-        run: pnpm audit --audit-level=high
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup test environment
+        run: |
+          {
+            echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
+            echo "NEON_DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
+            echo "CLERK_SECRET_KEY=test-clerk-secret-key"
+            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_mock"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare the test database
+        run: pnpm db:migrate -- apply --target ci
 
       - name: Lint
         # H24: --max-warnings=0 enforced via package.json lint script.
@@ -123,65 +299,6 @@ jobs:
         # (eslint.config.mjs §"PREVENTION LAYER") flags hardcoded model
         # IDs + direct cloud database clients across TS/JS.
         run: pnpm exec turbo run lint --affected
-
-      - name: Hardcoded-model-id gate (Rust)
-        # Wave 1.5 prevention layer (CLAUDE.md §"Critical rules" #1).
-        # ESLint covers TS/JS in the previous step; this script covers
-        # Rust (CLI + Tauri backend) so the locked rule "never hardcode
-        # model IDs" is enforced uniformly across the repo.
-        run: bash scripts/check-no-hardcoded-models.sh
-
-      - name: HookEvent fire-site gate (AP-07)
-        # AP-07 / R27-PARITY: every HookEvent enum variant must have ≥1
-        # run_hooks() call site in apps/cli/src. Static grep — no cargo build.
-        run: pnpm check:hook-fire-sites
-
-      - name: Module reachability gate
-        # R26-1 prevention layer: Rust files under CLI/Desktop native sources
-        # must be reachable from lib.rs, main.rs, or bin roots.
-        run: pnpm check:module-reachability
-
-      - name: Extension AP-02 — no hardcoded color literals
-        # R27-PARITY: extension must use var(--agi-ext-*) design tokens; no hex/rgb/hsl literals.
-        run: pnpm --filter @agiworkforce/extension check:no-hex
-
-      - name: Web AP-02 — no new hardcoded color literals
-        # DESIGN-SYSTEM-004: ratchet guard over apps/web app/components/lib/features.
-        # Pre-existing literals are grandfathered in apps/web/scripts/.no-hex-baseline.json;
-        # anything new fails here.
-        run: pnpm --filter @agiworkforce/web check:no-hex-web
-
-      - name: Extension AP-10 — no direct cloud-IPC in v1
-        # R27-PARITY / v1-local-only: cloud feature paths must gate through InviteCodeModal.
-        run: pnpm --filter @agiworkforce/extension check:no-cloud-ipc
-      - name: Hardcoded-fixture-array gate (AP-08)
-        # R27-PARITY: detects UI components that declare their own copy of
-        # display data (CONNECTORS, SKILLS_LIST, etc.) when a live store
-        # already exists for the same domain. Canonical definition files
-        # (*Definitions.ts, *Catalog.ts) are exempt. Exit 1 = anti-pattern.
-        run: pnpm check:hardcoded-arrays
-
-      - name: Secret scan (CRIT-017)
-        # Repository-owned credential scanning over every tracked file. BLOCKING
-        # on purpose: a committed credential is already in history by the time
-        # anyone reads an advisory warning, so the only useful moment to stop it
-        # is before the merge.
-        #
-        # Not entropy analysis — every pattern matches a vendor-prefixed
-        # credential format, so a hit is a credential SHAPE rather than "this
-        # looks random". Reviewed fixtures live in
-        # scripts/secret-scan-allowlist.json keyed on (path, format), and an
-        # entry that stops matching fails the job as stale.
-        run: pnpm check:secrets
-
-      - name: Lock-vs-build drift check (AP-09, advisory)
-        # R27-PARITY: compares model ID references in Claude memory lock files
-        # against packages/contracts/types/src/models.json. Lock files live in ~/.claude/
-        # (user home — not in repo), so this step exits 0 (skip) in CI and is
-        # only substantive when run locally by a developer. Exit 2 = drift
-        # warnings; non-blocking (continue-on-error).
-        run: pnpm check:lock-drift
-        continue-on-error: true
 
       - name: Type check
         # @agiworkforce/web's `tsc --noEmit` aborts with SIGABRT (exit 134) —
@@ -225,21 +342,63 @@ jobs:
       # job, which is the actual defect and is what the split below fixes.
       #
       # Semgrep's exit codes separate the two cases: 0 = no findings, 1 =
-      # findings, >=2 = the scanner itself failed. A scanner failure now fails
-      # the job unconditionally. Whether FINDINGS block is a separate decision
-      # (see the gate step) — but "the tool broke" must never again read as
-      # "the code is clean".
-      # TRIAGE, 2026-08-09, semgrep 1.172.0 against this tree: 148 findings, not
-      # 41. 130 are dismissed by the --exclude-rule flags below, each for a
-      # reason recorded there. The 18 that survive are all package-manager
-      # supply-chain hardening (dependabot cooldowns, pnpm/npm minimum release
-      # age, pnpm trust policy, exotic sub-dependency blocking) across
-      # .github/dependabot.yml, .npmrc, both pnpm-workspace.yaml files and
-      # tools/skill-vetting/pyproject.toml. They are real and worth doing —
-      # they are the defense against adopting a package compromised minutes
-      # after publication — but they change INSTALL behaviour, so they land as
-      # their own change rather than riding along with a security-gate edit.
-      # Once they are zero, `--error` flips this step to blocking.
+      # findings, >=2 = the scanner itself failed. A scanner failure fails the
+      # job here; findings are adjudicated by the gate step below, which is what
+      # actually blocks the merge. No rule is dismissed on this command line:
+      # every acceptance lives in scripts/semgrep-allowlist.json with an owner,
+      # an expiry and a reason, so it cannot outlive the triage behind it.
+
+      - name: Build affected deployable JavaScript surfaces
+        run: >-
+          pnpm exec turbo run build --affected
+          --filter=@agiworkforce/signaling-server
+          --filter=@agiworkforce/extension
+          --filter=@agiworkforce/web
+          --filter=agi-workforce
+
+      - name: Package browser and VS Code release artifacts
+        # The package commands enforce release-only contents. Running only the
+        # normal build would miss stale Chrome ZIP entries and leaked VSIX
+        # source maps/configuration files.
+        env:
+          # Public, non-routable contract fixtures. Real release values live in
+          # the protected release environment; CI proves manifest injection and
+          # validation without producing a publishable authenticated artifact.
+          CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
+          CLERK_FRONTEND_API: https://clerk-ci.invalid
+          CLERK_SYNC_HOST: https://clerk-ci.invalid
+          # Syntactically valid public-only RSA fixture so Chromium can load
+          # the exact package; it is unrelated to the production store item.
+          CHROME_EXTENSION_PUBLIC_KEY: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5cGnbsCvSikskJTyhn/hqB8wtzGwhZDaa6PQTePWdmuxI7u2JR7dPuAcyOL8zYW8japmuv7P/SBJ/wr1CiFQAJIToFv3pbDbZDxrUy0ttLNpvZumZ/GPj/4kEMwlWV0PZIRHzF91Cm41O3iQUhctXifllGX5IMicNSwXj/I52fWAcHKLm7Ut6C/PP4s3RP26K/I+s4D9E8Q8PgVGmkgsxxwyxX0ct+N2tdDXVYhFiPSXyU3wPp1gyoD8FRzy+N+xEWNF/a/mm+TSjI3cxkNPL9jpY00IRy/gh7PywS3h5lNa8skhxy2OklT2k7br1xNBAMHJAZRKdmAf5z/1z12rxwIDAQAB
+        run: |
+          pnpm --filter @agiworkforce/extension package
+          pnpm --filter agi-workforce package
+
+  security:
+    name: Security scans
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Dependency audit (JS) — critical (blocking)
+        run: pnpm audit --audit-level=critical
+
+      - name: Dependency audit (JS) — high (blocking, FIX-043)
+        run: pnpm audit --audit-level=high
+
       - name: Semgrep (security audit)
         id: semgrep
         shell: bash
@@ -252,20 +411,6 @@ jobs:
             --config p/typescript \
             --config p/owasp-top-ten \
             --metrics=off \
-            `# 118x. Flags actions/* referenced by tag. check:ci-guardrails` \
-            `# already SHA-pins every THIRD-PARTY action and deliberately` \
-            `# exempts GitHub's own, which is a stricter, enforced policy.` \
-            --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
-            `# 5x. The pwn-request shape, all in the deploy workflows. Each is` \
-            `# already gated on head_repository.full_name == github.repository,` \
-            `# which production-deploy-scope.test.mjs asserts for both workflows.` \
-            --exclude-rule yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout \
-            `# 4x, all in *.test.ts fixtures — no production secret.` \
-            --exclude-rule javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret \
-            `# 3x, each already safe: ArtifactPreview routes markdown through` \
-            `# DOMPurify and HTML through a sandboxed iframe; SEOHead emits` \
-            `# ld+json and has zero importers; the third is under archive/.` \
-            --exclude-rule typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml \
             --json --output semgrep-results.json
           status=$?
           set -e
@@ -291,42 +436,42 @@ jobs:
           path: semgrep-results.json
           retention-days: 14
 
-      - name: Build affected deployable JavaScript surfaces
-        run: >-
-          pnpm exec turbo run build --affected
-          --filter=@agiworkforce/api-gateway
-          --filter=@agiworkforce/signaling-server
-          --filter=@agiworkforce/extension
-          --filter=@agiworkforce/web
-          --filter=agi-workforce
+      - name: Semgrep gate (unaccepted findings block the merge)
+        run: node scripts/check-semgrep-findings.mjs semgrep-results.json
 
-      - name: Package browser and VS Code release artifacts
-        # The package commands enforce release-only contents. Running only the
-        # normal build would miss stale Chrome ZIP entries and leaked VSIX
-        # source maps/configuration files.
-        env:
-          # Public, non-routable contract fixtures. Real release values live in
-          # the protected release environment; CI proves manifest injection and
-          # validation without producing a publishable authenticated artifact.
-          CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
-          CLERK_FRONTEND_API: https://clerk-ci.invalid
-          CLERK_SYNC_HOST: https://clerk-ci.invalid
-          # Syntactically valid public-only RSA fixture so Chromium can load
-          # the exact package; it is unrelated to the production store item.
-          CHROME_EXTENSION_PUBLIC_KEY: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5cGnbsCvSikskJTyhn/hqB8wtzGwhZDaa6PQTePWdmuxI7u2JR7dPuAcyOL8zYW8japmuv7P/SBJ/wr1CiFQAJIToFv3pbDbZDxrUy0ttLNpvZumZ/GPj/4kEMwlWV0PZIRHzF91Cm41O3iQUhctXifllGX5IMicNSwXj/I52fWAcHKLm7Ut6C/PP4s3RP26K/I+s4D9E8Q8PgVGmkgsxxwyxX0ct+N2tdDXVYhFiPSXyU3wPp1gyoD8FRzy+N+xEWNF/a/mm+TSjI3cxkNPL9jpY00IRy/gh7PywS3h5lNa8skhxy2OklT2k7br1xNBAMHJAZRKdmAf5z/1z12rxwIDAQAB
+  rust-desktop-cli:
+    name: Rust desktop and CLI (default features)
+    runs-on: ubuntu-24.04
+    needs: scope
+    if: needs.scope.outputs.native_changed == 'true'
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies (Linux)
         run: |
-          pnpm --filter @agiworkforce/extension package
-          pnpm --filter agi-workforce package
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl wget file pkg-config libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev libleptonica-dev libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libwebp-dev tesseract-ocr libtesseract-dev libasound2-dev xvfb libclang-dev
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Setup Rust toolchain
-        if: steps.scope.outputs.native == 'true'
         uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
         with:
           toolchain: '1.94.0'
           components: clippy, rustfmt
 
       - name: Cache Rust dependencies
-        if: steps.scope.outputs.native == 'true'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: 'apps/desktop/src-tauri -> target'
@@ -334,27 +479,23 @@ jobs:
           cache-directories: ~/.cargo/bin
 
       - name: Ensure clippy is available
-        if: steps.scope.outputs.native == 'true'
         run: rustup component add clippy --toolchain 1.94.0
 
       # H41: Verify exact Rust toolchain version before running clippy/tests
+
       - name: Verify Rust toolchain
-        if: steps.scope.outputs.native == 'true'
         run: rustup show active-toolchain && rustc --version && cargo --version
 
       - name: Rust formatting gate
-        if: steps.scope.outputs.native == 'true'
         run: cargo fmt --all -- --check
 
       - name: Verify generated protocol bindings are current
-        if: steps.scope.outputs.native == 'true'
         # Generates into an isolated staging directory and compares against the
         # checked-in TypeScript bindings. A failed exporter must never erase the
         # last known-good bindings used by downstream packages.
         run: pnpm check:protocol-types
 
       - name: Reclaim runner disk before the native build
-        if: steps.scope.outputs.native == 'true'
         # The sidecar build died with
         #   rustc-LLVM ERROR: IO failure on output stream: No space left on device
         # Building the desktop lib drags in the whole native tree — openssl,
@@ -375,11 +516,9 @@ jobs:
           echo "--- after ---"; df -h /
 
       - name: Build native messaging host sidecar
-        if: steps.scope.outputs.native == 'true'
         run: pnpm exec turbo run build:native-host --filter=@agiworkforce/desktop -- --profile debug
 
       - name: Dependency policy (Rust) — bans/sources/licenses (blocking)
-        if: steps.scope.outputs.native == 'true'
         # deny.toml is the policy source of truth; bans, sources, and licenses
         # are green on the workspace and must stay green.
         run: cargo install cargo-deny --version 0.20.2 --locked --quiet && cargo deny check bans sources licenses
@@ -387,7 +526,6 @@ jobs:
           CARGO_HOME: ~/.cargo
 
       - name: Dependency vulnerabilities (Rust) — blocking
-        if: steps.scope.outputs.native == 'true'
         # Three real rustls-webpki TLS advisories rode into main because the
         # only advisories step was continue-on-error and the audit ignore list
         # blamed them on Tauri. RUSTSEC vulnerabilities now fail the job; the
@@ -398,7 +536,6 @@ jobs:
           CARGO_HOME: ~/.cargo
 
       - name: Dependency advisories (Rust) — non-blocking warning-policy debt
-        if: steps.scope.outputs.native == 'true'
         # Unmaintained/unsound/yanked warnings on transitive deps we cannot move
         # past upstream, tracked as RUST-DEPENDENCY-ADVISORIES-01 in
         # docs/agent-context/known-flaws.md. Reported, never blocking.
@@ -408,7 +545,6 @@ jobs:
           CARGO_HOME: ~/.cargo
 
       - name: Test (apps/desktop + apps/cli, default features)
-        if: steps.scope.outputs.native == 'true'
         # Scope the test step to the binaries we actually ship — matches
         # the Clippy step's scope (323ab2e5). The 100+ ported codex-rs
         # crates under crates/* have their own pre-existing test
@@ -442,8 +578,32 @@ jobs:
           xvfb-run --auto-servernum cargo test -p agiworkforce-desktop --lib
           xvfb-run --auto-servernum cargo test -p agiworkforce-cli
 
+      - name: Cross-language sync parity (TEST-05)
+        # packages/client/sync (TS) and data::cloud_sync (Rust) reimplement the
+        # same delta-sync rules and agree only because both replay the golden
+        # fixtures in packages/client/sync/src/__fixtures__. `turbo --affected`
+        # never selects the TS package for a Rust-only change (it is a
+        # dependency of apps/desktop, not a dependent), so the TS half is run
+        # here by name rather than left to affected-selection. The scope
+        # classifier forces this lane on for fixture-only edits so the Rust half
+        # cannot be skipped on the commit that changes the contract.
+        env:
+          AGIWORKFORCE_SKIP_VENDORED_BWRAP: '1'
+          RUSTFLAGS: ''
+          CARGO_INCREMENTAL: '0'
+        run: |
+          set -euo pipefail
+          pnpm --filter @agiworkforce/sync test
+          # A cargo name filter that matches nothing still exits 0, which would
+          # make this half of the gate silently vacuous if the module is renamed.
+          matched=$(cargo test -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests -- --list | grep -c ': test$' || true)
+          if [ "$matched" -eq 0 ]; then
+            echo "data::cloud_sync::fixture_tests matched no tests — the Rust half of the parity pair is gone" >&2
+            exit 1
+          fi
+          cargo test -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests
+
       - name: Free Rust test artifacts before clippy
-        if: steps.scope.outputs.native == 'true'
         # The native-host build plus full Rust lib tests can leave enough
         # transient target artifacts to exhaust GitHub's ephemeral runner disk
         # before clippy writes final rmeta files. Tests have already passed at
@@ -454,7 +614,6 @@ jobs:
           df -h .
 
       - name: Clippy (apps/desktop + apps/cli, default features)
-        if: steps.scope.outputs.native == 'true'
         # Scope clippy to the binaries we actually ship. The 100+ ported
         # codex-rs crates under crates/* legitimately use unsafe (PTY,
         # exec policy, etc.) and would fail `-D unsafe-code` even though
@@ -465,19 +624,11 @@ jobs:
           CARGO_INCREMENTAL: '0'
         run: cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code
 
-      - name: Tauri IPC wiring (FIX-023)
-        # Catches two regressions:
-        #   1. Frontend invoke('foo') where lib.rs has no `foo` registered.
-        #   2. #[tauri::command] fn defined in src-tauri but missing from
-        #      the generate_handler!{} list (silently dead — a frontend
-        #      invoke would fail at runtime instead of compile time).
-        run: bash apps/desktop/check-wiring.sh
-
   desktop-e2e:
     name: Desktop E2E (deterministic mocks)
     runs-on: ubuntu-24.04
-    needs: check
-    if: needs.check.outputs.desktop_changed == 'true'
+    needs: scope
+    if: needs.scope.outputs.desktop_changed == 'true'
     timeout-minutes: 30
     env:
       # Keep deterministic-mock E2E independent of repository secrets.
@@ -569,8 +720,8 @@ jobs:
   browser-extension-e2e:
     name: Chrome extension E2E (real Chromium)
     runs-on: ubuntu-24.04
-    needs: check
-    if: needs.check.outputs.extension_changed == 'true'
+    needs: scope
+    if: needs.scope.outputs.extension_changed == 'true'
     timeout-minutes: 30
     env:
       # Public, non-routable fixtures. This produces a structurally valid ZIP
@@ -605,8 +756,8 @@ jobs:
   vscode-extension-e2e:
     name: VS Code + CLI clean-profile E2E
     runs-on: ubuntu-24.04
-    needs: check
-    if: needs.check.outputs.vscode_changed == 'true'
+    needs: scope
+    if: needs.scope.outputs.vscode_changed == 'true'
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
@@ -651,8 +802,8 @@ jobs:
   mobile-e2e:
     name: Mobile E2E (iOS simulator)
     runs-on: macos-15
-    needs: check
-    if: needs.check.outputs.mobile_changed == 'true'
+    needs: scope
+    if: needs.scope.outputs.mobile_changed == 'true'
     timeout-minutes: 75
     env:
       APP_ENV: development
@@ -729,8 +880,8 @@ jobs:
   web-a11y:
     name: Web E2E and accessibility audit
     runs-on: ubuntu-24.04
-    needs: check
-    if: needs.check.outputs.web_changed == 'true'
+    needs: scope
+    if: needs.scope.outputs.web_changed == 'true'
     timeout-minutes: 30
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
@@ -819,8 +970,8 @@ jobs:
   clippy-all-features:
     name: Clippy (all features)
     runs-on: ubuntu-24.04
-    needs: check
-    if: needs.check.outputs.native_changed == 'true'
+    needs: scope
+    if: needs.scope.outputs.native_changed == 'true'
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v6
@@ -875,8 +1026,9 @@ jobs:
         # has no such feature. Cargo rejects an unknown feature before it lints
         # anything ("none of the selected packages contains this feature"), so
         # while it was listed this lane failed on every commit and linted zero
-        # lines. It went unnoticed because the lane only runs after `check`
-        # passes, which had not happened since 2026-07-21. Every name below is
+        # lines. It went unnoticed because the lane used to run only after a
+        # 120-minute monolithic `check` job, which had not passed since
+        # 2026-07-21. It now gates only on `scope`. Every name below is
         # verified against [features] in apps/desktop/src-tauri/Cargo.toml, and
         # `pnpm check:workflow-cargo-features` re-verifies it on every run.
         #
@@ -893,12 +1045,13 @@ jobs:
             -- -D warnings
 
   # macOS smoke check: compile + clippy on the primary target platform.
-  # Runs after the main check job passes to avoid wasting macOS runner minutes on bad code.
+  # Gated only on change detection so a failure in another lane cannot suppress
+  # this lane's evidence.
   macos-smoke:
     name: macOS Rust smoke (cargo check + clippy)
     runs-on: macos-latest
-    needs: check
-    if: needs.check.outputs.native_changed == 'true'
+    needs: scope
+    if: needs.scope.outputs.native_changed == 'true'
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -938,8 +1091,8 @@ jobs:
   windows-smoke:
     name: Windows Rust smoke (cargo check + tests, --skip linux-only)
     runs-on: windows-latest
-    needs: check
-    if: needs.check.outputs.native_changed == 'true'
+    needs: scope
+    if: needs.scope.outputs.native_changed == 'true'
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
@@ -995,7 +1148,12 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - check
+      - scope
+      - repo-guards
+      - database
+      - js-verify
+      - security
+      - rust-desktop-cli
       - desktop-e2e
       - browser-extension-e2e
       - vscode-extension-e2e

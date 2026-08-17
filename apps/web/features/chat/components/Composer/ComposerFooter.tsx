@@ -28,6 +28,7 @@ import {
   type ProviderId,
   getPickerModelTier,
   evaluateModelEnvironment,
+  getReasoningDepthIndicator,
   type ModelEnvironment,
   type EnvironmentAvailability,
 } from '@agiworkforce/types';
@@ -39,6 +40,7 @@ import {
   getModelMetadata,
   getModelReasoning,
   isModelAllowedForTier,
+  splitEffortsByEntitlement,
 } from '@shared/config/llm';
 import type { ModelReasoning } from '@agiworkforce/types';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
@@ -101,16 +103,6 @@ const EFFORT_CHIP_LABEL: Record<string, string> = {
   max: 'Max',
 };
 
-/**
- * The effort marks to render for a model. Only catalog-declared
- * `supportedEfforts` become user-selectable provider effort values. Manual
- * `thinking_budget` models such as Haiku 4.5 keep their on/off switch while the
- * server owns the token budget; they must not expose synthetic effort levels.
- */
-function effortChipsFor(r: ModelReasoning): string[] {
-  return r.supportedEfforts ?? [];
-}
-
 /** Whether the flyout should show a separate on/off switch (vs a `none` mark). */
 function showsThinkingSwitch(r: ModelReasoning): boolean {
   if (r.control === 'none' || r.control === 'always_on') return false;
@@ -129,7 +121,12 @@ function defaultStoreEffort(r: ModelReasoning): Effort {
   return r.defaultEffort ?? 'medium';
 }
 
-function isModelSelectableForTier(model: AIModel, tier: string): boolean {
+function isModelSelectableForTier(model: AIModel, tier: string | null): boolean {
+  // A null tier means the plan is not known yet. Guessing "free" here told
+  // paying subscribers to upgrade whenever /api/me was slow or answered 401,
+  // so the tier gate withholds its claim until the plan resolves; the server
+  // still enforces the real entitlement on send.
+  if (tier === null) return true;
   // Free users may select any of the cost-efficient tool-capable trial models
   // while the server privately enforces the unpublished dynamic usage ceiling.
   if (FREE_TRIAL_MODELS.includes(model.id)) return true;
@@ -179,7 +176,7 @@ function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailabilit
  */
 function modelLock(
   model: AIModel,
-  tier: string,
+  tier: string | null,
 ): { locked: boolean; reason?: string; kind: 'tier' | 'env' | 'coming_soon' } {
   // Availability check FIRST — a coming_soon/unavailable model is display-only:
   // never selectable, never routable, regardless of tier. This is the picker
@@ -277,7 +274,7 @@ function modelCapabilityBadges(modelId: string): string[] {
  */
 function partitionModels(
   models: AIModel[],
-  tier: string,
+  tier: string | null,
   searchQuery: string,
 ): {
   recommended: (AIModel & {
@@ -415,6 +412,7 @@ function ModelRow({
   const isEnvLocked = isLocked && lockKind === 'env';
   const isComingSoon = isLocked && lockKind === 'coming_soon';
   const capabilityBadges = modelCapabilityBadges(model.id);
+  const reasoningDepth = getReasoningDepthIndicator(model.id);
   const deprecationWarning = deprecationWarningFor(model);
   // Env-locked and coming_soon rows are HARD-disabled: not clickable, not
   // focusable, no upgrade CTA (upgrading can't satisfy either). Only tier-locked
@@ -486,6 +484,25 @@ function ModelRow({
               >
                 {badge}
               </span>
+            ))}
+          </span>
+        )}
+        {reasoningDepth && (
+          <span
+            role="img"
+            aria-label={`Reasoning depth ${reasoningDepth.filled} of ${reasoningDepth.scale}`}
+            title={`Reasoning depth ${reasoningDepth.filled} of ${reasoningDepth.scale}`}
+            className="mt-1 flex items-center gap-0.5"
+          >
+            {Array.from({ length: reasoningDepth.scale }, (_, index) => (
+              <span
+                key={index}
+                aria-hidden="true"
+                className={[
+                  'h-1 w-1 rounded-full',
+                  index < reasoningDepth.filled ? 'bg-foreground/55' : 'bg-muted-foreground/25',
+                ].join(' ')}
+              />
             ))}
           </span>
         )}
@@ -604,7 +621,12 @@ export function ComposerFooter({
   const setThinkingEffort = useThinkingStore((s) => s.setEffort);
   const subscription = useBillingStore((s) => s.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
+  const billingUnauthenticated = useBillingStore((s) => s.unauthenticated === true);
   const tier = subscription?.tier ?? 'free';
+  // Free is the right answer for a signed-out visitor and for a resolved Free
+  // subscription; it is a guess in every other state, and this picker turns a
+  // guess into an "requires upgrade" claim against paying subscribers.
+  const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
 
   const selectedModel = getSelectedModel();
 
@@ -682,7 +704,11 @@ export function ComposerFooter({
     AVAILABLE_MODELS.find((model) => model.id === getBestAutoModeForTier('free')) ?? selectedModel;
 
   // Partition into recommended / more, respecting current tier and search
-  const { recommended, more, isSearching } = partitionModels(AVAILABLE_MODELS, tier, searchQuery);
+  const { recommended, more, isSearching } = partitionModels(
+    AVAILABLE_MODELS,
+    knownTier,
+    searchQuery,
+  );
   // AUDIT-FIX CMP-30: a roster short enough to read at a glance needs no
   // search field; anything longer gets one (and with it the previously
   // unreachable `isSearching` branch of partitionModels).
@@ -698,7 +724,10 @@ export function ComposerFooter({
   const isAlwaysOn =
     reasoning.control === 'always_on' ||
     (reasoning.capable && reasoning.canDisableThinking === false);
-  const effortChips = effortChipsFor(reasoning);
+  const { allowed: effortChips, gated: gatedEffortChips } =
+    knownTier === null
+      ? { allowed: reasoning.supportedEfforts ?? [], gated: [] as Effort[] }
+      : splitEffortsByEntitlement(reasoning, knownTier);
   // A model can support provider-managed thinking without accepting a user
   // effort value (Haiku 4.5 is the important case). Only an explicit catalog
   // effort ladder earns UI; never turn a token-budget capability into a dead
@@ -945,6 +974,27 @@ export function ComposerFooter({
                         )}
                       </div>
                     )}
+
+                    {gatedEffortChips.length > 0 && (
+                      <p className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                        <span>
+                          {gatedEffortChips
+                            .map((chip) => EFFORT_CHIP_LABEL[chip] ?? chip)
+                            .join(', ')}{' '}
+                          {gatedEffortChips.length > 1 ? 'effort levels are' : 'effort is'} not
+                          included in your plan.
+                        </span>
+                        {onUpgradeRequest && (
+                          <button
+                            type="button"
+                            onClick={onUpgradeRequest}
+                            className="font-medium text-primary underline-offset-2 hover:underline"
+                          >
+                            Upgrade
+                          </button>
+                        )}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -998,7 +1048,7 @@ export function ComposerFooter({
                       </button>
                       {showMore &&
                         more.map((model) => {
-                          const lock = modelLock(model, tier);
+                          const lock = modelLock(model, knownTier);
                           const isSelected = model.id === selectedModelId;
                           return (
                             <ModelRow

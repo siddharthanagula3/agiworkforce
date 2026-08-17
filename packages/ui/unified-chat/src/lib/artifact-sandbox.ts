@@ -1,28 +1,8 @@
-import { stripTrailingSlashes } from '@agiworkforce/types';
+import { ARTIFACT_CSP_CONTENT, stripTrailingSlashes } from '@agiworkforce/types';
 
 export const ARTIFACT_SANDBOX_ATTR = 'allow-scripts allow-modals';
 
-const ARTIFACT_SCRIPT_CDN_HOSTS = [
-  'https://unpkg.com',
-  'https://cdn.jsdelivr.net',
-  'https://cdnjs.cloudflare.com',
-  'https://esm.sh',
-] as const;
-
-export const ARTIFACT_CSP_CONTENT = [
-  "default-src 'none'",
-  `script-src 'unsafe-inline' 'unsafe-eval' ${ARTIFACT_SCRIPT_CDN_HOSTS.join(' ')}`,
-  "style-src 'unsafe-inline' https:",
-  'img-src data: blob: https:',
-  'font-src data: https:',
-  'media-src data: blob:',
-  "connect-src 'none'",
-  "frame-src 'none'",
-  "child-src 'none'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-].join('; ');
+export { ARTIFACT_CSP_CONTENT };
 
 const CSP_META = `<meta http-equiv="Content-Security-Policy" content="${ARTIFACT_CSP_CONTENT}">`;
 

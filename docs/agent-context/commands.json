@@ -87,6 +87,7 @@
     "docsCheck": "pnpm docs:check",
     "dbIsolation": "pnpm check:db-isolation",
     "cssTokens": "pnpm check:css-tokens",
+    "capabilityPreconditions": "pnpm check:capability-preconditions",
     "referenceIntegrity": "pnpm check:reference-integrity",
     "referenceIntegrityBaseline": "node scripts/check-reference-integrity.mjs --write-baseline"
   },

@@ -12,8 +12,17 @@ jest.mock('../lib/mmkv', () => ({
 jest.mock('../services/api', () => ({
   api: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
 }));
+jest.mock('../services/managedCloudChat', () => ({
+  managedCloudChat: {
+    listConversations: jest.fn(),
+    createConversation: jest.fn(),
+    getConversation: jest.fn(),
+    updateConversation: jest.fn(),
+    deleteConversation: jest.fn(),
+  },
+}));
 
-import { api } from '../services/api';
+import { managedCloudChat } from '../services/managedCloudChat';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
@@ -25,9 +34,15 @@ import type { ChatMessage, ConversationSummary } from '../types/chat';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { canAccessCloudModelForTier } from '../src/features/model-picker/service';
 
-const mockDelete = api.delete as jest.MockedFunction<typeof api.delete>;
-const mockGet = api.get as jest.MockedFunction<typeof api.get>;
-const mockPut = api.put as jest.MockedFunction<typeof api.put>;
+const mockDelete = managedCloudChat.deleteConversation as jest.MockedFunction<
+  typeof managedCloudChat.deleteConversation
+>;
+const mockGet = managedCloudChat.getConversation as jest.MockedFunction<
+  typeof managedCloudChat.getConversation
+>;
+const mockPut = managedCloudChat.updateConversation as jest.MockedFunction<
+  typeof managedCloudChat.updateConversation
+>;
 const T = '2026-06-20T00:00:00.000Z';
 const CLOUD_MODEL_ID = requireMobileCloudModel().id;
 const LOCAL_MODEL_ID = requireLocalModel().id;
@@ -257,10 +272,7 @@ describe('cloud conversation model durability', () => {
     expect(updated).toBe(true);
     expect(convModel('c1')).toBe(CLOUD_MODEL_ID);
     expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
-    expect(mockPut).toHaveBeenCalledWith(
-      expect.stringContaining('c1'),
-      expect.objectContaining({ model: CLOUD_MODEL_ID }),
-    );
+    expect(mockPut).toHaveBeenCalledWith('c1', expect.objectContaining({ model: CLOUD_MODEL_ID }));
   });
 
   it('rejects a Local model before mutating or queueing a Cloud conversation', async () => {
@@ -360,13 +372,10 @@ describe('cloud conversation message-load durability', () => {
         id: 'c1',
         title: 'Chat c1',
         model: null,
-        project_id: null,
+        projectId: null,
         pinned: false,
-        starred: false,
-        archived: false,
-        is_temporary: false,
-        created_at: T,
-        updated_at: T,
+        createdAt: T,
+        updatedAt: T,
       },
       messages: [],
       total: 0,

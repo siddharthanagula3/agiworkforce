@@ -27,6 +27,7 @@ import {
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
 } from '@agiworkforce/types';
+import { supportsManagedMediaImageEdit } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
@@ -38,6 +39,7 @@ import {
   clearInvalidMediaModelSelections,
   listMediaModels,
   resolveMediaModelId,
+  resolveVideoOutputSelection,
 } from '@/src/features/chat/actions/mediaMode';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
@@ -113,14 +115,19 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const showToolSection = showResearchToggle || FEATURES.computerUse;
   const imageModelId = resolveMediaModelId('image', selectedMediaModel);
   const videoModelId = resolveMediaModelId('video', selectedMediaModel);
+  const imageModelSupportsReference = supportsManagedMediaImageEdit(
+    imageModelId ? getModelMetadataById(imageModelId)?.provider : null,
+  );
   const videoAspectOptions = useMemo(
     () => getVideoAspectOptionsForModel(videoModelId ?? undefined),
     [videoModelId],
   );
-  const effectiveVideoAspectRatio =
-    videoAspectOptions.find((option) => option.id === videoAspectRatio)?.id ??
-    videoAspectOptions[0]?.id ??
-    '16:9';
+  const videoOutputSelection = useMemo(
+    () => resolveVideoOutputSelection(videoModelId, videoAspectRatio, videoResolution),
+    [videoModelId, videoAspectRatio, videoResolution],
+  );
+  const effectiveVideoAspectRatio = videoOutputSelection.aspectRatio;
+  const effectiveVideoResolution = videoOutputSelection.resolution;
   const imageAspectOptions = useMemo(
     () => getImageAspectOptionsForModel(imageModelId ?? undefined),
     [imageModelId],
@@ -133,10 +140,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     () => getVideoQualityOptionsForModel(videoModelId ?? undefined, effectiveVideoAspectRatio),
     [videoModelId, effectiveVideoAspectRatio],
   );
-  const effectiveVideoResolution =
-    videoQualityOptions.find((option) => option.id === videoResolution)?.id ??
-    videoQualityOptions[0]?.id ??
-    '720p';
   useEffect(() => {
     clearInvalidMediaModelSelections();
   }, [selectedMediaModel]);
@@ -560,6 +563,22 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                       activeColor={themeColors.teal}
                     />
                   ))}
+
+                  {mediaMode === 'image' ? (
+                    <Text
+                      testID="image-reference-hint"
+                      style={{
+                        fontSize: 11,
+                        color: themeColors.textMuted,
+                        paddingHorizontal: 4,
+                        marginTop: 6,
+                      }}
+                    >
+                      {imageModelSupportsReference
+                        ? 'Attach one photo above to edit it with your prompt instead of generating from text.'
+                        : 'This model generates from text only. Attach a photo and pick an editing model to edit it.'}
+                    </Text>
+                  ) : null}
 
                   {/* Image output shape. Same treatment as video: the managed
                       image route has always accepted and validated

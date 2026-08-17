@@ -185,6 +185,7 @@ export class SecurityMonitoringService {
         csrf_validation_failed: 0,
         invalid_signature: 0,
         content_notice: 0,
+        retention_purge: 0,
       };
 
       const uniqueIps = new Set<string>();
@@ -365,21 +366,5 @@ export class SecurityMonitoringService {
       recent_critical: recentCritical,
       top_ips: topIps,
     };
-  }
-
-  static async cleanupOldLogs(): Promise<number> {
-    try {
-      const db = getNeonDb();
-      const [row] = await db.query<{ cleanup_old_security_logs: number }>(
-        `select cleanup_old_security_logs() as cleanup_old_security_logs`,
-      );
-
-      const deletedCount = row?.cleanup_old_security_logs ?? 0;
-      logger.info({ deletedCount }, 'Cleaned up old security logs');
-      return deletedCount;
-    } catch (error) {
-      logger.error({ error }, 'Error in cleanupOldLogs');
-      throw error;
-    }
   }
 }

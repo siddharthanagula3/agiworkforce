@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { SettingsModal } from '../SettingsModal';
 import { SETTINGS_NAV_GROUPS_WEB } from '../../settings-nav';
 import type { SettingsDataAdapter, SettingsPlugin } from '../types';
@@ -45,16 +48,16 @@ function renderConnectorDetail() {
 }
 
 describe('connector disconnect confirmation', () => {
-  it('does not disconnect until the confirm dialog is accepted', () => {
+  it('does not disconnect until the confirm dialog is accepted', async () => {
     const { disconnectConnector } = renderConnectorDetail();
 
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
     expect(disconnectConnector).not.toHaveBeenCalled();
 
-    const dialog = screen.getByRole('dialog', { name: 'Disconnect GitHub?' });
+    const dialog = screen.getByRole('alertdialog', { name: 'Disconnect GitHub?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
 
-    expect(disconnectConnector).toHaveBeenCalledWith('github');
+    await waitFor(() => expect(disconnectConnector).toHaveBeenCalledWith('github'));
   });
 
   it('cancels without disconnecting', () => {
@@ -62,11 +65,11 @@ describe('connector disconnect confirmation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Disconnect GitHub?' });
+    const dialog = screen.getByRole('alertdialog', { name: 'Disconnect GitHub?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
     expect(disconnectConnector).not.toHaveBeenCalled();
-    expect(screen.queryByRole('dialog', { name: 'Disconnect GitHub?' })).toBeNull();
+    expect(screen.queryByRole('alertdialog', { name: 'Disconnect GitHub?' })).toBeNull();
   });
 });
 
@@ -95,18 +98,18 @@ function renderPlugins(adapterOverrides: Partial<SettingsDataAdapter>) {
 }
 
 describe('plugin removal confirmation', () => {
-  it('confirms before removing from the plugins table', () => {
+  it('confirms before removing from the plugins table', async () => {
     const { removePlugin } = renderPlugins({ plugins: [INSTALLED_PLUGIN] });
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(removePlugin).not.toHaveBeenCalled();
 
-    const dialog = screen.getByRole('dialog', { name: 'Remove plugin?' });
+    const dialog = screen.getByRole('alertdialog', { name: 'Remove plugin?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
-    expect(removePlugin).toHaveBeenCalledWith('research-pack');
+    await waitFor(() => expect(removePlugin).toHaveBeenCalledWith('research-pack'));
   });
 
-  it('confirms before removing from the directory browse view', () => {
+  it('confirms before removing from the directory browse view', async () => {
     const { removePlugin } = renderPlugins({
       plugins: [],
       pluginCatalog: [INSTALLED_PLUGIN],
@@ -116,8 +119,23 @@ describe('plugin removal confirmation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(removePlugin).not.toHaveBeenCalled();
 
-    const dialog = screen.getByRole('dialog', { name: 'Remove plugin?' });
+    const dialog = screen.getByRole('alertdialog', { name: 'Remove plugin?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
-    expect(removePlugin).toHaveBeenCalledWith('research-pack');
+    await waitFor(() => expect(removePlugin).toHaveBeenCalledWith('research-pack'));
+  });
+});
+
+describe('confirm primitive ownership', () => {
+  const source = readFileSync(path.join(__dirname, '..', 'SettingsModal.tsx'), 'utf8');
+
+  it('borrows the package-shared useConfirm instead of declaring its own', () => {
+    expect(source).toContain("import { useConfirm } from '../primitives/ConfirmDialog';");
+    expect(source).not.toMatch(/function\s+useConfirm\s*\(/u);
+  });
+
+  it('routes every destructive action in the modal through that one hook', () => {
+    const hookUses = source.match(/useConfirm\(\)/gu) ?? [];
+    expect(hookUses.length).toBe(3);
+    expect(source).not.toMatch(/window\.confirm/u);
   });
 });

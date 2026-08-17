@@ -44,6 +44,7 @@ import {
   validateShortcutActions,
   MAX_CONTEXT_HTML_CHARS,
   sanitizePageText,
+  SITE_ALLOWLIST_STORAGE_KEY,
 } from './background/policy';
 
 const PAGE_EXTRACTION_TIMEOUT_MS = 5_000;
@@ -1131,6 +1132,21 @@ async function handleFillForm(message: FillFormMessage): Promise<ExtensionRespon
 
 let _isAutofillingNow = false;
 
+const AUTOFILL_ORIGIN_BLOCKED_ERROR =
+  'Autofill is blocked here — this site is not on your approved-site allowlist';
+
+async function isAutofillOriginAllowed(): Promise<boolean> {
+  try {
+    const res = await chrome.storage.local.get(SITE_ALLOWLIST_STORAGE_KEY);
+    const list = (res as Record<string, unknown>)[SITE_ALLOWLIST_STORAGE_KEY];
+    if (!Array.isArray(list)) return false;
+    return list.includes(window.location.origin);
+  } catch (err) {
+    logger.debug('Could not read site allowlist for autofill gating', err);
+    return false;
+  }
+}
+
 async function handleAutoFillJobApplication(
   message: AutoFillJobApplicationMessage,
 ): Promise<ExtensionResponse> {
@@ -1139,6 +1155,9 @@ async function handleAutoFillJobApplication(
       success: false,
       error: 'Autofill already in progress — please wait for it to finish',
     } as ExtensionResponse;
+  }
+  if (!(await isAutofillOriginAllowed())) {
+    return { success: false, error: AUTOFILL_ORIGIN_BLOCKED_ERROR } as ExtensionResponse;
   }
   _isAutofillingNow = true;
   const profile =
@@ -1173,6 +1192,9 @@ async function handleAutoFillJobApplication(
 
 async function handleRunAutofill(): Promise<ExtensionResponse> {
   try {
+    if (!(await isAutofillOriginAllowed())) {
+      return { success: false, error: AUTOFILL_ORIGIN_BLOCKED_ERROR } as ExtensionResponse;
+    }
     const profile = await loadAutofillProfile();
     const detection = detectJobApplication();
 

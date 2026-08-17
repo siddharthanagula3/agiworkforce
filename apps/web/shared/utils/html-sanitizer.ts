@@ -1,5 +1,5 @@
-
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
+import { buildArtifactCspContent } from '@agiworkforce/types';
 
 export type SanitizeLevel = 'strict' | 'standard' | 'extended';
 
@@ -396,41 +396,8 @@ export function stripMetaRefreshFromSandboxHtml(html: string): string {
   return html.replace(/<meta[^>]*http-equiv\s*=\s*['"]?refresh['"]?[^>]*>/gi, '');
 }
 
-export const ARTIFACT_SCRIPT_CDN_HOSTS = [
-  'https://unpkg.com',
-  'https://cdn.jsdelivr.net',
-  'https://cdnjs.cloudflare.com',
-  'https://esm.sh',
-] as const;
-
-/**
- * AUDIT-FIX ART-6 / ART-14: build the artifact Content-Security-Policy value.
- *
- * @param extraScriptSources Additional `script-src` sources for a renderer
- *   that bootstraps from a host outside {@link ARTIFACT_SCRIPT_CDN_HOSTS}.
- */
-export function buildArtifactCspContent(extraScriptSources: readonly string[] = []): string {
-  const scriptSrc = [
-    "'unsafe-inline'",
-    "'unsafe-eval'",
-    ...ARTIFACT_SCRIPT_CDN_HOSTS,
-    ...extraScriptSources,
-  ];
-  return [
-    "default-src 'none'",
-    `script-src ${scriptSrc.join(' ')}`,
-    "style-src 'unsafe-inline' https:",
-    'img-src data: blob: https:',
-    'font-src data: https:',
-    'media-src data: blob:',
-    "connect-src 'none'",
-    "frame-src 'none'",
-    "child-src 'none'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'none'",
-  ].join('; ');
-}
+export { ARTIFACT_SCRIPT_CDN_HOSTS } from '@agiworkforce/types';
+export { buildArtifactCspContent };
 
 export function buildArtifactCspMeta(extraScriptSources: readonly string[] = []): string {
   return `<meta http-equiv="Content-Security-Policy" content="${buildArtifactCspContent(

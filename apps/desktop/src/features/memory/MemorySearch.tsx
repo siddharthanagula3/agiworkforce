@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import type { MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 
 export interface MemorySearchProps {
   onSearch?: (query: string) => void;
@@ -21,7 +22,7 @@ export const MemorySearch = memo(function MemorySearch({
   onSearch,
   onResults,
   placeholder = 'Search memories...',
-  debounceMs = 300,
+  debounceMs = SEARCH_INPUT_DEBOUNCE_MS,
   className,
   useApiSearch = false,
 }: MemorySearchProps) {

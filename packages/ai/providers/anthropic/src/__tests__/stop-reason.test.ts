@@ -3,8 +3,9 @@
  * Anthropic `stop_reason` as an explicit, correct `StreamChunkStop['reason']`
  * -- never silently fall back to `'end_turn'` for a reason it doesn't
  * recognize by name. `'refusal'` (streaming safety classifiers intervened,
- * see the SDK's `StopReason` JSDoc) is the case this regression-tests: it
- * must NOT be reported as a normal successful completion.
+ * see the SDK's `StopReason` JSDoc) and `'pause_turn'` (a server tool
+ * suspended a still-resumable turn) are the cases this regression-tests:
+ * neither may be reported as a normal successful completion.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -101,7 +102,7 @@ describe('translateAnthropicStream — stop_reason mapping', () => {
     },
   );
 
-  it('documents the untouched pause_turn gap: still falls back to end_turn (tracked, not fixed here)', async () => {
+  it('surfaces pause_turn as its own resumable outcome, never as a completed turn', async () => {
     const events: Event[] = [
       messageStart('msg_pause'),
       {
@@ -113,6 +114,7 @@ describe('translateAnthropicStream — stop_reason mapping', () => {
 
     const out = await collect(translateAnthropicStream(fromArray(events)));
     const stop = out.find((c) => c.type === 'stop');
-    expect(stop).toEqual({ type: 'stop', reason: 'end_turn' });
+    expect(stop).toEqual({ type: 'stop', reason: 'pause_turn' });
+    expect(stop).not.toEqual({ type: 'stop', reason: 'end_turn' });
   });
 });

@@ -1,4 +1,3 @@
-
 import type { AIEmployeeBasic, AIEmployeePerformance } from '@shared/types';
 
 export type {
@@ -15,9 +14,10 @@ export type {
   AIEmployeeBasic,
   AIEmployeeStatus,
   AIEmployeePerformance,
-  MessageMetadata,
   MessageReaction,
 } from '@shared/types';
+
+export type { MessageMetadata } from '@shared/stores/web-chat-store';
 
 export type ChatMode = 'team' | 'engineer' | 'research' | 'race' | 'solo';
 

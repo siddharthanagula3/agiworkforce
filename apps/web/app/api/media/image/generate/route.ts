@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   ManagedMediaImageGenerationRequestSchema,
+  supportsManagedMediaImageEdit,
   type ManagedMediaImageAspectRatio,
   type ManagedMediaImageOperation,
   type ManagedMediaImageProvider,
@@ -1217,7 +1218,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       };
     }
 
-    if (editContext && provider !== 'openai') {
+    if (editContext && !supportsManagedMediaImageEdit(provider)) {
       throw new Error(
         `Image ${operation} is not supported by the ${provider} provider yet. Use the OpenAI image model for edits.`,
       );

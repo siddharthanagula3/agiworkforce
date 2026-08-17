@@ -17,6 +17,7 @@ vi.mock('../../../stores/auth', () => ({
 
 vi.mock('../../../lib/stripeCheckout', () => ({
   openBillingPortal: vi.fn(),
+  openTopUpCheckout: vi.fn(),
 }));
 
 import { BillingSettings } from '../BillingSettings';

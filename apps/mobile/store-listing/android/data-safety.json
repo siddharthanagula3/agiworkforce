@@ -1,0 +1,75 @@
+{
+  "package": "com.agiworkforce.app",
+  "dataDeletionRequestUrl": "https://agiworkforce.com/settings/account",
+  "dataDeletionEndpoint": "apps/web/app/api/user/delete-account/route.ts",
+  "allDataEncryptedInTransit": true,
+  "usesAdvertisingId": false,
+  "collectedData": [
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeEmailAddress",
+      "playCategory": "Personal info",
+      "playDataType": "Email address",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["App functionality", "Account management"],
+      "optional": false,
+      "ephemeral": false,
+      "usedForTracking": false
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeName",
+      "playCategory": "Personal info",
+      "playDataType": "Name",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["App functionality", "Account management"],
+      "optional": true,
+      "ephemeral": false,
+      "usedForTracking": false
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeOtherUserContent",
+      "playCategory": "Messages",
+      "playDataType": "Other in-app messages",
+      "collected": true,
+      "sharedWithThirdParties": true,
+      "purposes": ["App functionality"],
+      "optional": false,
+      "ephemeral": false,
+      "usedForTracking": false
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypePhotosorVideos",
+      "playCategory": "Photos and videos",
+      "playDataType": "Photos",
+      "collected": true,
+      "sharedWithThirdParties": true,
+      "purposes": ["App functionality"],
+      "optional": true,
+      "ephemeral": false,
+      "usedForTracking": false
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeUserID",
+      "playCategory": "Personal info",
+      "playDataType": "User IDs",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["App functionality", "Account management"],
+      "optional": false,
+      "ephemeral": false,
+      "usedForTracking": false
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeDeviceID",
+      "playCategory": "Device or other IDs",
+      "playDataType": "Device or other IDs",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["App functionality"],
+      "optional": false,
+      "ephemeral": false,
+      "usedForTracking": false
+    }
+  ]
+}

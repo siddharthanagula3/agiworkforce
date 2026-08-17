@@ -4,9 +4,12 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import {
+  CANONICAL_POLICY_ROUTES,
   CONTACT_EMAIL,
   CONTACT_SUBJECTS,
   GOVERNING_LAW,
+  GRIEVANCE_OFFICER_NAME,
+  GRIEVANCE_RESPONSE_TARGET_DAYS,
   LEGAL_ENTITY,
   LEGAL_ENTITY_DESCRIPTOR,
   NOTICE_ADDRESS,
@@ -17,7 +20,7 @@ import {
 export const metadata = buildMetadata({
   title: 'Data Processing Addendum',
   description:
-    'The full DPA text, readable before you sign: role allocation per trust boundary, Annex I processing details, Annex II security measures with their limits, Annex III subprocessors, and the transfer mechanism.',
+    'The full DPA text, readable before you sign: role allocation per trust boundary, Annex I processing details, Annex II security measures with their limits, Annex III subprocessors, Annex IV for India’s DPDP Act, and the transfer mechanism.',
   path: '/dpa',
 });
 
@@ -130,10 +133,74 @@ const ANNEX_II: { k: string; v: string; limit: string }[] = [
       'Vendor-side backup snapshots are governed by the vendors’ own retention configuration and are not separately purged by AGI. See section 09.',
   },
   {
+    k: 'Financial-record retention',
+    v: 'A daily job enforces a written schedule over billing rows. Books of account — the credit ledger and the organisation usage ledger — are kept for the statutory record-keeping period and then deleted, with the request-shaped metadata beside them emptied earlier. Metering events, completed settlement jobs, double-charge protection keys and payment-webhook receipts each carry their own shorter maximum age. The windows are published in section 05 of the privacy policy.',
+    limit:
+      'Two rows carry no maximum age by design: the current plan row and the current credit balance, because ageing them out would cancel a live subscription or delete purchased credits. Both are erased with the account. Invoices and payment records held by the payment processor are governed by its retention, not AGI’s.',
+  },
+  {
     k: 'Personnel and change management',
     v: 'Changes pass repository guardrails, type checks, lint and focused tests, plus dependency and vulnerability scanning, before release.',
     limit:
       'AGI holds no SOC 2, ISO 27001 or comparable third-party attestation. See /trust for the dated compliance status.',
+  },
+];
+
+const DPDP_TERMS: { gdpr: string; dpdp: string; note: string }[] = [
+  {
+    gdpr: 'Controller',
+    dpdp: 'Data Fiduciary',
+    note: 'The same decision-making test. The Act places substantially all compliance duty here, including for processing carried out by an engaged Data Processor.',
+  },
+  {
+    gdpr: 'Processor',
+    dpdp: 'Data Processor',
+    note: 'The Act’s structural requirement is that the engagement is under a valid contract (s. 8(2)). This DPA is that contract for Managed Cloud. The Act gives a Data Processor no direct duty toward the Board.',
+  },
+  {
+    gdpr: 'Data subject',
+    dpdp: 'Data Principal',
+    note: 'Rights are exercised against the Data Fiduciary. For a child, the Data Principal includes the parent or lawful guardian.',
+  },
+  {
+    gdpr: 'Personal data, processing',
+    dpdp: 'The same words, digital only',
+    note: 'The Act covers digital personal data and personal data digitised after collection. It has no special-category regime, so Annex I’s bar on special-category data stands as a contractual term rather than a statutory echo.',
+  },
+];
+
+const DPDP_DUTIES: { k: string; v: string }[] = [
+  {
+    k: 'Role, by boundary',
+    v: 'Local: AGI processes nothing, so no Data Fiduciary or Data Processor relationship arises. BYOK: the Customer is the Data Fiduciary; AGI is its Data Processor for account and settings data only, and the model provider is engaged on the Customer’s own contract. Managed Cloud: the Customer is the Data Fiduciary for the content its users submit and AGI is its Data Processor, with the vendors in Annex III engaged by AGI under obligations no less protective than these. AGI is Data Fiduciary in its own right for account administration, billing, security and audit logs and service telemetry, and for its direct consumer users.',
+  },
+  {
+    k: 'Notice and consent (ss. 5–6)',
+    v: 'Giving the itemised notice and obtaining consent by clear affirmative action, per purpose, is the Data Fiduciary’s duty — for enterprise use, the Customer’s duty toward its own users. AGI does not collect consent from the Customer’s users on the Customer’s behalf and is not registered as a Consent Manager under s. 6(7). AGI runs its own per-purpose consent record for the processing it is Data Fiduciary for.',
+  },
+  {
+    k: 'Erasure on withdrawal or purpose end (s. 8(7))',
+    v: 'AGI erases on the Customer’s instruction and on account deletion, by the mechanism and on the timetable in section 09, and imposes the same obligation on its sub-processors. The vendor-snapshot limit stated in section 09 applies here unchanged; it is not restated as narrower than it is.',
+  },
+  {
+    k: 'Data Principal rights (ss. 11–14)',
+    v: 'Access, correction, erasure, grievance redressal and nomination are exercised against the Data Fiduciary. Where a Data Principal contacts AGI about Customer data, AGI refers them to the Customer and assists in responding. Nomination has no field in the product; a nomination sent to the grievance contact is recorded against an account by hand.',
+  },
+  {
+    k: 'Breach intimation (s. 8(6))',
+    v: 'Section 10 of this DPA. The duty to intimate the Board and every affected Data Principal sits on the Data Fiduciary: AGI notifies the Customer so the Customer can perform it, delivers the notice through AGI-controlled surfaces on the Customer’s written instruction, and performs it directly for the data AGI is Data Fiduciary for.',
+  },
+  {
+    k: 'Transfer outside India (s. 16)',
+    v: 'Personal data is processed and stored in the United States, and AGI offers no Indian data residency. The Act permits transfer except to territories the Central Government restricts by notification; whether any notification affects the United States is a question of the live list on the date you read this, and this DPA does not answer it for you.',
+  },
+  {
+    k: 'Significant Data Fiduciary (s. 10)',
+    v: 'AGI has not been notified as a Significant Data Fiduciary. It has not appointed an India-resident Data Protection Officer, and it does not run the independent data audits or data protection impact assessments the Act requires of one. If the Customer’s own position depends on those controls existing at its processor, they do not exist here today.',
+  },
+  {
+    k: 'Children (s. 9)',
+    v: 'AGI performs no age verification and no verifiable parental consent. Accounts are for adults, and the Terms of Service permit 13- to 17-year-olds only under an account opened and supervised by a parent, guardian or school. This is named as a gap against the Act rather than implied away.',
   },
 ];
 
@@ -150,7 +217,8 @@ const SECTIONS = [
   '10 &middot; Personal data breach',
   '11 &middot; Audit',
   '12 &middot; Alpha status, liability, and term',
-  '13 &middot; Signature',
+  '13 &middot; Annex IV &mdash; India (DPDP Act, 2023)',
+  '14 &middot; Signature',
 ] as const;
 
 export default function DpaPage() {
@@ -200,13 +268,26 @@ export default function DpaPage() {
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             &ldquo;Applicable Data Protection Law&rdquo; means the EU General Data Protection
             Regulation 2016/679 (&ldquo;GDPR&rdquo;), the UK GDPR and Data Protection Act 2018, the
-            Swiss Federal Act on Data Protection, and the California Consumer Privacy Act as amended
-            (&ldquo;CCPA&rdquo;), each to the extent it applies. &ldquo;Controller&rdquo;,
+            Swiss Federal Act on Data Protection, the California Consumer Privacy Act as amended
+            (&ldquo;CCPA&rdquo;), and India&rsquo;s Digital Personal Data Protection Act, 2023
+            (&ldquo;DPDP Act&rdquo;) together with the rules made under it as and to the extent they
+            are in force, each to the extent it applies. &ldquo;Controller&rdquo;,
             &ldquo;processor&rdquo;, &ldquo;data subject&rdquo;, &ldquo;personal data&rdquo; and
             &ldquo;processing&rdquo; carry the meanings given in the GDPR. &ldquo;Customer Personal
             Data&rdquo; means personal data contained in content the Customer or its users submit to
             Managed Cloud. &ldquo;Sub-processor&rdquo; means a third party engaged by AGI to process
             Customer Personal Data.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            The DPDP Act does not use that vocabulary. Where it applies, &ldquo;Data
+            Fiduciary&rdquo; reads for controller, &ldquo;Data Processor&rdquo; for processor and
+            &ldquo;Data Principal&rdquo; for data subject, and the Act allocates duties differently
+            enough that a word swap is not a translation.{' '}
+            <strong>
+              Section 13 is the India annex and states the allocation in the Act&rsquo;s own terms;
+              where this DPA and that annex differ on processing subject to the DPDP Act, the annex
+              governs.
+            </strong>
           </p>
         </section>
 
@@ -266,6 +347,13 @@ export default function DpaPage() {
               </tr>
             </tbody>
           </table>
+          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
+            Under the DPDP Act the same three rows read Data Fiduciary for controller and Data
+            Processor for processor, with one difference that matters: the Act puts substantially
+            all compliance duty on the Data Fiduciary, including for processing carried out by its
+            Data Processor, so a Customer subject to that Act cannot discharge a duty by pointing at
+            AGI. Section 13 sets that out row by row.
+          </p>
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
             AGI is an independent controller for a narrow set of its own data: account
             administration, billing records, security and audit logs, and service telemetry. It
@@ -510,6 +598,29 @@ export default function DpaPage() {
             information. Where the full picture is not available within that window, AGI provides
             what it has and follows up in phases. Notification is not an admission of fault.
           </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            <strong>Notification to the affected individuals.</strong> Where AGI is the processor or
+            Data Processor, the duty to notify individuals sits with the Customer as controller or
+            Data Fiduciary, and AGI does not notify the Customer&rsquo;s users behind the
+            Customer&rsquo;s back. Two commitments keep that from being the place the obligation
+            disappears. First, where the Customer instructs AGI in writing to deliver the notice,
+            AGI delivers it through the surfaces AGI controls. Second, where AGI is itself the
+            controller or Data Fiduciary of the affected data &mdash; the account, billing,
+            security-log and telemetry records described in section 03, and its own direct users
+            &mdash; AGI notifies each affected individual directly, and where the DPDP Act applies
+            also intimates the Data Protection Board of India, without waiting for its investigation
+            to conclude and without sequencing the individual notice behind the regulator one. The
+            DPDP Act carries no low-risk exception and does not let a public notice stand in for
+            individual intimation where the individuals are identifiable.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            <strong>How that notice is delivered, honestly.</strong> The product sends
+            support-escalation and scheduled-task email, and nothing in it can mail an arbitrary
+            list of affected users. A notice to individuals is therefore delivered in-product on
+            next sign-in and as a dated public notice at a stable URL, with direct email only where
+            an address is held and someone sends it. That is a limit of the product today, published
+            here so no incident response is planned around a broadcast that does not exist.
+          </p>
         </section>
 
         <section className="agi-section" id="s-11">
@@ -558,8 +669,81 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section" id="s-13">
-          <p className="agi-section-eyebrow">13 &middot; Signature</p>
+        <section className="agi-section" id="s-13" data-legal-review="pending-counsel">
+          <p className="agi-section-eyebrow">13 &middot; Annex IV &mdash; India (DPDP Act, 2023)</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            This annex applies where AGI processes digital personal data in connection with offering
+            the service to Data Principals in India. It is written out rather than folded into the
+            GDPR text because the DPDP Act is not a translation of the GDPR: it uses its own
+            vocabulary, puts the consent and breach-intimation duties in different places, and gives
+            a Data Processor no regulator-facing obligation to hand back to the Customer.{' '}
+            <strong>
+              This annex was drafted from the statute text and has not been reviewed by Indian
+              counsel. Counsel review is an open item, not a completed one, and this page says so
+              rather than letting a signature imply otherwise.
+            </strong>
+          </p>
+          <table className="agi-ledger" style={{ marginTop: 16 }}>
+            <thead>
+              <tr>
+                <th>GDPR term</th>
+                <th>DPDP Act term</th>
+                <th>What changes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DPDP_TERMS.map((row) => (
+                <tr key={row.gdpr}>
+                  <td style={{ width: '18%', verticalAlign: 'top' }}>{row.gdpr}</td>
+                  <td style={{ width: '20%', verticalAlign: 'top' }}>{row.dpdp}</td>
+                  <td style={{ verticalAlign: 'top' }}>{row.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <table className="agi-ledger" style={{ marginTop: 16 }}>
+            <tbody>
+              {DPDP_DUTIES.map((row) => (
+                <tr key={row.k}>
+                  <td style={{ width: '26%', verticalAlign: 'top' }}>{row.k}</td>
+                  <td>{row.v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="agi-callout" style={{ marginTop: 20 }}>
+            <h3 className="agi-callout-h">{GRIEVANCE_OFFICER_NAME}</h3>
+            <p className="agi-callout-p">
+              Grievance redressal under s. 13: email{' '}
+              <a
+                href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)}
+                style={{ color: 'var(--agi-ink)' }}
+              >
+                {CONTACT_EMAIL}
+              </a>{' '}
+              with the subject line &ldquo;{CONTACT_SUBJECTS.dpdpGrievance}&rdquo;, or post to{' '}
+              {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We aim to respond within{' '}
+              {GRIEVANCE_RESPONSE_TARGET_DAYS} days &mdash; our commitment, not a statutory deadline
+              being quoted back to you. If our response does not resolve it, a Data Principal may
+              complain to the Data Protection Board of India.
+            </p>
+          </div>
+          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
+            The notice AGI gives its own Data Principals in India, including the consent purposes
+            and the retention schedule behind them, is at{' '}
+            <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} style={{ color: 'var(--agi-ink)' }}>
+              /privacy/india
+            </Link>
+            , and rights are exercised at{' '}
+            <Link href={CANONICAL_POLICY_ROUTES.dataRights} style={{ color: 'var(--agi-ink)' }}>
+              /privacy/requests
+            </Link>
+            .
+          </p>
+        </section>
+
+        <section className="agi-section" id="s-14">
+          <p className="agi-section-eyebrow">14 &middot; Signature</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             This DPA is effective without signature once the Terms of Service are accepted. If your
             procurement process needs a countersigned copy, email{' '}

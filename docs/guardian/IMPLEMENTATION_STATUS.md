@@ -112,8 +112,8 @@ Concrete attachment points so Phase 3 starts from file paths, not re-mapping:
   (`packages/contracts/types/src/subscription-entitlement.ts`; entitled
   statuses are `active`/`trialing` — `plan_tier` alone lies after
   cancellation) then `canUseBillingPlanCapability`. Worked example:
-  `requireManagedChatPlan` in
-  `services/api-gateway/src/middleware/planGate.ts`.
+  `resolveTeamAdminAccess` in
+  `apps/web/app/api/settings/team/team-admin-access.ts`.
 - **Quotas**: add numeric limits (repos watched, reviews/period) to
   `BillingPlanProductLimits` + `BILLING_PLAN_PRODUCT_LIMITS` with an accessor
   built on `toEnforceableBillingPlanLimit` (import the canonical converter —

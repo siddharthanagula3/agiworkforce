@@ -1,4 +1,10 @@
-import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
+import {
+  MAX_TOP_UP_AMOUNT_USD,
+  MIN_TOP_UP_AMOUNT_USD,
+  topUpUnitsForUsd,
+  type BillingInterval,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 import { WEB_APP_URL } from '../api/config';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { openExternalUrl } from '../utils/navigation';
@@ -165,6 +171,55 @@ export async function openBillingPortal(
   }
 
   await openBillingUrl(url, 'Manage AGI billing', onClosed);
+  return null;
+}
+
+export async function openTopUpCheckout(
+  amountUsd: number,
+  onClosed?: () => void | Promise<void>,
+): Promise<string | null> {
+  if (topUpUnitsForUsd(amountUsd) === null) {
+    return `Choose a whole-dollar top-up from $${MIN_TOP_UP_AMOUNT_USD} to $${MAX_TOP_UP_AMOUNT_USD}.`;
+  }
+
+  let request: ReturnType<typeof createManagedCloudRequestContext>;
+  try {
+    request = createManagedCloudRequestContext('Cloud usage top-up');
+  } catch {
+    return 'Please sign in to buy a usage top-up.';
+  }
+  const ownershipBlock = stripeBillingActionBlockReason('portal');
+  if (ownershipBlock) return ownershipBlock;
+
+  let url: string;
+  try {
+    const res = await request.fetch(`${WEB_APP_URL}/api/billing/top-up`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `agi.topup.desktop.${crypto.randomUUID()}`,
+      },
+      body: JSON.stringify({ amountUsd }),
+    });
+    request.assertBoundary();
+
+    if (!res.ok) {
+      const msg = await readBillingError(res, `Top-up failed (${res.status})`);
+      request.assertBoundary();
+      return msg;
+    }
+
+    const payload: unknown = await res.json();
+    request.assertBoundary();
+    if (!isRecord(payload) || typeof payload['url'] !== 'string') {
+      return 'No top-up checkout URL returned from server.';
+    }
+    url = payload['url'];
+  } catch {
+    return 'Unable to reach payment service. Check your internet connection.';
+  }
+
+  await openBillingUrl(url, 'Buy an AGI usage top-up', onClosed);
   return null;
 }
 

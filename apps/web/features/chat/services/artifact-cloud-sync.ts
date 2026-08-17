@@ -1,7 +1,14 @@
-import { ChatSyncPullResponseSchema, type ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
+import {
+  ChatSyncPullResponseSchema,
+  ChatSyncPushResponseSchema,
+  type ArtifactSyncPushItem,
+  type ArtifactWireDelta,
+  type ChatSyncPushResponse,
+} from '@agiworkforce/cloud-contracts';
 import { selectNextCursor } from '@agiworkforce/sync';
 
 const MAX_PULL_PAGES = 100;
+const SYNC_PROTOCOL_VERSION = 2;
 
 export interface PullArtifactCloudChangesOptions {
   cursor: string;
@@ -54,4 +61,41 @@ export async function pullArtifactCloudChanges({
   }
 
   throw new Error(`artifact sync exceeded ${MAX_PULL_PAGES} pages`);
+}
+
+export interface PushArtifactCloudChangesOptions {
+  artifacts: ReadonlyArray<ArtifactSyncPushItem>;
+  getToken: () => Promise<string | null>;
+  fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
+  signal?: AbortSignal;
+}
+
+export async function pushArtifactCloudChanges({
+  artifacts,
+  getToken,
+  fetchImpl = fetch,
+  signal,
+}: PushArtifactCloudChangesOptions): Promise<ChatSyncPushResponse | null> {
+  if (artifacts.length === 0) return null;
+
+  const token = await getToken();
+  if (!token) {
+    throw new Error('artifact sync authentication is unavailable');
+  }
+
+  const response = await fetchImpl('/api/chat/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ protocolVersion: SYNC_PROTOCOL_VERSION, artifacts }),
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) {
+    throw new Error(`artifact sync push failed with status ${response.status}`);
+  }
+
+  const parsed = ChatSyncPushResponseSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error('invalid artifact sync push response');
+  }
+  return parsed.data;
 }

@@ -336,6 +336,45 @@ describe('chatStore action basics (H15)', () => {
   });
 
   describe('forkConversationForByok', () => {
+    it('carries only the approved, redacted context across the trust boundary', () => {
+      const { createConversation, addMessage } = useChatStore.getState();
+      const sourceId = createConversation('Local thread');
+      addMessage({ role: 'user', content: 'my api key is sk-live-secret' });
+      addMessage({ role: 'assistant', content: 'Local answer' });
+      addMessage({ role: 'user', content: 'unapproved follow-up' });
+
+      const sourceMessages = useChatStore.getState().messagesByConversation[sourceId] ?? [];
+      const approvedId = sourceMessages[0]!.id;
+      const forkId = useChatStore.getState().forkConversationForByok(sourceId, {
+        approvedContext: [{ messageId: approvedId, redactedContent: 'my api key is [REDACTED]' }],
+        model: FIXTURE_MODEL_ID,
+        provider: 'openai',
+      });
+
+      const state = useChatStore.getState();
+      const forked = state.messagesByConversation[forkId!] ?? [];
+      expect(forked).toHaveLength(1);
+      expect(forked[0]?.content).toBe('my api key is [REDACTED]');
+      expect(state.messagesByConversation[sourceId]).toHaveLength(3);
+      expect(state.messagesByConversation[sourceId]?.[0]?.content).toBe(
+        'my api key is sk-live-secret',
+      );
+    });
+
+    it('refuses to fork when nothing was approved', () => {
+      const { createConversation, addMessage } = useChatStore.getState();
+      const sourceId = createConversation('Local thread');
+      addMessage({ role: 'user', content: 'Local only' });
+
+      const forkId = useChatStore
+        .getState()
+        .forkConversationForByok(sourceId, { approvedContext: [] });
+
+      expect(forkId).toBeNull();
+      expect(useChatStore.getState().conversations).toHaveLength(1);
+      expect(useChatStore.getState().activeConversationId).toBe(sourceId);
+    });
+
     it('creates a new active conversation with copied messages', () => {
       const { createConversation, addMessage, forkConversationForByok } = useChatStore.getState();
       const sourceId = createConversation('Local thread');
@@ -351,13 +390,18 @@ describe('chatStore action basics (H15)', () => {
         metadata: { model: 'fixture-local-model', provider: 'ollama' },
       });
 
+      const approved = (useChatStore.getState().messagesByConversation[sourceId] ?? []).map(
+        (message) => ({ messageId: message.id, redactedContent: message.content }),
+      );
       const forkId = forkConversationForByok(sourceId, {
+        approvedContext: approved,
         title: 'Local thread (BYOK fork)',
         model: FIXTURE_MODEL_ID,
         provider: 'openai',
       });
       const state = useChatStore.getState();
 
+      expect(forkId).not.toBeNull();
       expect(forkId).not.toBe(sourceId);
       expect(state.activeConversationId).toBe(forkId);
       expect(state.conversations[0]?.title).toBe('Local thread (BYOK fork)');
@@ -368,21 +412,29 @@ describe('chatStore action basics (H15)', () => {
         state.conversations.find((conversation) => conversation.id === forkId)?.executionMode,
       ).toBe('byok');
       expect(state.messagesByConversation[sourceId]).toHaveLength(2);
-      expect(state.messagesByConversation[forkId]).toHaveLength(2);
-      expect(state.messagesByConversation[forkId]?.[0]?.pending).toBeUndefined();
-      expect(state.messagesByConversation[forkId]?.[0]?.streaming).toBeUndefined();
-      expect(state.messagesByConversation[forkId]?.[1]?.metadata?.model).toBe(FIXTURE_MODEL_ID);
-      expect(state.messagesByConversation[forkId]?.[1]?.metadata?.provider).toBe('openai');
+      expect(state.messagesByConversation[forkId!]).toHaveLength(2);
+      expect(state.messagesByConversation[forkId!]?.[0]?.pending).toBeUndefined();
+      expect(state.messagesByConversation[forkId!]?.[0]?.streaming).toBeUndefined();
+      expect(state.messagesByConversation[forkId!]?.[1]?.metadata?.model).toBe(FIXTURE_MODEL_ID);
+      expect(state.messagesByConversation[forkId!]?.[1]?.metadata?.provider).toBe('openai');
     });
 
     it('preserves project and custom instruction metadata on the fork', () => {
-      const { createConversation, setConversationProject, setConversationCustomInstructions } =
-        useChatStore.getState();
+      const {
+        createConversation,
+        addMessage,
+        setConversationProject,
+        setConversationCustomInstructions,
+      } = useChatStore.getState();
       const sourceId = createConversation('Project thread');
+      addMessage({ role: 'user', content: 'Project question' });
       setConversationProject(sourceId, 'project-1');
       setConversationCustomInstructions(sourceId, 'Use the project voice.');
 
-      const forkId = useChatStore.getState().forkConversationForByok(sourceId);
+      const approvedId = (useChatStore.getState().messagesByConversation[sourceId] ?? [])[0]!.id;
+      const forkId = useChatStore.getState().forkConversationForByok(sourceId, {
+        approvedContext: [{ messageId: approvedId, redactedContent: 'Project question' }],
+      });
       const fork = useChatStore
         .getState()
         .conversations.find((conversation) => conversation.id === forkId);

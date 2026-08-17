@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { CreditCard } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import {
+  MAX_TOP_UP_AMOUNT_USD,
+  MIN_TOP_UP_AMOUNT_USD,
+  TOP_UP_PRESET_AMOUNTS_USD,
+  TOP_UP_UNITS_PER_USD,
+  topUpUnitsForUsd,
+} from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
-import { openBillingPortal } from '../../lib/stripeCheckout';
+import { openBillingPortal, openTopUpCheckout } from '../../lib/stripeCheckout';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
 import { isElectronHost } from '../../lib/runtimeEnvironment';
 
@@ -39,6 +46,9 @@ export function BillingSettings() {
   );
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [topUpAmountUsd, setTopUpAmountUsd] = useState<number>(MIN_TOP_UP_AMOUNT_USD);
+  const [topUpOpening, setTopUpOpening] = useState(false);
+  const [topUpError, setTopUpError] = useState<string | null>(null);
 
   const ownerPolicy = getDesktopSubscriptionOwnerPolicy(
     subscriptionSource,
@@ -64,6 +74,20 @@ export function BillingSettings() {
     const err = await openBillingPortal();
     if (err) setError(err);
     setOpening(false);
+  };
+
+  const canBuyTopUps =
+    subscriptionSource === 'stripe' &&
+    (subscriptionStatus === 'active' || subscriptionStatus === 'trialing');
+  const selectedTopUpUnits = topUpUnitsForUsd(topUpAmountUsd);
+
+  const handleBuyTopUp = async () => {
+    if (topUpOpening || selectedTopUpUnits === null) return;
+    setTopUpOpening(true);
+    setTopUpError(null);
+    const err = await openTopUpCheckout(topUpAmountUsd);
+    if (err) setTopUpError(err);
+    setTopUpOpening(false);
   };
 
   const openPlans = () => {
@@ -138,6 +162,64 @@ export function BillingSettings() {
           ) : ownerPolicy.canStartStripePlanChange ? (
             <Button onClick={openPlans}>Compare plans</Button>
           ) : null}
+
+          {canBuyTopUps && (
+            <section className="space-y-3 rounded-lg border border-border bg-card/60 p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Usage top-up</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {TOP_UP_UNITS_PER_USD} units for every $1. Minimum ${MIN_TOP_UP_AMOUNT_USD},
+                  self-serve maximum ${MAX_TOP_UP_AMOUNT_USD}. A top-up adds managed-usage balance
+                  and does not change your plan or renewal date.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {TOP_UP_PRESET_AMOUNTS_USD.map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    aria-pressed={topUpAmountUsd === amount}
+                    onClick={() => setTopUpAmountUsd(amount)}
+                    className={`rounded-md border px-3 py-1.5 text-sm ${
+                      topUpAmountUsd === amount
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    ${amount}
+                  </button>
+                ))}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                Custom amount ($)
+                <input
+                  aria-label="Custom top-up amount in dollars"
+                  type="number"
+                  min={MIN_TOP_UP_AMOUNT_USD}
+                  max={MAX_TOP_UP_AMOUNT_USD}
+                  step={1}
+                  value={topUpAmountUsd}
+                  onChange={(e) => setTopUpAmountUsd(Number(e.target.value))}
+                  className="w-24 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                />
+              </label>
+
+              {topUpError && <p className="text-sm text-rose-400">{topUpError}</p>}
+
+              <Button
+                onClick={() => void handleBuyTopUp()}
+                disabled={topUpOpening || selectedTopUpUnits === null}
+              >
+                {topUpOpening
+                  ? 'Opening checkout…'
+                  : selectedTopUpUnits === null
+                    ? `Enter $${MIN_TOP_UP_AMOUNT_USD}–$${MAX_TOP_UP_AMOUNT_USD} in whole dollars`
+                    : `Buy ${selectedTopUpUnits.toLocaleString('en-US')} units · $${topUpAmountUsd}`}
+              </Button>
+            </section>
+          )}
         </>
       )}
     </div>

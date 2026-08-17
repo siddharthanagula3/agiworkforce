@@ -14,6 +14,7 @@ import { finalizeObservedManagedUsage } from '@/lib/services/managed-usage-accou
 import {
   completeCloudAgentApprovalCheckpoint,
   readCloudAgentRunAssistantText,
+  recordCloudAgentRunSettledUsage,
   transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -80,13 +81,26 @@ export async function settleWorkflowInvocation(
     runId: input.runId,
     billingIdempotencyKey: input.billing.idempotencyKey,
   });
-  await finalizeObservedManagedUsage({
+  const finalization = await finalizeObservedManagedUsage({
     reservation: { db, ...input.billing },
     provider: input.processed.provider,
     model: input.processed.chatRequest.model,
     usage,
     reason: `cloud_agent_workflow_${outcome}`,
     cancelled: outcome === 'cancelled',
+  });
+
+  await recordCloudAgentRunSettledUsage(db, {
+    userId: input.userId,
+    runId: input.runId,
+    billingIdempotencyKey: input.billing.idempotencyKey,
+    usage: {
+      providerCalls: usage.providerCalls,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      reasoningTokens: usage.reasoningTokens,
+      costCents: finalization.actualCostCents,
+    },
   });
 
   await persistWorkflowAssistantTurn(db, input, outcome, usage);

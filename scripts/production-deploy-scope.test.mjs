@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 import {
+  SYNC_PARITY_SOURCES,
   classifyDeployScope,
   formatGithubOutputs,
   isEligibleProductionRun,
@@ -12,7 +13,6 @@ import {
 test('web-only changes do not spend unrelated expensive runners', () => {
   assert.deepEqual(classifyDeployScope(['apps/web/app/page.tsx']), {
     web: true,
-    gateway: false,
     signaling: false,
     desktop: false,
     native: false,
@@ -25,18 +25,7 @@ test('web-only changes do not spend unrelated expensive runners', () => {
 test('service and native paths select only their owning expensive lanes', () => {
   assert.deepEqual(classifyDeployScope(['services/signaling-server/src/index.ts']), {
     web: false,
-    gateway: false,
     signaling: true,
-    desktop: false,
-    native: false,
-    extension: false,
-    vscode: false,
-    mobile: false,
-  });
-  assert.deepEqual(classifyDeployScope(['services/api-gateway/src/index.ts']), {
-    web: false,
-    gateway: true,
-    signaling: false,
     desktop: false,
     native: false,
     extension: false,
@@ -45,7 +34,6 @@ test('service and native paths select only their owning expensive lanes', () => 
   });
   assert.deepEqual(classifyDeployScope(['apps/desktop/src-tauri/src/lib.rs']), {
     web: false,
-    gateway: false,
     signaling: false,
     desktop: true,
     native: true,
@@ -55,30 +43,22 @@ test('service and native paths select only their owning expensive lanes', () => 
   });
 });
 
-test('gateway image and host contracts select only the gateway deploy lane', () => {
-  for (const file of [
-    '.dockerignore',
-    'infrastructure/api-gateway/fly.production.toml',
-    'scripts/verify-gateway-deployment.mjs',
-  ]) {
-    assert.deepEqual(classifyDeployScope([file]), {
-      web: false,
-      gateway: true,
-      signaling: false,
-      desktop: false,
-      native: false,
-      extension: false,
-      vscode: false,
-      mobile: false,
-    });
-  }
+test('the image-build contract selects only the containerized signaling lane', () => {
+  assert.deepEqual(classifyDeployScope(['.dockerignore']), {
+    web: false,
+    signaling: true,
+    desktop: false,
+    native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
+  });
 });
 
 test('shared build inputs conservatively rebuild every deployable lane', () => {
   const scope = classifyDeployScope(['pnpm-lock.yaml']);
   assert.deepEqual(scope, {
     web: true,
-    gateway: true,
     signaling: true,
     desktop: true,
     native: true,
@@ -93,7 +73,6 @@ test('shared build inputs conservatively rebuild every deployable lane', () => {
 test('documentation-only changes do not allocate deploy or native work', () => {
   assert.deepEqual(classifyDeployScope(['docs/current/ci-deployment-policy.md']), {
     web: false,
-    gateway: false,
     signaling: false,
     desktop: false,
     native: false,
@@ -106,7 +85,6 @@ test('documentation-only changes do not allocate deploy or native work', () => {
 test('product-shell paths select their real E2E lane', () => {
   const expectedBase = {
     web: false,
-    gateway: false,
     signaling: false,
     desktop: false,
     native: false,
@@ -235,7 +213,7 @@ test('a failed deploy job is not a baseline, and neither is a foreign run', () =
 
 test('surfaces are tracked independently', () => {
   const WEB = 'Deploy verified web artifact';
-  const GATEWAY = 'Promote verified gateway image to production';
+  const OTHER = 'Deploy signaling server';
   const base = {
     conclusion: 'success',
     event: 'push',
@@ -245,11 +223,11 @@ test('surfaces are tracked independently', () => {
 
   const runs = [
     { ...base, head_sha: 'web-only', jobs: [{ name: WEB, conclusion: 'success' }] },
-    { ...base, head_sha: 'both', jobs: [{ name: GATEWAY, conclusion: 'success' }] },
+    { ...base, head_sha: 'other-only', jobs: [{ name: OTHER, conclusion: 'success' }] },
   ];
 
   assert.equal(selectSurfaceBaseline(runs, 'owner/repository', WEB), 'web-only');
-  assert.equal(selectSurfaceBaseline(runs, 'owner/repository', GATEWAY), 'both');
+  assert.equal(selectSurfaceBaseline(runs, 'owner/repository', OTHER), 'other-only');
 });
 
 test('never deployed reads as null, which the caller must treat as deploy-everything', () => {
@@ -266,13 +244,56 @@ test('Vercel Git integration cannot race the CI-owned main promotion', () => {
   assert.match(workflow, /vercel deploy --prebuilt --prod/);
 });
 
-test('gateway production reuses the immutable image verified in staging', () => {
+test('the web promotion verifies the schema ledger before it deploys', () => {
   const workflow = fs.readFileSync('.github/workflows/deploy-production.yml', 'utf8');
-  assert.match(workflow, /containerimage\.digest/);
-  assert.match(
-    workflow,
-    /IMAGE_REF: \$\{\{ needs\.deploy-gateway-staging\.outputs\.image_ref \}\}/,
-  );
   assert.match(workflow, /pnpm db:migrate -- verify/);
-  assert.equal((workflow.match(/node scripts\/verify-gateway-deployment\.mjs/g) ?? []).length, 2);
+  assert.doesNotMatch(workflow, /api-gateway/);
+});
+
+test('editing either half of the sync parity pair selects the lane that runs both', () => {
+  for (const file of [
+    'packages/client/sync/src/__fixtures__/pull-apply.json',
+    'packages/client/sync/src/__fixtures__/cursor-compare.json',
+    'packages/client/sync/src/__fixtures__/push-body.json',
+    'packages/client/sync/src/cursor.ts',
+    'packages/client/sync/src/messages.ts',
+    'apps/desktop/src-tauri/src/data/cloud_sync.rs',
+  ]) {
+    assert.equal(classifyDeployScope([file]).native, true, file);
+  }
+
+  assert.equal(classifyDeployScope(['packages/platform/utils/src/logger.ts']).native, false);
+});
+
+test('the sync parity sources named by the classifier still exist', () => {
+  for (const source of SYNC_PARITY_SOURCES) {
+    assert.equal(fs.existsSync(source), true, source);
+  }
+});
+
+test('CI runs the TS suite and the Rust fixture replay in the same job', () => {
+  const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+  const stepAt = workflow.indexOf('Cross-language sync parity');
+  assert.notEqual(stepAt, -1);
+
+  const headers = [...workflow.matchAll(/^ {2}[a-z0-9-]+:$/gm)];
+  const owner = headers.filter((header) => header.index < stepAt).at(-1);
+  const next = headers.find((header) => header.index > stepAt);
+  const job = workflow.slice(owner.index, next ? next.index : workflow.length);
+
+  assert.match(job, /if: needs\.scope\.outputs\.native_changed == 'true'/);
+  assert.match(job, /run: pnpm install --frozen-lockfile/);
+  assert.match(job, /pnpm --filter @agiworkforce\/sync test/);
+  assert.match(job, /cargo test -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests/);
+  assert.match(job, /grep -c ': test\$'/);
+  assert.match(job, /if \[ "\$matched" -eq 0 \]; then/);
+
+  const syncManifest = JSON.parse(fs.readFileSync('packages/client/sync/package.json', 'utf8'));
+  assert.equal(syncManifest.name, '@agiworkforce/sync');
+  assert.equal(typeof syncManifest.scripts.test, 'string');
+
+  const rust = fs.readFileSync('apps/desktop/src-tauri/src/data/cloud_sync.rs', 'utf8');
+  assert.match(rust, /^mod fixture_tests \{$/m);
+  assert.match(rust, /packages\/client\/sync\/src\/__fixtures__\/pull-apply\.json/);
+  assert.match(rust, /packages\/client\/sync\/src\/__fixtures__\/cursor-compare\.json/);
 });

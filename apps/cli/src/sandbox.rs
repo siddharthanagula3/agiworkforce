@@ -45,6 +45,31 @@ impl SandboxType {
     }
 }
 
+/// Actionable diagnosis for a host where `SandboxType::detect()` found nothing.
+/// The Linux branch names bubblewrap as the hard runtime dependency it is: the
+/// in-process seccomp module (`platform::policy::linux_sandbox`) is not compiled
+/// into release builds and installs no filter on any exec path, so a missing
+/// `bwrap` leaves no sandbox at all.
+pub fn missing_sandbox_message(os: &str) -> String {
+    match os {
+        "linux" => "Sandboxed exec requires bubblewrap (`bwrap`) on PATH and it was not found. \
+             Install it — Debian/Ubuntu: `sudo apt install bubblewrap`, Fedora/RHEL: \
+             `sudo dnf install bubblewrap`, Arch: `sudo pacman -S bubblewrap`, Alpine: \
+             `apk add bubblewrap` — then re-run `agi doctor`. To run without any sandbox, \
+             re-run with --no-sandbox and accept unrestricted command execution."
+            .to_string(),
+        "macos" => "Sandboxed exec requires `sandbox-exec` (macOS Seatbelt) on PATH and it was \
+             not found. Restore it from the base macOS install, or re-run with --no-sandbox \
+             and accept unrestricted command execution."
+            .to_string(),
+        other => format!(
+            "Sandboxed exec is unsupported on {other}. It is available only on Linux \
+             (bubblewrap) and macOS (Seatbelt). Re-run with --no-sandbox to accept \
+             unrestricted command execution."
+        ),
+    }
+}
+
 /// Network access opt-in flag for sandboxed execution.
 ///
 /// Default: network is denied. Callers that legitimately need outbound access
@@ -457,23 +482,17 @@ pub(crate) async fn execute_sandboxed_with_timeout(
                 .map_err(anyhow::Error::new)
                 .context("Bubblewrap exec failed")
         }
-        // Refuse loudly on Windows + any other OS without a supported sandbox,
-        // instead of silently running unsandboxed. Marketing claim of "sandboxed
-        // execution" must not be honored on platforms where sandbox support is
-        // absent. Windows + Landlock are tracked as future work.
-        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-        _ => Err(anyhow::anyhow!(
-            "Sandbox unavailable on this platform ({}). Sandboxed exec is currently \
-             supported only on macOS (Seatbelt) and Linux (Bubblewrap). See \
-             docs/plans/UNIFIED_LAUNCH_PLAN.md §1.",
-            std::env::consts::OS
+        // Refuse loudly rather than silently running unsandboxed: the "sandboxed
+        // execution" claim must not be honored where no sandbox is installed.
+        SandboxType::None => Err(anyhow::anyhow!(
+            "{}",
+            missing_sandbox_message(std::env::consts::OS)
         )),
-        // On macOS/Linux, this catch-all only matches if SandboxBackend was extended
-        // without a corresponding implementation above — fail loud rather than silently
-        // bypass.
-        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        // Only reachable if a SandboxType variant was added without an exec
+        // implementation — fail loud rather than silently bypass.
         _ => Err(anyhow::anyhow!(
-            "Unhandled SandboxBackend variant — sandbox config is broken; refusing exec"
+            "Unhandled SandboxType variant {} — sandbox config is broken; refusing exec",
+            manager.sandbox_type.name()
         )),
     }
 }
@@ -930,6 +949,38 @@ mod tests {
         assert!(
             !args.contains(&"--unshare-net"),
             "bwrap allow-network args must NOT include --unshare-net"
+        );
+    }
+
+    #[test]
+    fn missing_linux_sandbox_message_names_bubblewrap_and_how_to_install_it() {
+        let msg = missing_sandbox_message("linux");
+        assert!(msg.contains("bwrap"), "{msg}");
+        assert!(msg.contains("apt install bubblewrap"), "{msg}");
+        assert!(msg.contains("dnf install bubblewrap"), "{msg}");
+        assert!(msg.contains("pacman -S bubblewrap"), "{msg}");
+        assert!(msg.contains("--no-sandbox"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn exec_without_a_detected_sandbox_tells_the_user_what_to_install() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let mgr = SandboxManager {
+            sandbox_type: SandboxType::None,
+            policy: SandboxPolicy::ReadOnly,
+            workspace_dir: workspace.path().to_path_buf(),
+            network_policy: NetworkPolicy::Deny,
+        };
+
+        let error = execute_sandboxed(&mgr, "printf hi", Some(workspace.path()))
+            .await
+            .expect_err("exec must refuse without a sandbox backend");
+        let msg = error.to_string();
+
+        assert_eq!(msg, missing_sandbox_message(std::env::consts::OS), "{msg}");
+        assert!(
+            !msg.contains("sandbox config is broken"),
+            "a missing sandbox backend must not be reported as a broken config: {msg}"
         );
     }
 }

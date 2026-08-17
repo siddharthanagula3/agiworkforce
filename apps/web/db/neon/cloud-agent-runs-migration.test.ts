@@ -19,6 +19,17 @@ describe('cloud agent runs migration', () => {
     expect(sql).toMatch(/cloud_agent_events_run_sequence_idx/i);
   });
 
+  it('gives a run a settled usage record keyed by the settlement that wrote it', async () => {
+    const sql = await readFile(
+      join(process.cwd(), 'db/neon/0125_cloud_agent_run_settled_usage.sql'),
+      'utf8',
+    );
+
+    expect(sql).toMatch(/alter table public\.cloud_agent_runs/i);
+    expect(sql).toMatch(/add column settled_usage jsonb not null default '\{\}'::jsonb/i);
+    expect(sql).toMatch(/jsonb_typeof\(settled_usage\) = 'object'/i);
+  });
+
   it('admits every origin surface the contract accepts', async () => {
     const migrations = await Promise.all(
       ['0061_cloud_agent_runs.sql', '0099_origin_surface_cli.sql'].map((file) =>

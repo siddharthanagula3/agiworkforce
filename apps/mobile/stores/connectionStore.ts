@@ -13,6 +13,7 @@ import {
   type HmacSessionState,
 } from '@/lib/dispatchHmac';
 import { parseAgent, MAX_AGENTS_PER_UPDATE } from '@/lib/dispatchAgentValidator';
+import { createControlAckTracker, type ControlDelivery } from '@/lib/controlAckTracker';
 
 interface RTCConfiguration {
   iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }>;
@@ -35,7 +36,12 @@ import { notifyCompanionMessage } from '@/services/companionNotifications';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useDispatchTaskStore } from './dispatchTaskStore';
-import type { DispatchTaskLifecycleStatus, DispatchTaskStatusEvent } from '@agiworkforce/types';
+import type {
+  ControlReceiptEvent,
+  ControlReceiptOutcome,
+  DispatchTaskLifecycleStatus,
+  DispatchTaskStatusEvent,
+} from '@agiworkforce/types';
 import { claimManualPairingToken, normalizePairingInput } from '@/services/manualPairing';
 
 export type ConnectionStatus =
@@ -57,6 +63,8 @@ export interface DesktopMetadata {
   [key: string]: unknown;
 }
 
+export type { ControlDelivery };
+
 interface ConnectionState {
   status: ConnectionStatus;
   pairingCode: string | null;
@@ -74,6 +82,8 @@ interface ConnectionState {
   reconnectSuccesses: number;
   lastReconnectDurationMs: number | null;
   reconnectStartedAt: number | null;
+  unacknowledgedControls: number;
+  lastControlDelivery: ControlDelivery | null;
 
   connect: (code: string) => void;
   disconnect: () => void;
@@ -124,6 +134,7 @@ function startConnectWatchdog(attemptId: number): void {
     cleanupPeerConnection();
     hmacState = null;
     pendingControlQueue.length = 0;
+    clearPendingControlAcks();
     useConnectionStore.setState({
       status: 'error',
       error: null,
@@ -137,6 +148,30 @@ let hmacState: HmacSessionState | null = null;
 
 const pendingControlQueue: Array<{ action: string; payload: unknown }> = [];
 const MAX_PENDING_QUEUE = 200;
+
+export const CONTROL_ACK_TIMEOUT_MS = 8_000;
+export const MAX_CONTROL_ACK_ATTEMPTS = 3;
+const MAX_PENDING_CONTROL_ACKS = 50;
+
+const controlAckTracker = createControlAckTracker({
+  timeoutMs: CONTROL_ACK_TIMEOUT_MS,
+  maxAttempts: MAX_CONTROL_ACK_ATTEMPTS,
+  maxPending: MAX_PENDING_CONTROL_ACKS,
+  resend: (action, payload) => {
+    void useConnectionStore.getState().sendControl(action, payload);
+  },
+  onChange: (pendingCount, delivery) => {
+    useConnectionStore.setState({
+      unacknowledgedControls: pendingCount,
+      ...(delivery ? { lastControlDelivery: delivery } : {}),
+    });
+  },
+});
+
+function clearPendingControlAcks(): void {
+  controlAckTracker.clear();
+  useConnectionStore.setState({ lastControlDelivery: null });
+}
 
 async function flushPendingControlQueue(): Promise<void> {
   if (pendingControlQueue.length === 0) return;
@@ -493,6 +528,48 @@ export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEve
   };
 }
 
+const VALID_CONTROL_RECEIPT_OUTCOMES = new Set<ControlReceiptOutcome>([
+  'accepted',
+  'duplicate',
+  'rejected',
+]);
+
+export function parseControlReceipt(payload: unknown): ControlReceiptEvent | null {
+  const normalized = normalizeIncomingControlPayload(payload);
+  if (!normalized || normalized['action'] !== 'control.receipt' || normalized['version'] !== 1) {
+    return null;
+  }
+
+  const requestId = boundedString(normalized['requestId'], 128);
+  const controlAction = boundedString(normalized['controlAction'], 128);
+  const receivedAt = boundedString(normalized['receivedAt'], 64);
+  const outcome = normalized['outcome'];
+  if (
+    !requestId ||
+    !controlAction ||
+    !receivedAt ||
+    !Number.isFinite(Date.parse(receivedAt)) ||
+    !isString(outcome) ||
+    !VALID_CONTROL_RECEIPT_OUTCOMES.has(outcome as ControlReceiptOutcome)
+  ) {
+    return null;
+  }
+
+  const reason =
+    normalized['reason'] === undefined ? undefined : boundedString(normalized['reason'], 500);
+  if (normalized['reason'] !== undefined && !reason) return null;
+
+  return {
+    action: 'control.receipt',
+    version: 1,
+    requestId,
+    controlAction,
+    outcome: outcome as ControlReceiptOutcome,
+    ...(reason ? { reason } : {}),
+    receivedAt,
+  };
+}
+
 async function handleControlMessageAsync(envelope: unknown): Promise<void> {
   if (!isDispatchCompanionEnabled()) return;
   if (!hmacState) {
@@ -609,6 +686,11 @@ function handleControlMessageInner(payload: unknown): void {
     case 'dispatch.task.status': {
       const event = parseDispatchTaskStatus(normalizedPayload);
       if (event) useDispatchTaskStore.getState().applyStatus(event);
+      break;
+    }
+    case 'control.receipt': {
+      const receipt = parseControlReceipt(normalizedPayload);
+      if (receipt) controlAckTracker.resolve(receipt.requestId, receipt.outcome);
       break;
     }
     case 'agent_failed':
@@ -775,6 +857,8 @@ export const useConnectionStore = create<ConnectionState>()(
       reconnectSuccesses: 0,
       lastReconnectDurationMs: null,
       reconnectStartedAt: null,
+      unacknowledgedControls: 0,
+      lastControlDelivery: null,
 
       connect: (rawCode: string) => {
         if (!isDispatchCompanionEnabled()) {
@@ -869,6 +953,7 @@ export const useConnectionStore = create<ConnectionState>()(
             console.warn('[dispatch] HMAC secret derivation failed:', err);
             hmacState = null;
             pendingControlQueue.length = 0;
+            clearPendingControlAcks();
             clearConnectWatchdog();
             set({
               status: 'error',
@@ -1064,6 +1149,7 @@ export const useConnectionStore = create<ConnectionState>()(
         invalidateConnectionAttempt();
         clearConnectWatchdog();
         pendingControlQueue.length = 0;
+        clearPendingControlAcks();
         set({
           status: 'session_expired',
           error: 'Pairing session expired. Please scan a new QR code.',
@@ -1086,6 +1172,7 @@ export const useConnectionStore = create<ConnectionState>()(
         cleanupPeerConnection();
         hmacState = null;
         pendingControlQueue.length = 0;
+        clearPendingControlAcks();
         set({
           status: 'disconnected',
           pairingCode: null,
@@ -1167,7 +1254,9 @@ export const useConnectionStore = create<ConnectionState>()(
             controlMessage.relay.action,
             controlMessage.innerPayload,
           );
-          return sendRaw(envelope);
+          const sent = sendRaw(envelope);
+          if (sent) controlAckTracker.track(action, payload);
+          return sent;
         } catch (err) {
           console.warn('[dispatch] Failed to sign control message:', err);
           return false;

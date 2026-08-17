@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 export const WEB_SEARCH_TOOL = 'web_search';
@@ -69,6 +68,7 @@ export type WebSearchErrorCode =
   | 'invalid_tool_input'
   | 'not_configured'
   | 'upstream_error'
+  | 'cancelled'
   | 'timeout';
 
 export type WebSearchOutcome =
@@ -80,7 +80,10 @@ export interface WebSearchOverrides {
   apiKey?: string;
   timeoutMs?: number;
   maxResults?: number;
+  signal?: AbortSignal;
 }
+
+const CANCELLED_MESSAGE = 'The request was cancelled.';
 
 function err(errorCode: WebSearchErrorCode, error: string): WebSearchOutcome {
   return { ok: false, errorCode, error };
@@ -109,6 +112,9 @@ export async function executeWebSearch(
   args: Record<string, unknown>,
   overrides: WebSearchOverrides = {},
 ): Promise<WebSearchOutcome> {
+  const callerSignal = overrides.signal;
+  if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
+
   const rawQuery = args['query'];
   if (typeof rawQuery !== 'string' || rawQuery.trim().length === 0) {
     return err('invalid_tool_input', 'web_search requires a non-empty string "query" argument.');
@@ -131,6 +137,8 @@ export async function executeWebSearch(
 
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), timeoutMs);
+  const cancel = () => controller.abort();
+  callerSignal?.addEventListener('abort', cancel, { once: true });
 
   try {
     let response: Response;
@@ -145,6 +153,7 @@ export async function executeWebSearch(
         body: JSON.stringify({ query, max_results: maxResults }),
       });
     } catch (fetchErr) {
+      if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
       if (controller.signal.aborted) {
         return err('timeout', `Web search timed out after ${timeoutMs}ms.`);
       }
@@ -193,6 +202,7 @@ export async function executeWebSearch(
     return { ok: true, query, results, ...(queryTruncated ? { queryTruncated: true } : {}) };
   } finally {
     clearTimeout(deadline);
+    callerSignal?.removeEventListener('abort', cancel);
   }
 }
 

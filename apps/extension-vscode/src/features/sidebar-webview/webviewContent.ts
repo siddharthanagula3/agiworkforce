@@ -1034,6 +1034,53 @@ export function getWebviewContent(
     }
     .usage-meter-banner.warn .usage-reset { color: inherit; opacity: 0.85; }
 
+    .usage-bucket-list {
+      list-style: none;
+      margin: 0;
+      padding: 4px 12px 8px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .usage-bucket-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+      padding: 2px 0;
+    }
+
+    .usage-bucket-row.binding { color: var(--text-primary); font-weight: 600; }
+
+    .usage-credit-row {
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+      padding-top: 4px;
+    }
+
+    .usage-bucket-label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .usage-bucket-remaining { flex-shrink: 0; }
+
+    .usage-bucket-reset {
+      flex-shrink: 2;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      opacity: 0.7;
+    }
+
     .usage-meter-collapsed {
       display: flex;
       align-items: center;
@@ -1824,6 +1871,8 @@ export function getWebviewContent(
     <button class="upgrade-btn" id="upgradeBtn" style="display:none">Upgrade</button>
     <button class="meter-dismiss-btn" id="meterDismissBtn" title="Collapse meter" aria-label="Collapse usage meter">&#215;</button>
   </div>
+  <!-- ── Per-limit usage breakdown ── -->
+  <ul class="usage-bucket-list" id="meterBuckets" style="display:none" aria-label="Managed Cloud usage limits"></ul>
   <!-- ── Usage meter collapsed pill ── -->
   <div class="usage-meter-collapsed" id="usageMeterCollapsed" style="display:none">
     <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage details">&#9660; <span id="meterCollapsedLabel">Usage</span></button>
@@ -2001,6 +2050,7 @@ export function getWebviewContent(
     const meterByokIcon = document.getElementById('meterByokIcon');
     const meterLocalIcon = document.getElementById('meterLocalIcon');
     const meterCloudIcon = document.getElementById('meterCloudIcon');
+    const meterBuckets = document.getElementById('meterBuckets');
 
     // Initial collapsed state (injected by extension host)
     var meterCollapsed = ${meterCollapsed ? 'true' : 'false'};
@@ -2226,6 +2276,9 @@ export function getWebviewContent(
     // ── Usage meter helpers ───────────────────────────────────────────────────
     function applyMeterCollapsed(collapsed) {
       meterCollapsed = collapsed;
+      if (meterBuckets && meterBuckets.childElementCount > 0) {
+        meterBuckets.style.display = collapsed ? 'none' : 'block';
+      }
       if (!usageMeterBanner || !usageMeterCollapsed) return;
       if (collapsed) {
         usageMeterBanner.style.display = 'none';
@@ -2355,11 +2408,66 @@ export function getWebviewContent(
       renderSessionIdentity();
     }
 
+    function renderUsageBuckets(payload) {
+      if (!meterBuckets) return;
+      meterBuckets.textContent = '';
+      var rows = (payload && payload.buckets) || [];
+      var emptyLabel = (payload && payload.bucketsEmptyLabel) || null;
+      var credits = (payload && payload.credits) || null;
+      if (rows.length === 0 && emptyLabel === null && credits === null) {
+        meterBuckets.style.display = 'none';
+        return;
+      }
+      if (rows.length === 0) {
+        var emptyItem = document.createElement('li');
+        emptyItem.className = 'usage-bucket-row';
+        emptyItem.textContent = emptyLabel;
+        meterBuckets.appendChild(emptyItem);
+      } else {
+        rows.forEach(function(row) {
+          var item = document.createElement('li');
+          item.className = row.binding ? 'usage-bucket-row binding' : 'usage-bucket-row';
+          var label = document.createElement('span');
+          label.className = 'usage-bucket-label';
+          label.textContent = row.label;
+          var remaining = document.createElement('span');
+          remaining.className = 'usage-bucket-remaining';
+          remaining.textContent = row.remainingLabel;
+          var reset = document.createElement('span');
+          reset.className = 'usage-bucket-reset';
+          reset.textContent = row.resetsIn || 'No reset pending';
+          item.appendChild(label);
+          item.appendChild(remaining);
+          item.appendChild(reset);
+          meterBuckets.appendChild(item);
+        });
+      }
+      if (credits !== null) {
+        var creditItem = document.createElement('li');
+        creditItem.className = 'usage-bucket-row usage-credit-row';
+        var creditLabel = document.createElement('span');
+        creditLabel.className = 'usage-bucket-label';
+        creditLabel.textContent = credits.label;
+        var creditBalance = document.createElement('span');
+        creditBalance.className = 'usage-bucket-remaining';
+        creditBalance.textContent = credits.balanceLabel;
+        var creditSpendability = document.createElement('span');
+        creditSpendability.className = 'usage-bucket-reset';
+        creditSpendability.textContent = credits.spendabilityLabel;
+        creditItem.appendChild(creditLabel);
+        creditItem.appendChild(creditBalance);
+        creditItem.appendChild(creditSpendability);
+        meterBuckets.appendChild(creditItem);
+      }
+      meterBuckets.style.display = meterCollapsed ? 'none' : 'block';
+    }
+
     function renderUsageMeter(payload) {
       lastUsageMeterPayload = payload;
       if (runtimeBlock !== null) {
         if (usageMeterBanner) usageMeterBanner.style.display = 'none';
         if (usageMeterCollapsed) usageMeterCollapsed.style.display = 'none';
+        renderUsageBuckets(null);
         if (runtimeBlock === 'workspace-required') renderNoWorkspaceIdentity();
         else if (runtimeBlock === 'workspace-untrusted') renderBlockedWorkspaceIdentity();
         else updateRuntimePill('runtime-unavailable');
@@ -2373,6 +2481,8 @@ export function getWebviewContent(
 
       if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
           !meterBarWrap || !meterByokIcon || !meterLocalIcon || !meterCloudIcon) return;
+
+      var bucketsPayload = null;
 
       // Reset all conditional elements
       meterByokIcon.style.display = 'none';
@@ -2418,6 +2528,7 @@ export function getWebviewContent(
         meterReset.textContent = '';
       } else {
         // managed-plan
+        bucketsPayload = payload;
         meterBarWrap.style.display = payload.remaining !== null ? 'flex' : 'none';
         var pct = payload.remaining !== null ? payload.remaining * 100 : 100;
         var usedPct = 100 - pct;
@@ -2439,6 +2550,8 @@ export function getWebviewContent(
           usageMeterBanner.classList.add('warn');
         }
       }
+
+      renderUsageBuckets(bucketsPayload);
 
       // Apply collapsed state without hiding the banner if it should be visible
       if (meterCollapsed) {
@@ -2565,6 +2678,7 @@ export function getWebviewContent(
             : 'No workspace prompt will be sent until the protocol-7 runtime connects.';
         if (usageMeterBanner) usageMeterBanner.style.display = 'none';
         if (usageMeterCollapsed) usageMeterCollapsed.style.display = 'none';
+        renderUsageBuckets(null);
         if (workspaceRequired) renderNoWorkspaceIdentity();
         if (workspaceUntrusted) renderBlockedWorkspaceIdentity();
         if (!workspaceRequired && !workspaceUntrusted) updateRuntimePill('runtime-unavailable');

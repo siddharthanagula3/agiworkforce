@@ -672,6 +672,14 @@
        Use this variant for CTA/link copy (e.g. the free-trial "Upgrade" link).
        Measures ~5.3-5.6:1 against light-mode chat surfaces. */
     --chat-accent-primary-text: #8b5f1d;
+    /* Accent-picker swatches. Light-mode values are darkened until they clear
+       WCAG AA 4.5:1 as text on --chat-bg, because selecting one also replaces
+       --chat-accent-primary-text. */
+    --accent-swatch-default: #c8892a;
+    --accent-swatch-green: #0f7a5e;
+    --accent-swatch-blue: #2563eb;
+    --accent-swatch-violet: #7c3aed;
+    --accent-swatch-rose: #e11d48;
     /*
      * Legacy product-surface aliases used by /settings and older shared pages.
      * Keep them derived from semantic tokens so light/dark mode stays readable
@@ -787,6 +795,11 @@
     /* On dark surfaces #c8892a already clears WCAG AA for text (~6.7:1 against
        --chat-bg #0a0a0a), so the text variant can reuse the same value. */
     --chat-accent-primary-text: #c8892a;
+    --accent-swatch-default: #c8892a;
+    --accent-swatch-green: #10a37f;
+    --accent-swatch-blue: #60a5fa;
+    --accent-swatch-violet: #a78bfa;
+    --accent-swatch-rose: #fb7185;
     /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border,
        --chat-user-bubble-bg, --chat-thinking-*, --chat-badge-*, --chat-destructive,
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
@@ -811,6 +824,44 @@
     --chat-accent-primary: #c8892a;
     /* Dark-mode cool theme: #c8892a already passes AA for text on dark surfaces. */
     --chat-accent-primary-text: #c8892a;
+  }
+}
+
+@layer base {
+  /* Accent choice, stamped on <html> by `shared/components/AppearancePreferences.tsx`.
+     Selector carries an attribute so it outranks the palette and cool-theme
+     re-assertions above; light/dark resolve through the swatch vars. */
+  html[data-accent='green'] {
+    --chat-accent-primary: var(--accent-swatch-green);
+    --chat-accent-primary-text: var(--accent-swatch-green);
+  }
+  html[data-accent='blue'] {
+    --chat-accent-primary: var(--accent-swatch-blue);
+    --chat-accent-primary-text: var(--accent-swatch-blue);
+  }
+  html[data-accent='violet'] {
+    --chat-accent-primary: var(--accent-swatch-violet);
+    --chat-accent-primary-text: var(--accent-swatch-violet);
+  }
+  html[data-accent='rose'] {
+    --chat-accent-primary: var(--accent-swatch-rose);
+    --chat-accent-primary-text: var(--accent-swatch-rose);
+  }
+
+  [data-accent-swatch='default'] {
+    background: var(--accent-swatch-default);
+  }
+  [data-accent-swatch='green'] {
+    background: var(--accent-swatch-green);
+  }
+  [data-accent-swatch='blue'] {
+    background: var(--accent-swatch-blue);
+  }
+  [data-accent-swatch='violet'] {
+    background: var(--accent-swatch-violet);
+  }
+  [data-accent-swatch='rose'] {
+    background: var(--accent-swatch-rose);
   }
 }
 
@@ -1724,10 +1775,15 @@
 }
 
 /*
- * Respect system contrast settings at the shipped CSS boundary. `more`
- * strengthens semantic text, borders, and focus rings without inventing an
- * app-only preference. Windows forced-colors uses system color keywords so
+ * Respect system contrast settings at the shipped CSS boundary, and give the
+ * same treatment to the in-app High contrast switch (Settings → General), which
+ * stamps data-contrast="more" on <html>. `more` strengthens semantic text,
+ * borders, and focus rings. Windows forced-colors uses system color keywords so
  * controls and selected states survive brand gradients and shadow removal.
+ *
+ * The two blocks below are deliberate duplicates: CSS cannot union a media
+ * query with a selector, and the app switch must work regardless of the OS
+ * setting.
  */
 @media (prefers-contrast: more) {
   :root {
@@ -1754,6 +1810,31 @@
     outline-width: 3px;
     outline-offset: 3px;
   }
+}
+
+html[data-contrast='more'] {
+  --muted-foreground: 215 25% 28%;
+  --border: 215 35% 38%;
+  --input: 215 35% 38%;
+  --ring: 221 100% 32%;
+  --chat-text-secondary: #303030;
+  --chat-border-subtle: rgba(0, 0, 0, 0.45);
+  --chat-border-strong: #4a4a4a;
+}
+
+html[data-contrast='more'].dark {
+  --muted-foreground: 210 30% 86%;
+  --border: 0 0% 68%;
+  --input: 0 0% 68%;
+  --ring: 210 100% 75%;
+  --chat-text-secondary: #e5e7eb;
+  --chat-border-subtle: rgba(255, 255, 255, 0.5);
+  --chat-border-strong: #d1d5db;
+}
+
+html[data-contrast='more'] *:focus-visible {
+  outline-width: 3px;
+  outline-offset: 3px;
 }
 
 @media (forced-colors: active) {

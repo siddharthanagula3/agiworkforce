@@ -1,6 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
-import * as Contacts from 'expo-contacts';
 import * as Calendar from 'expo-calendar';
 import { Platform } from 'react-native';
 import { Camera } from 'expo-camera';
@@ -9,7 +8,6 @@ import {
   Camera as CameraIcon,
   Image,
   Bell,
-  Users,
   CalendarDays,
   ListChecks,
   type LucideIcon,
@@ -80,16 +78,6 @@ async function requestNotifications(): Promise<OsPermissionStatus> {
   return toOsStatus(result.status, result.canAskAgain);
 }
 
-async function getContactsStatus(): Promise<OsPermissionStatus> {
-  const result = await Contacts.getPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
-}
-
-async function requestContacts(): Promise<OsPermissionStatus> {
-  const result = await Contacts.requestPermissionsAsync();
-  return toOsStatus(result.status, result.canAskAgain);
-}
-
 async function getCalendarStatus(): Promise<OsPermissionStatus> {
   const result = await Calendar.getCalendarPermissionsAsync();
   return toOsStatus(result.status, result.canAskAgain);
@@ -150,15 +138,6 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
       getStatus: getNotificationsStatus,
       requestPermission: requestNotifications,
     },
-    contacts: {
-      kind: 'contacts',
-      label: 'Contacts',
-      description: 'Optional. Used only when you choose contact lookup.',
-      icon: Users,
-      applicableLevels: ['denied', 'ask_each_time', 'allow_while_using'],
-      getStatus: getContactsStatus,
-      requestPermission: requestContacts,
-    },
     calendar: {
       kind: 'calendar',
       label: 'Calendar',
@@ -186,7 +165,6 @@ export const PERMISSION_KINDS: MobilePermissionKind[] = [
   'camera',
   'photos',
   'notifications',
-  'contacts',
   'calendar',
   ...(Platform.OS === 'ios' ? (['reminders'] as const) : []),
 ];

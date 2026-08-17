@@ -11,6 +11,7 @@
 //! - Progress events during installation
 //! - Persistent metadata storage
 
+use crate::core::mcp::manifest::AllowlistState;
 use crate::core::mcp::McpServerConfig;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -485,18 +486,31 @@ fn merge_installed_bundle_snapshots(
     }
 }
 
-fn npm_install_spec(bundle: &McpBundle, npm_package: &str) -> String {
+fn verified_install_spec(
+    bundle: &McpBundle,
+    npm_package: &str,
+    allowlist: &AllowlistState,
+) -> Result<String, String> {
+    if !allowlist.permits(npm_package) {
+        tracing::warn!(package = %npm_package, absent = allowlist.is_absent(), "MCP install refused");
+        return Err(if allowlist.is_absent() {
+            format!("The MCP allow-list is missing from this installation, so '{npm_package}' cannot be verified. Reinstall AGI Workforce.")
+        } else {
+            format!("MCP package '{npm_package}' is not on the allow-list.")
+        });
+    }
+
     if bundle.id.starts_with(OFFICIAL_REGISTRY_BUNDLE_PREFIX) {
         let versioned_prefix = format!("{npm_package}@");
-        bundle
+        Ok(bundle
             .config_template
             .args
             .iter()
             .find(|argument| argument.starts_with(&versioned_prefix))
             .cloned()
-            .unwrap_or_else(|| format!("{npm_package}@{}", bundle.version))
+            .unwrap_or_else(|| format!("{npm_package}@{}", bundle.version)))
     } else {
-        npm_package.to_string()
+        Ok(npm_package.to_string())
     }
 }
 
@@ -2740,25 +2754,10 @@ pub async fn mcpb_install_bundle(
         .npm_package
         .clone()
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
-    let install_spec = npm_install_spec(&bundle, &npm_package);
-
-    // The slopsquatting allow-list was only ever consulted by
-    // core::mcp::config::install_bundle, which nothing in the product calls —
-    // this is the path that actually runs `npm install -g`, and it checked
-    // nothing. Refuse an unlisted package here, before npm can fetch and run
-    // its install scripts.
-    let allowlist = load_packaged_allowlist(&app);
-    if !allowlist.permits(&npm_package) {
-        let reason = if allowlist.is_absent() {
-            format!(
-                "The MCP allow-list is missing from this installation, so '{npm_package}' cannot be verified. Reinstall AGI Workforce."
-            )
-        } else {
-            format!("MCP package '{npm_package}' is not on the allow-list.")
-        };
-        tracing::warn!(package = %npm_package, absent = allowlist.is_absent(), "MCP install refused");
-        return Err(reason);
-    }
+    // The spec is refused before npm can fetch the package and run its install
+    // scripts, so a typosquatted registry entry never reaches the network.
+    let install_spec =
+        verified_install_spec(&bundle, &npm_package, &load_packaged_allowlist(&app))?;
 
     // Emit install started event
     emit_install_started(&app, &bundle_id);
@@ -3053,7 +3052,8 @@ pub async fn mcpb_update_bundle(
         .npm_package
         .clone()
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
-    let install_spec = npm_install_spec(&bundle, &npm_package);
+    let install_spec =
+        verified_install_spec(&bundle, &npm_package, &load_packaged_allowlist(&app))?;
 
     emit_install_started(&app, &bundle_id);
 
@@ -3259,9 +3259,63 @@ mod tests {
         assert!(bundle.required_credentials[0].required);
         assert!(!bundle.verified);
         assert_eq!(
-            npm_install_spec(bundle, "@example/secure-tools"),
+            verified_install_spec(
+                bundle,
+                "@example/secure-tools",
+                &allowlist_naming("@example/secure-tools")
+            )
+            .unwrap(),
             "@example/secure-tools@1.2.3"
         );
+    }
+
+    fn allowlist_naming(package: &str) -> AllowlistState {
+        AllowlistState::Loaded(crate::core::mcp::manifest::Manifest {
+            version: 1,
+            allowed_packages: vec![package.to_string()],
+        })
+    }
+
+    fn registry_bundle(npm_package: &str) -> McpBundle {
+        let mut bundle = get_embedded_registry()
+            .into_iter()
+            .next()
+            .expect("embedded registry should not be empty");
+        bundle.id = format!("{OFFICIAL_REGISTRY_BUNDLE_PREFIX}typosquat");
+        bundle.version = "9.9.9".to_string();
+        bundle.npm_package = Some(npm_package.to_string());
+        bundle.config_template.args = vec!["-y".to_string(), npm_package.to_string()];
+        bundle
+    }
+
+    #[test]
+    fn no_install_spec_exists_for_a_package_outside_the_allowlist() {
+        let bundle = registry_bundle("@modelcontextprotocol/server-fetchh");
+
+        let refusal = verified_install_spec(
+            &bundle,
+            "@modelcontextprotocol/server-fetchh",
+            &allowlist_naming("@modelcontextprotocol/server-fetch"),
+        )
+        .unwrap_err();
+
+        assert!(refusal.contains("not on the allow-list"), "got: {refusal}");
+    }
+
+    #[test]
+    fn a_missing_packaged_allowlist_yields_no_install_spec_in_release() {
+        let bundle = registry_bundle("@modelcontextprotocol/server-fetch");
+
+        let outcome = verified_install_spec(
+            &bundle,
+            "@modelcontextprotocol/server-fetch",
+            &AllowlistState::Absent,
+        );
+
+        assert_eq!(outcome.is_ok(), cfg!(debug_assertions));
+        if let Err(refusal) = outcome {
+            assert!(refusal.contains("Reinstall"), "got: {refusal}");
+        }
     }
 
     #[test]

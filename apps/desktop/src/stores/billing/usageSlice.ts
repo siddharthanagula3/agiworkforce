@@ -1,5 +1,4 @@
 import type { UsageStats, ModelUsageStats } from '../../types/billing';
-import { checkUsageLimit } from '../../utils/featureGates';
 import { useBillingStore } from '../auth';
 
 export interface UsageSliceState {
@@ -17,9 +16,6 @@ export interface UsageSliceState {
 export interface UsageSliceActions {
   fetchUsage: (customerId: string, periodStart: number, periodEnd: number) => Promise<void>;
   refreshUsage: () => Promise<void>;
-  checkAutomationLimit: () => boolean;
-  checkApiCallLimit: () => boolean;
-  checkStorageLimit: (additionalMb: number) => boolean;
   getInputTokens: () => number;
   getOutputTokens: () => number;
   getTotalTokens: () => number;
@@ -61,29 +57,6 @@ export const createUsageSlice = (
     const { stripeCustomer: customer } = useBillingStore.getState();
     if (!customer) return;
     await get().fetchUsage(customer.id, usagePeriodStartSec, usagePeriodEndSec);
-  },
-
-  checkAutomationLimit: () => {
-    const { usageStats } = get();
-    const { stripeSubscription: subscription } = useBillingStore.getState();
-    if (!usageStats) return true;
-    return checkUsageLimit('automations', usageStats.automations_executed, subscription)
-      .withinLimit;
-  },
-
-  checkApiCallLimit: () => {
-    const { usageStats } = get();
-    const { stripeSubscription: subscription } = useBillingStore.getState();
-    if (!usageStats) return true;
-    return checkUsageLimit('apiCalls', usageStats.api_calls_made, subscription).withinLimit;
-  },
-
-  checkStorageLimit: (additionalMb) => {
-    const { usageStats } = get();
-    const { stripeSubscription: subscription } = useBillingStore.getState();
-    if (!usageStats) return true;
-    return checkUsageLimit('storage', usageStats.storage_used_mb + additionalMb, subscription)
-      .withinLimit;
   },
 
   getInputTokens: () => get().usageStats?.llm_input_tokens || 0,

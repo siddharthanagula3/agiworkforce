@@ -58,6 +58,7 @@ describe('EffectiveCapabilityDocument (types) -> EffectiveCapabilityDocumentSche
     const document = sampleDocument();
     const asWire: EffectiveCapabilityDocumentWire = {
       ...document,
+      limits: document.limits.map((limit) => ({ ...limit })),
       granted: [...document.granted],
       deniedBy: Object.fromEntries(
         Object.entries(document.deniedBy).map(([capabilityId, layers]) => [

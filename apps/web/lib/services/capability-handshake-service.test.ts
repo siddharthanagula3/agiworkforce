@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { EffectiveCapabilityDocumentSchema } from '@agiworkforce/cloud-contracts';
-import { CAPABILITY_DOCUMENT_VERSION_UNRESOLVED } from '@agiworkforce/types';
+import {
+  CAPABILITY_CONTRACT_ACCOUNT,
+  CAPABILITY_CONTRACT_EXPECTATIONS,
+  EffectiveCapabilityDocumentSchema,
+} from '@agiworkforce/cloud-contracts';
+import {
+  CAPABILITY_DOCUMENT_VERSION_UNRESOLVED,
+  SYNCED_APP_SURFACES,
+  resolveCapabilityDecision,
+} from '@agiworkforce/types';
 import {
   ME_CAPABILITY_HANDSHAKE_VERSION,
   buildMeCapabilityHandshake,
@@ -212,5 +220,139 @@ describe('capability-document versioning + staleness (W5 tail — replaces place
     expect(
       isMeCapabilityHandshakeStale({ version: CAPABILITY_DOCUMENT_VERSION_UNRESOLVED }, current),
     ).toBe(true);
+  });
+});
+
+describe('BILL-15 — effective-entitlement limits on the existing /api/me handshake', () => {
+  const RESETS = {
+    billingPeriodEndsAt: '2026-09-01T00:00:00.000Z',
+    rollingFiveHourResetsAt: '2026-08-17T05:00:00.000Z',
+    rollingWeeklyResetsAt: '2026-08-24T00:00:00.000Z',
+  };
+
+  it('publishes the managed-usage windows with their authoritative resetsAt and policySource', () => {
+    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro', resets: RESETS });
+    const byId = new Map(document.limits.map((limit) => [limit.id, limit]));
+
+    expect(byId.get('managed_usage_billing_period_cents')?.resetsAt).toBe(
+      RESETS.billingPeriodEndsAt,
+    );
+    expect(byId.get('managed_usage_rolling_five_hour_cents')?.resetsAt).toBe(
+      RESETS.rollingFiveHourResetsAt,
+    );
+    expect(byId.get('managed_usage_rolling_weekly_cents')?.resetsAt).toBe(
+      RESETS.rollingWeeklyResetsAt,
+    );
+    for (const id of [
+      'managed_usage_billing_period_cents',
+      'managed_usage_rolling_five_hour_cents',
+      'managed_usage_rolling_weekly_cents',
+    ]) {
+      expect(byId.get(id)?.policySource).toBe('managed-usage-caps:pro');
+      expect(byId.get(id)?.unit).toBe('usage_cents');
+      expect(typeof byId.get(id)?.limit).toBe('number');
+    }
+  });
+
+  it('carries every tier-policy cap that actually exists, sourced to the tier that set it', () => {
+    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free', resets: RESETS });
+    const tierLimits = document.limits.filter((limit) => limit.policySource === 'tier:free');
+    expect(tierLimits.length).toBeGreaterThan(0);
+    for (const limit of tierLimits) {
+      expect(limit.limit).not.toBeNull();
+    }
+  });
+
+  it('differs by tier: free and max do not publish the same caps', () => {
+    const free = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free', resets: RESETS });
+    const max = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'max', resets: RESETS });
+    expect(free.limits).not.toEqual(max.limits);
+  });
+
+  it('resolves a decision with the deniedBy layer sourceId as policySource', () => {
+    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro', resets: RESETS });
+    const denied = resolveCapabilityDecision(document, 'canUseDeepResearch');
+    expect(denied.allowed).toBe(false);
+    expect(denied.policySource).toBe('tier:pro');
+
+    const allowed = resolveCapabilityDecision(document, 'canUseWebSearch');
+    expect(allowed.allowed).toBe(true);
+    expect(allowed.policySource).toBeNull();
+  });
+
+  it('attaches the cloud-model usage windows to the capability they gate', () => {
+    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro', resets: RESETS });
+    const decision = resolveCapabilityDecision(document, 'canUseCloudModels');
+    expect(decision.limits.map((limit) => limit.id)).toContain(
+      'managed_usage_rolling_five_hour_cents',
+    );
+  });
+
+  it('versions POLICY, not the clock: a changed resetsAt must not bump the version', () => {
+    const a = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro', resets: RESETS });
+    const b = buildMeCapabilityHandshake({
+      ...BASE_INPUT,
+      tier: 'pro',
+      resets: { ...RESETS, rollingFiveHourResetsAt: '2026-08-18T09:30:00.000Z' },
+    });
+    expect(a.version).toBe(b.version);
+  });
+
+  it('survives the wire schema with limits intact', () => {
+    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro', resets: RESETS });
+    const parsed = EffectiveCapabilityDocumentSchema.safeParse(toWireCapabilityHandshake(document));
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.limits.length).toBe(document.limits.length);
+    }
+  });
+});
+
+describe('BILL-15 — one decision for one account across every synced surface', () => {
+  const resets = {
+    billingPeriodEndsAt: CAPABILITY_CONTRACT_ACCOUNT.billingPeriodEndsAt,
+    rollingFiveHourResetsAt: CAPABILITY_CONTRACT_ACCOUNT.rollingFiveHourResetsAt,
+    rollingWeeklyResetsAt: CAPABILITY_CONTRACT_ACCOUNT.rollingWeeklyResetsAt,
+  };
+
+  it.each(SYNCED_APP_SURFACES)(
+    'surface %s resolves the contract account exactly as the contract declares',
+    (surface) => {
+      const document = buildMeCapabilityHandshake({
+        userId: CAPABILITY_CONTRACT_ACCOUNT.userId,
+        tier: CAPABILITY_CONTRACT_ACCOUNT.tier,
+        surface,
+        cloudExecutionDeploymentEnabled:
+          CAPABILITY_CONTRACT_ACCOUNT.cloudExecutionDeploymentEnabled,
+        computedAt: CAPABILITY_CONTRACT_ACCOUNT.computedAt,
+        resets,
+      });
+      for (const [capabilityId, expected] of Object.entries(CAPABILITY_CONTRACT_EXPECTATIONS)) {
+        const decision = resolveCapabilityDecision(
+          document,
+          capabilityId as keyof typeof CAPABILITY_CONTRACT_EXPECTATIONS,
+        );
+        expect({ allowed: decision.allowed, policySource: decision.policySource }).toEqual(
+          expected,
+        );
+      }
+    },
+  );
+
+  it('publishes identical limits for the contract account on every surface', () => {
+    const documents = SYNCED_APP_SURFACES.map((surface) =>
+      buildMeCapabilityHandshake({
+        userId: CAPABILITY_CONTRACT_ACCOUNT.userId,
+        tier: CAPABILITY_CONTRACT_ACCOUNT.tier,
+        surface,
+        cloudExecutionDeploymentEnabled:
+          CAPABILITY_CONTRACT_ACCOUNT.cloudExecutionDeploymentEnabled,
+        computedAt: CAPABILITY_CONTRACT_ACCOUNT.computedAt,
+        resets,
+      }),
+    );
+    for (const document of documents) {
+      expect(document.limits).toEqual(documents[0]?.limits);
+    }
   });
 });

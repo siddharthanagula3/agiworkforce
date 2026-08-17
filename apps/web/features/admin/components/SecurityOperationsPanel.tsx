@@ -23,9 +23,11 @@ function formatTimestamp(value: string): string {
 }
 
 function severityClass(severity: AdminSecurityEvent['severity']): string {
-  if (severity === 'critical') return 'border-red-400/30 bg-red-400/10 text-red-100';
-  if (severity === 'high') return 'border-amber-400/30 bg-amber-400/10 text-amber-100';
-  return 'border-white/10 bg-white/[0.04] text-zinc-300';
+  if (severity === 'critical')
+    return 'border-red-600/40 bg-red-500/10 text-red-800 dark:border-red-400/30 dark:text-red-100';
+  if (severity === 'high')
+    return 'border-amber-600/40 bg-amber-500/10 text-amber-800 dark:border-amber-400/30 dark:text-amber-100';
+  return 'border-border bg-muted text-foreground';
 }
 
 export default function SecurityOperationsPanel() {
@@ -94,11 +96,13 @@ export default function SecurityOperationsPanel() {
     <section className="space-y-4" aria-labelledby="security-operations-title">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="font-mono text-xs uppercase text-sky-300">Live administration</p>
-          <h2 id="security-operations-title" className="mt-1 text-xl font-medium text-white">
+          <p className="font-mono text-xs uppercase text-sky-700 dark:text-sky-300">
+            Live administration
+          </p>
+          <h2 id="security-operations-title" className="mt-1 text-xl font-medium text-foreground">
             Security operations
           </h2>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Authenticated metrics, alerts, event history, and audited account controls.
           </p>
         </div>
@@ -106,7 +110,7 @@ export default function SecurityOperationsPanel() {
           type="button"
           onClick={() => void loadOperations()}
           disabled={loading}
-          className="inline-flex items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-200 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-foreground/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           Refresh
@@ -116,7 +120,7 @@ export default function SecurityOperationsPanel() {
       {loadError ? (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-100"
+          className="flex items-start gap-2 rounded-md border border-red-600/40 bg-red-500/10 p-3 text-sm text-red-800 dark:border-red-400/30 dark:text-red-100"
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           {loadError}
@@ -130,28 +134,27 @@ export default function SecurityOperationsPanel() {
           ['Unique users · 24h', dashboard?.metrics.unique_users_24h],
           ['Unique IPs · 24h', dashboard?.metrics.unique_ips_24h],
         ].map(([label, value]) => (
-          <div
-            key={String(label)}
-            className="rounded-md border border-white/10 bg-white/[0.03] p-4"
-          >
-            <p className="text-xs uppercase text-zinc-500">{label}</p>
-            <p className="mt-2 font-mono text-2xl text-white">{loading ? '…' : (value ?? 0)}</p>
+          <div key={String(label)} className="rounded-md border border-border bg-card p-4">
+            <p className="text-xs uppercase text-muted-foreground">{label}</p>
+            <p className="mt-2 font-mono text-2xl text-foreground">
+              {loading ? '…' : (value ?? 0)}
+            </p>
           </div>
         ))}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-        <div className="overflow-hidden rounded-md border border-white/10 bg-white/[0.02]">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div className="overflow-hidden rounded-md border border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-sky-300" aria-hidden="true" />
-              <h3 className="text-sm font-medium text-white">Recent security events</h3>
+              <ShieldAlert className="h-4 w-4 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+              <h3 className="text-sm font-medium text-foreground">Recent security events</h3>
             </div>
-            <span className="text-xs text-zinc-500">Latest 25</span>
+            <span className="text-xs text-muted-foreground">Latest 25</span>
           </div>
           <div className="max-h-[430px] overflow-auto">
             <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-              <thead className="sticky top-0 bg-zinc-950 text-xs uppercase text-zinc-500">
+              <thead className="sticky top-0 bg-background text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">When</th>
                   <th className="px-4 py-3 font-medium">Severity</th>
@@ -162,8 +165,8 @@ export default function SecurityOperationsPanel() {
               </thead>
               <tbody>
                 {events.map((securityEvent) => (
-                  <tr key={securityEvent.id} className="border-t border-white/10">
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-400">
+                  <tr key={securityEvent.id} className="border-t border-border">
+                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                       {formatTimestamp(securityEvent.created_at)}
                     </td>
                     <td className="px-4 py-3">
@@ -173,18 +176,18 @@ export default function SecurityOperationsPanel() {
                         {securityEvent.severity}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-zinc-200">{securityEvent.event_type}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-400">
+                    <td className="px-4 py-3 text-foreground">{securityEvent.event_type}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                       {securityEvent.user_id ?? 'anonymous'}
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-500">
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                       {securityEvent.endpoint ?? '—'}
                     </td>
                   </tr>
                 ))}
                 {!loading && events.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                       No security events found.
                     </td>
                   </tr>
@@ -195,37 +198,39 @@ export default function SecurityOperationsPanel() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">
-            <h3 className="text-sm font-medium text-white">Active alerts</h3>
+          <div className="rounded-md border border-border bg-card p-4">
+            <h3 className="text-sm font-medium text-foreground">Active alerts</h3>
             <div className="mt-3 space-y-2">
               {triggeredAlerts.map((alert) => (
                 <div
                   key={alert.alert_name}
-                  className="rounded-md border border-red-400/20 bg-red-400/10 p-3"
+                  className="rounded-md border border-red-600/40 bg-red-500/10 p-3 dark:border-red-400/20"
                 >
-                  <p className="text-sm text-red-100">{alert.alert_name}</p>
-                  <p className="mt-1 text-xs text-red-200/70">
+                  <p className="text-sm text-red-800 dark:text-red-100">{alert.alert_name}</p>
+                  <p className="mt-1 text-xs text-red-900/80 dark:text-red-200/70">
                     {alert.current_count} / {alert.threshold} in {alert.window_minutes} minutes
                   </p>
                 </div>
               ))}
               {!loading && triggeredAlerts.length === 0 ? (
-                <p className="text-sm text-zinc-500">No alert threshold is currently triggered.</p>
+                <p className="text-sm text-muted-foreground">
+                  No alert threshold is currently triggered.
+                </p>
               ) : null}
             </div>
           </div>
 
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">
-            <h3 className="text-sm font-medium text-white">Top source IPs · 24h</h3>
+          <div className="rounded-md border border-border bg-card p-4">
+            <h3 className="text-sm font-medium text-foreground">Top source IPs · 24h</h3>
             <ol className="mt-3 space-y-2">
               {(dashboard?.top_ips ?? []).map((item) => (
                 <li key={item.ip_address} className="flex justify-between gap-3 text-sm">
-                  <span className="font-mono text-zinc-300">{item.ip_address}</span>
-                  <span className="text-zinc-500">{item.event_count} events</span>
+                  <span className="font-mono text-foreground">{item.ip_address}</span>
+                  <span className="text-muted-foreground">{item.event_count} events</span>
                 </li>
               ))}
               {!loading && (dashboard?.top_ips.length ?? 0) === 0 ? (
-                <li className="text-sm text-zinc-500">No source IP data in this window.</li>
+                <li className="text-sm text-muted-foreground">No source IP data in this window.</li>
               ) : null}
             </ol>
           </div>
@@ -234,23 +239,23 @@ export default function SecurityOperationsPanel() {
 
       <form
         onSubmit={(event) => void submitAccountAction(event)}
-        className="rounded-md border border-white/10 bg-white/[0.03] p-4"
+        className="rounded-md border border-border bg-card p-4"
       >
         <div className="flex items-center gap-2">
-          <UserRoundCog className="h-4 w-4 text-sky-300" aria-hidden="true" />
-          <h3 className="text-sm font-medium text-white">Account control</h3>
+          <UserRoundCog className="h-4 w-4 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+          <h3 className="text-sm font-medium text-foreground">Account control</h3>
         </div>
-        <p className="mt-2 text-xs leading-5 text-zinc-500">
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
           Every action is authenticated, CSRF-protected, and written to the security audit log. Your
           own account cannot be modified here.
         </p>
         <div className="mt-4 grid gap-3 lg:grid-cols-[190px_minmax(220px,1fr)_minmax(280px,2fr)_auto]">
-          <label className="space-y-1 text-xs text-zinc-400">
+          <label className="space-y-1 text-xs text-muted-foreground">
             Action
             <select
               value={action}
               onChange={(event) => setAction(event.target.value as AdminAccountAction)}
-              className="w-full rounded-md border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
             >
               {Object.entries(ACTION_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -259,7 +264,7 @@ export default function SecurityOperationsPanel() {
               ))}
             </select>
           </label>
-          <label className="space-y-1 text-xs text-zinc-400">
+          <label className="space-y-1 text-xs text-muted-foreground">
             Target user ID
             <input
               value={targetUserId}
@@ -267,18 +272,18 @@ export default function SecurityOperationsPanel() {
               required
               maxLength={255}
               autoComplete="off"
-              className="w-full rounded-md border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white placeholder:text-zinc-600"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
               placeholder="user_…"
             />
           </label>
-          <label className="space-y-1 text-xs text-zinc-400">
+          <label className="space-y-1 text-xs text-muted-foreground">
             Audit reason
             <input
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               required
               maxLength={1000}
-              className="w-full rounded-md border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white placeholder:text-zinc-600"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
               placeholder="Required operational reason"
             />
           </label>
@@ -287,14 +292,14 @@ export default function SecurityOperationsPanel() {
             disabled={submitting || !targetUserId.trim() || !reason.trim()}
             className={
               action === 'ban-user'
-                ? 'self-end rounded-md border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm text-red-100 hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-                : 'self-end rounded-md border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm text-sky-100 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-50'
+                ? 'self-end rounded-md border border-red-600/40 bg-red-500/10 px-4 py-2 text-sm text-red-800 hover:bg-red-500/20 dark:border-red-400/30 dark:text-red-100 disabled:cursor-not-allowed disabled:opacity-50'
+                : 'self-end rounded-md border border-sky-600/40 bg-sky-500/10 px-4 py-2 text-sm text-sky-800 hover:bg-sky-500/20 dark:border-sky-400/30 dark:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50'
             }
           >
             {submitting ? 'Applying…' : ACTION_LABELS[action]}
           </button>
         </div>
-        <p className="mt-3 text-sm text-zinc-300" aria-live="polite">
+        <p className="mt-3 text-sm text-foreground" aria-live="polite">
           {actionResult}
         </p>
       </form>

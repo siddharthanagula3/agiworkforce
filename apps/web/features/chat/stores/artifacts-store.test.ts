@@ -258,3 +258,150 @@ describe('chat artifacts sidecar store', () => {
     expect(useArtifactsStore.getState().getConversationArtifacts('conv-cloud')).toEqual([]);
   });
 });
+
+describe('local artifact push batching', () => {
+  const CONVERSATION_ID = '00000000-0000-4000-8000-00000000c001';
+  const MESSAGE_ID = '00000000-0000-4000-8000-00000000d001';
+  const ARTIFACT_ID = '00000000-0000-4000-8000-00000000a001';
+
+  function pushableDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDelta {
+    return cloudDelta({
+      id: ARTIFACT_ID,
+      conversation_id: CONVERSATION_ID,
+      message_id: MESSAGE_ID,
+      ...overrides,
+    });
+  }
+
+  function seedLocalArtifact(content = '<main>Local</main>'): void {
+    useArtifactsStore.getState().addArtifact({
+      id: ARTIFACT_ID,
+      type: 'html',
+      title: 'Local artifact',
+      language: 'html',
+      content,
+      messageId: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+    });
+  }
+
+  beforeEach(() => {
+    useArtifactsStore.getState().clearArtifacts();
+  });
+
+  it('queues a locally created artifact for the cloud as an insert', () => {
+    seedLocalArtifact();
+
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([
+      expect.objectContaining({
+        id: ARTIFACT_ID,
+        conversationId: CONVERSATION_ID,
+        messageId: MESSAGE_ID,
+        artifactType: 'html',
+        content: '<main>Local</main>',
+        baseVersion: '0',
+      }),
+    ]);
+  });
+
+  it('skips artifacts the cloud already stores byte for byte', () => {
+    seedLocalArtifact('<main>Cloud</main>');
+    useArtifactsStore
+      .getState()
+      .applyCloudArtifactDeltas([
+        pushableDelta({ title: 'Local artifact', content: '<main>Cloud</main>' }),
+      ]);
+
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([]);
+  });
+
+  it('pushes a local edit over an older cloud copy using its server version', () => {
+    useArtifactsStore.getState().applyCloudArtifactDeltas([pushableDelta()]);
+    useArtifactsStore.getState().upsertArtifact({
+      id: ARTIFACT_ID,
+      type: 'html',
+      title: 'Cloud artifact',
+      language: 'html',
+      content: '<main>Edited here</main>',
+      messageId: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      createdAt: new Date('2026-07-18T00:00:00.000Z'),
+    });
+
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([
+      expect.objectContaining({ content: '<main>Edited here</main>', baseVersion: '12' }),
+    ]);
+  });
+
+  it('leaves a newer cloud edit alone instead of pushing the stale local copy back', () => {
+    useArtifactsStore.getState().upsertArtifact({
+      id: ARTIFACT_ID,
+      type: 'html',
+      title: 'Local artifact',
+      language: 'html',
+      content: '<main>Local</main>',
+      messageId: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      createdAt: new Date('2026-07-16T00:00:00.000Z'),
+    });
+    useArtifactsStore.getState().applyCloudArtifactDeltas([pushableDelta()]);
+
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([]);
+  });
+
+  it('stops re-pushing once the server reports the batch applied', () => {
+    seedLocalArtifact();
+    const batch = useArtifactsStore.getState().collectArtifactPushBatch();
+    expect(batch).toHaveLength(1);
+
+    useArtifactsStore.getState().applyArtifactPushResult({
+      protocolVersion: 2,
+      applied: {
+        conversations: [],
+        messages: [],
+        artifacts: [{ id: ARTIFACT_ID, server_version: '44' }],
+      },
+      conflicts: { conversations: [], messages: [], artifacts: [] },
+      cursor: '44',
+    });
+
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([]);
+  });
+
+  it('retries a rejected batch only after the artifact changes again', () => {
+    seedLocalArtifact();
+    useArtifactsStore.getState().collectArtifactPushBatch();
+
+    useArtifactsStore.getState().applyArtifactPushResult({
+      protocolVersion: 2,
+      applied: { conversations: [], messages: [], artifacts: [] },
+      conflicts: {
+        conversations: [],
+        messages: [],
+        artifacts: [{ id: ARTIFACT_ID, current: null }],
+      },
+      cursor: '0',
+    });
+
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([]);
+
+    seedLocalArtifact('<main>Local again</main>');
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([
+      expect.objectContaining({ content: '<main>Local again</main>' }),
+    ]);
+  });
+
+  it('never sends an artifact the sync contract would reject', () => {
+    useArtifactsStore.getState().addArtifact({
+      id: 'research-report-local',
+      type: 'document',
+      title: 'Report',
+      language: 'markdown',
+      content: '# Report',
+      messageId: '',
+      conversationId: CONVERSATION_ID,
+    });
+
+    expect(useArtifactsStore.getState().collectArtifactPushBatch()).toEqual([]);
+  });
+});

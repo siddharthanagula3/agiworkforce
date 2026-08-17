@@ -108,6 +108,7 @@ vi.mock('@shared/config/llm', () => ({
     capabilities: { thinking: false },
   }),
   isModelAllowedForTier: (_id: string, _tier: string) => true,
+  splitEffortsByEntitlement: () => ({ allowed: [], gated: [] }),
   getModelReasoning: (_id: string) => ({ capable: false, control: 'none' }),
   FREE_TRIAL_MODELS: [],
   normalizeModelId: (id: string) => id,

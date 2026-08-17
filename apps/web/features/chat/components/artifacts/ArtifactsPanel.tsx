@@ -448,7 +448,7 @@ export function ArtifactsPanel() {
             </div>
 
             {/* Content */}
-            <div className="flex flex-1 flex-col overflow-hidden bg-[#1e1e1e]">
+            <div className="flex flex-1 flex-col overflow-hidden bg-background">
               {showStreamingView && streamingArtifact ? (
                 <StreamingArtifactView artifact={streamingArtifact} />
               ) : selectedArtifact ? (

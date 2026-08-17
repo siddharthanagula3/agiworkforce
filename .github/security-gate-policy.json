@@ -1,0 +1,102 @@
+{
+  "description": "Single registry of every dependency and static-analysis gate in CI, the severity each one blocks at, and every exclusion from those gates. scripts/check-security-gates.mjs fails the build when CI and this file disagree.",
+  "workflow": ".github/workflows/ci.yml",
+  "gates": [
+    {
+      "id": "js-dependency-audit-critical",
+      "job": "security",
+      "step": "Dependency audit (JS) — critical (blocking)",
+      "tool": "pnpm audit",
+      "blocksAt": "critical"
+    },
+    {
+      "id": "js-dependency-audit-high",
+      "job": "security",
+      "step": "Dependency audit (JS) — high (blocking, FIX-043)",
+      "tool": "pnpm audit",
+      "blocksAt": "high"
+    },
+    {
+      "id": "semgrep-findings",
+      "job": "security",
+      "step": "Semgrep gate (unaccepted findings block the merge)",
+      "tool": "semgrep",
+      "blocksAt": "any-unaccepted-finding"
+    },
+    {
+      "id": "rust-dependency-policy",
+      "job": "rust-desktop-cli",
+      "step": "Dependency policy (Rust) — bans/sources/licenses (blocking)",
+      "tool": "cargo deny",
+      "blocksAt": "any-policy-violation"
+    },
+    {
+      "id": "rust-dependency-vulnerabilities",
+      "job": "rust-desktop-cli",
+      "step": "Dependency vulnerabilities (Rust) — blocking",
+      "tool": "cargo deny",
+      "blocksAt": "vulnerability"
+    },
+    {
+      "id": "secret-scan",
+      "job": "repo-guards",
+      "step": "Secret scan (CRIT-017)",
+      "tool": "scripts/check-secrets.mjs",
+      "blocksAt": "any-credential-shape"
+    }
+  ],
+  "exclusions": [
+    {
+      "id": "lock-drift-advisory",
+      "kind": "continue-on-error",
+      "job": "repo-guards",
+      "step": "Lock-vs-build drift check (AP-09, advisory)",
+      "reason": "The lock files it compares live in ~/.claude on a developer machine, so in CI the step has nothing to read and its exit code carries no signal.",
+      "owner": "Platform lead",
+      "tracking": "AP-09"
+    },
+    {
+      "id": "rust-advisory-maintenance-classes",
+      "kind": "continue-on-error",
+      "job": "rust-desktop-cli",
+      "step": "Dependency advisories (Rust) — non-blocking warning-policy debt",
+      "reason": "Unmaintained, unsound, and yanked warnings on transitive crates with no upstream replacement. RUSTSEC vulnerabilities are still blocking in the step above.",
+      "owner": "Platform lead",
+      "tracking": "RUST-DEPENDENCY-ADVISORIES-01 (docs/agent-context/known-flaws.md)"
+    },
+    {
+      "id": "windows-test-loader",
+      "kind": "continue-on-error",
+      "job": "windows-smoke",
+      "step": "cargo test --workspace --lib (default features, Windows)",
+      "reason": "The Windows test binary fails to load with STATUS_ENTRYPOINT_NOT_FOUND from a cross-CRT DLL mismatch; Windows cargo check and clippy stay strict and the full test suite runs on Linux.",
+      "owner": "Platform lead",
+      "tracking": "TODO(windows-test-load)"
+    },
+    {
+      "id": "semgrep-accepted-findings",
+      "kind": "allowlist-file",
+      "path": "scripts/semgrep-allowlist.json",
+      "reason": "Triaged Semgrep findings accepted as supply-chain hardening debt. Every entry carries a rule, reason, owner, and expiry that scripts/check-semgrep-findings.mjs enforces.",
+      "owner": "Platform lead",
+      "tracking": "GAP-P0-005"
+    },
+    {
+      "id": "secret-scan-fixtures",
+      "kind": "allowlist-file",
+      "path": "scripts/secret-scan-allowlist.json",
+      "reason": "Reviewed non-credential fixtures keyed on (path, format); an entry that stops matching fails the scan as stale.",
+      "owner": "Platform lead",
+      "tracking": "CRIT-017"
+    },
+    {
+      "id": "cargo-deny-advisory-ignores",
+      "kind": "cargo-deny-advisory-ignore",
+      "path": "deny.toml",
+      "advisories": [],
+      "reason": "No RUSTSEC advisory has been triaged as an accepted risk; the ignore list is deliberately empty.",
+      "owner": "Platform lead",
+      "tracking": "CRIT-018"
+    }
+  ]
+}

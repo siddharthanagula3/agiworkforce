@@ -129,6 +129,13 @@ export interface SendMessageOptions {
   onAccepted?: () => void;
 }
 
+interface DeferredSend {
+  content: string;
+  model: string;
+  attachments?: Attachment[];
+  options?: SendMessageOptions;
+}
+
 interface ExecutionState {
   isStreaming: boolean;
   streamingConversationIds: string[];
@@ -163,6 +170,8 @@ interface ExecutionState {
 
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
+const MAX_DEFERRED_SENDS = 5;
+const deferredSends = new Map<string, DeferredSend[]>();
 const streamingConversations = new Set<string>();
 const cloudStreamingConversations = new Set<string>();
 let cloudExecutionGeneration = 0;
@@ -234,6 +243,7 @@ export function clearCloudExecutionState(): void {
     streamingConversations.delete(conversationId);
     activeCloudRuns.delete(conversationId);
     cancelledBeforeStream.delete(conversationId);
+    deferredSends.delete(conversationId);
     thinkingStartTimes.delete(conversationId);
     thinkingEndTimes.delete(conversationId);
     lastDeltaTimes.delete(conversationId);
@@ -663,6 +673,18 @@ export function captureArtifactsFromMessage(
   }
 }
 
+function flushDeferredSend(conversationId: string): void {
+  const waiting = deferredSends.get(conversationId);
+  const next = waiting?.[0];
+  if (!waiting || !next) return;
+  const rest = waiting.slice(1);
+  if (rest.length > 0) deferredSends.set(conversationId, rest);
+  else deferredSends.delete(conversationId);
+  void useChatExecutionStore
+    .getState()
+    .sendMessage(conversationId, next.content, next.model, next.attachments, next.options);
+}
+
 export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   isStreaming: false,
   streamingConversationIds: [],
@@ -708,10 +730,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     queue.dequeue();
 
-    const existingController = abortControllers.get(conversationId);
-    if (existingController) {
-      existingController.abort();
-      abortControllers.delete(conversationId);
+    if (abortControllers.has(conversationId)) {
+      const waiting = deferredSends.get(conversationId) ?? [];
+      if (waiting.length >= MAX_DEFERRED_SENDS) {
+        set({
+          error: `Only ${MAX_DEFERRED_SENDS} follow-ups can wait for the current reply. Send this one once the reply finishes.`,
+          paywallError: null,
+        });
+        return false;
+      }
+      deferredSends.set(conversationId, [...waiting, { content, model, attachments, options }]);
+      options?.onAccepted?.();
+      return true;
     }
     cancelledBeforeStream.delete(conversationId);
 
@@ -1956,6 +1986,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
       }
       set({ ...streamingFlags() });
+      flushDeferredSend(conversationId);
     }
   },
 
@@ -2404,6 +2435,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
       }
       set({ ...streamingFlags() });
+      flushDeferredSend(conversationId);
     }
   },
 

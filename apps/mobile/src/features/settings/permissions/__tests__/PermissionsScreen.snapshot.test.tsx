@@ -140,11 +140,6 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
-jest.mock('expo-contacts', () => ({
-  getPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
-  requestPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
-}));
-
 jest.mock('expo-calendar', () => ({
   getCalendarPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
   requestCalendarPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
@@ -160,7 +155,6 @@ const mockPermissionsState = {
     camera: { ...mockDefaultPerm },
     photos: { ...mockDefaultPerm },
     notifications: { ...mockDefaultPerm },
-    contacts: { ...mockDefaultPerm },
     calendar: { ...mockDefaultPerm },
     reminders: { ...mockDefaultPerm },
   },

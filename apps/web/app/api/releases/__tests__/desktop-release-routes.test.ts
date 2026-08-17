@@ -438,6 +438,33 @@ describe('desktop release routes', () => {
     });
   });
 
+  it('serves desktop updates from the default repository when the release env vars are unset', async () => {
+    getOptionalEnvMock.mockReturnValue(undefined);
+
+    const updaterResponse = await getTauriUpdate(
+      makeRequest('https://agi.example/api/releases/linux-x86_64/1.9.0'),
+      { params: Promise.resolve({ target: 'linux-x86_64', version: '1.9.0' }) },
+    );
+    expect(updaterResponse.status).toBe(200);
+    expect(await updaterResponse.json()).toMatchObject({
+      version: '1.10.0',
+      platforms: { 'linux-x86_64': { url: RAW_APPIMAGE_URL, signature: 'tauri-signature' } },
+    });
+
+    const latestResponse = await getLatestRelease(
+      makeRequest('https://agi.example/api/releases/latest/linux-x86_64'),
+      { params: Promise.resolve({ platform: 'linux-x86_64' }) },
+    );
+    expect(latestResponse.status).toBe(200);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'https://api.github.com/repos/siddharthanagula3/agiworkforce/releases',
+      ),
+      expect.any(Object),
+    );
+  });
+
   it('rejects unknown release channels instead of falling back to stable', async () => {
     const response = await getLatestRelease(
       makeRequest('https://agi.example/api/releases/latest/linux-x86_64?channel=preview'),

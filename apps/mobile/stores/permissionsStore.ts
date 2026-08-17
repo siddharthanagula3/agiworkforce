@@ -22,7 +22,6 @@ function makeDefaults(): AllPermissionsMap {
     camera: { ...DEFAULT_STATE },
     photos: { ...DEFAULT_STATE },
     notifications: { ...DEFAULT_STATE },
-    contacts: { ...DEFAULT_STATE },
     calendar: { ...DEFAULT_STATE },
     reminders: { ...DEFAULT_STATE },
   };

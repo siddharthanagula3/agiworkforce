@@ -16,6 +16,7 @@ interface SendButtonProps {
   state: SendButtonState;
   onPress: () => void;
   disabled?: boolean;
+  accessibilityLabel?: string;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -38,7 +39,7 @@ function fillForState(state: SendButtonState, color: string) {
   return state === 'streaming' ? color : undefined;
 }
 
-export function SendButton({ state, onPress, disabled }: SendButtonProps) {
+export function SendButton({ state, onPress, disabled, accessibilityLabel }: SendButtonProps) {
   const colors = useThemeColors();
   const palette = stateColors(colors);
   const progress = useSharedValue(0);
@@ -88,7 +89,8 @@ export function SendButton({ state, onPress, disabled }: SendButtonProps) {
         animatedStyle,
       ]}
       accessibilityLabel={
-        state === 'idle' ? 'Send message' : state === 'streaming' ? 'Stop generating' : 'Queued'
+        accessibilityLabel ??
+        (state === 'idle' ? 'Send message' : state === 'streaming' ? 'Stop generating' : 'Queued')
       }
       accessibilityRole="button"
     >

@@ -44,8 +44,8 @@ export default function AiChatFeaturePage() {
             },
             {
               meta: 'Search',
-              title: 'Web search on demand',
-              body: "A one-tap toggle sends the question to the live web when an answer shouldn't come from model memory alone.",
+              title: 'Web search, no switch to find',
+              body: 'Search-capable models reach the live web on their own when an answer should not come from model memory alone. The composer states whether search is on for the model you picked.',
             },
             {
               meta: 'Models',

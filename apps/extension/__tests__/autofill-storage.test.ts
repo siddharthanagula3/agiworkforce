@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { JobApplicationProfile } from '../src/types';
 
@@ -6,7 +5,7 @@ interface StorageArea {
   store: Record<string, unknown>;
   get(keys: string | string[]): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
-  remove(key: string): Promise<void>;
+  remove(keys: string | string[]): Promise<void>;
 }
 
 function makeStorageArea(): StorageArea {
@@ -24,8 +23,8 @@ function makeStorageArea(): StorageArea {
     async set(items: Record<string, unknown>): Promise<void> {
       Object.assign(store, items);
     },
-    async remove(key: string): Promise<void> {
-      delete store[key];
+    async remove(keys: string | string[]): Promise<void> {
+      for (const k of Array.isArray(keys) ? keys : [keys]) delete store[k];
     },
   };
 }
@@ -65,6 +64,35 @@ describe('autofill profile storage — H-04', () => {
     installChromeStub();
     const { loadAutofillProfile } = await import('../src/features/content/autofill/filler');
     expect(await loadAutofillProfile()).toEqual({});
+  });
+});
+
+describe('clearAutofillProfile — SEC-49 erasure path', () => {
+  it('removes the identity and employment profile from chrome.storage.local', async () => {
+    const { local } = installChromeStub();
+    const profile: JobApplicationProfile = {
+      firstName: 'Ada',
+      email: 'ada@example.test',
+      currentCompany: 'Analytical Engines',
+    };
+    await local.set({ agi_autofill_profile: profile });
+    const { clearAutofillProfile } = await import('../src/features/content/autofill/filler');
+    await clearAutofillProfile();
+    expect(local.store['agi_autofill_profile']).toBeUndefined();
+  });
+
+  it('also removes any pre-migration synced copy', async () => {
+    const { sync } = installChromeStub();
+    await sync.set({ agi_autofill_profile: { email: 'legacy@example.test' } });
+    const { clearAutofillProfile } = await import('../src/features/content/autofill/filler');
+    await clearAutofillProfile();
+    expect(sync.store['agi_autofill_profile']).toBeUndefined();
+  });
+
+  it('resolves without throwing when storage is unavailable', async () => {
+    (globalThis as { chrome?: unknown }).chrome = undefined;
+    const { clearAutofillProfile } = await import('../src/features/content/autofill/filler');
+    await expect(clearAutofillProfile()).resolves.toBeUndefined();
   });
 });
 

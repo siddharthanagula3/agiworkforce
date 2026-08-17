@@ -3,7 +3,6 @@ import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zus
 import { storageFallback } from '../lib/storageFallback';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import type { CustomerInfo, SubscriptionInfo } from '../types/billing';
-import { PLAN_FEATURES, type PlanFeatures } from '../constants/planFeatures';
 import {
   type PlanTier,
   PLAN_DISPLAY_NAMES,
@@ -1037,38 +1036,6 @@ export function waitForHydration(): Promise<void> {
 }
 
 export const waitForBillingHydration = waitForHydration;
-
-export function hasFeature(featureKey: string): boolean {
-  const { featureFlags, plan } = useUnifiedAuthStore.getState();
-
-  if (featureFlags[featureKey] !== undefined) {
-    return featureFlags[featureKey]!;
-  }
-
-  const featureMap: Record<string, keyof PlanFeatures> = {
-    browser_automation: 'browserAutomation',
-    advanced_ui_automation: 'advancedUiAutomation',
-    email_support: 'emailSupport',
-    llm_cost_tracking: 'llmCostTracking',
-    team_features: 'teamFeatures',
-    sso: 'sso',
-    priority_support: 'prioritySupport',
-    custom_workflows: 'customWorkflows',
-    webhook_integration: 'webhookIntegration',
-    analytics: 'analytics',
-  };
-
-  const mappedFeature = featureMap[featureKey];
-  if (mappedFeature) {
-    return Boolean(PLAN_FEATURES[plan ?? 'free'][mappedFeature]);
-  }
-
-  if (featureKey === 'unlimited_automations') {
-    return PLAN_FEATURES[plan ?? 'free'].automationsPerDay === 'unlimited';
-  }
-
-  return true;
-}
 
 export function getPlanDescription(plan: PlanTier): string {
   return PLAN_DESCRIPTION[normalizeUIPlanTier(plan)];

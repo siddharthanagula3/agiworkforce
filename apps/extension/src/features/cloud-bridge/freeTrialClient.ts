@@ -1,4 +1,3 @@
-
 import {
   createManagedCloudAgentRunClient,
   MAX_CHAT_ATTACHMENT_BYTES,
@@ -27,6 +26,7 @@ import {
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
 import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './clerkAuth';
+import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
 
 export const FREE_TRIAL_MODEL: string = getRoutingSlotModel('general_fast');
@@ -290,6 +290,7 @@ export async function clearAuthToken(): Promise<void> {
   } catch {
     // ignore
   }
+  await clearAutofillProfile();
 }
 
 export type FreeTrialContentPart =

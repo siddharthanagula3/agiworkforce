@@ -53,6 +53,19 @@ describe('ConnectorGallery', () => {
     });
   });
 
+  it('states that custom connectors do not cross the local/cloud boundary', async () => {
+    render(
+      <TooltipProvider>
+        <ConnectorGallery />
+      </TooltipProvider>,
+    );
+
+    const note = await screen.findByTestId('custom-connector-scope-note');
+    expect(note).toHaveTextContent('stay on this device');
+    expect(note).toHaveTextContent('not uploaded to your cloud account');
+    expect(note).toHaveTextContent('added on web or mobile do not appear in this list');
+  });
+
   it('shows saved custom servers as disconnected and connects only after an explicit click', async () => {
     vi.mocked(McpClient.listServers).mockResolvedValue([
       {

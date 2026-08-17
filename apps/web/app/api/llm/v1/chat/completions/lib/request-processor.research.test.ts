@@ -3,6 +3,7 @@ import { requireProviderDefaultModel } from '@agiworkforce/types';
 import {
   applyResearchMode,
   researchModeAllowed,
+  ChatCompletionRequestSchema,
   RESEARCH_SYSTEM_PROMPT,
 } from './request-processor';
 import type { ChatCompletionRequest } from './request-processor';
@@ -96,5 +97,39 @@ describe('researchModeAllowed gates on the capability it names', () => {
 
   it('refuses when the model has no capability metadata', () => {
     expect(researchModeAllowed(asked, undefined)).toBe(false);
+  });
+});
+
+describe('research_resume.approved_steps', () => {
+  it('accepts the plan a user approved so the run can skip planning', () => {
+    const parsed = ChatCompletionRequestSchema.parse({
+      model: CHAT_MODEL,
+      messages: [{ role: 'user', content: 'research the topic' }],
+      research: true,
+      research_resume: {
+        sources: [],
+        steps: [],
+        approved_steps: [
+          { id: 'plan-1', type: 'search', description: 'alpha query', status: 'pending' },
+        ],
+      },
+    });
+
+    expect(parsed.research_resume?.approved_steps).toEqual([
+      { id: 'plan-1', type: 'search', description: 'alpha query', status: 'pending' },
+    ]);
+  });
+
+  it('rejects an approved step with no description to search for', () => {
+    expect(() =>
+      ChatCompletionRequestSchema.parse({
+        model: CHAT_MODEL,
+        messages: [{ role: 'user', content: 'research the topic' }],
+        research: true,
+        research_resume: {
+          approved_steps: [{ id: 'plan-1', type: 'search', description: '  ', status: 'pending' }],
+        },
+      }),
+    ).toThrow();
   });
 });

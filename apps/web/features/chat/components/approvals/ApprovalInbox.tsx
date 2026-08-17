@@ -2,7 +2,8 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { Check, ChevronRight, Loader2, ShieldCheck, X } from 'lucide-react';
-import { Button, Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
+import { Button, Popover, PopoverContent, PopoverTrigger, Textarea } from '@agiworkforce/ui';
+import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import type { Message } from '@shared/stores/web-chat-store';
 import { isApprovalTurnLive, type ToolApprovalDecision } from '@/lib/hooks/useChatStream';
 import { humanizeToolName } from '../messages/ToolTimeline';
@@ -19,6 +20,7 @@ type ResolveApproval = (
   assistantMessageId: string,
   toolCallId: string,
   decision: ToolApprovalDecision,
+  guidance?: string,
 ) => Promise<void>;
 
 interface ApprovalInboxProps {
@@ -116,13 +118,20 @@ export function ApprovalInbox({
 }: ApprovalInboxProps) {
   const approvals = useMemo(() => collectPendingApprovals(messages), [messages]);
   const [resolvingKeys, setResolvingKeys] = useState<Set<string>>(() => new Set());
+  const [guidanceByKey, setGuidanceByKey] = useState<Record<string, string>>({});
 
   const resolve = useCallback(
     async (item: PendingApprovalItem, decision: ToolApprovalDecision) => {
       const key = approvalKey(item);
+      const guidance = guidanceByKey[key]?.trim();
       setResolvingKeys((current) => new Set(current).add(key));
       try {
-        await onResolve(item.assistantMessageId, item.toolCallId, decision);
+        await onResolve(item.assistantMessageId, item.toolCallId, decision, guidance || undefined);
+        setGuidanceByKey((current) => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
       } finally {
         setResolvingKeys((current) => {
           const next = new Set(current);
@@ -131,7 +140,7 @@ export function ApprovalInbox({
         });
       }
     },
-    [onResolve],
+    [guidanceByKey, onResolve],
   );
 
   return (
@@ -147,7 +156,7 @@ export function ApprovalInbox({
           <span className="hidden text-xs sm:inline">Approvals</span>
           {approvals.length > 0 && (
             <span
-              className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-none text-white"
+              className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-none text-amber-950"
               aria-hidden="true"
             >
               {approvals.length > 99 ? '99+' : approvals.length}
@@ -187,7 +196,7 @@ export function ApprovalInbox({
                 >
                   <div className="flex items-start gap-2">
                     <ShieldCheck
-                      className="mt-0.5 h-4 w-4 shrink-0 text-amber-500"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500"
                       aria-hidden="true"
                     />
                     <div className="min-w-0 flex-1">
@@ -209,39 +218,54 @@ export function ApprovalInbox({
                       This request expired. Open the conversation to rerun the turn.
                     </div>
                   ) : (
-                    <div className="mt-3 flex items-center justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-1.5"
+                    <>
+                      <Textarea
+                        id={`approval-guidance-${key}`}
+                        value={guidanceByKey[key] ?? ''}
+                        onChange={(event) =>
+                          setGuidanceByKey((current) => ({ ...current, [key]: event.target.value }))
+                        }
                         disabled={resolving}
-                        onClick={() => void resolve(item, 'rejected')}
-                        aria-label={`Reject ${item.label}`}
-                      >
-                        {resolving ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <X className="h-3.5 w-3.5" aria-hidden="true" />
-                        )}
-                        Reject
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 gap-1.5"
-                        disabled={resolving}
-                        onClick={() => void resolve(item, 'approved')}
-                        aria-label={`Approve ${item.label}`}
-                      >
-                        {resolving ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                        )}
-                        Approve
-                      </Button>
-                    </div>
+                        rows={2}
+                        maxLength={TOOL_APPROVAL_GUIDANCE_MAX_LENGTH}
+                        placeholder="Add guidance to steer the run (optional)"
+                        aria-label={`Guidance for ${item.label}`}
+                        className="mt-3 min-h-16 resize-none text-xs"
+                      />
+                      <div className="mt-2 flex items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1.5"
+                          disabled={resolving}
+                          onClick={() => void resolve(item, 'rejected')}
+                          aria-label={`Reject ${item.label}`}
+                        >
+                          {resolving ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          )}
+                          Reject
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-8 gap-1.5"
+                          disabled={resolving}
+                          onClick={() => void resolve(item, 'approved')}
+                          aria-label={`Approve ${item.label}`}
+                        >
+                          {resolving ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                          )}
+                          Approve
+                        </Button>
+                      </div>
+                    </>
                   )}
 
                   {onShowMessage && (

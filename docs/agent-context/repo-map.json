@@ -96,10 +96,7 @@
       "path": "services",
       "owner": "Backend/data lead",
       "purpose": "API gateway, signaling server, future managed compute services",
-      "primaryChecks": [
-        "pnpm --filter @agiworkforce/api-gateway test",
-        "pnpm --filter @agiworkforce/signaling-server test"
-      ],
+      "primaryChecks": ["pnpm --filter @agiworkforce/signaling-server test"],
       "rule": "Services must not import UI packages."
     },
     {
@@ -125,7 +122,6 @@
       "purpose": "Admin policy, identity, audit, support, usage ledger, managed-credit launch gates, and enterprise docs",
       "primaryChecks": [
         "pnpm --filter @agiworkforce/types build",
-        "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
         "pnpm --filter @agiworkforce/web typecheck"
       ],
       "rule": "Managed compute is public alpha and open by default (founder decision 2026-06-27); the private-beta/waitlist launch gate is removed and AGI_MANAGED_COMPUTE_PRIVATE_BETA is an incident-response kill-switch only. Ledger, caps, fraud, refund, dispute, and provider-term controls must keep pace with public usage but no longer gate access; managed access stays subscription/entitlement-gated and Local/BYOK are never silently routed into managed cloud."
@@ -183,15 +179,12 @@
       "path": "packages/tools/apply-patch",
       "kind": "package",
       "canonicalOwner": "Tooling and security",
-      "consumers": ["apps/desktop", "services/api-gateway"],
+      "consumers": ["apps/desktop"],
       "deployability": "library",
       "trustBoundary": "privileged filesystem mutation",
       "status": "active",
       "action": "keep",
-      "evidence": [
-        "packages/tools/apply-patch/src/index.ts",
-        "services/api-gateway/src/tools/file_edit.ts"
-      ]
+      "evidence": ["packages/tools/apply-patch/src/index.ts"]
     },
     {
       "path": "packages/tools/browser-tool",
@@ -219,15 +212,12 @@
       "path": "packages/platform/data-layer",
       "kind": "package",
       "canonicalOwner": "Backend and data",
-      "consumers": ["apps/web", "services/api-gateway"],
+      "consumers": ["apps/web"],
       "deployability": "server-library",
       "trustBoundary": "tenant-scoped database access",
       "status": "active",
       "action": "keep",
-      "evidence": [
-        "packages/platform/data-layer/src/factory.ts",
-        "services/api-gateway/src/lib/neonClients.ts"
-      ]
+      "evidence": ["packages/platform/data-layer/src/factory.ts"]
     },
     {
       "path": "packages/ui/design-tokens",
@@ -335,7 +325,6 @@
       "canonicalOwner": "Provider platform",
       "consumers": [
         "apps/web",
-        "services/api-gateway",
         "packages/ai/providers/anthropic",
         "packages/ai/providers/deepseek",
         "packages/ai/providers/google",
@@ -352,10 +341,7 @@
       "trustBoundary": "provider request and response normalization",
       "status": "active-high-fan-in",
       "action": "keep",
-      "evidence": [
-        "packages/ai/provider-protocol/src/index.ts",
-        "services/api-gateway/package.json"
-      ]
+      "evidence": ["packages/ai/provider-protocol/src/index.ts"]
     },
     {
       "path": "packages/ai/provider-runtime",
@@ -366,7 +352,6 @@
         "apps/mobile",
         "apps/extension",
         "apps/extension-vscode",
-        "services/api-gateway",
         "packages/ai/providers/anthropic",
         "packages/ai/providers/deepseek",
         "packages/ai/providers/google",
@@ -407,15 +392,12 @@
       "path": "packages/tools/mcp",
       "kind": "package",
       "canonicalOwner": "Tooling platform",
-      "consumers": ["apps/desktop", "apps/web", "services/api-gateway"],
+      "consumers": ["apps/desktop", "apps/web"],
       "deployability": "library",
       "trustBoundary": "external MCP server transport and tool metadata",
       "status": "active",
       "action": "keep",
-      "evidence": [
-        "packages/tools/mcp/src/connect.ts",
-        "services/api-gateway/src/mcp/sharedClient.ts"
-      ]
+      "evidence": ["packages/tools/mcp/src/connect.ts"]
     },
     {
       "path": "packages/ai/model-registry",
@@ -435,7 +417,7 @@
       "path": "packages/ai/providers",
       "kind": "package-group",
       "canonicalOwner": "Provider platform",
-      "consumers": ["services/api-gateway", "apps/web"],
+      "consumers": ["apps/web"],
       "deployability": "namespace-only",
       "trustBoundary": "provider egress adapters",
       "status": "active-grouping-directory",
@@ -446,15 +428,14 @@
       "path": "packages/ai/providers/factory",
       "kind": "package",
       "canonicalOwner": "Provider platform",
-      "consumers": ["apps/web", "services/api-gateway"],
+      "consumers": ["apps/web"],
       "deployability": "provider-adapter-composition-library",
       "trustBoundary": "provider adapter construction with caller-owned credentials and egress policy",
       "status": "active",
       "action": "keep",
       "evidence": [
         "packages/ai/providers/factory/src/index.ts",
-        "apps/web/lib/services/provider-adapter-service.ts",
-        "services/api-gateway/src/lib/providerAdapters.ts"
+        "apps/web/lib/services/provider-adapter-service.ts"
       ]
     },
     {
@@ -703,7 +684,7 @@
       "path": "packages/tools/skills",
       "kind": "package",
       "canonicalOwner": "Tooling platform",
-      "consumers": ["apps/desktop", "apps/mobile", "apps/web", "services/api-gateway"],
+      "consumers": ["apps/desktop", "apps/mobile", "apps/web"],
       "deployability": "library",
       "trustBoundary": "untrusted skill metadata parsing and merge",
       "status": "active",
@@ -720,7 +701,6 @@
         "apps/mobile",
         "apps/extension",
         "apps/extension-vscode",
-        "services/api-gateway",
         "packages/platform/artifacts",
         "packages/client/desktop-command-client",
         "packages/tools/browser-tool",
@@ -943,7 +923,6 @@
       "evidence": ["crates/agiworkforce-utils-image/Cargo.toml", "cargo metadata"]
     },
     {
-      "path": "services/api-gateway",
       "kind": "service",
       "canonicalOwner": "Backend and data",
       "consumers": ["apps/web", "apps/mobile", "apps/extension", "apps/extension-vscode"],
@@ -951,26 +930,18 @@
       "trustBoundary": "managed-cloud authentication, provider egress, tools and tenant data",
       "status": "active-stale-package-description",
       "action": "keep",
-      "evidence": [
-        "services/api-gateway/src/index.ts",
-        "apps/web/app/api/v1/providers",
-        "apps/mobile/lib/providerStreamClient.ts"
-      ]
+      "evidence": ["apps/web/app/api/v1/providers", "apps/mobile/lib/providerStreamClient.ts"]
     },
     {
       "path": "services/signaling-server",
       "kind": "service",
       "canonicalOwner": "Backend and realtime",
-      "consumers": ["services/api-gateway", "apps/mobile", "apps/desktop/src-tauri"],
+      "consumers": ["apps/mobile", "apps/desktop/src-tauri"],
       "deployability": "deployable-service",
       "trustBoundary": "pairing, signaling and authenticated WebSocket relay",
       "status": "active",
       "action": "keep",
-      "evidence": [
-        "services/signaling-server/src/index.ts",
-        "services/api-gateway/src/routes/pair.ts",
-        "services/api-gateway/src/routes/mobile.ts"
-      ]
+      "evidence": ["services/signaling-server/src/index.ts"]
     },
     {
       "path": "tools/skill-vetting",

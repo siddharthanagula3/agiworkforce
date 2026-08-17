@@ -77,6 +77,7 @@ export interface CloudRunReattachment {
 }
 
 import type { CloudWorkMode } from '@agiworkforce/types';
+import type { MediaKind } from '../stores/mediaModeStore';
 
 export interface ChatRuntime {
   sendMessage(conversationId: string, content: string, options?: SendMessageOptions): Promise<void>;
@@ -185,6 +186,7 @@ export interface SendMessageOptions {
   continuationMessageId?: string;
   agentMode?: string;
   effort?: string;
+  mediaMode?: MediaKind;
 }
 
 export interface SendMessageParams {

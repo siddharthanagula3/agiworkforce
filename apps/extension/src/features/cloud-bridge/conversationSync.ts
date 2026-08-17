@@ -13,6 +13,7 @@ import {
   type HistoryMessage,
 } from '../background/conversation-history';
 import { logger } from '../../utils';
+import { readCloudMirroringEnabled } from '../privacy/cloudMirroring';
 import { getManagedCloudAuthContext } from './freeTrialClient';
 import {
   buildExtensionCloudMessageMetadata,
@@ -114,6 +115,7 @@ export async function flushConversation(
 ): Promise<void> {
   const key = flushKey(owner, conversationId);
   if (inFlightFlushes.has(key)) return;
+  if (!(await readCloudMirroringEnabled())) return;
 
   const controller = new AbortController();
   inFlightFlushes.set(key, controller);

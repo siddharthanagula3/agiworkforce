@@ -15,6 +15,12 @@ import {
   processClaimedScheduleRun,
 } from '@/lib/services/schedule-service';
 import { executeScheduledAgent } from '@/lib/services/scheduled-agent-executor';
+import {
+  MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
+  MANAGED_CLOUD_SCHEDULE_RUNS_MAX_PAGE_SIZE,
+  clampSchedulePageOffset,
+  clampSchedulePageSize,
+} from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -41,11 +47,12 @@ async function handleGetRuns(request: NextRequest, context: RouteContext) {
 
   const { id: taskId } = await context.params;
   const url = new URL(request.url);
-  const limit = Math.min(100, Math.max(1, integerQueryValue(url.searchParams.get('limit'), 20)));
-  const offset = Math.min(
-    10_000,
-    Math.max(0, integerQueryValue(url.searchParams.get('offset'), 0)),
+  const limit = clampSchedulePageSize(
+    integerQueryValue(url.searchParams.get('limit'), MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE),
+    MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
+    MANAGED_CLOUD_SCHEDULE_RUNS_MAX_PAGE_SIZE,
   );
+  const offset = clampSchedulePageOffset(integerQueryValue(url.searchParams.get('offset'), 0));
 
   try {
     const runs = await listScheduleRuns(db, userId, taskId, { limit, offset });

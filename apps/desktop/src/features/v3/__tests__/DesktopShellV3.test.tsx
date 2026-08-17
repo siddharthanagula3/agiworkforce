@@ -900,6 +900,23 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(screen.getByText('Local agent tasks')).toBeInTheDocument();
   });
 
+  it('leaves a Cloud-only panel for chat when the trust boundary switches to Local', async () => {
+    useAppModeStore.setState({ mode: 'cloud' });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(await screen.findByTestId('desktop-tasks')).toBeInTheDocument();
+
+    act(() => {
+      useAppModeStore.setState({ mode: 'local' });
+    });
+
+    await waitFor(() => expect(screen.getByTestId('chat-interface')).toBeInTheDocument());
+    expect(screen.queryByTestId('desktop-tasks')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('agi-work-projects')).not.toBeInTheDocument();
+  });
+
   it('keeps Customize reachable through the Desktop settings owner', () => {
     const onNavigateView = vi.fn();
     render(<DesktopShellV3 runtime={null} hostBridge={null} onNavigateView={onNavigateView} />);

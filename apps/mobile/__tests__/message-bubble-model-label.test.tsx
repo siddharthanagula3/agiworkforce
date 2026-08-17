@@ -462,4 +462,52 @@ describe('MessageBubble model label', () => {
     expect(view.queryByTestId('inline-artifact-wrong-scope')).toBeNull();
     expect(view.queryByText('Store fallback')).toBeNull();
   });
+
+  it('drops the derived fenced-data card when a durable file of the same format is persisted', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useArtifactStore.setState({
+      artifacts: [
+        {
+          id: 'derived-csv',
+          messageId: 'm-csv',
+          title: 'Untitled data',
+          kind: 'code',
+          language: 'csv',
+          content: 'region,total\nAPAC,120',
+          ageLabel: 'Now',
+          sourceLabel: 'AGI',
+          accentColor: '#000000',
+          previewLines: [],
+          provenance: { scope: 'cloud', ownerId: 'user-fixture' },
+        },
+      ],
+    });
+    const message = {
+      id: 'm-csv',
+      role: 'assistant',
+      content: 'Here is the export.',
+      createdAt: '2026-08-13T00:00:00.000Z',
+      metadata: {
+        generatedFiles: [
+          {
+            id: 'file-csv-1',
+            fileName: 'sales-summary.csv',
+            mimeType: 'text/csv',
+            uri: 'https://media.example/sales-summary.csv',
+            byteCount: 512,
+            kind: 'csv',
+            surface: 'file',
+            previewable: false,
+          },
+        ],
+      },
+    } as unknown as ChatMessage;
+
+    const view = render(<MessageBubble message={message} />);
+
+    expect(view.queryByTestId('inline-artifact-derived-csv')).toBeNull();
+    expect(view.getByTestId('inline-artifact-file-csv-1').props.children).toBe(
+      'sales-summary.csv|document|sales-summary.csv|',
+    );
+  });
 });

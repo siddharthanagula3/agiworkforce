@@ -11,6 +11,7 @@ import {
   listSourceFiles,
   toRepoRelative,
 } from './lib/module-graph.mjs';
+import { checkBaselineCeiling } from './lib/module-reachability-ratchet.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -302,8 +303,6 @@ const tsTargets = [
       'apps/desktop/src/features/messaging/MessageHistory.tsx',
       'apps/desktop/src/features/messaging/MessagingIntegrations.tsx',
       'apps/desktop/src/features/messaging/index.ts',
-      'apps/desktop/src/features/notifications/NotificationCenter.tsx',
-      'apps/desktop/src/features/notifications/index.ts',
       'apps/desktop/src/features/onboarding/OnboardingWelcome.tsx',
       'apps/desktop/src/features/outcomes/GoalOutcomes.tsx',
       'apps/desktop/src/features/outcomes/OutcomesDashboard.tsx',
@@ -351,7 +350,6 @@ const tsTargets = [
       'apps/desktop/src/hooks/useLSP.ts',
       'apps/desktop/src/hooks/useOCR.ts',
       'apps/desktop/src/hooks/usePromptSuggestions.ts',
-      'apps/desktop/src/hooks/useTTS.ts',
       'apps/desktop/src/hooks/useTerminal.ts',
       'apps/desktop/src/hooks/useWorkflows.ts',
       'apps/desktop/src/integrations/index.ts',
@@ -400,7 +398,6 @@ const tsTargets = [
       'apps/desktop/src/stores/filesystemStore.ts',
       'apps/desktop/src/stores/mcp/index.ts',
       'apps/desktop/src/stores/mediaGenerationStore.ts',
-      'apps/desktop/src/stores/notificationStore.ts',
       'apps/desktop/src/stores/promptStashStore.ts',
       'apps/desktop/src/stores/roiStore.ts',
       'apps/desktop/src/stores/schedulesStore.ts',
@@ -440,10 +437,20 @@ const tsTargets = [
       'apps/desktop/src/utils/tokenCount.ts',
       'apps/desktop/src/utils/validation.ts',
     ],
+    maxKnownUnreachable: 247,
   },
 ];
 
-function checkTsTarget({ label, sourceRoot, entries, aliases, knownUnreachable }) {
+function checkTsTarget({
+  label,
+  sourceRoot,
+  entries,
+  aliases,
+  knownUnreachable,
+  maxKnownUnreachable,
+}) {
+  errors.push(...checkBaselineCeiling({ label, knownUnreachable, ceiling: maxKnownUnreachable }));
+
   const absoluteRoot = path.join(root, sourceRoot);
   if (!exists(absoluteRoot)) return;
 

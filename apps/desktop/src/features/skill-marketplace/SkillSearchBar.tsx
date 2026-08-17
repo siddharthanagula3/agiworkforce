@@ -2,8 +2,7 @@ import { Search, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
-
-const DEBOUNCE_MS = 300;
+import { SEARCH_INPUT_DEBOUNCE_MS as DEBOUNCE_MS } from '@agiworkforce/utils';
 
 export function SkillSearchBar() {
   const storeQuery = useSkillMarketplaceStore((s) => s.searchQuery);

@@ -23,6 +23,16 @@ interface SyncEvent {
   created_at: string;
 }
 
+type MappedRole = 'admin' | 'member' | 'viewer';
+
+interface GroupSummary {
+  id: string;
+  connection_id: string;
+  display_name: string;
+  mapped_role: MappedRole | null;
+  member_count: number;
+}
+
 interface TokenSummary {
   id: string;
   connection_id: string;
@@ -33,6 +43,8 @@ interface TokenSummary {
   revoked_at: string | null;
   created_at: string;
 }
+
+const FALLBACK_MAPPABLE_ROLES: MappedRole[] = ['admin', 'member', 'viewer'];
 
 const PROVIDERS = [
   { value: 'okta', label: 'Okta' },
@@ -62,6 +74,9 @@ export default function DirectorySyncAdminPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [events, setEvents] = useState<SyncEvent[]>([]);
   const [tokens, setTokens] = useState<TokenSummary[]>([]);
+  const [groups, setGroups] = useState<GroupSummary[]>([]);
+  const [mappableRoles, setMappableRoles] = useState<MappedRole[]>(FALLBACK_MAPPABLE_ROLES);
+  const [canManageRoles, setCanManageRoles] = useState(false);
   const [scimBaseUrl, setScimBaseUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,9 +94,10 @@ export default function DirectorySyncAdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [connectionsResponse, tokensResponse] = await Promise.all([
+      const [connectionsResponse, tokensResponse, groupsResponse] = await Promise.all([
         fetch('/api/admin/directory-sync', { credentials: 'include' }),
         fetch('/api/admin/directory-sync/tokens', { credentials: 'include' }),
+        fetch('/api/admin/directory-sync/groups', { credentials: 'include' }),
       ]);
 
       if (!connectionsResponse.ok) {
@@ -89,6 +105,8 @@ export default function DirectorySyncAdminPage() {
         setConnections([]);
         setEvents([]);
         setTokens([]);
+        setGroups([]);
+        setCanManageRoles(false);
         return;
       }
 
@@ -106,6 +124,22 @@ export default function DirectorySyncAdminPage() {
         setTokens(tokenBody.tokens ?? []);
       } else {
         setTokens([]);
+      }
+
+      if (groupsResponse.ok) {
+        const groupBody = (await groupsResponse.json()) as {
+          groups?: GroupSummary[];
+          mappable_roles?: MappedRole[];
+          can_manage_roles?: boolean;
+        };
+        setGroups(groupBody.groups ?? []);
+        setMappableRoles(
+          groupBody.mappable_roles?.length ? groupBody.mappable_roles : FALLBACK_MAPPABLE_ROLES,
+        );
+        setCanManageRoles(groupBody.can_manage_roles === true);
+      } else {
+        setGroups([]);
+        setCanManageRoles(false);
       }
     } catch {
       setError('Could not reach the directory sync API.');
@@ -195,6 +229,37 @@ export default function DirectorySyncAdminPage() {
     }
   };
 
+  const updateGroupRole = async (groupId: string, mappedRole: MappedRole | null) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const csrf = await getCsrfToken();
+      const response = await fetch('/api/admin/directory-sync/groups', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+        body: JSON.stringify({ groupId, mappedRole }),
+      });
+      if (!response.ok) {
+        setError(await readError(response));
+        return;
+      }
+      const body = (await response.json()) as { group?: GroupSummary | null };
+      const updated = body.group;
+      if (updated) {
+        setGroups((current) =>
+          current.map((group) => (group.id === updated.id ? { ...group, ...updated } : group)),
+        );
+      } else {
+        await load();
+      }
+    } catch {
+      setError('Could not reach the directory sync API.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const revokeToken = async (tokenId: string) => {
     setBusy(true);
     setError(null);
@@ -215,19 +280,19 @@ export default function DirectorySyncAdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
         <header>
-          <h1 className="text-2xl font-medium text-white">Directory sync (SCIM 2.0)</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+          <h1 className="text-2xl font-medium text-foreground">Directory sync (SCIM 2.0)</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Provision and deprovision members from your identity provider. Requires an active
             Enterprise subscription; every request is re-checked against the plan of the admin who
             minted the token.
           </p>
           {scimBaseUrl ? (
-            <p className="mt-4 text-sm text-zinc-300">
+            <p className="mt-4 text-sm text-foreground">
               SCIM base URL:{' '}
-              <code className="rounded bg-white/[0.06] px-2 py-1 text-emerald-300">
+              <code className="rounded bg-muted px-2 py-1 text-emerald-700 dark:text-emerald-300">
                 {scimBaseUrl}
               </code>
             </p>
@@ -237,31 +302,31 @@ export default function DirectorySyncAdminPage() {
         {error ? (
           <p
             role="alert"
-            className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200"
+            className="rounded-md border border-red-600/60 dark:border-red-500/40 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200"
           >
             {error}
           </p>
         ) : null}
 
-        {loading ? <p className="text-sm text-zinc-400">Loading directory sync…</p> : null}
+        {loading ? <p className="text-sm text-muted-foreground">Loading directory sync…</p> : null}
 
-        <section className="rounded-md border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="text-base font-medium text-white">Connections</h2>
+        <section className="rounded-md border border-border bg-card p-5">
+          <h2 className="text-base font-medium text-foreground">Connections</h2>
           {connections.length === 0 && !loading ? (
-            <p className="mt-2 text-sm text-zinc-400">No directory sync connection yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">No directory sync connection yet.</p>
           ) : (
             <ul className="mt-4 flex flex-col gap-3">
               {connections.map((connection) => (
                 <li
                   key={connection.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/10 p-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3"
                 >
                   <div>
-                    <p className="text-sm text-white">
+                    <p className="text-sm text-foreground">
                       {connection.display_name ?? connection.directory_id}{' '}
-                      <span className="text-zinc-500">({connection.provider})</span>
+                      <span className="text-muted-foreground">({connection.provider})</span>
                     </p>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-muted-foreground">
                       Directory {connection.directory_id} · last sync{' '}
                       {formatTimestamp(connection.last_sync_at)}
                     </p>
@@ -270,7 +335,7 @@ export default function DirectorySyncAdminPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => void deleteConnection(connection.id)}
-                    className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-200 disabled:opacity-50"
+                    className="rounded border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
                   >
                     Remove
                   </button>
@@ -280,12 +345,12 @@ export default function DirectorySyncAdminPage() {
           )}
 
           <form onSubmit={createConnection} className="mt-5 flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1 text-xs text-zinc-400">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               Provider
               <select
                 value={provider}
                 onChange={(event) => setProvider(event.target.value)}
-                className="rounded border border-white/10 bg-zinc-900 px-2 py-1 text-sm text-white"
+                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
               >
                 {PROVIDERS.map((entry) => (
                   <option key={entry.value} value={entry.value}>
@@ -294,23 +359,23 @@ export default function DirectorySyncAdminPage() {
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-400">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               Directory ID
               <input
                 value={directoryId}
                 onChange={(event) => setDirectoryId(event.target.value)}
                 required
                 maxLength={255}
-                className="rounded border border-white/10 bg-zinc-900 px-2 py-1 text-sm text-white"
+                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-400">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               Display name
               <input
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
                 maxLength={255}
-                className="rounded border border-white/10 bg-zinc-900 px-2 py-1 text-sm text-white"
+                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
               />
             </label>
             <button
@@ -323,19 +388,21 @@ export default function DirectorySyncAdminPage() {
           </form>
         </section>
 
-        <section className="rounded-md border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="text-base font-medium text-white">SCIM tokens</h2>
-          <p className="mt-2 text-sm text-zinc-400">
+        <section className="rounded-md border border-border bg-card p-5">
+          <h2 className="text-base font-medium text-foreground">SCIM tokens</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             A token is shown once, when it is minted. Only its hash is stored, so it cannot be
             recovered — mint a new one and revoke the old.
           </p>
 
           {freshToken ? (
             <div className="mt-4 rounded border border-emerald-500/40 bg-emerald-500/10 p-3">
-              <p className="text-xs uppercase tracking-wide text-emerald-300">
+              <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                 Copy this now — it will not be shown again
               </p>
-              <code className="mt-2 block break-all text-sm text-emerald-100">{freshToken}</code>
+              <code className="mt-2 block break-all text-sm text-emerald-900 dark:text-emerald-100">
+                {freshToken}
+              </code>
             </div>
           ) : null}
 
@@ -344,26 +411,26 @@ export default function DirectorySyncAdminPage() {
               {tokens.map((token) => (
                 <li
                   key={token.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/10 p-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3"
                 >
                   <div>
-                    <p className="text-sm text-white">
+                    <p className="text-sm text-foreground">
                       {token.name}{' '}
-                      <span className="text-zinc-500">scim_{token.token_prefix}_…</span>
+                      <span className="text-muted-foreground">scim_{token.token_prefix}_…</span>
                     </p>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-muted-foreground">
                       Last used {formatTimestamp(token.last_used_at)}
                       {token.revoked_at ? ' · revoked' : ''}
                     </p>
                   </div>
                   {token.revoked_at ? (
-                    <span className="text-xs text-zinc-500">Revoked</span>
+                    <span className="text-xs text-muted-foreground">Revoked</span>
                   ) : (
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => void revokeToken(token.id)}
-                      className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-200 disabled:opacity-50"
+                      className="rounded border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
                     >
                       Revoke
                     </button>
@@ -374,13 +441,13 @@ export default function DirectorySyncAdminPage() {
           ) : null}
 
           <form onSubmit={mintToken} className="mt-5 flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1 text-xs text-zinc-400">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               Connection
               <select
                 value={tokenConnectionId}
                 onChange={(event) => setTokenConnectionId(event.target.value)}
                 required
-                className="rounded border border-white/10 bg-zinc-900 px-2 py-1 text-sm text-white"
+                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
               >
                 <option value="">Select a connection</option>
                 {connections.map((connection) => (
@@ -390,14 +457,14 @@ export default function DirectorySyncAdminPage() {
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-400">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               Token name
               <input
                 value={tokenName}
                 onChange={(event) => setTokenName(event.target.value)}
                 required
                 maxLength={120}
-                className="rounded border border-white/10 bg-zinc-900 px-2 py-1 text-sm text-white"
+                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
               />
             </label>
             <button
@@ -410,21 +477,80 @@ export default function DirectorySyncAdminPage() {
           </form>
         </section>
 
-        <section className="rounded-md border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="text-base font-medium text-white">Recent IdP activity</h2>
+        <section className="rounded-md border border-border bg-card p-5">
+          <h2 className="text-base font-medium text-foreground">Group role mapping</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            A provisioned user gets the strongest role among the groups they belong to. Leave a
+            group unmapped and its members land as{' '}
+            <strong className="text-foreground">member</strong>. A group can never grant ownership.
+          </p>
+          {!canManageRoles ? (
+            <p className="mt-2 text-sm text-amber-700 dark:text-amber-200">
+              Only an organization owner can change group role mapping.
+            </p>
+          ) : null}
+
+          {groups.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">
+              No groups have been pushed by your identity provider yet.
+            </p>
+          ) : (
+            <ul className="mt-4 flex flex-col gap-3">
+              {groups.map((group) => (
+                <li
+                  key={group.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3"
+                >
+                  <div>
+                    <p className="text-sm text-foreground">{group.display_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {group.member_count} member{group.member_count === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                    Role for {group.display_name}
+                    <select
+                      value={group.mapped_role ?? ''}
+                      disabled={busy || !canManageRoles}
+                      onChange={(event) =>
+                        void updateGroupRole(
+                          group.id,
+                          event.target.value === '' ? null : (event.target.value as MappedRole),
+                        )
+                      }
+                      className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground disabled:opacity-50"
+                    >
+                      <option value="">No mapping (member)</option>
+                      {mappableRoles.map((role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-md border border-border bg-card p-5">
+          <h2 className="text-base font-medium text-foreground">Recent IdP activity</h2>
           {events.length === 0 ? (
-            <p className="mt-2 text-sm text-zinc-400">
+            <p className="mt-2 text-sm text-muted-foreground">
               Nothing yet. If your IdP is configured and this stays empty, it is not reaching this
               deployment.
             </p>
           ) : (
             <ul className="mt-4 flex flex-col gap-2">
               {events.map((event) => (
-                <li key={event.id} className="text-sm text-zinc-300">
-                  <span className="text-zinc-500">{formatTimestamp(event.created_at)}</span>{' '}
+                <li key={event.id} className="text-sm text-foreground">
+                  <span className="text-muted-foreground">{formatTimestamp(event.created_at)}</span>{' '}
                   {event.event_type}
                   {event.user_email ? ` · ${event.user_email}` : ''}
-                  {event.error ? <span className="text-red-300"> · {event.error}</span> : null}
+                  {event.error ? (
+                    <span className="text-red-700 dark:text-red-300"> · {event.error}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>

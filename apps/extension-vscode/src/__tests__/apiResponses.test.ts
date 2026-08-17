@@ -19,13 +19,44 @@ const canonicalUsageResponse = {
 };
 
 describe('usage summary parsing', () => {
-  it('accepts the full /api/usage summary and reads only the tier fields', () => {
+  it('reads every published limit out of the full /api/usage summary', () => {
     expect(parseTierInfoResponse(canonicalUsageResponse)).toEqual({
       tier: 'pro',
       subscriptionStatus: 'active',
       usagePercentage: 42,
       resetsAt: '2026-09-01T00:00:00.000Z',
+      hasUsageRemaining: true,
+      usageBuckets: [
+        {
+          bucket: 'session',
+          percentRemaining: 88,
+          resetAt: '2026-08-16T05:00:00.000Z',
+        },
+        { bucket: 'weekly', percentRemaining: 70, resetAt: '2026-08-22T00:00:00.000Z' },
+        {
+          bucket: 'weeklyFlagship',
+          percentRemaining: 92,
+          resetAt: '2026-08-22T00:00:00.000Z',
+        },
+        { bucket: 'period', percentRemaining: 58, resetAt: '2026-09-01T00:00:00.000Z' },
+      ],
     });
+  });
+
+  it('still reports the billing period when a deployment omits the rolling windows', () => {
+    const {
+      session_usage_percentage: _session,
+      session_reset_at: _sessionReset,
+      weekly_usage_percentage: _weekly,
+      weekly_reset_at: _weeklyReset,
+      flagship_weekly_usage_percentage: _flagship,
+      flagship_weekly_reset_at: _flagshipReset,
+      ...withoutRollingWindows
+    } = canonicalUsageResponse;
+
+    expect(parseTierInfoResponse(withoutRollingWindows)?.usageBuckets).toEqual([
+      { bucket: 'period', percentRemaining: 58, resetAt: '2026-09-01T00:00:00.000Z' },
+    ]);
   });
 
   it('rejects a reset timestamp that would render as an invalid date', () => {

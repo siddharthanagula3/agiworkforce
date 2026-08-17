@@ -1,4 +1,3 @@
-
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { describe, it, expect } from 'vitest';
@@ -73,6 +72,31 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
 
   it('does not claim "zero server-side storage"', () => {
     expect(privacySource).not.toContain('zero server-side storage');
+  });
+});
+
+describe('Personal data about people who hold no account (DPDP-49)', () => {
+  it('says such data arrives through uploads and connectors', () => {
+    expect(privacySource).toMatch(/people who never signed up/i);
+    expect(privacySource).toMatch(/connector fetches when an account holder points the agent/i);
+  });
+
+  it('states our role and the lawful basis for holding it', () => {
+    expect(privacySource).toMatch(/we hold it as the account holder&rsquo;s processor/i);
+    expect(privacySource).toMatch(
+      /rests on our contract with them rather than on any consent from you/i,
+    );
+  });
+
+  it('routes a non-account-holder to the sign-in-free rights request form', () => {
+    expect(privacySource).toMatch(
+      /grievance request at\{' '\} <Link href="\/privacy\/requests"[\s\S]{0,200}without signing in/i,
+    );
+  });
+
+  it('admits the limits on acting for someone whose data sits in a customer account', () => {
+    expect(privacySource).toMatch(/needs enough detail to find it/i);
+    expect(privacySource).toMatch(/route your request to them rather than act on it ourselves/i);
   });
 });
 

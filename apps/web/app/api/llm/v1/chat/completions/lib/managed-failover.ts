@@ -44,15 +44,12 @@ import { logger } from '@/lib/logger';
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
 
-/** Same five availability classes the gateway rotates on — see
- *  services/api-gateway/src/lib/providerStreamSafety.ts's
- *  FAILOVER_ELIGIBLE_CATEGORIES, plus direct-provider rate limits. A managed
- *  Auto request should not fail because one upstream project exhausted quota;
+/** Availability classes only, plus direct-provider rate limits. A managed Auto
+ *  request should not fail because one upstream project exhausted quota;
  *  explicit selections remain rotation-free by construction.
  *
- *  Availability only: credential rejections rotate under the separate
- *  provider-scoped rule below (`CredentialFailoverState`), exactly as in the
- *  gateway. */
+ *  Credential rejections are deliberately excluded here — they rotate under the
+ *  separate provider-scoped rule below (`CredentialFailoverState`). */
 const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'connection',
   'server_error',
@@ -83,7 +80,12 @@ export function buildFailoverAttemptView(
   provider: string,
 ): ProcessedRequest {
   const providerLower = provider.toLowerCase();
-  const effort = resolveRequestEffort(providerLower, model, processed.llmRequest.effort);
+  const effort = resolveRequestEffort(
+    providerLower,
+    model,
+    processed.llmRequest.effort,
+    processed.subscriptionTier,
+  );
   const thinking = buildThinkingConfig({
     provider: providerLower,
     model,

@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -12,6 +11,8 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { ManagedCloudProjectUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 import {
   ProjectConversationMembershipError,
   replaceProjectConversationMembership,
@@ -20,6 +21,13 @@ import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
+const PG_UNDEFINED_TABLE = '42P01';
+
+function isSchemaNotReady(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = (error as { code?: string }).code;
+  return code === PG_UNDEFINED_COLUMN || code === PG_UNDEFINED_TABLE;
+}
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -265,9 +273,8 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   const { id } = await context.params;
   const organizationId = await resolveActiveOrganizationId(db, userId);
 
-  let affected: number;
-  try {
-    affected = await db.transaction(async (tx) => {
+  const runDelete = (purgeKnowledgeFiles: boolean) =>
+    db.transaction(async (tx) => {
       const deleted = await tx.execute(
         `update user_projects
            set deleted_at = now(), updated_at = now()
@@ -277,26 +284,68 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
            and deleted_at is null`,
         [id, userId, organizationId],
       );
-      if (deleted > 0) {
-        await tx.execute(
-          `update web_conversations
-              set project_id = null, updated_at = now()
-            where project_id = $1
-              and user_id = $2
-              and organization_id is not distinct from $3::uuid
-              and deleted_at is null`,
-          [id, userId, organizationId],
-        );
-      }
-      return deleted;
+      if (deleted === 0) return { deleted, storageUris: [] as string[] };
+
+      await tx.execute(
+        `update web_conversations
+            set project_id = null, updated_at = now()
+          where project_id = $1
+            and user_id = $2
+            and organization_id is not distinct from $3::uuid
+            and deleted_at is null`,
+        [id, userId, organizationId],
+      );
+
+      if (!purgeKnowledgeFiles) return { deleted, storageUris: [] as string[] };
+
+      const purged = await tx.query<{ storage_uri: string | null }>(
+        `update project_knowledge_files
+            set deleted_at = now(), updated_at = now()
+          where project_id = $1::uuid
+            and deleted_at is null
+        returning storage_uri`,
+        [id],
+      );
+      return {
+        deleted,
+        storageUris: purged
+          .map((row) => row.storage_uri)
+          .filter((uri): uri is string => typeof uri === 'string' && uri.length > 0),
+      };
     });
+
+  let outcome: { deleted: number; storageUris: string[] };
+  try {
+    try {
+      outcome = await runDelete(true);
+    } catch (error) {
+      if (!isSchemaNotReady(error)) throw error;
+      logger.warn(
+        { error, projectId: id, userId },
+        'Knowledge-file schema not ready; deleting project without source cleanup',
+      );
+      outcome = await runDelete(false);
+    }
   } catch (error) {
     logger.error({ error, projectId: id, userId }, 'Failed to delete project');
     throw createError.internal('Failed to delete project');
   }
 
-  if (affected === 0) {
+  if (outcome.deleted === 0) {
     throw createError.notFound('Project not found');
+  }
+
+  for (const storageUri of outcome.storageUris) {
+    const objectKey = objectKeyFromStorageUri(storageUri);
+    if (!objectKey) continue;
+    try {
+      await deleteProjectKnowledgeObject(objectKey);
+    } catch (error) {
+      logger.error(
+        { error, projectId: id, userId, objectKey },
+        'Failed to delete a project knowledge object after project deletion',
+      );
+    }
   }
 
   return NextResponse.json({ success: true });

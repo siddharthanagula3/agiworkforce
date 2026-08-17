@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const recordSettledProviderCostMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/cogs-ledger-service', () => ({
+  recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCostMock(...args),
+}));
+
 import {
   claimVideoIncidentAlert,
   claimVideoSettlementIncidentByReservation,
@@ -11,6 +16,7 @@ import {
   countExhaustedVideoIncidentAlerts,
   listPendingVideoIncidentAlertIds,
   listPendingVideoSettlementIncidentIds,
+  finalizeVideoGenerationJob,
   nudgeVideoGenerationJobFromProviderEvent,
 } from './video-generation-jobs';
 
@@ -210,5 +216,56 @@ describe('durable video job persistence boundary', () => {
 
     await expect(listPendingVideoSettlementIncidentIds({ query } as never)).resolves.toEqual([]);
     expect(query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('video settlement feeds the COGS ledger', () => {
+  it('records the completed video per second of output', async () => {
+    recordSettledProviderCostMock.mockClear();
+    const db = {
+      query: vi.fn().mockResolvedValue([
+        {
+          id: 'job-1',
+          user_id: 'user-1',
+          idempotency_key: 'k',
+          request_hash: 'h',
+          billing_lease_token: 't',
+          provider: 'runway',
+          model: 'fixture-video-model',
+          prompt: 'p',
+          duration_secs: 6,
+          resolution: '720p',
+          source_surface: 'web',
+          estimated_cost_cents: 100,
+          actual_cost_cents: 90,
+          estimated_duration_secs: 60,
+          status: 'completed',
+          billing_outcome: 'completed',
+          reconcile_failures: 0,
+          next_attempt_at: '2026-08-01T00:00:00.000Z',
+          created_at: '2026-08-01T00:00:00.000Z',
+          updated_at: '2026-08-01T00:00:00.000Z',
+        },
+      ]),
+    };
+
+    await finalizeVideoGenerationJob({
+      db: db as never,
+      jobId: 'job-1',
+      claimToken: 'claim',
+      outcome: 'completed',
+      actualCostCents: 90,
+    });
+
+    expect(recordSettledProviderCostMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        provider: 'runway',
+        model: 'fixture-video-model',
+        actualCostCents: 90,
+        sourceRef: 'video_job:job-1',
+        usage: expect.objectContaining({ operation: 'video', durationSecs: 6 }),
+      }),
+    );
   });
 });

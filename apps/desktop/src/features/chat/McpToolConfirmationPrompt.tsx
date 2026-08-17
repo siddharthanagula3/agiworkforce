@@ -1,11 +1,15 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, ShieldAlert, X } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/ui/Dialog';
 import { useApprovalActions } from '@/hooks/useApprovalActions';
 import { useToolStore, type ApprovalRequest } from '@/stores/chat/toolStore';
+import { formatComboDisplay, matchesBinding } from '@/constants/shortcuts';
 import { cn } from '@/lib/utils';
 import { FolderAccessConsentDialog } from './FolderAccessConsentDialog';
+
+const DENY_BINDING = { key: 'Escape', modifiers: {} };
+const APPROVE_BINDING = { key: 'Enter', modifiers: { meta: true } };
 
 function readDetail(approval: ApprovalRequest, key: string): string | null {
   const value = approval.details[key];
@@ -75,9 +79,12 @@ export function McpToolConfirmationPrompt() {
     ? toolName === 'folder access' || readDetail(approval, 'toolName') === 'folder_access'
     : false;
 
+  const decidedApprovalId = useRef<string | null>(null);
+
   const resolve = useCallback(
     async (decision: 'approve' | 'reject') => {
-      if (!approval) return;
+      if (!approval || decidedApprovalId.current === approval.id) return;
+      decidedApprovalId.current = approval.id;
       setResolvingId(approval.id);
       setResolutionError(null);
       try {
@@ -85,6 +92,7 @@ export function McpToolConfirmationPrompt() {
           reason: decision === 'reject' ? 'Denied by user' : undefined,
         });
       } catch (cause) {
+        decidedApprovalId.current = null;
         setResolutionError({
           approvalId: approval.id,
           message: cause instanceof Error ? cause.message : 'Could not send your decision.',
@@ -95,6 +103,25 @@ export function McpToolConfirmationPrompt() {
     },
     [approval, resolveApproval],
   );
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isResolving) return;
+      if (matchesBinding(event, DENY_BINDING)) {
+        event.preventDefault();
+        void resolve('reject');
+        return;
+      }
+      if (matchesBinding(event, APPROVE_BINDING)) {
+        event.preventDefault();
+        void resolve('approve');
+      }
+    },
+    [isResolving, resolve],
+  );
+
+  const denyHint = formatComboDisplay(DENY_BINDING.key, DENY_BINDING.modifiers);
+  const approveHint = formatComboDisplay(APPROVE_BINDING.key, APPROVE_BINDING.modifiers);
 
   if (!approval) {
     return null;
@@ -118,6 +145,7 @@ export function McpToolConfirmationPrompt() {
         overlayProps={{ className: 'z-[var(--z-fullscreen)] bg-background/80' }}
         role="alertdialog"
         data-testid="mcp-tool-confirmation-prompt"
+        onKeyDown={handleKeyDown}
       >
         <div className="flex items-start gap-3 border-b border-border px-5 py-4">
           <span className="rounded-xl bg-destructive/10 p-2 text-destructive">
@@ -220,7 +248,7 @@ export function McpToolConfirmationPrompt() {
           >
             <X className="mr-2 h-4 w-4" aria-hidden="true" />
             Deny
-            <kbd className="ml-2 rounded border border-border px-1 text-[10px]">Esc</kbd>
+            <kbd className="ml-2 rounded border border-border px-1 text-[10px]">{denyHint}</kbd>
           </Button>
           <Button
             type="button"
@@ -230,6 +258,7 @@ export function McpToolConfirmationPrompt() {
           >
             <Check className="mr-2 h-4 w-4" aria-hidden="true" />
             Approve
+            <kbd className="ml-2 rounded border border-border px-1 text-[10px]">{approveHint}</kbd>
           </Button>
         </div>
       </DialogContent>

@@ -18,6 +18,12 @@ import {
   type ScheduleInput,
 } from '@/lib/services/schedule-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import {
+  MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
+  MANAGED_CLOUD_SCHEDULES_MAX_PAGE_SIZE,
+  clampSchedulePageOffset,
+  clampSchedulePageSize,
+} from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
 
@@ -54,11 +60,12 @@ async function handleGetSchedules(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const url = new URL(request.url);
-  const limit = Math.min(100, Math.max(1, integerQueryValue(url.searchParams.get('limit'), 50)));
-  const offset = Math.min(
-    10_000,
-    Math.max(0, integerQueryValue(url.searchParams.get('offset'), 0)),
+  const limit = clampSchedulePageSize(
+    integerQueryValue(url.searchParams.get('limit'), MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE),
+    MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
+    MANAGED_CLOUD_SCHEDULES_MAX_PAGE_SIZE,
   );
+  const offset = clampSchedulePageOffset(integerQueryValue(url.searchParams.get('offset'), 0));
   const schedules = await listSchedules(db, userId, { limit, offset });
   return NextResponse.json({ schedules, pagination: { limit, offset } });
 }

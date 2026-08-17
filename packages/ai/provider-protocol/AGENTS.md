@@ -23,8 +23,8 @@ Request-shaping is centralized, not duplicated. Three cases, verified
 
 - **TS provider adapters** — `packages/ai/providers/*` (anthropic, openai,
   google, deepseek, lmstudio, minimax, moonshot, ollama, openrouter,
-  perplexity, qwen, xai, zhipu), `apps/web/app/api/llm/**`, and
-  `services/api-gateway` import this package directly. It is not web-only.
+  perplexity, qwen, xai, zhipu) and `apps/web/app/api/llm/**` import this
+  package directly.
 - **Rust surfaces** — `apps/desktop` and `apps/cli` shape through
   `crates/agiworkforce-llm`, held to byte-parity with the desktop adapters by
   `apps/desktop/src-tauri/src/core/llm/tests/c2c_request_oracle.rs`.

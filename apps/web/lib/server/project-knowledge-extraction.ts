@@ -1,9 +1,9 @@
 import 'server-only';
 
-import { isTextAttachmentMeta } from '@agiworkforce/types';
+import { isTextAttachmentMeta, MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { matchDenylistedUpload } from '@/lib/moderation';
 import { scanUploadBytes, type UploadScanFinding } from '@/lib/security/upload-scan';
-import { objectKeyFromStorageUri } from './object-storage';
+import { objectKeyFromStorageUri, StoredObjectTooLargeError } from './object-storage';
 import { getProjectKnowledgeObject } from './project-knowledge-object-storage';
 
 export const MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000;
@@ -184,7 +184,27 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
-  const object = await getProjectKnowledgeObject(objectKey);
+  if (
+    !Number.isSafeInteger(input.byteCount) ||
+    input.byteCount <= 0 ||
+    input.byteCount > MAX_ATTACHMENT_BYTES
+  ) {
+    throw new ProjectKnowledgeExtractionError(
+      'byte_count_mismatch',
+      'The uploaded file did not pass its integrity check. Upload it again.',
+    );
+  }
+
+  let object: { data: Buffer; contentType: string | undefined } | null;
+  try {
+    object = await getProjectKnowledgeObject(objectKey, input.byteCount);
+  } catch (error) {
+    if (!(error instanceof StoredObjectTooLargeError)) throw error;
+    throw new ProjectKnowledgeExtractionError(
+      'byte_count_mismatch',
+      'The uploaded file did not pass its integrity check. Upload it again.',
+    );
+  }
   if (!object) {
     throw new ProjectKnowledgeExtractionError(
       'object_missing',

@@ -17,6 +17,7 @@ import {
   type ClaimedUserScope,
 } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
+import { withSpan } from '@/lib/observability/span';
 import {
   assertDeliverableCadence,
   buildCronExpression,
@@ -1071,7 +1072,31 @@ async function announceScheduleRun(
   }
 }
 
-export async function processClaimedScheduleRun(
+export function processClaimedScheduleRun(
+  db: DatabaseAdapter,
+  claim: ClaimedScheduleRun,
+  execute: ScheduledTaskExecutor,
+  options: { timeoutMs: number; signal?: AbortSignal; now?: () => Date },
+): Promise<ScheduleRun> {
+  return withSpan(
+    'schedule.run',
+    {
+      domain: 'task',
+      kind: 'consumer',
+      attributes: {
+        'task.run_id': claim.runId,
+        'task.trigger_source': claim.triggerSource,
+      },
+    },
+    async (span) => {
+      const run = await runClaimedSchedule(db, claim, execute, options);
+      span.setAttributes({ 'task.status': run.status });
+      return run;
+    },
+  );
+}
+
+async function runClaimedSchedule(
   db: DatabaseAdapter,
   claim: ClaimedScheduleRun,
   execute: ScheduledTaskExecutor,

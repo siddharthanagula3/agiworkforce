@@ -107,7 +107,13 @@ export const READY_MARKER = 'READY_TO_REPORT';
 /** Marker the model emits when it wants another search round. */
 const CONTINUE_MARKER = 'CONTINUE_RESEARCH';
 
-export type ResearchPhase = 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error';
+export type ResearchPhase =
+  | 'planning'
+  | 'awaiting_approval'
+  | 'searching'
+  | 'synthesizing'
+  | 'complete'
+  | 'error';
 
 /** Planned search queries the planning turn may commit to. */
 const PLAN_MIN_STEPS = 3;
@@ -185,6 +191,19 @@ export interface ResearchLoopOptions {
    * restored as-is (never re-run) and the remainder becomes this run's plan.
    */
   priorSteps?: ResearchStep[];
+  /**
+   * The plan the user pressed Start on. Present only on the request that
+   * follows an approval pause: it replaces this run's planning turn, so the
+   * searches executed are exactly the ones that were shown and accepted.
+   */
+  approvedPlan?: ResearchStep[];
+  /**
+   * Stop after planning and hand the plan to the user for a Start/Cancel
+   * decision instead of searching straight away. The approved plan comes back
+   * on the next request, which is what makes this stateless — the paused run
+   * holds no server-side session.
+   */
+  requirePlanApproval?: boolean;
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -893,6 +912,22 @@ export async function* runResearchLoop(
   const plan: ResearchStep[] = (options.priorSteps ?? [])
     .filter((step) => step.status === 'completed')
     .map((step) => ({ ...step }));
+  const approvedPlan = (options.approvedPlan ?? [])
+    .filter(
+      (step) =>
+        step.type === 'search' &&
+        step.description.trim().length > 0 &&
+        !carriedQueries.some(
+          (carried) => carried.toLowerCase() === step.description.trim().toLowerCase(),
+        ),
+    )
+    .slice(0, PLAN_MAX_STEPS)
+    .map((step, index) => ({
+      ...step,
+      id: `plan-${plan.length + index + 1}`,
+      status: 'pending' as const,
+    }));
+  plan.push(...approvedPlan);
   const planEvent = (): Uint8Array => encoder.encode(researchPlanEvent(plan, responseModel));
 
   /** Move every step in `ids` to `status`, stamping honest timing. */
@@ -919,6 +954,8 @@ export async function* runResearchLoop(
 
   // ── Durable report persistence (CAP-045 slice 1) ──
   let reportPersisted = false;
+  /** A run paused for approval gathered nothing; a stored empty report would be noise. */
+  let awaitingApproval = false;
   const userQuery = extractUserQuery(processed.llmRequest.messages);
 
   /**
@@ -1215,7 +1252,7 @@ export async function* runResearchLoop(
     // Its output becomes the `x_research_plan` queue the user watches. A failed
     // or unparseable plan is NEVER fatal and is never guessed at: the run falls
     // back to showing the round it actually executes.
-    if (planningTurnEnabled) {
+    if (planningTurnEnabled && approvedPlan.length === 0) {
       iteration = 1;
       try {
         if (yield* flushCancellationIfRequested()) return;
@@ -1252,6 +1289,25 @@ export async function* runResearchLoop(
           '[research-loop] planning turn failed; continuing without a query plan',
         );
       }
+    }
+
+    // ── Approval gate ──
+    // The plan is the user's to accept: searching costs their budget, so the
+    // run stops here and the client re-sends the approved steps as
+    // `research_resume`. A plan that could not be parsed has nothing to approve
+    // and must not strand the run, so it falls through to the rounds below.
+    if (
+      options.requirePlanApproval &&
+      approvedPlan.length === 0 &&
+      pendingPlanStepIds().length > 0
+    ) {
+      awaitingApproval = true;
+      yield planEvent();
+      yield status('awaiting_approval', 'Review the plan to start searching');
+      yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'paused' }));
+      yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'end-turn' }));
+      yield encoder.encode(sseDone());
+      return;
     }
 
     let cutShortReason: string | null = null;
@@ -1534,7 +1590,7 @@ export async function* runResearchLoop(
     // every terminal path above. Whatever the run really gathered is still
     // persisted as `interrupted` so a retry can resume from it. `persistRun`
     // is a no-op once a terminal path already wrote the row.
-    if (!reportPersisted && options.persistReport) {
+    if (!reportPersisted && !awaitingApproval && options.persistReport) {
       await persistRun('interrupted', '', 'Research stopped before the report was written.');
     }
     // Financial settlement and every enforced usage window belong to the

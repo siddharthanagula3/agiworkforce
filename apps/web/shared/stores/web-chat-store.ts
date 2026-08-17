@@ -95,7 +95,14 @@ export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
  * a research report survives reload with its activity summary intact.
  */
 export interface MessageResearchState {
-  phase: 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error' | 'interrupted';
+  phase:
+    | 'planning'
+    | 'awaiting_approval'
+    | 'searching'
+    | 'synthesizing'
+    | 'complete'
+    | 'error'
+    | 'interrupted';
   /** Human-readable phase label (e.g. "Searching the web (round 2)"). */
   label?: string;
   iteration?: number;
@@ -394,6 +401,12 @@ export interface Message {
   createdAt: string;
   model?: string;
   provider?: string;
+  /**
+   * Stable substitution code from `X-AGI-Fallback-Reason` when the server served
+   * this turn on a model other than the one the user picked. Per-turn and not
+   * persisted: it explains this delivery, not the stored message.
+   */
+  fallbackReason?: string;
   /**
    * Per-turn usage as PERSISTED on the messages row (`input_tokens` /
    * `output_tokens`), written by the server's assistant-turn persistence and

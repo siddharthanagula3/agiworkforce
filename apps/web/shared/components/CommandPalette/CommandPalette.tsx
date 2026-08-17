@@ -249,30 +249,32 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 overflow-hidden bg-zinc-900 border border-zinc-700 shadow-2xl max-w-xl [&>button]:hidden">
+      <DialogContent className="p-0 overflow-hidden bg-popover text-popover-foreground border border-border shadow-2xl max-w-xl [&>button]:hidden">
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <DialogDescription className="sr-only">
           Search commands, navigate the app, change preferences, and switch AI models.
         </DialogDescription>
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
           {activeSubMenu ? (
             <button
               onClick={() => {
                 setActiveSubMenu(null);
                 setQuery('');
               }}
-              className="rounded-sm text-zinc-500 hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 shrink-0"
+              className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
               aria-label="Back to main menu"
               type="button"
             >
               <ChevronRight className="w-4 h-4 rotate-180" />
             </button>
           ) : (
-            <Search className="w-4 h-4 text-zinc-500 shrink-0" aria-hidden="true" />
+            <Search className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
           )}
           {subMenuTitle && (
-            <span className="text-xs font-medium text-zinc-400 shrink-0">{subMenuTitle}</span>
+            <span className="text-xs font-medium text-muted-foreground shrink-0">
+              {subMenuTitle}
+            </span>
           )}
           <input
             ref={inputRef}
@@ -284,20 +286,20 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             name="command-palette-search"
             autoComplete="off"
             spellCheck={false}
-            className="flex-1 rounded-sm bg-transparent text-zinc-200 placeholder:text-zinc-500 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500"
+            className="flex-1 rounded-sm bg-transparent text-foreground placeholder:text-muted-foreground text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             aria-label="Command palette search"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="rounded-sm text-zinc-500 hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 shrink-0"
+              className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0"
               aria-label="Clear search"
               type="button"
             >
               <X className="w-4 h-4" />
             </button>
           )}
-          <kbd className="text-[10px] text-zinc-600 bg-zinc-800 rounded px-1.5 py-0.5 hidden sm:block">
+          <kbd className="text-[10px] text-foreground bg-muted border border-border rounded px-1.5 py-0.5 hidden sm:block">
             ESC
           </kbd>
         </div>
@@ -305,11 +307,11 @@ export function CommandPalette({ open, onOpenChange }: Props) {
         {/* Command list */}
         <div className="max-h-[360px] overflow-y-auto py-2" role="listbox" aria-label="Commands">
           {filtered.length === 0 ? (
-            <p className="text-center text-sm text-zinc-500 py-8">No commands found.</p>
+            <p className="text-center text-sm text-muted-foreground py-8">No commands found.</p>
           ) : (
             Object.entries(groups).map(([group, items]) => (
               <div key={group}>
-                <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {group}
                 </p>
                 {items.map((cmd) => {
@@ -324,23 +326,25 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                       onClick={() => execute(cmd)}
                       onMouseEnter={() => setSelectedIndex(idx)}
                       className={cn(
-                        'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500',
-                        isSelected ? 'bg-white/10 text-white' : 'text-zinc-300 hover:bg-white/5',
+                        'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                        isSelected
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-foreground hover:bg-accent/60',
                       )}
                       type="button"
                     >
-                      <Icon className="w-4 h-4 shrink-0 text-zinc-500" aria-hidden="true" />
+                      <Icon className="w-4 h-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                       <div className="flex-1 min-w-0">
                         <span className="font-medium">{cmd.title}</span>
                         {cmd.subtitle && (
-                          <span className="ml-2 text-xs text-zinc-500 truncate">
+                          <span className="ml-2 text-xs text-muted-foreground truncate">
                             {cmd.subtitle}
                           </span>
                         )}
                       </div>
                       {cmd.hasSubMenu && (
                         <ChevronRight
-                          className="w-3.5 h-3.5 text-zinc-600 shrink-0"
+                          className="w-3.5 h-3.5 text-muted-foreground shrink-0"
                           aria-hidden="true"
                         />
                       )}
@@ -353,20 +357,22 @@ export function CommandPalette({ open, onOpenChange }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-950/50 px-4 py-2">
-          <div className="flex items-center gap-3 text-[10px] text-zinc-600">
+        <div className="flex items-center justify-between border-t border-border bg-muted/50 px-4 py-2">
+          <div className="flex items-center gap-3 text-[10px] text-foreground">
             <span>
-              <kbd className="bg-zinc-800 rounded px-1 py-0.5 font-mono">↑↓</kbd> navigate
+              <kbd className="bg-muted border border-border rounded px-1 py-0.5 font-mono">↑↓</kbd>{' '}
+              navigate
             </span>
             <span>
-              <kbd className="bg-zinc-800 rounded px-1 py-0.5 font-mono">↵</kbd> select
+              <kbd className="bg-muted border border-border rounded px-1 py-0.5 font-mono">↵</kbd>{' '}
+              select
             </span>
             <span>
-              <kbd className="bg-zinc-800 rounded px-1 py-0.5 font-mono">esc</kbd>{' '}
+              <kbd className="bg-muted border border-border rounded px-1 py-0.5 font-mono">esc</kbd>{' '}
               {activeSubMenu ? 'back' : 'close'}
             </span>
           </div>
-          <span className="text-[10px] text-zinc-600">{filtered.length} results</span>
+          <span className="text-[10px] text-foreground">{filtered.length} results</span>
         </div>
       </DialogContent>
     </Dialog>

@@ -107,11 +107,6 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
-jest.mock('expo-contacts', () => ({
-  getPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
-  requestPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
-}));
-
 jest.mock('expo-calendar', () => ({
   getCalendarPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
   requestCalendarPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
@@ -158,7 +153,6 @@ describe('permissionStatusLabel — OS status → granted level', () => {
   const grantedCases: Array<[string, string]> = [
     ['microphone', 'While using'],
     ['camera', 'While using'],
-    ['contacts', 'While using'],
     ['photos', 'Always'],
     ['notifications', 'Always'],
     ['calendar', 'Always'],

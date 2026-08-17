@@ -1,3 +1,4 @@
+import { AUTOMATION_EXECUTE_TIMEOUT_MS, AUTOMATION_TIMEOUT_MS } from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 import type {
   AutomationScript,
@@ -11,15 +12,12 @@ import type {
   RecordingSession,
 } from '../types/automationEnhanced';
 
-const AUTOMATION_ENHANCED_TIMEOUT_MS = 30000;
-const AUTOMATION_EXECUTE_TIMEOUT_MS = 120000;
-
 const MAX_RECURSION_DEPTH = 100;
 
 async function invokeWithTimeout<T>(
   command: string,
   args?: Record<string, unknown>,
-  timeoutMs: number = AUTOMATION_ENHANCED_TIMEOUT_MS,
+  timeoutMs: number = AUTOMATION_TIMEOUT_MS,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {

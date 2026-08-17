@@ -34,7 +34,8 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db.current }));
 
 const recordCopyrightNotice = vi.fn(async () => ({ reference: 'REF' }));
 vi.mock('@/lib/server/copyright-notices', () => ({
-  recordCopyrightNotice: (...args: unknown[]) => recordCopyrightNotice(...args),
+  recordCopyrightNotice: (...args: Parameters<typeof recordCopyrightNotice>) =>
+    recordCopyrightNotice(...args),
 }));
 
 import { POST } from '../route';

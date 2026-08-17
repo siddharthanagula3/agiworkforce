@@ -62,6 +62,17 @@ describe('Mobile schedule policy', () => {
     );
   });
 
+  it('renders the deployed sweep in whole units instead of a fractional hour', () => {
+    const sweepMinutes = Math.floor((24 * 60) / firingsPerDay(deployedSweepSchedule()));
+    const { cadence, window } = describeCloudScheduleSweep();
+    expect(cadence).toMatch(/^(once a (minute|hour|day)|every \d+ (minutes|hours|days))$/);
+    expect(window).toMatch(/^(\d+-(minute|hour|day)|hourly|daily)$/);
+    if (sweepMinutes < 60) {
+      expect(cadence).toBe(`every ${sweepMinutes} minutes`);
+      expect(window).toBe(`${sweepMinutes}-minute`);
+    }
+  });
+
   it.each(['hourly', 'every hour at 9am', 'every 15 minutes', 'every 2 hours at 9am'])(
     'does not reinterpret unsupported sub-daily phrase %j as a daily task',
     (phrase) => {

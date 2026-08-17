@@ -1,6 +1,6 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
   Badge,
   Dialog,
@@ -154,7 +154,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
 
     searchTimeoutRef.current = setTimeout(() => {
       handleSearch();
-    }, 300);
+    }, SEARCH_INPUT_DEBOUNCE_MS);
 
     return () => {
       if (searchTimeoutRef.current) {

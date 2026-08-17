@@ -11,6 +11,7 @@ import {
   readPersistedInteractiveCards,
   type CloudAgentOriginSurface,
   type CloudAgentRun,
+  type CloudAgentRunUsage,
   type CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
 import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkforce/types';
@@ -43,6 +44,7 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   updated_at: string | Date;
   pending_approval_requested_at?: string | Date | null;
   pending_approval_tool_calls?: unknown;
+  settled_usage?: unknown;
 }
 
 interface CloudAgentEventRow extends Record<string, unknown> {
@@ -220,10 +222,45 @@ function mapPendingApproval(row: CloudAgentRunRow): CloudAgentRun['pendingApprov
   };
 }
 
+const SettledUsageEntrySchema = z.object({
+  providerCalls: z.number().int().min(0),
+  inputTokens: z.number().int().min(0),
+  outputTokens: z.number().int().min(0),
+  reasoningTokens: z.number().int().min(0),
+  costCents: z.number().int().min(0).nullable(),
+  settledAt: z.string().datetime(),
+});
+
+export type CloudAgentRunSettledUsage = z.infer<typeof SettledUsageEntrySchema>;
+
+function mapSettledUsage(row: CloudAgentRunRow): CloudAgentRun['usage'] {
+  const parsed = z.record(z.string(), SettledUsageEntrySchema).safeParse(row.settled_usage ?? {});
+  if (!parsed.success) return undefined;
+  const entries = Object.values(parsed.data);
+  if (entries.length === 0) return undefined;
+  const charged = entries.filter((entry) => entry.costCents !== null);
+  return {
+    providerCalls: entries.reduce((total, entry) => total + entry.providerCalls, 0),
+    inputTokens: entries.reduce((total, entry) => total + entry.inputTokens, 0),
+    outputTokens: entries.reduce((total, entry) => total + entry.outputTokens, 0),
+    reasoningTokens: entries.reduce((total, entry) => total + entry.reasoningTokens, 0),
+    costCents:
+      charged.length === 0
+        ? null
+        : charged.reduce((total, entry) => total + (entry.costCents ?? 0), 0),
+    settledAt: entries.reduce(
+      (latest, entry) => (entry.settledAt > latest ? entry.settledAt : latest),
+      entries[0]!.settledAt,
+    ),
+  };
+}
+
 function mapRun(row: CloudAgentRunRow): CloudAgentRun {
   const pendingApproval = mapPendingApproval(row);
+  const usage = mapSettledUsage(row);
   return CloudAgentRunSchema.parse({
     ...(pendingApproval ? { pendingApproval } : {}),
+    ...(usage ? { usage } : {}),
     id: row.id,
     userId: row.user_id,
     requestId: row.request_id,
@@ -423,6 +460,43 @@ export async function transitionCloudAgentRun(
     [input.runId, input.userId, input.state],
   );
   return requireRun(rows);
+}
+
+export async function recordCloudAgentRunSettledUsage(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    runId: string;
+    billingIdempotencyKey: string;
+    usage: {
+      providerCalls: number;
+      inputTokens: number;
+      outputTokens: number;
+      reasoningTokens: number;
+      costCents: number | null;
+    };
+  },
+): Promise<CloudAgentRun | null> {
+  const billingIdempotencyKey = z.string().min(8).max(128).parse(input.billingIdempotencyKey);
+  const counter = z.coerce.number().int().nonnegative().safe();
+  const entry: CloudAgentRunUsage = SettledUsageEntrySchema.parse({
+    providerCalls: counter.parse(input.usage.providerCalls),
+    inputTokens: counter.parse(input.usage.inputTokens),
+    outputTokens: counter.parse(input.usage.outputTokens),
+    reasoningTokens: counter.parse(input.usage.reasoningTokens),
+    costCents: input.usage.costCents === null ? null : counter.parse(input.usage.costCents),
+    settledAt: new Date().toISOString(),
+  });
+  const rows = await db.query<CloudAgentRunRow>(
+    `update public.cloud_agent_runs
+        set settled_usage = settled_usage || jsonb_build_object($3::text, $4::jsonb),
+            updated_at = now()
+      where id = $1 and user_id = $2
+      returning *`,
+    [input.runId, input.userId, billingIdempotencyKey, entry],
+  );
+  const row = rows[0];
+  return row ? mapRun(row) : null;
 }
 
 export async function requestCloudAgentRunCancellation(

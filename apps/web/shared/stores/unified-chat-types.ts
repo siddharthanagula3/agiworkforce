@@ -1,4 +1,3 @@
-
 import type { Artifact } from '@shared/types/chat';
 
 export interface ChatWidgetData {
@@ -7,7 +6,7 @@ export interface ChatWidgetData {
   [key: string]: unknown;
 }
 
-export interface MessageMetadata {
+export interface EnhancedMessageMetadata {
   tokenCount?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -137,7 +136,7 @@ export interface EnhancedMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  metadata?: MessageMetadata;
+  metadata?: EnhancedMessageMetadata;
   attachments?: Attachment[];
   artifacts?: Artifact[];
   operations?: Operation[];

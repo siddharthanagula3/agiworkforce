@@ -180,6 +180,8 @@ export default function ChatScreen() {
   const updateVideoGenerationProgress = useChatStore((s) => s.updateVideoGenerationProgress);
   const completeVideoGeneration = useChatStore((s) => s.completeVideoGeneration);
   const failVideoGeneration = useChatStore((s) => s.failVideoGeneration);
+  const recordVideoGenerationTask = useChatStore((s) => s.recordVideoGenerationTask);
+  const isVideoGenerationCancelRequested = useChatStore((s) => s.isVideoGenerationCancelRequested);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
   const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
   const videoResolution = useChatViewStore((s) => s.videoResolution);
@@ -351,6 +353,8 @@ export default function ChatScreen() {
           resolution: videoRequest.resolution,
           ownerId: videoRequest.ownerId,
           begin: beginVideoGeneration,
+          taskCreated: recordVideoGenerationTask,
+          isCancelRequested: isVideoGenerationCancelRequested,
           progress: updateVideoGenerationProgress,
           complete: completeVideoGeneration,
           fail: failVideoGeneration,
@@ -375,7 +379,7 @@ export default function ChatScreen() {
         mediaMode,
         selection: selectedModel,
         subscriptionTier,
-        hasAttachments: Boolean(attachments?.length),
+        attachments: attachments ?? [],
         globalImageGenerationEnabled: FEATURES.imageGen,
         imageGenerationEnabled,
         isClerkSignedIn,
@@ -398,6 +402,8 @@ export default function ChatScreen() {
           prompt: imageRequest.prompt,
           model: imageRequest.model,
           aspectRatio: imageRequest.aspectRatio,
+          operation: imageRequest.operation,
+          sourceImage: imageRequest.sourceImage,
           ownerId: imageRequest.ownerId,
           begin: beginImageGeneration,
           complete: completeImageGeneration,
@@ -484,6 +490,8 @@ export default function ChatScreen() {
       completeImageGeneration,
       failImageGeneration,
       beginVideoGeneration,
+      recordVideoGenerationTask,
+      isVideoGenerationCancelRequested,
       updateVideoGenerationProgress,
       completeVideoGeneration,
       failVideoGeneration,

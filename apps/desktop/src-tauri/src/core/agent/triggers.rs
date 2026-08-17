@@ -53,9 +53,13 @@ pub struct TriggerRegistry {
     file_watchers: HashMap<String, (RecommendedWatcher, tokio::task::JoinHandle<()>)>,
     /// Tauri app handle for emitting events.
     app_handle: Option<AppHandle>,
+    /// Durable backing store, so configured triggers outlive the process.
+    store: Option<TriggerStore>,
     /// Cancellation flag shared with background tasks.
     cancel: Arc<tokio::sync::Notify>,
 }
+
+pub type TriggerStore = Arc<std::sync::Mutex<rusqlite::Connection>>;
 
 /// A fully-registered trigger definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -258,6 +262,7 @@ impl TriggerRegistry {
             webhook_handle: None,
             file_watchers: HashMap::new(),
             app_handle: None,
+            store: None,
             cancel: Arc::new(tokio::sync::Notify::new()),
         }
     }
@@ -265,6 +270,91 @@ impl TriggerRegistry {
     /// Set the Tauri app handle used for emitting events to the frontend.
     pub fn set_app_handle(&mut self, app_handle: AppHandle) {
         self.app_handle = Some(app_handle);
+    }
+
+    /// Attach the durable store that survives a restart.
+    pub fn set_store(&mut self, store: TriggerStore) {
+        self.store = Some(store);
+    }
+
+    /// Restore every persisted trigger into the in-memory registry.
+    pub async fn load_persisted(&self) -> anyhow::Result<usize> {
+        let Some(store) = self.store.as_ref() else {
+            return Ok(0);
+        };
+
+        let payloads: Vec<String> = {
+            let conn = store
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Trigger store lock poisoned: {}", e))?;
+            let mut stmt = conn.prepare("SELECT payload FROM automation_triggers")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+
+        let mut map = self.triggers.write().await;
+        let mut restored = 0usize;
+        for payload in payloads {
+            match serde_json::from_str::<RegisteredTrigger>(&payload) {
+                Ok(trigger) => {
+                    map.insert(trigger.id.clone(), trigger);
+                    restored += 1;
+                }
+                Err(e) => tracing::warn!(
+                    "[TriggerRegistry] Dropped unreadable persisted trigger: {}",
+                    e
+                ),
+            }
+        }
+
+        tracing::info!("[TriggerRegistry] Restored {} persisted triggers", restored);
+        Ok(restored)
+    }
+
+    fn persist(&self, trigger: &RegisteredTrigger) {
+        let Some(store) = self.store.as_ref() else {
+            return;
+        };
+        let payload = match serde_json::to_string(trigger) {
+            Ok(payload) => payload,
+            Err(e) => {
+                tracing::error!("[TriggerRegistry] Failed to serialize trigger: {}", e);
+                return;
+            }
+        };
+        let conn = match store.lock() {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::error!("[TriggerRegistry] Trigger store lock poisoned: {}", e);
+                return;
+            }
+        };
+        if let Err(e) = conn.execute(
+            "INSERT INTO automation_triggers (id, payload, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at",
+            rusqlite::params![trigger.id, payload, trigger.updated_at],
+        ) {
+            tracing::error!("[TriggerRegistry] Failed to persist trigger {}: {}", trigger.id, e);
+        }
+    }
+
+    fn forget(&self, id: &str) {
+        let Some(store) = self.store.as_ref() else {
+            return;
+        };
+        let conn = match store.lock() {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::error!("[TriggerRegistry] Trigger store lock poisoned: {}", e);
+                return;
+            }
+        };
+        if let Err(e) = conn.execute(
+            "DELETE FROM automation_triggers WHERE id = ?1",
+            rusqlite::params![id],
+        ) {
+            tracing::error!("[TriggerRegistry] Failed to forget trigger {}: {}", id, e);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -309,6 +399,7 @@ impl TriggerRegistry {
         }
 
         let id = trigger.id.clone();
+        self.persist(&trigger);
         self.triggers.write().await.insert(id.clone(), trigger);
 
         tracing::info!("[TriggerRegistry] Registered trigger: {}", id);
@@ -322,6 +413,7 @@ impl TriggerRegistry {
         if removed.is_none() {
             return Err(anyhow::anyhow!("Trigger not found: {}", id));
         }
+        self.forget(id);
 
         tracing::info!("[TriggerRegistry] Unregistered trigger: {}", id);
         self.emit_event("trigger:unregistered", id, serde_json::Value::Null);
@@ -335,6 +427,8 @@ impl TriggerRegistry {
             .get_mut(id)
             .ok_or_else(|| anyhow::anyhow!("Trigger not found: {}", id))?;
         trigger.enabled = true;
+        let persisted = trigger.clone();
+        self.persist(&persisted);
         tracing::info!("[TriggerRegistry] Enabled trigger: {}", id);
         self.emit_event("trigger:enabled", id, serde_json::Value::Null);
         Ok(())
@@ -347,6 +441,8 @@ impl TriggerRegistry {
             .get_mut(id)
             .ok_or_else(|| anyhow::anyhow!("Trigger not found: {}", id))?;
         trigger.enabled = false;
+        let persisted = trigger.clone();
+        self.persist(&persisted);
         tracing::info!("[TriggerRegistry] Disabled trigger: {}", id);
         self.emit_event("trigger:disabled", id, serde_json::Value::Null);
         Ok(())
@@ -393,6 +489,7 @@ impl TriggerRegistry {
 
         trigger.updated_at = Utc::now().to_rfc3339();
         let updated = trigger.clone();
+        self.persist(&updated);
         tracing::info!("[TriggerRegistry] Updated trigger: {}", id);
         self.emit_event("trigger:updated", id, serde_json::Value::Null);
         Ok(updated)
@@ -547,7 +644,7 @@ impl TriggerRegistry {
         let dispatch_result: anyhow::Result<()> = match trigger.action.action_type.as_str() {
             "agent" => Self::spawn_agent_from_trigger(&trigger, &event_data, app_handle).await,
             "notification" => {
-                Self::send_trigger_notification(&trigger, app_handle);
+                Self::send_trigger_notification(&trigger, app_handle).await;
                 Ok(())
             }
             "workflow" => {
@@ -627,47 +724,67 @@ impl TriggerRegistry {
             "spawnId": Uuid::new_v4().to_string(),
         });
 
-        if let Some(ref app) = app_handle {
-            app.emit("trigger:agent_spawn", &spawn_payload)?;
-            tracing::info!(
-                "[TriggerRegistry] Emitted agent spawn for trigger '{}'",
+        let Some(app) = app_handle.as_ref() else {
+            return Err(anyhow::anyhow!(
+                "No app handle; cannot spawn agent for trigger '{}'",
                 trigger.name
-            );
-        } else {
-            tracing::warn!(
-                "[TriggerRegistry] No app handle; cannot spawn agent for trigger '{}'",
-                trigger.name
-            );
-        }
+            ));
+        };
 
+        app.emit("trigger:agent_spawn", &spawn_payload)?;
+        tracing::info!(
+            "[TriggerRegistry] Emitted agent spawn for trigger '{}'",
+            trigger.name
+        );
         Ok(())
     }
 
     /// Send a desktop notification for a trigger.
-    fn send_trigger_notification(trigger: &RegisteredTrigger, app_handle: &Option<AppHandle>) {
-        if let Some(ref app) = app_handle {
-            use tauri_plugin_notification::NotificationExt;
+    fn trigger_notification_input(
+        trigger: &RegisteredTrigger,
+    ) -> crate::sys::commands::notification_center::CreateNotificationInput {
+        use crate::sys::commands::notification_center::{
+            CreateNotificationInput, NotificationPriority, NotificationType,
+        };
 
-            let title = format!("Trigger Fired: {}", trigger.name);
-            let body = trigger
+        CreateNotificationInput {
+            title: format!("Trigger Fired: {}", trigger.name),
+            message: trigger
                 .action
                 .prompt
                 .clone()
-                .unwrap_or_else(|| format!("Trigger '{}' fired.", trigger.name));
+                .unwrap_or_else(|| format!("Trigger '{}' fired.", trigger.name)),
+            notification_type: NotificationType::AgentActivity,
+            priority: NotificationPriority::Normal,
+            action_url: None,
+            action_label: None,
+            icon: None,
+            metadata: Some(serde_json::json!({ "triggerId": trigger.id })),
+            dismissible: true,
+            expires_at: None,
+        }
+    }
 
-            if let Err(e) = app
-                .notification()
-                .builder()
-                .title(&title)
-                .body(&body)
-                .show()
-            {
-                tracing::warn!(
-                    "[TriggerRegistry] Failed to show notification for trigger {}: {}",
-                    trigger.id,
-                    e
-                );
-            }
+    async fn send_trigger_notification(
+        trigger: &RegisteredTrigger,
+        app_handle: &Option<AppHandle>,
+    ) {
+        use crate::sys::commands::notification_center::{
+            deliver_notification, NotificationCenterState,
+        };
+        use tauri::Manager;
+
+        let Some(app) = app_handle else { return };
+
+        let state = app.state::<NotificationCenterState>();
+        if let Err(reason) =
+            deliver_notification(app, &state, Self::trigger_notification_input(trigger)).await
+        {
+            tracing::info!(
+                "[TriggerRegistry] Notification for trigger {} not delivered: {}",
+                trigger.id,
+                reason
+            );
         }
     }
 
@@ -1564,5 +1681,124 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("minimum allowed interval"));
+    }
+
+    fn cron_trigger(action_type: &str) -> RegisteredTrigger {
+        let mut trigger = make_test_trigger(
+            TriggerType::Cron,
+            TriggerConfig::Cron {
+                expression: "0 */5 * * * *".to_string(),
+                timezone: None,
+            },
+        );
+        trigger.action.action_type = action_type.to_string();
+        trigger
+    }
+
+    #[tokio::test]
+    async fn an_agent_that_cannot_be_spawned_is_recorded_as_a_failure() {
+        let triggers = Arc::new(RwLock::new(HashMap::new()));
+        let executions = Arc::new(RwLock::new(HashMap::new()));
+        let trigger = cron_trigger("agent");
+        triggers
+            .write()
+            .await
+            .insert(trigger.id.clone(), trigger.clone());
+
+        let result = TriggerRegistry::execute_trigger(
+            &triggers,
+            &executions,
+            &trigger.id,
+            serde_json::json!({}),
+            &None,
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "an agent trigger that reached nothing reported success"
+        );
+        let history = executions.read().await;
+        let recorded = &history.get(&trigger.id).expect("execution recorded")[0];
+        assert!(
+            !recorded.success,
+            "the execution log recorded a spawn that never happened as a success"
+        );
+    }
+
+    #[tokio::test]
+    async fn registered_triggers_survive_a_restart() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open store");
+        crate::data::db::migrations::run_migrations(&conn).expect("migrate store");
+        let store = Arc::new(std::sync::Mutex::new(conn));
+
+        let mut registry = TriggerRegistry::new();
+        registry.set_store(Arc::clone(&store));
+        let trigger = cron_trigger("notification");
+        registry.register(trigger.clone()).await.expect("register");
+
+        let mut restarted = TriggerRegistry::new();
+        restarted.set_store(store);
+        restarted.load_persisted().await.expect("load persisted");
+
+        let restored = restarted.list().await;
+        assert_eq!(
+            restored.len(),
+            1,
+            "triggers vanished when the app restarted"
+        );
+        assert_eq!(restored[0].id, trigger.id);
+    }
+
+    #[test]
+    fn the_app_setup_starts_the_trigger_engine() {
+        let setup = include_str!("../../lib.rs");
+        assert!(
+            setup.contains("registry.set_app_handle("),
+            "app setup never hands the trigger registry a live app handle"
+        );
+        assert!(
+            setup.contains("registry.start()"),
+            "TriggerRegistry::start() is never called outside tests"
+        );
+    }
+
+    /// DESK-11. Trigger notifications used to call the OS notification plugin
+    /// directly, so the master switch, group toggles and DND window in the
+    /// notification center governed nothing.
+    #[test]
+    fn trigger_notifications_go_through_the_notification_center() {
+        let source = include_str!("triggers.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            !production.contains("tauri_plugin_notification"),
+            "the trigger path must not raise an OS notification of its own"
+        );
+        assert!(production.contains("deliver_notification"));
+    }
+
+    #[test]
+    fn a_trigger_notification_carries_a_group_the_settings_can_gate() {
+        use crate::sys::commands::notification_center::{
+            suppression_reason, NotificationSettings, NotificationType,
+        };
+
+        let trigger = make_test_trigger(
+            TriggerType::Cron,
+            TriggerConfig::Cron {
+                expression: "0 0 * * * *".to_string(),
+                timezone: None,
+            },
+        );
+        let input = TriggerRegistry::trigger_notification_input(&trigger);
+        assert_eq!(input.notification_type, NotificationType::AgentActivity);
+        assert!(input.title.contains(&trigger.name));
+        assert_eq!(input.message, "Hello from trigger");
+
+        let muted = NotificationSettings {
+            enabled_types: vec![NotificationType::Reminder],
+            ..NotificationSettings::default()
+        };
+        assert!(suppression_reason(&muted, &input.notification_type, "12:00").is_some());
     }
 }

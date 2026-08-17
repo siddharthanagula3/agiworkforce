@@ -214,3 +214,55 @@ describe('ImageGenerationCard revision panel', () => {
     });
   });
 });
+
+describe('ImageGenerationCard model disclosure', () => {
+  const OPENAI_IMAGE_MODEL_LABEL = (() => {
+    const model = IMAGE_MODELS.find((candidate) => candidate.id === OPENAI_IMAGE_MODEL_ID);
+    if (!model) throw new Error('Canonical model catalog must expose an OpenAI image model');
+    return model.label;
+  })();
+
+  it('names the catalog model while the image is still generating', () => {
+    render(
+      <ImageGenerationCard isGenerating prompt="Draw a star" modelId={OPENAI_IMAGE_MODEL_ID} />,
+    );
+
+    expect(screen.getByText(`Generating with ${OPENAI_IMAGE_MODEL_LABEL}`)).toBeVisible();
+  });
+
+  it('names the catalog model on the finished image card', () => {
+    render(
+      <ImageGenerationCard
+        imageUrl="/api/files/original"
+        isGenerating={false}
+        prompt="Draw a star"
+        modelId={OPENAI_IMAGE_MODEL_ID}
+      />,
+    );
+
+    expect(screen.getByText(`Generated with ${OPENAI_IMAGE_MODEL_LABEL}`)).toBeVisible();
+  });
+
+  it('stays silent rather than guessing when the message stored no catalog model', () => {
+    render(
+      <ImageGenerationCard
+        imageUrl="/api/files/original"
+        isGenerating={false}
+        prompt="Draw a star"
+      />,
+    );
+
+    expect(screen.queryByText(/generated with/i)).toBeNull();
+  });
+});
+
+describe('ImageGenerationCard theme safety', () => {
+  it('paints the generating placeholder with a token surface so its labels survive light theme', () => {
+    render(<ImageGenerationCard isGenerating prompt="Draw a star" />);
+
+    const placeholder = screen.getByLabelText('Generating image');
+    expect(placeholder.className).toContain('bg-muted');
+    expect(placeholder.className).not.toMatch(/bg-\[#/);
+    expect(placeholder.getAttribute('style')).not.toMatch(/rgba\(255,\s*255,\s*255/);
+  });
+});

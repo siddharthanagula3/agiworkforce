@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 77;
+const CURRENT_VERSION: i32 = 78;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -643,6 +643,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 77 {
         run_migration_in_transaction(conn, 77, apply_migration_v77)?;
+    }
+
+    if current_version < 78 {
+        run_migration_in_transaction(conn, 78, apply_migration_v78)?;
     }
 
     Ok(())
@@ -6195,6 +6199,21 @@ fn apply_migration_v77(conn: &Connection) -> Result<()> {
         conn.execute_batch(&index_sql)?;
     }
 
+    Ok(())
+}
+
+/// Migration v78: durable storage for automation triggers. Before this the
+/// trigger registry lived only in memory, so every cron schedule, webhook and
+/// file watcher a user configured was gone on the next launch.
+fn apply_migration_v78(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS automation_triggers (
+            id TEXT PRIMARY KEY,
+            payload TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )",
+        [],
+    )?;
     Ok(())
 }
 

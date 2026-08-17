@@ -13,9 +13,11 @@ import {
 import {
   Check,
   ChevronDown,
+  Clapperboard,
   Folder,
   FolderOpen,
   History,
+  Image as ImageIcon,
   ListChecks,
   Loader2,
   Mic,
@@ -36,10 +38,12 @@ import { ThinkingControl } from './ThinkingControl';
 import { PlanModeToggle } from './ChatInputToolbar';
 import { SlashCommandMenu, type CommandSuggestion } from './SlashCommandMenu';
 import { SkillMentionPicker, type MentionSkill } from './SkillMentionPicker';
+import { matchMentionQuery } from '../lib/mentionQuery';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
+import { selectMediaMode, supportedMediaKinds, useMediaModeStore } from '../stores/mediaModeStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
-import { largePasteToFile } from '../lib/largePaste';
+import { decideComposerPaste } from '../lib/largePaste';
 import { loadWritingStyle, saveWritingStyle, type WritingStyle } from '../lib/writingStyle';
 import type { ChatAttachmentPolicy, LocalToolScope } from '../lib/runtime';
 import {
@@ -93,6 +97,15 @@ export interface ChatInputSlashCommandHost {
   openRewindTimeline?: (checkpointId?: string) => void;
 }
 
+export interface ComposerSkillSuggestion {
+  name: string;
+  description: string;
+  reason: string;
+}
+
+const SKILL_SUGGESTION_DEBOUNCE_MS = 300;
+const SKILL_SUGGESTION_MIN_CHARS = 8;
+
 export interface ChatInputProps {
   onSend: (
     content: string,
@@ -128,6 +141,8 @@ export interface ChatInputProps {
   projectId?: string | null;
   supportsCodeExecution?: boolean;
   supportsResearch?: boolean;
+  supportsImageGeneration?: boolean;
+  supportsVideoGeneration?: boolean;
   supportsExplicitLocalWebSearch?: boolean;
   attachmentPolicy?: ChatAttachmentPolicy;
   pendingAttachments?: { id: string; files: File[] } | null;
@@ -135,6 +150,7 @@ export interface ChatInputProps {
   voiceInputController?: ComposerVoiceController;
   slashCommandHost?: ChatInputSlashCommandHost;
   skills?: MentionSkill[];
+  suggestSkills?: (content: string) => Promise<ComposerSkillSuggestion[]>;
 }
 
 export function ChatInput({
@@ -162,6 +178,8 @@ export function ChatInput({
   projectId,
   supportsCodeExecution = false,
   supportsResearch = false,
+  supportsImageGeneration = false,
+  supportsVideoGeneration = false,
   supportsExplicitLocalWebSearch = false,
   attachmentPolicy,
   pendingAttachments = null,
@@ -169,6 +187,7 @@ export function ChatInput({
   voiceInputController,
   slashCommandHost,
   skills = [],
+  suggestSkills,
 }: ChatInputProps) {
   const { t } = useUiTranslation('chat');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -194,6 +213,16 @@ export function ChatInput({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [explicitWebSearchEnabled, setExplicitWebSearchEnabled] = useState(false);
+  const mediaMode = useMediaModeStore(selectMediaMode);
+  const toggleMediaMode = useMediaModeStore((state) => state.toggleMediaMode);
+  const exitMediaMode = useMediaModeStore((state) => state.exitMediaMode);
+  const mediaGenerationKinds = useMemo(
+    () => supportedMediaKinds({ image: supportsImageGeneration, video: supportsVideoGeneration }),
+    [supportsImageGeneration, supportsVideoGeneration],
+  );
+  useEffect(() => {
+    if (mediaMode !== 'text' && !mediaGenerationKinds.includes(mediaMode)) exitMediaMode();
+  }, [mediaMode, mediaGenerationKinds, exitMediaMode]);
   const [activeStyle, setActiveStyleState] = useState<WritingStyle | null>(loadWritingStyle);
   const setActiveStyle = useCallback((style: WritingStyle | null) => {
     setActiveStyleState(style);
@@ -201,6 +230,8 @@ export function ChatInput({
   }, []);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [selectedSkill, setSelectedSkill] = useState<MentionSkill | null>(null);
+  const [suggestedSkills, setSuggestedSkills] = useState<ComposerSkillSuggestion[]>([]);
+  const [dismissedSkillNames, setDismissedSkillNames] = useState<string[]>([]);
 
   const [workMode, setWorkMode] = useState<ChatWorkMode>('chat');
   const [scopePickerOpen, setScopePickerOpen] = useState(false);
@@ -389,14 +420,14 @@ export function ChatInput({
     [adjustHeight, conversationId, setDraftContent],
   );
 
-  const skillQueryMatch = /(?:^|\s)@([A-Za-z0-9_-]*)$/.exec(draftContent);
-  const skillQuery = skills.length > 0 ? (skillQueryMatch?.[1] ?? null) : null;
+  const mentionTrigger = matchMentionQuery(draftContent);
+  const skillQuery = skills.length > 0 ? (mentionTrigger?.query ?? null) : null;
 
   const handleSkillSelect = useCallback(
     (skill: MentionSkill) => {
-      const match = /(?:^|\s)@[A-Za-z0-9_-]*$/.exec(draftContent);
-      if (match) {
-        setDraftContent(draftContent.slice(0, match.index).trimEnd(), conversationId);
+      const trigger = matchMentionQuery(draftContent);
+      if (trigger) {
+        setDraftContent(draftContent.slice(0, trigger.startIndex).trimEnd(), conversationId);
       }
       setSelectedSkill(skill);
       textareaRef.current?.focus();
@@ -406,7 +437,50 @@ export function ChatInput({
 
   useEffect(() => {
     setSelectedSkill(null);
+    setSuggestedSkills([]);
+    setDismissedSkillNames([]);
   }, [attachmentDestinationKey]);
+
+  useEffect(() => {
+    if (!suggestSkills || selectedSkill || skillQuery !== null) {
+      setSuggestedSkills([]);
+      return;
+    }
+    const text = draftContent.trim();
+    if (text.length < SKILL_SUGGESTION_MIN_CHARS) {
+      setSuggestedSkills([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void suggestSkills(text)
+        .then((matches) => {
+          if (!cancelled) setSuggestedSkills(matches);
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestedSkills([]);
+        });
+    }, SKILL_SUGGESTION_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [draftContent, selectedSkill, skillQuery, suggestSkills]);
+
+  const visibleSkillSuggestions = useMemo(
+    () => suggestedSkills.filter((suggestion) => !dismissedSkillNames.includes(suggestion.name)),
+    [dismissedSkillNames, suggestedSkills],
+  );
+
+  const handleSuggestedSkillApply = useCallback((suggestion: ComposerSkillSuggestion) => {
+    setSelectedSkill({ id: suggestion.name, name: suggestion.name, category: 'suggested' });
+    setSuggestedSkills([]);
+    textareaRef.current?.focus();
+  }, []);
+
+  const handleSuggestedSkillDismiss = useCallback((name: string) => {
+    setDismissedSkillNames((names) => (names.includes(name) ? names : [...names, name]));
+  }, []);
 
   const slashQueryMatch = /^\/([A-Za-z0-9_-]*)$/.exec(draftContent);
   const slashQuery = slashQueryMatch?.[1]?.toLowerCase() ?? null;
@@ -423,6 +497,16 @@ export function ChatInput({
         name: 'rewind',
         enabled: Boolean(conversationId && slashCommandHost.openRewindTimeline),
         icon: <History className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
+      },
+      {
+        name: 'image',
+        enabled: mediaGenerationKinds.includes('image'),
+        icon: <ImageIcon className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
+      },
+      {
+        name: 'video',
+        enabled: mediaGenerationKinds.includes('video'),
+        icon: <Clapperboard className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
       },
     ] as const;
 
@@ -448,7 +532,7 @@ export function ChatInput({
         },
       ];
     });
-  }, [conversationId, slashCommandHost, slashQuery]);
+  }, [conversationId, mediaGenerationKinds, slashCommandHost, slashQuery]);
   const slashMenuOpen = slashQuery !== null && slashSuggestions.length > 0;
 
   useEffect(() => {
@@ -462,14 +546,14 @@ export function ChatInput({
       if (!command?.handler || !slashCommandHost) return;
       const context: SlashCommandContext = {
         conversationId: conversationId ?? null,
-        host: { ...slashCommandHost },
+        host: { ...slashCommandHost, toggleMediaMode },
       };
       void command.handler('', context);
       clearDraftContent(conversationId);
       setSlashSelectedIndex(0);
       textareaRef.current?.focus();
     },
-    [clearDraftContent, conversationId, slashCommandHost],
+    [clearDraftContent, conversationId, slashCommandHost, toggleMediaMode],
   );
 
   const appendFiles = useCallback(
@@ -566,30 +650,12 @@ export function ChatInput({
   const handlePaste = useCallback(
     (e: ClipboardEvent<HTMLTextAreaElement>) => {
       if (disabled || isStreaming) return;
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const pasted: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        if (item.kind === 'file') {
-          const file = item.getAsFile();
-          if (file) pasted.push(file);
-        }
-      }
-      if (pasted.length > 0) {
-        e.preventDefault();
-        appendFiles(pasted);
-        return;
-      }
-      const pastedText = e.clipboardData?.getData('text/plain') ?? '';
-      const asFile = largePasteToFile(pastedText, {
+      const decision = decideComposerPaste(e.clipboardData, {
         existingFileNames: attachedFilesRef.current.map((file) => file.name),
       });
-      if (asFile) {
-        e.preventDefault();
-        appendFiles([asFile]);
-      }
+      if (decision.kind === 'text') return;
+      e.preventDefault();
+      appendFiles(decision.kind === 'files' ? decision.files : [decision.file]);
     },
     [disabled, isStreaming, appendFiles],
   );
@@ -690,6 +756,8 @@ export function ChatInput({
     attachedFilesDestinationRef.current = null;
     setAttachmentError(null);
     setSelectedSkill(null);
+    setSuggestedSkills([]);
+    setDismissedSkillNames([]);
     setExplicitWebSearchEnabled(false);
   }, [
     disabled,
@@ -798,6 +866,40 @@ export function ChatInput({
             }
           }}
         />
+      ) : null}
+      {!selectedSkill && visibleSkillSuggestions.length > 0 ? (
+        <div
+          data-testid="composer-skill-suggestions"
+          className="mb-2 flex flex-wrap items-center gap-1.5"
+        >
+          <span className="text-[11px] text-[var(--chat-text-secondary)]">
+            {t('composer.suggestedSkills', 'Suggested skills')}
+          </span>
+          {visibleSkillSuggestions.map((suggestion) => (
+            <span
+              key={suggestion.name}
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] pl-2.5 pr-1 py-0.5 text-xs text-[var(--chat-text-secondary)]"
+            >
+              <button
+                type="button"
+                title={suggestion.reason}
+                onClick={() => handleSuggestedSkillApply(suggestion)}
+                aria-label={`Use ${suggestion.name} skill`}
+                className="rounded-full hover:text-[var(--chat-text-primary)]"
+              >
+                {suggestion.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSuggestedSkillDismiss(suggestion.name)}
+                aria-label={`Dismiss ${suggestion.name} suggestion`}
+                className="rounded-full p-0.5 hover:bg-[var(--chat-surface-hover)]"
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
       ) : null}
       <div
         className={cn(
@@ -943,6 +1045,9 @@ export function ChatInput({
                   codeExecutionEnabled={codeExecutionEnabled}
                   codeExecutionAvailable={codeExecutionAvailable}
                   onCodeExecutionToggle={supportsCodeExecution ? toggleCodeExecution : undefined}
+                  mediaMode={mediaMode}
+                  mediaGenerationKinds={mediaGenerationKinds}
+                  onMediaModeToggle={mediaGenerationKinds.length > 0 ? toggleMediaMode : undefined}
                   activeStyle={activeStyle}
                   onStyleChange={setActiveStyle}
                   onScreenshot={(file) => appendFiles([file])}
@@ -1028,6 +1133,19 @@ export function ChatInput({
                   onToggle={slashCommandHost.togglePlanMode}
                   className="shrink-0"
                 />
+              )}
+              {mediaMode !== 'text' && (
+                <button
+                  type="button"
+                  onClick={exitMediaMode}
+                  aria-pressed
+                  aria-label={`Leave ${mediaMode} generation mode`}
+                  className="flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-[var(--chat-accent-primary)] px-3 text-xs font-medium text-white"
+                >
+                  {mediaMode === 'image' ? <ImageIcon size={13} /> : <Clapperboard size={13} />}
+                  {mediaMode === 'image' ? 'Image' : 'Video'}
+                  <X size={12} />
+                </button>
               )}
             </div>
 

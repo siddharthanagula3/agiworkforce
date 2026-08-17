@@ -110,7 +110,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-lg border-white/[0.08] bg-zinc-950">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit command' : 'New custom command'}</DialogTitle>
           <DialogDescription>
@@ -235,7 +235,7 @@ interface DeleteConfirmProps {
 function DeleteConfirmDialog({ open, commandName, onConfirm, onCancel }: DeleteConfirmProps) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
-      <DialogContent className="max-w-sm border-white/[0.08] bg-zinc-950">
+      <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Delete /{commandName}?</DialogTitle>
           <DialogDescription>
@@ -285,7 +285,7 @@ export function CustomCommandsSettings() {
           {customCommands.map((cmd) => (
             <li
               key={cmd.id}
-              className="flex items-start gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-3"
+              className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 px-3 py-3"
             >
               <Terminal
                 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
@@ -316,7 +316,7 @@ export function CustomCommandsSettings() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-red-400"
+                  className="h-7 w-7 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
                   onClick={() => setDeletingCmd(cmd)}
                   aria-label={`Delete /${cmd.name}`}
                 >

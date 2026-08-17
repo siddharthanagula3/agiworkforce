@@ -122,6 +122,11 @@ import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
+import { policyAutoApprovesTool } from './tool-approval-policy';
+import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
+  type ToolApprovalPolicy,
+} from '@shared/types/toolApprovalPolicy';
 import {
   executeManagedSkillTool,
   executeManagedSkillToolForPlugins,
@@ -191,6 +196,7 @@ export type ConnectorToolExecutor = (
   serverId: string,
   toolName: string,
   args: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
 ) => Promise<{ handled: boolean; content: string; isError: boolean }>;
 
 export interface ToolApprovalDecision {
@@ -200,6 +206,7 @@ export interface ToolApprovalDecision {
 
 export interface ResumeApproval {
   approvals: ToolApprovalDecision[];
+  guidance?: string;
 }
 
 export interface ToolLoopApprovalCheckpoint {
@@ -290,6 +297,7 @@ export interface ToolLoopOptions {
   isCancellationRequested?: () => Promise<boolean>;
   signal?: AbortSignal;
   connectorPermissions?: ConnectorToolPermissions;
+  toolApprovalPolicy?: ToolApprovalPolicy;
   failover?: ToolLoopFailoverPlan;
 }
 
@@ -984,6 +992,7 @@ async function runMcpTool(
     organizationId: string | null;
     model: string;
     webSearchMaxResults?: number;
+    signal?: AbortSignal;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -1051,7 +1060,10 @@ async function runMcpTool(
   }
 
   if (isUrlFetchTool(toolCall.qualifiedName)) {
-    const outcome = await executeUrlFetch(toolCall.args);
+    const outcome = await executeUrlFetch(
+      toolCall.args,
+      executionContext?.signal ? { signal: executionContext.signal } : {},
+    );
     if (!outcome.ok) {
       return { content: `Fetch failed (${outcome.errorCode}): ${outcome.error}`, isError: true };
     }
@@ -1065,6 +1077,7 @@ async function runMcpTool(
   if (isWebSearchTool(toolCall.qualifiedName)) {
     const outcome = await executeWebSearch(toolCall.args, {
       maxResults: executionContext?.webSearchMaxResults,
+      ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
     });
     return {
       content: formatWebSearchResultForModel(outcome),
@@ -1103,6 +1116,7 @@ async function runMcpTool(
         parsed.serverId,
         parsed.toolName,
         toolCall.args,
+        executionContext?.signal ? { signal: executionContext.signal } : undefined,
       );
       if (connectorResult.handled) {
         return { content: capOutput(connectorResult.content), isError: connectorResult.isError };
@@ -1114,7 +1128,11 @@ async function runMcpTool(
   }
 
   try {
-    const result = await executeWebMcpTool(parsed.serverId, parsed.toolName, toolCall.args);
+    const result = executionContext?.signal
+      ? await executeWebMcpTool(parsed.serverId, parsed.toolName, toolCall.args, {
+          signal: executionContext.signal,
+        })
+      : await executeWebMcpTool(parsed.serverId, parsed.toolName, toolCall.args);
     const text = result.content
       .map((block) => {
         if (block.type === 'text') return block.text;
@@ -1241,6 +1259,7 @@ export async function* runToolLoop(
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
   const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
   const sensitiveSourceAvailable =
     mcpTools.some((def) => isSensitiveSourceTool(def)) ||
@@ -1261,6 +1280,7 @@ export async function* runToolLoop(
       | 'user_requires_approval'
       | 'manual_approval_mode'
       | 'auto_approval_mode'
+      | 'account_default_read_only'
       | 'lethal_trifecta';
   };
 
@@ -1279,7 +1299,11 @@ export async function* runToolLoop(
         : { verdict: 'allow', reason: 'always_allow' };
     }
     if (saved === 'ask') return { verdict: 'ask', reason: 'user_requires_approval' };
-    if (approvalMode === 'manual') return { verdict: 'ask', reason: 'manual_approval_mode' };
+    if (approvalMode === 'manual') {
+      return !trifecta && policyAutoApprovesTool(toolApprovalPolicy, toolCall.qualifiedName)
+        ? { verdict: 'allow', reason: 'account_default_read_only' }
+        : { verdict: 'ask', reason: 'manual_approval_mode' };
+    }
     return trifecta
       ? { verdict: 'ask', reason: 'lethal_trifecta' }
       : { verdict: 'allow', reason: 'auto_approval_mode' };
@@ -1568,6 +1592,7 @@ export async function* runToolLoop(
           organizationId: processed.organizationId ?? null,
           model: responseModel,
           webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
+          ...(options.signal ? { signal: options.signal } : {}),
         });
       const run = options.toolExecutor
         ? options.toolExecutor({
@@ -1885,6 +1910,22 @@ export async function* runToolLoop(
           return;
         }
         yield* runAndStreamToolCalls(toRun);
+      }
+
+      // The guidance turn must land after every tool result: providers reject a
+      // thread where a user message separates assistant tool_calls from them.
+      const resumeGuidance = options.resume.guidance?.trim();
+      if (resumeGuidance) {
+        messages.push({ role: 'user', content: resumeGuidance });
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'progress-update',
+            progressId: `approval-guidance:${options.initialEventSequence ?? 0}`,
+            summary: 'Applied your guidance',
+            detail: resumeGuidance,
+            status: 'completed',
+          }),
+        );
       }
       // Fall through into the loop: the next provider call sees the completed
       // thread (assistant tool_calls + every tool result) and continues.

@@ -3,34 +3,28 @@ import { ArrowUpDown, Brain, Clock, Download, Import, Plus, RefreshCw, Star } fr
 
 import { Button } from '@/ui/Button';
 import { ScrollArea } from '@/ui/ScrollArea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { cn } from '@/lib/utils';
 import { useShallow } from 'zustand/react/shallow';
-import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
+import type { MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 
 import { MemoryCard } from './MemoryCard';
 import { MemorySearch } from './MemorySearch';
 import { CreateMemoryDialog } from './CreateMemoryDialog';
 import { MemoryImport } from './MemoryImport';
+import {
+  MEMORY_TAB_EMPTY_LABELS,
+  MEMORY_TAB_OPTIONS,
+  countMemoriesByCategory,
+  type MemoryTabValue,
+} from './categories';
 
 type SortOption = 'importance-desc' | 'importance-asc' | 'date-desc' | 'date-asc' | 'topic-asc';
-type TabValue = 'all' | MemoryCategory;
+type TabValue = MemoryTabValue;
 
-const TAB_OPTIONS: { value: TabValue; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'preference', label: 'Preferences' },
-  { value: 'fact', label: 'Facts' },
-  { value: 'decision', label: 'Decisions' },
-  { value: 'context', label: 'Context' },
-];
+const TAB_OPTIONS = MEMORY_TAB_OPTIONS;
 
 const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[] = [
   { value: 'importance-desc', label: 'Most Important', icon: <Star className="h-4 w-4" /> },
@@ -104,19 +98,7 @@ export const MemoryManager = memo(function MemoryManager({
     return sortMemories(filtered, sortBy);
   }, [memories, searchResults, searchQuery, activeTab, sortBy]);
 
-  const categoryCounts = useMemo(() => {
-    let preference = 0,
-      fact = 0,
-      decision = 0,
-      context = 0;
-    for (const m of memories) {
-      if (m.category === 'preference') preference++;
-      else if (m.category === 'fact') fact++;
-      else if (m.category === 'decision') decision++;
-      else if (m.category === 'context') context++;
-    }
-    return { all: memories.length, preference, fact, decision, context };
-  }, [memories]);
+  const categoryCounts = useMemo(() => countMemoriesByCategory(memories), [memories]);
 
   const handleRefresh = useCallback(async () => {
     await loadAll();
@@ -341,13 +323,7 @@ function EmptyState({
     );
   }
 
-  const categoryLabels: Record<TabValue, string> = {
-    all: 'memories',
-    preference: 'preferences',
-    fact: 'facts',
-    decision: 'decisions',
-    context: 'context memories',
-  };
+  const categoryLabels = MEMORY_TAB_EMPTY_LABELS;
 
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">

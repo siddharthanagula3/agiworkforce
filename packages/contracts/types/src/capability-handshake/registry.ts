@@ -12,6 +12,7 @@ import {
   CAPABILITY_LAYERS,
   type CapabilityLayer,
   type CapabilityLayerGrant,
+  type CapabilityLimit,
   type EffectiveCapabilityDocument,
 } from './types';
 
@@ -20,6 +21,7 @@ export interface BuildEffectiveCapabilityDocumentInput {
   version: string;
   computedAt?: string;
   layers: Readonly<Record<CapabilityLayer, CapabilityLayerGrant>>;
+  limits?: readonly CapabilityLimit[];
 }
 
 export function buildEffectiveCapabilityDocument(
@@ -57,5 +59,6 @@ export function buildEffectiveCapabilityDocument(
     sources,
     granted,
     deniedBy,
+    limits: [...(input.limits ?? [])].sort((a, b) => a.id.localeCompare(b.id)),
   };
 }

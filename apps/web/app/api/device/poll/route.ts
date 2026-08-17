@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DevicePollRequestSchema } from '@/lib/validations/device';
+import { devicePairingFlow, DevicePollRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -11,6 +11,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 interface DeviceAuthRow {
   device_id: string;
   device_fingerprint: string | null;
+  user_code: string | null;
   status: string;
   user_id: string | null;
   expires_at: string;
@@ -59,7 +60,7 @@ async function handleDevicePoll(request: NextRequest) {
     const db = getNeonDb();
 
     const rows = await db.query<DeviceAuthRow>(
-      `SELECT device_id, device_fingerprint, status, user_id, expires_at, updated_at
+      `SELECT device_id, device_fingerprint, user_code, status, user_id, expires_at, updated_at
          FROM device_authorization_codes
         WHERE device_id = $1`,
       [device_id],
@@ -73,6 +74,15 @@ async function handleDevicePoll(request: NextRequest) {
     }
 
     const data = rows[0]!;
+
+    // device_authorization_codes is shared with the RFC 8628 CLI flow; polling a row that
+    // belongs to that flow would consume it here and strand the CLI sign-in.
+    if (devicePairingFlow(data.user_code) !== 'qr') {
+      return NextResponse.json(
+        { error: 'Not found' },
+        { status: 404, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
 
     if (data.status === 'consumed' || new Date(data.expires_at) < new Date()) {
       if (data.status === 'pending') {

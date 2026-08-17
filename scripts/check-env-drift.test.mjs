@@ -71,8 +71,78 @@ test('the declared contract comes from the env-doctor contract, not a second lis
       (group) => group.includes('UPSTASH_REDIS_REST_URL') && group.includes('KV_REST_API_URL'),
     ),
   );
-  assert.deepEqual(production.forbidden, ['ACCOUNT_STATUS_FAIL_OPEN']);
+  assert.deepEqual(production.forbidden, [
+    'ACCOUNT_STATUS_FAIL_OPEN',
+    'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+    'AGI_DURABLE_INITIAL_TURNS',
+  ]);
   assert.deepEqual(declaredContract('web', 'preview').forbidden, []);
+});
+
+test('the durable-turn kill-switch configured in production is reconciled as drift', async () => {
+  const posted = [];
+  const contract = declaredContract('web', 'production');
+  const present = [
+    ...contract.required,
+    ...contract.groups.map((group) => group[0]),
+    'AGI_DURABLE_INITIAL_TURNS',
+  ];
+
+  const code = await run(
+    ['--scope', 'web', '--target', 'production'],
+    {
+      VERCEL_TOKEN: 'token-under-test',
+      VERCEL_PROJECT_ID: 'prj_under_test',
+      PAGER_WEBHOOK_URL: 'https://pager.invalid/hook',
+    },
+    {
+      fetchImpl: async (url, init) => {
+        if (String(url).startsWith('https://pager.invalid')) {
+          posted.push(JSON.parse(init.body));
+          return okResponse({});
+        }
+        return okResponse({ envs: present.map((key) => ({ key, target: ['production'] })) });
+      },
+    },
+  );
+
+  assert.equal(code, 1);
+  assert.equal(posted.length, 1);
+  assert.ok(posted[0].text.includes('escape hatch AGI_DURABLE_INITIAL_TURNS is configured'));
+});
+
+test('a fail-open rate-limit policy override in production is reconciled as drift', async () => {
+  const posted = [];
+  const contract = declaredContract('web', 'production');
+  const present = [
+    ...contract.required,
+    ...contract.groups.map((group) => group[0]),
+    'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  ];
+
+  const code = await run(
+    ['--scope', 'web', '--target', 'production'],
+    {
+      VERCEL_TOKEN: 'token-under-test',
+      VERCEL_PROJECT_ID: 'prj_under_test',
+      PAGER_WEBHOOK_URL: 'https://pager.invalid/hook',
+    },
+    {
+      fetchImpl: async (url, init) => {
+        if (String(url).startsWith('https://pager.invalid')) {
+          posted.push(JSON.parse(init.body));
+          return okResponse({});
+        }
+        return okResponse({ envs: present.map((key) => ({ key, target: ['production'] })) });
+      },
+    },
+  );
+
+  assert.equal(code, 1);
+  assert.equal(posted.length, 1);
+  assert.ok(
+    posted[0].text.includes('escape hatch AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY is configured'),
+  );
 });
 
 test('only names are read from the Vercel listing, never values', async () => {
@@ -192,4 +262,16 @@ test('the drift report names every deleted variable', () => {
   assert.ok(report.includes('- missing required LOG_SALT'));
   assert.ok(report.includes('- missing one of UPSTASH_REDIS_REST_URL / KV_REST_API_URL'));
   assert.ok(report.includes('- escape hatch ACCOUNT_STATUS_FAIL_OPEN is configured'));
+});
+
+test('an unprovisioned artifact sandbox origin is production drift, not a silent fallback', () => {
+  const production = declaredContract('web', 'production');
+  assert.ok(production.required.includes('NEXT_PUBLIC_SANDBOX_ORIGIN'));
+
+  const drift = compareEnvKeys({
+    required: production.required,
+    present: production.required.filter((name) => name !== 'NEXT_PUBLIC_SANDBOX_ORIGIN'),
+  });
+  assert.deepEqual(drift.missing, ['NEXT_PUBLIC_SANDBOX_ORIGIN']);
+  assert.equal(hasDrift(drift), true);
 });

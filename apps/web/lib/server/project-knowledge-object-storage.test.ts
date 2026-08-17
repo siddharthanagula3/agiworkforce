@@ -12,10 +12,16 @@ import {
 vi.mock('./object-storage', () => ({
   isObjectStorageConfigured: () => false,
   isPrivateObjectStorageConfigured: () => false,
-  getObject: vi.fn(),
-  getPrivateObject: vi.fn(),
+  getBoundedObject: vi.fn(),
+  getBoundedPrivateObject: vi.fn(),
   deleteObject: vi.fn(),
   deletePrivateObject: vi.fn(),
+  StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {
+    constructor(_key: string, maxBytes: number) {
+      super(`Stored object exceeds the permitted ${maxBytes} bytes`);
+      this.name = 'StoredObjectTooLargeError';
+    }
+  },
 }));
 
 describe('local project knowledge storage', () => {
@@ -53,7 +59,7 @@ describe('local project knowledge storage', () => {
       data: bytes,
     });
 
-    await expect(getProjectKnowledgeObject(key)).resolves.toEqual({
+    await expect(getProjectKnowledgeObject(key, bytes.byteLength)).resolves.toEqual({
       data: Buffer.from(bytes),
       contentType: 'text/plain',
     });
@@ -66,7 +72,29 @@ describe('local project knowledge storage', () => {
       }),
     ).rejects.toThrow(/already been used/i);
     await deleteProjectKnowledgeObject(key);
-    await expect(getProjectKnowledgeObject(key)).resolves.toBeNull();
+    await expect(getProjectKnowledgeObject(key, bytes.byteLength)).resolves.toBeNull();
+  });
+
+  it('refuses to read a stored file larger than the caller allows', async () => {
+    const key = 'knowledge-files/projects/project-1/oversized.txt';
+    const bytes = new TextEncoder().encode('this local object is larger than the caller declared');
+    const uploadUrl = await createLocalProjectKnowledgeUploadUrl({
+      userId: 'user-1',
+      key,
+      contentType: 'text/plain',
+      byteCount: bytes.byteLength,
+    });
+    const token = new URL(uploadUrl, 'http://localhost').searchParams.get('token')!;
+    await storeLocalProjectKnowledgeUpload({
+      token,
+      userId: 'user-1',
+      contentType: 'text/plain',
+      data: bytes,
+    });
+
+    await expect(getProjectKnowledgeObject(key, bytes.byteLength - 1)).rejects.toThrow(
+      /exceeds the permitted/i,
+    );
   });
 
   it('rejects a token used by a different signed-in owner', async () => {

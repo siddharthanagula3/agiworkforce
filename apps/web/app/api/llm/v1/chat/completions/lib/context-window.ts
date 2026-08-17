@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { estimateTokens } from '@agiworkforce/routing';
@@ -104,20 +103,35 @@ export function trimMessagesToContextWindow(
     running = totalTokens(next, model);
   }
 
-  let truncatedMessages = 0;
+  const truncated = new Set<number>();
   if (running > budget) {
-    for (let i = next.length - 1; i >= 0 && running > budget; i--) {
-      const message = next[i];
-      if (!message || typeof message.content !== 'string') continue;
-      const currentTokens = messageTokens(message, model);
-      const overflow = running - budget;
-      if (currentTokens <= 16) continue;
-      const keepRatio = Math.max(0.1, 1 - overflow / currentTokens);
-      const keepChars = Math.max(64, Math.floor(message.content.length * keepRatio));
-      if (keepChars >= message.content.length) continue;
-      message.content = message.content.slice(0, keepChars) + TRUNCATED_MESSAGE_MARKER;
-      truncatedMessages++;
-      running = totalTokens(next, model);
+    // One sweep only approximates the budget, because the keep-ratio is derived
+    // from an estimator and every message carries fixed overhead. Sweeping until
+    // no message shrinks any further is what makes "fits the window" true rather
+    // than nearly true.
+    let shrankSomething = true;
+    while (running > budget && shrankSomething) {
+      shrankSomething = false;
+      for (let i = next.length - 1; i >= 0 && running > budget; i--) {
+        const message = next[i];
+        if (!message || typeof message.content !== 'string') continue;
+        const currentTokens = messageTokens(message, model);
+        if (currentTokens <= 16) continue;
+        const body = message.content.endsWith(TRUNCATED_MESSAGE_MARKER)
+          ? message.content.slice(0, -TRUNCATED_MESSAGE_MARKER.length)
+          : message.content;
+        const overflow = running - budget;
+        const keepRatio = Math.max(0.1, 1 - overflow / currentTokens);
+        const keepChars = Math.min(
+          body.length - 1,
+          Math.max(1, Math.floor(body.length * keepRatio)),
+        );
+        if (keepChars < 1) continue;
+        message.content = body.slice(0, keepChars) + TRUNCATED_MESSAGE_MARKER;
+        truncated.add(i);
+        shrankSomething = true;
+        running = totalTokens(next, model);
+      }
     }
   }
 
@@ -126,7 +140,7 @@ export function trimMessagesToContextWindow(
 
   const result: ContextTrimResult = {
     droppedMessages: dropped.size,
-    truncatedMessages,
+    truncatedMessages: truncated.size,
     estimatedTokensBefore: before,
     estimatedTokensAfter: running,
     budgetTokens: budget,
@@ -136,4 +150,12 @@ export function trimMessagesToContextWindow(
     '[context-window] trimmed conversation history to fit the resolved model context window',
   );
   return result;
+}
+
+export function compactionUsageFields(trim: ContextTrimResult | null | undefined): {
+  compactionSavedTokens?: number;
+} {
+  if (!trim) return {};
+  const saved = trim.estimatedTokensBefore - trim.estimatedTokensAfter;
+  return saved > 0 ? { compactionSavedTokens: saved } : {};
 }

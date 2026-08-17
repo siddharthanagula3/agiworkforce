@@ -11,6 +11,7 @@ import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import {
   appendCloudAgentEvent,
+  recordCloudAgentRunSettledUsage,
   transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
@@ -145,11 +146,34 @@ export function buildManagedAgentStream(
 
   const servingRequest = (): ProcessedRequest => input.getServingRequest?.() ?? input.processed;
 
+  const recordRunUsage = async (costCents: number | null, settlementKey: string) => {
+    if (!input.runJournal) return;
+    try {
+      await recordCloudAgentRunSettledUsage(input.runJournal.db, {
+        userId: input.runJournal.userId,
+        runId: input.runJournal.runId,
+        billingIdempotencyKey: settlementKey,
+        usage: {
+          providerCalls: input.usage.providerCalls,
+          inputTokens: input.usage.inputTokens,
+          outputTokens: input.usage.outputTokens,
+          reasoningTokens: input.usage.reasoningTokens,
+          costCents,
+        },
+      });
+    } catch (error) {
+      logger.warn(
+        { error, requestId: input.processed.requestId },
+        'Per-task usage could not be recorded on the cloud agent run',
+      );
+    }
+  };
+
   const settle = async (reason: string, outcome: 'completed' | 'failed' | 'cancelled') => {
     if (settled) return;
     const serving = servingRequest();
     if (input.processed.managedUsage) {
-      await finalizeObservedManagedUsage({
+      const finalization = await finalizeObservedManagedUsage({
         reservation: input.processed.managedUsage,
         provider: serving.provider,
         model: serving.chatRequest.model,
@@ -161,6 +185,10 @@ export function buildManagedAgentStream(
           ...(outcome === 'cancelled' ? { cancelled: true } : {}),
         }),
       });
+      await recordRunUsage(
+        finalization.actualCostCents,
+        input.processed.managedUsage.idempotencyKey,
+      );
     } else if (input.processed.freeTrial) {
       const inputTokens = input.usage.inputTokens;
       const outputTokens = input.usage.outputTokens;
@@ -182,6 +210,7 @@ export function buildManagedAgentStream(
           cacheCreation1hInputTokens: input.usage.cacheWrite1hTokens,
         },
       });
+      await recordRunUsage(null, input.processed.freeTrial.requestId);
     }
     settled = true;
   };

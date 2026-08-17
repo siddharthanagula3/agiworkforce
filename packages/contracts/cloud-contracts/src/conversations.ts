@@ -92,6 +92,7 @@ export const ManagedCloudConversationListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE).optional(),
   offset: z.coerce.number().int().min(0).optional(),
   includeHistoryStats: z.boolean().optional(),
+  archived: z.enum(['include', 'only', 'exclude']).optional(),
 });
 export type ManagedCloudConversationListQuery = z.infer<
   typeof ManagedCloudConversationListQuerySchema

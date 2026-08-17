@@ -1,0 +1,108 @@
+{
+  "$comment": [
+    "Allowlist for scripts/check-semgrep-findings.mjs (register row SEC-36).",
+    "",
+    "The Semgrep step in .github/workflows/ci.yml carries no --exclude-rule flags. Every",
+    "dismissal lives here, and every dismissal names an owner, an expiry and a reason.",
+    "A finding with no entry fails CI. An entry past its expiry fails CI even though the",
+    "finding still matches, so an acceptance cannot outlive the triage that justified it.",
+    "An entry that matches nothing fails CI as stale — an acceptance nobody can point at",
+    "reads as reviewed when it is not.",
+    "",
+    "Omit \"paths\" to accept a rule repository-wide. A \"paths\" entry matches an exact",
+    "repository-relative file, or a directory when the value ends in \"/\".",
+    "",
+    "Triaged on 2026-08-17 against semgrep 1.172.0 with p/security-audit, p/typescript",
+    "and p/owasp-top-ten — the exact configuration the CI step runs."
+  ],
+  "entries": [
+    {
+      "rule": "yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag",
+      "paths": [".github/workflows/"],
+      "owner": "@siddhartha",
+      "expires": "2027-08-31",
+      "reason": "Flags every actions/* reference by tag. scripts/check-action-pins.sh SHA-pins every THIRD-PARTY action and deliberately exempts GitHub's own first-party actions, which is a stricter policy than this rule and is itself enforced by check:ci-guardrails and .github/workflows/actions-pinned-check.yml."
+    },
+    {
+      "rule": "yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout",
+      "paths": [
+        ".github/workflows/deploy-production.yml",
+        ".github/workflows/deploy-signaling-server.yml"
+      ],
+      "owner": "@siddhartha",
+      "expires": "2027-08-31",
+      "reason": "The pwn-request shape in the deploy workflows. Each checkout is gated on github.event.workflow_run.head_repository.full_name == github.repository, which scripts/production-deploy-scope.test.mjs asserts for both workflows."
+    },
+    {
+      "rule": "javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
+      "paths": [
+        "apps/web/app/api/auth/logout/route.test.ts",
+        "apps/web/lib/__tests__/api-auth.test.ts",
+        "services/api-gateway/__tests__/integration/dependency-isolation.test.ts"
+      ],
+      "owner": "@siddhartha",
+      "expires": "2027-02-28",
+      "reason": "Test fixtures only. The values are synthetic and authenticate nothing; scripts/check-secrets.mjs is the blocking gate for real credential shapes. Scoped by path on purpose — the same rule firing in production code must fail."
+    },
+    {
+      "rule": "typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml",
+      "paths": [
+        "apps/desktop/src/features/canvas/ArtifactPreview.tsx",
+        "apps/web/shared/components/seo/SEOHead.tsx",
+        "apps/desktop/archive/features/tool-calling/ToolResultCard.tsx"
+      ],
+      "owner": "@siddhartha",
+      "expires": "2027-02-28",
+      "reason": "ArtifactPreview routes markdown through DOMPurify and raw HTML through a sandboxed iframe; SEOHead emits ld+json and has no importers; ToolResultCard is under archive/ and is not built."
+    },
+    {
+      "rule": "javascript.express.security.audit.xss.direct-response-write.direct-response-write",
+      "paths": ["services/api-gateway/src/routes/enterprise.ts"],
+      "owner": "@siddhartha",
+      "expires": "2027-02-28",
+      "reason": "The audit-event export sets Content-Type to text/csv or application/x-ndjson and Content-Disposition: attachment before res.send, and services/api-gateway/src/app.ts applies helmet() so nosniff is on. The body is never interpreted as HTML."
+    },
+    {
+      "rule": "package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown",
+      "paths": [".github/dependabot.yml"],
+      "owner": "@siddhartha",
+      "expires": "2026-11-30",
+      "reason": "Supply-chain hardening worth doing: a cooldown is the defense against adopting a package compromised minutes after publication. It changes update cadence for every ecosystem in the file, so it lands as its own reviewed change rather than riding along with a security-gate edit."
+    },
+    {
+      "rule": "package_managers.npm.npm-missing-minimum-release-age.npm-missing-minimum-release-age",
+      "paths": [".npmrc"],
+      "owner": "@siddhartha",
+      "expires": "2026-11-30",
+      "reason": "Same supply-chain hardening track as the dependabot cooldown. A minimum release age changes what `pnpm install --frozen-lockfile` will accept in CI, so it lands with its own install-behaviour review."
+    },
+    {
+      "rule": "package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age",
+      "paths": ["pnpm-workspace.yaml", "apps/web/pnpm-workspace.yaml"],
+      "owner": "@siddhartha",
+      "expires": "2026-11-30",
+      "reason": "Same supply-chain hardening track as the dependabot cooldown. Both workspace files must move together or the two installs disagree."
+    },
+    {
+      "rule": "package_managers.pnpm.pnpm-trust-policy.pnpm-trust-policy",
+      "paths": ["pnpm-workspace.yaml", "apps/web/pnpm-workspace.yaml"],
+      "owner": "@siddhartha",
+      "expires": "2026-11-30",
+      "reason": "Same supply-chain hardening track. An explicit trust policy blocks unreviewed postinstall scripts and will break installs for any dependency that currently relies on one, so it needs its own verification pass."
+    },
+    {
+      "rule": "package_managers.pnpm.pnpm-block-exotic-sub-dependencies.pnpm-block-exotic-sub-dependencies",
+      "paths": ["pnpm-workspace.yaml", "apps/web/pnpm-workspace.yaml"],
+      "owner": "@siddhartha",
+      "expires": "2026-11-30",
+      "reason": "Same supply-chain hardening track. Blocking git/tarball sub-dependencies needs the resolved graph audited first — the Rust side already denies non-crates.io sources in deny.toml."
+    },
+    {
+      "rule": "package_managers.uv.uv-missing-dependency-cooldown.uv-missing-dependency-cooldown",
+      "paths": ["tools/skill-vetting/pyproject.toml"],
+      "owner": "@siddhartha",
+      "expires": "2026-11-30",
+      "reason": "Same supply-chain hardening track, Python side. tools/skill-vetting resolves with uv and needs the same cooldown as the npm ecosystems."
+    }
+  ]
+}

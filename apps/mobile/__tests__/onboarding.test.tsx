@@ -97,6 +97,11 @@ jest.mock('@agiworkforce/compliance', () => ({
   DISCLOSURE_LEDGER_KEY: 'disclosure_ledger',
 }));
 
+const mockOpenInAppBrowser = jest.fn().mockResolvedValue(true);
+jest.mock('../lib/safeOpenURL', () => ({
+  openInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
+}));
+
 const mockDetectCapabilities = jest.fn(() => new Promise(() => {}));
 const mockGetInstalledModel = jest.fn().mockResolvedValue(null);
 const DEFAULT_LOCAL_MODEL_ID = 'fixture-default-local-model';
@@ -285,6 +290,40 @@ describe('Onboarding', () => {
         await Promise.resolve();
       });
       expect(mockRecordDisclosureAcceptance).toHaveBeenCalled();
+    });
+
+    it('states what AGI Cloud collects before the user can accept', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const { getByTestId, getByText } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      expect(getByTestId('disclosure-privacy-notice')).toBeTruthy();
+      expect(getByText(/the messages you send/)).toBeTruthy();
+      expect(getByText(/device identifier/)).toBeTruthy();
+      expect(getByText(/your chats stay on this device/)).toBeTruthy();
+    });
+
+    it('links the privacy policy and the India DPDP notice from the disclosure', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const { getByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        fireEvent.press(getByTestId('disclosure-privacy-policy-link'));
+        await Promise.resolve();
+      });
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/privacy');
+
+      await act(async () => {
+        fireEvent.press(getByTestId('disclosure-india-notice-link'));
+        await Promise.resolve();
+      });
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/privacy/india');
     });
 
     it('declining the disclosure keeps user on hero screen', async () => {

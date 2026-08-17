@@ -19,7 +19,7 @@ const RESEARCH_FEATURES = [
   {
     meta: 'Search',
     title: 'Live web search',
-    body: 'Turn search on when the answer needs current information. Results arrive as source cards with titles, snippets, and links, right in the chat where you asked.',
+    body: 'Search-capable models reach the live web on their own when an answer needs current information, and the composer states whether search is on for the model you picked. Results arrive as source cards with titles, snippets, and links, right in the chat where you asked.',
   },
   {
     meta: 'Citations',
@@ -66,10 +66,10 @@ export default function DeepResearchPage() {
             </span>
           </h1>
           <p className="agi-fl-lede">
-            Research in AGI is designed around one rule: claims come with citations. Turn on search
-            and results arrive as source cards, numbered citations sit inside the answer, and a
-            sources panel keeps the evidence one click away, in the same workspace as your projects,
-            artifacts, and memory.
+            Research in AGI is designed around one rule: claims come with citations. Search runs on
+            its own whenever the question needs the live web, results arrive as source cards,
+            numbered citations sit inside the answer, and a sources panel keeps the evidence one
+            click away, in the same workspace as your projects, artifacts, and memory.
           </p>
           <div className="agi-fl-cta-row">
             <Link href={WEB_CHAT_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">

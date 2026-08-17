@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Pressable } from 'react-native';
-import Slider from '@react-native-community/slider';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -46,6 +45,16 @@ const REASONING_EFFORT_LABEL: Readonly<Record<string, string>> = {
   high: 'High',
   xhigh: 'xHigh',
   max: 'Max',
+};
+
+const REASONING_EFFORT_TRADEOFF: Readonly<Record<string, string>> = {
+  none: 'Answers straight away. Cheapest, weakest on hard problems.',
+  minimal: 'Barely pauses to think. Best for quick lookups and rewrites.',
+  low: 'A short think. Faster and cheaper than the default.',
+  medium: 'Balanced thinking time for everyday work.',
+  high: 'Thinks longer. Better on tricky reasoning, slower and pricier.',
+  xhigh: 'Thinks much longer. Use when accuracy matters more than the wait.',
+  max: 'Thinks as long as it can. Slowest and most expensive.',
 };
 
 function sortEffortLadder(efforts: readonly string[]): PickerEffort[] {
@@ -524,52 +533,87 @@ export function ModelPickerSheet({
 
         {showEffortControl ? (
           <View
+            testID="model-picker-effort-selector"
             style={{
               marginHorizontal: 16,
               marginBottom: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceElevated,
+              paddingHorizontal: 6,
+              paddingVertical: 6,
             }}
           >
-            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>Effort</Text>
-            {selectedRequiresReasoning ? (
-              <Text style={{ color: colors.textMuted, fontSize: 11 }}>Always on</Text>
-            ) : null}
             <View
-              testID="model-picker-effort-selector"
               style={{
-                flex: 1,
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surfaceElevated,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
                 paddingHorizontal: 8,
-                paddingVertical: 4,
+                paddingBottom: 4,
               }}
             >
-              <Slider
-                minimumValue={0}
-                maximumValue={effortOptions.length - 1}
-                step={1}
-                value={Math.max(effortOptions.indexOf(selectedEffort), 0)}
-                onValueChange={(value) => {
-                  const effort = effortOptions[Math.round(value)];
-                  if (effort) handleSelectEffort(effort);
-                }}
-                minimumTrackTintColor={colors.teal}
-                maximumTrackTintColor={colors.border}
-                thumbTintColor={colors.textPrimary}
-                accessibilityRole="adjustable"
-                accessibilityLabel="Reasoning effort"
-                accessibilityValue={{
-                  min: 0,
-                  max: effortOptions.length - 1,
-                  now: Math.max(effortOptions.indexOf(selectedEffort), 0),
-                  text: REASONING_EFFORT_LABEL[selectedEffort] ?? selectedEffort,
-                }}
-              />
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+                Effort
+              </Text>
+              {selectedRequiresReasoning ? (
+                <Text style={{ color: colors.textMuted, fontSize: 11 }}>Always on</Text>
+              ) : null}
             </View>
+            {effortOptions.map((effort) => {
+              const label = REASONING_EFFORT_LABEL[effort] ?? effort;
+              const tradeoff = REASONING_EFFORT_TRADEOFF[effort];
+              const active = effort === selectedEffort;
+              return (
+                <Pressable
+                  key={effort}
+                  testID={`model-picker-effort-${effort}`}
+                  onPress={() => handleSelectEffort(effort)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Reasoning effort ${label}`}
+                  accessibilityHint={tradeoff}
+                  accessibilityState={{ selected: active }}
+                >
+                  {({ pressed }) => (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        minHeight: 44,
+                        paddingHorizontal: 8,
+                        paddingVertical: 6,
+                        borderRadius: 12,
+                        backgroundColor: active
+                          ? colors.accentSurface
+                          : pressed
+                            ? colors.surfaceHover
+                            : colors.transparent,
+                      }}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          style={{
+                            color: active ? colors.teal : colors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: active ? '600' : '500',
+                          }}
+                        >
+                          {label}
+                        </Text>
+                        {tradeoff ? (
+                          <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
+                            {tradeoff}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {active ? <Check size={16} color={colors.teal} /> : null}
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
         ) : null}
 

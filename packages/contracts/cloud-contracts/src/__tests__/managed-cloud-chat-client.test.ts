@@ -59,6 +59,20 @@ describe('createManagedCloudChatClient', () => {
     expect(page.historyStats).toEqual({ conversationCount: 195, messageCount: 842 });
   });
 
+  it('carries the archived filter so surfaces do not hand-roll the query string', async () => {
+    const fetchImpl = vi.fn(async () =>
+      response({ conversations: [], hasMore: false, nextOffset: 0 }),
+    );
+    const client = createManagedCloudChatClient({ fetchImpl });
+
+    await client.listConversations({ limit: 100, offset: 0, archived: 'exclude' });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/api/chat/conversations?limit=100&offset=0&archived=exclude',
+      { headers: {} },
+    );
+  });
+
   it('fails closed when a successful HTTP response violates the contract', async () => {
     const fetchImpl = vi.fn(async () =>
       response({ conversations: [{ ...rawConversation, created_at: 123 }] }),

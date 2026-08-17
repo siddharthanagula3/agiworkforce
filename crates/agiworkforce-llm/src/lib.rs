@@ -13,6 +13,8 @@
 //! - tool-call delta assembly ([`ToolCallAssembler`])
 //! - the idle watchdog ([`IdleWatchdog`]) and structured error
 //!   classification ([`LlmError`], [`classify_error_response`])
+//! - the speech transcription endpoint/field contract ([`speech`]) shared by
+//!   the desktop and CLI binaries
 //!
 //! POLICY stays in the apps: provider selection UX, config/key resolution,
 //! subscription auth (Copilot/ChatGPT), TUI notices, routing/fallback chains,
@@ -26,6 +28,7 @@ pub mod error;
 pub mod events;
 pub mod serialize;
 pub mod spec;
+pub mod speech;
 pub mod stream;
 pub mod watchdog;
 pub mod wire;
@@ -36,6 +39,7 @@ pub use error::{LlmError, PaywallNotice, classify_error_response, parse_paywall_
 pub use events::{ChatOutcome, StreamEvent, Usage};
 pub use serialize::OllamaRequestOpts;
 pub use spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
+pub use speech::{TranscriptionRequest, TranscriptionResponseFormat};
 pub use stream::{
     AnthropicThinking, ChatRequest, ToolChoice, build_anthropic_request_body,
     build_gemini_request_body, build_ollama_request_body, build_openai_compat_request_body,

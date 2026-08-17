@@ -29,13 +29,17 @@ import {
 } from '../lib/schedule-form';
 import { scheduleApi, type ScheduleApi } from '../services/schedule-api';
 import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
+import {
+  MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
+  MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
+} from '@agiworkforce/cloud-contracts';
 import type { ScheduleDraft, ScheduleFormErrors, ScheduleRun, ScheduleTask } from '../types';
 
 export const SCHEDULE_MATURITY_LABEL = 'Alpha';
 export const SCHEDULE_MATURITY_TITLE = `Schedules run on Managed Cloud, which is in ${MANAGED_CLOUD_STATUS}. An unattended run can fail or be skipped, and behaviour may change.`;
 
-const SCHEDULE_PAGE_SIZE = 50;
-const RUN_PAGE_SIZE = 20;
+const SCHEDULE_PAGE_SIZE = MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE;
+const RUN_PAGE_SIZE = MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE;
 
 type ScheduleStatusFilter = 'all' | ScheduleTask['status'];
 

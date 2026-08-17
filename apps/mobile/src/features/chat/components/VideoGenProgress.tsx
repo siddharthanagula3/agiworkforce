@@ -1,7 +1,6 @@
-
 import { useEffect } from 'react';
-import { View } from 'react-native';
-import { AlertCircle, Film } from 'lucide-react-native';
+import { Pressable, View } from 'react-native';
+import { AlertCircle, Film, Square } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -16,8 +15,11 @@ import { useThemeColors } from '@/src/ui/theme';
 export interface VideoGenProgressProps {
   prompt: string;
   progress?: number;
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout' | 'cancelled';
   errorMessage?: string;
+  onStop?: () => void;
+  stopping?: boolean;
+  stopError?: string;
 }
 
 const STATUS_LABEL: Record<VideoGenProgressProps['status'], string> = {
@@ -26,6 +28,7 @@ const STATUS_LABEL: Record<VideoGenProgressProps['status'], string> = {
   completed: 'Video ready',
   failed: 'Video generation failed',
   timeout: 'Video generation timed out',
+  cancelled: 'Video generation stopped',
 };
 
 export function VideoGenProgress({
@@ -33,6 +36,9 @@ export function VideoGenProgress({
   progress,
   status,
   errorMessage,
+  onStop,
+  stopping,
+  stopError,
 }: VideoGenProgressProps) {
   const colors = useThemeColors();
   const reducedMotion = useReducedMotion();
@@ -114,6 +120,44 @@ export function VideoGenProgress({
       {!isError ? (
         <Text style={{ fontSize: 11, color: colors.textMuted }}>
           This usually takes a minute or two. You can keep using the app.
+        </Text>
+      ) : null}
+
+      {onStop && !isError ? (
+        <Pressable
+          testID="video-gen-stop"
+          onPress={onStop}
+          disabled={stopping === true}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: stopping === true }}
+          accessibilityLabel="Stop generating this video"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            alignSelf: 'flex-start',
+            gap: 6,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: stopping === true ? 0.6 : 1,
+          }}
+        >
+          <Square size={11} color={colors.textSecondary} />
+          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+            {stopping === true ? 'Stopping…' : 'Stop generating'}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {stopError ? (
+        <Text
+          testID="video-gen-stop-error"
+          accessibilityRole="alert"
+          style={{ fontSize: 11, color: colors.agentError }}
+        >
+          Could not stop this generation: {stopError}
         </Text>
       ) : null}
     </Animated.View>

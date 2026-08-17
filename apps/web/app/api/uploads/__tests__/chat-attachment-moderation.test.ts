@@ -1,25 +1,38 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createHash } from 'node:crypto';
 
 const {
   mockGetClerkAuthUser,
-  mockGetPrivateObject,
+  mockGetBoundedPrivateObject,
   mockDeletePrivateObject,
   mockInsertMediaAsset,
   mockGetMediaAssetByStoragePathname,
   mockResolveActiveOrganizationId,
   loggerMock,
-} = vi.hoisted(() => ({
-  mockGetClerkAuthUser: vi.fn(),
-  mockGetPrivateObject: vi.fn(),
-  mockDeletePrivateObject: vi.fn(),
-  mockInsertMediaAsset: vi.fn(),
-  mockGetMediaAssetByStoragePathname: vi.fn(),
-  mockResolveActiveOrganizationId: vi.fn(),
-  loggerMock: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
-}));
+  StoredObjectTooLargeError,
+} = vi.hoisted(() => {
+  class StoredObjectTooLargeError extends Error {
+    constructor(
+      readonly key: string,
+      readonly maxBytes: number,
+      readonly contentLength?: number,
+    ) {
+      super(`Stored object exceeds the permitted ${maxBytes} bytes`);
+      this.name = 'StoredObjectTooLargeError';
+    }
+  }
+  return {
+    mockGetClerkAuthUser: vi.fn(),
+    mockGetBoundedPrivateObject: vi.fn(),
+    mockDeletePrivateObject: vi.fn(),
+    mockInsertMediaAsset: vi.fn(),
+    mockGetMediaAssetByStoragePathname: vi.fn(),
+    mockResolveActiveOrganizationId: vi.fn(),
+    loggerMock: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+    StoredObjectTooLargeError,
+  };
+});
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
@@ -31,8 +44,9 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   isPrivateObjectStorageConfigured: vi.fn(() => true),
-  getPrivateObject: mockGetPrivateObject,
+  getBoundedPrivateObject: mockGetBoundedPrivateObject,
   deletePrivateObject: mockDeletePrivateObject,
+  StoredObjectTooLargeError,
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: mockInsertMediaAsset,
@@ -71,7 +85,7 @@ beforeEach(() => {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockResolveActiveOrganizationId.mockResolvedValue(ORGANIZATION_ID);
   mockGetMediaAssetByStoragePathname.mockResolvedValue(null);
-  mockGetPrivateObject.mockResolvedValue({ data: PNG_BYTES, contentType: 'image/png' });
+  mockGetBoundedPrivateObject.mockResolvedValue({ data: PNG_BYTES, contentType: 'image/png' });
   mockInsertMediaAsset.mockResolvedValue('asset-1');
   mockDeletePrivateObject.mockResolvedValue(undefined);
   loggerMock.error.mockClear();
@@ -126,6 +140,24 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
     );
     expect(JSON.stringify(body)).not.toContain(PNG_DIGEST);
     expect(JSON.stringify(body)).not.toMatch(/hash|denylist|ncmec/i);
+  });
+
+  it('reads the stored object under the declared byte count rather than unbounded', async () => {
+    await POST(completeRequest());
+
+    expect(mockGetBoundedPrivateObject).toHaveBeenCalledWith(STORAGE_KEY, PNG_BYTES.byteLength);
+  });
+
+  it('rejects and purges an object that outgrew the size the user declared', async () => {
+    mockGetBoundedPrivateObject.mockRejectedValue(
+      new StoredObjectTooLargeError(STORAGE_KEY, PNG_BYTES.byteLength, 4 * 1024 * 1024 * 1024),
+    );
+
+    const response = await POST(completeRequest());
+
+    expect(response.status).toBe(400);
+    expect(mockInsertMediaAsset).not.toHaveBeenCalled();
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
   });
 
   it('still registers attachments when no denylist is configured', async () => {

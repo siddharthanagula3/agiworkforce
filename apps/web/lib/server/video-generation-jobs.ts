@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 
 export type VideoJobProvider = 'google' | 'runway' | 'openrouter';
 export type VideoJobStatus =
@@ -817,7 +818,7 @@ export async function deferVideoGenerationJobFailure(input: {
   return job;
 }
 
-export function finalizeVideoGenerationJob(input: {
+export async function finalizeVideoGenerationJob(input: {
   db: DatabaseAdapter;
   jobId: string;
   claimToken: string;
@@ -826,7 +827,7 @@ export function finalizeVideoGenerationJob(input: {
   publicError?: string;
   actualCostCents?: number;
 }): Promise<VideoGenerationJob | null> {
-  return queryJob(
+  const job = await queryJob(
     input.db,
     `select * from public.finalize_video_generation_job(
        $1::uuid, $2::text, $3::text, $4::uuid, $5::text, $6::integer
@@ -840,6 +841,30 @@ export function finalizeVideoGenerationJob(input: {
       input.actualCostCents ?? null,
     ],
   );
+
+  // A completed video settles inside finalize_video_generation_job, which calls the
+  // billing SQL directly and never passes through finalizeManagedUsageRequest, so the
+  // COGS event has to be emitted here or video — the most expensive non-token
+  // capability — would be the one capability missing from the ledger.
+  if (job && job.billingOutcome === 'completed') {
+    await recordSettledProviderCost({
+      userId: job.userId,
+      provider: job.provider,
+      model: job.model,
+      actualCostCents: job.actualCostCents ?? 0,
+      sourceRef: `video_job:${job.id}`,
+      taskOutcome: 'delivered',
+      taskRef: `video_job:${job.id}`,
+      usage: {
+        operation: 'video',
+        durationSecs: job.durationSecs,
+        resolution: job.resolution,
+        sourceSurface: job.sourceSurface,
+      },
+    });
+  }
+
+  return job;
 }
 
 export async function nudgeVideoGenerationJobFromProviderEvent(input: {

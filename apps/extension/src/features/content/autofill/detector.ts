@@ -1,4 +1,3 @@
-
 export type DetectedPlatform = 'linkedin' | 'lever' | 'greenhouse' | 'ashby' | null;
 
 export interface DetectedField {
@@ -21,6 +20,7 @@ import {
   collectResolvableGreenhouseFields,
 } from './greenhouse';
 import { isAshbyUrl, findAshbyFormContainer, collectResolvableAshbyFields } from './ashby';
+import { matchesAtsHostRules, type AtsHostRule } from './hosts';
 
 function cssEscapeIdent(value: string): string {
   const g = globalThis as { CSS?: { escape?: (v: string) => string } };
@@ -48,16 +48,19 @@ export function uniqueCssSelector(el: Element): string {
   return segments.join(' > ');
 }
 
-const LINKEDIN_URL_PATTERNS = [/linkedin\.com\/jobs\//i, /linkedin\.com\/job\//i];
+const LINKEDIN_HOST_RULES: AtsHostRule[] = [{ host: 'linkedin.com', path: /^\/jobs?\// }];
 
-function isLinkedInUrl(url: string): boolean {
-  return LINKEDIN_URL_PATTERNS.some((re) => re.test(url));
+export function isLinkedInUrl(url: string): boolean {
+  return matchesAtsHostRules(url, LINKEDIN_HOST_RULES);
 }
 
-const LEVER_URL_PATTERNS = [/jobs\.lever\.co\//i, /app\.lever\.co\/.*\/apply/i];
+const LEVER_HOST_RULES: AtsHostRule[] = [
+  { host: 'jobs.lever.co' },
+  { host: 'app.lever.co', path: /\/apply/ },
+];
 
-function isLeverUrl(url: string): boolean {
-  return LEVER_URL_PATTERNS.some((re) => re.test(url));
+export function isLeverUrl(url: string): boolean {
+  return matchesAtsHostRules(url, LEVER_HOST_RULES);
 }
 
 function findLinkedInFormContainer(): Element | null {

@@ -14,9 +14,9 @@ use tokio::sync::RwLock;
 /// regardless of user-configured permissions. Mirrors Claude Cowork's
 /// hard-blocked categories: investment / brokerage / crypto / banking.
 ///
-/// On macOS, matches against the foreground app's bundle identifier.
-/// On Windows, matches against the substring of the executable name (case
-/// insensitive — e.g. `robinhood.exe`, `coinbase.exe`).
+/// On macOS, matches against the foreground app's bundle identifier. On Windows
+/// and Linux the OS reports only a process name, so `is_always_blocked_bundle`
+/// also matches it against the branded component of each entry.
 pub const ALWAYS_BLOCKED_BUNDLE_IDS: &[&str] = &[
     // Brokerage / trading
     "com.robinhood.app",
@@ -86,14 +86,30 @@ pub const ALWAYS_BLOCKED_URL_HOSTS: &[&str] = &[
     "zellepay.com",
 ];
 
-/// Returns `true` if the given bundle id (or process name) is on the
-/// always-blocked list. Case-insensitive check: matches if any blocked
-/// identifier is a dot-delimited component suffix of the candidate.
+/// Components that carry no brand and so must never block on their own.
+const GENERIC_IDENTIFIER_COMPONENTS: &[&str] = &["com", "io", "app", "us", "inc"];
+
+fn brand_stem(identifier: &str) -> String {
+    let lowered = identifier.to_lowercase();
+    let file = lowered.rsplit(['/', '\\']).next().unwrap_or("");
+    file.strip_suffix(".exe").unwrap_or(file).trim().to_string()
+}
+
+/// Returns `true` if the given bundle id, executable path or process name is on
+/// the always-blocked list. Case-insensitive. A macOS bundle id matches when it
+/// equals a blocked entry or is one of its dot-delimited descendants; a Windows
+/// or Linux process name matches when it equals a branded component of a blocked
+/// entry, which is the only identifier those platforms report.
 pub fn is_always_blocked_bundle(identifier: &str) -> bool {
     let lowered = identifier.to_lowercase();
+    let stem = brand_stem(identifier);
+    let stem_can_match =
+        !stem.is_empty() && !GENERIC_IDENTIFIER_COMPONENTS.contains(&stem.as_str());
     ALWAYS_BLOCKED_BUNDLE_IDS.iter().any(|blocked| {
         let b = blocked.to_lowercase();
-        lowered == b || lowered.ends_with(&format!(".{}", b))
+        lowered == b
+            || lowered.ends_with(&format!(".{b}"))
+            || (stem_can_match && b.split('.').any(|component| component == stem))
     })
 }
 
@@ -428,5 +444,39 @@ mod tests {
             .await;
         mgr.remove_permission("Safari").await;
         assert!(mgr.check_app("Safari").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_brokerage_app_is_blocked_when_the_os_reports_a_process_name() {
+        let mgr = AppPermissionManager::new();
+        for identifier in ["Robinhood.exe", "coinbase", "MetaMask", "Chase"] {
+            assert_eq!(
+                mgr.decide(identifier, None).await,
+                PermissionStatus::Denied,
+                "{identifier} reached the agent unblocked"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_windows_executable_path_is_blocked_by_its_file_name() {
+        let mgr = AppPermissionManager::new();
+        assert_eq!(
+            mgr.decide("Kraken", Some("C:\\Program Files\\Kraken\\kraken.exe"))
+                .await,
+            PermissionStatus::Denied
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unrelated_app_still_reaches_the_user_prompt() {
+        let mgr = AppPermissionManager::new();
+        for identifier in ["Notes", "notes", "code.exe", "com.apple.Notes"] {
+            assert_eq!(
+                mgr.decide(identifier, None).await,
+                PermissionStatus::AskEveryTime,
+                "{identifier} was blocked by the financial refuse-list"
+            );
+        }
     }
 }

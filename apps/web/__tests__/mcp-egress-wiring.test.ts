@@ -23,8 +23,10 @@ describe('every connectMcpServer call site carries the SSRF egress policy', () =
       const calls = source.split('connectMcpServer({').length - 1;
       expect(calls).toBeGreaterThan(0);
 
-      const guarded =
-        source.split('connectMcpServer({\n      egressPolicy: MCP_EGRESS_POLICY,').length - 1;
+      const guarded = source
+        .split('connectMcpServer({')
+        .slice(1)
+        .filter((tail) => /^\s*egressPolicy:\s*MCP_EGRESS_POLICY,/.test(tail)).length;
       expect(guarded).toBe(calls);
       expect(source).toContain("from '@/lib/mcp-egress-policy'");
     });
@@ -42,7 +44,7 @@ describe('every connectMcpServer call site carries the SSRF egress policy', () =
       const unguarded = source
         .split('connectMcpServer({')
         .slice(1)
-        .filter((tail) => !tail.trimStart().startsWith('egressPolicy'));
+        .filter((tail) => !/^\s*egressPolicy:\s*MCP_EGRESS_POLICY,/.test(tail));
       expect(unguarded, `${file} has an unguarded connectMcpServer call`).toHaveLength(0);
     }
   });

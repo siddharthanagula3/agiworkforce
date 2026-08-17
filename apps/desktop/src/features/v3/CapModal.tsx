@@ -5,10 +5,9 @@ import { useBudgetStore, selectBudget, selectBudgetPercentage } from '@agiworkfo
 
 interface CapModalProps {
   onSwitchModel?: () => void;
-  onBuyTopUp?: () => void;
 }
 
-export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
+export function CapModal({ onSwitchModel }: CapModalProps) {
   const { t } = useTranslation('v3');
   const budget = useBudgetStore(selectBudget);
   const usagePercent = useBudgetStore(selectBudgetPercentage);
@@ -86,19 +85,6 @@ export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
               }}
             >
               {t('capModal.switchModel')}
-            </button>
-          )}
-          {onBuyTopUp && (
-            <button
-              type="button"
-              onClick={onBuyTopUp}
-              className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--chat-surface-hover)]"
-              style={{
-                borderColor: 'var(--chat-border-strong)',
-                color: 'var(--chat-text-primary)',
-              }}
-            >
-              {t('capModal.buyTopUp')}
             </button>
           )}
           <button

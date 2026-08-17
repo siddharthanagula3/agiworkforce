@@ -17,6 +17,7 @@ import {
   isManagedComputePrivateBetaEnabled,
   MANAGED_COMPUTE_PRIVATE_BETA_ENV,
 } from '@/lib/managed-compute-gate';
+import ContentReportQueuePanel from '../components/ContentReportQueuePanel';
 import SecurityOperationsPanel from '../components/SecurityOperationsPanel';
 
 function managedComputeStatusLabel(open: boolean): string {
@@ -26,14 +27,30 @@ function managedComputeStatusLabel(open: boolean): string {
 type ReadinessTone = 'ok' | 'warn';
 
 const READINESS_TONE_CLASS: Record<ReadinessTone, string> = {
-  ok: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100',
-  warn: 'border-amber-400/30 bg-amber-400/10 text-amber-100',
+  ok: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-300/10 dark:text-emerald-100',
+  warn: 'border-amber-600/30 bg-amber-500/10 text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100',
+};
+
+export const READINESS_ATTESTED_AS_OF = '2026-08-16';
+
+type ReadinessSource = 'config' | 'attested';
+
+const READINESS_SOURCE_LABEL: Record<ReadinessSource, string> = {
+  config: 'Live config',
+  attested: `Self-attested ${READINESS_ATTESTED_AS_OF}`,
+};
+
+const READINESS_SOURCE_CLASS: Record<ReadinessSource, string> = {
+  config:
+    'border-sky-600/30 bg-sky-500/10 text-sky-800 dark:border-sky-300/20 dark:bg-sky-300/10 dark:text-sky-100',
+  attested: 'border-border bg-muted text-muted-foreground',
 };
 
 interface ReadinessRow {
   area: string;
   status: string;
   tone: ReadinessTone;
+  source: ReadinessSource;
   owner: string;
   evidence: string;
 }
@@ -44,6 +61,7 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
       area: 'Privacy modes',
       status: 'Fail-closed',
       tone: 'ok',
+      source: 'config',
       owner: 'Platform',
       evidence: `${DEFAULT_ENTERPRISE_ADMIN_POLICY.allowedPrivacyModes.join(', ')} allowed by default`,
     },
@@ -51,6 +69,7 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
       area: 'Managed compute',
       status: managedComputeStatusLabel(managedComputeOpen),
       tone: managedComputeOpen ? 'ok' : 'warn',
+      source: 'config',
       owner: 'Billing',
       evidence: managedComputeOpen
         ? `Open by default since 2026-06-27. Hard review at ${MANAGED_COMPUTE_MARGIN_POLICY.hardStopAtRevenueShare * 100}% provider-cost share.`
@@ -60,21 +79,25 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
       area: 'Identity',
       status: 'Implemented — entitlement-gated',
       tone: 'ok',
+      source: 'attested',
       owner: 'Enterprise',
       evidence:
         'Migration 0076 owns SSO and directory-sync configuration with RLS. First-party SSO sign-in (lib/server/sso/clerk-enterprise-connections.ts, /api/admin/sso) and SCIM provisioning (/api/scim/v2) are implemented and gated on the enterprise_controls capability by lib/server/sso/sso-route-guard.ts, which is a capability check rather than a tier comparison',
     },
     {
       area: 'Audit logs',
-      status: 'Append-only',
-      tone: 'ok',
+      status: 'Append-only, no export',
+      tone: 'warn',
+      source: 'attested',
       owner: 'Security',
-      evidence: 'Enterprise audit events and export requests are separated from support logs',
+      evidence:
+        'Enterprise audit events are written to a table app_rls cannot update or delete (migration 0087) and are separated from support logs. No self-serve read or export surface exists; extracts are supplied on request',
     },
     {
       area: 'Support loop',
       status: 'Routed',
       tone: 'ok',
+      source: 'attested',
       owner: 'Support',
       evidence: 'Support cases, feedback cases, and release fix links have shared tables',
     },
@@ -102,6 +125,14 @@ const ADMIN_CONTROLS: ReadonlyArray<{
     service: 'POST /api/admin/security',
     detail:
       'Suspend, ban, and reactivate accounts. Admin-authenticated, CSRF-protected, and written to the security audit log.',
+    external: false,
+  },
+  {
+    name: 'Content report queue',
+    href: '#content-report-queue-title',
+    service: 'GET/POST /api/admin/content-reports',
+    detail:
+      'Reports flagged from web and mobile, oldest first, with a 24-hour review SLA. Claim, action, or dismiss with a recorded reviewer note.',
     external: false,
   },
   {
@@ -159,15 +190,17 @@ export default function AdminConsolePage() {
   const policyTiles = buildPolicyTiles(managedComputeOpen);
 
   return (
-    <div className="min-h-screen bg-[#0b0d0f] text-zinc-100">
+    <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-        <header className="flex flex-col gap-4 border-b border-white/10 pb-6 md:flex-row md:items-end md:justify-between">
+        <header className="flex flex-col gap-4 border-b border-border pb-6 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="font-mono text-xs uppercase text-emerald-300">Enterprise control plane</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-normal text-white">
+            <p className="font-mono text-xs uppercase text-emerald-700 dark:text-emerald-300">
+              Enterprise control plane
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-normal text-foreground">
               Admin readiness
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
               Operational surface for teams, policy, identity, auditability, support, and
               managed-compute commercial gates.
             </p>
@@ -175,8 +208,8 @@ export default function AdminConsolePage() {
           <div
             className={
               managedComputeOpen
-                ? 'flex items-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100'
-                : 'flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100'
+                ? 'flex items-center gap-2 rounded-md border border-emerald-600/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100'
+                : 'flex items-center gap-2 rounded-md border border-amber-600/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100'
             }
           >
             {managedComputeOpen ? (
@@ -194,45 +227,48 @@ export default function AdminConsolePage() {
           {policyTiles.map((tile) => {
             const Icon = tile.icon;
             return (
-              <div
-                key={tile.label}
-                className="rounded-md border border-white/10 bg-white/[0.03] p-4"
-              >
+              <div key={tile.label} className="rounded-md border border-border bg-card p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-zinc-400">{tile.label}</span>
-                  <Icon className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                  <span className="text-sm text-muted-foreground">{tile.label}</span>
+                  <Icon
+                    className="h-4 w-4 text-emerald-600 dark:text-emerald-300"
+                    aria-hidden="true"
+                  />
                 </div>
-                <div className="mt-3 font-mono text-xl text-white">{tile.value}</div>
-                <p className="mt-3 text-xs leading-5 text-zinc-500">{tile.detail}</p>
+                <div className="mt-3 font-mono text-xl text-foreground">{tile.value}</div>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">{tile.detail}</p>
               </div>
             );
           })}
         </section>
 
         <section
-          className="overflow-hidden rounded-md border border-white/10 bg-white/[0.02]"
+          className="overflow-hidden rounded-md border border-border bg-card"
           aria-labelledby="admin-controls-title"
         >
-          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-            <SlidersHorizontal className="h-4 w-4 text-sky-300" aria-hidden="true" />
-            <h2 id="admin-controls-title" className="text-sm font-medium text-white">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+            <SlidersHorizontal
+              className="h-4 w-4 text-sky-600 dark:text-sky-300"
+              aria-hidden="true"
+            />
+            <h2 id="admin-controls-title" className="text-sm font-medium text-foreground">
               Admin controls
             </h2>
           </div>
-          <ul className="divide-y divide-white/10">
+          <ul className="divide-y divide-border">
             {ADMIN_CONTROLS.map((control) => (
               <li
                 key={control.name}
                 className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between"
               >
                 <div className="min-w-0">
-                  <p className="text-sm text-white">{control.name}</p>
-                  <p className="mt-1 text-xs leading-5 text-zinc-500">{control.detail}</p>
-                  <p className="mt-1 font-mono text-xs text-zinc-600">{control.service}</p>
+                  <p className="text-sm text-foreground">{control.name}</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{control.detail}</p>
+                  <p className="mt-1 font-mono text-xs text-muted-foreground">{control.service}</p>
                 </div>
                 <a
                   href={control.href}
-                  className="shrink-0 self-start rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-zinc-200 hover:bg-white/[0.08] md:self-center"
+                  className="shrink-0 self-start rounded-md border border-border bg-muted px-3 py-2 text-xs text-foreground hover:bg-accent md:self-center"
                 >
                   {control.external ? 'Open' : 'Jump to'}
                 </a>
@@ -243,25 +279,50 @@ export default function AdminConsolePage() {
 
         <SecurityOperationsPanel />
 
-        <section className="overflow-hidden rounded-md border border-white/10 bg-white/[0.02]">
-          <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-            <DatabaseZap className="h-4 w-4 text-emerald-300" aria-hidden="true" />
-            <h2 className="text-sm font-medium text-white">Enterprise readiness ledger</h2>
+        <ContentReportQueuePanel />
+
+        <section
+          className="overflow-hidden rounded-md border border-border bg-card"
+          aria-labelledby="readiness-ledger-title"
+        >
+          <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <DatabaseZap
+                className="h-4 w-4 text-emerald-600 dark:text-emerald-300"
+                aria-hidden="true"
+              />
+              <h2 id="readiness-ledger-title" className="text-sm font-medium text-foreground">
+                Enterprise readiness ledger
+              </h2>
+            </div>
+            <p
+              data-testid="readiness-ledger-disclaimer"
+              className="text-xs leading-5 text-muted-foreground"
+            >
+              Not a live health check. Rows marked{' '}
+              <span className="text-foreground">{READINESS_SOURCE_LABEL.config}</span> are read from
+              this deployment&apos;s policy constants and environment on page load. Rows marked{' '}
+              <span className="text-foreground">Self-attested</span> are a written claim reviewed on{' '}
+              <time dateTime={READINESS_ATTESTED_AS_OF}>{READINESS_ATTESTED_AS_OF}</time> and are
+              not queried from running systems. Use the security operations panel above for live
+              state.
+            </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-              <thead className="bg-white/[0.03] text-xs uppercase text-zinc-500">
+              <thead className="bg-muted text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Area</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Source</th>
                   <th className="px-4 py-3 font-medium">Owner</th>
                   <th className="px-4 py-3 font-medium">Evidence</th>
                 </tr>
               </thead>
               <tbody>
                 {readinessRows.map((row) => (
-                  <tr key={row.area} className="border-t border-white/10">
-                    <td className="px-4 py-3 text-white">{row.area}</td>
+                  <tr key={row.area} className="border-t border-border">
+                    <td className="px-4 py-3 text-foreground">{row.area}</td>
                     <td className="px-4 py-3">
                       <span
                         data-tone={row.tone}
@@ -270,8 +331,16 @@ export default function AdminConsolePage() {
                         {row.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-zinc-300">{row.owner}</td>
-                    <td className="px-4 py-3 text-zinc-400">{row.evidence}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        data-source={row.source}
+                        className={`whitespace-nowrap rounded-md border px-2 py-1 text-xs ${READINESS_SOURCE_CLASS[row.source]}`}
+                      >
+                        {READINESS_SOURCE_LABEL[row.source]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-foreground">{row.owner}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{row.evidence}</td>
                   </tr>
                 ))}
               </tbody>
@@ -280,28 +349,37 @@ export default function AdminConsolePage() {
         </section>
 
         <section className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">
-            <KeyRound className="h-5 w-5 text-emerald-300" aria-hidden="true" />
-            <h2 className="mt-4 text-base font-medium text-white">Identity</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
+          <div className="rounded-md border border-border bg-card p-4">
+            <KeyRound
+              className="h-5 w-5 text-emerald-600 dark:text-emerald-300"
+              aria-hidden="true"
+            />
+            <h2 className="mt-4 text-base font-medium text-foreground">Identity</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Organization, SSO, and directory-sync configuration have canonical migrations and RLS.
               Enterprise SSO sign-in (Clerk enterprise connections, /api/admin/sso) and SCIM 2.0
               provisioning (/api/scim/v2) are implemented and gated on the enterprise_controls
               capability.
             </p>
           </div>
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">
-            <ShieldCheck className="h-5 w-5 text-emerald-300" aria-hidden="true" />
-            <h2 className="mt-4 text-base font-medium text-white">Policy</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
+          <div className="rounded-md border border-border bg-card p-4">
+            <ShieldCheck
+              className="h-5 w-5 text-emerald-600 dark:text-emerald-300"
+              aria-hidden="true"
+            />
+            <h2 className="mt-4 text-base font-medium text-foreground">Policy</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Admin, provider, connector, and retention policies are separate so agents can own
               future work without editing the same file.
             </p>
           </div>
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">
-            <LifeBuoy className="h-5 w-5 text-emerald-300" aria-hidden="true" />
-            <h2 className="mt-4 text-base font-medium text-white">Feedback</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
+          <div className="rounded-md border border-border bg-card p-4">
+            <LifeBuoy
+              className="h-5 w-5 text-emerald-600 dark:text-emerald-300"
+              aria-hidden="true"
+            />
+            <h2 className="mt-4 text-base font-medium text-foreground">Feedback</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Support and feedback cases can link to fixes and releases, which is the base for
               future customer-feedback-to-PR automation.
             </p>

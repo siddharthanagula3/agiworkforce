@@ -137,10 +137,9 @@
   },
   "capModal": {
     "title": "Has alcanzado tu límite de mensajes",
-    "subtitle": "Elige cómo continuar — cambia a un modelo más pequeño, recarga o espera a que se restablezca tu uso.",
+    "subtitle": "Elige cómo continuar — cambia a un modelo más pequeño o espera a que se restablezca tu uso.",
     "dismiss": "Descartar hasta el próximo reinicio",
     "switchModel": "Cambiar a un modelo más pequeño",
-    "buyTopUp": "Comprar recarga",
     "waitReset": "Esperar al reinicio"
   },
   "artifact": {
@@ -194,7 +193,13 @@
     "giftAGI": "Regalar AGI",
     "helpSupport": "Ayuda y soporte",
     "logOut": "Cerrar sesión",
-    "accountFallback": "Cuenta"
+    "accountFallback": "Cuenta",
+    "workspace": "Workspace",
+    "workspacePersonal": "Personal",
+    "workspaceLoading": "Loading workspaces…",
+    "workspaceRetry": "Try loading workspaces again",
+    "workspaceManage": "Manage workspaces",
+    "workspaceSelected": "Selected"
   },
   "customize": {
     "title": "Personalizar",

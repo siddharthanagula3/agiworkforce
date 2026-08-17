@@ -46,6 +46,14 @@ export function resolveLocalizedPlanPrice(
   stripePrice: StripePriceLike | null,
 ): LocalizedPlanPrice {
   const currency = requestedCurrency.trim().toLowerCase();
+  const publishedUsd: LocalizedPlanPrice = {
+    amountMinor: getPublishedPlanPriceCents(plan, interval),
+    currency: 'usd',
+    localized: false,
+  };
+
+  if (currency === 'usd') return publishedUsd;
+
   const founderSetIndiaPrice =
     interval === 'monthly' && currency === 'inr' ? INDIA_MONTHLY_PRICE_MINOR[plan] : undefined;
 
@@ -62,14 +70,10 @@ export function resolveLocalizedPlanPrice(
     stripePrice?.currency.toLowerCase() === currency &&
     typeof stripePrice.unit_amount === 'number'
   ) {
-    return { amountMinor: stripePrice.unit_amount, currency, localized: currency !== 'usd' };
+    return { amountMinor: stripePrice.unit_amount, currency, localized: true };
   }
 
-  return {
-    amountMinor: getPublishedPlanPriceCents(plan, interval),
-    currency: 'usd',
-    localized: false,
-  };
+  return publishedUsd;
 }
 
 export function formatLocalizedPrice(

@@ -37,6 +37,24 @@ pub const fn system_dictation_available() -> bool {
     false
 }
 
+/// Refusal reason returned by [`ensure_text_injection_allowed`].
+pub const TEXT_INJECTION_UNAVAILABLE: &str =
+    "text injection is unavailable in this build: system dictation has not passed its release gates";
+
+/// Admission for synthetic keystroke injection into the OS-focused field.
+///
+/// Injection has no target pinning, secure-field refusal, or clipboard
+/// transaction yet (plan phase 4), so it fails closed on the same capability
+/// probe that refuses `Global` sessions instead of relying on having no
+/// callers.
+pub fn ensure_text_injection_allowed() -> Result<(), String> {
+    if system_dictation_available() {
+        Ok(())
+    } else {
+        Err(TEXT_INJECTION_UNAVAILABLE.to_string())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DictationPhase {

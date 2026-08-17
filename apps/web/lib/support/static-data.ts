@@ -1,4 +1,3 @@
-
 import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 export interface FAQ {
@@ -101,9 +100,9 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     category_id: 'features',
     title: 'Using web search in chat',
     slug: 'web-search',
-    excerpt: 'How to enable real-time web search for your conversations.',
+    excerpt: 'How real-time web search reaches your conversations.',
     content:
-      '# Using web search\n\nEnable web search in the chat toolbar to let the AI fetch current information. Managed Cloud search follows the chat and usage policy for your plan; Local and BYOK behavior depends on the selected runtime and provider.',
+      '# Using web search\n\nThere is no search switch to find. Search-capable models reach the live web on their own when an answer should not come from training data alone, and the composer states whether search is on for the model you picked. Managed Cloud search follows the chat and usage policy for your plan; Local and BYOK behavior depends on the selected runtime and provider.',
     views: 640,
   },
 ];

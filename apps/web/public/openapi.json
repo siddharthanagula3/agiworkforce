@@ -393,6 +393,42 @@
             }
           }
         }
+      },
+      "ManagedUsageSummary": {
+        "type": "object",
+        "description": "Percentage-only managed-usage summary across every rolling window. Ledger units and allocations never cross this boundary.",
+        "required": [
+          "plan_tier",
+          "usage_percentage",
+          "usage_reset_at",
+          "has_usage_remaining",
+          "period_start",
+          "period_end",
+          "subscription_status",
+          "session_usage_percentage",
+          "session_reset_at",
+          "weekly_usage_percentage",
+          "weekly_reset_at",
+          "flagship_weekly_usage_percentage",
+          "flagship_weekly_reset_at"
+        ],
+        "properties": {
+          "plan_tier": { "type": "string" },
+          "subscription_status": { "type": "string" },
+          "usage_percentage": { "type": "number" },
+          "usage_reset_at": { "type": "string", "format": "date-time", "nullable": true },
+          "has_usage_remaining": { "type": "boolean" },
+          "period_start": { "type": "string", "format": "date-time", "nullable": true },
+          "period_end": { "type": "string", "format": "date-time", "nullable": true },
+          "session_usage_percentage": { "type": "number" },
+          "session_reset_at": { "type": "string", "format": "date-time", "nullable": true },
+          "weekly_usage_percentage": { "type": "number" },
+          "weekly_reset_at": { "type": "string", "format": "date-time", "nullable": true },
+          "flagship_weekly_usage_percentage": { "type": "number" },
+          "flagship_weekly_reset_at": { "type": "string", "format": "date-time", "nullable": true },
+          "credit_balance_cents": { "type": "integer", "nullable": true },
+          "overage_enabled": { "type": "boolean" }
+        }
       }
     }
   },
@@ -440,9 +476,10 @@
     "/llm/v1/chat/completions": {
       "post": {
         "summary": "Create a chat completion",
-        "description": "OpenAI-compatible chat completions, streaming or buffered.\n\nTakes a session bearer token only. An AGI API key passes the auth gate and then fails the request: the managed path binds a database subject from a signed JWT, which an API key does not carry.",
+        "description": "OpenAI-compatible chat completions, streaming or buffered.\n\nTakes an AGI API key or a session bearer token. A key is always pinned to the `api` client surface regardless of any `x-agi-surface` header, and that surface is gated on the `managed_api` plan capability, so a key on a plan without it answers 403 `managed_api_plan_required`.",
         "tags": ["Inference"],
-        "security": [{ "BearerAuth": [] }],
+        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "x-agi-api-key-scope": "inference:write",
         "requestBody": {
           "required": true,
           "content": {
@@ -474,6 +511,12 @@
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
             }
           },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, or the calling plan lacks the capability for the resolved client surface",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
           "422": {
             "description": "Refused by content policy",
             "content": {
@@ -492,7 +535,7 @@
     "/llm/v1/embeddings": {
       "post": {
         "summary": "Create embeddings",
-        "description": "OpenAI-compatible embeddings. Takes a session bearer token only, for the same reason as chat completions. `Idempotency-Key` is required so a retry settles the reservation once.",
+        "description": "OpenAI-compatible embeddings. Takes a session bearer token only: the route declares no API-key scope, so a key is refused at the auth gate. `Idempotency-Key` is required so a retry settles the reservation once.",
         "tags": ["Inference"],
         "security": [{ "BearerAuth": [] }],
         "parameters": [
@@ -599,6 +642,38 @@
           "401": { "description": "Not authenticated" },
           "403": {
             "description": "No subscription record, or the API key lacks the `usage:read` scope",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          }
+        }
+      }
+    },
+    "/usage": {
+      "get": {
+        "summary": "Get managed-usage summary",
+        "description": "Percentage-only managed-usage summary for the calling account across every rolling window, plus the subscription state those windows are measured against. Ledger units and allocations never cross this boundary.",
+        "tags": ["Billing"],
+        "security": [{ "ApiKeyAuth": [] }, { "BearerAuth": [] }],
+        "x-agi-api-key-scope": "usage:read",
+        "responses": {
+          "200": {
+            "description": "Usage summary",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ManagedUsageSummary" }
+              }
+            }
+          },
+          "401": { "description": "Not authenticated" },
+          "403": {
+            "description": "API key lacks the `usage:read` scope",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
             }

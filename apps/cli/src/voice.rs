@@ -7,6 +7,7 @@
 //! Audio is captured from the default input device using `cpal`, recorded as
 //! 16 kHz mono PCM, then encoded to WAV via `hound` before transcription.
 
+use agiworkforce_llm::{speech, TranscriptionRequest, TranscriptionResponseFormat};
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -856,6 +857,18 @@ async fn transcribe(
     result
 }
 
+/// Non-audio half of the cloud transcription request, built from the contract
+/// the desktop binary also posts.
+fn openai_transcription_request(language: &str) -> Result<TranscriptionRequest> {
+    let model = agiworkforce_model_registry::slot_model(speech::TRANSCRIPTION_ROUTING_SLOT)
+        .context("Generated model registry failed to load")?
+        .context("Generated model registry has no voice transcription route")?;
+    Ok(
+        TranscriptionRequest::new(model.provider_model_id, TranscriptionResponseFormat::Text)
+            .with_language(Some(language.to_string())),
+    )
+}
+
 /// Transcribe using the OpenAI Whisper API.
 async fn transcribe_openai_api(wav_path: &std::path::Path, language: &str) -> Result<String> {
     let api_key = std::env::var("OPENAI_API_KEY").context("OPENAI_API_KEY not set")?;
@@ -873,17 +886,15 @@ async fn transcribe_openai_api(wav_path: &std::path::Path, language: &str) -> Re
         .mime_str("audio/wav")
         .context("Failed to create multipart file part")?;
 
-    let stt_model = crate::model_catalog::preferred_model_for_type("openai", "stt")
-        .context("Canonical model catalog has no live OpenAI speech-to-text model")?;
-    let form = reqwest::multipart::Form::new()
-        .part("file", file_part)
-        .text("model", stt_model)
-        .text("language", language.to_string())
-        .text("response_format", "text");
+    let mut form =
+        reqwest::multipart::Form::new().part(speech::TRANSCRIPTION_FILE_FIELD, file_part);
+    for (field, value) in openai_transcription_request(language)?.text_fields() {
+        form = form.text(field, value);
+    }
 
     let client = reqwest::Client::new();
     let response = client
-        .post("https://api.openai.com/v1/audio/transcriptions")
+        .post(speech::OPENAI_TRANSCRIPTIONS_URL)
         .header("Authorization", format!("Bearer {}", api_key))
         .multipart(form)
         .timeout(Duration::from_secs(30))
@@ -1181,5 +1192,49 @@ mod tests {
             matches!(effective, TranscriptionBackend::LocalBinary(_)),
             "gate_backend must preserve LocalBinary backend"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Shared speech contract — DESK-17
+    //
+    // The endpoint, the multipart fields, and the transcription model used to
+    // be retyped here and again in the desktop Tauri binary, so a provider
+    // change could land in one and miss the other. Both now read
+    // `agiworkforce_llm::speech` and the `voice_transcription` routing slot.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn the_transcription_endpoint_is_not_retyped_in_this_binary() {
+        let source = include_str!("voice.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            !production.contains("api.openai.com"),
+            "the transcription endpoint must come from agiworkforce_llm::speech"
+        );
+        assert!(
+            production.contains("speech::OPENAI_TRANSCRIPTIONS_URL"),
+            "the request must post to the shared endpoint constant"
+        );
+    }
+
+    #[test]
+    fn the_transcription_model_comes_from_the_shared_routing_slot() {
+        let source = include_str!("voice.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            production.contains("speech::TRANSCRIPTION_ROUTING_SLOT"),
+            "the model must be resolved from the slot the desktop binary reads, \
+             not from a per-binary catalog heuristic"
+        );
+
+        let slot = agiworkforce_model_registry::slot_model(speech::TRANSCRIPTION_ROUTING_SLOT)
+            .expect("generated registry should load")
+            .expect("the voice transcription slot must resolve");
+        let request = openai_transcription_request("en").expect("request must build");
+        assert_eq!(request.model, slot.provider_model_id);
+        assert_eq!(request.response_format, TranscriptionResponseFormat::Text);
+        assert!(request
+            .text_fields()
+            .contains(&("language", "en".to_string())));
     }
 }

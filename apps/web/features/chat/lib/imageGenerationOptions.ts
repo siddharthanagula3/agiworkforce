@@ -1,5 +1,5 @@
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
-import { getModels, isModelLive } from '@agiworkforce/types';
+import { getModelMetadataById, getModels, isModelLive } from '@agiworkforce/types';
 
 export type ImageAspectRatio = 'auto' | ManagedMediaImageAspectRatio;
 
@@ -81,6 +81,12 @@ const IMAGE_PICKER_RATIOS_BY_API: Record<
 function resolveImageModel(modelId?: string): ImageModelOption | undefined {
   if (!modelId) return undefined;
   return IMAGE_MODELS.find((model) => model.id === modelId);
+}
+
+export function getImageModelLabel(modelId?: string | null): string | null {
+  const id = modelId?.trim();
+  if (!id) return null;
+  return resolveImageModel(id)?.label ?? getModelMetadataById(id)?.name ?? null;
 }
 
 export function getImageAspectOptionsForModel(modelId?: string): ImageAspectOption[] {

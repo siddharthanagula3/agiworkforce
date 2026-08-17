@@ -553,6 +553,8 @@ describe('cloudAccountSettings', () => {
           currentUserRole: 'owner',
         },
         canManageTeam: true,
+        activeOrganizationId: null,
+        workspaces: [],
       });
     });
 
@@ -564,6 +566,8 @@ describe('cloudAccountSettings', () => {
       await expect(getCloudOrganizationOverview()).resolves.toEqual({
         organization: null,
         canManageTeam: false,
+        activeOrganizationId: null,
+        workspaces: [],
       });
     });
 

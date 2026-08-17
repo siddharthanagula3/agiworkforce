@@ -45,6 +45,34 @@ describe('Article50Marker — buildProvenanceClaim', () => {
     expect(typeof serialised).toBe('string');
     expect(serialised.indexOf('assertions')).toBeLessThan(serialised.indexOf('version'));
   });
+
+  it('keeps nested assertion keys through serialisation', () => {
+    const claim = buildProvenanceClaim({
+      kind: 'text',
+      provider: 'anthropic',
+      model: FIXTURE_TEXT_MODEL_ID,
+      generatedAt: '2026-05-17T00:00:00.000Z',
+    });
+    const parsed = JSON.parse(serialiseClaim(claim)) as {
+      assertions: Array<{ label?: string; action?: string }>;
+    };
+    expect(parsed.assertions).toHaveLength(1);
+    expect(parsed.assertions[0]?.label).toBe('c2pa.actions');
+    expect(parsed.assertions[0]?.action).toBe('c2pa.created:trainedAlgorithmicMedia');
+  });
+
+  it('sorts keys at every depth, not just the top level', () => {
+    const claim = buildProvenanceClaim({
+      kind: 'image',
+      provider: 'google',
+      model: FIXTURE_IMAGE_MODEL_ID,
+      generatedAt: '2026-05-17T00:00:00.000Z',
+    });
+    const serialised = serialiseClaim(claim);
+    expect(serialised).toContain(
+      '"assertions":[{"action":"c2pa.created:trainedAlgorithmicMedia","label":"c2pa.actions"}]',
+    );
+  });
 });
 
 describe('Article50Marker — <meta> tag', () => {
@@ -118,6 +146,23 @@ describe('Article50Marker — wrapTextExportWithMarker + hasAiGeneratedMarker', 
     expect(wrapped).toContain('hello world');
     expect(wrapped).toMatch(/<meta\s+name="agi:ai-generated"/);
     expect(hasAiGeneratedMarker(wrapped)).toBe(true);
+  });
+
+  it('emits a sidecar whose claim still carries its Article 50(2) assertions', () => {
+    const wrapped = wrapTextExportWithMarker({
+      text: 'hello world',
+      provider: 'anthropic',
+      model: FIXTURE_TEXT_MODEL_ID,
+      generatedAt: '2026-05-17T00:00:00.000Z',
+    });
+    const sidecar = wrapped.match(/<!-- agi:ai-generated:c2pa-claim (.*?) -->/)?.[1];
+    expect(sidecar).toBeDefined();
+    const parsed = JSON.parse(sidecar as string) as {
+      assertions: Array<{ action?: string }>;
+    };
+    expect(parsed.assertions.some((a) => a.action === 'c2pa.created:trainedAlgorithmicMedia')).toBe(
+      true,
+    );
   });
 
   it('returns false for plain payloads with no marker', () => {

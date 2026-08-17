@@ -1,4 +1,12 @@
-
+import {
+  getVideoAspectOptionsForModel,
+  getVideoQualityOptionsForModel,
+  isVideoOutputSupported,
+} from '@agiworkforce/types';
+import {
+  MANAGED_MEDIA_VIDEO_ASPECT_RATIOS,
+  MANAGED_MEDIA_VIDEO_RESOLUTIONS,
+} from '@agiworkforce/cloud-contracts';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
 
 const ENTITLED = {
@@ -191,5 +199,85 @@ describe('resolveMobileVideoGenerationRequest — Auto intent routing', () => {
     expect(decision.status).toBe('blocked');
     if (decision.status !== 'blocked') return;
     expect(decision.code).toBe('requires_cloud');
+  });
+});
+
+describe('resolveMobileVideoGenerationRequest — output shape follows the routed model', () => {
+  const routed = resolveMobileVideoGenerationRequest({
+    ...ENTITLED,
+    text: 'a cat surfing',
+    aspectRatio: '16:9',
+    resolution: '720p',
+  });
+  const routedModel = routed.status === 'ready' ? routed.model : '';
+  const publishedAspects = getVideoAspectOptionsForModel(routedModel).map((option) => option.id);
+  const publishedQualities = getVideoQualityOptionsForModel(routedModel, publishedAspects[0]).map(
+    (option) => option.id,
+  );
+
+  it('routes to a model whose published output catalog is narrower than the contract enums', () => {
+    expect(routedModel).toBeTruthy();
+    expect(publishedAspects.length).toBeGreaterThan(0);
+    expect(publishedQualities.length).toBeGreaterThan(0);
+    expect(MANAGED_MEDIA_VIDEO_ASPECT_RATIOS.some((id) => !publishedAspects.includes(id))).toBe(
+      true,
+    );
+    expect(MANAGED_MEDIA_VIDEO_RESOLUTIONS.some((id) => !publishedQualities.includes(id))).toBe(
+      true,
+    );
+  });
+
+  it('clamps a persisted aspect the routed model never published', () => {
+    const unpublished = MANAGED_MEDIA_VIDEO_ASPECT_RATIOS.find(
+      (id) => !publishedAspects.includes(id),
+    )!;
+    const decision = resolveMobileVideoGenerationRequest({
+      ...ENTITLED,
+      text: 'a cat surfing',
+      aspectRatio: unpublished,
+      resolution: publishedQualities[0]!,
+    });
+
+    expect(decision.status).toBe('ready');
+    if (decision.status !== 'ready') return;
+    expect(decision.aspectRatio).not.toBe(unpublished);
+    expect(publishedAspects).toContain(decision.aspectRatio);
+    expect(isVideoOutputSupported(decision.model, decision.aspectRatio, decision.resolution)).toBe(
+      true,
+    );
+  });
+
+  it('clamps a persisted resolution the routed model never published at that aspect', () => {
+    const unpublished = MANAGED_MEDIA_VIDEO_RESOLUTIONS.find(
+      (id) => !publishedQualities.includes(id),
+    )!;
+    const decision = resolveMobileVideoGenerationRequest({
+      ...ENTITLED,
+      text: 'a cat surfing',
+      aspectRatio: publishedAspects[0]!,
+      resolution: unpublished,
+    });
+
+    expect(decision.status).toBe('ready');
+    if (decision.status !== 'ready') return;
+    expect(decision.resolution).not.toBe(unpublished);
+    expect(publishedQualities).toContain(decision.resolution);
+    expect(isVideoOutputSupported(decision.model, decision.aspectRatio, decision.resolution)).toBe(
+      true,
+    );
+  });
+
+  it('keeps a persisted pair the routed model does publish', () => {
+    const decision = resolveMobileVideoGenerationRequest({
+      ...ENTITLED,
+      text: 'a cat surfing',
+      aspectRatio: publishedAspects[0]!,
+      resolution: publishedQualities[publishedQualities.length - 1]!,
+    });
+
+    expect(decision.status).toBe('ready');
+    if (decision.status !== 'ready') return;
+    expect(decision.aspectRatio).toBe(publishedAspects[0]);
+    expect(decision.resolution).toBe(publishedQualities[publishedQualities.length - 1]);
   });
 });

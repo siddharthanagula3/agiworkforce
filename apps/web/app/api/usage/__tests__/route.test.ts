@@ -6,12 +6,18 @@ const {
   mockGetSubscription,
   mockGetRollingUsage,
   mockGetFreeTrialPublicUsage,
+  mockDbQuery,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockGetBalance: vi.fn(),
   mockGetSubscription: vi.fn(),
   mockGetRollingUsage: vi.fn(),
   mockGetFreeTrialPublicUsage: vi.fn(),
+  mockDbQuery: vi.fn(),
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({ query: mockDbQuery }),
 }));
 
 vi.mock('@/lib/api-auth', () => ({
@@ -63,6 +69,39 @@ describe('GET /api/usage', () => {
       resetAt: null,
       hasUsageRemaining: true,
     });
+    mockDbQuery.mockResolvedValue([{ overage_enabled: false, available_cents: 0 }]);
+  });
+
+  it('publishes the spendable credit balance and whether it will actually be spent', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_cents: 2000,
+      credits_used_cents: 100,
+      credits_remaining_cents: 1900,
+    });
+    mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
+    mockDbQuery.mockResolvedValue([{ overage_enabled: true, available_cents: '1234' }]);
+
+    const json = await (await GET(makeRequest())).json();
+
+    expect(json.credit_balance_cents).toBe(1234);
+    expect(json.overage_enabled).toBe(true);
+  });
+
+  it('reports an unknown balance rather than zero when the credit lookup fails', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_cents: 2000,
+      credits_used_cents: 100,
+      credits_remaining_cents: 1900,
+    });
+    mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
+    mockDbQuery.mockRejectedValue(new Error('connection lost'));
+
+    const json = await (await GET(makeRequest())).json();
+
+    expect(json.credit_balance_cents).toBeNull();
+    expect(json.overage_enabled).toBe(false);
   });
 
   it('includes session/weekly/flagship-weekly fields derived from real rolling-window spend for a paid tier', async () => {

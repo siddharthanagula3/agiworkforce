@@ -99,12 +99,14 @@ const ConnectorListRow: React.FC<ConnectorListRowProps> = ({
       'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-100',
       selected
         ? 'bg-primary/10 text-foreground'
-        : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
     )}
   >
     <OfficialConnectorLogo connector={connector} />
     <span className="min-w-0 flex-1 truncate text-xs font-medium">{connector.name}</span>
-    {connected ? <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" /> : null}
+    {connected ? (
+      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+    ) : null}
   </button>
 );
 
@@ -314,10 +316,15 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
           loop cannot use this connector until the user authorizes again. */}
       {isOAuthGrant && needsReauthorization && (
         <div className="mb-4 flex flex-wrap items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+          <AlertTriangle
+            className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-500"
+            aria-hidden="true"
+          />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-amber-400">Authorization needs renewing</p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-amber-200/80">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-400">
+              Authorization needs renewing
+            </p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-amber-900/90 dark:text-amber-200/80">
               The {connector.name} authorization saved for your account has expired and cannot be
               renewed automatically. Your agents cannot use {connector.name} until you reconnect.
             </p>
@@ -343,11 +350,11 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
           plain-English description for them here, and inventing one would
           misstate what access was granted. */}
       {isOAuthGrant && (
-        <div className="mb-4 rounded-xl border border-border bg-white/[0.02] p-4">
+        <div className="mb-4 rounded-xl border border-border bg-muted/40 p-4">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge
               variant="outline"
-              className="border-emerald-500/30 px-2 py-0.5 text-[11px] text-emerald-400"
+              className="border-emerald-600/40 px-2 py-0.5 text-[11px] text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400"
             >
               Connected with OAuth
             </Badge>
@@ -399,7 +406,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
       {/* Tools — only shown for connectors that actually work in this deployment,
           so fabricated capability badges never render as product state. */}
       {(isAvailable || connected) && tools.length > 0 && (
-        <div className="rounded-xl border border-border bg-white/[0.02] p-4">
+        <div className="rounded-xl border border-border bg-muted/40 p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Tools ({tools.length})</span>
           </div>
@@ -677,7 +684,7 @@ export function ConnectorsPage() {
             {/* Status filter + Search row */}
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
               {/* Tri-state status filter */}
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-white/[0.03] p-0.5">
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/50 p-0.5">
                 {STATUS_FILTERS.map((sf) => (
                   <button
                     key={sf.value}
@@ -702,7 +709,7 @@ export function ConnectorsPage() {
                   placeholder="Search connectors..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 border-border bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
+                  className="h-9 border-border bg-background pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
                 />
               </div>
             </div>
@@ -717,7 +724,7 @@ export function ConnectorsPage() {
                     'shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150',
                     activeCategory === cat.value
                       ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-white/[0.06] hover:text-foreground',
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
                   {cat.label}
@@ -767,7 +774,7 @@ export function ConnectorsPage() {
                 {connectedConnectors.length > 0 && (
                   <div className="mb-4">
                     <div className="mb-1.5 flex items-center gap-1.5 px-1">
-                      <Check className="h-3 w-3 text-emerald-400" />
+                      <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Connected ({connectedConnectors.length})
                       </span>
@@ -875,7 +882,7 @@ export function ConnectorsPage() {
                   /* Placeholder shown on desktop when nothing is selected */
                   <div className="hidden h-full items-center justify-center lg:flex">
                     <div className="text-center">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.04]">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
                         <Zap className="h-5 w-5 text-muted-foreground/60" />
                       </div>
                       <p className="text-sm text-muted-foreground">
@@ -890,7 +897,7 @@ export function ConnectorsPage() {
 
           {/* Roadmap Callout - shown below master-detail (not during an error state, so the retry banner stays the focus) */}
           {!loading && !connectorsError && (
-            <div className="mt-6 rounded-xl border border-border bg-white/[0.02] p-5">
+            <div className="mt-6 rounded-xl border border-border bg-muted/40 p-5">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                   <Zap className="h-5 w-5 text-primary" />

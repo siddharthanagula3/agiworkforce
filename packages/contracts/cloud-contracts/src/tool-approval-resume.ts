@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 import {
   ManagedCloudAgentRunReferenceSchema,
@@ -11,9 +10,12 @@ export const ToolApprovalDecisionSchema = z.object({
 });
 export type ToolApprovalDecisionWire = z.infer<typeof ToolApprovalDecisionSchema>;
 
+export const TOOL_APPROVAL_GUIDANCE_MAX_LENGTH = 4_000;
+
 export const ToolApprovalResumeRequestSchema = z.object({
   run_id: z.string().uuid(),
   tool_approvals: z.array(ToolApprovalDecisionSchema).min(1).max(32),
+  guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
 });
 export type ToolApprovalResumeRequest = z.infer<typeof ToolApprovalResumeRequestSchema>;
 

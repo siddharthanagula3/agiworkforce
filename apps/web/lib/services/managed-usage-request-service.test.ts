@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+const recordSettledProviderCost = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/cogs-ledger-service', () => ({
+  recordSettledProviderCost: (...args: unknown[]) => recordSettledProviderCost(...args),
+}));
+
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
   ManagedUsageRequestError,
@@ -233,6 +238,59 @@ describe('managed usage request service', () => {
     );
   });
 
+  it('carries the reserved quota feature into the settled usage row so unit caps can count it', async () => {
+    const db = fakeDb([]);
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([{ headroom_cents: 0 }])
+      .mockResolvedValueOnce([
+        {
+          reservation_decision: 'acquired',
+          request_status: 'reserved',
+          lease_token: 'lease-9',
+          estimated_cost_cents: 7,
+          settlement_status: 'succeeded',
+          error_code: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          request_status: 'completed',
+          operation_result: 'finalized',
+          settlement_status: 'succeeded',
+          actual_cost_cents: 5,
+        },
+      ]);
+
+    const reservation = await reserveManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'external-client:turn_123',
+      requestHash: 'd'.repeat(64),
+      provider: 'fixture-provider',
+      model: 'fixture-model',
+      estimatedCostCents: 7,
+      planTier: 'max',
+      isFlagship: false,
+      quotaFeature: 'computer_use',
+    });
+
+    expect(reservation.quotaFeature).toBe('computer_use');
+
+    await finalizeManagedUsageRequest({
+      ...reservation,
+      outcome: 'completed',
+      actualCostCents: 5,
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+
+    const settledUsage = vi.mocked(db.query).mock.calls[2]?.[1]?.[6];
+    expect(JSON.parse(String(settledUsage))).toMatchObject({
+      inputTokens: 10,
+      outputTokens: 5,
+      quotaFeature: 'computer_use',
+    });
+  });
+
   it('atomically extends a provider step with the original request and lease identity', async () => {
     const db = fakeDb([
       {
@@ -333,5 +391,102 @@ describe('managed usage request service', () => {
     const sql = vi.mocked(db.query).mock.calls[0]?.[0] ?? '';
     expect(sql.match(/\$1::text/g)).toHaveLength(1);
     expect(sql).toMatch(/\$7::jsonb\s*\)/);
+  });
+});
+
+describe('managed usage settlement feeds the COGS ledger', () => {
+  it('records what the settled capability cost, in that capability’s own unit', async () => {
+    recordSettledProviderCost.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'completed',
+        operation_result: 'finalized',
+        settlement_status: 'succeeded',
+        actual_cost_cents: 14,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.image.web.turn_1',
+      requestHash: 'b'.repeat(64),
+      leaseToken: 'lease-1',
+      estimatedCostCents: 20,
+      provider: 'openai',
+      model: 'fixture-image-model',
+      quotaFeature: 'image',
+      outcome: 'completed',
+      actualCostCents: 14,
+      usage: { operation: 'image', outputCount: 2 },
+    });
+
+    expect(recordSettledProviderCost).toHaveBeenCalledWith({
+      userId: 'user_1',
+      provider: 'openai',
+      model: 'fixture-image-model',
+      actualCostCents: 14,
+      sourceRef: `managed_usage:user_1:agi.image.web.turn_1:${'b'.repeat(64)}`,
+      taskOutcome: 'delivered',
+      taskRef: 'b'.repeat(64),
+      usage: { operation: 'image', outputCount: 2, quotaFeature: 'image' },
+    });
+  });
+
+  it('records the cost of work the client never confirmed receiving as undelivered', async () => {
+    recordSettledProviderCost.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'outcome_unknown',
+        operation_result: 'finalized',
+        settlement_status: 'terminal',
+        actual_cost_cents: 9,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_9',
+      requestHash: 'c'.repeat(64),
+      leaseToken: 'lease-9',
+      estimatedCostCents: 12,
+      provider: 'openai',
+      model: 'fixture-chat-model',
+      outcome: 'completed',
+      actualCostCents: 9,
+      usage: { inputTokens: 100, outputTokens: 20 },
+    });
+
+    expect(recordSettledProviderCost).toHaveBeenCalledWith(
+      expect.objectContaining({ taskOutcome: 'undelivered', taskRef: 'c'.repeat(64) }),
+    );
+  });
+
+  it('does not bill the ledger for a released reservation', async () => {
+    recordSettledProviderCost.mockClear();
+    const db = fakeDb([
+      {
+        request_status: 'released',
+        operation_result: 'finalized',
+        settlement_status: null,
+        actual_cost_cents: 0,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.image.web.turn_2',
+      requestHash: 'c'.repeat(64),
+      leaseToken: 'lease-1',
+      estimatedCostCents: 20,
+      provider: 'openai',
+      model: 'fixture-image-model',
+      outcome: 'failed',
+      actualCostCents: 0,
+    });
+
+    expect(recordSettledProviderCost).not.toHaveBeenCalled();
   });
 });

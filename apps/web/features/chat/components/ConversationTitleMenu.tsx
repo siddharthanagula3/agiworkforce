@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { ChevronDown, GitFork, Pencil, Printer, Trash2, FolderInput } from 'lucide-react';
+import { ChevronDown, Download, GitFork, Pencil, Printer, Trash2, FolderInput } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,7 @@ export interface ConversationTitleMenuProps {
   onMoveToProject?: (projectId: string) => void;
   onDelete: () => void;
   onPrint?: () => void;
+  onExport?: () => void;
   onFork?: () => void;
 }
 
@@ -31,6 +32,7 @@ export function ConversationTitleMenu({
   onDelete,
   onFork,
   onPrint,
+  onExport,
 }: ConversationTitleMenuProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -47,9 +49,7 @@ export function ConversationTitleMenu({
   }, [draft, title, onRename]);
 
   return (
-    <div
-      className="flex min-w-0 flex-1 items-center justify-center"
-    >
+    <div className="flex min-w-0 flex-1 items-center justify-center">
       {isRenaming ? (
         <input
           autoFocus
@@ -104,6 +104,12 @@ export function ConversationTitleMenu({
               <DropdownMenuItem onSelect={() => onPrint()}>
                 <Printer className="mr-2 h-4 w-4" />
                 Print
+              </DropdownMenuItem>
+            )}
+            {onExport && (
+              <DropdownMenuItem onSelect={() => onExport()}>
+                <Download className="mr-2 h-4 w-4" />
+                Export…
               </DropdownMenuItem>
             )}
             {onFork && (

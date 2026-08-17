@@ -221,31 +221,6 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — services/api-gateway ──────────────────────────────────────
-  - package-ecosystem: 'npm'
-    directory: '/services/api-gateway'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    open-pull-requests-limit: 0
-    labels:
-      - 'dependencies'
-      - 'javascript'
-      - 'services'
-    groups:
-      api-gateway-patch-minor:
-        applies-to: version-updates
-        update-types:
-          - 'minor'
-          - 'patch'
-      api-gateway-major:
-        applies-to: version-updates
-        update-types:
-          - 'major'
-    ignore:
-      - dependency-name: '*'
-        update-types: ['version-update:semver-major']
-
   # ─── npm / pnpm — services/signaling-server ─────────────────────────────────
   - package-ecosystem: 'npm'
     directory: '/services/signaling-server'

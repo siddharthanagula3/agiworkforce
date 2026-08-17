@@ -7,7 +7,9 @@ import {
   CircleStop,
   CircleCheck,
   CircleDashed,
+  ListChecks,
   LoaderCircle,
+  Play,
   RotateCw,
   Search,
   FileText,
@@ -25,6 +27,7 @@ function formatElapsed(ms: number): string {
 
 const PHASE_FALLBACK_LABELS: Record<MessageResearchState['phase'], string> = {
   planning: 'Planning research',
+  awaiting_approval: 'Review the plan to start searching',
   searching: 'Searching the web',
   synthesizing: 'Writing report',
   complete: 'Research complete',
@@ -83,11 +86,18 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
   );
 }
 
+export type ResearchPlanDecision = 'start' | 'cancel';
+
 interface ResearchActivityProps {
   research: MessageResearchState;
   isStreaming: boolean;
   onRetry?: () => void;
   isRetrying?: boolean;
+  /**
+   * Answer a paused run's plan. Absent when the surface cannot send, so a
+   * plan that cannot be started shows no Start button.
+   */
+  onPlanDecision?: (decision: ResearchPlanDecision) => void;
 }
 
 export function ResearchActivity({
@@ -95,6 +105,7 @@ export function ResearchActivity({
   isStreaming,
   onRetry,
   isRetrying = false,
+  onPlanDecision,
 }: ResearchActivityProps) {
   const isActive =
     isStreaming &&
@@ -144,7 +155,9 @@ export function ResearchActivity({
   }
 
   const steps = research.steps ?? [];
+  const awaitingApproval = research.phase === 'awaiting_approval';
   const canRetry = Boolean(onRetry) && (failed || interrupted);
+  const canDecide = Boolean(onPlanDecision) && awaitingApproval && !isStreaming;
 
   return (
     <div className="mb-3">
@@ -166,6 +179,8 @@ export function ResearchActivity({
           <CircleStop className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         ) : complete ? (
           <CircleCheck className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+        ) : awaitingApproval ? (
+          <ListChecks className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
         ) : (
           <Telescope
             className={cn('h-3.5 w-3.5 shrink-0 text-primary', isActive && 'animate-pulse')}
@@ -180,6 +195,39 @@ export function ResearchActivity({
         <span className="ml-auto flex shrink-0 items-center gap-2 tabular-nums">
           {counts.length > 0 && <span>{counts.join(' · ')}</span>}
           {liveElapsed > 0 && <span>{formatElapsed(liveElapsed)}</span>}
+          {canDecide && (
+            <>
+              <button
+                type="button"
+                onClick={() => onPlanDecision?.('start')}
+                disabled={isRetrying}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-md bg-primary px-2 py-0.5',
+                  'text-[11px] font-medium text-primary-foreground transition-opacity',
+                  'hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60',
+                )}
+                data-testid="research-plan-start"
+                aria-label="Start searching this research plan"
+              >
+                <Play className="h-3 w-3" aria-hidden="true" />
+                {isRetrying ? 'Starting…' : 'Start research'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onPlanDecision?.('cancel')}
+                disabled={isRetrying}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-md border border-border/40 px-2 py-0.5',
+                  'text-[11px] font-medium text-foreground transition-colors',
+                  'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
+                )}
+                data-testid="research-plan-cancel"
+                aria-label="Cancel this research plan"
+              >
+                Cancel
+              </button>
+            </>
+          )}
           {canRetry && (
             <button
               type="button"

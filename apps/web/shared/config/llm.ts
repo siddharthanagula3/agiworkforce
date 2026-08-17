@@ -19,6 +19,8 @@ import {
   getTierPolicy as getCatalogTierPolicy,
   normalizeSubscriptionAccessTier,
   getModelReasoning as getCatalogModelReasoning,
+  splitEffortsByEntitlement as splitCatalogEffortsByEntitlement,
+  type EffortEntitlement,
   getDisplayModels as getCatalogDisplayModels,
   getSelectableModels as getCatalogSelectableModels,
   isAutoModeModelId as isCatalogAutoModeModelId,
@@ -113,6 +115,13 @@ export function getModelMetadata(modelId: string): ModelMetadata | null {
 
 export function getModelReasoning(modelId: string | null | undefined): ModelReasoning {
   return getCatalogModelReasoning(modelId);
+}
+
+export function splitEffortsByEntitlement(
+  reasoning: ModelReasoning,
+  tier: string | null | undefined,
+): EffortEntitlement {
+  return splitCatalogEffortsByEntitlement(reasoning, tier);
 }
 
 export function getDisplayModels(): ModelMetadata[] {

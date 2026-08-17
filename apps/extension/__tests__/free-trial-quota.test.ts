@@ -433,6 +433,18 @@ describe('clearAuthToken', () => {
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
   });
 
+  it('erases the saved autofill profile so sign-out reaches the stored PII', async () => {
+    chromeMock._localStore['agi_autofill_profile'] = {
+      firstName: 'Ada',
+      email: 'ada@example.test',
+      currentCompany: 'Analytical Engines',
+    };
+
+    await clearAuthToken();
+
+    expect(chromeMock._localStore['agi_autofill_profile']).toBeUndefined();
+  });
+
   it('tears down the exact Managed Cloud owner before options-page sign-out', async () => {
     clerkAuthMock.getFreshClerkAuthContext.mockResolvedValueOnce({
       token: 'token-a',

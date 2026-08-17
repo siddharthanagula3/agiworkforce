@@ -24,6 +24,7 @@ vi.mock('../logger', () => ({
 }));
 vi.mock('../security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
+  BLOCK_APPEAL_PATH: '/support',
 }));
 
 const req = { headers: new Headers() } as unknown as NextRequest;
@@ -313,5 +314,40 @@ describe('rate-limit failure policy', () => {
 
     const allowed = await checkRateLimit(req, 'me', 'user:no-limiter');
     expect(allowed.success).toBe(true);
+  });
+});
+
+describe('BILL-33 — an automated block is auditable and appealable', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['VERCEL_ENV'];
+  });
+
+  it('names the rule that blocked the caller and the page they can appeal on', async () => {
+    const { withRateLimit } = await import('../rate-limit');
+    const { logRateLimitExceeded } = await import('../security-audit');
+    const request = {
+      headers: new Headers(),
+      url: 'https://agiworkforce.com/api/chat',
+    } as unknown as NextRequest;
+
+    let blocked: Response | null = null;
+    for (let i = 0; i < 40 && blocked === null; i++) {
+      blocked = await withRateLimit(request, 'chat-message', 'user:appeal-path');
+    }
+
+    expect(blocked).not.toBeNull();
+    const body = await (blocked as Response).json();
+    expect(body.error.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(body.error.reason).toBe('rate_limit:chat-message');
+    expect(body.error.appeal_path).toBe('/support');
+    expect(logRateLimitExceeded).toHaveBeenCalledWith(
+      request,
+      'user:appeal-path',
+      'appeal-path',
+      'rate_limit:chat-message',
+    );
   });
 });

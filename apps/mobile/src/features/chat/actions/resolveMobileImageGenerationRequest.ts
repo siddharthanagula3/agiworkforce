@@ -5,10 +5,13 @@ import {
 } from '@agiworkforce/types';
 import {
   MANAGED_MEDIA_IMAGE_ASPECT_RATIOS,
+  MANAGED_MEDIA_IMAGE_REF_MAX_BYTES,
+  supportsManagedMediaImageEdit,
   type ManagedMediaImageAspectRatio,
+  type ManagedMediaImageOperation,
 } from '@agiworkforce/cloud-contracts';
 import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
-import { resolveMediaModelId } from './mediaMode';
+import { listMediaModels, resolveMediaModelId } from './mediaMode';
 
 export type MobileImageGenerationBlockCode =
   | 'empty_prompt'
@@ -18,11 +21,21 @@ export type MobileImageGenerationBlockCode =
   | 'auth_required'
   | 'plan_required'
   | 'offline'
-  | 'route_unavailable';
+  | 'route_unavailable'
+  | 'reference_image_invalid'
+  | 'reference_image_too_large'
+  | 'reference_image_unsupported';
 
 export interface MobileImageGenerationAlert {
   title: string;
   message: string;
+}
+
+export interface MobileImageReferenceAttachment {
+  uri: string;
+  mimeType: string;
+  fileName: string;
+  fileSize?: number;
 }
 
 export type MobileImageGenerationRequestDecision =
@@ -38,6 +51,8 @@ export type MobileImageGenerationRequestDecision =
       model: string;
       aspectRatio?: ManagedMediaImageAspectRatio;
       ownerId: string;
+      operation?: ManagedMediaImageOperation;
+      sourceImage?: MobileImageReferenceAttachment;
     };
 
 export interface ResolveMobileImageGenerationRequestInput {
@@ -46,7 +61,7 @@ export interface ResolveMobileImageGenerationRequestInput {
   mediaMode: 'text' | 'image' | 'video';
   selection: string;
   subscriptionTier?: string | null;
-  hasAttachments: boolean;
+  attachments?: readonly MobileImageReferenceAttachment[];
   globalImageGenerationEnabled: boolean;
   imageGenerationEnabled: boolean;
   isClerkSignedIn: boolean;
@@ -105,20 +120,84 @@ const BLOCKED_ALERTS: Readonly<Record<MobileImageGenerationBlockCode, MobileImag
       message:
         'No eligible image model is available for this request. Choose another Cloud model or try again later.',
     },
+    reference_image_invalid: {
+      title: 'Attach one image to edit',
+      message:
+        'A reference image must be a single image file. Remove the other attachments and try again.',
+    },
+    reference_image_too_large: {
+      title: 'Reference image is too large',
+      message: `A reference image must be under ${Math.floor(MANAGED_MEDIA_IMAGE_REF_MAX_BYTES / (1024 * 1024))} MB. Attach a smaller image and try again.`,
+    },
+    reference_image_unsupported: {
+      title: 'This image model cannot use a reference image',
+      message:
+        'No image model in this build can edit an attached image. Remove the attachment to generate a new image from your prompt.',
+    },
   };
 
-function blocked(code: MobileImageGenerationBlockCode): MobileImageGenerationRequestDecision {
-  return { status: 'blocked', code, alert: BLOCKED_ALERTS[code] };
+function blocked(
+  code: MobileImageGenerationBlockCode,
+  message?: string,
+): MobileImageGenerationRequestDecision {
+  return {
+    status: 'blocked',
+    code,
+    alert: message ? { ...BLOCKED_ALERTS[code], message } : BLOCKED_ALERTS[code],
+  };
+}
+
+function editCapableImageModelNames(): string[] {
+  return listMediaModels('image')
+    .filter((id) => supportsManagedMediaImageEdit(getModelMetadataById(id)?.provider))
+    .map((id) => getModelMetadataById(id)?.name ?? id);
+}
+
+type ReferenceImageDecision =
+  | { kind: 'none' }
+  | { kind: 'blocked'; code: MobileImageGenerationBlockCode; message?: string }
+  | { kind: 'ready'; attachment: MobileImageReferenceAttachment };
+
+function resolveReferenceImage(
+  attachments: readonly MobileImageReferenceAttachment[],
+  modelId: string,
+): ReferenceImageDecision {
+  if (attachments.length === 0) return { kind: 'none' };
+  if (attachments.length > 1) return { kind: 'blocked', code: 'reference_image_invalid' };
+  const attachment = attachments[0]!;
+  if (!attachment.mimeType.startsWith('image/')) {
+    return { kind: 'blocked', code: 'reference_image_invalid' };
+  }
+  if (
+    typeof attachment.fileSize === 'number' &&
+    attachment.fileSize > MANAGED_MEDIA_IMAGE_REF_MAX_BYTES
+  ) {
+    return { kind: 'blocked', code: 'reference_image_too_large' };
+  }
+  if (!supportsManagedMediaImageEdit(getModelMetadataById(modelId)?.provider)) {
+    const capable = editCapableImageModelNames();
+    return {
+      kind: 'blocked',
+      code: 'reference_image_unsupported',
+      ...(capable.length > 0
+        ? {
+            message: `${getModelMetadataById(modelId)?.name ?? modelId} cannot edit an attached image. Pick ${capable.join(' or ')} as the image model in Add to chat, or remove the attachment.`,
+          }
+        : {}),
+    };
+  }
+  return { kind: 'ready', attachment };
 }
 
 export function resolveMobileImageGenerationRequest(
   input: ResolveMobileImageGenerationRequestInput,
 ): MobileImageGenerationRequestDecision {
   const text = input.text.trim();
+  const attachments = input.attachments ?? [];
   const slashImageRequest = /^\/image(?:\s|$)/i.test(text);
   const explicitImageMode = input.mediaMode === 'image';
   const cloudDispatch =
-    !explicitImageMode && input.executionMode === 'cloud' && !input.hasAttachments
+    !explicitImageMode && input.executionMode === 'cloud' && attachments.length === 0
       ? resolveMobileCloudDispatch({
           selection: input.selection,
           message: text,
@@ -145,12 +224,12 @@ export function resolveMobileImageGenerationRequest(
   if (!input.isOnline) return blocked('offline');
 
   if (explicitImageMode || slashImageRequest) {
-    if (input.hasAttachments) return blocked('route_unavailable');
-
     const modelId = resolveMediaModelId('image');
     if (!modelId || getModelMetadataById(modelId)?.capabilities.imageGen !== true) {
       return blocked('route_unavailable');
     }
+    const reference = resolveReferenceImage(attachments, modelId);
+    if (reference.kind === 'blocked') return blocked(reference.code, reference.message);
     const aspectRatio = resolveAspectRatio(modelId, input.aspectRatio);
     return {
       status: 'ready',
@@ -158,6 +237,9 @@ export function resolveMobileImageGenerationRequest(
       model: modelId,
       ...(aspectRatio ? { aspectRatio } : {}),
       ownerId: input.ownerId,
+      ...(reference.kind === 'ready'
+        ? { operation: 'edit' as const, sourceImage: reference.attachment }
+        : {}),
     };
   }
 

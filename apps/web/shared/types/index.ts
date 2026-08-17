@@ -1,5 +1,3 @@
-
-
 export {
   type ChatMessage as CanonicalChatMessage,
   type Conversation as CanonicalConversation,
@@ -12,13 +10,11 @@ export {
   type MessageDeliveryStatus,
   type ToolCallStatus,
   type ParticipantType,
-
   type ApiResponse,
   type APIResponse, // Alias for backward compatibility
   type PaginatedResponse,
   type ApiError,
-
-  type MessageMetadata,
+  type AgentTranscriptMetadata,
   type BaseChatMessage,
   type SimpleChatMessage,
   type ChatMessage,
@@ -30,24 +26,18 @@ export {
   type MessageReaction,
   type ThinkingStep,
   type Citation,
-
   type ChatSession,
   type ChatSettings,
   type TypingIndicator,
-
   type AIProvider,
   type AIEmployeeStatus,
   type AIEmployeeBasic,
   type MarketplaceEmployee,
   type AIEmployeePerformance,
-
   type Tool,
   type ToolResult,
-
   type StreamingUpdate,
-
   type BaseEntity,
-
   type CollaborationAgentCapability,
   type SelectionAgentCapability,
   type AgentStatus,

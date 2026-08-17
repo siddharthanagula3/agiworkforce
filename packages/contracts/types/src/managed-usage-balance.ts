@@ -32,6 +32,8 @@ export interface ManagedUsageSummaryResponse {
   weekly_reset_at: string | null;
   flagship_weekly_usage_percentage: number;
   flagship_weekly_reset_at: string | null;
+  credit_balance_cents?: number | null;
+  overage_enabled?: boolean;
 }
 
 export function normalizeUsagePercentage(value: unknown): number {
@@ -64,6 +66,15 @@ function readPercentage(record: Record<string, unknown>, key: string): number {
   return value;
 }
 
+function readNullableCents(record: Record<string, unknown>, key: string): number | null {
+  const value = record[key];
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new TypeError(`${key} must be a non-negative whole number of cents or null`);
+  }
+  return value;
+}
+
 export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSummaryResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError('managed usage summary must be an object');
@@ -87,5 +98,11 @@ export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSu
     weekly_reset_at: readNullableTimestamp(record, 'weekly_reset_at'),
     flagship_weekly_usage_percentage: readPercentage(record, 'flagship_weekly_usage_percentage'),
     flagship_weekly_reset_at: readNullableTimestamp(record, 'flagship_weekly_reset_at'),
+    ...(record['credit_balance_cents'] === undefined
+      ? {}
+      : { credit_balance_cents: readNullableCents(record, 'credit_balance_cents') }),
+    ...(record['overage_enabled'] === undefined
+      ? {}
+      : { overage_enabled: record['overage_enabled'] === true }),
   };
 }

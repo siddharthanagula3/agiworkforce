@@ -998,7 +998,7 @@ async function removeGroupMembers(
   }
 }
 
-async function reconcileGroupMembers(
+export async function reconcileGroupMembers(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
   scimUserIds: string[],
@@ -1019,9 +1019,9 @@ async function reconcileGroupMembers(
   );
   const byId = new Map(rows.map((row) => [row.id, row]));
 
-  const present = unique.map((id) => byId.get(id)).filter((row): row is ScimProvisionedUserRow =>
-    Boolean(row),
-  );
+  const present = unique
+    .map((id) => byId.get(id))
+    .filter((row): row is ScimProvisionedUserRow => Boolean(row));
   if (present.length === 0) return;
 
   await linkAccountsBatch(db, ctx, present);

@@ -31,12 +31,29 @@ describe('enrichManagedMemoryContext', () => {
       isTemporary: false,
     });
 
-    expect(query).toHaveBeenCalledOnce();
     expect(chatRequest.messages[0]).toMatchObject({ role: 'system' });
     expect(chatRequest.messages[0]?.content).toContain('I prefer morning meetings.');
     expect(collectManagedPromptMaterials(chatRequest).join('\n')).toContain(
       'I prefer morning meetings.',
     );
+  });
+
+  it('keeps memories from a suppressed source out of the managed prompt', async () => {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) =>
+      sql.includes("settings -> 'memory'") ? [{ memory: { suppressedSources: ['auto'] } }] : [],
+    );
+    const chatRequest = makeRequest();
+
+    await enrichManagedMemoryContext({
+      db: { query: query as never },
+      userId: 'user-1',
+      chatRequest,
+      isTemporary: false,
+    });
+
+    const recall = query.mock.calls.find(([sql]) => sql.includes('from user_memories'));
+    expect(recall?.[0]).toContain("coalesce(source, 'web') <> all");
+    expect(recall?.[1]).toEqual(['user-1', ['auto']]);
   });
 
   it('does not load or inject account memory for Temporary Chats', async () => {

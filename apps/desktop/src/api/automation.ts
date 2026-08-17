@@ -1,3 +1,4 @@
+import { AUTOMATION_TIMEOUT_MS } from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 import type {
   AutomationClickRequest,
@@ -11,8 +12,6 @@ import type {
 } from '../types/automation';
 import type { CaptureResult } from '../types/capture';
 import { normalizeCaptureResult, type RawCaptureResult } from '../utils/captureTransforms';
-
-const AUTOMATION_TIMEOUT_MS = 30000;
 
 async function invokeWithTimeout<T>(
   command: string,

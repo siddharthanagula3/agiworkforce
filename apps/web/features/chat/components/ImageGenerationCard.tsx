@@ -35,6 +35,7 @@ import {
 import { cn } from '@shared/lib/utils';
 import {
   getImageAspectOptionsForModel,
+  getImageModelLabel,
   normalizeImageAspectRatioForModel,
   type ImageAspectRatio,
 } from '../lib/imageGenerationOptions';
@@ -169,7 +170,9 @@ function imageAspectClass(aspectRatio: ImageAspectRatio | undefined): string {
 function GeneratingCard({
   aspectRatio,
   capHeight,
-}: { aspectRatio?: ImageAspectRatio; capHeight?: boolean } = {}) {
+  modelId,
+}: { aspectRatio?: ImageAspectRatio; capHeight?: boolean; modelId?: string } = {}) {
+  const modelLabel = getImageModelLabel(modelId);
   const startedAt = useRef(Date.now());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -194,23 +197,24 @@ function GeneratingCard({
         // portrait placeholder doesn't overshoot and then collapse when the
         // real image lands.
         capHeight && 'max-h-[420px]',
-        // Subtle dot-grid texture
-        'bg-[#1a1a1f]',
+        'bg-muted',
       )}
       style={{
-        backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)',
+        backgroundImage:
+          'radial-gradient(circle, hsl(var(--muted-foreground) / 0.14) 1px, transparent 1px)',
         backgroundSize: '20px 20px',
       }}
       aria-label="Generating image"
       aria-live="polite"
     >
-      {/* Shimmer overlay */}
-      <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-white/[0.02] via-transparent to-white/[0.04]" />
+      <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-foreground/[0.02] via-transparent to-foreground/[0.04]" />
 
       <div className="relative z-10 flex flex-col items-center gap-2.5">
-        {/* Spinner ring */}
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-primary/60" />
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary/60" />
         <span className="text-sm font-medium text-foreground">Generating image</span>
+        {modelLabel && (
+          <span className="text-xs text-muted-foreground">Generating with {modelLabel}</span>
+        )}
         <span className="text-xs tabular-nums text-muted-foreground">
           Waiting for the image provider · {formatElapsed(elapsedSeconds)} elapsed
         </span>
@@ -581,9 +585,9 @@ function EditPanel({
         </div>
 
         {/* Image area */}
-        <div className="flex flex-1 flex-col items-center justify-center overflow-hidden bg-[#0f0f12] p-4">
+        <div className="flex flex-1 flex-col items-center justify-center overflow-hidden bg-muted/40 p-4">
           {generating ? (
-            <GeneratingCard aspectRatio={currentAspect} />
+            <GeneratingCard aspectRatio={currentAspect} modelId={modelId} />
           ) : (
             <img
               src={currentUrl}
@@ -592,7 +596,7 @@ function EditPanel({
             />
           )}
           {genError && (
-            <p className="mt-2 text-xs text-rose-400" role="alert">
+            <p className="mt-2 text-xs text-[var(--chat-destructive)]" role="alert">
               {genError}
             </p>
           )}
@@ -662,11 +666,13 @@ function EditPanel({
 interface ResultCardProps {
   imageUrl: string;
   prompt: string;
+  modelId?: string;
   onEdit: () => void;
   onShare: () => void;
 }
 
-function ResultCard({ imageUrl, prompt, onEdit, onShare }: ResultCardProps) {
+function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardProps) {
+  const modelLabel = getImageModelLabel(modelId);
   const [imgError, setImgError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showMore, setShowMore] = useState(false);
@@ -805,6 +811,12 @@ function ResultCard({ imageUrl, prompt, onEdit, onShare }: ResultCardProps) {
             </div>
           )}
         </div>
+
+        {modelLabel && (
+          <span className="ml-auto truncate pr-1 text-[11px] text-muted-foreground">
+            Generated with {modelLabel}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -883,7 +895,7 @@ export function ImageGenerationCard({
   // elapsed time; rotating pseudo-stages such as "Painting details" and
   // "Almost there" implied provider telemetry we do not receive.
   if (!imageUrl && isGenerating) {
-    return <GeneratingCard aspectRatio={aspectRatio} capHeight />;
+    return <GeneratingCard aspectRatio={aspectRatio} capHeight modelId={modelId} />;
   }
 
   // A failed/disconnected request must never leave an infinite loading card.
@@ -933,6 +945,7 @@ export function ImageGenerationCard({
       <ResultCard
         imageUrl={liveUrl ?? imageUrl}
         prompt={livePrompt}
+        modelId={modelId}
         onEdit={() => setShowEdit(true)}
         onShare={() => setShowShare(true)}
       />

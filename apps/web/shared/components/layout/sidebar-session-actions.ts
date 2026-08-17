@@ -40,10 +40,16 @@ export function conversationDeleteConfirm(title: string | null | undefined) {
   } satisfies DestructiveConfirmCopy;
 }
 
+/**
+ * WEB-130: DELETE /api/projects/[id] stamps `deleted_at` on the project, moves
+ * its conversations out, and soft-deletes its knowledge files while erasing the
+ * stored source bytes — so the sources genuinely go, but the project row itself
+ * is retained rather than erased, which is why nothing here promises a purge.
+ */
 export function projectDeleteConfirm(name: string | null | undefined) {
   return {
     title: 'Delete project?',
-    description: `${quoted(name, 'This project')} will be permanently deleted. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
+    description: `${quoted(name, 'This project')} and its instructions will be removed from your workspace, and the files you added as project sources will be deleted. Conversations in this project will be moved to “All Chats”. This cannot be undone.`,
     confirmText: 'Delete project',
     variant: 'destructive',
   } satisfies DestructiveConfirmCopy;

@@ -255,6 +255,34 @@ export function resolveSelectableModelId(modelId: string | null | undefined): st
     : DEFAULT_MODEL_ID;
 }
 
+export interface ModelSubstitution {
+  requestedId: string;
+  requestedLabel: string;
+  resolvedId: string;
+  resolvedLabel: string;
+}
+
+/**
+ * Non-null exactly when `resolveSelectableModelId` would swap the given id for
+ * something else — the conversation's saved model was retired, dropped from the
+ * catalog, or is display-only. Callers use it to tell the user the swap
+ * happened instead of letting the model change under them (AI-49).
+ */
+export function describeModelSubstitution(
+  modelId: string | null | undefined,
+): ModelSubstitution | null {
+  if (!modelId) return null;
+  const requestedId = normalizeModelId(modelId) ?? modelId;
+  const resolvedId = resolveSelectableModelId(requestedId);
+  if (resolvedId === requestedId) return null;
+  return {
+    requestedId,
+    requestedLabel: getModelMetadata(requestedId)?.name ?? requestedId,
+    resolvedId,
+    resolvedLabel: AVAILABLE_MODELS.find((model) => model.id === resolvedId)?.name ?? resolvedId,
+  };
+}
+
 /**
  * AUDIT-FIX CMP-24: selecting a model now changes ONLY the model. Extended
  * thinking is the user's choice and lives in `useThinkingStore`; the composer

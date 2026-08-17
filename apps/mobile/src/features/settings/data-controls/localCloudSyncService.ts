@@ -1,5 +1,7 @@
-
+import { managedCloudConversationMessagesPath } from '@agiworkforce/cloud-contracts';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { api } from '@/services/api';
+import { managedCloudChat } from '@/services/managedCloudChat';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import type { ConversationSummary, ChatMessage } from '@/types/chat';
@@ -12,6 +14,11 @@ export interface LocalCloudSyncResult {
 
 const MAX_CONVERSATIONS_TO_SYNC = 50;
 const MAX_MESSAGES_PER_CONVERSATION = 100;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function cloudConversationIdFor(localId: string): string {
+  return UUID_PATTERN.test(localId) ? localId : uuidv7();
+}
 
 function sanitiseMessageForCloud(message: ChatMessage): Omit<ChatMessage, 'attachments'> {
   const { attachments: _attachments, ...safeMessage } = message;
@@ -33,13 +40,10 @@ export async function syncLocalConversationsToCloud(): Promise<LocalCloudSyncRes
 
   for (const conv of localConversations) {
     try {
-      const { conversation } = await api.post<{ conversation: { id: string } }>(
-        '/api/chat/conversations',
-        {
-          title: conv.title ?? 'Synced from Local Mode',
-          metadata: { syncedFromLocal: true, localId: conv.id },
-        },
-      );
+      const conversation = await managedCloudChat.createConversation({
+        id: cloudConversationIdFor(conv.id),
+        title: conv.title ?? 'Synced from Local Mode',
+      });
 
       const localMessages = (messages[conv.id] ?? [])
         .filter((m) => !m.isStreaming && !m.isQueued)
@@ -50,7 +54,7 @@ export async function syncLocalConversationsToCloud(): Promise<LocalCloudSyncRes
       let savedCount = 0;
       if (localMessages.length > 0) {
         const { saved } = await api.post<{ saved: number }>(
-          `/api/chat/conversations/${conversation.id}/messages/bulk`,
+          `${managedCloudConversationMessagesPath(conversation.id)}/bulk`,
           {
             messages: localMessages.map((m) => ({
               role: m.role,

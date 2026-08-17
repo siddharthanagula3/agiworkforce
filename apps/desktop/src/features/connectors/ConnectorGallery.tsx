@@ -1061,6 +1061,14 @@ export function ConnectorGallery() {
             <p className="mt-0.5 text-sm text-muted-foreground">
               Use custom connectors for remote MCP servers or provider-specific API keys.
             </p>
+            <p
+              className="mt-1 text-sm text-muted-foreground"
+              data-testid="custom-connector-scope-note"
+            >
+              Custom connectors you add here stay on this device. They are not uploaded to your
+              cloud account, and custom connectors added on web or mobile do not appear in this
+              list.
+            </p>
           </div>
           <SettingsRowButton onClick={() => setCustomConnectorOpen(true)}>
             <ExternalLink className="h-3.5 w-3.5" />

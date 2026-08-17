@@ -69,8 +69,17 @@ describe('useMediaModelAvailability', () => {
 
     expect(signal?.aborted).toBe(true);
     expect(result.current.status).toBe('error');
-    expect(result.current.error).toMatch(/timed out/i);
+    expect(result.current.error).toMatch(/took too long/i);
     expect(result.current.admissionFor('catalog-image-fixture')).toBeUndefined();
+  });
+
+  it('surfaces plain language instead of transport or contract detail', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('boom', { status: 500 })));
+    const { result } = renderHook(() => useMediaModelAvailability());
+
+    await waitFor(() => expect(result.current.status).toBe('error'), { timeout: 3_000 });
+    expect(result.current.error).not.toMatch(/HTTP|500|contract|schema|payload/i);
+    expect(result.current.error).toMatch(/image and video models/i);
   });
 
   it('aborts the request when its composer unmounts', () => {

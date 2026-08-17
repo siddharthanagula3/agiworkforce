@@ -1,14 +1,14 @@
-
 import type { DetectedField } from './detector';
+import { matchesAtsHostRules, type AtsHostRule } from './hosts';
 
-const ASHBY_URL_PATTERNS = [
-  /jobs\.ashbyhq\.com\//i,
-  /ashbyhq\.com\/.*\/jobs\//i,
-  /app\.ashbyhq\.com\//i,
+const ASHBY_HOST_RULES: AtsHostRule[] = [
+  { host: 'jobs.ashbyhq.com' },
+  { host: 'app.ashbyhq.com' },
+  { host: 'ashbyhq.com', path: /\/jobs\// },
 ];
 
 export function isAshbyUrl(url: string): boolean {
-  return ASHBY_URL_PATTERNS.some((re) => re.test(url));
+  return matchesAtsHostRules(url, ASHBY_HOST_RULES);
 }
 
 export async function awaitAshbyFormReady(timeoutMs = 4000): Promise<boolean> {

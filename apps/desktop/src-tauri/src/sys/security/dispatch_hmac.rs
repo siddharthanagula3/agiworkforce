@@ -3,9 +3,18 @@
 //! Desktop counterpart to `apps/mobile/lib/dispatchHmac.ts`. Mobile signs
 //! every outbound control message with HMAC-SHA-256 over a canonical envelope;
 //! desktop must verify the HMAC, the timestamp window, and the nonce
-//! freshness. Without verification, an attacker who reaches the signaling
-//! relay can forge `surface=desktop, role=assistant` messages that the mobile
-//! UI consumes via Realtime — a prompt-injection vector.
+//! freshness. Without verification, anyone who reaches the data channel can
+//! forge `surface=desktop, role=assistant` messages that the mobile UI
+//! consumes via Realtime — a prompt-injection vector.
+//!
+//! # Trust boundary
+//!
+//! This layer does not defend against the signaling relay. The relay mints the
+//! pairing code and sees it again on the claim call and the register frame,
+//! and the session salt reaches it in register metadata, so it holds both KDF
+//! inputs below and can mint envelopes that verify in either direction. The
+//! out-of-band key or PAKE that would close it is SEC-16 in
+//! `docs/remediation/register.json`.
 //!
 //! # Wire format
 //!

@@ -4,6 +4,10 @@ import type {
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import {
+  dataTransferCarriesFiles,
+  filesFromDataTransfer,
+} from '@agiworkforce/utils/composer-paste';
 import { getExtensionTokensCssAuto } from './tokens';
 import { t } from './i18n';
 import { pageChipLabel } from './utils';
@@ -74,6 +78,12 @@ import {
 } from './features/side-panel/chat-state';
 import { setupVoiceInput } from './features/side-panel/voice';
 import { markOnboardingComplete, isOnboardingComplete } from './features/side-panel/onboarding';
+import { DATA_HANDLING_DISCLOSURES } from './features/privacy/dataHandling';
+import {
+  cloudMirroringEnabledSnapshot,
+  readCloudMirroringEnabled,
+  watchCloudMirroringEnabled,
+} from './features/privacy/cloudMirroring';
 import { getChromeSurfaceAvailability } from './features/side-panel/surface-policy';
 import { ManagedCloudOwnerRequestFence } from './features/side-panel/managed-owner-request-fence';
 import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl, sanitizePageText } from './background/policy';
@@ -200,6 +210,14 @@ type PersistencePresentation = {
 function conversationPersistencePresentation(
   entry: ConversationEntry | undefined,
 ): PersistencePresentation {
+  if (!cloudMirroringEnabledSnapshot()) {
+    return {
+      state: 'local',
+      label: 'Saved on this device',
+      detail: 'Account mirroring is off in AGI settings, so chats stay in this browser.',
+      cloudIcon: false,
+    };
+  }
   if (!entry) {
     return {
       state: 'local',
@@ -5308,6 +5326,28 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   row0c.appendChild(row0cText);
   rows0.appendChild(row0c);
 
+  for (const disclosure of DATA_HANDLING_DISCLOSURES) {
+    const privacyRow = el('div', { class: 'sp-ob-row sp-ob-privacy-row' });
+    const privacyIcon = el('div', { class: 'sp-ob-row-icon', 'aria-hidden': 'true' });
+    appendSvgString(privacyIcon, eyeSvg);
+    const privacyText = el('div', { class: 'sp-ob-row-text' });
+    privacyText.appendChild(el('strong', {}, disclosure.label));
+    privacyText.appendChild(document.createTextNode(` ${disclosure.body}`));
+    privacyRow.appendChild(privacyIcon);
+    privacyRow.appendChild(privacyText);
+    rows0.appendChild(privacyRow);
+  }
+
+  const privacySettingsRow = el('div', { class: 'sp-ob-row sp-ob-privacy-row' });
+  const privacySettingsText = el('div', { class: 'sp-ob-row-text' });
+  const privacySettingsBtn = el('button', { class: 'sp-ob-learn-more' }, 'Open privacy settings');
+  privacySettingsBtn.addEventListener('click', () => {
+    if (typeof chrome.runtime.openOptionsPage === 'function') chrome.runtime.openOptionsPage();
+  });
+  privacySettingsText.appendChild(privacySettingsBtn);
+  privacySettingsRow.appendChild(privacySettingsText);
+  rows0.appendChild(privacySettingsRow);
+
   step0.appendChild(rows0);
   body.appendChild(step0);
 
@@ -8987,21 +9027,10 @@ function buildUI(): void {
   });
 
   inputEl.addEventListener('paste', (e: ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    const pasted: File[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (!item) continue;
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        if (file && file.type.startsWith('image/')) pasted.push(file);
-      }
-    }
-    if (pasted.length > 0) {
-      e.preventDefault();
-      acceptIncomingComposerFiles(pasted);
-    }
+    const pasted = filesFromDataTransfer(e.clipboardData);
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    acceptIncomingComposerFiles(pasted);
   });
 
   const sendBtn = el('button', {
@@ -9550,16 +9579,7 @@ function buildUI(): void {
   });
 
   composerShell.addEventListener('dragover', (event: DragEvent) => {
-    const types = event.dataTransfer?.types;
-    if (!types) return;
-    let hasFile = false;
-    for (let i = 0; i < types.length; i++) {
-      if (types[i] === 'Files') {
-        hasFile = true;
-        break;
-      }
-    }
-    if (!hasFile) return;
+    if (!dataTransferCarriesFiles(event.dataTransfer)) return;
     event.preventDefault();
     composerShell.classList.add('dragover');
   });
@@ -9572,7 +9592,7 @@ function buildUI(): void {
     if (!event.dataTransfer) return;
     event.preventDefault();
     composerShell.classList.remove('dragover');
-    acceptIncomingComposerFiles(event.dataTransfer.files);
+    acceptIncomingComposerFiles(filesFromDataTransfer(event.dataTransfer));
   });
 
   setupVoiceInput(micBtn, inputEl, autoResizeInput);
@@ -10270,6 +10290,8 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 });
 
 injectStyles();
+watchCloudMirroringEnabled();
+void readCloudMirroringEnabled().then(() => refreshActivePersistenceState());
 buildUI();
 chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
