@@ -1,4 +1,4 @@
-  // llm-guardrail-allow: this block IS the ban on the sink, not a use of it
+// llm-guardrail-allow: this block IS the ban on the sink, not a use of it
 import { defineConfig, globalIgnores } from 'eslint/config';
 import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
@@ -28,6 +28,11 @@ const eslintConfig = defineConfig([
     rules: {
       // eslint-plugin-react 7.x calls removed ESLint 10 rule-context APIs from several rules.
       ...disabledReactRules,
+      // On in the root config (via eslint:recommended) and absent from Next's,
+      // so the same file linted from the repo root and from this package
+      // disagreed: lint-staged demanded a disable directive that `pnpm lint`
+      // then failed as unused. Enabled here so both runs agree.
+      'no-control-regex': 'error',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         {
