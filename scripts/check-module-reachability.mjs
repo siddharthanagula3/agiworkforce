@@ -293,12 +293,6 @@ const tsTargets = [
       'apps/desktop/src/features/mcp/index.tsx',
       'apps/desktop/src/features/media/MediaGenerationProgress.tsx',
       'apps/desktop/src/features/media/model-options.ts',
-      'apps/desktop/src/features/memory/MemoryBadge.tsx',
-      'apps/desktop/src/features/memory/MemoryBrowserModal.tsx',
-      'apps/desktop/src/features/memory/MemoryImportanceIndicator.tsx',
-      'apps/desktop/src/features/memory/MemoryViewer.tsx',
-      'apps/desktop/src/features/memory/SaveToMemoryButton.tsx',
-      'apps/desktop/src/features/memory/index.ts',
       'apps/desktop/src/features/messaging/MessageComposer.tsx',
       'apps/desktop/src/features/messaging/MessageHistory.tsx',
       'apps/desktop/src/features/messaging/MessagingIntegrations.tsx',
@@ -437,7 +431,7 @@ const tsTargets = [
       'apps/desktop/src/utils/tokenCount.ts',
       'apps/desktop/src/utils/validation.ts',
     ],
-    maxKnownUnreachable: 247,
+    maxKnownUnreachable: 241,
   },
 ];
 
