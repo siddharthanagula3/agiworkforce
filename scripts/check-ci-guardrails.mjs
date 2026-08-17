@@ -27,6 +27,20 @@ function requireIncludes(relativePath, expected) {
   }
 }
 
+// For assertions on a YAML block Prettier may reflow between one line and many.
+// A literal substring pins the formatter's current choice, so the guard breaks on
+// a reformat that changed nothing it cares about.
+function requireMatches(relativePath, pattern, description) {
+  if (!exists(relativePath)) {
+    errors.push(`Missing required CI file: ${relativePath}`);
+    return;
+  }
+
+  if (!pattern.test(readText(relativePath))) {
+    errors.push(`${relativePath} must ${description}`);
+  }
+}
+
 function requireNotIncludes(relativePath, forbidden) {
   if (!exists(relativePath)) return;
   const body = readText(relativePath);
@@ -407,16 +421,10 @@ requireNotIncludes(
   '.github/workflows/release-desktop.yml',
   'needs: [prepare-release, build-linux, update-database]',
 );
-requireIncludes(
+requireMatches(
   '.github/workflows/release-desktop.yml',
-  `needs:
-      [
-        prepare-release,
-        build-linux,
-        build-macos,
-        clean-install-linux,
-        upgrade-from-previous-linux,
-      ]`,
+  /publish-release:[\s\S]*?needs:\s*\[\s*prepare-release,\s*build-linux,\s*build-macos,\s*clean-install-linux,\s*upgrade-from-previous-linux,?\s*\]/,
+  'gate publish-release on both platform builds and both Linux smoke tests',
 );
 requireIncludes(
   '.github/workflows/release-desktop.yml',
