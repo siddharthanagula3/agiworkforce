@@ -13,9 +13,11 @@ import {
 import { useUnifiedAuthStore } from '../../stores/auth';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import { useAppModeStore } from '../../stores/appModeStore';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 type MenuItemDef =
   | { kind: 'header'; label: string; sub?: string }
+  | { kind: 'workspace' }
   | { kind: 'divider' }
   | {
       kind: 'item';
@@ -39,12 +41,14 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
   const signOut = useUnifiedAuthStore((s) => s.signOut);
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
   const setMode = useAppModeStore((s) => s.setMode);
+  const appMode = useAppModeStore((s) => s.mode);
 
   const displayLabel = user?.name || user?.email || t('accountMenu.accountFallback');
   const emailSub = user?.name && user?.email ? user.email : undefined;
 
   const items: MenuItemDef[] = [
     { kind: 'header', label: displayLabel, sub: emailSub },
+    ...(appMode === 'cloud' ? ([{ kind: 'workspace' }] as MenuItemDef[]) : []),
     {
       kind: 'item',
       icon: Settings,
@@ -175,6 +179,17 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
                 </div>
               )}
             </div>
+          );
+        }
+        if (it.kind === 'workspace') {
+          return (
+            <WorkspaceSwitcher
+              key={i}
+              onManage={() => {
+                openSettings('team');
+                onClose();
+              }}
+            />
           );
         }
         if (it.kind === 'divider') {

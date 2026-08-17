@@ -10,6 +10,7 @@ import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { extractJsonObject, wantsJsonObject } from './json-object-mode';
+import { compactionUsageFields } from './context-window';
 import type { ProcessedRequest } from './request-processor';
 import {
   ManagedUsageRequestError,
@@ -79,6 +80,7 @@ export async function buildNonStreamResponse(
         cacheReadTokens: llmResponse.cachedInputTokens,
         cacheWriteTokens: llmResponse.cacheCreationInputTokens,
         cacheWrite1hTokens: llmResponse.cacheCreation1hInputTokens,
+        ...compactionUsageFields(processed.contextTrim),
         ...cpstUsage,
       },
     });

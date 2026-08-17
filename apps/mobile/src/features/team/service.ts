@@ -20,9 +20,18 @@ export interface Workspace {
   currentUserRole: WorkspaceRole;
 }
 
+export interface WorkspaceMembership {
+  id: string;
+  name: string;
+  slug: string;
+  role: WorkspaceRole;
+}
+
 export interface WorkspaceOverview {
   workspace: Workspace | null;
   access: WorkspaceAccess;
+  activeWorkspaceId: string | null;
+  workspaces: WorkspaceMembership[];
 }
 
 export interface WorkspaceMember {
@@ -66,13 +75,34 @@ export async function fetchWorkspaceOverview(signal?: AbortSignal): Promise<Work
     maxMembers: asNullableCount(rawAccess['maxMembers']),
   };
 
+  const rawActiveId = response['activeOrganizationId'];
+  const activeWorkspaceId = typeof rawActiveId === 'string' && rawActiveId ? rawActiveId : null;
+  const rawWorkspaces = response['workspaces'];
+  const workspaces = Array.isArray(rawWorkspaces)
+    ? rawWorkspaces.flatMap((raw): WorkspaceMembership[] => {
+        if (!isRecord(raw)) return [];
+        const id = asString(raw['id']);
+        if (!id) return [];
+        return [
+          {
+            id,
+            name: asString(raw['name'], 'Workspace'),
+            slug: asString(raw['slug']),
+            role: asRole(raw['role']),
+          },
+        ];
+      })
+    : [];
+
   const rawOrg = response['organization'];
   if (!isRecord(rawOrg)) {
-    return { workspace: null, access };
+    return { workspace: null, access, activeWorkspaceId, workspaces };
   }
 
   return {
     access,
+    activeWorkspaceId,
+    workspaces,
     workspace: {
       id: asString(rawOrg['id']),
       name: asString(rawOrg['name'], 'Workspace'),
@@ -83,6 +113,10 @@ export async function fetchWorkspaceOverview(signal?: AbortSignal): Promise<Work
       currentUserRole: asRole(rawOrg['currentUserRole']),
     },
   };
+}
+
+export async function setActiveWorkspace(organizationId: string | null): Promise<void> {
+  await api.put('/api/settings/organization/active', { organizationId });
 }
 
 export async function fetchWorkspaceMembers(

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
@@ -91,6 +90,7 @@ vi.mock('@shared/config/llm', () => ({
     return null;
   },
   isModelAllowedForTier: (_id: string, _tier: string) => true,
+  splitEffortsByEntitlement: () => ({ allowed: [], gated: [] }),
   getModelReasoning: (_id: string) => ({ capable: false, control: 'none' }),
   FREE_TRIAL_MODELS: [],
   normalizeModelId: (id: string) => id,

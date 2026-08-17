@@ -10,12 +10,20 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Shield } from 'lucide-react-native';
+import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
-import { confirmAgeGate, getAgeThreshold } from '@/src/features/auth/services/ageGate';
+import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
 
 const PARENTAL_CONTROLS_RETURN_PATH = '/(app)/settings/parental-controls' as const;
+export const CLOUD_SIGN_IN_RETURN_PATH = '/(auth)/login' as const;
+
+const RETURN_PATHS = [PARENTAL_CONTROLS_RETURN_PATH, CLOUD_SIGN_IN_RETURN_PATH] as const;
+type ReturnPath = (typeof RETURN_PATHS)[number];
+
+export function resolveReturnPath(raw: string | undefined): ReturnPath | null {
+  return RETURN_PATHS.find((path) => path === raw) ?? null;
+}
 
 export default function AgeGateScreen() {
   const { colors, isDark } = useTheme();
@@ -24,6 +32,7 @@ export default function AgeGateScreen() {
   const [ageText, setAgeText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [minorNotice, setMinorNotice] = useState(false);
+  const [minorLocked] = useState(isMinorMode);
   const inputRef = useRef<TextInput>(null);
 
   const threshold = getAgeThreshold();
@@ -31,8 +40,7 @@ export default function AgeGateScreen() {
   const primaryButtonTextColor = isDark ? colors.black : colors.white;
   const disabledButtonBg = isDark ? colors.surfaceHover : colors.surfaceHover;
   const disabledButtonTextColor = colors.textMuted;
-  const returnTo =
-    params.returnTo === PARENTAL_CONTROLS_RETURN_PATH ? PARENTAL_CONTROLS_RETURN_PATH : null;
+  const returnTo = resolveReturnPath(params.returnTo);
 
   const handleBack = useCallback(() => {
     if (returnTo) {
@@ -80,6 +88,51 @@ export default function AgeGateScreen() {
       <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Review Age Settings</Text>
     </View>
   ) : null;
+
+  if (minorLocked) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        {header}
+        <ScrollView
+          testID="age-gate-minor-locked"
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { backgroundColor: colors.background, justifyContent: 'center' },
+          ]}
+        >
+          <View style={[styles.iconWrap, { backgroundColor: colors.accentSurface }]}>
+            <Lock size={40} color={colors.teal} />
+          </View>
+
+          <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
+            Minor-safe mode is locked on
+          </Text>
+
+          <Text style={[styles.body, { color: colors.textSecondary }]}>
+            This device recorded an age under {threshold}. AGI cannot verify a new age, so it will
+            not turn minor-safe filtering off from inside the app.
+          </Text>
+
+          <Text style={[styles.body, { color: colors.textSecondary }]}>
+            An adult can lift it by reinstalling AGI on this device, which clears the stored age
+            record and everything saved with it.
+          </Text>
+
+          <Pressable
+            testID="age-gate-minor-locked-continue-btn"
+            onPress={handleComplete}
+            accessibilityRole="button"
+            accessibilityLabel="Continue to app"
+            style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
+          >
+            <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Continue</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   if (minorNotice) {
     return (

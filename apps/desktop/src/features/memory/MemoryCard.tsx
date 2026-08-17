@@ -1,45 +1,17 @@
 import { memo, useCallback, useState } from 'react';
-import { ChevronDown, ChevronUp, Star, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Star, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/ui/Badge';
 import { Button } from '@/ui/Button';
+import { Textarea } from '@/ui/Textarea';
 import { Card, CardContent, CardHeader } from '@/ui/Card';
 import { cn } from '@/lib/utils';
 import { useIsMounted } from '@/hooks/useIsMounted';
-import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
+import type { MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
 import { formatRelativeTime } from '@/lib/utils';
-
-const CATEGORY_COLORS: Record<MemoryCategory, { bg: string; text: string; border: string }> = {
-  preference: {
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-700 dark:text-blue-300',
-    border: 'border-blue-500/30',
-  },
-  fact: {
-    bg: 'bg-green-500/10',
-    text: 'text-green-700 dark:text-green-300',
-    border: 'border-green-500/30',
-  },
-  decision: {
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-700 dark:text-purple-300',
-    border: 'border-purple-500/30',
-  },
-  context: {
-    bg: 'bg-gray-500/10',
-    text: 'text-gray-700 dark:text-gray-300',
-    border: 'border-gray-500/30',
-  },
-};
-
-const CATEGORY_LABELS: Record<MemoryCategory, string> = {
-  preference: 'Preference',
-  fact: 'Fact',
-  decision: 'Decision',
-  context: 'Context',
-};
+import { MEMORY_CATEGORY_PRESENTATION } from './categories';
 
 export interface MemoryCardProps {
   memory: MemoryEntry;
@@ -146,12 +118,16 @@ export const MemoryCard = memo(function MemoryCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditingImportance, setIsEditingImportance] = useState(false);
+  const [contentDraft, setContentDraft] = useState<string | null>(null);
+  const [isSavingContent, setIsSavingContent] = useState(false);
 
   const { forget, remember } = useMemoryStore();
   const isMounted = useIsMounted();
 
-  const categoryColors = CATEGORY_COLORS[memory.category];
-  const categoryLabel = CATEGORY_LABELS[memory.category];
+  const presentation =
+    MEMORY_CATEGORY_PRESENTATION[memory.category] ?? MEMORY_CATEGORY_PRESENTATION.context;
+  const categoryColors = presentation.colors;
+  const categoryLabel = presentation.label;
 
   const contentPreview =
     memory.content.length > 150 ? `${memory.content.slice(0, 150)}...` : memory.content;
@@ -183,6 +159,23 @@ export const MemoryCard = memo(function MemoryCard({
     },
     [remember, memory, onImportanceChange],
   );
+
+  const handleContentSave = useCallback(async () => {
+    const corrected = contentDraft?.trim();
+    if (!corrected || corrected === memory.content) {
+      setContentDraft(null);
+      return;
+    }
+    setIsSavingContent(true);
+    try {
+      await remember(memory.category, memory.topic, corrected, memory.importance);
+      if (isMounted.current) setContentDraft(null);
+    } catch {
+      // Error is already handled by the store with toast
+    } finally {
+      if (isMounted.current) setIsSavingContent(false);
+    }
+  }, [contentDraft, memory, remember, isMounted]);
 
   const toggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -216,6 +209,16 @@ export const MemoryCard = memo(function MemoryCard({
               <Button
                 variant="ghost"
                 size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => setContentDraft(memory.content)}
+                disabled={contentDraft !== null}
+                aria-label="Correct memory"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={() => setShowDeleteConfirm(true)}
                 disabled={isDeleting}
@@ -228,16 +231,40 @@ export const MemoryCard = memo(function MemoryCard({
         </CardHeader>
 
         <CardContent className="pb-4 px-4 space-y-3">
-          {/* Content */}
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            <HighlightedText
-              text={isExpanded ? memory.content : contentPreview}
-              highlight={highlightText}
-            />
-          </p>
+          {contentDraft !== null ? (
+            <div className="space-y-2">
+              <Textarea
+                value={contentDraft}
+                onChange={(event) => setContentDraft(event.target.value)}
+                aria-label="Memory content"
+                className="text-sm"
+                rows={4}
+              />
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={handleContentSave} disabled={isSavingContent}>
+                  Save correction
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setContentDraft(null)}
+                  disabled={isSavingContent}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              <HighlightedText
+                text={isExpanded ? memory.content : contentPreview}
+                highlight={highlightText}
+              />
+            </p>
+          )}
 
           {/* Expand/Collapse Button */}
-          {showExpandButton && (
+          {contentDraft === null && showExpandButton && (
             <Button
               variant="ghost"
               size="sm"

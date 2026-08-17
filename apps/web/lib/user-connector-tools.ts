@@ -85,6 +85,21 @@ export interface ConnectorExecResult {
   isError: boolean;
 }
 
+export interface ConnectorExecOptions {
+  signal?: AbortSignal;
+}
+
+function callConnectorTool(
+  handle: McpServerHandle,
+  toolName: string,
+  args: Record<string, unknown>,
+  options?: ConnectorExecOptions,
+): Promise<McpCallToolResult> {
+  return options?.signal
+    ? handle.callTool(toolName, args, { signal: options.signal })
+    : handle.callTool(toolName, args);
+}
+
 const NOT_HANDLED: ConnectorExecResult = { handled: false, content: '', isError: false };
 
 interface GithubInstallationRow {
@@ -450,6 +465,7 @@ async function executeRemoteConnectorTool(
   entry: RemoteConnectorEntry,
   toolName: string,
   args: Record<string, unknown>,
+  options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
   try {
     let handle = _remoteHandles.get(entry.connectorId);
@@ -462,7 +478,7 @@ async function executeRemoteConnectorTool(
       });
       _remoteHandles.set(entry.connectorId, handle);
     }
-    const result = await handle.callTool(toolName, args);
+    const result = await callConnectorTool(handle, toolName, args, options);
     const text = mcpResultToText(result);
     return { handled: true, content: text || '(no output)', isError: result.isError === true };
   } catch (err) {
@@ -697,6 +713,7 @@ async function executeCustomConnectorTool(
   shortId: string,
   toolName: string,
   args: Record<string, unknown>,
+  options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
   const db = getNeonDb();
   let rows: CustomConnectorRow[];
@@ -732,7 +749,7 @@ async function executeCustomConnectorTool(
       });
       _customHandles.set(cacheKey, handle);
     }
-    const result = await handle.callTool(toolName, args);
+    const result = await callConnectorTool(handle, toolName, args, options);
     const text = mcpResultToText(result);
     return { handled: true, content: text || '(no output)', isError: result.isError === true };
   } catch (err) {
@@ -931,6 +948,7 @@ async function callOAuthConnectorTool(
   tokenType: string,
   toolName: string,
   args: Record<string, unknown>,
+  options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
   const cacheKey = oauthConnectorCacheKey(userId, target.connectorId);
   let handle = _oauthHandles.get(cacheKey);
@@ -943,7 +961,7 @@ async function callOAuthConnectorTool(
     });
     _oauthHandles.set(cacheKey, handle);
   }
-  const result = await handle.callTool(toolName, args);
+  const result = await callConnectorTool(handle, toolName, args, options);
   return {
     handled: true,
     content: mcpResultToText(result) || '(no output)',
@@ -956,6 +974,7 @@ async function executeOAuthConnectorTool(
   connectorId: string,
   toolName: string,
   args: Record<string, unknown>,
+  options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
   const target = resolveConnectorMcpTarget(connectorId);
   if (!target) return NOT_HANDLED;
@@ -977,6 +996,7 @@ async function executeOAuthConnectorTool(
       access.tokenType,
       toolName,
       args,
+      options,
     );
   } catch (err) {
     if (err instanceof EgressPolicyError) {
@@ -1187,6 +1207,7 @@ async function executeOrgSharedConnectorTool(
   orgShortId: string,
   toolName: string,
   args: Record<string, unknown>,
+  options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
   const organizationId = await resolveConnectorOrganizationId(userId, admittedOrganizationId);
   if (!organizationId) {
@@ -1235,7 +1256,7 @@ async function executeOrgSharedConnectorTool(
       });
       _orgSharedHandles.set(cacheKey, handle);
     }
-    const result = await handle.callTool(toolName, args);
+    const result = await callConnectorTool(handle, toolName, args, options);
     const text = mcpResultToText(result);
     return { handled: true, content: text || '(no output)', isError: result.isError === true };
   } catch (err) {
@@ -1391,9 +1412,12 @@ export function makeUserConnectorExecutor(
   serverId: string,
   toolName: string,
   args: Record<string, unknown>,
+  options?: ConnectorExecOptions,
 ) => Promise<ConnectorExecResult> {
-  return async (serverId, toolName, args) => {
+  return async (serverId, toolName, args, options) => {
     if (!userId) return NOT_HANDLED;
+
+    options?.signal?.throwIfAborted();
 
     if (serverId === GITHUB_SERVER_ID) {
       return executeGithubTool(userId, toolName, args);
@@ -1401,19 +1425,26 @@ export function makeUserConnectorExecutor(
 
     const customShortId = customShortIdFromServerId(serverId);
     if (customShortId !== null) {
-      return executeCustomConnectorTool(userId, customShortId, toolName, args);
+      return executeCustomConnectorTool(userId, customShortId, toolName, args, options);
     }
 
     const orgShortId = orgShortIdFromServerId(serverId);
     if (orgShortId !== null) {
-      return executeOrgSharedConnectorTool(userId, organizationId, orgShortId, toolName, args);
+      return executeOrgSharedConnectorTool(
+        userId,
+        organizationId,
+        orgShortId,
+        toolName,
+        args,
+        options,
+      );
     }
 
     const map = loadConnectorMcpMap();
     const entry = map.get(serverId);
     if (!entry) {
       if (getConnectorOAuthProvider(serverId)) {
-        return executeOAuthConnectorTool(userId, serverId, toolName, args);
+        return executeOAuthConnectorTool(userId, serverId, toolName, args, options);
       }
       return NOT_HANDLED;
     }
@@ -1427,6 +1458,6 @@ export function makeUserConnectorExecutor(
       };
     }
 
-    return executeRemoteConnectorTool(entry, toolName, args);
+    return executeRemoteConnectorTool(entry, toolName, args, options);
   };
 }

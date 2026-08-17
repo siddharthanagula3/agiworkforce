@@ -83,14 +83,17 @@ export function SettingsInfo({
   title,
   body,
   icon: Icon,
+  testID,
 }: {
   title: string;
   body: string;
   icon?: LucideIcon;
+  testID?: string;
 }) {
   const colors = useThemeColors();
   return (
     <View
+      testID={testID}
       style={{
         borderRadius: cardRadius,
         backgroundColor: colors.surfaceElevated,

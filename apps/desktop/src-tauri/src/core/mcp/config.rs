@@ -1,4 +1,5 @@
 use super::transport::TransportConfig;
+use crate::core::mcp::manifest::AllowlistState;
 use crate::core::mcp::McpResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -1631,6 +1632,24 @@ pub fn load_bundle(path: &std::path::Path) -> McpResult<McpBundle> {
     Ok(bundle)
 }
 
+fn launched_npm_package(server: &McpServerConfig) -> Option<&str> {
+    let runner = std::path::Path::new(&server.command)
+        .file_stem()
+        .and_then(|stem| stem.to_str())?;
+    if !matches!(runner, "npx" | "bunx" | "pnpx") {
+        return None;
+    }
+    let spec = server
+        .args
+        .iter()
+        .find(|arg| !arg.starts_with('-'))
+        .map(String::as_str)?;
+    Some(match spec.rfind('@') {
+        Some(0) | None => spec,
+        Some(version_at) => &spec[..version_at],
+    })
+}
+
 /// Install an [`McpBundle`] into an existing [`McpServersConfig`].
 ///
 /// Merges the bundle's server configurations into `config`. Existing entries
@@ -1639,31 +1658,24 @@ pub fn load_bundle(path: &std::path::Path) -> McpResult<McpBundle> {
 ///
 /// This function is purely in-memory; callers are responsible for persisting
 /// the updated config via [`McpServersConfig::save_to_file`].
-pub fn install_bundle(bundle: &McpBundle, config: &mut McpServersConfig) -> McpResult<()> {
+///
+/// `allowlist` must be resolved from the packaged resource by the caller; a
+/// missing list denies every package in a release build.
+pub fn install_bundle(
+    bundle: &McpBundle,
+    config: &mut McpServersConfig,
+    allowlist: &AllowlistState,
+) -> McpResult<()> {
     bundle.validate()?;
-
-    // AUDIT-FIX: CI-5 — slopsquatting defense. If mcp-allowlist.json is present
-    // next to the binary's config dir, reject server entries whose args reference
-    // an npm package not on the list. Absence of the file = open mode (dev).
-    let allowlist_path = std::path::PathBuf::from("mcp-allowlist.json");
-    let allowlist = if allowlist_path.exists() {
-        crate::core::mcp::manifest::load(&allowlist_path).ok()
-    } else {
-        None
-    };
 
     let mut installed = 0usize;
     for (server_name, server_config) in &bundle.servers {
-        if let Some(ref m) = allowlist {
-            for arg in &server_config.args {
-                if (arg.starts_with('@') || arg.starts_with("@modelcontextprotocol/"))
-                    && !crate::core::mcp::manifest::is_allowed(m, arg)
-                {
-                    return Err(crate::core::mcp::McpError::InvalidConfig(format!(
-                        "MCP package '{}' (server '{}') is not on the allow-list",
-                        arg, server_name
-                    )));
-                }
+        if let Some(package) = launched_npm_package(server_config) {
+            if !allowlist.permits(package) {
+                return Err(crate::core::mcp::McpError::InvalidConfig(format!(
+                    "MCP package '{}' (server '{}') is not on the allow-list",
+                    package, server_name
+                )));
             }
         }
         let prev = config
@@ -2026,9 +2038,74 @@ mod tests {
             mcp_servers: HashMap::new(),
         };
 
-        install_bundle(&bundle, &mut config).unwrap();
+        install_bundle(&bundle, &mut config, &permitting_allowlist()).unwrap();
         assert_eq!(config.mcp_servers.len(), 1);
         assert!(config.mcp_servers.contains_key("filesystem"));
+    }
+
+    fn permitting_allowlist() -> AllowlistState {
+        AllowlistState::Loaded(crate::core::mcp::manifest::Manifest {
+            version: 1,
+            allowed_packages: vec!["@modelcontextprotocol/server-filesystem".to_string()],
+        })
+    }
+
+    fn bundle_launching(package: &str) -> McpBundle {
+        let mut bundle = sample_bundle();
+        let server = bundle.servers.get_mut("filesystem").unwrap();
+        server.args = vec!["-y".to_string(), package.to_string(), ".".to_string()];
+        bundle
+    }
+
+    #[test]
+    fn install_bundle_refuses_a_package_the_allowlist_does_not_name() {
+        let bundle = bundle_launching("@modelcontextprotocol/server-filesystemm");
+        let mut config = McpServersConfig {
+            mcp_servers: HashMap::new(),
+        };
+
+        let err = install_bundle(&bundle, &mut config, &permitting_allowlist()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("not on the allow-list"),
+            "got: {err}"
+        );
+        assert!(config.mcp_servers.is_empty());
+    }
+
+    #[test]
+    fn install_bundle_refuses_a_versioned_typosquat() {
+        let bundle = bundle_launching("@modelcontextprotocol/server-filesysten@1.4.2");
+        let mut config = McpServersConfig {
+            mcp_servers: HashMap::new(),
+        };
+
+        assert!(install_bundle(&bundle, &mut config, &permitting_allowlist()).is_err());
+        assert!(config.mcp_servers.is_empty());
+    }
+
+    #[test]
+    fn install_bundle_accepts_a_listed_package_carrying_a_version() {
+        let bundle = bundle_launching("@modelcontextprotocol/server-filesystem@1.4.2");
+        let mut config = McpServersConfig {
+            mcp_servers: HashMap::new(),
+        };
+
+        install_bundle(&bundle, &mut config, &permitting_allowlist()).unwrap();
+        assert!(config.mcp_servers.contains_key("filesystem"));
+    }
+
+    #[test]
+    fn install_bundle_without_a_packaged_allowlist_denies_in_release() {
+        let bundle = sample_bundle();
+        let mut config = McpServersConfig {
+            mcp_servers: HashMap::new(),
+        };
+
+        let outcome = install_bundle(&bundle, &mut config, &AllowlistState::Absent);
+
+        assert_eq!(outcome.is_ok(), cfg!(debug_assertions));
+        assert_eq!(config.mcp_servers.is_empty(), !cfg!(debug_assertions));
     }
 
     #[test]
@@ -2052,7 +2129,7 @@ mod tests {
             },
         };
 
-        install_bundle(&bundle, &mut config).unwrap();
+        install_bundle(&bundle, &mut config, &permitting_allowlist()).unwrap();
         let fs = config.mcp_servers.get("filesystem").unwrap();
         // Should now have the bundle's version
         assert_eq!(fs.command, "npx", "existing entry should be overwritten");

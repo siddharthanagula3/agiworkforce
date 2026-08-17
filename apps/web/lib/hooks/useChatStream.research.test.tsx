@@ -336,6 +336,41 @@ describe('useChatStream research retry request', () => {
     });
   });
 
+  it('keeps a plan paused for approval instead of dropping the phase', async () => {
+    installFetch([researchStatus('planning'), researchStatus('awaiting_approval')]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('research the topic', { research: true });
+    });
+
+    expect(assistantMessage()?.metadata?.research?.phase).toBe('awaiting_approval');
+  });
+
+  it('sends the approved plan back as research_resume.approved_steps', async () => {
+    installFetch([contentDelta('Report'), researchStatus('complete')]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('research the topic', {
+        research: true,
+        researchResume: {
+          sources: [],
+          steps: [],
+          approvedSteps: [
+            { id: 'plan-1', type: 'search', description: 'alpha', status: 'pending' },
+          ],
+        },
+      });
+    });
+
+    expect(completionBodies()[0]?.['research_resume']).toEqual({
+      sources: [],
+      steps: [],
+      approved_steps: [{ id: 'plan-1', type: 'search', description: 'alpha', status: 'pending' }],
+    });
+  });
+
   it('never attaches resume material to a non-research send', async () => {
     installFetch([contentDelta('plain answer')]);
 

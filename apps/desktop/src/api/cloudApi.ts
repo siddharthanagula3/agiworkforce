@@ -1,4 +1,3 @@
-
 import { guardedFetch } from '../lib/egressGuard';
 import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
@@ -18,10 +17,12 @@ import {
   createManagedCloudChatClient,
   createManagedCloudAgentRunClient,
   ManagedMediaImageGenerationRequestSchema,
+  ManagedMediaVideoGenerationRequestSchema,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   TOOL_APPROVAL_RESUME_PATH,
   type ManagedMediaImageProvider,
+  type ManagedMediaVideoProvider,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudConversation,
@@ -397,6 +398,13 @@ export interface CloudGeneratedImage {
   model: string;
 }
 
+export interface CloudGeneratedVideo {
+  id: string;
+  uri: string;
+  provider: ManagedMediaVideoProvider;
+  model: string;
+}
+
 /**
  * Fetches the canonical public model catalog for the embedded Cloud shell.
  * Catalog membership is not an entitlement claim; execution remains
@@ -534,6 +542,164 @@ export async function generateCloudImage(input: {
     provider,
     model,
   };
+}
+
+export const CLOUD_VIDEO_POLL_INTERVAL_MS = 5_000;
+export const CLOUD_VIDEO_POLL_TIMEOUT_MS = 5 * 60_000;
+
+function durableCloudFileUri(rawUri: unknown): { id: string; uri: string } | null {
+  if (typeof rawUri !== 'string' || !rawUri.trim()) return null;
+  const fallbackOrigin = globalThis.location?.origin || 'http://localhost';
+  const cloudOrigin = new URL(CLOUD_API_BASE_URL || fallbackOrigin);
+  let resolved: URL;
+  try {
+    resolved = new URL(rawUri, cloudOrigin);
+  } catch {
+    return null;
+  }
+  const fileMatch = /^\/api\/files\/([^/]+)$/.exec(resolved.pathname);
+  if (resolved.origin !== cloudOrigin.origin || !fileMatch?.[1]) return null;
+  return {
+    id: decodeURIComponent(fileMatch[1]),
+    uri: CLOUD_API_BASE_URL
+      ? resolved.toString()
+      : `${resolved.pathname}${resolved.search}${resolved.hash}`,
+  };
+}
+
+function waitFor(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Video generation was cancelled', 'AbortError'));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(new DOMException('Video generation was cancelled', 'AbortError'));
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function cancelCloudVideoTask(taskId: string, expectedAccountId: string | undefined) {
+  try {
+    const headers = await getAuthHeaders(expectedAccountId);
+    await accountBoundCloudFetch(
+      `${CLOUD_API_BASE_URL}/api/media/video/cancel`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ task_id: taskId }),
+        credentials: 'include',
+      },
+      expectedAccountId,
+    );
+  } catch {
+    // The server-side reconciler settles a task the client could not cancel.
+  }
+}
+
+export async function generateCloudVideo(input: {
+  prompt: string;
+  idempotencyKey: string;
+  durationSecs?: number;
+  signal?: AbortSignal;
+  onProgress?: (progress: number | undefined, status: string) => void;
+  pollIntervalMs?: number;
+  pollTimeoutMs?: number;
+}): Promise<CloudGeneratedVideo> {
+  const expectedAccountId = captureDesktopCloudAccountId();
+  const request = ManagedMediaVideoGenerationRequestSchema.parse({
+    prompt: input.prompt,
+    ...(input.durationSecs !== undefined ? { duration_secs: input.durationSecs } : {}),
+  });
+  const headers = await getAuthHeaders(expectedAccountId);
+  headers['Idempotency-Key'] = input.idempotencyKey;
+
+  const started = await accountBoundCloudFetch(
+    `${CLOUD_API_BASE_URL}/api/media/video/generate`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+      signal: input.signal,
+      credentials: 'include',
+    },
+    expectedAccountId,
+  );
+  if (!started.ok) throw await readCloudResponseError(started);
+
+  const startPayload: unknown = await started.json();
+  if (!startPayload || typeof startPayload !== 'object' || Array.isArray(startPayload)) {
+    throw new Error('AGI Cloud returned an invalid video-generation response.');
+  }
+  const startRecord = startPayload as Record<string, unknown>;
+  const taskId = startRecord['task_id'];
+  if (typeof taskId !== 'string' || !taskId.trim()) {
+    throw new Error('AGI Cloud accepted the video request but returned no task to poll.');
+  }
+  const provider = startRecord['provider'];
+  const model = startRecord['model'];
+  if (
+    (provider !== 'runway' && provider !== 'google' && provider !== 'openrouter') ||
+    typeof model !== 'string' ||
+    !model.trim()
+  ) {
+    throw new Error('AGI Cloud returned incomplete video provenance.');
+  }
+
+  const intervalMs = input.pollIntervalMs ?? CLOUD_VIDEO_POLL_INTERVAL_MS;
+  const deadline = Date.now() + (input.pollTimeoutMs ?? CLOUD_VIDEO_POLL_TIMEOUT_MS);
+
+  for (;;) {
+    try {
+      await waitFor(intervalMs, input.signal);
+    } catch (err) {
+      await cancelCloudVideoTask(taskId, expectedAccountId);
+      throw err;
+    }
+
+    const statusHeaders = await getAuthHeaders(expectedAccountId);
+    const response = await accountBoundCloudFetch(
+      `${CLOUD_API_BASE_URL}/api/media/video/status?task_id=${encodeURIComponent(taskId)}`,
+      { method: 'GET', headers: statusHeaders, signal: input.signal, credentials: 'include' },
+      expectedAccountId,
+    );
+    if (!response.ok) throw await readCloudResponseError(response);
+
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('AGI Cloud returned an invalid video-status response.');
+    }
+    const record = payload as Record<string, unknown>;
+    const status = typeof record['status'] === 'string' ? record['status'] : 'unknown';
+    const progress = typeof record['progress'] === 'number' ? record['progress'] : undefined;
+    input.onProgress?.(progress, status);
+
+    if (status === 'completed') {
+      const durable = durableCloudFileUri(record['video_url']);
+      if (!durable) {
+        throw new Error('AGI Cloud finished the video but returned no durable file URL.');
+      }
+      return { id: durable.id, uri: durable.uri, provider, model };
+    }
+    if (status === 'failed' || status === 'timeout') {
+      const message =
+        typeof record['error'] === 'string' && record['error'].trim()
+          ? record['error']
+          : 'AGI Cloud could not generate the video.';
+      throw new Error(message);
+    }
+
+    if (Date.now() >= deadline) {
+      await cancelCloudVideoTask(taskId, expectedAccountId);
+      throw new Error('AGI Cloud did not finish the video before the polling window closed.');
+    }
+  }
 }
 
 class CloudSseEventLimitError extends Error {

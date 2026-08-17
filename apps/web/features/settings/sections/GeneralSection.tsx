@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Monitor, Sun, Moon } from 'lucide-react';
+import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useUser } from '@clerk/nextjs';
@@ -9,7 +9,11 @@ import { LanguageSelector } from '@/features/settings/components/LanguageSelecto
 import { useTTS } from '@/lib/hooks/useTTS';
 import { useModelStore } from '@shared/stores/model-store';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
-import { useSettingsStore, type ChatTextSize } from '@shared/stores/web-settings-store';
+import {
+  ACCENT_COLORS,
+  useSettingsStore,
+  type ChatTextSize,
+} from '@shared/stores/web-settings-store';
 import { CustomCommandsSettings } from '@/features/settings/components/CustomCommandsSettings';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
@@ -318,7 +322,7 @@ export function GeneralSection() {
               type="button"
               onClick={handleSave}
               disabled={!profilePreferencesReady || displayName.trim().length === 0 || saving}
-              className="rounded-md bg-amber-600 px-4 py-2 text-[13px] font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
+              className="rounded-md bg-amber-700 px-4 py-2 text-[13px] font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
             >
               {saving ? 'Saving...' : 'Save profile'}
             </button>
@@ -363,7 +367,7 @@ export function GeneralSection() {
                     key={opt.value}
                     type="button"
                     onClick={() => setNextTheme(opt.value)}
-                    className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${isActive ? 'border-amber-600 bg-amber-600 text-white' : 'border-border bg-transparent text-muted-foreground hover:bg-muted'}`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${isActive ? 'border-amber-700 bg-amber-700 text-white' : 'border-border bg-transparent text-muted-foreground hover:bg-muted'}`}
                     title={opt.label}
                     aria-label={`${opt.label} theme`}
                     aria-pressed={isActive}
@@ -375,8 +379,14 @@ export function GeneralSection() {
             </div>
           </Row>
 
-          {/* Display Language */}
-          <Row label="Display Language">
+          <AccentColorRow />
+
+          <HighContrastRow />
+
+          <Row
+            label="Display Language"
+            hint="Translates pricing, marketing pages, and device sign-in. The chat interface is still English."
+          >
             <LanguageSelector />
           </Row>
 
@@ -473,6 +483,62 @@ function ReasoningEffortRow() {
   );
 }
 
+function AccentColorRow() {
+  const accentColor = useSettingsStore((state) => state.accentColor);
+  const setAccentColor = useSettingsStore((state) => state.setAccentColor);
+
+  return (
+    <Row label="Accent colour">
+      <div className="flex gap-1.5" role="group" aria-label="Accent colour">
+        {ACCENT_COLORS.map((accent) => {
+          const isActive = accentColor === accent.value;
+          return (
+            <button
+              key={accent.value}
+              type="button"
+              onClick={() => setAccentColor(accent.value)}
+              data-accent-swatch={accent.value}
+              title={accent.label}
+              aria-label={`${accent.label} accent`}
+              aria-pressed={isActive}
+              className={`flex h-7 w-7 items-center justify-center rounded-full ring-offset-2 ring-offset-background transition-shadow ${isActive ? 'ring-2 ring-foreground' : 'ring-0'}`}
+            >
+              {isActive && <Check className="h-3.5 w-3.5 text-white" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </div>
+    </Row>
+  );
+}
+
+function HighContrastRow() {
+  const highContrast = useSettingsStore((state) => state.highContrast);
+  const setHighContrast = useSettingsStore((state) => state.setHighContrast);
+
+  return (
+    <Row label="High contrast">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={highContrast}
+        aria-label="High contrast"
+        onClick={() => setHighContrast(!highContrast)}
+        className={`h-6 w-11 shrink-0 rounded-full transition-colors ${
+          highContrast ? 'bg-primary' : 'bg-muted'
+        }`}
+      >
+        <span
+          aria-hidden="true"
+          className={`block h-5 w-5 rounded-full bg-background transition-transform ${
+            highContrast ? 'translate-x-[22px]' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+    </Row>
+  );
+}
+
 function ChatTextSizeRow() {
   const chatTextSize = useSettingsStore((state) => state.chatTextSize);
   const setChatTextSize = useSettingsStore((state) => state.setChatTextSize);
@@ -546,42 +612,69 @@ function ReadAloudVoiceRow() {
 
   useEffect(() => () => stop(), [stop]);
 
-  if (!isSupported || voices.length === 0) return null;
+  if (!isSupported || voices.length === 0) {
+    return (
+      <Row label="Read-aloud voice">
+        <span className="text-xs text-muted-foreground sm:text-right">
+          This browser exposes no speech voices, so read-aloud is unavailable here.
+        </span>
+      </Row>
+    );
+  }
 
   return (
-    <Row label="Read-aloud voice">
-      <div className="flex min-w-0 items-center gap-2">
-        <select
-          value={voiceUri ?? ''}
-          onChange={(event) => setVoiceUri(event.target.value || null)}
-          aria-label="Read-aloud voice"
-          className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground sm:max-w-[220px]"
-        >
-          <option value="">Browser default</option>
-          {voices.map((voice) => (
-            <option key={voice.voiceURI} value={voice.voiceURI}>
-              {voice.name} ({voice.lang})
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={() =>
-            isSpeaking ? stop() : speak('This is how messages will sound when read aloud.')
-          }
-          className="h-8 shrink-0 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-muted"
-        >
-          {isSpeaking ? 'Stop' : 'Preview'}
-        </button>
-      </div>
-    </Row>
+    <>
+      <Row label="Read-aloud voice">
+        <div className="flex min-w-0 items-center gap-2">
+          <select
+            value={voiceUri ?? ''}
+            onChange={(event) => setVoiceUri(event.target.value || null)}
+            aria-label="Read-aloud voice"
+            className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground sm:max-w-[220px]"
+          >
+            <option value="">Browser default</option>
+            {voices.map((voice) => (
+              <option key={voice.voiceURI} value={voice.voiceURI}>
+                {voice.name} ({voice.lang})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() =>
+              isSpeaking ? stop() : speak('This is how messages will sound when read aloud.')
+            }
+            className="h-8 shrink-0 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-muted"
+          >
+            {isSpeaking ? 'Stop' : 'Preview'}
+          </button>
+        </div>
+      </Row>
+      <p className="-mt-3 text-xs leading-relaxed text-muted-foreground">
+        Read-aloud uses your browser&apos;s built-in speech. It always plays through your system
+        default output device — browsers give web pages no way to choose one, so change it in your
+        operating system&apos;s sound settings. AGI reads a reply on request and then stops; web has
+        no hands-free voice conversation that listens back between turns.
+      </p>
+    </>
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex min-h-9 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <span className="text-sm text-foreground sm:shrink-0">{label}</span>
+      <span className={`flex min-w-0 flex-col gap-0.5 ${hint ? '' : 'sm:shrink-0'}`}>
+        <span className="text-sm text-foreground">{label}</span>
+        {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+      </span>
       {children}
     </div>
   );

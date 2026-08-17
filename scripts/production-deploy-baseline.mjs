@@ -3,10 +3,7 @@ import { execFileSync } from 'node:child_process';
 import process from 'node:process';
 import { classifyDeployScope, selectSurfaceBaseline } from './production-deploy-scope.mjs';
 
-const SURFACES = [
-  { key: 'web', jobName: 'Deploy verified web artifact' },
-  { key: 'gateway', jobName: 'Promote verified gateway image to production' },
-];
+const SURFACES = [{ key: 'web', jobName: 'Deploy verified web artifact' }];
 
 const WORKFLOW_FILE = 'deploy-production.yml';
 const RUNS_TO_SCAN = 30;
@@ -70,7 +67,7 @@ async function main() {
   const token = process.env.GITHUB_TOKEN;
   const headSha = process.env.GITHUB_SHA;
 
-  const scope = { web: false, gateway: false };
+  const scope = { web: false };
 
   let runs = [];
   if (!repository || !token) {
@@ -125,5 +122,4 @@ function print(scope) {
 main().catch((error) => {
   log(`Baseline selection failed (${error.message}); deploying every surface.`);
   console.log('web=true');
-  console.log('gateway=true');
 });

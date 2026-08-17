@@ -20,9 +20,11 @@
 
   AGI Local Mode collects no personal data by default. Signing in to
   AGI Cloud (public alpha, open to any signed-in user, no invite gate)
-  collects email address and optional name for app-functionality
-  purposes. NSPrivacyTracking is false. AGI does not include the
-  AdSupport / IDFA APIs.
+  collects email address, optional name, the account identifier, the
+  conversation content and attachments the user sends, and a device
+  identifier for push delivery — all for app-functionality purposes.
+  NSPrivacyTracking is false. AGI does not include the AdSupport /
+  IDFA APIs.
 
   There is deliberately no Health & Fitness entry: the Apple Health
   connector, its entitlement, and its usage description were all
@@ -125,6 +127,81 @@
         <dict>
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypeName</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+          Other User Content: signing in to AGI Cloud sends the
+          conversation itself. services/streaming.ts posts the full
+          message list to the cloud chat endpoint, and the provider
+          serving the selected model receives it (see
+          agiworkforce.com/subprocessors). Local Mode sends nothing.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+          Photos or Videos: images picked from the photo library or
+          shot with the camera are uploaded as chat attachments
+          (services/api.ts uploadFile) and as the account avatar.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+          User ID: the signed-in account identifier that every
+          authenticated cloud request carries.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeUserID</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+          Device ID: an app-generated random UUID (lib/deviceId.ts,
+          kept in the keychain, device-only) plus the push token are
+          registered against the account at /api/mobile/push-token so
+          notifications reach the right install. Not an advertising
+          identifier — AGI links no IDFA and ships no AdSupport.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeDeviceID</string>
             <key>NSPrivacyCollectedDataTypeLinked</key>
             <true/>
             <key>NSPrivacyCollectedDataTypeTracking</key>

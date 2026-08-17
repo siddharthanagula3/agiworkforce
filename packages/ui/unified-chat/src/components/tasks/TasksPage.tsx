@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { ListChecks, Loader2, MessageSquare, RotateCcw, ShieldQuestion, X } from 'lucide-react';
-import type {
-  CloudAgentRun,
-  CloudAgentRunSnapshotPage,
-  ManagedCloudAgentRunClient,
+import {
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
+  type CloudAgentRun,
+  type CloudAgentRunSnapshotPage,
+  type ManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
@@ -14,6 +15,7 @@ import {
   TASK_TONE_BADGE_CLASS,
   type AgentTaskState,
   type AgiWorkRerunGoal,
+  formatTaskCost,
   isCancellableState,
   isLiveTaskState,
   taskStateLabel,
@@ -125,6 +127,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null);
+  const [guidanceByRunId, setGuidanceByRunId] = useState<Record<string, string>>({});
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [journal, setJournal] = useState<TaskJournalSnapshot | null>(null);
   const [journalLoading, setJournalLoading] = useState(false);
@@ -242,12 +245,19 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
     async (run: CloudAgentRun, decision: 'approved' | 'rejected') => {
       const pending = run.pendingApproval;
       if (!pending) return;
+      const guidance = guidanceByRunId[run.id]?.trim();
       setResolvingApprovalId(run.id);
       try {
         await getClient().resumeRun(
           run.id,
           pending.toolCalls.map((call) => ({ toolCallId: call.toolCallId, decision })),
+          guidance ? { guidance } : {},
         );
+        setGuidanceByRunId((current) => {
+          const next = { ...current };
+          delete next[run.id];
+          return next;
+        });
         await load(filter, null);
         if (selectedRunId === run.id) await loadJournal(run.id);
       } catch (err) {
@@ -258,7 +268,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
         setResolvingApprovalId(null);
       }
     },
-    [filter, getClient, load, loadJournal, selectedRunId, transport],
+    [filter, getClient, guidanceByRunId, load, loadJournal, selectedRunId, transport],
   );
 
   const openConversation = useCallback(
@@ -394,6 +404,14 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                         <span className="shrink-0">
                           {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
                         </span>
+                        {run.usage && run.usage.costCents !== null ? (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span data-testid={`task-cost-${run.id}`} className="shrink-0">
+                              {formatTaskCost(run.usage.costCents)}
+                            </span>
+                          </>
+                        ) : null}
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center gap-1">
@@ -449,6 +467,22 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                           </li>
                         ))}
                       </ul>
+                      <textarea
+                        data-testid={`task-approval-guidance-${run.id}`}
+                        value={guidanceByRunId[run.id] ?? ''}
+                        onChange={(event) =>
+                          setGuidanceByRunId((current) => ({
+                            ...current,
+                            [run.id]: event.target.value,
+                          }))
+                        }
+                        disabled={resolvingApprovalId === run.id}
+                        rows={2}
+                        maxLength={TOOL_APPROVAL_GUIDANCE_MAX_LENGTH}
+                        placeholder="Add guidance to steer this run (optional)"
+                        aria-label="Guidance for this task"
+                        className="mt-2.5 w-full resize-none rounded-md border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground"
+                      />
                       <div className="mt-2.5 flex items-center gap-2">
                         <Button
                           size="sm"

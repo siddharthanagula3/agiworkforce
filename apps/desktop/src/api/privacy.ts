@@ -1,4 +1,4 @@
-
+import { DELETE_TIMEOUT_MS, EXPORT_TIMEOUT_MS, PRIVACY_TIMEOUT_MS } from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 
 export interface PrivacyPreferences {
@@ -13,42 +13,22 @@ export interface ExportMetadata {
   exported_at: string;
   app_name: string;
   export_version: string;
+  tables: number;
+  rows: number;
+  redacted_columns: string;
 }
+
+export type ExportedRow = Record<string, string | number | boolean | null>;
 
 /**
- * Structure of exported user data
+ * Structure of exported user data: one entry per user-scoped local table,
+ * derived from the live schema rather than a fixed list, plus the metadata
+ * block. Column sets follow the database, so rows are read dynamically.
  */
 export interface ExportedData {
-  conversations: Array<{
-    id: string;
-    title: string | null;
-    created_at: string;
-    updated_at: string | null;
-  }>;
-  messages: Array<{
-    id: string;
-    conversation_id: string;
-    role: string;
-    content: string;
-    created_at: string;
-  }>;
-  settings: Array<{
-    key: string;
-    value: string;
-    category: string | null;
-  }>;
-  custom_instructions: Array<{
-    id: string;
-    name: string | null;
-    content: string;
-    created_at: string | null;
-  }>;
   export_metadata: ExportMetadata;
+  [table: string]: ExportedRow[] | ExportMetadata;
 }
-
-const PRIVACY_TIMEOUT_MS = 30000;
-const EXPORT_TIMEOUT_MS = 60000;
-const DELETE_TIMEOUT_MS = 60000;
 
 async function invokeWithTimeout<T>(
   command: string,
@@ -119,7 +99,7 @@ export async function updatePrivacyPreferences(preferences: PrivacyPreferences):
  * ```ts
  * const data = await exportUserData();
  * const parsed = JSON.parse(data) as ExportedData;
- * console.log(`Exported ${parsed.conversations.length} conversations`);
+ * console.log(`Exported ${parsed.export_metadata.rows} rows`);
  * ```
  */
 export async function exportUserData(): Promise<string> {

@@ -79,6 +79,25 @@ interface FetchDesktopReleaseOptions {
 
 const DESKTOP_TAG_PREFIX = 'v-desktop-';
 export const DESKTOP_CLOUD_TAG_PREFIX = 'v-cloud-desktop-';
+
+export const DEFAULT_DESKTOP_RELEASE_OWNER = 'siddharthanagula3';
+export const DEFAULT_DESKTOP_RELEASE_REPO = 'agiworkforce';
+
+export function resolveDesktopReleaseRepository(
+  options: Pick<FetchDesktopReleaseOptions, 'owner' | 'repo'> = {},
+): { owner: string; repo: string } {
+  return {
+    owner:
+      options.owner?.trim() ||
+      getOptionalEnv('DESKTOP_GITHUB_OWNER')?.trim() ||
+      DEFAULT_DESKTOP_RELEASE_OWNER,
+    repo:
+      options.repo?.trim() ||
+      getOptionalEnv('DESKTOP_GITHUB_REPO')?.trim() ||
+      DEFAULT_DESKTOP_RELEASE_REPO,
+  };
+}
+
 const SEMVER_PATTERN =
   /^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?(?:\+([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?$/;
 const MAX_RELEASE_PAGES = 10;
@@ -208,12 +227,7 @@ export async function fetchLatestDesktopRelease(
   channel: DesktopReleaseChannel,
   options: FetchDesktopReleaseOptions = {},
 ): Promise<StableDesktopRelease | null> {
-  const owner = options.owner ?? getOptionalEnv('DESKTOP_GITHUB_OWNER');
-  const repo = options.repo ?? getOptionalEnv('DESKTOP_GITHUB_REPO');
-  if (!owner || !repo) {
-    logger.warn('Desktop release GitHub repository is not configured');
-    return null;
-  }
+  const { owner, repo } = resolveDesktopReleaseRepository(options);
 
   try {
     const releases: unknown[] = [];
@@ -265,7 +279,7 @@ function hasX64Marker(name: string): boolean {
   return /(?:x86_64|x64|amd64)/i.test(name);
 }
 
-function isTrustedGitHubReleaseAssetUrl(rawUrl: string): boolean {
+export function isTrustedGitHubReleaseAssetUrl(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl);
     return (

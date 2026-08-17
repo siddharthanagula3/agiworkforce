@@ -186,6 +186,25 @@ export interface CompanionApprovalClosedEvent {
   closedAt: string;
 }
 
+export type ControlReceiptOutcome = 'accepted' | 'duplicate' | 'rejected';
+
+/**
+ * Desktop acknowledgement that a mobile control request arrived and was
+ * dispatched. Mobile keeps a control pending until this receipt lands, so a
+ * dropped data-channel frame is retried with the same `requestId` instead of
+ * being silently lost. Desktop replies to a replayed `requestId` with the
+ * stored receipt and `outcome: 'duplicate'` rather than acting twice.
+ */
+export interface ControlReceiptEvent {
+  action: 'control.receipt';
+  version: 1;
+  requestId: string;
+  controlAction: string;
+  outcome: ControlReceiptOutcome;
+  reason?: string;
+  receivedAt: string;
+}
+
 export interface CompanionApprovalSnapshotEvent {
   action: 'approval_snapshot';
   version: 1;

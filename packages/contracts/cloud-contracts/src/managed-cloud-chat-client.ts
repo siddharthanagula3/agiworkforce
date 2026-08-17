@@ -269,6 +269,7 @@ export function createManagedCloudChatClient(
       if (parsedQuery.limit !== undefined) params.set('limit', String(parsedQuery.limit));
       if (parsedQuery.offset !== undefined) params.set('offset', String(parsedQuery.offset));
       if (parsedQuery.includeHistoryStats) params.set('includeHistoryStats', '1');
+      if (parsedQuery.archived) params.set('archived', parsedQuery.archived);
       const suffix = params.size > 0 ? `?${params.toString()}` : '';
       const response = await request(`${MANAGED_CLOUD_CHAT_BASE_PATH}${suffix}`, {
         headers: await readHeaders(options.signal, options.organizationId),

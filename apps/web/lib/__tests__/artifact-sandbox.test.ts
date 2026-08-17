@@ -65,6 +65,16 @@ describe('getSandboxOrigin', () => {
     process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'] = 'javascript:alert(1)';
     expect(getSandboxOrigin()).toBeNull();
   });
+
+  it('rejects the app’s own origin so the frame cannot be same-origin', () => {
+    process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'] = window.location.origin;
+    expect(getSandboxOrigin()).toBeNull();
+  });
+
+  it('rejects the app’s own origin written with a trailing slash', () => {
+    process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'] = `${window.location.origin}/`;
+    expect(getSandboxOrigin()).toBeNull();
+  });
 });
 
 describe('isSandboxConfigured', () => {

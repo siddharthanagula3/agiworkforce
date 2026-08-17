@@ -83,6 +83,10 @@ import {
   type ComputerUseRunLease,
 } from './features/computer-use/runOwnership';
 import {
+  browserControlConsentRequiredMessage,
+  hasBrowserControlConsent,
+} from './features/computer-use/browserControlConsent';
+import {
   DISCOVERY_MESSAGE_TYPES,
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
@@ -128,6 +132,10 @@ import {
   sweepConversationSync,
   SYNC_SWEEP_ALARM,
 } from './features/cloud-bridge/conversationSync';
+import {
+  readCloudMirroringEnabled,
+  watchCloudMirroringEnabled,
+} from './features/privacy/cloudMirroring';
 import { resolveComputerUseModel } from './features/computer-use/cloudAgentClient';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import {
@@ -3691,6 +3699,21 @@ async function handleMessageAsync(
         );
       }
 
+      let cuBrowserControlGranted: boolean;
+      try {
+        cuBrowserControlGranted = await hasBrowserControlConsent(cuOrigin);
+      } catch {
+        return failStart('AGI_START_COMPUTER_USE: browser control consent could not be verified');
+      }
+      if (startWasCancelled()) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
+      if (!cuBrowserControlGranted) {
+        return failStart(
+          `AGI_START_COMPUTER_USE: ${browserControlConsentRequiredMessage(cuOrigin)}`,
+        );
+      }
+
       if (cuTab.windowId !== undefined) {
         let activeTab: chrome.tabs.Tab | undefined;
         try {
@@ -5240,9 +5263,12 @@ chrome.alarms.create(SYNC_SWEEP_ALARM, { periodInMinutes: 1.0 }, () => {
     logger.warn('Failed to create conversation sync alarm', chrome.runtime.lastError.message);
   }
 });
-void sweepConversationSync().catch((error) => {
-  logger.debug('Conversation sync sweep on worker start failed', error);
-});
+watchCloudMirroringEnabled();
+void readCloudMirroringEnabled()
+  .then(() => sweepConversationSync())
+  .catch((error) => {
+    logger.debug('Conversation sync sweep on worker start failed', error);
+  });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SYNC_SWEEP_ALARM) {

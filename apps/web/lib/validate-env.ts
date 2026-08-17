@@ -275,20 +275,75 @@ const SECURITY_ESCAPE_HATCHES: Array<{ env: string; impact: string }> = [
   },
 ];
 
+const SECURITY_POLICY_DOWNGRADES: Array<{ env: string; value: string; impact: string }> = [
+  {
+    env: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+    value: 'fail-open',
+    impact:
+      'a Redis outage stops enforcing rate limits and the per-plan concurrent-turn ceiling, so ' +
+      'every caller is admitted unmetered for as long as Redis is unreachable. The production ' +
+      'default is fail-closed; this turns it off.',
+  },
+];
+
 export function validateSecurityEscapeHatches(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const enabled = (value: string | undefined) =>
     ['1', 'true', 'on'].includes((value ?? '').toLowerCase());
+  const isProduction = () =>
+    process.env['VERCEL_ENV'] === 'production' || process.env['NODE_ENV'] === 'production';
+  const report = (message: string) => {
+    if (isProduction()) errors.push(message);
+    else warnings.push(message);
+  };
 
   for (const { env, impact } of SECURITY_ESCAPE_HATCHES) {
     if (!enabled(process.env[env])) continue;
-    const message = `${env} is enabled — ${impact}`;
-    if (process.env['VERCEL_ENV'] === 'production' || process.env['NODE_ENV'] === 'production') {
-      errors.push(message);
-    } else {
-      warnings.push(message);
-    }
+    report(`${env} is enabled — ${impact}`);
+  }
+
+  for (const { env, value, impact } of SECURITY_POLICY_DOWNGRADES) {
+    if (process.env[env]?.trim().toLowerCase() !== value) continue;
+    report(`${env} is set to ${value} — ${impact}`);
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+export function validateGeneratedMediaStorage(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const read = (name: string): string | undefined => process.env[name]?.trim() || undefined;
+
+  const hasR2Credentials = Boolean(
+    read('CLOUDFLARE_R2_ACCOUNT_ID') &&
+    read('CLOUDFLARE_R2_ACCESS_KEY_ID') &&
+    read('CLOUDFLARE_R2_SECRET_ACCESS_KEY'),
+  );
+  if (!hasR2Credentials) {
+    warnings.push(
+      'Cloudflare R2 credentials are not set (CLOUDFLARE_R2_ACCOUNT_ID, ' +
+        'CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY) — managed image and ' +
+        'video generation report storage_not_configured and stay unavailable in the composer.',
+    );
+    return { valid: true, errors, warnings };
+  }
+
+  const privateBucket = read('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME');
+  const publicBucket = read('CLOUDFLARE_R2_BUCKET_NAME');
+
+  if (!privateBucket) {
+    warnings.push(
+      'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME is not set — generated media has nowhere private to ' +
+        'live, so every managed image and video model reports storage_not_configured and video ' +
+        'generation is refused before any credit is reserved.',
+    );
+  } else if (publicBucket && privateBucket === publicBucket) {
+    warnings.push(
+      'CLOUDFLARE_R2_PRIVATE_BUCKET_NAME matches CLOUDFLARE_R2_BUCKET_NAME — private generated ' +
+        'media storage stays disabled until the two name different buckets.',
+    );
   }
 
   return { valid: errors.length === 0, errors, warnings };
@@ -331,6 +386,7 @@ export function validateEnvironment(): ValidationResult {
     validateProductionKeyTypes(),
     validateStripeKeyModeConsistency(),
     validateSecurityEscapeHatches(),
+    validateGeneratedMediaStorage(),
   ];
 
   const allErrors = results.flatMap((r) => r.errors);

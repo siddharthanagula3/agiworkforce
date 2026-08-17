@@ -7,7 +7,6 @@ import { useFocusEffect } from 'expo-router';
 import {
   ArrowLeft,
   Calendar,
-  Users,
   CheckCircle,
   XCircle,
   HelpCircle,
@@ -21,9 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import {
   requestCalendarPermission,
-  requestContactsPermission,
   getCalendarPermissionStatus,
-  getContactsPermissionStatus,
   type PermissionStatus,
 } from '@/src/features/integrations/services/deviceIntegrations';
 import { DeviceIntegrationStatus } from '@/src/features/integrations/components/DeviceIntegrationStatus';
@@ -81,18 +78,13 @@ export default function IntegrationsScreen() {
   const colors = useThemeColors();
 
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>('undetermined');
-  const [contactsStatus, setContactsStatus] = useState<PermissionStatus>('undetermined');
   const [isChecking, setIsChecking] = useState(true);
 
   const refreshPermissionStatus = useCallback(async () => {
     setIsChecking(true);
     try {
-      const [calStat, conStat] = await Promise.allSettled([
-        getCalendarPermissionStatus(),
-        getContactsPermissionStatus(),
-      ]);
+      const [calStat] = await Promise.allSettled([getCalendarPermissionStatus()]);
       setCalendarStatus(calStat.status === 'fulfilled' ? calStat.value : 'undetermined');
-      setContactsStatus(conStat.status === 'fulfilled' ? conStat.value : 'undetermined');
     } finally {
       setIsChecking(false);
     }
@@ -150,38 +142,6 @@ export default function IntegrationsScreen() {
     [calendarStatus, openSystemSettings],
   );
 
-  const handleContactsToggle = useCallback(
-    async (enabled: boolean) => {
-      if (!enabled) {
-        Alert.alert(
-          'Revoke Contacts Access',
-          'To revoke contacts access, go to your device Settings and disable contacts permissions for this app.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: openSystemSettings },
-          ],
-        );
-        return;
-      }
-
-      if (contactsStatus === 'denied') {
-        Alert.alert(
-          'Contacts Access Denied',
-          'Contacts access was previously denied. Please enable it in your device Settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: openSystemSettings },
-          ],
-        );
-        return;
-      }
-
-      const granted = await requestContactsPermission();
-      setContactsStatus(granted ? 'granted' : 'denied');
-    },
-    [contactsStatus, openSystemSettings],
-  );
-
   if (!FEATURES.connectors) return <FeatureUnavailable feature="Connectors" />;
 
   return (
@@ -221,7 +181,7 @@ export default function IntegrationsScreen() {
         </View>
 
         {/* ------------------------------------------------------------------ */}
-        {/* SECTION 2: Permission toggles (Calendar / Contacts)                  */}
+        {/* SECTION 2: Permission toggles (Calendar)                             */}
         {/* ------------------------------------------------------------------ */}
         <View>
           <SectionHeader title="Permissions" colors={colors} />
@@ -274,42 +234,6 @@ export default function IntegrationsScreen() {
                   Calendar is used to provide context about your schedule to AI assistants. Upcoming
                   events help the AI understand your availability and suggest better times for
                   tasks.
-                </Text>
-              </Card>
-
-              {/* Contacts */}
-              <Card>
-                <View className="flex-row items-center justify-between mb-3">
-                  <View className="flex-row items-center gap-3">
-                    <View
-                      className="w-9 h-9 rounded-lg items-center justify-center"
-                      style={{ backgroundColor: colors.purpleSurface }}
-                    >
-                      <Users size={18} color={colors.purple} />
-                    </View>
-                    <View>
-                      <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
-                        Contacts
-                      </Text>
-                      <View className="flex-row items-center gap-1.5 mt-0.5">
-                        <StatusIcon status={contactsStatus} colors={colors} />
-                        <Badge
-                          label={statusLabel(contactsStatus)}
-                          color={statusBadgeColor(contactsStatus)}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                  <Switch
-                    value={contactsStatus === 'granted'}
-                    onValueChange={handleContactsToggle}
-                  />
-                </View>
-                <Separator className="mb-3" />
-                <Text className="text-xs leading-4" style={{ color: colors.textMuted }}>
-                  Contacts helps AI find and reference people you know. When you mention someone by
-                  name, the AI can look up their details to help draft messages or schedule
-                  meetings.
                 </Text>
               </Card>
 

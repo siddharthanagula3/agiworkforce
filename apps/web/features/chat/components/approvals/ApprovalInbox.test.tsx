@@ -110,7 +110,43 @@ describe('ApprovalInbox', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Approve Read file' }));
 
     await waitFor(() => {
-      expect(onResolve).toHaveBeenCalledWith('assistant-1', 'call-read', 'approved');
+      expect(onResolve).toHaveBeenCalledWith('assistant-1', 'call-read', 'approved', undefined);
+    });
+  });
+
+  it('sends typed guidance with the decision so a run can be redirected without stopping it', async () => {
+    const onResolve = vi.fn(async () => {});
+    render(
+      <ApprovalInbox
+        messages={[
+          assistantMessage({
+            metadata: {
+              cloudApproval: {
+                schemaVersion: 1,
+                runId: '5c8e9b8e-cbad-4e76-87cf-e17e7d828c40',
+                calls: [{ toolCallId: 'call-read', name: 'file_read' }],
+              },
+            },
+          }),
+        ]}
+        onResolve={onResolve}
+        isApprovalLive={() => true}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approvals (1 pending)' }));
+    fireEvent.change(await screen.findByLabelText('Guidance for Read file'), {
+      target: { value: '  Read the changelog instead.  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve Read file' }));
+
+    await waitFor(() => {
+      expect(onResolve).toHaveBeenCalledWith(
+        'assistant-1',
+        'call-read',
+        'approved',
+        'Read the changelog instead.',
+      );
     });
   });
 

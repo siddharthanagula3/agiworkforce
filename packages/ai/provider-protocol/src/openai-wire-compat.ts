@@ -1,4 +1,3 @@
-
 import type {
   ChatRequest,
   ContentBlock,
@@ -236,6 +235,9 @@ function stopReasonToFinishReason(
     case 'tool_use':
       return 'tool_calls';
     case 'max_tokens':
+    case 'pause_turn':
+      // The wire has no pause; `length` is its only "incomplete, continuable"
+      // value, and `stop` would claim the turn finished
       return 'length';
     case 'refusal':
       // The OpenAI wire's own safety-stop vocabulary — a refusal must reach

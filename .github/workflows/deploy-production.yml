@@ -60,14 +60,28 @@ jobs:
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
           node scripts/verify-deployment.mjs "$PRODUCTION_WEB_URL" "$head_sha"
 
+      # The `/v1/*` aliases exist only as host-scoped rewrites, so nothing but a
+      # request carrying the real `api.` Host header exercises them. A
+      # `*.vercel.app` probe cannot: it fails the host condition and falls
+      # through to the app's not-found page, which is exactly the regression
+      # this step exists to catch.
+      - name: Verify the API host serves the OpenAI-compatible aliases
+        id: api-host
+        shell: bash
+        run: node scripts/verify-deployment.mjs --api-host "$PRODUCTION_WEB_URL"
+
       - name: Record the production drift check
         if: ${{ !cancelled() }}
         env:
           HEAD_SHA: ${{ steps.drift.outputs.head_sha }}
           DRIFT_OUTCOME: ${{ steps.drift.outcome }}
+          API_HOST_OUTCOME: ${{ steps.api-host.outcome }}
         shell: bash
         run: |
           set -euo pipefail
+          if [ "$API_HOST_OUTCOME" = "failure" ]; then
+            echo "::error::the API host is not serving /v1/*; the host-scoped rewrite is inert"
+          fi
           if [ "$DRIFT_OUTCOME" = "success" ]; then
             verdict="production serves main HEAD"
           else
@@ -80,6 +94,7 @@ jobs:
             echo "- Origin: $PRODUCTION_WEB_URL"
             echo "- main HEAD: \`${HEAD_SHA:-unknown}\`"
             echo "- Serving path: probed via /api/health plus authenticated routes"
+            echo "- API host /v1/* aliases: $API_HOST_OUTCOME"
             echo "- Verdict: $verdict"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -94,7 +109,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       web: ${{ steps.scope.outputs.web }}
-      gateway: ${{ steps.scope.outputs.gateway }}
     steps:
       - name: Checkout the CI-verified commit
         uses: actions/checkout@v6
@@ -136,6 +150,7 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       AGI_DATABASE_URL: ${{ secrets.AGI_DATABASE_URL }}
+      PAGER_WEBHOOK_URL: ${{ secrets.PAGER_WEBHOOK_URL }}
     steps:
       - name: Checkout the CI-verified commit
         uses: actions/checkout@v6
@@ -166,6 +181,15 @@ jobs:
 
       - name: Self-test the production serving-path verifier
         run: node --test scripts/verify-deployment.test.mjs
+
+      - name: Self-test the environment drift reconciler
+        run: node --test scripts/check-env-drift.test.mjs
+
+      # Pre-flight, before anything is built. The 6-hourly reconcile catches a
+      # deleted variable up to six hours late; this catches it before the build
+      # that would boot without it reaches production.
+      - name: Reconcile production env against the declared contract
+        run: node scripts/check-env-drift.mjs --scope web --target production
 
       - name: Install migration-ledger dependencies
         run: pnpm install --frozen-lockfile
@@ -312,202 +336,4 @@ jobs:
             echo "- URL: $DEPLOYMENT_URL"
             echo "- Serving path: $serving_path"
             echo "- Rollback: $rollback"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-gateway-staging:
-    name: Build and verify gateway staging
-    needs: scope
-    if: needs.scope.outputs.gateway == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    environment:
-      name: staging-gateway
-      url: ${{ vars.GATEWAY_STAGING_URL }}
-    outputs:
-      image_ref: ${{ steps.image.outputs.image_ref }}
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      FLY_GATEWAY_STAGING_APP: ${{ vars.FLY_GATEWAY_STAGING_APP }}
-      GATEWAY_STAGING_URL: ${{ vars.GATEWAY_STAGING_URL }}
-      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-    steps:
-      - name: Checkout the CI-verified commit
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-
-      - name: Install Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1.6
-
-      - name: Require the protected staging contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in FLY_API_TOKEN FLY_GATEWAY_STAGING_APP GATEWAY_STAGING_URL HEAD_SHA; do
-            if [ -z "${!name:-}" ]; then
-              echo "::error::$name is required in the staging-gateway environment"
-              exit 1
-            fi
-          done
-
-      - name: Authenticate to the Fly registry
-        run: flyctl auth docker
-
-      - name: Build and publish the verified gateway image
-        id: image
-        shell: bash
-        run: |
-          set -euo pipefail
-          image_tag="registry.fly.io/${FLY_GATEWAY_STAGING_APP}:sha-${HEAD_SHA}"
-          metadata_file="$RUNNER_TEMP/gateway-image.json"
-          docker buildx build \
-            --platform linux/amd64 \
-            --file services/api-gateway/Dockerfile \
-            --build-arg "RELEASE_SHA=$HEAD_SHA" \
-            --tag "$image_tag" \
-            --metadata-file "$metadata_file" \
-            --provenance=false \
-            --push \
-            .
-
-          METADATA_FILE="$metadata_file" IMAGE_TAG="$image_tag" node <<'NODE'
-          const fs = require('node:fs');
-          const metadata = JSON.parse(fs.readFileSync(process.env.METADATA_FILE, 'utf8'));
-          const digest = metadata['containerimage.digest'];
-          if (typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(digest)) {
-            throw new Error('Docker did not return an immutable image digest');
-          }
-          fs.appendFileSync(
-            process.env.GITHUB_OUTPUT,
-            `image_ref=${process.env.IMAGE_TAG}@${digest}\n`,
-          );
-          NODE
-
-      - name: Deploy the immutable image to staging
-        env:
-          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
-        run: >-
-          flyctl deploy
-          --config infrastructure/api-gateway/fly.staging.toml
-          --app "$FLY_GATEWAY_STAGING_APP"
-          --image "$IMAGE_REF"
-          --ha=false
-          --strategy rolling
-          --wait-timeout 300
-          --yes
-
-      - name: Hold the gateway at one machine until the durable-state ticket
-        run: flyctl scale count 1 --app "$FLY_GATEWAY_STAGING_APP" --yes
-
-      - name: Verify staging HTTP readiness and WebSocket upgrade
-        run: >-
-          node scripts/verify-gateway-deployment.mjs
-          "$GATEWAY_STAGING_URL"
-          "$HEAD_SHA"
-
-      - name: Record staging deployment summary
-        env:
-          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
-        shell: bash
-        run: |
-          {
-            echo "## API gateway staging deployment"
-            echo
-            echo "- Commit: \`$HEAD_SHA\`"
-            echo "- Image: \`$IMAGE_REF\`"
-            echo "- HTTP health, readiness, and WebSocket upgrade: passed"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  deploy-gateway-production:
-    name: Promote verified gateway image to production
-    needs: [scope, deploy-gateway-staging]
-    if: needs.scope.outputs.gateway == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    environment:
-      name: production-gateway
-      url: ${{ vars.GATEWAY_PRODUCTION_URL }}
-    env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      AGI_DATABASE_URL: ${{ secrets.AGI_DATABASE_URL }}
-      FLY_GATEWAY_PRODUCTION_APP: ${{ vars.FLY_GATEWAY_PRODUCTION_APP }}
-      GATEWAY_PRODUCTION_URL: ${{ vars.GATEWAY_PRODUCTION_URL }}
-      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-      IMAGE_REF: ${{ needs.deploy-gateway-staging.outputs.image_ref }}
-    steps:
-      - name: Checkout the CI-verified commit
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
-        with:
-          version: 9.15.3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1.6
-
-      - name: Require the protected production contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in FLY_API_TOKEN AGI_DATABASE_URL FLY_GATEWAY_PRODUCTION_APP GATEWAY_PRODUCTION_URL HEAD_SHA IMAGE_REF; do
-            if [ -z "${!name:-}" ]; then
-              echo "::error::$name is required in the production-gateway environment"
-              exit 1
-            fi
-          done
-
-      - name: Install migration-ledger dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify the production schema ledger without mutation
-        run: pnpm db:migrate -- verify
-
-      - name: Deploy the exact staging image to production
-        run: >-
-          flyctl deploy
-          --config infrastructure/api-gateway/fly.production.toml
-          --app "$FLY_GATEWAY_PRODUCTION_APP"
-          --image "$IMAGE_REF"
-          --ha=false
-          --strategy rolling
-          --wait-timeout 300
-          --yes
-
-      - name: Hold the gateway at one machine until the durable-state ticket
-        run: flyctl scale count 1 --app "$FLY_GATEWAY_PRODUCTION_APP" --yes
-
-      - name: Verify production HTTP readiness and WebSocket upgrade
-        run: >-
-          node scripts/verify-gateway-deployment.mjs
-          "$GATEWAY_PRODUCTION_URL"
-          "$HEAD_SHA"
-
-      - name: Record production deployment summary
-        shell: bash
-        run: |
-          {
-            echo "## API gateway production deployment"
-            echo
-            echo "- Commit: \`$HEAD_SHA\`"
-            echo "- Image: \`$IMAGE_REF\`"
-            echo "- Source: exact staging-tested digest"
-            echo "- Production schema ledger: verified without mutation"
-            echo "- HTTP health, readiness, and WebSocket upgrade: passed"
           } >> "$GITHUB_STEP_SUMMARY"

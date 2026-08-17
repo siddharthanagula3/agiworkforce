@@ -2,7 +2,18 @@ import { useState } from 'react';
 import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 import type { DisclosureCopy } from '@agiworkforce/compliance';
+
+export const PRIVACY_POLICY_URL = 'https://agiworkforce.com/privacy';
+export const INDIA_DPDP_NOTICE_URL = 'https://agiworkforce.com/privacy/india';
+
+const PRIVACY_NOTICE_TITLE = 'What we collect';
+const PRIVACY_NOTICE_BODY = [
+  'Local Mode: your chats stay on this device, encrypted at rest. No account, no upload.',
+  'AGI Cloud (only after you sign in): your account email and name, the messages you send, any photos or files you attach, and a device identifier used for push notifications are sent to AGI Cloud and to the model provider serving your request.',
+  'We never use your conversations to track you across other apps or websites.',
+].join('\n\n');
 
 interface Props {
   visible: boolean;
@@ -49,6 +60,40 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
             </Text>
 
             <Text style={[styles.summary, { color: colors.textSecondary }]}>{copy.summary}</Text>
+
+            <View
+              testID="disclosure-privacy-card"
+              style={[
+                styles.privacyCard,
+                { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[styles.privacyTitle, { color: colors.textPrimary }]}
+                accessibilityRole="header"
+              >
+                {PRIVACY_NOTICE_TITLE}
+              </Text>
+              <Text style={[styles.privacyBody, { color: colors.textSecondary }]}>
+                {PRIVACY_NOTICE_BODY}
+              </Text>
+              <Pressable
+                testID="disclosure-privacy-policy-link"
+                onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
+                accessibilityRole="link"
+                accessibilityLabel="Read the AGI privacy policy"
+              >
+                <Text style={[styles.privacyLink, { color: colors.teal }]}>Privacy Policy</Text>
+              </Pressable>
+              <Pressable
+                testID="disclosure-dpdp-notice-link"
+                onPress={() => void openInAppBrowser(INDIA_DPDP_NOTICE_URL)}
+                accessibilityRole="link"
+                accessibilityLabel="Read the India DPDP notice"
+              >
+                <Text style={[styles.privacyLink, { color: colors.teal }]}>India DPDP notice</Text>
+              </Pressable>
+            </View>
 
             <Pressable
               onPress={() => setLegalExpanded((v) => !v)}
@@ -142,6 +187,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 16,
+  },
+  privacyCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+    gap: 8,
+  },
+  privacyTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  privacyBody: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  privacyLink: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   legalToggle: {
     paddingVertical: 4,

@@ -62,6 +62,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../primitives/Dialog';
+import { useConfirm } from '../primitives/ConfirmDialog';
 import {
   parseCustomMcpJsonConfig,
   describeCustomMcpJsonImportError,
@@ -85,79 +86,15 @@ function isValidHttpsUrl(value: string): boolean {
   }
 }
 
-// ---------------------------------------------------------------------------
-// useConfirm — the single confirm-before-destructive-action primitive for this
-// modal (CPS-03). Every destructive action here routes through it so a new one
-// cannot ship without a confirm step, as connector Disconnect once did.
-// ---------------------------------------------------------------------------
-
-interface ConfirmRequest {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-}
-
-function useConfirm(): {
-  confirm: (request: ConfirmRequest) => void;
-  confirmDialog: React.ReactNode;
-} {
-  const [request, setRequest] = useState<ConfirmRequest | null>(null);
-  const confirm = useCallback((next: ConfirmRequest) => setRequest(next), []);
-
-  const confirmDialog = (
-    <Dialog
-      open={request !== null}
-      onOpenChange={(open) => {
-        if (!open) setRequest(null);
-      }}
-    >
-      <DialogContent className="border-border bg-card sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-base font-semibold text-foreground">
-            {request?.title}
-          </DialogTitle>
-          <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-            {request?.description}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => setRequest(null)}
-            className={cn(
-              'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
-              FOCUS_RING,
-            )}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const pending = request;
-              setRequest(null);
-              pending?.onConfirm();
-            }}
-            className={cn(
-              'rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground transition-colors hover:bg-destructive/90',
-              FOCUS_RING,
-            )}
-          >
-            {request?.confirmLabel}
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-
-  return { confirm, confirmDialog };
-}
+// Destructive actions in this modal route through the package-shared
+// useConfirm primitive (CPS-03/CONN-29), so a new one cannot ship without a
+// confirm step, as connector Disconnect once did.
 
 const REMOVE_PLUGIN_CONFIRM = {
   title: 'Remove plugin?',
   description: "This plugin's commands and skills will no longer be available.",
-  confirmLabel: 'Remove',
+  confirmText: 'Remove',
+  variant: 'destructive',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -555,7 +492,7 @@ function DirectoryBrowse({
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'az' | 'za'>('az');
   const [category, setCategory] = useState('All');
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   // WEB-31: installing a pack grants its skills and reuses the connectors it
   // declares, so the grant has to be shown and accepted before the install call
   // is made — never on the way back from it.
@@ -619,6 +556,91 @@ function DirectoryBrowse({
     )
     .sort(byName);
 
+  const isUsableHere = (connector: SettingsConnector) =>
+    connectionById.has(connector.id) || Boolean(connector.canConnect && adapter?.connectConnector);
+  const connectableConnectors = visibleConnectors.filter(isUsableHere);
+  const previewConnectors = visibleConnectors.filter((c) => !isUsableHere(c));
+
+  const renderConnectorCard = (connector: SettingsConnector) => {
+    const connection = connectionById.get(connector.id);
+    const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
+    const mutating = mutatingIds.has(connector.id);
+    const error = errors[connector.id];
+    return (
+      <div
+        key={connector.id}
+        className="flex flex-col gap-2 rounded-lg border border-border/80 bg-card/40 p-3.5 transition-colors hover:bg-card/70"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <ConnectorLogo
+              connectorId={connector.id}
+              fallbackGradient={connector.iconBg}
+              fallbackText={connector.iconText}
+              size="sm"
+            />
+            <div className="min-w-0">
+              <span className="block truncate text-sm font-medium text-foreground">
+                {connector.name}
+              </span>
+              <span className="text-[11px] text-muted-foreground">{connector.category}</span>
+            </div>
+          </div>
+          <div className="shrink-0">
+            {mutating ? (
+              <Loader2
+                className="h-4 w-4 animate-spin text-muted-foreground"
+                aria-label={`Connecting ${connector.name}`}
+              />
+            ) : connection ? (
+              onOpenConnector ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenConnector(connector.id)}
+                  aria-label={`Configure ${connector.name}`}
+                  className={cn(
+                    'flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                    FOCUS_RING,
+                  )}
+                >
+                  <SettingsIcon className="h-4 w-4" />
+                </button>
+              ) : (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15">
+                  <Check className="h-3 w-3 text-primary" aria-hidden="true" />
+                </span>
+              )
+            ) : canConnect ? (
+              <button
+                type="button"
+                onClick={() => connect(connector.id)}
+                aria-label={`Connect ${connector.name}`}
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                  FOCUS_RING,
+                )}
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">
+                {connector.statusLabel ?? 'Not connected'}
+              </span>
+            )}
+          </div>
+        </div>
+        <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
+          {connector.description}
+        </p>
+        {error && (
+          <p role="alert" className="text-[11px] text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   const selectTab = (nextTab: BrowseTab) => {
     setTab(nextTab);
     if (nextTab === 'connectors' && adapter?.connectors === undefined && !connectorsLoading) {
@@ -647,8 +669,8 @@ function DirectoryBrowse({
         <h2 className="text-base font-semibold text-foreground">Browse directory</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {hasPluginDirectory
-            ? 'Explore skills, connectors, and plugins available in this environment.'
-            : 'Explore skills and connectors available in this environment.'}
+            ? 'Explore the skills, connectors, and plugins in the catalog, and see which ones this environment can use today.'
+            : 'Explore the skills and connectors in the catalog, and see which ones this environment can use today.'}
         </p>
       </div>
 
@@ -764,88 +786,31 @@ function DirectoryBrowse({
             No connectors match.
           </p>
         ) : (
-          <div id="settings-directory-connectors" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {visibleConnectors.map((connector) => {
-              const connection = connectionById.get(connector.id);
-              const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
-              const mutating = mutatingIds.has(connector.id);
-              const error = errors[connector.id];
-              return (
-                <div
-                  key={connector.id}
-                  className="flex flex-col gap-2 rounded-lg border border-border/80 bg-card/40 p-3.5 transition-colors hover:bg-card/70"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ConnectorLogo
-                        connectorId={connector.id}
-                        fallbackGradient={connector.iconBg}
-                        fallbackText={connector.iconText}
-                        size="sm"
-                      />
-                      <div className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-foreground">
-                          {connector.name}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground">
-                          {connector.category}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="shrink-0">
-                      {mutating ? (
-                        <Loader2
-                          className="h-4 w-4 animate-spin text-muted-foreground"
-                          aria-label={`Connecting ${connector.name}`}
-                        />
-                      ) : connection ? (
-                        onOpenConnector ? (
-                          <button
-                            type="button"
-                            onClick={() => onOpenConnector(connector.id)}
-                            aria-label={`Configure ${connector.name}`}
-                            className={cn(
-                              'flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                              FOCUS_RING,
-                            )}
-                          >
-                            <SettingsIcon className="h-4 w-4" />
-                          </button>
-                        ) : (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15">
-                            <Check className="h-3 w-3 text-primary" aria-hidden="true" />
-                          </span>
-                        )
-                      ) : canConnect ? (
-                        <button
-                          type="button"
-                          onClick={() => connect(connector.id)}
-                          aria-label={`Connect ${connector.name}`}
-                          className={cn(
-                            'flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-                            FOCUS_RING,
-                          )}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground">
-                          {connector.statusLabel ?? 'Not connected'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
-                    {connector.description}
-                  </p>
-                  {error && (
-                    <p role="alert" className="text-[11px] text-destructive">
-                      {error}
-                    </p>
-                  )}
+          <div id="settings-directory-connectors" className="flex flex-col gap-5">
+            {connectableConnectors.length > 0 && (
+              <section className="flex flex-col gap-2.5">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Available in this environment ({connectableConnectors.length})
+                </h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {connectableConnectors.map(renderConnectorCard)}
                 </div>
-              );
-            })}
+              </section>
+            )}
+            {previewConnectors.length > 0 && (
+              <section className="flex flex-col gap-2.5">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Not connectable here yet ({previewConnectors.length})
+                </h3>
+                <p className="-mt-1 text-xs text-muted-foreground">
+                  Listed so you can see what the catalog covers. This deployment cannot connect them
+                  yet.
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {previewConnectors.map(renderConnectorCard)}
+                </div>
+              </section>
+            )}
           </div>
         ))}
 
@@ -1030,9 +995,8 @@ function DirectoryBrowse({
                         type="button"
                         disabled={plugin.mutating}
                         onClick={() =>
-                          confirm({
-                            ...REMOVE_PLUGIN_CONFIRM,
-                            onConfirm: () => void adapter.removePlugin?.(plugin.id),
+                          void confirm(REMOVE_PLUGIN_CONFIRM).then((confirmed) => {
+                            if (confirmed) void adapter.removePlugin?.(plugin.id);
                           })
                         }
                         className={cn(
@@ -1257,6 +1221,8 @@ function AddCustomConnectorForm({
           ) : (
             <a
               href="/docs"
+              target="_blank"
+              rel="noreferrer"
               className={cn('text-foreground underline underline-offset-2', FOCUS_RING)}
             >
               Learn more
@@ -1450,7 +1416,7 @@ function ConnectorsPanel({
     connect: handleConnect,
     disconnect: handleDisconnect,
   } = useConnectorMutations(adapter);
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const catalogConnectors = useMemo(
     () => (adapter?.connectors ?? []).filter((c) => !c.exclusive),
@@ -1535,11 +1501,13 @@ function ConnectorsPanel({
           mutating={mutatingIds.has(detailConnector.id)}
           onConnect={() => handleConnect(detailConnector.id)}
           onDisconnect={() =>
-            confirm({
+            void confirm({
               title: `Disconnect ${detailConnector.name}?`,
               description: `The assistant will no longer be able to use ${detailConnector.name}. You can connect it again later.`,
-              confirmLabel: 'Disconnect',
-              onConfirm: () => handleDisconnect(detailConnector.id),
+              confirmText: 'Disconnect',
+              variant: 'destructive',
+            }).then((confirmed) => {
+              if (confirmed) handleDisconnect(detailConnector.id);
             })
           }
           onBack={() => setDetailId(null)}
@@ -1951,7 +1919,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'table' | 'browse'>('table');
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const plugins = useMemo(() => adapter?.plugins ?? [], [adapter?.plugins]);
   const loading = adapter?.pluginsLoading ?? false;
   const loadError = adapter?.pluginsError;
@@ -2190,9 +2158,8 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                             type="button"
                             disabled={plugin.mutating}
                             onClick={() =>
-                              confirm({
-                                ...REMOVE_PLUGIN_CONFIRM,
-                                onConfirm: () => void adapter.removePlugin?.(plugin.id),
+                              void confirm(REMOVE_PLUGIN_CONFIRM).then((confirmed) => {
+                                if (confirmed) void adapter.removePlugin?.(plugin.id);
                               })
                             }
                             className={cn(

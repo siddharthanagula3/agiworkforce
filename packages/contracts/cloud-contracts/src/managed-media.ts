@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 export const MANAGED_MEDIA_IMAGE_PROVIDERS = ['google', 'openai', 'stability'] as const;
@@ -55,9 +54,23 @@ export const MANAGED_MEDIA_IMAGE_OPERATIONS = [
 ] as const;
 export const ManagedMediaImageOperationSchema = z.enum(MANAGED_MEDIA_IMAGE_OPERATIONS);
 
+export const MANAGED_MEDIA_IMAGE_EDIT_PROVIDERS = [
+  'openai',
+] as const satisfies readonly (typeof MANAGED_MEDIA_IMAGE_PROVIDERS)[number][];
+
+export function supportsManagedMediaImageEdit(provider: string | null | undefined): boolean {
+  return MANAGED_MEDIA_IMAGE_EDIT_PROVIDERS.includes(
+    provider as (typeof MANAGED_MEDIA_IMAGE_EDIT_PROVIDERS)[number],
+  );
+}
+
+export const MANAGED_MEDIA_IMAGE_REF_MAX_B64_LENGTH = 12_000_000;
+export const MANAGED_MEDIA_IMAGE_REF_MAX_BYTES =
+  Math.floor(MANAGED_MEDIA_IMAGE_REF_MAX_B64_LENGTH / 4) * 3;
+
 export const ManagedMediaImageRefSchema = z.union([
   z.object({ asset_id: z.string().uuid() }).strict(),
-  z.object({ b64_json: z.string().min(1).max(12_000_000) }).strict(),
+  z.object({ b64_json: z.string().min(1).max(MANAGED_MEDIA_IMAGE_REF_MAX_B64_LENGTH) }).strict(),
 ]);
 
 export const ManagedMediaImageGenerationRequestSchema = z

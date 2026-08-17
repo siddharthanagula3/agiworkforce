@@ -1,4 +1,3 @@
-
 import { ChevronLeft, ChevronRight, Maximize2, Presentation } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
@@ -109,7 +108,7 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
     <div
       ref={containerRef}
       className={cn(
-        'flex flex-col h-[450px] bg-black border rounded-xl overflow-hidden relative group outline-none',
+        '@container flex flex-col h-[450px] bg-black border rounded-xl overflow-hidden relative group outline-none',
         className,
       )}
       data-testid="presentation-artifact"
@@ -119,8 +118,11 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
       aria-roledescription="slide deck"
       aria-label={artifact.title || 'Presentation'}
     >
-      {/* Slide canvas */}
-      <div className="flex-1 relative bg-gradient-to-br from-muted via-background to-black p-8 flex flex-col justify-center items-center overflow-hidden">
+      {/* Slide canvas. The deck is hosted inside the artifacts split pane,
+          which is as narrow as 280px while the window stays wide, so every
+          padding step below queries the deck (@container on the root), never
+          the viewport. */}
+      <div className="flex-1 relative bg-gradient-to-br from-muted via-background to-black p-4 @[30rem]:p-8 flex flex-col justify-center items-center overflow-hidden">
         {/* Decorative blurs */}
         <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:20px_20px]" />
         <div className="absolute -left-20 -top-20 h-64 w-64 rounded-full bg-purple-500/10 blur-[100px]" />
@@ -128,7 +130,7 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
 
         {/* Slide card */}
         <div
-          className="w-full max-w-4xl aspect-[16/9] bg-card/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 sm:p-12 shadow-2xl flex flex-col relative z-10 transition-transform duration-500"
+          className="w-full max-w-4xl aspect-[16/9] bg-card/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 @[30rem]:p-8 @[40rem]:p-12 shadow-2xl flex flex-col relative z-10 transition-transform duration-500"
           role="group"
           aria-roledescription="slide"
           aria-label={`Slide ${slideIndex + 1} of ${slides.length}`}

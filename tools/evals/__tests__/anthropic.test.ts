@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   anthropicResponder,
   extractResponse,
+  messagesUrl,
   readModelCatalog,
   resolveAnthropicModel,
 } from '../src/anthropic';
@@ -115,6 +116,13 @@ describe('anthropicResponder', () => {
       max_tokens: 64,
       messages: [{ role: 'user', content: evalCase.prompt }],
     });
+  });
+
+  it('re-hosts the provider from the environment without a code edit', () => {
+    expect(messagesUrl({})).toBe('https://api.anthropic.com/v1/messages');
+    expect(messagesUrl({ ANTHROPIC_BASE_URL: 'https://gateway.internal/anthropic/v1/' })).toBe(
+      'https://gateway.internal/anthropic/v1/messages',
+    );
   });
 
   it('fails the run on a provider error instead of scoring an empty answer', async () => {

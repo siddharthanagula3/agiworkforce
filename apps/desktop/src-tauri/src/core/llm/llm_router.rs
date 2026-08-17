@@ -455,6 +455,26 @@ pub struct RouterPreferences {
     pub trust_mode: Option<TrustMode>,
 }
 
+/// TRUST BOUNDARY: what to tell a Local conversation that produced no candidate.
+///
+/// A Local conversation keeps only local providers (see
+/// [`provider_matches_trust_mode`]), so picking a configured BYOK model inside
+/// one empties the candidate list. The generic "start your local runtime"
+/// message blamed Ollama for a refusal Ollama had nothing to do with; a BYOK
+/// selection has to name the boundary and the fork that crosses it properly.
+pub(crate) fn local_only_no_candidate_message(requested: Option<Provider>) -> &'static str {
+    let asked_for_byok = requested.is_some_and(|provider| {
+        !provider_matches_trust_mode(provider, TrustMode::Local) && provider != Provider::ManagedCloud
+    });
+    if asked_for_byok {
+        return "This conversation is Local, so it will not be sent to a BYOK provider. \
+                Fork it to BYOK — which lets you choose the context, scans it for secrets and \
+                shows you the payload first — or pick a local model to keep the thread on device.";
+    }
+    "No local model provider is reachable. Ensure your local runtime (e.g. Ollama) is \
+     running and a local model is installed and selected, then try again."
+}
+
 fn provider_matches_trust_mode(provider: Provider, trust_mode: TrustMode) -> bool {
     let is_local = matches!(
         provider,
@@ -1675,8 +1695,7 @@ impl LLMRouter {
             // or no local model is installed/selected). Surface that specifically so
             // the failure is diagnosable instead of a silent/confusing drop.
             let message = if preferences.local_only {
-                "No local model provider is reachable. Ensure your local runtime (e.g. Ollama) is \
-                 running and a local model is installed and selected, then try again."
+                local_only_no_candidate_message(preferences.provider)
             } else {
                 "No LLM providers configured"
             };
@@ -1917,16 +1936,17 @@ impl LLMRouter {
             RoutingStrategy::AutoPremium => "auto-premium",
             _ => return Vec::new(),
         };
+        let runtime_profile_id = match trust_mode {
+            TrustMode::ManagedCloud => "desktop/cloud-chat",
+            TrustMode::Byok => "desktop/byok-chat",
+            TrustMode::Local | TrustMode::OnDevice => "desktop/local-chat",
+        };
         let request = AutoRoutingRequest {
             selection: Some(selection),
             task_type,
             subscription_tier: plan_tier,
             trust_mode,
-            runtime_profile_id: Some(match trust_mode {
-                TrustMode::ManagedCloud => "desktop/cloud-chat",
-                TrustMode::Byok => "desktop/byok-chat",
-                TrustMode::Local | TrustMode::OnDevice => "desktop/local-chat",
-            }),
+            runtime_profile_id: Some(runtime_profile_id),
             ..AutoRoutingRequest::default()
         };
 
@@ -1967,13 +1987,74 @@ impl LLMRouter {
                     reasons = ?unavailable.reasons,
                     "Canonical Auto policy found no eligible Desktop route"
                 );
-                Vec::new()
+                self.runtime_profile_harness_candidates(runtime_profile_id, trust_mode)
             }
             Err(error) => {
                 tracing::error!(error = %error, "Failed to load canonical Auto policy");
                 Vec::new()
             }
         }
+    }
+
+    /// Fallback candidate order for a runtime profile whose models the registry
+    /// cannot enumerate.
+    ///
+    /// A Local boundary has no catalog routes at all: a local model's identity
+    /// comes from whatever the user pulled into their own runtime, so
+    /// `resolve_auto_route` can only ever answer `Unavailable` for
+    /// `desktop/local-chat`. Without this step every Auto strategy under Local
+    /// produced an empty candidate list, which dead-ended the planner, the AGI
+    /// executors and every other caller that leaves `provider` unset.
+    ///
+    /// The order is the profile's `allowedHarnessIds` as the registry declares
+    /// them — that list is the documented fallback order, not a literal here.
+    /// TRUST BOUNDARY: `provider_matches_trust_mode` still gates every entry, so
+    /// this can only widen a boundary to providers the boundary already admits.
+    fn runtime_profile_harness_candidates(
+        &self,
+        runtime_profile_id: &str,
+        trust_mode: TrustMode,
+    ) -> Vec<RouteCandidate> {
+        let profile = match agiworkforce_model_registry::runtime_profile(runtime_profile_id) {
+            Ok(Some(profile)) => profile,
+            Ok(None) => return Vec::new(),
+            Err(error) => {
+                tracing::error!(
+                    error = %error,
+                    "Failed to load the runtime profile harness fallback"
+                );
+                return Vec::new();
+            }
+        };
+
+        let mut candidates: Vec<RouteCandidate> = Vec::new();
+        for harness_id in &profile.allowed_harness_ids {
+            let Some((provider_key, _)) = harness_id.split_once('/') else {
+                continue;
+            };
+            let Some(provider) = Provider::from_string(provider_key) else {
+                continue;
+            };
+            if !provider_matches_trust_mode(provider, trust_mode) {
+                continue;
+            }
+            if !self.has_provider(provider) {
+                continue;
+            }
+            if candidates
+                .iter()
+                .any(|candidate| candidate.provider == provider)
+            {
+                continue;
+            }
+            candidates.push(RouteCandidate {
+                strategy: None,
+                provider,
+                model: super::models_config::get_default_model(&provider).to_string(),
+                reason: "runtime-profile-harness",
+            });
+        }
+        candidates
     }
 
     /// Default model selection for each provider and task category.
@@ -2496,8 +2577,7 @@ impl LLMRouter {
             // or no local model is installed/selected). Surface that specifically so
             // the failure is diagnosable instead of a silent/confusing drop.
             let message = if preferences.local_only {
-                "No local model provider is reachable. Ensure your local runtime (e.g. Ollama) is \
-                 running and a local model is installed and selected, then try again."
+                local_only_no_candidate_message(preferences.provider)
             } else {
                 "No LLM providers configured"
             };

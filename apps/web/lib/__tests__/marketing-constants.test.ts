@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { modelsCatalogJson } from '@agiworkforce/types';
 import {
@@ -9,6 +11,16 @@ import {
   MARKETING_FEATURE_MATRIX,
   SURFACE_STATUS,
 } from '../marketing-constants';
+
+const repoRoot = resolve(import.meta.dirname, '../../../..');
+
+function shippedVersion(manifestPath: string): string {
+  const manifest = JSON.parse(readFileSync(resolve(repoRoot, manifestPath), 'utf8')) as {
+    version?: string;
+  };
+  if (!manifest.version) throw new Error(`${manifestPath} declares no version`);
+  return manifest.version;
+}
 
 describe('marketing plan matrix', () => {
   it('uses the founder-approved shared catalog labels and prices', () => {
@@ -87,10 +99,10 @@ describe('surface availability', () => {
     expect(statuses.every((status) => status === COMING_SOON_LABEL)).toBe(false);
   });
 
-  it('states the three shipped surfaces as available', () => {
+  it('states the three shipped surfaces as available, at the version each one actually ships', () => {
     expect(SURFACE_STATUS.web).not.toBe(COMING_SOON_LABEL);
-    expect(SURFACE_STATUS.desktop).toContain('1.2.0');
-    expect(SURFACE_STATUS.cli).toContain('1.0.0');
+    expect(SURFACE_STATUS.desktop).toContain(shippedVersion('apps/desktop/package.json'));
+    expect(SURFACE_STATUS.cli).toContain(shippedVersion('apps/cli/npm/package.json'));
   });
 
   it('keeps the three surfaces with no release tag marked unreleased', () => {

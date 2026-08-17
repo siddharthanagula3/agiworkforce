@@ -1316,7 +1316,7 @@ The scale report is organized under the visible sections **Spend**, **Throughput
 - [ ] **SCALE-VER-005 — Add fault injection.** Provider outage, DB timeout, duplicate webhook, queue replay, network loss, expired token, disk full, worker crash, and partial stream.
 - [ ] **SCALE-VER-006 — Add production observability.** Trace model, retrieval, tool, approval, task, billing, and external-call spans with redaction and shared correlation IDs.
 
-      > **Triage 2026-08-09 — OPEN_DEFECT — confirmed near-total absence. Exactly ONE module across `apps/web/lib` and `services/api-gateway/src` references a tracer or span. The wave-6 conformance pass reached the same conclusion independently ("no spans anywhere", `toOtelAttributes` with zero production consumers). Without spans, the correlation requirement in SCALE-VER-006 and the incident-review requirement behind ENT-004 cannot be met — there is nothing to correlate.**
+      > **Triage 2026-08-09 — OPEN_DEFECT — confirmed near-total absence. Exactly ONE module across `apps/web/lib` and the Express gateway (since deleted) references a tracer or span. The wave-6 conformance pass reached the same conclusion independently ("no spans anywhere", `toOtelAttributes` with zero production consumers). Without spans, the correlation requirement in SCALE-VER-006 and the incident-review requirement behind ENT-004 cannot be met — there is nothing to correlate.**
 
 - [ ] **SCALE-VER-007 — Define SLOs.** Availability, TTFT, completion, task success, approval wait, sync lag, queue age, scan latency, and notification delivery.
 - [ ] **SCALE-VER-008 — Verify release claims from deployed artifacts.** Do not infer store, marketplace, signing, or production health from source configuration alone.

@@ -1,4 +1,3 @@
-
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { listCanonicalModels, requireProviderDefaultModel } from '@agiworkforce/types';
@@ -476,6 +475,19 @@ describe('Managed Web AGI Work dispatch', () => {
       planTier: 'max',
       isToolDenied: expect.any(Function),
     });
+  });
+
+  it('takes the durable transport by default, with no environment override set', async () => {
+    arrangePaidAgenticTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', undefined);
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+
+    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('wrun_durable_1');
+    expect(workflowRouteMocks.start).toHaveBeenCalledTimes(1);
   });
 
   it('reverts to the request-scoped stream when the kill-switch is off', async () => {

@@ -1,10 +1,8 @@
-
 export type MobilePermissionKind =
   | 'microphone'
   | 'camera'
   | 'photos'
   | 'notifications'
-  | 'contacts'
   | 'calendar'
   | 'reminders';
 

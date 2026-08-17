@@ -14,7 +14,7 @@ export { useChatViewStore } from './chat/chatViewStore';
 import { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
 import { useChatExecutionStore } from './chat/chatExecutionStore';
 import { useChatViewStore } from './chat/chatViewStore';
-import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
 import type { ForkConversationOptions } from './chat/chatMessageStore';
 import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 import type { SendMessageOptions } from './chat/chatExecutionStore';
@@ -81,6 +81,7 @@ export interface CombinedChatState {
     commandContent: string,
     prompt: string,
     model: string,
+    attachments?: MessageAttachment[],
   ) => string;
   completeImageGeneration: (
     conversationId: string,
@@ -114,6 +115,13 @@ export interface CombinedChatState {
     assistantMessageId: string,
     errorMessage: string,
   ) => void;
+  recordVideoGenerationTask: (
+    conversationId: string,
+    assistantMessageId: string,
+    taskId: string,
+  ) => void;
+  isVideoGenerationCancelRequested: (conversationId: string, assistantMessageId: string) => boolean;
+  stopVideoGeneration: (conversationId: string, assistantMessageId: string) => Promise<void>;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
   sendMessage: (
@@ -179,6 +187,9 @@ function buildCombinedState(
     updateVideoGenerationProgress: msg.updateVideoGenerationProgress,
     completeVideoGeneration: msg.completeVideoGeneration,
     failVideoGeneration: msg.failVideoGeneration,
+    recordVideoGenerationTask: msg.recordVideoGenerationTask,
+    isVideoGenerationCancelRequested: msg.isVideoGenerationCancelRequested,
+    stopVideoGeneration: msg.stopVideoGeneration,
     resolveOfflineMessage: msg.resolveOfflineMessage,
     clearQueuedPlaceholders: msg.clearQueuedPlaceholders,
     isStreaming: exec.isStreaming,

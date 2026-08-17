@@ -1,14 +1,15 @@
-
 import type { DetectedField } from './detector';
+import { matchesAtsHostRules, type AtsHostRule } from './hosts';
 
-const GREENHOUSE_URL_PATTERNS = [
-  /boards\.greenhouse\.io\//i,
-  /greenhouse\.io\/.*\/jobs\//i,
-  /grnh\.se\//i, // Greenhouse short-links
+const GREENHOUSE_HOST_RULES: AtsHostRule[] = [
+  { host: 'boards.greenhouse.io' },
+  { host: 'job-boards.greenhouse.io' },
+  { host: 'greenhouse.io', path: /\/jobs\// },
+  { host: 'grnh.se' },
 ];
 
 export function isGreenhouseUrl(url: string): boolean {
-  return GREENHOUSE_URL_PATTERNS.some((re) => re.test(url));
+  return matchesAtsHostRules(url, GREENHOUSE_HOST_RULES);
 }
 
 export const GREENHOUSE_SELECTORS: Record<string, string[]> = {

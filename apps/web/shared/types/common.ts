@@ -1,5 +1,3 @@
-
-
 export type Status = 'idle' | 'loading' | 'success' | 'error';
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
@@ -37,7 +35,7 @@ export interface ApiError {
   details?: Record<string, unknown>;
 }
 
-export interface MessageMetadata {
+export interface AgentTranscriptMetadata {
   model?: string;
   provider?: string;
   tokensUsed?: number;
@@ -82,7 +80,7 @@ export interface BaseChatMessage {
   role: MessageRole;
   content: string;
   createdAt: Date | string;
-  metadata?: MessageMetadata;
+  metadata?: AgentTranscriptMetadata;
 }
 
 export interface SimpleChatMessage {

@@ -53,3 +53,9 @@ export type {
   SkillToolResultCode,
   SkillToolRuntimeContext,
 } from './tool';
+export {
+  matchSkillsForPrompt,
+  DEFAULT_SKILL_RELEVANCE_LIMIT,
+  DEFAULT_SKILL_RELEVANCE_MINIMUM_SCORE,
+} from './relevance';
+export type { MatchSkillsForPromptOptions, SkillRelevanceMatch } from './relevance';

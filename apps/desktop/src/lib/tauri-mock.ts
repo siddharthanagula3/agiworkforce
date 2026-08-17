@@ -1088,9 +1088,11 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         latencyMs: 100,
       } as T;
 
+    case 'voice_inject_text':
+      throw new Error('system dictation is unavailable in this build; text injection is disabled');
+
     case 'voice_start_global_ptt':
     case 'voice_stop_global_ptt':
-    case 'voice_inject_text':
     case 'voice_tts_speak':
       return undefined as T;
 

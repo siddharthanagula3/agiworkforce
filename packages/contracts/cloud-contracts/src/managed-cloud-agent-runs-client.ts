@@ -92,7 +92,7 @@ export interface ManagedCloudAgentRunClient {
   resumeRun(
     runId: string,
     approvals: ManagedCloudAgentRunApproval[],
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; guidance?: string },
   ): Promise<void>;
   followRun(
     runId: string,
@@ -336,12 +336,14 @@ export function createManagedCloudAgentRunClient(
     },
 
     async resumeRun(runId, approvals, options = {}) {
+      const guidance = options.guidance?.trim();
       const body = ToolApprovalResumeRequestSchema.parse({
         run_id: runId,
         tool_approvals: approvals.map((approval) => ({
           tool_call_id: approval.toolCallId,
           decision: approval.decision,
         })),
+        ...(guidance ? { guidance } : {}),
       });
       let response: Response;
       try {

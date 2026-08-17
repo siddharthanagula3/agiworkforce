@@ -9,6 +9,10 @@ import { createError } from '@/lib/errors';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from './subscription-service';
 import type { VerifiedMobileIapPurchase } from '@/lib/server/mobile-iap-store-verification';
+import {
+  resolveSubscriptionOwnerHandoff,
+  subscriptionOwnerHandoffConflictMessage,
+} from '@/lib/server/subscription-owner-handoff';
 
 type ExistingSubscription = Pick<
   SubscriptionRow,
@@ -24,16 +28,6 @@ type ExistingSubscription = Pick<
 
 function planRank(tier: string | null | undefined): number {
   return (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).indexOf(tier ?? '');
-}
-
-function storeOwner(
-  subscription: ExistingSubscription | undefined,
-): 'ios' | 'android' | 'stripe' | null {
-  if (!subscription) return null;
-  if (subscription.stripe_subscription_id) return 'stripe';
-  if (subscription.apple_original_transaction_id) return 'ios';
-  if (subscription.google_purchase_token) return 'android';
-  return null;
 }
 
 function isEntitledStatus(status: string | undefined): boolean {
@@ -96,12 +90,10 @@ export async function recordVerifiedMobileIapPurchase(input: {
       [input.userId],
     );
 
-    const owner = storeOwner(subscription);
+    const handoff = resolveSubscriptionOwnerHandoff(subscription, input.verified.platform);
     if (input.verified.product.kind === 'subscription') {
-      if (owner && owner !== input.verified.platform && isEntitledStatus(subscription?.status)) {
-        throw createError.conflict(
-          'This account already has a subscription managed by another billing provider.',
-        );
+      if (handoff.blocked) {
+        throw createError.conflict(subscriptionOwnerHandoffConflictMessage(handoff));
       }
       if (!input.verified.expiresAt) {
         throw createError.badRequest('Verified subscription is missing its renewal date.');
@@ -216,6 +208,8 @@ export async function recordVerifiedMobileIapPurchase(input: {
          plan_tier = excluded.plan_tier,
          apple_original_transaction_id = excluded.apple_original_transaction_id,
          google_purchase_token = excluded.google_purchase_token,
+         stripe_subscription_id = case when $7 then null else subscriptions.stripe_subscription_id end,
+         stripe_price_id = case when $7 then null else subscriptions.stripe_price_id end,
          current_period_start = excluded.current_period_start,
          current_period_end = excluded.current_period_end,
          cancel_at_period_end = false,
@@ -229,6 +223,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
         input.verified.platform === 'android' ? input.purchaseToken : null,
         periodStart.toISOString(),
         input.verified.expiresAt!.toISOString(),
+        handoff.clearsStripe,
       ],
     );
     if (!upserted?.id) throw createError.internal('Failed to record the store subscription.');

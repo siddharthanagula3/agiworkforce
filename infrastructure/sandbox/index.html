@@ -45,22 +45,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AGI Artifact Sandbox</title>
+    <!--
+      Generated from ARTIFACT_RENDERER_CSP_CONTENT in
+      packages/contracts/types/src/artifact-csp.ts. Kept byte-identical by
+      packages/contracts/types/src/__tests__/artifact-csp.test.ts — edit the
+      module, not this attribute.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="
-        default-src 'none';
-        script-src 'self' 'unsafe-inline' 'unsafe-eval'
-          https://unpkg.com
-          https://cdn.jsdelivr.net;
-        style-src 'self' 'unsafe-inline';
-        img-src 'self' data: blob: https:;
-        font-src 'self' data: https:;
-        connect-src 'none';
-        frame-src 'self';
-        base-uri 'none';
-        form-action 'none';
-        object-src 'none';
-      "
+      content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src data: blob:; connect-src 'none'; frame-src 'self'; child-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <style>
       :root {
@@ -188,6 +181,51 @@
           } catch (e) {
             return false;
           }
+        }
+
+        // --------------------------------------------------------------
+        // CDN runtimes, pinned to an exact version and verified with
+        // Subresource Integrity, exactly as the DOMPurify tag above is.
+        // Without `integrity` a compromised CDN response executes arbitrary
+        // code in this origin, which is the whole artifact trust boundary.
+        // A floating range (react@18, @babel/standalone with no version) is
+        // the same hole: the bytes are allowed to change, so no hash can
+        // cover them. To bump: change the version, re-fetch, recompute
+        // (curl -fsSL <url> | openssl dgst -sha384 -binary | openssl base64 -A).
+        //
+        // mermaid is the single-file UMD bundle, not the .esm.min.mjs entry:
+        // `import` specifiers cannot carry an integrity attribute, and the
+        // ESM build additionally pulls unhashed chunks at runtime.
+        // --------------------------------------------------------------
+        const REACT_RUNTIME_SCRIPTS = [
+          {
+            src: 'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
+            integrity: 'sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z',
+          },
+          {
+            src: 'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js',
+            integrity: 'sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1',
+          },
+          {
+            src: 'https://unpkg.com/@babel/standalone@8.0.4/babel.min.js',
+            integrity: 'sha384-bdF7m0Y1IFKt9Q6xC8X9qkXn0OBriQWKyWwZKYsN05zF6P/g9OakjjL0G2Sd4pB4',
+          },
+        ];
+
+        const MERMAID_RUNTIME_SCRIPT = {
+          src: 'https://cdn.jsdelivr.net/npm/mermaid@10.9.8/dist/mermaid.min.js',
+          integrity: 'sha384-N3QqR/7q+xm3BGX+CBbNI8AUmRRqcsDzToy+0z1NLDI0QmTKW8zvwLvqulJgk3dP',
+        };
+
+        function appendPinnedScript(cfg, parent) {
+          const s = document.createElement('script');
+          s.src = cfg.src;
+          s.integrity = cfg.integrity;
+          s.crossOrigin = 'anonymous';
+          s.referrerPolicy = 'no-referrer';
+          s.async = false;
+          parent.appendChild(s);
+          return s;
         }
 
         const idleEl = document.getElementById('idle');
@@ -322,18 +360,8 @@
           reactRoot.id = 'react-root';
           rootEl.appendChild(reactRoot);
 
-          const scriptConfigs = [
-            { src: 'https://unpkg.com/react@18/umd/react.production.min.js' },
-            { src: 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js' },
-            { src: 'https://unpkg.com/@babel/standalone/babel.min.js' },
-          ];
-
-          scriptConfigs.forEach(function (cfg) {
-            const s = document.createElement('script');
-            s.src = cfg.src;
-            s.crossOrigin = 'anonymous';
-            s.async = false;
-            rootEl.appendChild(s);
+          REACT_RUNTIME_SCRIPTS.forEach(function (cfg) {
+            appendPinnedScript(cfg, rootEl);
           });
 
           const codeScript = document.createElement('script');
@@ -380,25 +408,30 @@
         }
 
         function renderMermaid(payload) {
-          rootEl.innerHTML =
-            '<pre class="mermaid">' +
-            String(payload.code || '').replace(/[&<>]/g, function (c) {
-              return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
-            }) +
-            '</pre>' +
-            '<script type="module">' +
-            'import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";' +
-            'mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });' +
-            'mermaid.run({ querySelector: ".mermaid" });' +
-            '</' +
-            'script>';
-          rootEl.querySelectorAll('script').forEach((oldScript) => {
-            const s = document.createElement('script');
-            for (const attr of oldScript.attributes) {
-              s.setAttribute(attr.name, attr.value);
+          rootEl.innerHTML = '';
+          const pre = document.createElement('pre');
+          pre.className = 'mermaid';
+          pre.textContent = String(payload.code || '');
+          rootEl.appendChild(pre);
+
+          function run() {
+            const mermaid = window.mermaid;
+            if (!mermaid) {
+              showError('Mermaid runtime unavailable');
+              return;
             }
-            s.text = oldScript.textContent || '';
-            oldScript.parentNode.replaceChild(s, oldScript);
+            mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+            mermaid.run({ querySelector: '.mermaid' });
+          }
+
+          if (window.mermaid) {
+            run();
+            return;
+          }
+          const s = appendPinnedScript(MERMAID_RUNTIME_SCRIPT, rootEl);
+          s.addEventListener('load', run);
+          s.addEventListener('error', function () {
+            showError('Mermaid runtime unavailable');
           });
         }
 

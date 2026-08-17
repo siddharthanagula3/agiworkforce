@@ -1,9 +1,10 @@
 # Personal data breach runbook
 
 Status: Draft — **not reviewed by counsel**
+Legal review: pending-counsel
 Owner: Founder (no incident commander is designated; see [Open gaps](#open-gaps))
-Last updated: 2026-08-13
-Applies to: AGI Automation LLC, all surfaces (web, desktop, mobile, extensions, CLI, api-gateway)
+Last updated: 2026-08-15
+Applies to: AGI Automation LLC, all surfaces (web, desktop, mobile, extensions, CLI, signaling server)
 
 This runbook exists because India's Digital Personal Data Protection Act, 2023
 requires a Data Fiduciary to notify **both** the Data Protection Board and
@@ -15,6 +16,13 @@ It is written against what this repository can actually do on the day. Where a
 step depends on something that does not exist yet, it says so instead of
 describing a capability we do not have. Read [Open gaps](#open-gaps) before you
 rely on any of it.
+
+`Legal review:` in the header is the one field that says whether the notification
+templates in §4 and §5 are settled wording. While it reads `pending-counsel`,
+both templates carry a pre-send notice saying so. It becomes `counsel-approved`
+only alongside an `Approved by:` line naming the reviewer and the date they
+signed off, and the pre-send notices come out in the same change. There is no
+third state, and no state in which the templates silently look approved.
 
 ---
 
@@ -87,8 +95,13 @@ was.
      them as expiring.
    - Snapshot the security audit log:
      `select * from public.security_audit_logs where created_at >= $since order by created_at;`
-     Note that this table is purged at 90 days by a routine an administrator
-     runs manually, so an old incident may have no audit trail at all.
+     This table is purged at 90 days by the daily
+     `/api/cron/purge-security-audit-logs` schedule (`vercel.json`), so an
+     incident older than 90 days has no audit trail. Each purge appends its own
+     `retention_purge` event carrying the rows deleted and the age of the oldest
+     surviving row, so what retention was actually applied is readable from the
+     same table:
+     `select created_at, details from public.security_audit_logs where event_type = 'retention_purge' order by created_at desc;`
    - Snapshot the relevant Neon tables (`pg_dump` of the affected tables, or a
      point-in-time branch) before any corrective UPDATE or DELETE.
    - Note the deployment SHA and the migration head (`apps/web/db/neon/`).
@@ -121,6 +134,16 @@ far and are updated.
 ---
 
 ## 4. Board notification template
+
+**Legal review: pending-counsel — this template has not been reviewed by a
+lawyer.** It was drafted from the statute text by an engineer. Counsel must
+review it and the approval must be recorded in the header field at the top of
+this file before this wording is treated as settled.
+
+**This is not a hold on sending.** The statutory clock does not pause for legal
+review. If an incident is live and no approval exists yet, send this as drafted
+and put counsel on the wording in parallel — a late intimation breaches the Act,
+an imperfectly worded one does not.
 
 Send by the means the Board prescribes at the time. Fill every field; write
 "not yet established" where it is not known rather than omitting the line — an
@@ -174,6 +197,18 @@ omitted field reads as a fact withheld.
 ---
 
 ## 5. Data Principal notification template
+
+**Legal review: pending-counsel — this template has not been reviewed by a
+lawyer.** It was drafted from the statute text by an engineer. Counsel must
+review it and the approval must be recorded in the header field at the top of
+this file before this wording is treated as settled. Counsel's attention is
+worth most on the "what data of yours was NOT involved" block: every line there
+is a factual claim about this system, and a wrong one is a second incident.
+
+**This is not a hold on sending.** The statutory clock does not pause for legal
+review. If an incident is live and no approval exists yet, send this as drafted
+and put counsel on the wording in parallel — a late intimation breaches the Act,
+an imperfectly worded one does not.
 
 Send to **every** affected principal. The Act does not provide a
 "low-risk" exception, and it does not permit substituting a public notice for
@@ -260,13 +295,12 @@ These are the parts of this runbook that describe an intention rather than a
 capability. They are listed here rather than written into the procedure as if
 they worked. Each is tracked in `DPDP_PROGRESS.md`.
 
-| Gap                                                                                                                                                                                                     | Consequence during an incident                                                                                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **No designated incident commander or on-call rota.** The founder owns every incident by default.                                                                                                       | The clock runs while someone works out who is responsible.                                                             |
-| **No mass-notification path.** Nothing can email an arbitrary list of affected users; the wired email provider serves support escalation and scheduled-task notifications only.                         | Individual intimation under §5 is manual, which does not scale past a small breach.                                    |
-| **No breach-notice page or in-product banner exists.**                                                                                                                                                  | The delivery method §5 assumes has to be built during the incident.                                                    |
-| **Security audit log retention is manual.** The 90-day purge is a routine an administrator runs, not a schedule.                                                                                        | An incident discovered late may have no audit trail, and the retention actually applied is unknown.                    |
-| **Vendor log retention is not set by us.** Vercel and Neon retain on their own schedules.                                                                                                               | Evidence may expire before the investigation reaches it.                                                               |
-| **`/subprocessors` is incomplete.** Recipients confirmed in code and missing from the page include the email provider, the video-generation provider, the geocoding service, and the mobile store APIs. | §3's "third parties involved" cannot be answered from the published page; it must be answered from code.               |
-| **No Data Protection Officer, and no Indian point of contact.**                                                                                                                                         | If AGI is ever notified as a Significant Data Fiduciary, a named India-based DPO becomes mandatory and does not exist. |
-| **This runbook has not been reviewed by counsel.**                                                                                                                                                      | The templates are drafted from the statute by an engineer. Have them reviewed before they are ever sent.               |
+| Gap                                                                                                                                                                                                     | Consequence during an incident                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No designated incident commander or on-call rota.** The founder owns every incident by default.                                                                                                       | The clock runs while someone works out who is responsible.                                                                                                                                        |
+| **No mass-notification path.** Nothing can email an arbitrary list of affected users; the wired email provider serves support escalation and scheduled-task notifications only.                         | Individual intimation under §5 is manual, which does not scale past a small breach.                                                                                                               |
+| **No breach-notice page or in-product banner exists.**                                                                                                                                                  | The delivery method §5 assumes has to be built during the incident.                                                                                                                               |
+| **Vendor log retention is not set by us.** Vercel and Neon retain on their own schedules.                                                                                                               | Evidence may expire before the investigation reaches it.                                                                                                                                          |
+| **`/subprocessors` is incomplete.** Recipients confirmed in code and missing from the page include the email provider, the video-generation provider, the geocoding service, and the mobile store APIs. | §3's "third parties involved" cannot be answered from the published page; it must be answered from code.                                                                                          |
+| **No Data Protection Officer, and no Indian point of contact.**                                                                                                                                         | If AGI is ever notified as a Significant Data Fiduciary, a named India-based DPO becomes mandatory and does not exist.                                                                            |
+| **This runbook has not been reviewed by counsel.** Tracked as a founder action in `FoundersAssistance.md`; `Legal review: pending-counsel` in the header is the live status.                            | The §4 and §5 templates are drafted from the statute by an engineer, so both carry a pre-send notice until counsel signs off. Sending is still not delayed for review — the clock does not pause. |

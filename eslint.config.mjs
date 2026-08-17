@@ -735,9 +735,6 @@ export default [
       'packages/client/desktop-command-client/src/memoryImport.ts',
 
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-G/I)
-      'services/api-gateway/src/routes/cloudChat.ts',
-      'services/api-gateway/src/routes/dotfile.ts',
-      'services/api-gateway/src/routes/models.ts',
     ],
     rules: {
       'no-restricted-syntax': 'off',

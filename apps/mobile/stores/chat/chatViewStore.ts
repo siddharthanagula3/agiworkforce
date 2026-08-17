@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 
 export type ChatMode = 'chat' | 'research' | 'create';
 
@@ -207,7 +208,7 @@ export const useChatViewStore = create<ViewState>()(
         searchDebounceTimer = setTimeout(() => {
           searchDebounceTimer = undefined;
           void runSearch(trimmed, set, get);
-        }, 300);
+        }, SEARCH_INPUT_DEBOUNCE_MS);
       },
 
       setChatMode: (mode) => set({ chatMode: mode }),

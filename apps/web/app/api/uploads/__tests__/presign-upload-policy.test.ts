@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -186,6 +185,7 @@ describe('POST /api/uploads/presign · type policy', () => {
       expect.objectContaining({
         key: expect.stringMatching(/^chat-attachments\/user-abc\//),
         contentType: 'text/plain',
+        contentLength: 128,
       }),
     );
     expect(mockGetPresignedUploadUrl).not.toHaveBeenCalled();

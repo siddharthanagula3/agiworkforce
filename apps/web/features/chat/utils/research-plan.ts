@@ -42,3 +42,8 @@ export function parseResearchPlanEvent(payload: unknown): ResearchStep[] | null 
 export function completedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
   return (steps ?? []).filter((step) => step.status === 'completed' && step.type === 'search');
 }
+
+/** The plan steps a paused run is offering: what pressing Start commits to. */
+export function approvedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
+  return (steps ?? []).filter((step) => step.status === 'pending' && step.type === 'search');
+}

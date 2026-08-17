@@ -53,6 +53,7 @@ import { CollapsibleSources } from './CollapsibleSources';
 import { MessageEditModal } from './MessageEditModal';
 import { renderMarkdownContent } from './MessageContentRenderer';
 import { parseAssistantThinking } from '@/stores/chat/chatExecutionStore';
+import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import { PerformanceChip } from './PerformanceChip';
 import { ReportFlagButton } from './ReportFlagButton';
@@ -69,7 +70,10 @@ import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
 import type { ChatMessage, Artifact, ToolCall } from '@/types/chat';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
 import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
-import { generatedFileArtifactsFromMetadata } from '@/src/features/chat/utils/generatedFileArtifacts';
+import {
+  generatedFileArtifactsFromMetadata,
+  mergeDerivedAndGeneratedFileArtifacts,
+} from '@/src/features/chat/utils/generatedFileArtifacts';
 
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
 
@@ -187,6 +191,9 @@ export const MessageBubble = memo(function MessageBubble({
   const themeColors = useThemeColors();
 
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const handleStopVideoGeneration = useCallback(() => {
+    void useChatMessageStore.getState().stopVideoGeneration(message.conversationId, message.id);
+  }, [message.conversationId, message.id]);
   const storedArtifacts = useArtifactStore((s) => s.artifacts);
   const inlineArtifacts = useMemo<Artifact[]>(() => {
     const scopedStoreArtifacts: Artifact[] = storedArtifacts
@@ -214,7 +221,11 @@ export const MessageBubble = memo(function MessageBubble({
     ]) {
       byId.set(artifact.id, artifact);
     }
-    return [...byId.values()];
+    const unique = [...byId.values()];
+    return mergeDerivedAndGeneratedFileArtifacts(
+      unique.filter((artifact) => !artifact.generatedFile),
+      unique.filter((artifact) => artifact.generatedFile),
+    );
   }, [
     appMode,
     storedArtifacts,
@@ -725,6 +736,9 @@ export const MessageBubble = memo(function MessageBubble({
                 progress={message.videoGenProgress}
                 status={message.videoGenStatus ?? 'processing'}
                 errorMessage={message.videoGenError}
+                onStop={message.videoTaskId ? handleStopVideoGeneration : undefined}
+                stopping={message.videoGenCancelRequested === true}
+                stopError={message.videoGenCancelError}
               />
             )}
 

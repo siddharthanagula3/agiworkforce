@@ -5,26 +5,39 @@ Author: Security design review (subagent)
 Date: 2026-08-05
 Scope: Design document under `docs/design/`. This review does not build the
 bridge and does not modify any runtime code.
-Decision gate: Parity ledger
-(`docs/current/parity-implementation-matrix.md:226-228`) approves CAP-052
-"despite security sensitivity; a security design review proving WEB-13 stays
-closed is a hard precondition." This document IS that precondition.
+Decision gate: The parity ledger's Creation-four approvals bullet
+(`docs/current/parity-implementation-matrix.md`, "Creation-four approvals
+(founder, 2026-08-05)") makes this review a hard precondition for CAP-052.
+This document IS that precondition.
 
-## 0. On the cited "WEB-13"
+## 0. What "WEB-13" refers to
 
-The ledger's precondition cites a finding "WEB-13" that **does not exist in this
-repository**. The only `WEB-13` string present is the unrelated **SEV-WEB-13**
-production incident — an env-drift/alerting gap where `UPSTASH_REDIS_REST_URL`/
-`TOKEN` were absent from the Vercel environment
-(`docs/agent-context/known-flaws.md` `PROD-ENV-DRIFT-ALERTING-GAP-2026-07-11`;
-`docs/decisions/pending-founder-decisions-2026-08-05.md`). That incident is
-about rate-limit backing store availability, not artifact sandbox egress.
+WEB-13 is the **iframe-sandbox-escape** finding from the 2026-05-19 `apps/web`
+security audit batch (`CHANGELOG.md`, section "[Unreleased — apps/web security
+audit batch] — 2026-05-19"). It was closed by moving LLM artifact rendering off
+the app origin onto a dedicated cross-origin renderer with `connect-src 'none'`
+and a parent-origin allowlist, backed by a CI grep regression test
+(`apps/web/__tests__/security/iframe-sandbox-regression.test.ts`) that fails if
+any TSX reintroduces `allow-scripts allow-same-origin`.
 
-There is therefore no prior artifact-bridge finding to "re-check." This review
-does not verify closure of a pre-existing finding; **it defines the security bar
-that CAP-052 must clear**. Treat the ledger's "WEB-13 stays closed" clause as
-satisfied by adopting the GO-WITH-CONDITIONS gate in §4 and tracking the
-open-condition set as the finding to keep closed.
+Two similarly named items are **not** WEB-13 and must not be substituted for it:
+
+- **SEV-WEB-13** — rate-limiter Redis enforcement, deferred as operational in
+  that same batch, and the env-drift/alerting gap where
+  `UPSTASH_REDIS_REST_URL`/`TOKEN` were absent from the Vercel environment
+  (`docs/agent-context/known-flaws.md`
+  `PROD-ENV-DRIFT-ALERTING-GAP-2026-07-11`). Backing-store availability, not
+  artifact sandbox egress. It is relevant to this review only through C5.
+- **WEB-13 in the remediation register**
+  (`docs/remediation/waves/W09-web-application-and-shared-ui-surfaces.md`) — a
+  `/connectors` dev-server hang, a separate ID namespace.
+
+The precondition is therefore concrete and directly topical: CAP-052 puts a
+network verb back inside the sandbox WEB-13's fix sealed. "WEB-13 stays closed"
+means the cross-origin renderer origin, `connect-src 'none'`, and the
+same-origin refusal in `isThisAppsOwnOrigin()` all survive the bridge intact —
+restated as condition 5 of §4, and verified in §1. On top of that, this review
+defines the additional bar CAP-052 must clear.
 
 ## 1. What CAP-052 proposes and why it is security-sensitive
 
@@ -196,8 +209,9 @@ sandbox invariant. Build is authorized **only when all of the following hold**
    bridge.
 
 If any of conditions 1-7 cannot be met, the recommendation degrades to
-**NO-GO** for that configuration. The set of open conditions above is the
-"finding" the ledger requires to be closed before CAP-052 ships.
+**NO-GO** for that configuration. Condition 5 is the ledger's "WEB-13 stays
+closed" clause; conditions 1-4 and 6-7, plus the §5 red-team items, are the
+additional open-condition set that must close before CAP-052 ships.
 
 ## 5. Adversarial red-team addendum (2026-08-05)
 

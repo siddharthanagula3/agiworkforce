@@ -45,6 +45,15 @@ describe('BudgetTrackerDisplay', () => {
     expect(container.querySelector('.rounded-lg')).toBeNull();
   });
 
+  it('draws its surface from theme tokens so it survives the light theme', () => {
+    const { container } = render(<BudgetTrackerDisplay />);
+
+    const card = container.querySelector('[aria-label="Session budget"]');
+    expect(card?.className).toContain('border-border');
+    expect(card?.className).toContain('bg-card');
+    expect(container.innerHTML).not.toContain('bg-white/[0.02]');
+  });
+
   it('shows an upgrade prompt instead of a meter when usage is internal (Free)', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,

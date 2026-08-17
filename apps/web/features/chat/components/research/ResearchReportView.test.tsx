@@ -6,6 +6,7 @@ import type { ResearchReport } from '@agiworkforce/types';
 import {
   ResearchReportView,
   researchReportFilename,
+  researchReportFollowUpPrompt,
   researchReportToMarkdown,
 } from './ResearchReportView';
 
@@ -168,5 +169,50 @@ describe('ResearchReportView', () => {
 
     expect(screen.queryByText('Key findings')).not.toBeInTheDocument();
     expect(screen.queryByText('Sources')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResearchReportView follow-up', () => {
+  it('renders no composer when the host cannot send the question anywhere', () => {
+    render(<ResearchReportView report={makeReport()} />);
+
+    expect(screen.queryByTestId('research-report-follow-up')).toBeNull();
+  });
+
+  it('sends the question with the report carried along as grounding', async () => {
+    const onAskFollowUp = vi.fn();
+    render(<ResearchReportView report={makeReport()} onAskFollowUp={onAskFollowUp} />);
+
+    await userEvent.type(
+      screen.getByLabelText('Ask a follow-up about this report'),
+      'Which line should we pin?',
+    );
+    await userEvent.click(screen.getByTestId('research-report-follow-up-send'));
+
+    expect(onAskFollowUp).toHaveBeenCalledTimes(1);
+    const prompt = onAskFollowUp.mock.calls[0]![0] as string;
+    expect(prompt).toContain('Which line should we pin?');
+    expect(prompt).toContain('Node 24 is LTS [1]');
+    expect(prompt).toContain('https://nodejs.org/en/about/previous-releases');
+  });
+
+  it('refuses to send an empty question', async () => {
+    const onAskFollowUp = vi.fn();
+    render(<ResearchReportView report={makeReport()} onAskFollowUp={onAskFollowUp} />);
+
+    expect(screen.getByTestId('research-report-follow-up-send')).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Ask a follow-up about this report'), '   {Enter}');
+    expect(onAskFollowUp).not.toHaveBeenCalled();
+  });
+});
+
+describe('researchReportFollowUpPrompt', () => {
+  it('declares the cut when the report is too long to carry whole', () => {
+    const prompt = researchReportFollowUpPrompt(
+      makeReport({ content: 'x'.repeat(9_000) }),
+      'and then?',
+    );
+    expect(prompt).toContain('[report truncated after 8000 characters]');
+    expect(prompt).toContain('and then?');
   });
 });

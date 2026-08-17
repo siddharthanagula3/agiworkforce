@@ -14,7 +14,8 @@ import type {
 } from './types';
 
 const MAX_ARTIFACTS = 200;
-const ARTIFACT_STORE_VERSION = 1;
+const MAX_VERSIONS_PER_ARTIFACT = 20;
+const ARTIFACT_STORE_VERSION = 2;
 
 function normalizedCloudOwnerId(ownerId: unknown): string | null {
   return typeof ownerId === 'string' && ownerId.trim().length > 0 ? ownerId.trim() : null;
@@ -41,10 +42,37 @@ function requireArtifactProvenance(provenance: MobileArtifactProvenance): Mobile
     : { scope: 'local' };
 }
 
+type VersionsById = Record<string, MobileArtifact[]>;
+
+function appendVersion(versions: MobileArtifact[], next: MobileArtifact): MobileArtifact[] {
+  return [...versions, next].slice(-MAX_VERSIONS_PER_ARTIFACT);
+}
+
+function versionsForArtifacts(
+  versionsById: VersionsById | undefined,
+  artifacts: ReadonlyArray<MobileArtifact>,
+): VersionsById {
+  const kept: VersionsById = {};
+  for (const artifact of artifacts) {
+    const versions = versionsById?.[artifact.id];
+    kept[artifact.id] =
+      Array.isArray(versions) && versions.length > 0
+        ? versions.slice(-MAX_VERSIONS_PER_ARTIFACT)
+        : [artifact];
+  }
+  return kept;
+}
+
 interface ArtifactStoreState {
   artifacts: MobileArtifact[];
 
+  versionsById: VersionsById;
+
   addArtifacts: (incoming: MobileArtifact[]) => void;
+
+  getArtifactVersions: (id: string) => MobileArtifact[];
+
+  restoreArtifactVersion: (id: string, versionIndex: number) => boolean;
 
   removeArtifact: (id: string) => void;
 
@@ -60,8 +88,10 @@ interface ArtifactStoreState {
 
 export const useArtifactStore = create<ArtifactStoreState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       artifacts: [],
+
+      versionsById: {},
 
       addArtifacts: (incoming) => {
         if (incoming.length === 0) return;
@@ -81,13 +111,33 @@ export const useArtifactStore = create<ArtifactStoreState>()(
               (artifact.provenance.scope === 'local' ||
                 artifact.provenance.ownerId === activeOwnerId),
           );
-          const existingIds = new Set(existing.map((artifact) => artifact.id));
-          const novel = safeIncoming.filter((artifact) => !existingIds.has(artifact.id));
+          const currentById = new Map(existing.map((artifact) => [artifact.id, artifact]));
+          const novel = safeIncoming.filter((artifact) => !currentById.has(artifact.id));
+          const revised = new Map<string, ScopedMobileArtifact>();
+          for (const artifact of safeIncoming) {
+            const current = currentById.get(artifact.id);
+            if (current && current.content !== artifact.content) revised.set(artifact.id, artifact);
+          }
+          const artifacts = [
+            ...novel,
+            ...existing.map((artifact) => revised.get(artifact.id) ?? artifact),
+          ];
+          const versionsById = versionsForArtifacts(state.versionsById, artifacts);
+          for (const [id, revision] of revised) {
+            const priorVersions = state.versionsById[id];
+            versionsById[id] = appendVersion(
+              Array.isArray(priorVersions) && priorVersions.length > 0
+                ? priorVersions
+                : [currentById.get(id)!],
+              revision,
+            );
+          }
           const hasIncomingCloud = novel.some((artifact) => artifact.provenance.scope === 'cloud');
           const ownerChanged =
             state.cloudArtifactsOwnerId !== null && state.cloudArtifactsOwnerId !== activeOwnerId;
           return {
-            artifacts: [...novel, ...existing],
+            artifacts,
+            versionsById,
             cloudArtifacts: ownerChanged ? [] : state.cloudArtifacts,
             cloudArtifactsOwnerId: hasIncomingCloud
               ? activeOwnerId
@@ -98,21 +148,41 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         });
       },
 
-      removeArtifact: (id) => {
-        set((state) => ({ artifacts: state.artifacts.filter((a) => a.id !== id) }));
+      getArtifactVersions: (id) => get().versionsById[id] ?? [],
+
+      restoreArtifactVersion: (id, versionIndex) => {
+        const versions = get().versionsById[id];
+        const target = versions?.[versionIndex];
+        if (!versions || !target || versionIndex >= versions.length - 1) return false;
+        set((state) => ({
+          artifacts: state.artifacts.map((artifact) => (artifact.id === id ? target : artifact)),
+          versionsById: { ...state.versionsById, [id]: appendVersion(versions, target) },
+        }));
+        return true;
       },
 
-      clearArtifacts: () => set({ artifacts: [] }),
+      removeArtifact: (id) => {
+        set((state) => {
+          const artifacts = state.artifacts.filter((a) => a.id !== id);
+          return { artifacts, versionsById: versionsForArtifacts(state.versionsById, artifacts) };
+        });
+      },
+
+      clearArtifacts: () => set({ artifacts: [], versionsById: {} }),
 
       clearAccountScopedArtifacts: () =>
-        set((state) => ({
-          artifacts: state.artifacts.filter(
+        set((state) => {
+          const artifacts = state.artifacts.filter(
             (artifact): artifact is ScopedMobileArtifact =>
               isScopedMobileArtifact(artifact) && artifact.provenance.scope === 'local',
-          ),
-          cloudArtifacts: [],
-          cloudArtifactsOwnerId: null,
-        })),
+          );
+          return {
+            artifacts,
+            versionsById: versionsForArtifacts(state.versionsById, artifacts),
+            cloudArtifacts: [],
+            cloudArtifactsOwnerId: null,
+          };
+        }),
 
       cloudArtifacts: [],
       cloudArtifactsOwnerId: null,
@@ -121,19 +191,23 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         const normalizedOwnerId = normalizedCloudOwnerId(ownerId);
         if (!normalizedOwnerId) return;
         if (captureCloudAccountEpoch()?.ownerId !== normalizedOwnerId) return;
-        set((state) => ({
-          cloudArtifacts: applyArtifactDeltas(
-            state.cloudArtifactsOwnerId === normalizedOwnerId ? state.cloudArtifacts : [],
-            deltas,
-          ),
-          artifacts: state.artifacts.filter(
+        set((state) => {
+          const artifacts = state.artifacts.filter(
             (artifact): artifact is ScopedMobileArtifact =>
               isScopedMobileArtifact(artifact) &&
               (artifact.provenance.scope === 'local' ||
                 artifact.provenance.ownerId === normalizedOwnerId),
-          ),
-          cloudArtifactsOwnerId: normalizedOwnerId,
-        }));
+          );
+          return {
+            cloudArtifacts: applyArtifactDeltas(
+              state.cloudArtifactsOwnerId === normalizedOwnerId ? state.cloudArtifacts : [],
+              deltas,
+            ),
+            artifacts,
+            versionsById: versionsForArtifacts(state.versionsById, artifacts),
+            cloudArtifactsOwnerId: normalizedOwnerId,
+          };
+        });
       },
 
       clearCloudArtifacts: () => set({ cloudArtifacts: [], cloudArtifactsOwnerId: null }),
@@ -145,19 +219,25 @@ export const useArtifactStore = create<ArtifactStoreState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[artifactStore] Hydration failed:', error);
       },
-      partialize: (state) => ({
-        artifacts: state.artifacts.slice(0, MAX_ARTIFACTS),
-        cloudArtifacts: state.cloudArtifacts.slice(0, MAX_ARTIFACTS),
-        cloudArtifactsOwnerId: state.cloudArtifactsOwnerId,
-      }),
+      partialize: (state) => {
+        const artifacts = state.artifacts.slice(0, MAX_ARTIFACTS);
+        return {
+          artifacts,
+          versionsById: versionsForArtifacts(state.versionsById, artifacts),
+          cloudArtifacts: state.cloudArtifacts.slice(0, MAX_ARTIFACTS),
+          cloudArtifactsOwnerId: state.cloudArtifactsOwnerId,
+        };
+      },
       version: ARTIFACT_STORE_VERSION,
       migrate: (persistedState) => {
         const persisted = persistedState as Partial<ArtifactStoreState> | undefined;
         const ownerId = normalizedCloudOwnerId(persisted?.cloudArtifactsOwnerId);
+        const artifacts = Array.isArray(persisted?.artifacts)
+          ? persisted.artifacts.filter(isScopedMobileArtifact).slice(0, MAX_ARTIFACTS)
+          : [];
         return {
-          artifacts: Array.isArray(persisted?.artifacts)
-            ? persisted.artifacts.filter(isScopedMobileArtifact).slice(0, MAX_ARTIFACTS)
-            : [],
+          artifacts,
+          versionsById: versionsForArtifacts(persisted?.versionsById, artifacts),
           cloudArtifacts:
             ownerId && Array.isArray(persisted?.cloudArtifacts)
               ? persisted.cloudArtifacts.slice(0, MAX_ARTIFACTS)
@@ -168,11 +248,13 @@ export const useArtifactStore = create<ArtifactStoreState>()(
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<ArtifactStoreState> | undefined;
         const ownerId = normalizedCloudOwnerId(persisted?.cloudArtifactsOwnerId);
+        const artifacts = Array.isArray(persisted?.artifacts)
+          ? persisted.artifacts.filter(isScopedMobileArtifact).slice(0, MAX_ARTIFACTS)
+          : [];
         return {
           ...currentState,
-          artifacts: Array.isArray(persisted?.artifacts)
-            ? persisted.artifacts.filter(isScopedMobileArtifact).slice(0, MAX_ARTIFACTS)
-            : [],
+          artifacts,
+          versionsById: versionsForArtifacts(persisted?.versionsById, artifacts),
           cloudArtifacts:
             ownerId && Array.isArray(persisted?.cloudArtifacts)
               ? persisted.cloudArtifacts.slice(0, MAX_ARTIFACTS)

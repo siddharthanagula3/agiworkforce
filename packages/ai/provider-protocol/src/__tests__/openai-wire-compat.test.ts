@@ -474,6 +474,32 @@ describe('OpenAIWireAssembler safety refusal (first-class StreamChunkStop refusa
   });
 });
 
+describe('OpenAIWireAssembler paused turn (StreamChunkStop pause_turn member)', () => {
+  it("default mode: a 'pause_turn' stop reaches the wire as the continuable finish_reason 'length', never a normal 'stop'", () => {
+    const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
+    const chunk = assembler.sseChunk({ type: 'stop', reason: 'pause_turn' });
+    expect(
+      (chunk as { choices: Array<{ finish_reason?: string }> }).choices[0]!.finish_reason,
+    ).toBe('length');
+  });
+
+  it("legacy-web mode: a 'pause_turn' stop emits the literal finish_reason 'pause_turn', which the client treats as continuable", () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      wireMode: 'legacy-web',
+      now: NOW,
+    });
+    const wire: Record<string, unknown>[] = [];
+    for (const c of assembler.sseChunks({ type: 'stop', reason: 'pause_turn' })) wire.push(c);
+    const finishReasons = wire
+      .map(
+        (e) => (e as { choices?: Array<{ finish_reason?: unknown }> }).choices?.[0]?.finish_reason,
+      )
+      .filter((f): f is string => typeof f === 'string');
+    expect(finishReasons).toEqual(['pause_turn']);
+  });
+});
+
 describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
   const thinkingThenToolUse: StreamChunk[] = [
     { type: 'thinking-delta', delta: 'Let me ' },

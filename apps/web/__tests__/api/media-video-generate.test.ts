@@ -146,6 +146,10 @@ vi.mock('@/lib/server/media-storage', () => ({
   isVideoStorageConfigured: vi.fn(() => true),
 }));
 
+vi.mock('@/lib/services/tier-unit-quota-service', () => ({
+  assertTierUnitAllowance: vi.fn(async () => ({ allowed: true })),
+}));
+
 vi.mock('@/lib/server/video-generation-jobs', () => ({
   acquireVideoGenerationAdmission: (...args: unknown[]) => durableJobMocks.admit(...args),
   beginVideoProviderSubmission: (...args: unknown[]) => durableJobMocks.beginSubmission(...args),

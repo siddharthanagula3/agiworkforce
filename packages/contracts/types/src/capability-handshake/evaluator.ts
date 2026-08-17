@@ -38,7 +38,36 @@
  */
 
 import type { PlatformCapability } from '../capabilities';
-import { CAPABILITY_LAYERS, type CapabilityLayer, type EffectiveCapabilityDocument } from './types';
+import {
+  CAPABILITY_LAYERS,
+  type CapabilityLayer,
+  type CapabilityLimit,
+  type EffectiveCapabilityDocument,
+} from './types';
+
+export interface CapabilityDecision {
+  capabilityId: PlatformCapability;
+  allowed: boolean;
+  deniedByLayers: readonly CapabilityLayer[];
+  policySource: string | null;
+  limits: readonly CapabilityLimit[];
+}
+
+export function resolveCapabilityDecision(
+  document: Pick<EffectiveCapabilityDocument, 'granted' | 'deniedBy' | 'sources' | 'limits'>,
+  capabilityId: PlatformCapability,
+): CapabilityDecision {
+  const deniedByLayers = document.deniedBy[capabilityId] ?? [];
+  const allowed = document.granted.includes(capabilityId) && deniedByLayers.length === 0;
+  const decidingLayer = deniedByLayers[0];
+  return {
+    capabilityId,
+    allowed,
+    deniedByLayers,
+    policySource: decidingLayer ? (document.sources[decidingLayer] ?? null) : null,
+    limits: (document.limits ?? []).filter((limit) => limit.capabilityId === capabilityId),
+  };
+}
 
 export type CapabilityRequirementStrength = 'mandatory' | 'optional';
 

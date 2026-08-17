@@ -1,4 +1,3 @@
-
 import type { PlatformCapability } from '@agiworkforce/types';
 
 export type SlashCommandIconName =
@@ -53,8 +52,8 @@ export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
   {
     id: 'code',
     label: '/code',
-    description: 'Write or explain code',
-    example: '/code sort an array in Python',
+    description: 'Run code in a sandbox',
+    example: '/code chart the first 20 prime numbers',
     iconName: 'Code',
   },
   {
@@ -200,6 +199,20 @@ export function registerBuiltinSlashCommands(): void {
       host?.togglePlanMode?.();
     },
   });
+
+  for (const kind of ['image', 'video'] as const) {
+    registerSlashCommand({
+      name: kind,
+      description: `Generate ${kind === 'image' ? 'an image' : 'a video'} from the next message`,
+      category: 'control-flow',
+      handler: (_args, ctx) => {
+        const host = ctx.host as
+          | { toggleMediaMode?: (kind: 'image' | 'video') => void }
+          | undefined;
+        host?.toggleMediaMode?.(kind);
+      },
+    });
+  }
 
   registerSlashCommand({
     name: 'clear',

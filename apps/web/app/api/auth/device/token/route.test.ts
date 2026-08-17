@@ -49,6 +49,7 @@ describe('POST /api/auth/device/token', () => {
     mocks.query.mockResolvedValue([
       {
         device_id: '0a9ae561-8447-4ce4-afca-1c205d69bbad',
+        user_code: 'ABCD-2345',
         expires_at: new Date(Date.now() + 60_000).toISOString(),
         status: 'pending',
         user_id: null,
@@ -63,6 +64,7 @@ describe('POST /api/auth/device/token', () => {
       .mockResolvedValueOnce([
         {
           device_id: '0a9ae561-8447-4ce4-afca-1c205d69bbad',
+          user_code: 'ABCD-2345',
           expires_at: new Date(Date.now() + 60_000).toISOString(),
           status: 'approved',
           user_id: 'user-1',
@@ -146,5 +148,32 @@ describe('POST /api/auth/device/token', () => {
     });
     expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses to exchange a QR-link row parked on the shared table', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        device_id: '0a9ae561-8447-4ce4-afca-1c205d69bbad',
+        user_code: 'A1B2C3D4E5F60718',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        status: 'approved',
+        user_id: 'victim-1',
+        user_email: 'victim@example.com',
+      },
+    ]);
+
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/auth/device/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://tauri.localhost' },
+        body: JSON.stringify({ device_code: '0a9ae561-8447-4ce4-afca-1c205d69bbad' }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'invalid_grant' });
+    expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
 import QRCode from 'qrcode';
 import { getEnv } from '@shared/utils/env';
 import { DeviceLinkRequestSchema } from '@/lib/validations/device';
+import { generateQrLinkCode } from '@/lib/server/device-codes';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -68,7 +68,7 @@ async function handleDeviceLink(request: NextRequest) {
     let lastError: unknown = null;
 
     for (let attempt = 0; attempt < 3; attempt++) {
-      link_code = randomBytes(8).toString('hex').toUpperCase();
+      link_code = generateQrLinkCode();
       try {
         await db.execute(
           `INSERT INTO device_authorization_codes

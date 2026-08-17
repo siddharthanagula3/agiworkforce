@@ -73,8 +73,22 @@ export async function getVideoStatus(taskId: string): Promise<VideoGenStatusResp
   );
 }
 
+export interface VideoGenCancelResponse {
+  success?: boolean;
+  task_id: string;
+  status: VideoGenStatusResponse['status'];
+  cancel_requested?: boolean;
+  provider_cancellation?: string;
+  message?: string;
+}
+
+export async function cancelVideoGeneration(taskId: string): Promise<VideoGenCancelResponse> {
+  return api.post<VideoGenCancelResponse>('/api/media/video/cancel', { task_id: taskId });
+}
+
 export interface GenerateVideoOptions {
   operationId?: string;
+  onTaskCreated?: (taskId: string) => void;
   onProgress?: (progress: number | undefined, status: VideoGenStatusResponse['status']) => void;
   shouldCancel?: () => boolean;
 }
@@ -87,6 +101,7 @@ export async function generateVideo(
     request,
     options.operationId ? { operationId: options.operationId } : {},
   );
+  options.onTaskCreated?.(started.task_id);
 
   const deadline = Date.now() + VIDEO_POLL_TIMEOUT_MS;
   for (;;) {

@@ -15,6 +15,11 @@ export function TasksPage() {
       client: createWebCloudTasksClient(),
       openConversation: (conversationId) => router.push(`/chat/${conversationId}`),
       notifyError: (message) => toast.error(message),
+      startWork: () => {
+        const store = useChatStore.getState();
+        store.setComposerToggles({ workMode: 'agiwork' }, PENDING_CONVERSATION_KEY);
+        router.push('/chat');
+      },
       rerunWork: (goal) => {
         const store = useChatStore.getState();
         store.setDraftContent(goal.goal, PENDING_CONVERSATION_KEY);

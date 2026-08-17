@@ -84,12 +84,6 @@ export default function CliPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              {/*
-                Availability comes from `SURFACE_STATUS.cli`, not from typed
-                copy. This line read "AGI CLI · coming soon" while the header
-                dropdown on this same page read "Released · v1.0.0" from the
-                registry — the CLI has shipped since the `v-cli-1.0.0` tag.
-              */}
               <p className="agi-fl-eyebrow">AGI CLI · {SURFACE_STATUS.cli}</p>
               <h1 id="agi-fl-cli-hero-title" className="agi-fl-h1">
                 <span className="agi-fl-h1-line">An agent in</span>{' '}
@@ -103,7 +97,7 @@ export default function CliPage() {
                 offline with local models.
               </p>
               <div className="agi-fl-cta-row">
-                <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+                <Link href="/download#cli-downloads" className="agi-fl-cta agi-fl-cta--primary">
                   Check availability
                 </Link>
                 <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
@@ -207,12 +201,12 @@ export default function CliPage() {
             The CLI is released.
           </h2>
           <p className="agi-fl-section-lede">
-            The agi binary ships as macOS, Linux, and Windows archives on the v1.0.0 release
+            The agi binary ships as macOS, Linux, and Windows archives on the current release
             channel. The download page tracks availability for every surface and platform in one
             place.
           </p>
           <div className="agi-fl-cta-row">
-            <Link href="/download" className="agi-fl-cta agi-fl-cta--secondary">
+            <Link href="/download#cli-downloads" className="agi-fl-cta agi-fl-cta--secondary">
               Check availability
             </Link>
           </div>
@@ -221,9 +215,9 @@ export default function CliPage() {
         <FinalCta
           eyebrow={SURFACE_STATUS.cli}
           title="An agent for your terminal."
-          body="The agi binary is released as v1.0.0: resumable sessions, sandboxed execution, and AGI managed cloud in public alpha, open by default."
+          body="The agi binary is released: resumable sessions, sandboxed execution, and AGI managed cloud in public alpha, open by default."
           ctas={[
-            { href: '/download', label: 'Check availability' },
+            { href: '/download#cli-downloads', label: 'Check availability' },
             { href: '/agi-code', label: 'Explore AGI Code' },
             { label: 'Enterprise early access', waitlist: true },
           ]}

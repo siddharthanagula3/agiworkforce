@@ -30,7 +30,6 @@ import {
   Palette,
   Trash2,
   Upload,
-  Brain,
   Database,
   ChevronDown,
   Loader2,
@@ -50,7 +49,6 @@ import { useChatStore, type ConversationSummary } from '../../stores/chat/chatSt
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
-import { MemoryManager } from '@/features/memory/MemoryManager';
 import type { ManagedCloudProjectKnowledgeFile } from '@agiworkforce/cloud-contracts';
 import { desktopCloudProjectKnowledge } from '../../services/desktopCloudProjectKnowledge';
 
@@ -58,6 +56,9 @@ const SUPPORTED_KB_EXTENSIONS = [
   '.txt',
   '.md',
   '.pdf',
+  '.docx',
+  '.xlsx',
+  '.xls',
   '.csv',
   '.json',
   '.py',
@@ -65,6 +66,14 @@ const SUPPORTED_KB_EXTENSIONS = [
   '.ts',
   '.rs',
 ] as const;
+const DOCUMENT_EXTRACT_KB_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.xls'] as const;
+
+export function kbReadCommandFor(fileName: string): 'document_extract_text' | 'file_read' {
+  const lower = fileName.toLowerCase();
+  return DOCUMENT_EXTRACT_KB_EXTENSIONS.some((extension) => lower.endsWith(extension))
+    ? 'document_extract_text'
+    : 'file_read';
+}
 const CLOUD_KNOWLEDGE_ACCEPT =
   'application/pdf,text/plain,text/markdown,text/csv,application/json,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.rs';
 
@@ -343,7 +352,11 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
   const processKbFile = useCallback(async (filePath: string, fileName: string) => {
     try {
-      const content = await invoke<string>('file_read', { path: filePath });
+      const command = kbReadCommandFor(fileName);
+      const content = await invoke<string>(
+        command,
+        command === 'document_extract_text' ? { filePath } : { path: filePath },
+      );
       const newFile: KnowledgeBaseFile = {
         id: crypto.randomUUID(),
         name: fileName,
@@ -734,16 +747,10 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
               {isManagedCloud ? 'Sources' : 'Knowledge'}
             </TabsTrigger>
             {!isManagedCloud && (
-              <>
-                <TabsTrigger value="files" className="shrink-0 data-[state=active]:bg-accent">
-                  <File className="w-4 h-4 mr-2" />
-                  Files
-                </TabsTrigger>
-                <TabsTrigger value="memory" className="shrink-0 data-[state=active]:bg-accent">
-                  <Brain className="w-4 h-4 mr-2" />
-                  Memory
-                </TabsTrigger>
-              </>
+              <TabsTrigger value="files" className="shrink-0 data-[state=active]:bg-accent">
+                <File className="w-4 h-4 mr-2" />
+                Files
+              </TabsTrigger>
             )}
             <TabsTrigger value="conversations" className="shrink-0 data-[state=active]:bg-accent">
               <MessageSquare className="w-4 h-4 mr-2" />
@@ -971,6 +978,26 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   documentation style, or any context the AI should know about your project.
                 </p>
               </div>
+              {/*
+                The Memory tab that used to sit beside this one mounted the
+                account-wide MemoryManager under a project heading. Nothing it
+                created was scoped: the local `memories` table has no project
+                column and `memory_remember` takes no project argument, so a
+                "project memory" was visible in every other project and in
+                unscoped chat. Re-add a control only when memories can really
+                be scoped to a project.
+              */}
+              {!isManagedCloud && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Memory
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Memories are saved for this device, not for this project. This project can use
+                    memories from outside chats, and vice versa. Review them in Settings → Memory.
+                  </p>
+                </div>
+              )}
             </TabsContent>
 
             {/* Files Tab */}
@@ -1167,7 +1194,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       <Label className="text-foreground">Knowledge Base</Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Upload files to give the AI persistent context about this project.
-                        Supported: .txt .md .pdf .csv .json .py .js .ts .rs
+                        Supported: .txt .md .pdf .docx .xlsx .csv .json .py .js .ts .rs
                       </p>
                     </div>
                     <Button
@@ -1248,31 +1275,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 </>
               )}
             </TabsContent>
-
-            {/* Memory Tab */}
-            {!isManagedCloud && (
-              <TabsContent value="memory" className="space-y-4">
-                <div className="space-y-4">
-                  {/* Memory Manager */}
-                  <div className="border border-border rounded-lg overflow-hidden">
-                    <MemoryManager
-                      showCreateButton={true}
-                      showImportExport={false}
-                      maxHeight="350px"
-                    />
-                  </div>
-
-                  {/* Info Box */}
-                  <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                    <p className="text-xs text-blue-300">
-                      Memories help AGI remember important details about your project across
-                      sessions. Architectural decisions, coding preferences, and project context are
-                      stored as memories for continuity.
-                    </p>
-                  </div>
-                </div>
-              </TabsContent>
-            )}
 
             {/* Conversations Tab */}
             <TabsContent value="conversations" className="space-y-4">

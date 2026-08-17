@@ -129,17 +129,17 @@ export function TypeIcon({ type, className }: { type: ArtifactData['type']; clas
 function badgeClass(type: ArtifactData['type']): string {
   switch (type) {
     case 'html':
-      return 'bg-orange-500/15 text-orange-400';
+      return 'bg-orange-500/15 text-orange-700 dark:text-orange-300';
     case 'react':
-      return 'bg-sky-500/15 text-sky-400';
+      return 'bg-sky-500/15 text-sky-700 dark:text-sky-300';
     case 'svg':
-      return 'bg-violet-500/15 text-violet-400';
+      return 'bg-violet-500/15 text-violet-700 dark:text-violet-300';
     case 'image':
-      return 'bg-fuchsia-500/15 text-fuchsia-400';
+      return 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300';
     case 'mermaid':
-      return 'bg-emerald-500/15 text-emerald-400';
+      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
     case 'code':
-      return 'bg-amber-500/15 text-amber-400';
+      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
     default:
       return 'bg-muted text-muted-foreground';
   }

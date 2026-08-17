@@ -87,7 +87,12 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
   );
 }
 
-export function ResearchReportsGallery() {
+interface ResearchReportsGalleryProps {
+  /** Host-injected follow-up send, forwarded to whichever report is open. */
+  onAskFollowUp?: (prompt: string) => void;
+}
+
+export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGalleryProps) {
   const [reports, setReports] = useState<GalleryReport[]>([]);
   const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +135,7 @@ export function ResearchReportsGallery() {
           All reports
         </button>
         <div className="min-h-0 flex-1">
-          <ResearchReportView report={openReport} />
+          <ResearchReportView report={openReport} {...(onAskFollowUp ? { onAskFollowUp } : {})} />
         </div>
       </div>
     );

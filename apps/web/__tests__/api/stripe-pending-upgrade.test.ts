@@ -25,12 +25,15 @@ it('provisions a paid pending upgrade when Stripe applies it', async () => {
   const event = {
     id: 'evt_upgrade_applied',
     type: 'customer.subscription.pending_update_applied',
+    created: 1_760_000_000,
     data: { object: subscription },
   } as Stripe.Event;
 
   await dispatchStripeEvent({} as never, {} as Stripe, event);
 
-  expect(updateSubscription).toHaveBeenCalledWith({}, {}, subscription);
+  expect(updateSubscription).toHaveBeenCalledWith({}, {}, subscription, {
+    eventSequence: 1_760_000_000,
+  });
 });
 
 it('reconciles the full paid subscription before invoice events can overwrite its period', async () => {
@@ -42,6 +45,7 @@ it('reconciles the full paid subscription before invoice events can overwrite it
   const event = {
     id: 'evt_invoice_paid',
     type: 'invoice.paid',
+    created: 1_760_000_500,
     data: {
       object: {
         id: 'in_1',
@@ -56,6 +60,8 @@ it('reconciles the full paid subscription before invoice events can overwrite it
 
   await dispatchStripeEvent(db as never, stripe, event);
 
-  expect(updateSubscription).toHaveBeenCalledWith(db, stripe, subscription);
+  expect(updateSubscription).toHaveBeenCalledWith(db, stripe, subscription, {
+    eventSequence: 1_760_000_500,
+  });
   expect(db.execute).not.toHaveBeenCalled();
 });

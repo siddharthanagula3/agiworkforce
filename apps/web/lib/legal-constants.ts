@@ -1,4 +1,3 @@
-
 export const LEGAL_ENTITY = 'AGI Automation LLC';
 
 export const LEGAL_ENTITY_DESCRIPTOR = 'a United States limited liability company';
@@ -26,7 +25,19 @@ export const CONTACT_SUBJECTS = {
   dpdpRequest: 'DPDP data principal request',
 } as const;
 
-export const GRIEVANCE_OFFICER_NAME = 'Grievance Officer, AGI Automation LLC';
+export const GRIEVANCE_OFFICER_ROLE = 'Grievance Officer';
+
+export const GRIEVANCE_OFFICER_DESIGNATE: string | null = null;
+
+export function grievanceOfficerLabel(
+  designate: string | null = GRIEVANCE_OFFICER_DESIGNATE,
+): string {
+  return designate
+    ? `${designate}, ${GRIEVANCE_OFFICER_ROLE}, ${LEGAL_ENTITY}`
+    : `${GRIEVANCE_OFFICER_ROLE}, ${LEGAL_ENTITY}`;
+}
+
+export const GRIEVANCE_OFFICER_NAME = grievanceOfficerLabel();
 export const GRIEVANCE_RESPONSE_TARGET_DAYS = 30;
 
 export function contactMailto(subject?: string): string {
@@ -39,7 +50,7 @@ export const POLICY_LAST_UPDATED = {
   terms: '2026-08-11',
   privacy: '2026-08-14',
   acceptableUse: '2026-08-05',
-  dpa: '2026-08-13',
+  dpa: '2026-08-17',
   cookies: '2026-08-14',
   subprocessors: '2026-08-14',
   security: '2026-08-14',

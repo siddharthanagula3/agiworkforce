@@ -6,6 +6,7 @@ use crate::sys::error::{Error, Result};
 
 pub mod excel;
 pub mod generated_file_manifest;
+pub mod ooxml;
 pub mod pdf;
 pub mod word;
 
@@ -95,6 +96,7 @@ pub mod edit_excel;
 pub mod edit_word;
 
 pub use excel::ExcelHandler;
+pub use ooxml::{extract_office_text, is_office_open_xml_extension};
 pub use pdf::PdfHandler;
 pub use word::WordHandler;
 

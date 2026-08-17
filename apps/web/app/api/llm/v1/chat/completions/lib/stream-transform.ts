@@ -6,6 +6,7 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
+import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
@@ -17,6 +18,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
+import { compactionUsageFields } from './context-window';
 import { withSseHeartbeat } from './sse-heartbeat';
 import {
   collectGeneratedFileRefs,
@@ -130,6 +132,7 @@ async function settleStreamBilling(input: {
         cacheReadTokens: usage.cacheReadInputTokens,
         cacheWriteTokens: usage.cacheCreationInputTokens,
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
+        ...compactionUsageFields(processed.contextTrim),
         ...buildCpstUsageFields(processed, {
           billingOutcome: billedOutcome,
           ...(input.cancelled === true ? { cancelled: true } : {}),
@@ -619,6 +622,7 @@ export async function buildStreamResponse(
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
+  addFallbackReasonHeader(streamHeaders, processed);
   return new NextResponse(withSseHeartbeat(reconciledStream), { headers: streamHeaders });
 }
 
@@ -910,5 +914,6 @@ export async function buildAdapterStreamResponse(
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
+  addFallbackReasonHeader(streamHeaders, processed);
   return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
 }

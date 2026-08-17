@@ -339,7 +339,7 @@ describe('Connectors pane (table)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
     fireEvent.click(
-      within(screen.getByRole('dialog', { name: 'Disconnect GitHub?' })).getByRole('button', {
+      within(screen.getByRole('alertdialog', { name: 'Disconnect GitHub?' })).getByRole('button', {
         name: 'Disconnect',
       }),
     );
@@ -429,6 +429,31 @@ describe('Connectors pane (table)', () => {
       screen.getByRole('link', { name: 'View GitHub Automation details' }).getAttribute('href'),
     ).toBe('/plugins/github-automation');
     expect(screen.queryByRole('button', { name: /install github automation/i })).toBeNull();
+  });
+
+  it('splits the browse catalogue into what this environment can use and what it cannot', () => {
+    renderModal({}, { connectConnector: vi.fn() });
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+
+    const usable = screen.getByText('Available in this environment (1)').closest('section')!;
+    expect(within(usable).getByText('GitHub')).toBeTruthy();
+
+    const preview = screen.getByText('Not connectable here yet (2)').closest('section')!;
+    expect(within(preview).getByText('Notion')).toBeTruthy();
+    expect(within(preview).getByText('Stripe')).toBeTruthy();
+    expect(within(preview).queryByText('GitHub')).toBeNull();
+    expect(within(preview).queryByRole('button', { name: /^Connect / })).toBeNull();
+  });
+
+  it('opens the custom-connector docs without tearing down the settings modal', () => {
+    renderModal();
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+
+    const learnMore = screen.getByRole('link', { name: 'Learn more' });
+    expect(learnMore.getAttribute('target')).toBe('_blank');
+    expect(learnMore.getAttribute('rel')).toContain('noreferrer');
   });
 
   it('shows honest loading states for directory catalogues', () => {

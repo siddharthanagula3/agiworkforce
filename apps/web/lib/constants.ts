@@ -1,18 +1,11 @@
-
+import { ENTITLED_SUBSCRIPTION_STATUSES, isEntitledSubscriptionStatus } from '@agiworkforce/types';
 
 export const WEBHOOK_MAX_RETRIES = 3;
 
 export const WEBHOOK_RETRY_BASE_DELAY_MS = 100;
 
-export const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'] as const;
+export const ACTIVE_SUBSCRIPTION_STATUSES = ENTITLED_SUBSCRIPTION_STATUSES;
 
-/**
- * Check if a subscription status is considered active.
- * @param status - The subscription status to check
- * @returns True if the status is considered active
- */
 export function isActiveSubscriptionStatus(status: string): boolean {
-  return ACTIVE_SUBSCRIPTION_STATUSES.includes(
-    status as (typeof ACTIVE_SUBSCRIPTION_STATUSES)[number],
-  );
+  return isEntitledSubscriptionStatus(status);
 }

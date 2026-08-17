@@ -1,5 +1,4 @@
-
-import { OLLAMA_TIMEOUT_MS } from '../constants/timeouts';
+import { OLLAMA_MODEL_PULL_TIMEOUT_MS, OLLAMA_TIMEOUT_MS } from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 
 export interface OllamaModelDetails {
@@ -18,8 +17,6 @@ export interface OllamaModel {
   digest: string;
   details: OllamaModelDetails;
 }
-
-const OLLAMA_MODEL_PULL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 async function invokeWithTimeout<T>(
   command: string,

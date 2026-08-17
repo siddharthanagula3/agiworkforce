@@ -1,13 +1,26 @@
 import { View, ScrollView, Pressable, Modal, Share, Alert, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { X, Copy, Check, Share2, RefreshCw, Eye, Code, Download, Globe } from 'lucide-react-native';
-import { useState, useCallback, useMemo } from 'react';
+import {
+  X,
+  Copy,
+  Check,
+  Share2,
+  RefreshCw,
+  Eye,
+  Code,
+  Download,
+  Globe,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react-native';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
+import { useArtifactStore } from '@/src/features/artifacts/store';
 import { publishArtifact } from '../services/artifactPublishing';
 import {
   shareFile,
@@ -89,8 +102,8 @@ export function publishableKindFor(artifact: Artifact): string | null {
   return null;
 }
 
-function canPublish(artifact: Artifact): boolean {
-  return publishableKindFor(artifact) !== null && artifact.content.trim().length > 0;
+function canPublish(artifact: Artifact, content: string): boolean {
+  return publishableKindFor(artifact) !== null && content.trim().length > 0;
 }
 
 async function confirmPublish(title: string): Promise<boolean> {
@@ -123,8 +136,22 @@ export function ArtifactFullScreen({
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState<{ artifactId: string; url: string } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
 
   const publishedUrl = published && published.artifactId === artifact?.id ? published.url : null;
+
+  const artifactId = artifact?.id;
+  const versionHistory = useArtifactStore((s) =>
+    artifactId ? s.versionsById[artifactId] : undefined,
+  );
+  const restoreArtifactVersion = useArtifactStore((s) => s.restoreArtifactVersion);
+  const versionCount = versionHistory?.length ?? 0;
+  const shownVersionIndex = viewedVersionIndex ?? (versionCount > 0 ? versionCount - 1 : 0);
+  const activeContent = versionHistory?.[shownVersionIndex]?.content ?? artifact?.content ?? '';
+
+  useEffect(() => {
+    setViewedVersionIndex(null);
+  }, [artifactId, versionCount]);
 
   const generatedFileSummary = useMemo(
     () =>
@@ -149,20 +176,20 @@ export function ArtifactFullScreen({
   const sourceTokens = useMemo(
     () =>
       artifact && isMonospaceArtifact(artifact)
-        ? tokenizeCode(artifact.content, artifact.language)
+        ? tokenizeCode(activeContent, artifact.language)
         : [],
-    [artifact],
+    [artifact, activeContent],
   );
 
   const handleCopy = useCallback(async () => {
     if (!artifact) return;
-    const success = await copyToClipboard(artifact.content);
+    const success = await copyToClipboard(activeContent);
     if (success) {
       setCopied(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTimeout(() => setCopied(false), 2000);
     }
-  }, [artifact]);
+  }, [artifact, activeContent]);
 
   const handleShare = useCallback(async () => {
     if (!artifact) return;
@@ -212,8 +239,8 @@ export function ArtifactFullScreen({
       } else {
         const isMarkdownKind = artifact.type === 'document' || artifact.type === 'research';
         const result = isMarkdownKind
-          ? await exportToMarkdown(artifact.content, artifact.title)
-          : await exportToText(artifact.content, artifact.title);
+          ? await exportToMarkdown(activeContent, artifact.title)
+          : await exportToText(activeContent, artifact.title);
         await shareFile(result.uri);
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -225,7 +252,7 @@ export function ArtifactFullScreen({
     } finally {
       setDownloading(false);
     }
-  }, [artifact, downloading]);
+  }, [artifact, activeContent, downloading]);
 
   const handlePublish = useCallback(async () => {
     if (!artifact || publishing) return;
@@ -240,7 +267,7 @@ export function ArtifactFullScreen({
         title: artifact.title,
         kind,
         ...(artifact.language ? { language: artifact.language } : {}),
-        content: artifact.content,
+        content: activeContent,
       });
 
       setPublished({ artifactId: artifact.id, url: shareUrl });
@@ -254,7 +281,15 @@ export function ArtifactFullScreen({
     } finally {
       setPublishing(false);
     }
-  }, [artifact, publishing]);
+  }, [artifact, activeContent, publishing]);
+
+  const handleRestoreVersion = useCallback(() => {
+    if (!artifactId) return;
+    if (restoreArtifactVersion(artifactId, shownVersionIndex)) {
+      setViewedVersionIndex(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [artifactId, restoreArtifactVersion, shownVersionIndex]);
 
   const handleCopyLink = useCallback(async () => {
     if (!publishedUrl) return;
@@ -369,7 +404,7 @@ export function ArtifactFullScreen({
             ) : null}
 
             {/* Publish to a public link — only kinds the public renderer supports */}
-            {canPublish(artifact) ? (
+            {canPublish(artifact, activeContent) ? (
               <Pressable
                 onPress={handlePublish}
                 style={{
@@ -447,7 +482,7 @@ export function ArtifactFullScreen({
                 bytes live behind the authenticated file route; a Copy button
                 there used to succeed while placing an empty string on the
                 clipboard. */}
-            {artifact.content.trim().length > 0 ? (
+            {activeContent.trim().length > 0 ? (
               <Pressable
                 onPress={handleCopy}
                 style={{
@@ -481,7 +516,78 @@ export function ArtifactFullScreen({
             </Pressable>
           </View>
 
-          {/* Row 2: the hosted link, once published */}
+          {/* Row 2: version navigation over the store's real edit history */}
+          {versionCount > 1 ? (
+            <View
+              style={{
+                marginTop: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                alignSelf: 'flex-start',
+                gap: 2,
+                paddingVertical: 2,
+                paddingHorizontal: 4,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.neutralSurface,
+              }}
+              testID="artifact-version-chip"
+            >
+              <Pressable
+                onPress={() => setViewedVersionIndex(Math.max(0, shownVersionIndex - 1))}
+                disabled={shownVersionIndex <= 0}
+                style={{ padding: 6, opacity: shownVersionIndex <= 0 ? 0.3 : 1 }}
+                accessibilityLabel="Previous version"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: shownVersionIndex <= 0 }}
+              >
+                <ChevronLeft size={15} color={colors.textSecondary} />
+              </Pressable>
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: colors.textSecondary,
+                  minWidth: 42,
+                  textAlign: 'center',
+                }}
+                accessibilityLiveRegion="polite"
+                testID="artifact-version-label"
+              >
+                {`v${shownVersionIndex + 1}/${versionCount}`}
+              </Text>
+              <Pressable
+                onPress={() =>
+                  setViewedVersionIndex(Math.min(versionCount - 1, shownVersionIndex + 1))
+                }
+                disabled={shownVersionIndex >= versionCount - 1}
+                style={{
+                  padding: 6,
+                  opacity: shownVersionIndex >= versionCount - 1 ? 0.3 : 1,
+                }}
+                accessibilityLabel="Next version"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: shownVersionIndex >= versionCount - 1 }}
+              >
+                <ChevronRight size={15} color={colors.textSecondary} />
+              </Pressable>
+              {shownVersionIndex < versionCount - 1 ? (
+                <Pressable
+                  onPress={handleRestoreVersion}
+                  style={{ paddingVertical: 6, paddingHorizontal: 8 }}
+                  accessibilityLabel={`Restore version ${shownVersionIndex + 1}`}
+                  accessibilityRole="button"
+                  testID="artifact-restore-version"
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '500', color: colors.textSecondary }}>
+                    Restore
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Row 3: the hosted link, once published */}
           {publishedUrl ? (
             <View
               style={{
@@ -529,7 +635,7 @@ export function ArtifactFullScreen({
 
         {/* ── Content ── */}
         {canPreview && viewMode === 'preview' && previewKind ? (
-          <SafeArtifactPreview content={artifact.content} kind={previewKind} style={{ flex: 1 }} />
+          <SafeArtifactPreview content={activeContent} kind={previewKind} style={{ flex: 1 }} />
         ) : canPreview && viewMode === 'preview' ? (
           <View
             style={{
@@ -682,7 +788,7 @@ export function ArtifactFullScreen({
               </ScrollView>
             ) : (
               <View testID="artifact-fullscreen-markdown">
-                {renderMarkdownContent(artifact.content, colors)}
+                {renderMarkdownContent(activeContent, colors)}
               </View>
             )}
 

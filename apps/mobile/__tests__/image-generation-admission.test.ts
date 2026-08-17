@@ -1,6 +1,12 @@
 import { getModelMetadataById } from '@agiworkforce/types';
+import {
+  MANAGED_MEDIA_IMAGE_REF_MAX_BYTES,
+  supportsManagedMediaImageEdit,
+} from '@agiworkforce/cloud-contracts';
 import { getDefaultCloudModelIdForTier } from '../src/features/model-picker/service';
 import { resolveMobileImageGenerationRequest } from '../src/features/chat/actions/resolveMobileImageGenerationRequest';
+import { listMediaModels } from '../src/features/chat/actions/mediaMode';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
 
 const eligibleRequest = {
   executionMode: 'cloud' as const,
@@ -8,7 +14,7 @@ const eligibleRequest = {
   mediaMode: 'text' as const,
   selection: getDefaultCloudModelIdForTier('pro')!,
   subscriptionTier: 'pro',
-  hasAttachments: false,
+  attachments: [],
   globalImageGenerationEnabled: true,
   imageGenerationEnabled: true,
   isClerkSignedIn: true,
@@ -60,7 +66,13 @@ describe('resolveMobileImageGenerationRequest', () => {
     ['the capability handshake denies images', { grantedCapabilities: [] }, 'plan_required'],
     ['the plan is ineligible', { subscriptionTier: 'free' }, 'plan_required'],
     ['the device is offline', { isOnline: false }, 'offline'],
-    ['an explicit image command has attachments', { hasAttachments: true }, 'route_unavailable'],
+    [
+      'an explicit image command carries a non-image attachment',
+      {
+        attachments: [{ uri: 'file:///brief.pdf', mimeType: 'application/pdf', fileName: 'b.pdf' }],
+      },
+      'reference_image_invalid',
+    ],
   ])('blocks when %s', (_label, overrides, expectedCode) => {
     expect(
       resolveMobileImageGenerationRequest({
@@ -132,5 +144,90 @@ describe('resolveMobileImageGenerationRequest — explicit Image mode', () => {
       status: 'blocked',
       code: 'empty_prompt',
     });
+  });
+});
+
+describe('resolveMobileImageGenerationRequest — reference image', () => {
+  const editCapableModelId = listMediaModels('image').find((id) =>
+    supportsManagedMediaImageEdit(getModelMetadataById(id)?.provider),
+  );
+  const textOnlyModelId = listMediaModels('image').find(
+    (id) => !supportsManagedMediaImageEdit(getModelMetadataById(id)?.provider),
+  );
+  const photo = {
+    uri: 'file:///photo.jpg',
+    mimeType: 'image/jpeg',
+    fileName: 'photo.jpg',
+    fileSize: 512_000,
+  };
+  const imageMode = { ...eligibleRequest, mediaMode: 'image' as const, text: 'make it a poster' };
+
+  afterEach(() => {
+    useChatViewStore.setState({ selectedMediaModel: {} });
+  });
+
+  it('turns an attached photo into an edit operation carrying the source image', () => {
+    if (!editCapableModelId) throw new Error('catalog exposes no edit-capable image model');
+    useChatViewStore.setState({ selectedMediaModel: { image: editCapableModelId } });
+
+    const result = resolveMobileImageGenerationRequest({ ...imageMode, attachments: [photo] });
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      model: editCapableModelId,
+      operation: 'edit',
+      sourceImage: photo,
+    });
+  });
+
+  it('leaves a prompt with no attachment as a plain generation', () => {
+    if (!editCapableModelId) throw new Error('catalog exposes no edit-capable image model');
+    useChatViewStore.setState({ selectedMediaModel: { image: editCapableModelId } });
+
+    const result = resolveMobileImageGenerationRequest({ ...imageMode, attachments: [] });
+
+    expect(result).toMatchObject({ status: 'ready' });
+    expect(result).not.toHaveProperty('operation');
+    expect(result).not.toHaveProperty('sourceImage');
+  });
+
+  it('names the editing model instead of claiming the route is unavailable', () => {
+    if (!textOnlyModelId || !editCapableModelId) {
+      throw new Error('catalog must expose one editing and one text-only image model');
+    }
+    useChatViewStore.setState({ selectedMediaModel: { image: textOnlyModelId } });
+
+    const result = resolveMobileImageGenerationRequest({ ...imageMode, attachments: [photo] });
+
+    expect(result).toMatchObject({ status: 'blocked', code: 'reference_image_unsupported' });
+    if (result.status === 'blocked') {
+      expect(result.alert.message).toContain(
+        getModelMetadataById(editCapableModelId)?.name ?? editCapableModelId,
+      );
+    }
+  });
+
+  it('refuses more than one reference image', () => {
+    if (!editCapableModelId) throw new Error('catalog exposes no edit-capable image model');
+    useChatViewStore.setState({ selectedMediaModel: { image: editCapableModelId } });
+
+    expect(
+      resolveMobileImageGenerationRequest({
+        ...imageMode,
+        attachments: [photo, { ...photo, uri: 'file:///second.jpg', fileName: 'second.jpg' }],
+      }),
+    ).toMatchObject({ status: 'blocked', code: 'reference_image_invalid' });
+  });
+
+  it('refuses a reference image the wire contract cannot carry', () => {
+    if (!editCapableModelId) throw new Error('catalog exposes no edit-capable image model');
+    useChatViewStore.setState({ selectedMediaModel: { image: editCapableModelId } });
+
+    expect(
+      resolveMobileImageGenerationRequest({
+        ...imageMode,
+        attachments: [{ ...photo, fileSize: MANAGED_MEDIA_IMAGE_REF_MAX_BYTES + 1 }],
+      }),
+    ).toMatchObject({ status: 'blocked', code: 'reference_image_too_large' });
   });
 });

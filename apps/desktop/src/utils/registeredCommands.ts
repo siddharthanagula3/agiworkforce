@@ -181,6 +181,8 @@ export const REGISTERED_COMMANDS: ReadonlySet<string> = new Set([
   'bg_pause_task',
   'bg_resume_task',
   'bg_submit_task',
+  'bridge_deny_pair_request',
+  'bridge_pending_pair_requests',
   'browser_call_function',
   'browser_check',
   'browser_check_status',

@@ -3,7 +3,7 @@ import { Redis } from '@upstash/redis';
 import { NextRequest, NextResponse } from 'next/server';
 import { BILLING_PLAN_PRODUCT_LIMITS, getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 import { logger } from './logger';
-import { logRateLimitExceeded } from './security-audit';
+import { BLOCK_APPEAL_PATH, logRateLimitExceeded } from './security-audit';
 
 const redisRestUrl = process.env['KV_REST_API_URL'] || process.env['UPSTASH_REDIS_REST_URL'];
 const redisRestToken = process.env['KV_REST_API_TOKEN'] || process.env['UPSTASH_REDIS_REST_TOKEN'];
@@ -892,7 +892,8 @@ export async function withRateLimit(
       ? info.identifier.slice('user:'.length)
       : undefined;
 
-    await logRateLimitExceeded(request, info.identifier, userId);
+    const reason = `rate_limit:${key}`;
+    await logRateLimitExceeded(request, info.identifier, userId, reason);
 
     const retryAfterSeconds = Math.max(0, Math.ceil((info.reset - Date.now()) / 1000));
     const resetAtIso = new Date(info.reset).toISOString();
@@ -902,6 +903,8 @@ export async function withRateLimit(
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
           message: 'Too many requests. Please wait before trying again.',
+          reason,
+          appeal_path: BLOCK_APPEAL_PATH,
           retry_after_seconds: retryAfterSeconds,
           reset_at: resetAtIso,
         },

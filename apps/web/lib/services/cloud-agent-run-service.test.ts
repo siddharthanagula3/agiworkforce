@@ -14,6 +14,7 @@ import {
   getCloudAgentRun,
   listCloudAgentRuns,
   readCloudAgentRunAssistantText,
+  recordCloudAgentRunSettledUsage,
   requestCloudAgentRunCancellation,
   releaseCloudAgentApprovalCheckpoint,
   saveCloudAgentApprovalCheckpoint,
@@ -549,6 +550,145 @@ describe('cloud agent run service', () => {
       null,
       2,
     ]);
+  });
+
+  describe('settled per-task usage and cost', () => {
+    it('leaves usage absent while a run has settled nothing', async () => {
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([{ ...RUN_ROW, settled_usage: {} }])
+        .mockResolvedValueOnce([]);
+
+      const run = await getCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id });
+
+      expect(run?.run.usage).toBeUndefined();
+    });
+
+    it('adds every settlement up so a resumed run is priced as one task', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([
+        {
+          ...RUN_ROW,
+          settled_usage: {
+            'agi.chat.web.turn-1': {
+              providerCalls: 2,
+              inputTokens: 1_200,
+              outputTokens: 340,
+              reasoningTokens: 64,
+              costCents: 7,
+              settledAt: '2026-07-17T20:00:05.000Z',
+            },
+            'agi.chat.web.turn-1.resume-1': {
+              providerCalls: 3,
+              inputTokens: 900,
+              outputTokens: 210,
+              reasoningTokens: 0,
+              costCents: 4,
+              settledAt: '2026-07-17T20:09:00.000Z',
+            },
+          },
+        },
+      ]);
+
+      const result = await listCloudAgentRuns(db, {
+        userId: 'user-1',
+        states: ['ready_for_review'],
+        limit: 5,
+      });
+
+      expect(result.runs[0]?.usage).toEqual({
+        providerCalls: 5,
+        inputTokens: 2_100,
+        outputTokens: 550,
+        reasoningTokens: 64,
+        costCents: 11,
+        settledAt: '2026-07-17T20:09:00.000Z',
+      });
+    });
+
+    it('reports no charge when every settlement was metered against a free trial', async () => {
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([
+          {
+            ...RUN_ROW,
+            settled_usage: {
+              'agi.chat.web.turn-1': {
+                providerCalls: 1,
+                inputTokens: 500,
+                outputTokens: 120,
+                reasoningTokens: 0,
+                costCents: null,
+                settledAt: '2026-07-17T20:00:05.000Z',
+              },
+            },
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const run = await getCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id });
+
+      expect(run?.run.usage).toMatchObject({ costCents: null, inputTokens: 500 });
+    });
+
+    it('overwrites its own key so a retried settlement never double-charges the task', async () => {
+      const settled = {
+        providerCalls: 2,
+        inputTokens: 1_200,
+        outputTokens: 340,
+        reasoningTokens: 0,
+        costCents: 7,
+        settledAt: '2026-07-17T20:00:05.000Z',
+      };
+      vi.mocked(db.query).mockResolvedValueOnce([
+        { ...RUN_ROW, settled_usage: { 'agi.chat.web.turn-1': settled } },
+      ]);
+
+      const run = await recordCloudAgentRunSettledUsage(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        billingIdempotencyKey: 'agi.chat.web.turn-1',
+        usage: {
+          providerCalls: 2,
+          inputTokens: 1_200,
+          outputTokens: 340,
+          reasoningTokens: 0,
+          costCents: 7,
+        },
+      });
+
+      const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
+      expect(sql).toMatch(
+        /settled_usage = settled_usage \|\| jsonb_build_object\(\$3::text, \$4::jsonb\)/i,
+      );
+      expect(params?.[0]).toBe(RUN_ROW.id);
+      expect(params?.[1]).toBe('user-1');
+      expect(params?.[2]).toBe('agi.chat.web.turn-1');
+      expect(params?.[3]).toMatchObject({
+        providerCalls: 2,
+        inputTokens: 1_200,
+        outputTokens: 340,
+        reasoningTokens: 0,
+        costCents: 7,
+      });
+      expect(run?.usage).toMatchObject({ costCents: 7, providerCalls: 2 });
+    });
+
+    it('does not fail settlement when the run row is already gone', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([]);
+
+      await expect(
+        recordCloudAgentRunSettledUsage(db, {
+          userId: 'user-1',
+          runId: RUN_ROW.id,
+          billingIdempotencyKey: 'agi.chat.web.turn-1',
+          usage: {
+            providerCalls: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            reasoningTokens: 0,
+            costCents: null,
+          },
+        }),
+      ).resolves.toBeNull();
+    });
   });
 
   it('persists cancellation intent without claiming termination before executor acknowledgement', async () => {

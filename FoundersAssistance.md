@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-13
+Last updated: 2026-08-17
 
 Things the remediation cannot finish in code, because they need a dashboard, a
 credential, a paid account, or a product decision that is not mine to make.
@@ -1380,3 +1380,349 @@ primary sources.
 - **Check before launching Basic in India:** if OpenAI's free-ChatGPT-Go-for-a-year
   promotion is still running, paid ₹399 Basic competes with a free equivalent.
   Whether it is still live was not established.
+
+---
+
+## 30. Counsel review of the two breach-notification templates in `BREACH_RUNBOOK.md`
+
+**Status:** `BLOCKED_BY_HUMAN`. The engineering side is finished. What is left is
+a lawyer reading two pages of wording and one line being changed in a file.
+
+**Blocks:** nothing operationally, and that is deliberate — read "This is not a
+hold" before treating it as a gate.
+
+`BREACH_RUNBOOK.md` §4 (intimation to the Data Protection Board) and §5
+(intimation to each affected Data Principal) were drafted from the text of the
+Digital Personal Data Protection Act, 2023 by an engineer. No lawyer has read
+either one. That wording is what goes to a regulator and to affected users on
+the worst day this company has, under a clock that starts the moment any
+employee or contractor first notices facts suggesting a breach.
+
+**This is not a hold on sending.** The statutory clock does not pause for legal
+review, and the runbook says so at both templates: if an incident is live and no
+approval exists, send them as drafted and put counsel on the wording in
+parallel. A late intimation breaches the Act; an imperfectly worded one does
+not. This item exists so the review happens on a calm day rather than at 2am.
+
+**What it costs to leave it:** every incident notice this company sends is
+unreviewed legal copy, sent under time pressure, to the two audiences least
+forgiving of a mistake in it.
+
+**Where a reviewer's time is worth most:** the "What data of yours was NOT
+involved" block in §5. Every line in it is a factual claim about this system —
+card details never reach us, Local-mode data never leaves the device, BYOK
+provider traffic does not pass through us, the identity provider holds the
+password. A wrong line there is a second incident, and it is the block a
+non-engineer reviewer is least able to check unaided. Hand over §3 alongside it;
+that scoping table is where those claims are sourced from.
+
+**Exact steps**
+
+1. Send the reviewer `BREACH_RUNBOOK.md` §3, §4 and §5. Ask two things
+   specifically: whether the §5 "NOT involved" claims are safe to make as
+   written, and whether either template omits anything the Board expects.
+2. On sign-off, in `BREACH_RUNBOOK.md`: change `Legal review: pending-counsel`
+   to `Legal review: counsel-approved`, add an `Approved by:` line naming the
+   reviewer and the date beneath it, update the `Status:` line so it no longer
+   says the runbook is unreviewed, and delete the two pre-send notices from §4
+   and §5.
+3. Drop the "not been reviewed by counsel" row from the runbook's Open gaps
+   table, close `L-9` in `DPDP_PROGRESS.md`, and close `DPDP-26` in
+   `docs/remediation/register.json`.
+4. Run `pnpm --filter @agiworkforce/web test app/__tests__/breach-runbook-counsel-gate.test.ts`.
+   That test holds steps 2 and 3 together — a half-applied approval, where the
+   header claims counsel signed off but the templates still carry the pending
+   notice or no reviewer is named, fails it.
+
+---
+
+## 31. Name a Grievance Officer, confirm the notice address, decide the grievance mailbox
+
+**Status:** `BLOCKED_BY_HUMAN`. Register row `DPDP-23`, founder decisions `F-1`,
+`F-2`, `F-4` in `DPDP_PROGRESS.md`.
+
+**Blocks:** nothing in the product. Every surface publishes a working grievance
+route today — the role account, `contact@agiworkforce.com`, and the subject line
+"DPDP grievance" — on `/privacy/india`, `/privacy/requests`, `/terms` and in the
+site footer. What is unresolved is whether those published facts are the ones
+you intend to stand behind.
+
+The code side is done and no longer needs an engineer:
+
+- `GRIEVANCE_OFFICER_DESIGNATE` in `apps/web/lib/legal-constants.ts` is `null`.
+  Set it to a person's name and every surface that publishes the officer
+  switches from "Grievance Officer, AGI Automation LLC" to "<name>, Grievance
+  Officer, AGI Automation LLC" — one edit, no page copy to touch. Leaving it
+  `null` keeps the role account, which is a decision, not a default.
+- `NOTICE_ADDRESS` is the only complete postal address anywhere in this
+  repository, which is the sole reason it is the one published. It is printed on
+  `/about`, `/press`, `/dpa`, `/terms`, `/privacy`, `/privacy/india`,
+  `/privacy/requests`, `/copyright`, `/model-licenses`, `/mobile/legal`,
+  `/acceptable-use` and `/legal/eu-representative`. If the operating address is
+  different, change it there once.
+- `CONTACT_EMAIL` is the only mailbox proven in use across the marketing
+  surface. `privacy@` and `grievance@` are not provisioned, and
+  `/privacy/india` says so in as many words rather than publishing an address
+  that would bounce. `apps/web/lib/__tests__/legal-constants.grievance.test.tsx`
+  fails if any grievance surface starts publishing a mailbox other than
+  `CONTACT_EMAIL`, so provisioning one is a deliberate edit in both places.
+
+**Exact steps**
+
+1. Decide `F-1`: either set `GRIEVANCE_OFFICER_DESIGNATE` to the named
+   individual, or record in writing that the role account stands. Counsel
+   question `L-7` asks whether a role is acceptable at all under Indian law;
+   answer that first if it is still open.
+2. Decide `F-2`: confirm `NOTICE_ADDRESS`, or replace it.
+3. Decide `F-4`: provision `privacy@` / `grievance@` and point `CONTACT_EMAIL`
+   consumers at it, or confirm in writing that subject-line routing on
+   `contact@` is the intended arrangement — including who watches that inbox for
+   the "DPDP grievance" subject and against what response target
+   (`GRIEVANCE_RESPONSE_TARGET_DAYS`, published as 30 days, our commitment and
+   not a statutory period).
+4. Close `F-1`, `F-2` and `F-4` in `DPDP_PROGRESS.md` and `DPDP-23` in
+   `docs/remediation/register.json`, then run
+   `pnpm --filter @agiworkforce/web test lib/__tests__/legal-constants.grievance.test.tsx`.
+
+---
+
+## 32. Decide whether AGI serves users below the regional age threshold at all
+
+**Status:** `BLOCKED_BY_HUMAN`. The engineering half of MOB-06 shipped on
+2026-08-17: `confirmAgeGate` in
+`apps/mobile/src/features/auth/services/ageGate.ts` no longer accepts a higher
+age once a minor record exists, `/(public)/age-gate` renders a locked notice
+instead of the input on a protected device, and Settings → Parental Controls no
+longer offers the route back to the self-declare screen. Proof:
+`apps/mobile/__tests__/minor-mode-not-child-clearable.test.tsx`.
+
+What code cannot decide is the half above it. The gate is still self-declared —
+a typed number, never verified — and `detectRegionRule` puts the threshold at 13
+in the US and default regions, 16 across the EU, 18 in India and Brazil. Below
+that threshold both COPPA and the DPDP Act require _verifiable_ parental
+consent, which AGI does not have and cannot fake. Today a 9-year-old types "9",
+gets content filtering, and uses the product.
+
+There are only two honest exits, and both are yours:
+
+1. **Restrict the minimum age.** Make a sub-threshold answer a refusal, not a
+   filtered session: no local chat, no cloud sign-in, an explanation and a way
+   out. Cheap to build, loses those users outright.
+2. **Buy a verifiable-parental-consent path.** A vendor flow (card
+   authorization, government-ID check, or a signed consent form with an adult
+   re-contact step) run before a minor account is provisioned, plus a consent
+   record with an audit trail and a withdrawal path. This is a contract and a
+   budget before it is an integration.
+
+**What is needed and from whom**
+
+- Founder: pick (1) or (2), and if (2), name the vendor and approve the spend.
+- Counsel: confirm the per-region thresholds in `TIMEZONE_TO_REGION` are the
+  ones we are held to, and whether timezone inference is defensible as the
+  region signal at all.
+- Until one of those lands, do not describe the age gate as compliant anywhere
+  in store listings or marketing copy.
+
+---
+
+## 33. Decide what happens to manual pairing-code entry when the Dispatch key moves out of band
+
+**Status:** `BLOCKED_BY_HUMAN` for one product decision. Everything else in
+SEC-16 is an engineering task queued in `ExecutionPlan.md`.
+
+**The defect.** The Dispatch control channel between Desktop and the Mobile
+companion signs every frame with HMAC-SHA-256, and the key is
+`HKDF(IKM = pairing code, salt = session salt)`. The signaling relay mints that
+pairing code, receives it again on `POST /pairings/{code}/claim` and in the
+WebSocket register frame, and receives the salt in register metadata. It holds
+both inputs. A relay compromise, an insider, or a TLS-intercepting proxy (mobile
+pinning is off and the pins in `apps/mobile/lib/pinning.ts` are placeholders)
+can therefore recompute the key and mint frames that verify in both directions —
+including a forged `approval_response {approved:true}` that Desktop treats as
+the user consenting to a tool execution. Fresh nonces and in-window timestamps
+do not help; the forger can produce both. The two module docstrings that used to
+claim this layer stops a relay attacker were corrected on 2026-08-17.
+
+**The fix and the one thing code cannot decide.** The key has to be established
+out of band: Desktop generates a random 32-byte secret, puts it in the QR code,
+and never sends it to the relay. That works for the QR path. It cannot work for
+the manual fallback, where the user reads a 12-character code off the Desktop
+screen and types it into `QRScanner`'s manual-entry field — a 64-hex secret is
+not typeable, and that path exists precisely for when the camera is denied.
+
+Pick one:
+
+1. **QR only.** Remove manual entry. Users with no camera permission cannot pair
+   until they grant it. Simplest, and the pairing channel is then genuinely
+   out of band.
+2. **Keep manual entry, honestly labelled.** The manual path stays
+   relay-derived and the companion says so before the first approval —
+   "this connection is trusted through our pairing service" — and, if you want
+   it to be more than a label, the approval card refuses high-risk tool classes
+   on a manually-paired session.
+3. **Keep manual entry, verified by a short authentication string.** After
+   connecting, both screens show the same six digits derived from the two DTLS
+   fingerprints and the user confirms they match. Strongest, most build: new UI
+   on both surfaces and fingerprint access from `react-native-webrtc` and the
+   Tauri side.
+
+**What is needed and from whom**
+
+- Founder: pick 1, 2 or 3. Everything downstream is mechanical once it is
+  picked, and the engineering steps are already written out in
+  `ExecutionPlan.md` under the SEC-16 TODO.
+- Founder or release owner: the change breaks every currently paired device.
+  Confirm the cutover — a coordinated bump of `DISPATCH_HMAC_REQUIRED_AFTER`
+  and `DISPATCH_HMAC_MIN_MOBILE_VERSION` with a forced re-pair — is acceptable,
+  and when.
+- Unrelated but adjacent: mobile TLS pins are still placeholders and
+  `PINNING_ENFORCED` is `false`, which is what makes the interception variant
+  of this attack cheap. That is tracked separately; provisioning real pins does
+  not close SEC-16 on its own, because the relay is authorized to see the code
+  regardless of the transport.
+
+---
+
+## 34. Decide whether a developer session may be driven from a second device, and on what grant
+
+**Status:** `BLOCKED_BY_HUMAN` for one product decision. The register rows
+DESK-99 and AI-58 both describe this as "no developer-session remote-control
+protocol exists end to end on any surface". That premise is wrong, and the
+correction narrows the ask to a decision rather than a rebuild.
+
+**What already exists.** The developer-session control protocol is defined and
+wired end to end:
+
+- `crates/agiworkforce-protocol/src/developer_session.rs` — the contract
+  (threads, turns, streaming, approvals, `AppServerCapabilities`,
+  `DeveloperSessionTrustMode`), with a conformance test at
+  `crates/agiworkforce-protocol/tests/developer_session_protocol.rs`.
+- `crates/agiworkforce-app-server/src/developer_sessions.rs` — the
+  `DeveloperSessionHost` trait and server.
+- `apps/cli/src/app_server/developer_host.rs` — the CLI host implementation
+  (~4.1k lines): persisted sessions, live agent instances, turn tasks,
+  cancellation, approval continuations, MCP attachment, streamed events.
+- `apps/extension-vscode/src/integrations/localRuntimeClient.ts:743` — the VS
+  Code client, which spawns `agiworkforce app-server` and speaks that protocol.
+
+Desktop's companion host UI is also mounted
+(`apps/desktop/src/features/settings/tabs/Connections/index.tsx` renders
+`MobileCompanionPanel`), and Mobile is not a static shell
+(`apps/mobile/app/(app)/companion/index.tsx` drives the QR scanner, pairing
+status, agent dashboard, execution stream and dispatch composer).
+
+**What genuinely does not exist.** Three things, and only the first is a
+decision:
+
+1. **A remote transport.** The protocol's only transport today is a local
+   stdio pipe to a child process. Nothing lets a session running on machine A
+   be attached from device B.
+2. **A projection client.** `DeveloperSessionSource` has exactly two variants,
+   `Cli` and `Vscode`. There is no Mobile or Web source, so no phone or browser
+   can present itself as a client of a developer session. The Mobile companion
+   is a separate WebRTC screen-share plus approval channel, not a projection of
+   a developer session.
+3. **Revocable persistent device grants for it.** The companion pairs with a
+   short-lived code and per-session `pairTokens`
+   (`apps/desktop/src/stores/connectionStore.ts`); nothing is stored, listed or
+   revocable. A durable, revocable grant table does already exist for CLI
+   device auth (`device_refresh_tokens`, with `revoked_at`, in
+   `apps/web/app/api/auth/device/refresh/route.ts`) and is the obvious model to
+   extend — but extending it to developer sessions is only worth building once
+   the answer to the question below is yes.
+
+**The decision.** Should a developer session — a live agent with the user's
+working directory, terminal and file-system tools — be drivable from a second
+device at all?
+
+1. **No.** Developer sessions stay local to the machine that owns the
+   workspace. Mobile and Web keep the current read-and-approve companion. Close
+   DESK-99 and AI-58 as won't-do and delete the MS-3 / MS-18 / CAP-049
+   expectations that assume otherwise.
+2. **Approve-only from a second device.** Today's shape, made durable: the
+   phone never sends turns, it only answers approvals, and the pairing becomes
+   a listed, revocable device grant. Smallest build, and it does not widen the
+   blast radius of a stolen phone.
+3. **Full remote drive.** A remote transport for the app-server protocol plus a
+   Mobile/Web projection client. This is the XL option, and it makes a stolen
+   or borrowed second device equivalent to a shell on the developer's machine —
+   so it cannot ship without the grant lifecycle in (3) above, a visible
+   host-side indicator, and a per-grant capability scope.
+
+**What is needed and from whom**
+
+- Founder: pick 1, 2 or 3. Every downstream engineering step is mechanical once
+  it is picked, and none of it should start before it is.
+- If 2 or 3: founder or security owner also decides grant lifetime, whether a
+  grant survives a re-install, and what the user sees on the host while a
+  remote device is attached.
+
+---
+
+## 35. Decide whether Desktop ships a Local→BYOK fork at all
+
+**Status:** `BLOCKED_BY_HUMAN`. Security holds today; the product is
+half-present.
+
+**Blocks:** SEC-90's last clause. Nothing is unsafe while it waits.
+
+The boundary is enforced. A Local conversation resolves `TrustMode::Local`
+(`apps/desktop/src-tauri/src/sys/commands/chat/send_message_setup.rs:169`), and
+`provider_matches_trust_mode` keeps only local providers
+(`apps/desktop/src-tauri/src/core/llm/llm_router.rs:458`), so a Local thread
+cannot reach a BYOK provider. The store-side ceremony is enforced too:
+`forkConversationForByok` copies only approved, redacted messages and returns
+null otherwise (`apps/desktop/src/stores/chat/chatStore.ts:496`), proven by
+`apps/desktop/src/stores/chat/__tests__/chatStore.test.ts`.
+
+What is missing is the way in. The desktop ceremony dialog exists but sits in
+`apps/desktop/archive/features/chat/LocalByokHandoffDialog.tsx`, outside the
+tsconfig `include`, and `forkConversationForByok` has no production caller — so
+no user can start a fork. Meanwhile the Local model picker lists configured BYOK
+models (`apps/desktop/src/App.tsx:889`), so selecting one is a control that can
+only fail. As of 2026-08-17 that failure at least explains itself and names the
+fork (`local_only_no_candidate_message`, tested in
+`core/llm/tests/routing_logic_tests.rs`) instead of blaming Ollama.
+
+**The decision.**
+
+1. **No fork on Desktop.** Then the picker must stop offering BYOK models inside
+   a Local conversation, and the archived dialog should be deleted rather than
+   left to look like a shipped feature.
+2. **Ship the fork.** Move the dialog into `apps/desktop/src/features/chat/`,
+   add the entry point (a conversation-header action is the natural place — the
+   header already takes host-supplied actions), and keep the six ceremony steps
+   the store already enforces.
+
+**What is needed and from whom**
+
+- Founder: pick 1 or 2. Both are small builds; which one is a product call about
+  whether Desktop users may move Local content to their own provider account.
+
+---
+
+## 36. The org BYOK domain allowlist has no way to reach a device
+
+**Status:** `BLOCKED_BY_HUMAN`. Needs a distribution design, not a patch.
+
+**Blocks:** SEC-05's clause "the org BYOK domain allowlist becomes an enforced
+block rather than metadata".
+
+`egress.byokDomainsAllowlist` exists in both schema ports
+(`crates/agiworkforce-licensing/src/org_policy.rs:41`,
+`packages/contracts/licensing/src/org-policy.ts:39`) and both only compare it
+for monotonic tightening. It has no enforcement consumer anywhere, and no
+surface loads a signed org policy at all: `grep -r org_policy
+apps/desktop/src-tauri/src` returns nothing. The enforcement point on Desktop is
+obvious once a policy exists — `validate_provider_base_url` in
+`core/llm/providers/direct_api_provider.rs:251` already judges every BYOK base
+URL — but wiring a check to an allowlist no device ever receives would be a
+guard that is always empty.
+
+**What is needed and from whom**
+
+- Founder / security owner: decide where a signed org policy comes from (bundled
+  with the license, fetched at sign-in, dropped by MDM), how often it refreshes,
+  and what a device does when it has none — fail open on product defaults, or
+  refuse BYOK entirely for managed orgs.
+- Only after that is the enforcement itself mechanical.

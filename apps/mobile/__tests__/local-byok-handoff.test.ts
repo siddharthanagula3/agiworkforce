@@ -5,6 +5,7 @@ jest.mock('../services/api', () => ({
     put: jest.fn(),
     delete: jest.fn(),
   },
+  apiFetch: jest.fn().mockRejectedValue(new Error('offline')),
 }));
 
 jest.mock('../services/authSession', () => ({
@@ -51,7 +52,7 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import { useChatStore } from '../stores/chatStore';
-import { api } from '../services/api';
+import { api, apiFetch } from '../services/api';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { retrieveMemoryContext } from '../src/features/memory/store';
@@ -169,6 +170,7 @@ describe('mobile local conversation forks', () => {
     expect(api.post).not.toHaveBeenCalled();
     expect(api.put).not.toHaveBeenCalled();
     expect(api.delete).not.toHaveBeenCalled();
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it('does not create a local fallback conversation while Cloud mode is selected', async () => {

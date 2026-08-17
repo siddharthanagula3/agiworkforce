@@ -235,8 +235,16 @@ Decided by the founder on 2026-08-05:
   Live artifacts (CAP-050); Design workspace v1 — mount the orphaned
   `CanvasWorkspace` whiteboard (CAP-051; full artboard/layers/prototype/deck
   parity remains a separate future decision); AI-powered artifacts (CAP-052 —
-  approved despite security sensitivity; a security design review proving
-  WEB-13 stays closed is a hard precondition).
+  approved despite security sensitivity;
+  `docs/design/cap-052-artifact-runtime-bridge-security-review-2026-08-05.md`
+  is that security design review and is a hard precondition: its §4
+  conditions 1-7 and its §5 red-team items RT-1..RT-4 plus RT-5(a) are the
+  open-condition set that must close. Condition 5 carries the original clause —
+  WEB-13, the 2026-05-19 `apps/web` iframe-sandbox-escape finding closed by the
+  cross-origin renderer origin, `connect-src 'none'`, and the same-origin
+  refusal in `isThisAppsOwnOrigin()`, must stay closed through the bridge. The
+  review currently returns NO-GO, so the precondition is unmet and no build
+  starts).
 - **Full-localization requirement (founder, 2026-08-05):** switching the app
   language must translate the ENTIRE surface — every user-facing string routes
   through i18n, every supported locale carries every bundle and key, no
@@ -436,7 +444,7 @@ Primary paths: `apps/desktop/src/features/v3`, `apps/desktop/src/features/settin
 | AGI Code dashboard | Repo selector, activity heatmap, sessions, PRs, routines, run history; managed cloud sessions are public alpha (entitlement-gated, not invite-gated).                                                                                                                         | Partial/Missing.   |
 | Admin/team         | Organization policy, audit, connector controls, managed compute readiness.                                                                                                                                                                                                    | Partial/Gated.     |
 
-Primary paths: `apps/web/app`, `apps/web/features`, `apps/web/core`, `apps/web/stores`, `services/api-gateway`, `apps/web/db/neon`.
+Primary paths: `apps/web/app`, `apps/web/features`, `apps/web/core`, `apps/web/stores`, `apps/web/db/neon`.
 
 ## Mobile Surface
 
@@ -503,7 +511,7 @@ Primary paths: `apps/extension/src`, `apps/extension/native-host`, `apps/extensi
 | Abuse/fraud controls     | Metering, quotas, refund/chargeback reserve, provider terms.                                                                                                                                                        | Missing/Gated.     |
 | Enterprise               | Org policy, audit, SSO/SCIM, connector policy, managed-credit ledger, support workflow.                                                                                                                             | Partial/Gated.     |
 
-Primary paths: `apps/web/features`, `apps/mobile/app/(app)/billing`, `services/api-gateway`, `packages/contracts/types/src/enterprise`, `apps/web/db/neon`.
+Primary paths: `apps/web/features`, `apps/mobile/app/(app)/billing`, `packages/contracts/types/src/enterprise`, `apps/web/db/neon`.
 
 ## Competitor Deltas (officially re-verified 2026-08-09)
 

@@ -28,7 +28,19 @@ import {
   uuidToDbId,
 } from '../stores/chat/chatStore';
 import { useArtifactStore } from '../stores/artifactStore';
+import { useSkillMarketplaceStore } from '../stores/skillMarketplaceStore';
 import { PartialArtifactAccumulator } from './partialArtifactArgs';
+
+async function resolveSkillSystemPrompt(options?: SendMessageOptions): Promise<string | undefined> {
+  if (!options?.skillName) return options?.systemPrompt;
+  const instructions = await useSkillMarketplaceStore
+    .getState()
+    .getSkillInstructions(options.skillName);
+  if (!instructions?.trim()) return options.systemPrompt;
+  return [options.systemPrompt, instructions]
+    .filter((part): part is string => Boolean(part && part.trim()))
+    .join('\n\n');
+}
 
 interface StreamChunkPayload {
   conversation_id: string | number;
@@ -478,7 +490,7 @@ export class TauriRuntime implements ChatRuntime {
       signal: options?.signal,
       thinkingEnabled: options?.thinkingEnabled,
       webSearch: options?.webSearch,
-      systemPrompt: options?.systemPrompt,
+      systemPrompt: await resolveSkillSystemPrompt(options),
       agentMode: options?.agentMode,
       effort: options?.effort,
       localToolScope,

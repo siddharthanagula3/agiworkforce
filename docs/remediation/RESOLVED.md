@@ -330,3 +330,310 @@
 - docs/agent-context/risk-map.json AUDIT-IMMUT-01 (audit log immutability) — RESOLVED: 0043_audit_log_immutability.sql revokes UPDATE,DELETE on public.security_audit_logs from app_rls and converts cleanup_old_security_logs() and delete_user_data(text) to SECURITY DEFINER so 90-day retention and GDPR erasure still purge; applied to prod Neon after a disposable-branch rehearsal with app_rls verified INSERT+SELECT-only. Explicit instruction preserved: do NOT re-derive the REVOKE, it exists. The two residues (the blanket GRANT re-grant footgun at 0037_rls_user_isolation.sql:81, and delete_user_data(text) having EXECUTE still open to public) are security/compliance items outside this slice.
 - docs/current/frontend-experience-contract.md §13 correction note — two rows were previously mismarked and are RESOLVED: CLI voice is present, not absent (apps/cli/src/voice.rs with cpal capture, Whisper API/local binary and a Local-mode egress gate, reached from both the REPL and TUI via /voice), and Desktop developer sessions are mounted (CodeWorkspace lazy-mounted in DesktopShellV3.tsx, Local-only, since 2026-08-04). What remains missing for the latter is the remote projection, carried forward as AI-55.
 - Chrome Quick mode routing through the admitted auto-economy profile (frontend-experience-contract.md §14 P0 item 4) — RESOLVED 2026-07-16: Chrome Quick now travels with both side-panel send paths and routes the turn through the admitted auto-economy profile without mutating the saved model selection.
+
+## Closed in the 2026-08-17 remediation pass
+
+These 150 items were closed on 2026-08-17 and removed from the active register so it
+shows only remaining work. Each line carries the code fact its closure rests on, so a reader can
+re-check the claim rather than trust it. Restore any row from git history if a closure is disputed.
+
+- **DESK-04** (CRITICAL, resolved) — Desktop automation triggers can never fire: TriggerRegistry::start() has no non-test caller, and triggers are memory-only  
+  Three tests observed failing then passing (`cargo test -p agiworkforce-desktop --lib triggers::tests`): `the_app_setup_starts_the_trigger_engine` ("app setup never hands the trigger registry a live app handle") → lib.rs now spawns a task that calls set_app_handle/set_store/load_persisted/start; `registered_triggers_survive_a_restart` (left 0, right 1) → migration v78 `automation_triggers` + persis
+- **DPDP-06** (CRITICAL, resolved) — Desktop 'delete my account' erases 7 of roughly 100 tables and leaves local emails, contacts, screenshots and OCR text untouched  
+  Two red→green proofs in `cargo test -p agiworkforce-desktop --lib privacy::`. (1) `export_returns_the_local_content_it_claims_to` failed with "no such table: custom*instructions" — privacy_export_data queried a table that never existed, so export ALWAYS errored; rewrote it to derive from classify_local_tables with secret-column redaction → passes. (2) `purge_removes_the_on_disk_artefacts_the_rows*
+- **DPDP-21** (CRITICAL, wontfix) — GDPR Article 27 EU representative not appointed — EEA traffic geo-blocked instead (founder decision 2026-08-17)  
+  Founder decided 2026-08-17 to geo-block the EEA rather than appoint a representative (cost). apps/web/lib/eu-access.ts + proxy.ts return 451 to /region-unavailable for 30 EEA countries; 8 tests cover on/off, non-EEA pass-through, and the UK/CH exclusions. EU consent, erasure and Article 50 code deliberately retained.
+- **INFRA-15** (CRITICAL, resolved) — Desktop and CLI are marketed site-wide as Released while no user can download either  
+  CLI was labelled Released with no download path (both /cli and /download only linked to each other). Added /api/releases/cli/latest + CliDownloadAvailability, mounted on /download, and pointed /cli CTAs at #cli-downloads. Verified live: v-cli-1.0.0 carries 5 public archives. New tests cli-release-route.test.ts (4) + cli-download-surface.test.tsx (3) failed with the route/component absent, pass now
+- **SEC-38** (CRITICAL, wontfix) — Repository is public by founder decision (2026-08-17), with unpatched findings visible  
+  Founder confirmed 2026-08-17 that the repository stays public; gh reports visibility PUBLIC. Reclassified from open CRITICAL defect to a dated recorded decision so the critical count reflects work someone intends to do.
+- **AI-37** (HIGH, resolved) — Durable (survives-connection-close) execution for initial AGI Work turns is off by default while CHANGELOG describes the flag as a kill-switch  
+  Row premise inverted: durable-initial-turns.ts already defaults ON, so the correct assertion is failing when the kill-switch IS set in production. Added AGI_DURABLE_INITIAL_TURNS: ['0','false','off'] to web productionForbiddenValues in scripts/env-doctor.mjs. New test 'the durable-turn kill-switch configured in production is reconciled as drift' + the forbidden-list deepEqual failed before (node -
+- **AI-38** (HIGH, resolved) — No way to steer or redirect an active agentic run without stopping it entirely  
+  tool-approval-resume.ts:18 adds guidance field; tool-loop.ts:1905-1912 appends it as a turn after every tool result; TasksPage.tsx:130,471-482 wires a follow-up composer per run.
+- **AI-40** (HIGH, resolved) — Web chat never retrieves or references excerpts from the user's other past conversations at send time  
+  New apps/web/lib/runtime/past-chat-context.ts ports the mobile retrieval/scoring/fencing (fenceUntrustedContent, tag past_chats) over /api/search; WebChatRuntime.sendMessage now injects it, gated on a NEW independent searchPastChats preference (isPastChatSearchEnabled) and excluded for temporary chats; CapabilitiesSection exposes the toggle, not nested under memory. 5-test suite: red before wiring
+- **BILL-09** (HIGH, resolved) — Spend caps and auto-reload are not enforced before execution and are not consent-gated  
+  Admission control already precedes provider execution: request-processor.ts degrades to a cheaper model then denies, and reserveManagedUsageRequest returns deterministic 402/429 before any provider call. request-processor.budget-admission.test.ts: 4/4 pass ("budget admission control runs before any provider work"). No auto-reload feature exists (zero grep hits); overage is opt-in via /api/billing/
+- **BILL-18** (HIGH, resolved) — Upgrade/downgrade/proration policy is undefined and subscription state transitions are not proven monotonic  
+  Added subscription-access-policy.ts (ranked state ladder, resolveSubscriptionAccess, hasLiveBillingRelationship, isMonotonicSubscriptionTransition), wired it into auth-gate.ts and delete-account, and documented upgrade/downgrade proration plus the dispute path in commercial-and-launch.md. Red: isActiveSubscriptionStatus('past_due') returned true (a chargeback read as active); now false. 8 policy t
+- **BILL-24** (HIGH, resolved) — Subscription allowance is not separated from purchased credit balance  
+  Added 0126_credit_balance_transferability.sql: triggers make token_credits.user_id and credit_transactions ownership immutable, and column comments state expiry, refundability, revocability, transferability and consumption order for both balances. Red: the migration test failed to load (files absent). Green: 4 tests pass and check-neon-migrations passes. Documented the attribute table in commercia
+- **CONN-01** (HIGH, resolved) — The connector catalog is nonfunctional by default: branded connectors 501 and the OAuth registry ships with zero providers  
+  api/connectors/route.ts already gates availability via isSelfServiceConnector/isConnectorOAuthConfigured (lines 86,162,232,277,381), and ConnectorsPage.tsx derives its available/availableIds card state from that same API (lines 118,180-184,484-503).
+- **CONN-07** (HIGH, resolved) — Custom MCP connectors are invisible on Desktop, and desktop Local mode runs an entirely separate connector system  
+  'custom' is already in the desktop connector source type (apps/desktop/src/api/cloudConnectors.ts:11) and ConnectorGallery.tsx:1066 carries the data-testid=custom-connector-scope-note stating the Local/cloud split. ConnectorGallery.test.tsx 7/7 pass — I had to add the missing '@agiworkforce/utils/markdown-source' alias to apps/desktop/vite.config.ts, without which the whole desktop suite failed to
+- **CONN-17** (HIGH, resolved) — No surface offers automatic (progressive-disclosure) skill invocation — a working desktop matcher has zero callers  
+  Both halves are wired. Desktop: skillMarketplaceStore.matchForMessage -> DesktopShellV3:206-217 suggestLocalSkills -> ChatInput suggestSkills, dismissible chips; ChatInput.skillSuggestions.test.tsx 4/4 pass. Web: matchSkillsForPrompt -> applyImplicitManagedSkillOffer, called in production at request-processor.ts:1958; request-processor.skill-offer.test.ts 4/4 pass.
+- **DESK-105** (HIGH, resolved) — Desktop background agents are fully built in Rust but unreachable: 11 Tauri commands and 7 of 9 events have zero production callers and there is no push-to-background UI  
+  backgroundAgentStore.ts invokes all 11 background*agent*\* commands and maps all 9 events (7 status + created/progress). BackgroundAgentsPanel.tsx mounts inside AgentTaskPanel.tsx:107, which DesktopShellV3 lazy-loads. backgroundAgentStore.test.ts + BackgroundAgentsPanel.test.tsx: 7/7 pass, including a test asserting every backend command is reached.
+- **DESK-11** (HIGH, resolved) — Desktop in-app Notification Center is unmounted; group toggles and DND schedule are inert; only 2 of 4 groups can fire  
+  Mounted NotificationCenter in the sidebar footer; 3 render tests FAILED ('Unable to find button named Notifications') without it, pass with it. Extracted suppression_reason + delivery_plan; triggers.rs now calls deliver_notification. Test trigger_notifications_go_through_the_notification_center FAILED on the reverted plugin call, passes now. 4893/4893 lib tests green.
+- **DESK-16** (HIGH, resolved) — Desktop provider endpoints and image model IDs are hardcoded outside the registry; image generation calls three nonexistent model IDs  
+  Added RETIRED_PROVIDER_HOSTS + is_retired_provider_host, enforced in validate_provider_base_url. Test validate_blocks_every_retired_provider_host FAILED with the check disabled ('https://api.mulerouter.ai/v1 must be refused'), PASSES after (46/46 in module). The guard itself then rejected the new literal (budget 13 exceeded) until declared — proving it rejects new host literals.
+- **DESK-25** (HIGH, resolved) — Desktop release lacks an SBOM, a clean-machine install test, and any upgrade-from-previous-version test  
+  Added scripts/generate-sbom.mjs (CycloneDX 1.6 from Cargo.lock + pnpm tree), SBOM steps in build-linux/build-macos, clean-install-linux (bare ubuntu:24.04 container, dpkg install, ldd no-missing-libs, desktop entry, SBOM present) and upgrade-from-previous-linux (installs previous published .deb, seeds data, upgrades, rolls back) gating publish-release. Red: node scripts/check-release-gates.mjs pri
+- **DESK-27** (HIGH, resolved) — Desktop native E2E has never honestly run: first real WDIO run passed 3 of 32 specs, surfacing raw i18n keys and a cold-start budget breach  
+  New contract test FAILED first, naming all 8 console.log-only tests. Converted all 29 console.log calls to expect() on the values already computed (collapse width/persist, draft clear+focus, search filter/close, group headers, project CRUD, footer, keyboard focus, truncation CSS); now 3/3 pass, and reinserting one log turns it red again. webServer clause was already real in playwright.config.ts.
+- **DESK-66** (HIGH, resolved) — Desktop background-agent subsystem (BackgroundAgentManager, 11 Tauri commands, 9 events) is fully built but unreachable from any UI  
+  Added backgroundAgentStore.ts (all 11 background*agent*\* commands + all 9 events) and BackgroundAgentsPanel.tsx, mounted as a Background tab in AgentTaskPanel. Tests backgroundAgentStore.test.ts + BackgroundAgentsPanel.test.tsx: red before (module missing; then with the tab reverted, 3 failures 'Unable to find Refactor the billing module'), 7 passed after. ipc-check confirms all 11 invokes resolve
+- **DESK-70** (HIGH, resolved) — Desktop image and video generation is unreachable from the live chat composer, and the Rust media commands never absolutize the returned relative URLs  
+  Rust half: absolutize_media_url joins get_api_base_url() onto img.url, video_url and thumbnail_url. Red: with the helper reduced to a passthrough, cargo test -p agiworkforce-desktop --lib media failed 2/30 (left "/api/files/media-asset-1"). Green after restore: 30 passed, 0 failed. Composer half is wired end to end (mediaModeStore -> ChatInput -> useChat -> CloudRuntime mediaMode); ChatInput.media
+- **DOCS-06** (HIGH, resolved) — Unsupported quantified and traction claims remain published  
+  Removed the falsifiable hardcoded CLI version from body copy (download page x2, cli page x2 + a stale narrating comment, agi-code page x1); the live version already comes from SURFACE_STATUS.cli ('Released · v1.7.1', guarded against apps/cli/npm/package.json) and from the live /api/releases/cli/latest fetch in CliDownloadAvailability. New guard 'keeps published CLI versions out of hand-typed copy'
+- **DPDP-08** (HIGH, resolved) — Anonymous rows with NULL user_id in waitlist, consent and data-rights tables are unreachable by any erasure path  
+  apps/web/lib/server/anonymous-erasure.ts deletes anonymous rows with 'where user_id is null' and anonymous-erasure.test.ts asserts the predicate
+- **DPDP-18** (HIGH, resolved) — The Chrome extension injects into every page, requests debugger and cookie permissions, mirrors transcripts to the cloud with no opt-out, and shows no privacy notice  
+  New apps/extension/**tests**/extension-privacy-disclosure.test.ts: 6 of 7 cases failed before the change (flush still POSTed with the pref stored false; isCloudPersistenceEligible returned true; no disclosure section existed), all 7 pass after. Full extension suite 1619/1619 green, tsc clean. Disclosure section names all-URLs injection, debugger, cookies, mirroring; stored key gates isCloudPersist
+- **DPDP-19** (HIGH, resolved) — Mobile shows no privacy notice at onboarding, its iOS privacy manifest under-declares collection, and store privacy declarations misstate what is shared  
+  Privacy-notice card + policy/DPDP links and NSPrivacyCollectedDataTypeOtherUserContent were already shipped (onboarding-privacy-notice.test.tsx, privacy-collection-declarations.test.ts pass). Remaining clause done: wrote **tests**/contacts-permission-not-requested.test.ts, saw 4/5 fail (NSContactsUsageDescription present, expo-contacts imported by 2 files, contacts in registry/deviceIntegrations);
+- **DPDP-25** (HIGH, resolved) — The DPA has no DPDP annex, uses controller/processor framing the Act does not share, and commits to no data-principal breach notification  
+  dpa/page.tsx now has a full Annex IV (DPDP Act) section (~line 673), a Data Fiduciary/Processor/Principal terminology table, and a direct-to-data-principal breach notification commitment (lines ~604-613).
+- **DPDP-38** (HIGH, resolved) — EU AI Act Article 50 provenance-marker serialization silently strips every nested key, and web hand-restates the marker shape instead of importing it, so the two surfaces reject each other's output  
+  serialiseAiActProvenanceClaim uses a recursive sorting replacer, not a key allowlist, and web imports the shared claim from @agiworkforce/types rather than restating it. Reverting to HEAD's `JSON.stringify(claim, Object.keys(claim).sort())` made ai-act-marker-cross-surface.test.ts FAIL 2/4; restored it passes 4/4. Compliance package 30/30.
+- **EXT-07** (HIGH, resolved) — Chrome extension exposes no privacy notice anywhere in its UI while injecting into every page, requesting debugger and cookies permissions, and mirroring chats to the cloud with no opt-out  
+  Same test file. Case 'sends nothing to the account once the user turns the mirror off' failed before (fetch called once) and passes after (zero fetches). Disclosure now also renders in the first-run side-panel onboarding step 1 (sp-ob-privacy-row rows plus an Open privacy settings button) and in the new options Privacy section with a working decline toggle. Extension suite 1619/1619.
+- **INFRA-02** (HIGH, resolved) — One monolithic `check` job gates every independent E2E lane  
+  ci.yml now runs 13+ independent jobs (repo-guards, database, js-verify, security, rust-desktop-cli, desktop-e2e, browser-extension-e2e, ...) each gated by needs.scope.outputs.\*\_changed, aggregated by a final ci-complete job (line 1114).
+- **INFRA-05** (HIGH, resolved) — Security and dependency gates are not uniformly blocking by documented severity  
+  Added .github/security-gate-policy.json as the single registry of every dependency/static-analysis gate, its blocking severity, and every exclusion (3 continue-on-error steps, 2 allowlist files, cargo-deny ignores) with reason/owner/tracking, plus scripts/check-security-gates.mjs wired blocking into ci.yml. Red: deleting the windows-test-loader entry made the guard exit 1 naming the unregistered s
+- **INFRA-22** (HIGH, resolved) — No environment-variable drift detection or alerting; a production outage from env deletion has already recurred  
+  .github/workflows/env-drift.yml runs a 6-hourly cron reconciling production env via check-env-drift.mjs with PAGER_WEBHOOK_URL alerting; validate-env.ts:271,280 tracks ACCOUNT_STATUS_FAIL_OPEN/AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY escape hatches; instrumentation.ts:17-18 runs validation at boot.
+- **INFRA-29** (HIGH, resolved) — Mutations lack idempotency keys, expected-revision leases and out-of-order reconciliation  
+  Subscription writes now carry the Stripe event's `created` as a sequence watermark (`last_stripe_event_at`), guarded in the read, the UPDATE where-clause and the upsert conflict target. New test app/api/stripe-webhook/lib/**tests**/subscription-event-ordering.test.ts: 4/4 failed before ('expected 200 to be...' / 'expected sql to contain last_stripe_event_at'), 4/4 pass after; 22 stripe suites (157
+- **INFRA-34** (HIGH, resolved) — No data-volume forecasts, retention tiers or partitioning for the tables that grow unbounded  
+  The row's only buildable clause is satisfied: vercel.json:51 registers {"path":"/api/cron/expire-organization-invitations"}, and apps/web/app/api/cron/cron-registration.test.ts is a real guard (it diffs every cron route dir against vercel.json crons both ways) — ran it: 4/4 pass. Nothing to change and it cannot silently regress. Forecast/retention/partitioning stay open by the row's own wording.
+- **MOB-05** (HIGH, resolved) — Mobile presents no privacy notice during onboarding and requests a Contacts permission no code reads  
+  Red: re-adding NSContactsUsageDescription to app.config.js failed contacts-permission-not-requested.test.ts (1 of 5). Green after restore: 5/5 pass — no Info.plist string, no Android permission, no expo-contacts import, no permissions-registry entry, no device-integration helper. Onboarding privacy notice covered by onboarding-privacy-notice.test.tsx; both suites 9/9. RESIDUAL: expo-contacts is st
+- **MOB-12** (HIGH, resolved) — Mobile remote-control dispatch is fire-and-forget: tasks and approvals can be silently dropped  
+  Added versioned ControlReceiptEvent to cross-device.ts; desktop acknowledges every control carrying a requestId via a bounded ledger that answers a replay with outcome 'duplicate' instead of a second acceptance; mobile tracks each sent control until its signed receipt lands, retrying the same requestId up to 3 times then reporting it dropped, and surfaces the count in ConnectionStatusBar. New test
+- **SEC-14** (HIGH, resolved) — At-rest AES-256-GCM keys for OAuth tokens, MCP credentials and the JWT secret are derived entirely from a public machine identifier  
+  docs/security/key-rotation.md now carries a header line "Rotation cadence: every 12 months per key, plus immediately on suspected exposure", a "## Rotation cadence" table giving every key env an interval, next-due date and sweep target, and an "## Accepted risk" block — the versioned procedure with a cadence the row required. Enforced by apps/web/**tests**/security/key-rotation-runbook.test.ts: `n
+- **SEC-36** (HIGH, resolved) — Security static analysis and dependency advisories are not uniformly blocking; CodeQL default setup suppresses Rust analysis on PRs  
+  ci.yml runs scripts/check-semgrep-findings.mjs as a blocking gate with an owner/expiry allowlist
+- **SEC-40** (HIGH, resolved) — No KMS, escrow or rotation for the five AES-256-GCM application keys; ENCRYPTION_KEY is only a boot warning  
+  Wrote apps/web/**tests**/security/key-rotation-runbook.test.ts (5 tests) asserting a named cadence + owner header, a per-key cadence table naming reencrypt.mjs and the rotation section, an accepted-risk block with Accepted by/Reviewed, and no ExecutionPlan.md deferral. Ran it against the unedited runbook: 5/5 FAILED. Added the Rotation cadence and Accepted risk sections to docs/security/key-rotati
+- **SEC-91** (HIGH, resolved) — MCP slopsquatting allow-list never loads in any packaged release build and fails open, so any npm package can be installed as an MCP server  
+  mcp-allowlist.json is bundled in tauri.conf.json resources and resolved via ALLOWLIST_RESOURCE
+- **TEST-03** (HIGH, resolved) — Tests that pass without testing anything: no assertions, hand-written mirrors, and redundant screenshots  
+  three extension test files now import renderMarkdown/sanitizeHtml from the real side-panel module (security-fixes, side-panel-markdown-live, sidePanelMarkdown); arm 1 is delegated to DESK-27 and arm 3 was dropped by the fix
+- **TEST-06** (HIGH, resolved) — No fault-injection testing for any failure mode the system is expected to survive  
+  Added 5 residual modes to FAILURE_MODES and injected each against real code: stripe idempotency replay + DB-outage (checkIdempotency), Redis outage (checkRateLimit fail-closed), provider failover (createFailoverPlan), sandbox TTL reclaim (reclaimAbandonedE2BSandboxes). apps/web/**tests**/fault-injection: 6 failed before ('no injection registered for ...'), 14 passed after.
+- **UI-27** (HIGH, resolved) — The shared composer desktop renders has no image/video generation mode at all  
+  Closed the video half of the composer media mode. apps/desktop/src/api/cloudApi.ts gained generateCloudVideo(): POSTs /api/media/video/generate with an Idempotency-Key and the contract schema, validates provider/model provenance, polls /api/media/video/status?task_id=... to completion, resolves the durable /api/files/<id> URL, and best-effort POSTs /api/media/video/cancel on abort or poll-window e
+- **WEB-34** (HIGH, resolved) — Web-created artifacts never push to the cloud — sync is pull-only, so artifacts live in one browser's localStorage  
+  The push path exists and is fully wired. artifacts-store.ts exposes collectArtifactPushBatch/applyArtifactPushResult with baseVersion conflict handling; use-artifact-cloud-sync.ts calls pushArtifactCloudChanges after every pull and on local edits; that service POSTs /api/chat/sync with protocolVersion 2 and Bearer auth; the route persists to web_artifacts. The hook is mounted at WebChatPage.tsx:65
+- **AI-15** (MEDIUM, resolved) — Anthropic pause_turn stop reason is mismapped to end_turn, telling callers a suspended turn completed cleanly  
+  anthropic stream.ts maps pause_turn to a distinct 'pause_turn' domain value
+- **AI-47** (MEDIUM, resolved) — Provider-outage / credit-downgrade fallback reason is computed but never reaches the streaming client  
+  X-AGI-Fallback-Reason is emitted, stored on the assistant turn and covered by fallback-reason-notice.test.tsx
+- **AI-48** (MEDIUM, resolved) — Ultra/Pro reasoning-mode and reasoningDots catalog fields have zero product consumers (schema built ahead of product)  
+  model-catalog.ts:150-155 now annotates ultraMode/proMode/persistentReasoning as authored-but-inert (endpoint 'responses', no transport), and reasoningDots gained a real consumer: getReasoningDepthIndicator (:1664-1680) rendered by ComposerFooter.tsx:410. git show HEAD:model-catalog.ts greps 0 hits for getReasoningDepthIndicator, so the test could not pass before; ComposerFooter.reasoningDepth.test
+- **AI-49** (MEDIUM, resolved) — Opening a conversation whose persisted model has been retired silently substitutes the default with no notice  
+  WebChatPage.tsx:1329 calls setModelSubstitution(describeModelSubstitution(persistedModel)) driving a dismissible UnavailableModelNotice banner; model-store.ts:271 comment explicitly labels this '(AI-49)'.
+- **BILL-04** (MEDIUM, resolved) — Enterprise is unlimited at $0 and the entire feature-gate subsystem has zero production callers  
+  apps/desktop/src/utils/featureGates.ts, constants/pricing.ts, constants/planFeatures.ts all deleted; planGateSubsystem.test.ts (billing/**tests**) enforces they stay deleted. billing-catalog.ts:130 enterprise is contractPriced, not $0.
+- **BILL-05** (MEDIUM, resolved) — Documented per-tier spend ceilings have zero runtime readers, and free-tier voice is contractually uncapped  
+  tier-unit-quota-service.ts's assertTierUnitAllowance is called (await, fail-closed throw) from audio/transcriptions/route.ts:351, media/video/generate/route.ts:915, and request-processor.ts:2334; free tier voiceMinutesPerMonth=30 (model-catalog.ts:831), not uncapped.
+- **BILL-12** (MEDIUM, resolved) — Prompt-cache and compression cost effects are not measured  
+  provider_cost_events gains cache_read_units, cache_write_units, compaction_saved_units, cache_savings_cents, cache_write_premium_cents (0130 + down; cogs_summary reports them beside, never inside, gross margin). cogs-token-classes.test.ts: 6/7 failed before, 7/7 after. Producer proof: stream-transform.managed-usage.test.ts 'settles with the tokens context compaction removed' failed (undefined) bef
+- **BILL-23** (MEDIUM, resolved) — Credit top-ups have fulfillment and a route but no purchase surface — the 402 error tells users to add credits with nowhere to buy them  
+  Server now emits `recovery` on quota refusals: added resolveManagedQuotaRecovery + recovery field in createManagedUsageErrorBody (managed-usage-request-service.ts), threaded `subscription` into handleCreditError/managedUsageErrorResponse/freeTrialBudgetReachedResponse (request-processor.ts). New request-processor.quota-recovery.test.ts: 4 failed / 1 passed before, 5 passed after. Client half wired
+- **BILL-30** (MEDIUM, resolved) — A published '40% gross margin' claim has no live calculation behind it  
+  No '40% gross margin' (or any gross-margin) claim exists anywhere in apps/web, apps/mobile, apps/desktop/src, or active docs; the referenced unit-economics doc no longer exists in the repo — premise no longer holds.
+- **BILL-35** (MEDIUM, resolved) — No data-retention or audit policy for financial records  
+  vercel.json registers enforce-billing-retention cron; lib/billing/financial-record-retention.ts defines a full rule schedule; privacy/page.tsx:661-679 and dpa/page.tsx:136-139 document it.
+- **BILL-48** (MEDIUM, resolved) — AGI Work runs carry no per-task cost or usage, so a long autonomous run is unpriced to the user  
+  cloud-agent-runs carries costCents/usage and TasksPage renders formatTaskCost at :407-411
+- **BILL-50** (MEDIUM, resolved) — VS Code shows no credit balance and only a single aggregate usage bar with no per-model limits or reset schedule  
+  extension-vscode usageMeter exposes creditBalanceCents and resetAt
+- **BILL-52** (MEDIUM, resolved) — Gateway LLM rate limit may still be a flat 30/min for every tier including Pro and Max  
+  attachPlanTier is mounted before createRateLimiter('llm-completions') on routes/llm.ts:318-319
+- **BILL-56** (MEDIUM, resolved) — Stale and conflicting plan-pricing copy persists across docs and locale bundles  
+  Added a catalog-driven guard in pricing-locale-claims.test.ts: any bundle key normalizeUIPlanTier maps off itself is a retired tier. Red before: 'ar/pricing.json ships retired tier key "hobby" (now sold as "basic")'. Stripped the hobby key from all 12 locale pricing.json; 4 files / 54 tests pass (incl. i18n-coverage, public-billing-copy, marketing-copy-regression). No education-plan claim exists a
+- **CONN-11** (MEDIUM, resolved) — MCP directory content is placeholder rather than a signed curated registry, and no install/publish lifecycle exists  
+  plugins/page.tsx now sources a live registry and honestly labels every entry's install state ('Declared — not installable yet' etc.), and /connectors/mcp-directory/page.tsx:10 explicitly states 'This is not a browsable registry' — the fix's honest-preview alternative is implemented.
+- **CONN-29** (MEDIUM, resolved) — Confirm-before-destructive-action dialog copy-pasted three times while the live connector disconnect remains unconfirmed  
+  SettingsModal declared its own second useConfirm hook alongside the package-shared primitives/ConfirmDialog one. Deleted it; DirectoryBrowse, PluginsPanel and the connector Disconnect now all call the shared promise-based useConfirm. New 'confirm primitive ownership' guard plus the behaviour tests: 6 failed against the pre-fix file (restored from a scratchpad copy), 51 pass after. Full @agiworkfor
+- **DESK-108** (MEDIUM, resolved) — Two independent CloudSyncClient structs exist in desktop Rust; the dead one targets a route that does not exist  
+  apps/desktop/src-tauri/src/integrations/sync no longer exists; the duplicate CloudSyncClient was deleted
+- **DESK-17** (MEDIUM, resolved) — Groq transcription endpoint and speech-provider config duplicated across the Desktop and CLI Rust binaries  
+  voice.rs:15 both binaries import agiworkforce_llm::speech; voice.rs:2435-2464 has a DESK-17-named test asserting no retyped endpoint.
+- **DESK-26** (MEDIUM, resolved) — Desktop visual-regression baseline captures a different app state than CI renders, and the threshold cannot catch a full-layout regression  
+  e2e/utils/visual-diff.ts sets maximumDiffPixelRatio = 0.005 as the fix required
+- **DESK-28** (MEDIUM, resolved) — Tauri isolation pattern deadlocks every IPC call in dev and in non-custom-protocol builds  
+  apps/desktop/src-tauri/tauri.dev.conf.json switches pattern to 'brownfield' for `pnpm dev`; documented in apps/desktop/AGENTS.md:36-54; guarded by src/**tests**/tauriDevIsolation.test.ts.
+- **DESK-40** (MEDIUM, resolved) — Desktop attachment docx/xlsx/pptx parsing unimplemented, and the knowledge-base picker offers PDFs it can never read  
+  kbReadCommandFor routes extractable types to document_extract_text instead of file_read
+- **DESK-89** (MEDIUM, resolved) — Desktop McpToolConfirmationPrompt has no keyboard handling despite advertising an 'Esc' hint  
+  apps/desktop/src/features/chat/McpToolConfirmationPrompt.tsx:11-121 now has DENY_BINDING (Escape) and APPROVE_BINDING (Cmd+Enter) wired via onKeyDown; hints render from the real bindings.
+- **DESK-95** (MEDIUM, resolved) — Desktop SkillMarketplace.tsx vs the shared DirectoryBrowse skills tab — duplication flagged but never diffed  
+  SkillMarketplace.tsx:1-15 carries a file-header comment explicitly diffing it against DirectoryBrowse's skills tab and documenting the trust-boundary reason the split is deliberate, not drift.
+- **DOCS-05** (MEDIUM, resolved) — README and package metadata are not release-grade and contain several counted inaccuracies  
+  `node scripts/check-readme-facts.mjs` passes (34 models, 19 providers, 28 packages, 14 adapters, 12 crates, 6 surface versions); every docs/current/\*.md link in README.md resolves to an existing file.
+- **DOCS-10** (MEDIUM, resolved) — Fabricated metrics remain in production templates, demos and marketing paths  
+  Swept production template/demo/marketing paths and found no fabricated metric presented as real: no %-faster/Nx/traction claims, no fake ratings/downloads/install counts (grep over apps/web/app, apps/web/features, apps/desktop/src, apps/mobile/src, packages/ui), and /customers explicitly publishes 'no logos, no testimonials'. Added a standing guard 'publishes no traction or performance number a re
+- **DOCS-14** (MEDIUM, resolved) — Marketing copy describes a manual web-search toggle that was deliberately deleted from the product  
+  app/features/ai-chat/page.tsx:47-48 now describes ambient search accurately, and ChatComposerNew.tsx renders an explicit 'Web search on'/'Web search off' state tied to model capability.
+- **DOCS-17** (MEDIUM, resolved) — SECURITY.md may misstate audit-log immutability status  
+  No SECURITY.md exists anywhere in the repo (root or docs) besides an unrelated vendored copy under a test extension's node_modules, so no immutability claim is currently published to misstate.
+- **DOCS-23** (MEDIUM, resolved) — AGI Work and the scheduling/task surfaces carry no maturity or beta disclosure anywhere  
+  SchedulesPage renders a schedule-maturity-badge
+- **DPDP-16** (MEDIUM, resolved) — Retention has no maximum age for waitlist emails, support tickets or rights requests, and the two lifecycle crons are not registered so they never run  
+  expire-organization-invitations registered in vercel.json:51 and cron-registration.test.ts asserts every cron directory appears
+- **DPDP-52** (MEDIUM, resolved) — Deleting a project permanently orphans its knowledge files — the soft delete never fires the ON DELETE CASCADE, there is no restore endpoint, and the dialog never mentions files  
+  project delete path calls deleteProjectKnowledgeObject and updates project_knowledge_files
+- **DPDP-56** (MEDIUM, resolved) — Security audit log 90-day retention is a routine an administrator runs by hand, not a schedule, so the retention actually applied is unknown and a late-discovered incident may have no trail  
+  vercel.json:54-57 schedules '/api/cron/purge-security-audit-logs' daily (30 2 \* \* \*); the authenticated route calls purgeExpiredSecurityAuditLogs and logs an error if retentionHolds is false, with test coverage in security-log-retention.test.ts.
+- **EXT-34** (MEDIUM, resolved) — VS Code E2E: one spec fails with 'Language model unavailable' and may be a real regression  
+  apps/extension-vscode/src/test/vsixInstallation.ts:187-224 registers an E2E stub vscode.lm.registerLanguageModelChatProvider, wired into writeExtensionHostTestRunner, fixing exactly the traced 'Language model unavailable' root cause documented at extension.smoke.test.ts:336-342.
+- **INFRA-09** (MEDIUM, resolved) — Reachability guards may still carry stale allowlist entries for a now-wired module  
+  fix directs that the six entries stay; check-module-reachability allowlist is correct as-is
+- **INFRA-33** (MEDIUM, resolved) — Scheduled tasks run once daily, claiming at most ten runs across the entire deployment  
+  run-schedules now fires \*/15 on the Pro plan; the daily-cap premise no longer holds
+- **INFRA-44** (MEDIUM, resolved) — The desktop dev loop deadlocks on every IPC call under the Tauri isolation pattern  
+  apps/desktop/package.json:8 dev script runs `tauri dev --config src-tauri/tauri.dev.conf.json`, which overrides pattern.use to 'brownfield' instead of the release build's 'isolation', avoiding the IPC deadlock.
+- **INFRA-45** (MEDIUM, resolved) — A transient sandbox reconnect failure orphans a still-live paused sandbox  
+  The reconnect-orphan path is implemented in apps/web/lib/e2b/runtime.ts: a failed Sandbox.connect() calls releaseUnreachableSandbox() (closeBillableInterval -> Sandbox.kill -> deleteE2BSession) before createFresh(). Verified it is load-bearing: deleting the single 'await releaseUnreachableSandbox(scope, existingSession);' line made 2 tests fail ('kills the sandbox it could not reach before creatin
+- **INFRA-47** (MEDIUM, resolved) — CI failures were never classified as pre-existing versus remediation regressions  
+  Built the attribution mechanism: .github/ci-failure-baseline.json names baseline 1e858a7f (origin/main), scripts/ci-failure-attribution.mjs classifies each red gate as regression (with introducing commit from run history), pre-existing (red at baseline), or unattributed, and .github/workflows/ci-failure-attribution.yml runs it on every failed main CI run into the step summary. scripts/ci-failure-a
+- **MOB-27** (MEDIUM, resolved) — Mobile content reports have an intake endpoint but no moderation workflow or reviewer UI  
+  ContentReportQueuePanel.tsx is mounted in AdminConsolePage.tsx:275, reads/writes the same public.content_reports table the mobile intake route (api/mobile/content-report/route.ts) writes to, with claim/action/dismiss workflow, SLA tracking, and reviewer notes.
+- **MOB-44** (MEDIUM, resolved) — Mobile has no follow-up message queue; sending mid-response aborts the running turn instead of queuing  
+  ChatInput.tsx:280-352 fully implements the queue: mid-stream sends push into queuedFollowUps state (not abort), render a dismissible chip with cancel (line 736-780), and flush via onSend on stream completion (line 344-360).
+- **MOB-45** (MEDIUM, resolved) — Mobile regex markdown parser silently drops nested-list structure and inline formatting inside table cells  
+  listItemPattern (line 147) and collectListItems (152-184) already tolerate leading whitespace and track indent depth; table cells at lines 393-394 call renderInlineMarkdown(row[colIdx] || '', ...).
+- **MOB-46** (MEDIUM, resolved) — Mobile's no-hardcoded-colour guard and its 640-entry baseline are not wired into CI despite explicit 'will fail CI' language  
+  check:no-hex-mobile runs as a CI step at .github/workflows/ci.yml:120
+- **MOB-52** (MEDIUM, resolved) — MS-20 trusted-contact flow is a dead announcement card with no real enrolment  
+  safety-security/index.tsx:89-92 now shows static 'Trusted contact · Not configured' decline copy identical in substance to web's SecuritySection.tsx:163-166 — the dead announcement card is gone.
+- **SEC-10** (MEDIUM, resolved) — ACCOUNT_STATUS_FAIL_OPEN admits suspended and banned accounts when the status lookup fails, and is invisible to env validation  
+  ACCOUNT_STATUS_FAIL_OPEN declared in validate-env.ts:271 and env-doctor.mjs productionForbiddenKeys
+- **SEC-12** (MEDIUM, resolved) — Unauthenticated local HTTP POST /pair aborts the desktop app via a non-char-boundary string slice  
+  http_request_body uses body.get(..content_length) with truncation check; non-boundary returns Err, no panic
+- **SEC-15** (MEDIUM, resolved) — Autofill decides a page is a Greenhouse/Lever/LinkedIn/Ashby application from an unanchored URL substring, writing the stored PII profile into an attacker's form  
+  autofill/hosts.ts matchesAtsHostRules does exact-or-suffix hostname plus path shape
+- **SEC-19** (MEDIUM, resolved) — Sandbox React/Babel/mermaid runtime scripts load from CDN with no subresource integrity  
+  all four sandbox runtimes carry pinned versions and sha384 integrity: DOMPurify via an integrity= attribute, React/ReactDOM/Babel/mermaid via appendPinnedScript setting s.integrity
+- **SEC-30** (MEDIUM, resolved) — Upload completion buffers the entire stored object into memory before any size check, on both the chat-attachment and project-knowledge paths  
+  complete route calls getBoundedPrivateObject(storageKey, byteCount); oversized stored object rejected before read
+- **SEC-34** (MEDIUM, resolved) — url_fetch runs quadratic lazy-quantifier regexes synchronously over up to 1.5 MB of attacker-controlled remote HTML  
+  url-fetch-tool.ts:143 slices to URL_FETCH_MAX_EXTRACT_CHARS before extractHtmlText
+- **SEC-47** (MEDIUM, resolved) — api-gateway hardening gaps: CORS defaults to localhost with credentials:true and no env guard, no sslmode=require, rate limiting fails open to in-memory  
+  ALLOWED_ORIGINS production wildcard/plaintext guard, sslmode=require asserted in neonClients, rate limiter defaults fail-closed
+- **SEC-48** (MEDIUM, resolved) — Credentials and PII leak into logs and error reporting: Pino has no redaction, share capability tokens are logged, Sentry never scrubs exception messages  
+  apps/web/lib/logger.ts wires redactLogRecord into the pino log hook
+- **SEC-49** (MEDIUM, resolved) — Client-side credentials and PII stored in plaintext with no expiry or erasure path  
+  both token write sites in apps/web/shared/lib/api.ts await writeStoredToken
+- **SEC-51** (MEDIUM, resolved) — SSO/SCIM identity lifecycle is incomplete: group→role mapping is never persisted, directory sync has no storage, domain verification fails open to disabled  
+  app/api/admin/directory-sync/groups/route.ts PATCH (line ~92) requires access.role==='owner' (403 otherwise) and writes scim_groups.mapped_role in a transaction — exactly the org-owner-gated write path the fix asked for.
+- **SEC-60** (MEDIUM, resolved) — Desktop voice controller auto-grants computer-use consent flags instead of showing the consent dialog  
+  useCloudVoiceController throws unless computerUse.consentAccepted && computerUseEnabled; no auto-grant
+- **SEC-63** (MEDIUM, resolved) — Chrome extension requests all-URLs content script, debugger and cookies permissions with no in-product disclosure of what they enable  
+  current_finding is wrong: options.html is a 16-line CSP shell; disclosures are built by options.ts via createDataHandlingSection from DATA_HANDLING_DISCLOSURES (page-injection, debugger, cookies, cloud-mirroring), and side_panel.ts renders the same list first-run. Mirroring is opt-out (CLOUD_MIRRORING_STORAGE_KEY gates the sync). Full-CDP sits behind browserControlConsent, enforced in background.t
+- **SEC-72** (MEDIUM, resolved) — /tasks is missing from the proxy protected-route matcher, so a signed-out visitor is served full authenticated app chrome instead of being redirected to login  
+  proxy.ts includes '/tasks(.\*)' in the protected-route matcher (lines 93 and 113)
+- **SEC-79** (MEDIUM, resolved) — Trusted-contact crisis notification is explicitly declined on web, but mobile ships a dead announcement card and a founder-approved enrolment flow that was never built  
+  apps/mobile/src/features/settings/safety-security/index.tsx:89-93 now shows an honest 'Trusted contact · Not configured' info card stating no contact is enrolled/monitors chats — matches web's decline, no dead enrollment CTA found.
+- **SEC-82** (MEDIUM, resolved) — voice_inject_text Tauri command stays registered and invokable with its documented safety precondition unmet, protected only by 'nothing currently calls it'  
+  dictation module gates injection through ensure_text_injection_allowed/system_dictation_available
+- **TEST-05** (MEDIUM, resolved) — No cross-language or cross-surface contract tests exist  
+  apps/web/**tests**/contracts holds cross-surface contract tests (ai-act-marker-cross-surface, connector-oauth-paths, tool-approval-resume-path); the row's premise that none exist is false
+- **TEST-11** (MEDIUM, resolved) — The support-bundle redaction default is unverified — nothing proves conversation content is excluded  
+  error_reporting.rs:157-186 test asserts prompt/message content ('divorce filing','Dear Ada') is absent from error_get_logs/error_export_logs/get_filtered_logs support-bundle outputs.
+- **UI-52** (MEDIUM, resolved) — Mobile has no follow-up queue while streaming — sending mid-response aborts the current turn instead of queuing  
+  apps/mobile ChatInput.tsx implements queuedFollowUps state (line 141), queues instead of sending mid-stream (line 296-309), renders dismissible chips (line 738+), and flushes on stream completion (line 348-364).
+- **UI-76** (MEDIUM, resolved) — Desktop McpToolConfirmationPrompt advertises an 'Esc' hint it does not implement and has no Enter-to-approve  
+  Duplicate of DESK-89: McpToolConfirmationPrompt.tsx:11-124 implements Escape-deny and Cmd+Enter-approve handlers with hints generated from the real bindings via formatComboDisplay.
+- **WEB-11** (MEDIUM, resolved) — Developer API is unusable as documented: structured outputs hard-rejected, retired /api/agents paths still referenced, no SDK/webhooks/Files API, no authoritative OpenAPI artifact  
+  docs/api/openapi.yaml reference removed from reference-integrity-allowlist.json; the surviving /api/agents/execute mention is past-tense history and the retired routes return 410
+- **WEB-114** (MEDIUM, resolved) — A materially complete conversation-export feature (Markdown/PDF/DOCX) is fully built and totally unreachable inside the dead v3 cascade  
+  The row's premise is stale: no v3/dialogs path exists anymore. EnhancedExportDialog now lives at apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx, is exported from dialogs/index.ts, imported into WebChatPage.tsx:109, and wired live via onExport at WebChatPage.tsx:4379/4635.
+- **WEB-122** (MEDIUM, resolved) — MessageMetadata TypeScript interface has three independently-diverged declarations in apps/web alone  
+  Only one interface literally named MessageMetadata remains in apps/web (web-chat-store.ts:164); common.ts uses AgentTranscriptMetadata and unified-chat-types.ts:9 uses EnhancedMessageMetadata — the other two were renamed as the fix required.
+- **WEB-130** (MEDIUM, resolved) — Project deletion soft-deletes, so knowledge files are permanently orphaned and the ON DELETE CASCADE never fires; there is no restore path  
+  route.ts:283-337 runDelete(true) already soft-deletes project_knowledge_files and purges storage objects on project delete; dialog copy (ProjectSettingsDialog.tsx:306) already says knowledge files 'will be permanently deleted', matching actual behavior.
+- **WEB-24** (MEDIUM, resolved) — Office/document generation: no XLSX, no editing of existing Office files, and artifacts can download with the wrong Office MIME/extension  
+  normalizeFilename() at managed-office-file-service.ts:145-156 now rejects/repairs mismatched extensions so download MIME/extension stay correct; no XLSX claims found anywhere in product copy.
+- **WEB-33** (MEDIUM, resolved) — /tasks renders full authenticated chrome to signed-out visitors — route missing from the proxy auth matcher  
+  proxy.ts includes '/tasks(.\*)' in the protected-route matcher (lines 93 and 113)
+- **WEB-42** (MEDIUM, resolved) — A materially complete conversation-export feature (Markdown/PDF/DOCX) is built, barrel-exported and totally unreachable  
+  EnhancedExportDialog is imported in WebChatPage.tsx:109, wired to a live header onExport handler (line 4379), and rendered (line 4635) — no longer dead/unreachable.
+- **WEB-54** (MEDIUM, resolved) — /skills/[name] is an orphaned, unreachable detail page whose hand-copied category-label map disagrees with the live one in 4 of 5 buckets  
+  apps/web/app/skills/[name]/ route is deleted (no longer exists); apps/web/app/skills/**tests**/skills-detail-route-orphan.test.ts now guards against it reappearing unlinked.
+- **WEB-62** (MEDIUM, resolved) — Unswept `subscription?.tier ?? 'free'` reads without a billing-readiness guard may still misrender plan state elsewhere  
+  Grepped all `?? 'free'` reads. Three of four were already guarded (BillingSection early-returns on !initialized/loading/unauthenticated/error; ChatComposerNew gates every capability on `billingPolicyReady &&`; UpgradeWelcome only polls). The real gap was ComposerFooter: partitionModels/modelLock/splitEffortsByEntitlement ran with a guessed 'free', so a paying subscriber saw every paid model badged
+- **AI-02** (LOW, resolved) — Retired and hardcoded model IDs persist in directories the model-ID guard never scans  
+  Both providers/anthropic/provider.py and providers/anthropic_proxy/provider.py now derive DEFAULT_MODEL via registry.lookup_default_model(REGISTRY_PATH); no hardcoded model IDs remain in either file.
+- **AI-07** (LOW, resolved) — Local-provider identity is hardcoded to 'ollama', misclassifying LM Studio, llama.cpp and vLLM  
+  LOCAL_PROVIDER_SET membership replaces every provider === 'ollama' comparison (zero remain)
+- **BILL-59** (LOW, wontfix) — In-chat commerce and checkout are explicitly not planned — recorded so it is not re-raised as a gap  
+  (no verification recorded)
+- **CLI-12** (LOW, resolved) — CLI browser-control documentation overclaims capability  
+  claude_parity.rs:1370-1389 has a regression test (chrome_command_does_not_claim_the_cli_can_drive_a_browser) enforcing accurate /chrome copy that states the CLI 'cannot drive Chrome itself'.
+- **CLI-16** (LOW, resolved) — CLI exec_policy.rs rename to the shared execpolicy crate is unfinished restructure work  
+  apps/cli/src/exec_policy.rs no longer exists; the rename onto the shared execpolicy crate is complete
+- **CONN-28** (LOW, resolved) — Connector browse/connect/add/disconnect is implemented twice, has already drifted three ways, and a security hardening fix was not propagated to the second copy  
+  SettingsModal.tsx:88-91 introduced a shared useConfirm primitive explicitly to close this gap; ConnectorDetail's onDisconnect (line 1536-1542) now routes through confirm() before calling handleDisconnect.
+- **DESK-02** (LOW, resolved) — Desktop Cloud Mode is gated behind a 'coming soon' toast contrary to the founder spec; DCL-4 unverifiable  
+  appModeStore.ts:52-56 has no 'coming soon' toast (only 'Local mode requires desktop app'); cited chat/cloud.rs:59 path doesn't exist; DCL-4 test bans such copy.
+- **DESK-51** (LOW, wontfix) — Desktop mobile-companion pairing is single-session and ephemeral by design; every multi-device and roster capability is declined  
+  recorded design decision: pairing is single-session and ephemeral by intent
+- **DESK-52** (LOW, wontfix) — Desktop AGI Code settings, worktrees, PR inbox and diff theming are declined because no runtime owns them  
+  recorded decision: AGI Code settings, worktrees and PR inbox are declared out of scope
+- **DESK-54** (LOW, wontfix) — Desktop lifecycle hooks, tool-runtime self-repair, MFA gate, session inventory and account deletion are declined without backing APIs  
+  (no verification recorded)
+- **DESK-76** (LOW, resolved) — Local/Cloud mode toggle silently reverts instead of disabling itself when Local mode is unavailable in the Electron renderer  
+  LocalCloudToggle.tsx:142 (now under features/v3/, file moved) passes disabled={!supportsLocalAppMode} to the Local Segment; collapsed variant also blocks via `blocked`.
+- **DOCS-04** (LOW, resolved) — The parity ledger gates a capability on a finding ID that does not exist  
+  parity-implementation-matrix.md:239 now cites docs/design/cap-052-artifact-runtime-bridge-security-review-2026-08-05.md (confirmed exists) with real §4 conditions 1-7 and §5 RT-1..RT-5(a) items verified present in that file.
+- **DPDP-14** (LOW, resolved) — The privacy policy's 'what we collect' table omits roughly ten data categories the product provably collects  
+  privacy page collection copy now covers directory-provisioned identities (page.tsx:354,369)
+- **DPDP-46** (LOW, resolved) — No ad-personalization opt-out exists, and it has never been confirmed whether any advertising vendor receives account data  
+  privacy/page.tsx:471-474 states 'We run no advertising, set no advertising cookies, and do not sell or share personal data for cross-context behavioural advertising' — the negative finding is recorded.
+- **DPDP-47** (LOW, resolved) — No published commercial or enterprise legal-terms document exists distinct from the consumer Terms — enterprise terms are bespoke-negotiated only  
+  enterprise/page.tsx:124-127 already states the bespoke-only posture explicitly: 'MSA: We negotiate against your procurement. No forced click-through.' — satisfying the fix's second (stated-posture) option.
+- **DPDP-49** (LOW, resolved) — The privacy notice says nothing about non-account-holder third parties whose personal data enters the product through a user's connectors or conversations  
+  privacy/page.tsx:389-437 adds a full callout section for non-account-holders whose data enters via connectors/uploads, covering lawful basis (processor/DPA) and a rights-request path at /privacy/requests.
+- **DPDP-51** (LOW, wontfix) — No MCP marketplace listing policy — correctly not written, because no curated marketplace is operated  
+  (no verification recorded)
+- **EXT-06** (LOW, resolved) — Chrome extension drives full DevTools-Protocol browser control with no elevated-risk gate or disclosure  
+  browserControlConsent.ts implements a per-origin consent store with headline 'This grants full DevTools-Protocol control'; background.ts:3697-3709 blocks AGI_START_COMPUTER_USE via hasBrowserControlConsent(cuOrigin) before any CDP action.
+- **EXT-08** (LOW, resolved) — Extension test file reimplements side-panel logic by hand instead of importing the real module, producing fake coverage  
+  security-fixes.test.ts imports validateGatewayUrl/renderMarkdown/sanitizeHtml from the production modules
+- **INFRA-53** (LOW, resolved) — Enterprise-Local licensing verification is fully built twice (TypeScript + Rust), wired into nothing, with no fixture-replay parity test between the two  
+  Row's own fix text says to close it: docs/decisions/2026-07-30-enterprise-local-verifier-retention.md is an Accepted ADR cited by both crate headers, AND crates/agiworkforce-licensing/src/tests.rs:85,179 already has license_fixture_corpus_replays_identically/org_policy_fixture_corpus_replays_identically tests replaying the shared TS fixture corpus — the 'no parity test' premise is factually false.
+- **MOB-04** (LOW, resolved) — Locked iOS privacy-manifest review copy has drifted from the real generated manifest and cites a deleted path  
+  app.config.js:150 declares NSPrivacyTrackingDomains: [] matching the locked manifest copy
+- **MOB-14** (LOW, resolved) — Mobile connector catalog was faked once and needs a standing regression guard  
+  connectors.ts:85 fetchConnectorDirectory() calls api.get('/api/connectors') (live fetch, not literal); connector-registry-ownership.test.ts guards the remaining literal marketing catalog against web/mobile drift.
+- **MOB-39** (LOW, wontfix) — Mobile declined-capability decisions recorded to prevent re-raising  
+  recorded decision: declined-capability list kept to prevent re-raising
+- **MOB-40** (LOW, wontfix) — Mobile has no medical/health profile or HealthKit integration despite audit expectations  
+  recorded decision: no medical/health profile or HealthKit integration
+- **SEC-27** (LOW, resolved) — Middleware api-host bounce builds its redirect target from the raw request path, allowing a protocol-relative open redirect  
+  buildApiHostRedirectTarget collapses leading slashes and asserts target.origin===origin
+- **SEC-50** (LOW, resolved) — Dead SecurityManager module with a deprecated XOR stream cipher is still shipped  
+  security.ts no longer has sync encrypt()/decrypt(), getSyncKey, or warn-shown flags; only encryptAsync/decryptAsync remain, and query-client.ts:277 depends on decryptAsync only.
+- **SEC-53** (LOW, resolved) — Admin console is a readiness dashboard, not an authoritative control plane  
+  AdminConsolePage.tsx buildReadinessRows already tags rows source:'attested' with a 'Self-attested {date}' label vs source:'config' for live-derived rows; AdminConsoleEntry.tsx adds a role-gated (hasAdminConsoleAccess) /admin link in SecuritySection.tsx.
+- **SEC-67** (LOW, resolved) — Tauri isolation pattern deadlocks every IPC call in dev builds, creating pressure to disable a security control  
+  apps/desktop/AGENTS.md:36-52 explicitly documents dev-loop brownfield override + compensating review (`pnpm run test:e2e`), guarded by src/**tests**/tauriDevIsolation.test.ts — matches the fix's second option verbatim.
+- **SEC-86** (LOW, resolved) — Chrome extension site allowlist has no default-permission policy — only a static approved-sites list with no stated behavior for sites not on it  
+  site-permission-policy.ts:5-6 defines UNAPPROVED_SITE_DEFAULT_HINT stating unapproved sites are blocked by default, and it is rendered via hint.textContent at line 53 in the options page — the requested copy tightening is done.
+- **SEC-92** (LOW, resolved) — Desktop voice_inject_text remains registered and invokable with its documented unsafe precondition unaddressed  
+  duplicate of SEC-82; dictation gates injection behind system_dictation_available
+- **SEC-96** (LOW, resolved) — Chrome extension site allowlist has no default-permission policy, only a static list  
+  New untracked file apps/extension/src/features/options/site-permission-policy.ts:5-6 states an explicit 'blocked by default' policy and wires a Default site permission selector into options.ts:1072.
+- **TEST-16** (LOW, resolved) — No confirmed CI gate runs both sides of the TS/Rust cloud-sync fixture-replay parity test together  
+  ci.yml:549 'Cross-language sync parity (TEST-05)' step runs both `pnpm --filter @agiworkforce/sync test` and the Rust fixture_tests in one job, with a zero-match guard against silent vacuity.
+- **UI-23** (LOW, resolved) — Learning mode (Socratic questions, understanding checks, uploaded materials) is undecided and its surface is unreachable  
+  capability-gaps.csv CAP-011 records the decision ('Socratic learning mode... Deferred... Do not create a learning vertical'); no learn-mode entry points found anywhere in web/desktop/mobile.
+- **UI-53** (LOW, resolved) — Chrome extension send-button tooltip claims a Cmd+Enter shortcut that does not exist  
+  apps/extension/src/side_panel.ts:9009 send button title already reads 'Send (Enter — Shift+Enter for a new line)', exactly matching the fix text; no Cmd+Enter claim remains.
+- **WEB-09** (LOW, resolved) — /admin console has no inbound navigation link anywhere in the app shell  
+  SecuritySection.tsx:151 renders <AdminConsoleEntry/>, which links to ADMIN_CONSOLE_PATH ('Open admin console') gated by hasAdminConsoleAccess(user.publicMetadata).
+- **WEB-103** (LOW, resolved) — No in-settings ad-personalization opt-out, and no confirmation that a program exists to gate  
+  privacy/page.tsx:471-474 states the product runs no advertising and sells/shares no data for cross-context ad profiling, so no ad program exists to gate — matches the fix's own no-program condition.
+- **WEB-16** (LOW, resolved) — Projects: no templates, no export, no collaborators; Duplicate fires a toast but never refetches the list  
+  ProjectSettingsDialog handleDuplicate success branch calls onDuplicated?.()

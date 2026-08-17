@@ -422,9 +422,18 @@ impl ComputerUseSafetyLayer {
             return None;
         }
 
+        // A gate switched on but never handed a registry is a wiring mistake,
+        // not a grant: ask rather than let every app through unchecked.
         let manager = match &self.app_permissions {
             Some(m) => m,
-            None => return None,
+            None => {
+                return Some(SafetyReason::AppRequiresApproval {
+                    app_name: active
+                        .map(|window| window.app_name)
+                        .unwrap_or_else(|| UNKNOWN_FOREGROUND_APP.to_string()),
+                    bundle_id: None,
+                });
+            }
         };
 
         let active = match active {
@@ -817,6 +826,55 @@ mod tests {
             }
             other => panic!("expected an approval request, got {other:?}"),
         }
+    }
+
+    fn foreground(
+        app_name: &str,
+        bundle_id: Option<&str>,
+    ) -> super::super::window_manager::ActiveWindow {
+        super::super::window_manager::ActiveWindow {
+            app_name: app_name.to_string(),
+            window_title: String::new(),
+            bundle_id: bundle_id.map(str::to_string),
+        }
+    }
+
+    /// An app the user has never ruled on must stop and ask. Defaulting an
+    /// unlisted app to allow would make the whole per-app gate cosmetic: only
+    /// the hardcoded refuse-list would ever block anything.
+    #[tokio::test]
+    async fn an_app_the_user_never_configured_asks_before_it_is_touched() {
+        let layer = ComputerUseSafetyLayer::with_app_permissions(
+            SafetyConfig::default(),
+            Arc::new(AppPermissionManager::new()),
+        );
+
+        match layer
+            .check_foreground_app(Some(foreground("Notes", Some("com.apple.Notes"))))
+            .await
+        {
+            Some(SafetyReason::AppRequiresApproval { app_name, .. }) => {
+                assert_eq!(app_name, "Notes");
+            }
+            other => panic!("expected an approval request, got {other:?}"),
+        }
+    }
+
+    /// A layer built without a permission registry used to allow everything,
+    /// which turned a missing wire-up into a silent grant.
+    #[tokio::test]
+    async fn a_gate_with_no_permission_registry_asks_instead_of_allowing() {
+        let layer = ComputerUseSafetyLayer::new(SafetyConfig::default());
+
+        assert!(
+            matches!(
+                layer
+                    .check_foreground_app(Some(foreground("Notes", Some("com.apple.Notes"))))
+                    .await,
+                Some(SafetyReason::AppRequiresApproval { .. })
+            ),
+            "a gate with no registry attached allowed the action"
+        );
     }
 
     #[tokio::test]

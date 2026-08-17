@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClientIp, logSecurityEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { shareRef } from '@/lib/share-ref';
 
 import { findPublicTarget, normalizeToken } from './lib/public-target';
 
@@ -95,7 +96,7 @@ async function handleTakedown(request: NextRequest): Promise<NextResponse> {
             )
           ).length;
   } catch (err) {
-    logger.error({ err, token, kind: target.kind }, 'Admin takedown failed');
+    logger.error({ err, share: shareRef(token), kind: target.kind }, 'Admin takedown failed');
     throw createError.internal('Failed to unpublish content');
   }
 

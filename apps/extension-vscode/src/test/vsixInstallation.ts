@@ -184,6 +184,48 @@ export function verifyInstalledExtensionRegistry(
   }
 }
 
+export const E2E_STUB_MODEL_VENDOR = 'agi-e2e-stub';
+export const E2E_STUB_MODEL_ID = 'agi-e2e-stub-model';
+
+const STUB_MODEL_PROVIDER_SOURCE = `'use strict';
+const vscode = require('vscode');
+
+const VENDOR = ${JSON.stringify(E2E_STUB_MODEL_VENDOR)};
+const STUB_MODEL = {
+  id: ${JSON.stringify(E2E_STUB_MODEL_ID)},
+  name: 'AGI E2E Stub Model',
+  family: VENDOR,
+  version: '1',
+  maxInputTokens: 4096,
+  maxOutputTokens: 1024,
+  capabilities: { imageInput: false, toolCalling: true },
+};
+
+exports.activate = function activate(context) {
+  const register = vscode.lm && vscode.lm.registerLanguageModelChatProvider;
+  if (typeof register !== 'function') return;
+  context.subscriptions.push(
+    register.call(vscode.lm, VENDOR, {
+      provideLanguageModelChatInformation() {
+        return [STUB_MODEL];
+      },
+      provideLanguageModelChatResponse() {
+        return Promise.reject(
+          new Error(
+            'The AGI E2E stub model must never generate. It exists only so VS Code can resolve a model before invoking the @agi participant, which answers from the local AGI runtime.',
+          ),
+        );
+      },
+      provideTokenCount(_model, text) {
+        return Promise.resolve(typeof text === 'string' ? text.length : 1);
+      },
+    }),
+  );
+};
+
+exports.deactivate = function deactivate() {};
+`;
+
 export function writeExtensionHostTestRunner(
   root: string,
   compiledTestRoot: string,
@@ -201,17 +243,21 @@ export function writeExtensionHostTestRunner(
         engines: { vscode: '^1.106.0' },
         activationEvents: ['*'],
         main: './extension.js',
+        contributes: {
+          languageModelChatProviders: [
+            { vendor: E2E_STUB_MODEL_VENDOR, displayName: 'AGI E2E Stub Models' },
+          ],
+        },
       },
       null,
       2,
     )}\n`,
     { flag: 'wx', mode: 0o600 },
   );
-  fs.writeFileSync(
-    path.join(root, 'extension.js'),
-    "'use strict';\nexports.activate = function activate() {};\nexports.deactivate = function deactivate() {};\n",
-    { flag: 'wx', mode: 0o600 },
-  );
+  fs.writeFileSync(path.join(root, 'extension.js'), STUB_MODEL_PROVIDER_SOURCE, {
+    flag: 'wx',
+    mode: 0o600,
+  });
 
   const compiledFiles = [
     'localModelFixture.js',

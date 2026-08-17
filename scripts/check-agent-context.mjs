@@ -196,7 +196,7 @@ requireIncludes('.github/pull_request_template.md', 'Risk Classification');
 requireIncludes('.github/PULL_REQUEST_TEMPLATE/security-privacy.md', 'Affected Trust Boundary');
 requireIncludes('README.md', 'For coding agents');
 requireIncludes('README.md', '[AGENTS.md](AGENTS.md)');
-requireIncludes('README.md', 'AGI_WORKFORCE.md) — product source of truth');
+requireIncludes('README.md', 'docs/current/source-of-truth.md');
 if (exists('opencode.json') || exists('.opencode')) {
   errors.push(
     'opencode tooling was retired on 2026-07-08 (monorepo restructure P0); do not reintroduce opencode.json or .opencode/',

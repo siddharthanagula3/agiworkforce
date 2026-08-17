@@ -1,16 +1,23 @@
-
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
+import {
+  compareToBaseline,
+  describeComparison,
+  dominantColor,
+  fillWith,
+} from './utils/visual-diff';
 
 const baselinePath = path.resolve(
   import.meta.dirname,
   'visual-baselines',
   'desktop-cloud-sign-in.png',
 );
-const maximumDiffPixelRatio = 0.03;
+
+function readBaseline(): PNG {
+  return PNG.sync.read(fs.readFileSync(baselinePath));
+}
 
 test('Desktop cloud sign-in matches its reviewed pixel baseline', async ({ page }, testInfo) => {
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
@@ -40,7 +47,7 @@ test('Desktop cloud sign-in matches its reviewed pixel baseline', async ({ page 
     `Missing reviewed visual baseline: ${baselinePath}. Regenerate it locally with UPDATE_VISUAL_BASELINES=1 and review the PNG before committing.`,
   ).toBe(true);
 
-  const baseline = PNG.sync.read(fs.readFileSync(baselinePath));
+  const baseline = readBaseline();
   const actual = PNG.sync.read(fs.readFileSync(actualPath));
 
   expect(
@@ -48,29 +55,28 @@ test('Desktop cloud sign-in matches its reviewed pixel baseline', async ({ page 
     'The rendered viewport dimensions changed; review and explicitly update the visual baseline.',
   ).toEqual({ width: baseline.width, height: baseline.height });
 
-  const diff = new PNG({ width: baseline.width, height: baseline.height });
-  const diffPixels = pixelmatch(
-    baseline.data,
-    actual.data,
-    diff.data,
-    baseline.width,
-    baseline.height,
-    { threshold: 0.1 },
-  );
-  const totalPixels = baseline.width * baseline.height;
-  const diffPixelRatio = diffPixels / totalPixels;
+  const comparison = compareToBaseline(baseline, actual);
 
-  if (diffPixelRatio > maximumDiffPixelRatio) {
+  if (!comparison.withinBudget) {
     const diffPath = testInfo.outputPath('desktop-cloud-sign-in-diff.png');
-    fs.writeFileSync(diffPath, PNG.sync.write(diff));
+    fs.writeFileSync(diffPath, PNG.sync.write(comparison.diff));
     await testInfo.attach('visual-diff', {
       path: diffPath,
       contentType: 'image/png',
     });
   }
 
+  expect(comparison.withinBudget, describeComparison(comparison)).toBe(true);
+});
+
+test('The visual budget rejects a render that lost every element on the page', () => {
+  const baseline = readBaseline();
+  const erased = fillWith(baseline.width, baseline.height, dominantColor(baseline));
+  const comparison = compareToBaseline(baseline, erased);
+
+  expect(comparison.diffPixels).toBeGreaterThan(0);
   expect(
-    diffPixelRatio,
-    `${diffPixels}/${totalPixels} pixels differ from the reviewed baseline.`,
-  ).toBeLessThanOrEqual(maximumDiffPixelRatio);
+    comparison.withinBudget,
+    `A page stripped back to bare background must never pass. ${describeComparison(comparison)}`,
+  ).toBe(false);
 });

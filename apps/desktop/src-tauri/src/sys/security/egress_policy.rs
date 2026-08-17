@@ -19,18 +19,16 @@
 //! denylist. Two limits on that, stated precisely because the previous version
 //! of this comment overstated them:
 //!
-//! * DNS REBINDING IS STILL OPEN. Resolving here closes the STATIC case (a
-//!   name whose records already point inside). It does not close the RACE: a
-//!   resolver that answers public for this lookup and private for the one
-//!   reqwest does when it connects still wins. Closing that needs connect-time
-//!   address pinning (a custom connector/`resolve()` override) or an OS-level
-//!   firewall, neither of which exists yet.
+//! * DNS REBINDING IS CLOSED ON [`PublicHttpClient`]. The addresses the
+//!   judgement used are pinned onto that client's transport ([`PinnedResolver`]),
+//!   so the address dialed is the address checked and there is no second lookup
+//!   for a hostile resolver to answer differently. Every other transport in the
+//!   process — bare `reqwest::Client`s, sidecars, local runtimes — resolves
+//!   independently and remains exposed to the race.
 //! * DNS FAILS CLOSED. A hostname has to resolve to at least one public address
 //!   before an arbitrary-public request is allowed. Treating lookup failure as
 //!   permission made the validator and transport two independent DNS queries:
 //!   an attacker could fail the first one and answer the second one internally.
-//!   This does not fully close the public-then-private rebinding race; doing
-//!   that still needs connect-time address pinning or an OS-level firewall.
 //!
 //! REDIRECTS are part of the destination, not an afterthought: judging only the
 //! first URL is no guard at all when the client follows up to ten further hops.
@@ -112,14 +110,17 @@ impl HostResolver for SystemResolver {
 /// `http://0x7f000001/`, IPv4-in-IPv6 `[::ffff:169.254.169.254]`, NAT64), and
 /// including hostnames whose A/AAAA records point at one.
 pub fn ensure_public_http_destination(url: &str) -> Result<(), EgressDenial> {
-    judge_destination(url, &SystemResolver)
+    judge_destination(url, &SystemResolver).map(|_| ())
 }
 
 /// [`ensure_public_http_destination`] with the name resolver injected.
+///
+/// Returns the addresses the destination was judged on, so a caller can pin
+/// them onto the transport and dial exactly what it checked.
 pub(crate) fn judge_destination(
     url: &str,
     resolver: &dyn HostResolver,
-) -> Result<(), EgressDenial> {
+) -> Result<Vec<IpAddr>, EgressDenial> {
     let parsed = url::Url::parse(url).map_err(|_| EgressDenial::InvalidUrl(url.to_string()))?;
 
     let scheme = parsed.scheme();
@@ -139,11 +140,13 @@ pub(crate) fn judge_destination(
             if is_internal_ipv4(ip) {
                 return Err(EgressDenial::InternalDestination(host_str.to_string()));
             }
+            Ok(vec![IpAddr::V4(ip)])
         }
         url::Host::Ipv6(ip) => {
             if is_internal_ipv6(ip) {
                 return Err(EgressDenial::InternalDestination(host_str.to_string()));
             }
+            Ok(vec![IpAddr::V6(ip)])
         }
         url::Host::Domain(domain) => {
             if is_loopback_name(domain) || is_metadata_name(domain) {
@@ -168,10 +171,10 @@ pub(crate) fn judge_destination(
             if addresses.is_empty() {
                 return Err(EgressDenial::UnresolvedDestination(host_str.to_string()));
             }
-            for address in addresses {
+            for address in &addresses {
                 let internal = match address {
-                    IpAddr::V4(ip) => is_internal_ipv4(ip),
-                    IpAddr::V6(ip) => is_internal_ipv6(ip),
+                    IpAddr::V4(ip) => is_internal_ipv4(*ip),
+                    IpAddr::V6(ip) => is_internal_ipv6(*ip),
                 };
                 if internal {
                     return Err(EgressDenial::InternalDestination(format!(
@@ -179,10 +182,9 @@ pub(crate) fn judge_destination(
                     )));
                 }
             }
+            Ok(addresses)
         }
     }
-
-    Ok(())
 }
 
 /// Hostnames the major clouds publish for their instance metadata service.
@@ -318,6 +320,81 @@ pub fn strict_public_destination_redirect_policy() -> reqwest::redirect::Policy 
     })
 }
 
+/// The addresses each host was judged on, shared between the validator and the
+/// transport's DNS resolver.
+///
+/// This is what closes the rebinding race the module doc used to declare open:
+/// validation and connection are no longer two independent DNS queries, so a
+/// resolver that answers public once and private once cannot win the second
+/// answer — there is no second answer.
+#[derive(Debug, Default)]
+pub struct PinnedDestinations {
+    addresses: std::sync::Mutex<std::collections::HashMap<String, Vec<IpAddr>>>,
+}
+
+impl PinnedDestinations {
+    fn pin(&self, host: &str, addresses: Vec<IpAddr>) {
+        if addresses.is_empty() {
+            return;
+        }
+        if let Ok(mut map) = self.addresses.lock() {
+            map.insert(host.to_ascii_lowercase(), addresses);
+        }
+    }
+
+    pub fn pinned(&self, host: &str) -> Option<Vec<IpAddr>> {
+        self.addresses
+            .lock()
+            .ok()?
+            .get(&host.to_ascii_lowercase())
+            .cloned()
+    }
+}
+
+/// The transport-side half of the pin: it serves only addresses the policy
+/// already judged, and refuses any host the policy never saw.
+pub struct PinnedResolver(pub std::sync::Arc<PinnedDestinations>);
+
+impl reqwest::dns::Resolve for PinnedResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let host = name.as_str().to_string();
+        let pinned = self.0.pinned(&host);
+        Box::pin(async move {
+            match pinned {
+                Some(addresses) => Ok(Box::new(
+                    addresses
+                        .into_iter()
+                        .map(|address| std::net::SocketAddr::new(address, 0)),
+                ) as reqwest::dns::Addrs),
+                None => Err(Box::new(EgressDenial::UnresolvedDestination(host))
+                    as Box<dyn std::error::Error + Send + Sync>),
+            }
+        })
+    }
+}
+
+/// Redirect policy for a pinned public-only client: every hop is judged, and
+/// the addresses that judgement used are pinned before the hop is followed.
+fn pinned_public_redirect_policy(
+    pins: std::sync::Arc<PinnedDestinations>,
+) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() >= MAX_REDIRECT_HOPS {
+            return attempt.error("too many redirects");
+        }
+
+        match judge_destination(attempt.url().as_str(), &SystemResolver) {
+            Ok(addresses) => {
+                if let Some(host) = attempt.url().host_str() {
+                    pins.pin(host, addresses);
+                }
+                attempt.follow()
+            }
+            Err(denial) => attempt.error(denial),
+        }
+    })
+}
+
 /// A reqwest client whose request builder cannot be created until the initial
 /// URL is proven public, and whose redirect policy repeats that proof for every
 /// hop. Keeping the inner client private prevents a caller from accidentally
@@ -325,6 +402,7 @@ pub fn strict_public_destination_redirect_policy() -> reqwest::redirect::Policy 
 #[derive(Clone)]
 pub struct PublicHttpClient {
     inner: reqwest::Client,
+    pins: std::sync::Arc<PinnedDestinations>,
 }
 
 impl PublicHttpClient {
@@ -338,10 +416,12 @@ impl PublicHttpClient {
     /// such as timeout or user agent. The redirect policy is always replaced
     /// with the strict per-hop public policy.
     pub fn with_builder(builder: reqwest::ClientBuilder) -> Result<Self, reqwest::Error> {
+        let pins = std::sync::Arc::new(PinnedDestinations::default());
         let inner = builder
-            .redirect(strict_public_destination_redirect_policy())
+            .redirect(pinned_public_redirect_policy(std::sync::Arc::clone(&pins)))
+            .dns_resolver(PinnedResolver(std::sync::Arc::clone(&pins)))
             .build()?;
-        Ok(Self { inner })
+        Ok(Self { inner, pins })
     }
 
     pub fn request(
@@ -349,8 +429,27 @@ impl PublicHttpClient {
         method: reqwest::Method,
         url: &str,
     ) -> Result<reqwest::RequestBuilder, EgressDenial> {
-        ensure_public_http_destination(url)?;
+        self.request_with_resolver(method, url, &SystemResolver)
+    }
+
+    pub(crate) fn request_with_resolver(
+        &self,
+        method: reqwest::Method,
+        url: &str,
+        resolver: &dyn HostResolver,
+    ) -> Result<reqwest::RequestBuilder, EgressDenial> {
+        let addresses = judge_destination(url, resolver)?;
+        if let Some(host) = url::Url::parse(url)
+            .ok()
+            .and_then(|parsed| parsed.host_str().map(str::to_string))
+        {
+            self.pins.pin(&host, addresses);
+        }
         Ok(self.inner.request(method, url))
+    }
+
+    pub fn pinned_addresses(&self, host: &str) -> Option<Vec<IpAddr>> {
+        self.pins.pinned(host)
     }
 
     pub fn get(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
@@ -494,6 +593,55 @@ mod tests {
             judge_destination("https://nothing.invalid/", &resolver),
             Err(EgressDenial::UnresolvedDestination(_))
         ));
+    }
+
+    #[test]
+    fn public_client_pins_the_addresses_it_validated() {
+        let resolver = StubResolver::new(&[("api.agiworkforce.com", "216.198.79.1")]);
+        let client = PublicHttpClient::new();
+
+        let _request = client
+            .request_with_resolver(
+                reqwest::Method::GET,
+                "https://api.agiworkforce.com/v1/models",
+                &resolver,
+            )
+            .expect("public host must be allowed");
+
+        assert_eq!(
+            client.pinned_addresses("api.agiworkforce.com"),
+            Some(vec!["216.198.79.1".parse::<IpAddr>().unwrap()]),
+            "the transport is free to re-resolve the name it was never told the answer to"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_pinned_resolver_serves_only_judged_addresses() {
+        use reqwest::dns::Resolve;
+        use std::str::FromStr;
+
+        let pins = std::sync::Arc::new(PinnedDestinations::default());
+        pins.pin(
+            "api.agiworkforce.com",
+            vec!["216.198.79.1".parse().unwrap()],
+        );
+        let resolver = PinnedResolver(pins);
+
+        let resolved: Vec<IpAddr> = resolver
+            .resolve(reqwest::dns::Name::from_str("api.agiworkforce.com").unwrap())
+            .await
+            .expect("pinned host resolves")
+            .map(|address| address.ip())
+            .collect();
+        assert_eq!(resolved, vec!["216.198.79.1".parse::<IpAddr>().unwrap()]);
+
+        assert!(
+            resolver
+                .resolve(reqwest::dns::Name::from_str("never.judged.example").unwrap())
+                .await
+                .is_err(),
+            "the transport reached a host the policy never judged"
+        );
     }
 
     #[test]

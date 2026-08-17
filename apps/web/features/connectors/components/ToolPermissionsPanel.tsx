@@ -42,27 +42,30 @@ const PERMISSION_LEVELS: {
     label: 'Allow',
     description: 'Always run without asking',
     icon: <Check className="h-3 w-3" aria-hidden="true" />,
-    activeClass: 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20',
+    activeClass:
+      'border-emerald-600 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:border-emerald-500/60 dark:text-emerald-400',
     inactiveClass:
-      'border-white/[0.06] bg-transparent text-muted-foreground hover:border-white/[0.12] hover:text-foreground',
+      'border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground',
   },
   {
     level: 'ask',
     label: 'Ask',
     description: 'Needs approval each time',
     icon: <HelpCircle className="h-3 w-3" aria-hidden="true" />,
-    activeClass: 'border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/20',
+    activeClass:
+      'border-amber-600 bg-amber-500/15 text-amber-800 hover:bg-amber-500/20 dark:border-amber-500/60 dark:text-amber-400',
     inactiveClass:
-      'border-white/[0.06] bg-transparent text-muted-foreground hover:border-white/[0.12] hover:text-foreground',
+      'border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground',
   },
   {
     level: 'deny',
     label: 'Deny',
     description: 'Never run this tool',
     icon: <Ban className="h-3 w-3" aria-hidden="true" />,
-    activeClass: 'border-red-500/60 bg-red-500/15 text-red-400 hover:bg-red-500/20',
+    activeClass:
+      'border-red-600 bg-red-500/15 text-red-700 hover:bg-red-500/20 dark:border-red-500/60 dark:text-red-400',
     inactiveClass:
-      'border-white/[0.06] bg-transparent text-muted-foreground hover:border-white/[0.12] hover:text-foreground',
+      'border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground',
   },
 ];
 
@@ -77,7 +80,7 @@ function ToolRow({ connectorId, toolName }: ToolRowProps) {
   const current = getToolPermission(connectorId, toolName);
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2.5">
       <span className="min-w-0 flex-1 truncate text-sm text-foreground">{toolName}</span>
       <div
         className="flex items-center gap-1"
@@ -106,7 +109,7 @@ function ToolRow({ connectorId, toolName }: ToolRowProps) {
 
 function PermissionLegend() {
   return (
-    <div className="flex flex-wrap gap-3 rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2">
+    <div className="flex flex-wrap gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2">
       {PERMISSION_LEVELS.map(({ level, label, description, icon, activeClass }) => (
         <div key={level} className="flex items-center gap-1.5">
           <span
@@ -137,7 +140,7 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-white/[0.08] bg-[#0f0e0d] sm:max-w-lg">
+      <DialogContent className="border-border bg-popover sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <OfficialConnectorLogo connector={connector} className="h-9 w-9 rounded-lg" />
@@ -164,7 +167,7 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-white/[0.04] bg-white/[0.02] px-4 py-6 text-center">
+            <div className="rounded-lg border border-border bg-muted/50 px-4 py-6 text-center">
               <p className="text-sm text-muted-foreground">
                 No tools defined for this connector yet.
               </p>
@@ -172,7 +175,7 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
           )}
 
           {/* Reset button */}
-          <div className="flex justify-end border-t border-white/[0.06] pt-2">
+          <div className="flex justify-end border-t border-border pt-2">
             <Button
               variant="ghost"
               size="sm"

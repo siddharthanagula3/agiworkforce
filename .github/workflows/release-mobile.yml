@@ -95,15 +95,109 @@ jobs:
           pnpm --filter @agiworkforce/mobile lint
           pnpm --filter @agiworkforce/mobile test
           pnpm --filter @agiworkforce/mobile test:release-associations
+          pnpm --filter @agiworkforce/mobile test:ios-device-dev
+          pnpm --filter @agiworkforce/mobile test:release-privacy-declarations
+          pnpm --filter @agiworkforce/mobile release:verify-privacy-declarations
           pnpm --filter @agiworkforce/mobile check:tls-pins
           jq -e '.build.production.environment == "production"' apps/mobile/eas.json >/dev/null
           jq -e '.submit.production.android.track == "internal"' apps/mobile/eas.json >/dev/null
           jq -e '.submit.production.android.releaseStatus == "draft"' apps/mobile/eas.json >/dev/null
 
+  device-matrix-e2e:
+    name: Device matrix E2E (${{ matrix.device }})
+    needs: validate
+    runs-on: macos-15
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [newest-iphone, smallest-iphone, ipad]
+    env:
+      APP_ENV: development
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC: '1'
+    steps:
+      - name: Checkout the exact validated release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Detox simulator utilities
+        run: |
+          brew tap wix/brew
+          brew trust --formula wix/brew/applesimutils
+          brew install applesimutils
+          pnpm --filter @agiworkforce/mobile exec detox build-framework-cache
+
+      - name: Resolve this matrix slot to a real simulator form factor
+        shell: bash
+        env:
+          DEVICE_CLASS: ${{ matrix.device }}
+        run: |
+          set -euo pipefail
+          device_name="$(xcrun simctl list devices available -j | node -e '
+            let input = "";
+            process.stdin.on("data", (chunk) => (input += chunk));
+            process.stdin.on("end", () => {
+              const devices = Object.values(JSON.parse(input).devices)
+                .flat()
+                .filter((candidate) => candidate.isAvailable);
+              const iphones = devices.filter((candidate) => candidate.name.startsWith("iPhone"));
+              const ipads = devices.filter((candidate) => candidate.name.startsWith("iPad"));
+              const pick = {
+                "newest-iphone": iphones.at(-1),
+                "smallest-iphone":
+                  iphones.find((candidate) => candidate.name.includes("SE")) ?? iphones.at(0),
+                ipad: ipads.at(0),
+              }[process.env.DEVICE_CLASS];
+              if (!pick) process.exit(1);
+              process.stdout.write(pick.name);
+            });
+          ')"
+          if [ -z "$device_name" ]; then
+            echo "ERROR: this runner offers no simulator for form factor $DEVICE_CLASS" >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          echo "DETOX_IOS_DEVICE=$device_name" >> "$GITHUB_ENV"
+          echo "Resolved $DEVICE_CLASS to $device_name"
+
+      - name: Generate the ignored iOS project
+        run: pnpm --filter @agiworkforce/mobile exec expo prebuild --platform ios --clean
+
+      - name: Build the release simulator app
+        run: pnpm --filter @agiworkforce/mobile exec detox build --configuration ios.sim.release
+
+      - name: Exercise the release build on this device
+        run: pnpm --filter @agiworkforce/mobile test:e2e:ios:ci
+
+      - name: Upload device artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mobile-e2e-${{ strategy.job-index }}
+          path: apps/mobile/artifacts/mobile-e2e
+          if-no-files-found: ignore
+          retention-days: 7
+
   release-ios:
     name: Build and submit iOS to TestFlight
     if: github.event_name == 'push' || inputs.publish == true
-    needs: validate
+    needs: [validate, device-matrix-e2e]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     environment:
@@ -204,7 +298,7 @@ jobs:
   release-android:
     name: Build and submit Android to Play Internal
     if: github.event_name == 'push' || inputs.publish == true
-    needs: validate
+    needs: [validate, device-matrix-e2e]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     environment:

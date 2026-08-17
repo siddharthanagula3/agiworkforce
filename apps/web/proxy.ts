@@ -3,6 +3,9 @@ import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withCorsAndSecurityHeaders } from './lib/cors';
 import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-route-contract';
+import { decideEuAccess, euBlockEnabled } from './lib/eu-access';
+
+const UNAVAILABLE_PATH = '/region-unavailable';
 
 function clerkFapiOrigin(): string {
   const key = process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY']?.trim();
@@ -90,6 +93,7 @@ const isProtectedAppRoute = createRouteMatcher([
   '/chat(.*)',
   '/library(.*)',
   '/schedules(.*)',
+  '/tasks(.*)',
   '/settings(.*)',
   '/billing(.*)',
   '/admin(.*)',
@@ -109,6 +113,7 @@ const isClerkSessionRoute = createRouteMatcher([
   '/chat(.*)',
   '/library(.*)',
   '/schedules(.*)',
+  '/tasks(.*)',
   '/settings(.*)',
   '/billing(.*)',
   '/admin(.*)',
@@ -160,7 +165,25 @@ export function buildApiHostRedirectTarget(
   }
 }
 
+function euAccessBlock(request: NextRequest): NextResponse | null {
+  const decision = decideEuAccess(
+    request.headers.get('x-vercel-ip-country'),
+    euBlockEnabled(process.env),
+  );
+  if (!decision.blocked) return null;
+  if (request.nextUrl.pathname === UNAVAILABLE_PATH) return null;
+  const target = request.nextUrl.clone();
+  target.pathname = UNAVAILABLE_PATH;
+  target.search = '';
+  const response = NextResponse.rewrite(target, { status: 451 });
+  response.headers.set('x-agi-region-block', decision.country);
+  return response;
+}
+
 export const proxy: NextMiddleware = async (request, event) => {
+  const regionBlock = euAccessBlock(request);
+  if (regionBlock) return regionBlock;
+
   const apiHostBounce = apiHostRedirect(request);
   if (apiHostBounce) return apiHostBounce;
 

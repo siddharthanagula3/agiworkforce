@@ -13,6 +13,7 @@ use crate::features::speech::{
 use crate::features::speech::{BargeInDetector, SharedVad};
 use crate::sys::account::{get_access_token, get_api_base_url};
 use crate::sys::commands::settings_v2::SettingsServiceState;
+use agiworkforce_llm::{speech, TranscriptionRequest, TranscriptionResponseFormat};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -39,31 +40,47 @@ pub struct VoiceSettings {
     pub language: Option<String>,
 }
 
-/// Cloud speech-to-text model, read off the catalog rather than retyped here.
+/// Cloud speech-to-text model, resolved from the canonical
+/// `voice_transcription` routing slot that the CLI binary and the managed
+/// transcription route in `apps/web` also read.
 ///
-/// STT has no `taskRouting` entry, so the balanced-tier `stt` model is the
-/// catalog's statement of which transcription model this build should call.
+/// The value is posted verbatim as the multipart `model` field, so it is the
+/// provider wire ID the registry declares for the slot's model key.
 ///
-/// This value is posted verbatim as the multipart `model` field to
-/// `api.openai.com/v1/audio/transcriptions` (and to the managed-cloud proxy in
-/// front of it), so it must be the wire ID: the catalog lookup returns the
-/// display ID, and `get_api_model_id` maps it to `apiModelId`; the two need not
-/// stay identical after a catalog update.
-///
-/// If the catalog ever carries no cloud STT entry this yields an empty string,
-/// which the transcription endpoint rejects with a request error — an obvious
-/// failure rather than a retired ID that looks valid. `models_config`'s
-/// `get_model_by_type_and_tier_resolves_non_chat_modalities` asserts the entry
-/// is present, so that path is not reachable with the shipped catalog.
+/// If the slot ever resolves to nothing this yields an empty string, which the
+/// transcription endpoint rejects with a request error — an obvious failure
+/// rather than a retired ID that looks valid. The registry crate's
+/// `the_voice_transcription_slot_resolves_to_a_live_provider_model` asserts the
+/// slot is present, so that path is not reachable with the shipped registry.
 fn default_cloud_stt_model() -> String {
-    match crate::core::llm::models_config::get_model_by_type_and_tier(
-        &crate::core::llm::Provider::OpenAI,
-        "stt",
-        "balanced",
-    ) {
-        Some(model_id) => crate::core::llm::models_config::get_api_model_id(model_id),
-        None => String::new(),
+    agiworkforce_model_registry::slot_model(speech::TRANSCRIPTION_ROUTING_SLOT)
+        .ok()
+        .flatten()
+        .map(|model| model.provider_model_id)
+        .unwrap_or_default()
+}
+
+fn transcription_request(settings: &VoiceSettings) -> TranscriptionRequest {
+    TranscriptionRequest::new(settings.model.clone(), TranscriptionResponseFormat::Json)
+        .with_language(settings.language.clone())
+}
+
+fn transcription_form(
+    audio_data: Vec<u8>,
+    extension: &str,
+    request: &TranscriptionRequest,
+) -> Result<reqwest::multipart::Form, String> {
+    let file_part = reqwest::multipart::Part::bytes(audio_data)
+        .file_name(format!("audio.{}", extension))
+        .mime_str(&format!("audio/{}", extension))
+        .map_err(|e| format!("Failed to create file part: {}", e))?;
+
+    let mut form =
+        reqwest::multipart::Form::new().part(speech::TRANSCRIPTION_FILE_FIELD, file_part);
+    for (field, value) in request.text_fields() {
+        form = form.text(field, value);
     }
+    Ok(form)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -492,18 +509,7 @@ async fn transcribe_with_cloud(
         .and_then(|e| e.to_str())
         .unwrap_or("mp3");
 
-    let file_part = reqwest::multipart::Part::bytes(audio_data)
-        .file_name(format!("audio.{}", extension))
-        .mime_str(&format!("audio/{}", extension))
-        .map_err(|e| format!("Failed to create file part: {}", e))?;
-
-    let mut form = reqwest::multipart::Form::new()
-        .part("file", file_part)
-        .text("model", settings.model.clone());
-
-    if let Some(ref lang) = settings.language {
-        form = form.text("language", lang.clone());
-    }
+    let form = transcription_form(audio_data, extension, &transcription_request(settings))?;
 
     transcribe_with_managed_cloud(client, form).await
 }
@@ -513,8 +519,7 @@ async fn transcribe_with_managed_cloud(
     form: reqwest::multipart::Form,
 ) -> Result<VoiceTranscription, String> {
     let token = get_access_token().map_err(|e| format!("Managed Cloud auth required: {}", e))?;
-    let base = get_api_base_url();
-    let url = format!("{}/api/llm/v1/audio/transcriptions", base);
+    let url = speech::managed_transcriptions_url(&get_api_base_url());
 
     let response = client
         .post(url)
@@ -554,8 +559,9 @@ struct WhisperResponse {
     duration: Option<f32>,
 }
 
-/// Transcribe using the user's own OpenAI API key from SettingsService.
-/// Falls back to managed cloud if no key is stored.
+/// Transcribe using the user's own OpenAI API key from SettingsService. The
+/// caller fails closed when no key is stored; this never reroutes to managed
+/// cloud.
 async fn transcribe_with_openai_direct(
     audio_path: &PathBuf,
     settings: &VoiceSettings,
@@ -570,21 +576,10 @@ async fn transcribe_with_openai_direct(
         .and_then(|e| e.to_str())
         .unwrap_or("webm");
 
-    let file_part = reqwest::multipart::Part::bytes(audio_data)
-        .file_name(format!("audio.{}", extension))
-        .mime_str(&format!("audio/{}", extension))
-        .map_err(|e| format!("Failed to create file part: {}", e))?;
-
-    let mut form = reqwest::multipart::Form::new()
-        .part("file", file_part)
-        .text("model", settings.model.clone());
-
-    if let Some(ref lang) = settings.language {
-        form = form.text("language", lang.clone());
-    }
+    let form = transcription_form(audio_data, extension, &transcription_request(settings))?;
 
     let response = client
-        .post("https://api.openai.com/v1/audio/transcriptions")
+        .post(speech::OPENAI_TRANSCRIPTIONS_URL)
         .bearer_auth(api_key)
         .multipart(form)
         .send()
@@ -2434,6 +2429,75 @@ pub async fn speech_stop_and_transcribe(
             tracing::error!("[dictation] Transcription failed: {}", e);
             Err(format!("Transcription failed: {}", e))
         }
+    }
+}
+
+/// DESK-17. The transcription endpoint, its multipart fields, and the model
+/// were retyped here and again in `apps/cli/src/voice.rs`, so a provider change
+/// could land in one binary and silently miss the other. Both now read
+/// `agiworkforce_llm::speech` and the `voice_transcription` routing slot.
+#[cfg(test)]
+mod shared_speech_contract_tests {
+    use super::*;
+
+    fn settings(language: Option<&str>) -> VoiceSettings {
+        VoiceSettings {
+            provider: VoiceProvider::Cloud,
+            model: default_cloud_stt_model(),
+            language: language.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn the_transcription_endpoints_are_not_retyped_in_this_binary() {
+        let source = include_str!("voice.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            !production.contains("api.openai.com"),
+            "the BYOK endpoint must come from agiworkforce_llm::speech"
+        );
+        assert!(
+            !production.contains("/api/llm/v1/audio/transcriptions"),
+            "the managed endpoint path must come from agiworkforce_llm::speech"
+        );
+        assert!(production.contains("speech::OPENAI_TRANSCRIPTIONS_URL"));
+        assert!(production.contains("speech::managed_transcriptions_url"));
+    }
+
+    #[test]
+    fn the_default_model_comes_from_the_shared_routing_slot() {
+        let slot = agiworkforce_model_registry::slot_model(speech::TRANSCRIPTION_ROUTING_SLOT)
+            .expect("generated registry should load")
+            .expect("the voice transcription slot must resolve");
+        assert!(!slot.provider_model_id.is_empty());
+        assert_eq!(default_cloud_stt_model(), slot.provider_model_id);
+    }
+
+    #[test]
+    fn the_request_carries_the_shared_fields() {
+        let request = transcription_request(&settings(Some("en")));
+        assert_eq!(request.model, default_cloud_stt_model());
+        assert_eq!(request.response_format, TranscriptionResponseFormat::Json);
+        assert!(request
+            .text_fields()
+            .contains(&("language", "en".to_string())));
+
+        let without_language = transcription_request(&settings(None));
+        assert!(!without_language
+            .text_fields()
+            .iter()
+            .any(|(field, _)| *field == "language"));
+    }
+
+    #[test]
+    fn the_managed_url_is_built_from_the_shared_path() {
+        assert_eq!(
+            speech::managed_transcriptions_url("https://example.invalid"),
+            format!(
+                "https://example.invalid/{}",
+                speech::MANAGED_TRANSCRIPTIONS_PATH
+            )
+        );
     }
 }
 

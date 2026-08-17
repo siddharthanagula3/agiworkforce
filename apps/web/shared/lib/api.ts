@@ -4,7 +4,12 @@
  */
 
 import { APIResponse, APIException } from '@shared/stores/query-client';
-import { securityManager } from './security';
+import {
+  ACCESS_TOKEN_MAX_AGE_MS,
+  REFRESH_TOKEN_MAX_AGE_MS,
+  readStoredToken,
+  writeStoredToken,
+} from './token-storage';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 export interface APIConfig {
@@ -51,27 +56,8 @@ export class APIClient {
 
   async loadTokenFromStorage(): Promise<void> {
     if (typeof window === 'undefined') return;
-    this.cachedToken = await this.decryptOrClearStored(this.tokenKey);
-    this.cachedRefreshToken = await this.decryptOrClearStored(this.refreshTokenKey);
-  }
-
-  private async decryptOrClearStored(key: string): Promise<string | null> {
-    const stored = localStorage.getItem(key);
-    if (!stored) return null;
-
-    try {
-      return await securityManager.decryptAsync(stored);
-    } catch {
-      const firstChar = stored.charAt(0);
-      if (firstChar === '{' || firstChar === '"' || stored.startsWith('ey')) {
-        console.warn(`[APIClient] Plaintext token found in ${key}; using as-is (migration path)`);
-        return stored;
-      }
-
-      console.warn(`[APIClient] Removing corrupted value from ${key}`);
-      localStorage.removeItem(key);
-      return null;
-    }
+    this.cachedToken = await readStoredToken(this.tokenKey, ACCESS_TOKEN_MAX_AGE_MS);
+    this.cachedRefreshToken = await readStoredToken(this.refreshTokenKey, REFRESH_TOKEN_MAX_AGE_MS);
   }
 
   private getToken(): string | null {
@@ -82,8 +68,7 @@ export class APIClient {
     if (typeof window === 'undefined') return;
     this.cachedToken = token;
     try {
-      const encrypted = await securityManager.encryptAsync(token);
-      localStorage.setItem(this.tokenKey, encrypted);
+      await writeStoredToken(this.tokenKey, token);
     } catch {
       console.warn('[APIClient] Encryption unavailable; token stored in memory only');
     }
@@ -108,8 +93,7 @@ export class APIClient {
     if (typeof window === 'undefined') return;
     this.cachedRefreshToken = token;
     try {
-      const encrypted = await securityManager.encryptAsync(token);
-      localStorage.setItem(this.refreshTokenKey, encrypted);
+      await writeStoredToken(this.refreshTokenKey, token);
     } catch {
       console.warn('[APIClient] Encryption unavailable; refresh token stored in memory only');
     }

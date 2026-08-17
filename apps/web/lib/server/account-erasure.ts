@@ -14,6 +14,7 @@ import {
   deleteProjectKnowledgeObject,
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
+import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
 
 export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }> = [
   { table: 'web_conversations', column: 'user_id' },
@@ -107,6 +108,18 @@ export const ANONYMIZED_USER_COLUMNS: ReadonlyArray<{
     column: 'added_by_user_id',
     reason: 'Files this user added to an organization-shared project owned by someone else.',
   },
+  {
+    table: 'provider_cost_events',
+    column: 'user_id',
+    reason:
+      'What managed cloud paid a provider is a cost record; the spend survives, the subject does not.',
+  },
+  {
+    table: 'cogs_adjustments',
+    column: 'user_id',
+    reason:
+      'Processing fees, refunds and chargebacks are financial records; the amount survives, the subject does not.',
+  },
 ];
 
 export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
@@ -145,6 +158,8 @@ export interface AccountErasureReport {
   knowledgeObjectsFailed: number;
   avatarObjectsDeleted: number;
   avatarObjectsFailed: number;
+  cacheKeysDeleted: number;
+  cacheKeysFailed: number;
   tables: Record<
     string,
     { deleted: boolean; skipped?: boolean; retainedForRetry?: boolean; error?: string }
@@ -461,6 +476,8 @@ export async function eraseUserAccountData(
       knowledgeObjectsFailed: 0,
       avatarObjectsDeleted: 0,
       avatarObjectsFailed: 0,
+      cacheKeysDeleted: 0,
+      cacheKeysFailed: 0,
       tables: {
         video_generation_jobs: {
           deleted: false,
@@ -478,6 +495,7 @@ export async function eraseUserAccountData(
     const media = await eraseUserMedia(userId);
     const knowledge = await eraseUserKnowledgeObjects(userId);
     const avatar = await eraseUserAvatarObject(userId);
+    const cache = await deleteE2BSessionsForUser(userId);
     const tables: AccountErasureReport['tables'] = {};
     const anonymized: AccountErasureReport['anonymized'] = {};
 
@@ -526,6 +544,7 @@ export async function eraseUserAccountData(
       media.mediaObjectsFailed === 0 &&
       knowledge.failed === 0 &&
       avatar.failed === 0 &&
+      cache.failed === 0 &&
       Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
       Object.values(anonymized).every((result) => result.updated || result.skipped === true);
 
@@ -560,6 +579,8 @@ export async function eraseUserAccountData(
       knowledgeObjectsFailed: knowledge.failed,
       avatarObjectsDeleted: avatar.deleted,
       avatarObjectsFailed: avatar.failed,
+      cacheKeysDeleted: cache.deleted,
+      cacheKeysFailed: cache.failed,
       tables,
       anonymized,
       complete,

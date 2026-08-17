@@ -1,4 +1,8 @@
+import type { ManagedMediaImageOperation } from '@agiworkforce/cloud-contracts';
+import type { MessageAttachment } from '@/types/chat';
 import { ApiPaywallError } from '@/services/api';
+import { readReferenceImageBase64 } from '@/src/features/image/services/imageReference';
+import type { MobileImageReferenceAttachment } from './resolveMobileImageGenerationRequest';
 import {
   generateImage,
   getDurableGeneratedImagePath,
@@ -26,8 +30,16 @@ export interface RunImageGenerationTurnInput {
   prompt: string;
   model: string;
   aspectRatio?: ImageGenRequest['aspect_ratio'];
+  operation?: ManagedMediaImageOperation;
+  sourceImage?: MobileImageReferenceAttachment;
   ownerId: string;
-  begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
+  begin: (
+    conversationId: string,
+    displayText: string,
+    prompt: string,
+    model: string,
+    attachments?: MessageAttachment[],
+  ) => string;
   complete: (
     conversationId: string,
     assistantMessageId: string,
@@ -43,6 +55,7 @@ export interface ImageGenerationTurnDependencies {
   generate: (request: ImageGenRequest) => Promise<ImageGenResponse>;
   getUri: (image: GeneratedImage | undefined) => string | null;
   getDurablePath?: (image: GeneratedImage | undefined) => string | null;
+  readReferenceImage?: (uri: string) => Promise<string>;
 }
 
 export type ImageGenerationTurnOutcome = {
@@ -60,6 +73,7 @@ const defaultDependencies: ImageGenerationTurnDependencies = {
   generate: generateImage,
   getUri: getGeneratedImageUri,
   getDurablePath: getDurableGeneratedImagePath,
+  readReferenceImage: readReferenceImageBase64,
 };
 
 export async function runImageGenerationTurn(
@@ -82,18 +96,39 @@ export async function runImageGenerationTurn(
   const generation = cloudImageGeneration;
   const isAccountCurrent = () =>
     generation === cloudImageGeneration && isCloudAccountEpochCurrent(accountEpoch);
-  const assistantMessageId = input.begin(
-    input.conversationId,
-    input.displayText,
-    input.prompt,
-    input.model,
-  );
+  const referenceAttachment: MessageAttachment | null = input.sourceImage
+    ? {
+        url: input.sourceImage.uri,
+        mimeType: input.sourceImage.mimeType,
+        fileName: input.sourceImage.fileName,
+        ...(input.sourceImage.fileSize !== undefined
+          ? { fileSize: input.sourceImage.fileSize }
+          : {}),
+      }
+    : null;
+  const assistantMessageId = referenceAttachment
+    ? input.begin(input.conversationId, input.displayText, input.prompt, input.model, [
+        referenceAttachment,
+      ])
+    : input.begin(input.conversationId, input.displayText, input.prompt, input.model);
 
   try {
+    const referenceOperation =
+      input.sourceImage && input.operation && input.operation !== 'generate'
+        ? input.operation
+        : null;
+    const referenceBase64 =
+      referenceOperation && input.sourceImage
+        ? await (dependencies.readReferenceImage ?? readReferenceImageBase64)(input.sourceImage.uri)
+        : null;
+    if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     const result = await dependencies.generate({
       prompt: input.prompt,
       model: input.model,
       ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
+      ...(referenceOperation && referenceBase64
+        ? { operation: referenceOperation, source_image: { b64_json: referenceBase64 } }
+        : {}),
     });
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     const image = result.images?.[0];

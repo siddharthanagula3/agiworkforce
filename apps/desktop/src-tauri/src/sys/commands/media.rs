@@ -138,6 +138,43 @@ fn ensure_managed_media_boundary() -> Result<(), String> {
     }
 }
 
+/// The managed-cloud media routes hand back site-relative asset paths
+/// (`/api/files/<id>`). The desktop webview is served from a `tauri://` origin,
+/// so a relative path there resolves against the app bundle and never reaches
+/// the API. Every URL crossing back into the renderer has to be absolute.
+fn absolutize_media_url(base_url: &str, url: Option<String>) -> Option<String> {
+    let url = url?;
+    if url.is_empty() || url.contains("://") || url.starts_with("data:") {
+        return Some(url);
+    }
+    let base = base_url.trim_end_matches('/');
+    if url.starts_with('/') {
+        Some(format!("{base}{url}"))
+    } else {
+        Some(format!("{base}/{url}"))
+    }
+}
+
+fn parse_generated_images(
+    base_url: &str,
+    body: &serde_json::Value,
+) -> Result<Vec<GeneratedImage>, String> {
+    let raw: Vec<GeneratedImage> = serde_json::from_value(
+        body.get("images")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([])),
+    )
+    .map_err(|e| format!("Failed to parse images: {}", e))?;
+
+    Ok(raw
+        .into_iter()
+        .map(|image| GeneratedImage {
+            url: absolutize_media_url(base_url, image.url),
+            b64_json: image.b64_json,
+        })
+        .collect())
+}
+
 // Compatibility normalization lives only at this privileged HTTP boundary.
 // Desktop presentation ids are never valid managed-cloud wire values.
 fn normalize_desktop_image_provider(provider: Option<&str>) -> Option<&str> {
@@ -283,12 +320,7 @@ pub async fn media_generate_image(
         return Err(error_msg.to_string());
     }
 
-    let images: Vec<GeneratedImage> = serde_json::from_value(
-        body.get("images")
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!([])),
-    )
-    .map_err(|e| format!("Failed to parse images: {}", e))?;
+    let images = parse_generated_images(&base_url, &body)?;
 
     let provider_str = body
         .get("provider")
@@ -435,14 +467,20 @@ pub async fn media_generate_video(
         match status_value {
             "completed" => {
                 final_status = "completed".to_string();
-                video_url = status_body
-                    .get("video_url")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                thumbnail_url = status_body
-                    .get("thumbnail_url")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                video_url = absolutize_media_url(
+                    &base_url,
+                    status_body
+                        .get("video_url")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                );
+                thumbnail_url = absolutize_media_url(
+                    &base_url,
+                    status_body
+                        .get("thumbnail_url")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                );
                 break;
             }
             "failed" => {
@@ -588,6 +626,56 @@ mod tests {
             normalize_desktop_image_provider(Some("openai")),
             Some("openai")
         );
+    }
+
+    // The managed-cloud media routes answer with `/api/files/<id>`; a relative
+    // path resolves against the `tauri://` bundle origin and renders nothing.
+    #[test]
+    fn absolutizes_relative_managed_media_paths_against_the_api_base() {
+        let base = "https://agiworkforce.com";
+
+        assert_eq!(
+            absolutize_media_url(base, Some("/api/files/asset-1".to_string())),
+            Some("https://agiworkforce.com/api/files/asset-1".to_string()),
+        );
+        assert_eq!(
+            absolutize_media_url("https://agiworkforce.com/", Some("api/files/a".to_string())),
+            Some("https://agiworkforce.com/api/files/a".to_string()),
+        );
+    }
+
+    #[test]
+    fn image_response_reaches_the_renderer_with_fetchable_urls() {
+        let body = serde_json::json!({
+            "success": true,
+            "images": [{ "url": "/api/files/media-asset-1" }, { "b64_json": "AAAA" }],
+            "provider": "google",
+        });
+
+        let images = parse_generated_images("https://agiworkforce.com", &body)
+            .expect("a well-formed managed-cloud image response must parse");
+
+        assert_eq!(
+            images[0].url.as_deref(),
+            Some("https://agiworkforce.com/api/files/media-asset-1"),
+        );
+        assert_eq!(images[1].url, None);
+        assert_eq!(images[1].b64_json.as_deref(), Some("AAAA"));
+    }
+
+    #[test]
+    fn leaves_absolute_and_inline_media_urls_untouched() {
+        let base = "https://agiworkforce.com";
+
+        assert_eq!(
+            absolutize_media_url(base, Some("https://cdn.example/v.mp4".to_string())),
+            Some("https://cdn.example/v.mp4".to_string()),
+        );
+        assert_eq!(
+            absolutize_media_url(base, Some("data:image/png;base64,AAAA".to_string())),
+            Some("data:image/png;base64,AAAA".to_string()),
+        );
+        assert_eq!(absolutize_media_url(base, None), None);
     }
 
     #[test]

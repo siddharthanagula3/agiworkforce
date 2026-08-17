@@ -9,14 +9,20 @@
  * @packageDocumentation
  */
 
-export type MemoryCategory =
-  | 'fact'
-  | 'preference'
-  | 'pattern'
-  | 'procedure'
-  | 'context'
-  | 'correction'
-  | 'skill';
+export const MEMORY_CATEGORIES = [
+  'preference',
+  'fact',
+  'decision',
+  'context',
+  'summary',
+  'skill',
+] as const;
+
+export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+
+export function isMemoryCategory(value: unknown): value is MemoryCategory {
+  return typeof value === 'string' && (MEMORY_CATEGORIES as readonly string[]).includes(value);
+}
 
 export type ImportanceScore = number;
 

@@ -69,11 +69,20 @@ interface SlashCommandMenuProps {
   skills: readonly SkillMeta[];
   onSkillSelect?: (skillName: string) => void;
   imageCommandAvailable: boolean;
+  codeCommandAvailable: boolean;
 }
 
 export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandMenuProps>(
   function SlashCommandMenu(
-    { query, onSelect, onClose, onSkillSelect, skills, imageCommandAvailable },
+    {
+      query,
+      onSelect,
+      onClose,
+      onSkillSelect,
+      skills,
+      imageCommandAvailable,
+      codeCommandAvailable,
+    },
     ref,
   ) {
     const customCommands = useSettingsStore((state) => state.customCommands);
@@ -86,6 +95,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
         isCapabilityEnabled(platform, capability),
       )
         .filter((command) => command.id !== 'image' || imageCommandAvailable)
+        .filter((command) => command.id !== 'code' || codeCommandAvailable)
         .map((command): CommandSuggestion => {
           const Icon = SLASH_ICONS[command.iconName];
           return {
@@ -127,7 +137,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           suggestion.command.slice(1).toLowerCase().startsWith(normalizedQuery)
         );
       });
-    }, [customCommands, imageCommandAvailable, platform, query, skills]);
+    }, [codeCommandAvailable, customCommands, imageCommandAvailable, platform, query, skills]);
 
     useEffect(() => {
       if (previousQueryRef.current === query) return;

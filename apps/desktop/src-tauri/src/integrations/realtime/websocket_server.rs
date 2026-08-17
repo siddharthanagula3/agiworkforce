@@ -196,8 +196,7 @@ fn normalize_pair_code(raw: &str) -> String {
 }
 
 fn pair_code_matches(supplied: &str, expected: &str) -> bool {
-    supplied.len() == expected.len()
-        && bool::from(supplied.as_bytes().ct_eq(expected.as_bytes()))
+    supplied.len() == expected.len() && bool::from(supplied.as_bytes().ct_eq(expected.as_bytes()))
 }
 
 fn drop_expired_pair_requests(pending: &mut HashMap<String, PendingPairRequest>, now: Instant) {
@@ -419,7 +418,8 @@ impl RealtimeServer {
         let mut prompts: Vec<(Instant, PairRequestPrompt)> = requests
             .iter()
             .map(|(request_id, request)| {
-                let remaining = PAIR_REQUEST_TTL.saturating_sub(now.duration_since(request.created_at));
+                let remaining =
+                    PAIR_REQUEST_TTL.saturating_sub(now.duration_since(request.created_at));
                 (
                     request.created_at,
                     PairRequestPrompt {
@@ -754,13 +754,7 @@ impl RealtimeServer {
         let header_section = match std::str::from_utf8(raw) {
             Ok(s) => s,
             Err(_) => {
-                Self::write_http(
-                    &mut stream,
-                    "400 Bad Request",
-                    "text/plain",
-                    "Bad Request",
-                )
-                .await;
+                Self::write_http(&mut stream, "400 Bad Request", "text/plain", "Bad Request").await;
                 return;
             }
         };
@@ -2771,7 +2765,10 @@ mod tests {
         let request_id = body["requestId"].as_str().unwrap().to_string();
         let code = read_displayed_code(&pending, &request_id).await;
 
-        assert!(body.get("code").is_none(), "response must not carry the code");
+        assert!(
+            body.get("code").is_none(),
+            "response must not carry the code"
+        );
         assert!(
             !response.contains(&code),
             "the confirmation code must never appear on the HTTP channel"
@@ -2811,7 +2808,7 @@ mod tests {
         let body = json_body(&response);
         let token = body["token"].as_str().unwrap();
         assert_eq!(token.len(), 64);
-        assert_eq!(body["fingerprint"].as_str().unwrap(), &token[..8]);
+        assert_eq!(body["fingerprint"].as_str().unwrap(), &token[..8]); // utf8-safe: 64 hex chars
         assert_eq!(body["nativeHostManifestInstalled"], serde_json::json!(true));
         assert_eq!(
             *installs.lock().unwrap(),
@@ -2832,7 +2829,10 @@ mod tests {
         let (addr, _) = spawn_handshake_handler(pair_token.clone(), pending.clone()).await;
         let requested = send_http(addr, &pair_request_http(TEST_EXTENSION_ID)).await;
         let requested = String::from_utf8_lossy(&requested).to_string();
-        let request_id = json_body(&requested)["requestId"].as_str().unwrap().to_string();
+        let request_id = json_body(&requested)["requestId"]
+            .as_str()
+            .unwrap()
+            .to_string();
 
         let displayed_code = read_displayed_code(&pending, &request_id).await;
 
@@ -2956,7 +2956,7 @@ mod tests {
             .unwrap()
             .to_string();
         let code = read_displayed_code(&pending, &request_id).await;
-        let typed = format!("{}-{}", &code[..4], &code[4..]).to_lowercase();
+        let typed = format!("{}-{}", &code[..4], &code[4..]).to_lowercase(); // utf8-safe: 32-symbol ASCII alphabet
 
         let (addr, installs) = spawn_handshake_handler(pair_token, pending).await;
         let response = send_http(addr, &pair_confirm_http(&request_id, &typed)).await;
@@ -3026,7 +3026,8 @@ mod tests {
             let code = generate_pair_code();
             assert_eq!(code.len(), PAIR_CODE_LEN);
             assert!(
-                code.chars().all(|c| PAIR_CODE_ALPHABET.contains(&(c as u8))),
+                code.chars()
+                    .all(|c| PAIR_CODE_ALPHABET.contains(&(c as u8))),
                 "code {code} left the alphabet"
             );
         }
@@ -3036,8 +3037,14 @@ mod tests {
     fn pair_code_normalization_strips_formatting_only() {
         assert_eq!(normalize_pair_code(" ab3d-ef4h "), "AB3DEF4H");
         assert_eq!(normalize_pair_code("AB3DEF4H"), "AB3DEF4H");
-        assert!(pair_code_matches(&normalize_pair_code("ab3d ef4h"), "AB3DEF4H"));
-        assert!(!pair_code_matches(&normalize_pair_code("ab3def4"), "AB3DEF4H"));
+        assert!(pair_code_matches(
+            &normalize_pair_code("ab3d ef4h"),
+            "AB3DEF4H"
+        ));
+        assert!(!pair_code_matches(
+            &normalize_pair_code("ab3def4"),
+            "AB3DEF4H"
+        ));
     }
 
     #[tokio::test]
@@ -3051,12 +3058,10 @@ mod tests {
             None,
         );
 
-        let prompt = open_pair_request(
-            &server.pending_pair_requests,
-            TEST_EXTENSION_ID.to_string(),
-        )
-        .await
-        .unwrap();
+        let prompt =
+            open_pair_request(&server.pending_pair_requests, TEST_EXTENSION_ID.to_string())
+                .await
+                .unwrap();
 
         let prompts = server.pending_pair_requests().await;
         assert_eq!(prompts.len(), 1);

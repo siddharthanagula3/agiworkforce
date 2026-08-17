@@ -69,10 +69,14 @@ describe('Tasks pending-approval inbox', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
 
     await waitFor(() =>
-      expect(resumeRun).toHaveBeenCalledWith(RUN_ID, [
-        { toolCallId: 'call-1', decision: 'approved' },
-        { toolCallId: 'call-2', decision: 'approved' },
-      ]),
+      expect(resumeRun).toHaveBeenCalledWith(
+        RUN_ID,
+        [
+          { toolCallId: 'call-1', decision: 'approved' },
+          { toolCallId: 'call-2', decision: 'approved' },
+        ],
+        {},
+      ),
     );
   });
 
@@ -83,10 +87,14 @@ describe('Tasks pending-approval inbox', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Deny' }));
 
     await waitFor(() =>
-      expect(resumeRun).toHaveBeenCalledWith(RUN_ID, [
-        { toolCallId: 'call-1', decision: 'rejected' },
-        { toolCallId: 'call-2', decision: 'rejected' },
-      ]),
+      expect(resumeRun).toHaveBeenCalledWith(
+        RUN_ID,
+        [
+          { toolCallId: 'call-1', decision: 'rejected' },
+          { toolCallId: 'call-2', decision: 'rejected' },
+        ],
+        {},
+      ),
     );
   });
 
@@ -134,6 +142,27 @@ describe('Tasks pending-approval inbox', () => {
     await waitFor(() =>
       expect(notifyError).toHaveBeenCalledWith(
         'This approval expired and the task can no longer continue from it.',
+      ),
+    );
+  });
+
+  it('sends typed guidance with the decision so the run can be redirected without stopping it', async () => {
+    const resumeRun = vi.fn(async () => undefined);
+    renderTasks(client({ resumeRun }));
+
+    fireEvent.change(await screen.findByTestId(`task-approval-guidance-${RUN_ID}`), {
+      target: { value: '  Open the issue against the docs repo instead.  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() =>
+      expect(resumeRun).toHaveBeenCalledWith(
+        RUN_ID,
+        [
+          { toolCallId: 'call-1', decision: 'approved' },
+          { toolCallId: 'call-2', decision: 'approved' },
+        ],
+        { guidance: 'Open the issue against the docs repo instead.' },
       ),
     );
   });

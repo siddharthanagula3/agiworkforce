@@ -48,7 +48,7 @@ export function SendButton({
         className={cn(
           'rounded-full p-2 transition-all duration-200',
           disabled
-            ? 'bg-terra-cotta-500/50 text-white/70 cursor-not-allowed'
+            ? 'bg-muted text-muted-foreground cursor-not-allowed'
             : 'bg-terra-cotta-500 text-white hover:bg-terra-cotta-600 shadow-md',
           className,
         )}

@@ -169,3 +169,48 @@ describe('ResearchActivity retry', () => {
     expect(onRetry).not.toHaveBeenCalled();
   });
 });
+
+describe('ResearchActivity plan approval', () => {
+  const paused = () =>
+    research({
+      phase: 'awaiting_approval',
+      label: 'Review the plan to start searching',
+      steps: [
+        { id: 'plan-1', type: 'search', description: 'alpha query', status: 'pending' },
+        { id: 'plan-2', type: 'search', description: 'beta query', status: 'pending' },
+      ],
+    });
+
+  it('offers Start and Cancel for a plan waiting on the user', async () => {
+    const onPlanDecision = vi.fn();
+    render(
+      <ResearchActivity isStreaming={false} research={paused()} onPlanDecision={onPlanDecision} />,
+    );
+
+    expect(screen.getByText('alpha query')).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId('research-plan-start'));
+    expect(onPlanDecision).toHaveBeenCalledWith('start');
+
+    await userEvent.click(screen.getByTestId('research-plan-cancel'));
+    expect(onPlanDecision).toHaveBeenCalledWith('cancel');
+  });
+
+  it('never offers a decision for a run that is not waiting', () => {
+    render(
+      <ResearchActivity
+        isStreaming
+        research={research({ phase: 'searching' })}
+        onPlanDecision={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('research-plan-start')).toBeNull();
+    expect(screen.queryByTestId('research-plan-cancel')).toBeNull();
+  });
+
+  it('renders no decision controls when the surface cannot send', () => {
+    render(<ResearchActivity isStreaming={false} research={paused()} />);
+
+    expect(screen.queryByTestId('research-plan-start')).toBeNull();
+  });
+});

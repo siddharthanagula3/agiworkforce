@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   voiceTtsSpeak,
@@ -8,7 +7,7 @@ import {
 } from '../api/voice';
 import { getPersistedVoicePersonaParams } from '../features/settings/voicePersonaParams';
 
-function stripMarkdown(text: string): string {
+export function stripMarkdownForSpeech(text: string): string {
   return (
     text
       // Remove fenced code blocks entirely (don't read raw code)
@@ -66,7 +65,7 @@ export function useTTS(): UseTTSReturn {
         return;
       }
 
-      const clean = stripMarkdown(text);
+      const clean = stripMarkdownForSpeech(text);
       if (!clean) return;
 
       window.speechSynthesis.cancel();
@@ -95,7 +94,7 @@ export function useTTS(): UseTTSReturn {
 
   const speakNative = useCallback(
     async (text: string) => {
-      const clean = stripMarkdown(text);
+      const clean = stripMarkdownForSpeech(text);
       if (!clean) return;
       setIsSpeaking(true);
       try {
@@ -111,7 +110,7 @@ export function useTTS(): UseTTSReturn {
 
   const speakWithBargeIn = useCallback(
     async (text: string) => {
-      const clean = stripMarkdown(text);
+      const clean = stripMarkdownForSpeech(text);
       if (!clean) return;
       setIsSpeaking(true);
       try {

@@ -80,9 +80,9 @@ import {
 function SectionSkeleton() {
   return (
     <div className="flex animate-pulse flex-col gap-6">
-      <div className="h-6 w-48 rounded" style={{ background: 'rgba(255,255,255,0.06)' }} />
-      <div className="h-4 w-80 rounded" style={{ background: 'rgba(255,255,255,0.04)' }} />
-      <div className="h-40 w-full rounded-xl" style={{ background: 'rgba(255,255,255,0.04)' }} />
+      <div className="h-6 w-48 rounded bg-foreground/10" />
+      <div className="h-4 w-80 rounded bg-foreground/[0.07]" />
+      <div className="h-40 w-full rounded-xl bg-foreground/[0.07]" />
     </div>
   );
 }

@@ -1,8 +1,13 @@
-
 import { apiClient } from './api';
 import { APIException, type APIResponse as BaseAPIResponse } from '@shared/stores/query-client';
 import { toast } from 'sonner';
 import { isRetryableError, getRetryDelay, getErrorMessage } from './error-utils';
+import {
+  RetryStoppedError,
+  classifyRetryError,
+  retryBudgetFor,
+  runWithRetryPolicy,
+} from '@agiworkforce/utils/retry-policy';
 
 export type { APIResponse } from '@shared/stores/query-client';
 
@@ -93,107 +98,49 @@ export class EnhancedAPIClient {
   private baseClient = apiClient;
   private maxRetries = 3;
 
+  private async send<T>(
+    operation: string,
+    idempotent: boolean,
+    call: () => Promise<BaseAPIResponse<T>>,
+  ): Promise<BaseAPIResponse<T>> {
+    let lastError: APIException | null = null;
+    try {
+      return await runWithRetryPolicy(call, {
+        operation,
+        idempotent,
+        maxAttempts: this.maxRetries,
+        budget: retryBudgetFor(`web-api:${operation}`),
+        classify: (error) => {
+          lastError = error as APIException;
+          errorHandlers.handleError(lastError);
+          const classification = classifyRetryError(error);
+          if (errorHandlers.shouldRetry(lastError)) return classification;
+          return { ...classification, disposition: 'terminal', reason: 'handler-declined' };
+        },
+      });
+    } catch (error) {
+      if (error instanceof RetryStoppedError) throw lastError ?? error.lastError;
+      throw error;
+    }
+  }
+
   async request<T = unknown>(
     endpoint: string,
     _options: RequestInit = {},
   ): Promise<BaseAPIResponse<T>> {
-    let lastError: APIException | null = null;
-
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const response = await this.baseClient.get<T>(endpoint);
-        return response;
-      } catch (error) {
-        lastError = error as APIException;
-
-        errorHandlers.handleError(lastError);
-
-        if (attempt < this.maxRetries && errorHandlers.shouldRetry(lastError)) {
-          const delay = errorHandlers.getRetryDelay(lastError, attempt);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          continue;
-        }
-
-        throw lastError;
-      }
-    }
-
-    throw lastError || new Error('Request failed');
+    return this.send('get', true, () => this.baseClient.get<T>(endpoint));
   }
 
   async post<T = unknown>(endpoint: string, data?: unknown): Promise<BaseAPIResponse<T>> {
-    let lastError: APIException | null = null;
-
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const response = await this.baseClient.post<T>(endpoint, data);
-        return response;
-      } catch (error) {
-        lastError = error as APIException;
-
-        errorHandlers.handleError(lastError);
-
-        if (attempt < this.maxRetries && errorHandlers.shouldRetry(lastError)) {
-          const delay = errorHandlers.getRetryDelay(lastError, attempt);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          continue;
-        }
-
-        throw lastError;
-      }
-    }
-
-    throw lastError || new Error('Request failed');
+    return this.send('post', false, () => this.baseClient.post<T>(endpoint, data));
   }
 
   async put<T = unknown>(endpoint: string, data?: unknown): Promise<BaseAPIResponse<T>> {
-    let lastError: APIException | null = null;
-
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const response = await this.baseClient.put<T>(endpoint, data);
-        return response;
-      } catch (error) {
-        lastError = error as APIException;
-
-        errorHandlers.handleError(lastError);
-
-        if (attempt < this.maxRetries && errorHandlers.shouldRetry(lastError)) {
-          const delay = errorHandlers.getRetryDelay(lastError, attempt);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          continue;
-        }
-
-        throw lastError;
-      }
-    }
-
-    throw lastError || new Error('Request failed');
+    return this.send('put', true, () => this.baseClient.put<T>(endpoint, data));
   }
 
   async delete<T = unknown>(endpoint: string): Promise<BaseAPIResponse<T>> {
-    let lastError: APIException | null = null;
-
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const response = await this.baseClient.delete<T>(endpoint);
-        return response;
-      } catch (error) {
-        lastError = error as APIException;
-
-        errorHandlers.handleError(lastError);
-
-        if (attempt < this.maxRetries && errorHandlers.shouldRetry(lastError)) {
-          const delay = errorHandlers.getRetryDelay(lastError, attempt);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          continue;
-        }
-
-        throw lastError;
-      }
-    }
-
-    throw lastError || new Error('Request failed');
+    return this.send('delete', true, () => this.baseClient.delete<T>(endpoint));
   }
 }
 

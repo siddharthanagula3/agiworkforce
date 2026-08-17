@@ -1,4 +1,3 @@
-
 import type { InteractiveCard } from '@agiworkforce/types';
 import type {
   ArtifactManifest,
@@ -99,10 +98,13 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   videoUrl?: string;
   videoThumbnailUrl?: string;
   isGeneratingVideo?: boolean;
-  videoGenStatus?: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
+  videoGenStatus?: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout' | 'cancelled';
   videoGenProgress?: number;
   videoGenError?: string;
   videoGenPrompt?: string;
+  videoTaskId?: string;
+  videoGenCancelRequested?: boolean;
+  videoGenCancelError?: string;
   citations?: Array<{ url: string; title?: string; snippet?: string }>;
   interactiveCards?: InteractiveCard[];
   isQueued?: boolean;

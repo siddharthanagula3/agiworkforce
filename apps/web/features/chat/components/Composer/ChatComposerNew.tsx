@@ -69,7 +69,8 @@ import {
 import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
 import {
   BUILT_IN_SLASH_COMMANDS,
-  largePasteToFile,
+  decideComposerPaste,
+  matchMentionQuery,
   SendPreview,
   useCapability,
 } from '@agiworkforce/unified-chat';
@@ -496,6 +497,7 @@ const ChatComposerNewComponent = ({
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
   const { skills: availableSkills, loading: skillsLoading, error: skillsError } = useSkillsList();
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -1213,31 +1215,16 @@ const ChatComposerNewComponent = ({
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       if (disabled || trialExhausted) return;
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const pasted: File[] = [];
-      for (let i = 0; i < items.length; i += 1) {
-        const item = items[i];
-        if (!item || item.kind !== 'file') continue;
-        const file = item.getAsFile();
-        if (file) pasted.push(file);
-      }
-      if (pasted.length > 0) {
-        // Only swallow the event once a real file paste was captured, so pasting
-        // ordinary text still inserts text.
-        e.preventDefault();
-        addChatAttachments(pasted);
-        return;
-      }
-      // COMPOSER-002: a book-sized paste is a document, not a message. Shared
-      // threshold and naming with the desktop composer and mobile so the same
-      // clipboard produces the same attachment on every surface.
-      const asFile = largePasteToFile(e.clipboardData?.getData('text/plain') ?? '', {
+      // COMPOSER-002/UI-81: the paste decision itself is shared, so the same
+      // clipboard produces the same attachment on web, the unified composer and
+      // the extension. `text` leaves the event alone so ordinary text still
+      // inserts as text.
+      const decision = decideComposerPaste(e.clipboardData, {
         existingFileNames: attachments.map((file) => file.name),
       });
-      if (!asFile) return;
+      if (decision.kind === 'text') return;
       e.preventDefault();
-      addChatAttachments([asFile]);
+      addChatAttachments(decision.kind === 'files' ? decision.files : [decision.file]);
     },
     [addChatAttachments, attachments, disabled, trialExhausted],
   );
@@ -1412,53 +1399,101 @@ const ChatComposerNewComponent = ({
     }
     setShowSlashMenu(false);
 
-    // @mention detection
-    const textBeforeCursor = value.substring(0, cursorPos);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-    if (lastAtIndex !== -1) {
-      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-        setShowMentions(true);
-        setMentionQuery(textAfterAt);
-        setMentionStartIndex(lastAtIndex);
-        return;
-      }
+    const mention = matchMentionQuery(value, cursorPos);
+    if (mention) {
+      setShowMentions(true);
+      setMentionQuery(mention.query);
+      setMentionStartIndex(mention.startIndex);
+      setMentionIndex(0);
+      return;
     }
     setShowMentions(false);
   }, []);
 
-  const filteredSkills = availableSkills
-    .filter(
-      (skill) =>
-        skill.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
-        skill.description.toLowerCase().includes(mentionQuery.toLowerCase()),
-    )
-    .slice(0, 12);
+  const mentionMatches = useCallback(
+    (haystack: string) => {
+      return haystack.toLowerCase().includes(mentionQuery.toLowerCase());
+    },
+    [mentionQuery],
+  );
+
+  const filteredSkills = useMemo(
+    () =>
+      availableSkills
+        .filter((skill) => mentionMatches(skill.name) || mentionMatches(skill.description))
+        .slice(0, 12),
+    [availableSkills, mentionMatches],
+  );
+
+  // Projects only join the mention menu on the surface state where the scope
+  // chip is rendered — elsewhere `onSelectProject` is cleared again on send, so
+  // an @project row would be a control the viewer sees do nothing.
+  const projectScopeSelectable = Boolean(
+    projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && !imageMode,
+  );
+
+  const filteredMentionProjects = useMemo(
+    () =>
+      projectScopeSelectable && projectPicker
+        ? projectPicker.projects.filter((project) => mentionMatches(project.name)).slice(0, 8)
+        : [],
+    [projectScopeSelectable, projectPicker, mentionMatches],
+  );
+
+  const mentionItems = useMemo(
+    () => [
+      ...filteredSkills.map((skill) => ({ kind: 'skill' as const, skill })),
+      ...filteredMentionProjects.map((project) => ({ kind: 'project' as const, project })),
+    ],
+    [filteredSkills, filteredMentionProjects],
+  );
+
+  const activeMentionIndex =
+    mentionItems.length === 0 ? -1 : Math.min(mentionIndex, mentionItems.length - 1);
+
+  const replaceMentionToken = useCallback(() => {
+    if (mentionStartIndex === -1) return;
+    const before = message.substring(0, mentionStartIndex);
+    const cursorPos = textareaRef.current?.selectionStart || message.length;
+    const after = message.substring(cursorPos);
+    // The `@query` is only a picker affordance and must not leak into the
+    // user's prompt. Keep the text on either side while normalizing only the
+    // whitespace at the removed token boundary.
+    const left = before.replace(/[ \t]+$/, '');
+    const right = after.replace(/^[ \t]+/, '');
+    const newMessage = left && right ? `${left} ${right}` : left || right;
+    const nextCursor = left ? left.length + (right ? 1 : 0) : 0;
+    setMessage(newMessage);
+    setShowMentions(false);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    }, 0);
+  }, [message, mentionStartIndex]);
 
   const handleMentionSelect = useCallback(
     (skill: SkillItem) => {
-      if (mentionStartIndex === -1) return;
-      const before = message.substring(0, mentionStartIndex);
-      const cursorPos = textareaRef.current?.selectionStart || message.length;
-      const after = message.substring(cursorPos);
-      // Selecting a Skill commits it to composer state; the `@query` is only
-      // a picker affordance and must not leak into the user's prompt. Keep the
-      // text on either side while normalizing only the whitespace at the
-      // removed token boundary.
-      const left = before.replace(/[ \t]+$/, '');
-      const right = after.replace(/^[ \t]+/, '');
-      const newMessage = left && right ? `${left} ${right}` : left || right;
-      const nextCursor = left ? left.length + (right ? 1 : 0) : 0;
-      setMessage(newMessage);
+      replaceMentionToken();
       setSelectedSkillName(skill.name);
-      setShowMentions(false);
-      setTimeout(() => {
-        textareaRef.current?.focus();
-        textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
-      }, 0);
     },
-    [message, mentionStartIndex, setSelectedSkillName],
+    [replaceMentionToken, setSelectedSkillName],
   );
+
+  const handleMentionProjectSelect = useCallback(
+    (projectId: string) => {
+      replaceMentionToken();
+      projectPicker?.onSelectProject(projectId);
+      clearFolder();
+    },
+    [replaceMentionToken, projectPicker, clearFolder],
+  );
+
+  const commitActiveMention = useCallback(() => {
+    const item = mentionItems[activeMentionIndex];
+    if (!item) return;
+    if (item.kind === 'skill') handleMentionSelect(item.skill);
+    else handleMentionProjectSelect(item.project.id);
+  }, [mentionItems, activeMentionIndex, handleMentionSelect, handleMentionProjectSelect]);
 
   /**
    * AUDIT-FIX CMP-8/CMP-9: resolve a slash command against what the selected
@@ -2108,16 +2143,31 @@ const ChatComposerNewComponent = ({
         }
       }
 
+      // The mention menu only owns navigation keys while it actually has rows
+      // to navigate; an empty menu must never swallow Enter and strand a
+      // message the user meant to send.
+      if (showMentions && mentionItems.length > 0 && !e.nativeEvent.isComposing) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setMentionIndex((prev) => (prev >= mentionItems.length - 1 ? 0 : prev + 1));
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setMentionIndex((prev) => (prev <= 0 ? mentionItems.length - 1 : prev - 1));
+          return;
+        }
+        if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+          e.preventDefault();
+          commitActiveMention();
+          return;
+        }
+      }
+
       // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
       // convention). Cmd/Ctrl+Enter also sends. Never submit while a picker owns
-      // Enter (slash/mentions) or mid-IME-composition (e.g. CJK candidates).
-      if (
-        e.key === 'Enter' &&
-        !e.shiftKey &&
-        !e.nativeEvent.isComposing &&
-        !showMentions &&
-        !showSlashMenu
-      ) {
+      // Enter (slash) or mid-IME-composition (e.g. CJK candidates).
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !showSlashMenu) {
         e.preventDefault();
         handleSubmit();
       }
@@ -2128,7 +2178,7 @@ const ChatComposerNewComponent = ({
         setShowSlashMenu(false);
       }
     },
-    [handleSubmit, showMentions, showSlashMenu],
+    [handleSubmit, showMentions, showSlashMenu, mentionItems.length, commitActiveMention],
   );
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
@@ -2257,7 +2307,7 @@ const ChatComposerNewComponent = ({
       {/* Selected Skill Badge */}
       {selectedSkillName && (
         <div className="mb-2 flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300">
             /{selectedSkillName}
             <button
               onClick={() => setSelectedSkillName(null)}
@@ -2438,6 +2488,7 @@ const ChatComposerNewComponent = ({
               mediaAvailabilityStatus === 'ready' &&
               availableImageModels.length > 0
             }
+            codeCommandAvailable={modelSupportsCodeExecution}
             onClose={() => setShowSlashMenu(false)}
           />
         )}
@@ -2449,7 +2500,7 @@ const ChatComposerNewComponent = ({
           contentRef={mentionsRef}
           className="w-72"
         >
-          <div className="p-1.5">
+          <div className="p-1.5" role="listbox" aria-label="Mentions">
             <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Skills
             </div>
@@ -2462,11 +2513,18 @@ const ChatComposerNewComponent = ({
             ) : filteredSkills.length === 0 ? (
               <p className="px-3 py-2 text-xs text-muted-foreground">No matching skills.</p>
             ) : (
-              filteredSkills.map((skill) => (
+              filteredSkills.map((skill, i) => (
                 <button
                   key={skill.name}
+                  type="button"
+                  role="option"
+                  aria-selected={i === activeMentionIndex}
+                  onMouseEnter={() => setMentionIndex(i)}
                   onClick={() => handleMentionSelect(skill)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                    i === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
+                  )}
                 >
                   <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <span className="text-[10px] font-bold">
@@ -2481,6 +2539,40 @@ const ChatComposerNewComponent = ({
                   </div>
                 </button>
               ))
+            )}
+
+            {projectScopeSelectable && (
+              <>
+                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Projects
+                </div>
+                {filteredMentionProjects.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">No matching projects.</p>
+                ) : (
+                  filteredMentionProjects.map((project, i) => {
+                    const index = filteredSkills.length + i;
+                    return (
+                      <button
+                        key={project.id}
+                        type="button"
+                        role="option"
+                        aria-selected={index === activeMentionIndex}
+                        onMouseEnter={() => setMentionIndex(index)}
+                        onClick={() => handleMentionProjectSelect(project.id)}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                          index === activeMentionIndex ? 'bg-muted/70' : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {project.name}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </>
             )}
           </div>
         </AnchoredComposerMenu>
@@ -3122,6 +3214,11 @@ const ChatComposerNewComponent = ({
                         closeMenu();
                       }}
                       disabled={disabled || !modelSupportsCodeExecution}
+                      title={
+                        !modelSupportsCodeExecution
+                          ? "Run code isn't available for this model on this deployment. Choose Auto or a model that can run code."
+                          : undefined
+                      }
                     />
 
                     {/* 8b. Managed Office creation — server-owned DOCX/PPTX bytes,
@@ -3874,8 +3971,9 @@ const ChatComposerNewComponent = ({
         {/* Accuracy caveat, in the position ChatGPT and Claude both use. The
             explicit Article 50(1) "you are interacting with an AI system"
             sentence was removed on 2026-08-14 in reliance on the regulation's
-            obviousness carve-out — lib/compliance/ai-act.ts carries the
-            reasoning and the list of what must NOT be trimmed with it. */}
+            obviousness carve-out, which counsel has NOT reviewed — see
+            ARTICLE_50_1_WEB_CARVE_OUT in lib/compliance/ai-act.ts. This
+            disclaimer is what deliberately stayed; do not trim it too. */}
         <span data-testid="ai-accuracy-disclaimer">{AI_ACCURACY_DISCLAIMER}</span>
         <span aria-hidden="true">·</span>
         <Link

@@ -147,6 +147,12 @@ export interface ModelReasoning {
   rejectsSamplingParameters?: boolean;
   thinkingBudget?: ReasoningBudget;
   request?: ReasoningRequestPaths;
+  /**
+   * Authored provider capability with no transport behind it: every field below is
+   * `endpoint: 'responses'`, and no surface in this repo speaks the Responses API —
+   * chat goes out over `/chat/completions`. Nothing may read these into an outgoing
+   * request until a Responses transport exists, or the provider rejects the call.
+   */
   ultraMode?: ReasoningUltraMode | boolean;
   proMode?: { param: string; value: string; endpoint: 'responses' };
   persistentReasoning?: {
@@ -822,6 +828,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowMCP: 'one_custom_remote',
     allowDeepResearch: false,
     allowVoice: true,
+    voiceMinutesPerMonth: 30,
     tokenCapPerMonth: null,
     messagesPerDayCap: null,
   },
@@ -1597,6 +1604,79 @@ export function getModelEffortOptions(modelId: string | null | undefined): reado
   const request = reasoning.request;
   if (!request?.effortPath && !request?.responsesEffortPath) return [];
   return reasoning.supportedEfforts ?? [];
+}
+
+const EFFORT_LADDER: readonly Effort[] = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+
+export interface EffortEntitlement {
+  allowed: Effort[];
+  gated: Effort[];
+  cap?: Effort;
+}
+
+/**
+ * Reasoning effort above a model's default is the same compute escalation that
+ * `manualModelSelection` already gates, so tiers without it stay at the default.
+ */
+export function splitEffortsByEntitlement(
+  reasoning: ModelReasoning,
+  tier: string | null | undefined,
+): EffortEntitlement {
+  const supported = reasoning.supportedEfforts ?? [];
+  const ungated: EffortEntitlement = { allowed: [...supported], gated: [] };
+  if (supported.length === 0 || canAccessManualModelSelection(tier)) return ungated;
+
+  const cap = reasoning.defaultEffort;
+  if (!cap) return ungated;
+  const capRank = EFFORT_LADDER.indexOf(cap);
+  if (capRank < 0) return ungated;
+
+  const allowed = supported.filter((effort) => EFFORT_LADDER.indexOf(effort) <= capRank);
+  const gated = supported.filter((effort) => EFFORT_LADDER.indexOf(effort) > capRank);
+  if (allowed.length === 0) return ungated;
+  return { allowed, gated, cap };
+}
+
+export function clampEffortToEntitlement(
+  modelId: string | null | undefined,
+  requested: Effort | undefined,
+  tier: string | null | undefined,
+): Effort | undefined {
+  if (!requested) return requested;
+  const { allowed, cap } = splitEffortsByEntitlement(getModelReasoning(modelId), tier);
+  if (allowed.length === 0 || allowed.includes(requested)) return requested;
+  return cap ?? allowed[allowed.length - 1];
+}
+
+export interface ReasoningDepthIndicator {
+  filled: number;
+  scale: number;
+}
+
+const reasoningDotsScale = (() => {
+  let max = 0;
+  for (const metadata of Object.values(modelsCatalog.models)) {
+    const dots = metadata.reasoningDots;
+    if (typeof dots === 'number' && Number.isFinite(dots) && dots > max) max = Math.floor(dots);
+  }
+  return max;
+})();
+
+export function getReasoningDepthIndicator(
+  modelId: string | null | undefined,
+): ReasoningDepthIndicator | null {
+  if (reasoningDotsScale <= 0) return null;
+  const dots = getModelMetadataById(modelId)?.reasoningDots;
+  if (typeof dots !== 'number' || !Number.isFinite(dots) || dots <= 0) return null;
+  return { filled: Math.min(Math.floor(dots), reasoningDotsScale), scale: reasoningDotsScale };
 }
 
 export function resolveModelEffort(

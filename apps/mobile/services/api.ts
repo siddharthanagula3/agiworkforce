@@ -201,11 +201,16 @@ function minimumTierForPlanUpgradeFeature(
   return 'basic';
 }
 
-async function request<T>(
+interface SentRequest {
+  response: Response;
+  release: () => void;
+}
+
+async function sendRequest(
   path: string,
-  init: RequestInit = {},
-  options: RequestOptions = {},
-): Promise<T> {
+  init: RequestInit,
+  options: RequestOptions,
+): Promise<SentRequest> {
   const accountGeneration = _accountGeneration;
   const headers = {
     'Content-Type': 'application/json',
@@ -217,6 +222,11 @@ async function request<T>(
   const timeout = options.timeout ?? TIMEOUTS.DEFAULT;
 
   const timeoutId = setTimeout(() => controller.abort(), timeout);
+  const release = () => clearTimeout(timeoutId);
+
+  const callerSignals = [options.signal, init.signal].filter((signal): signal is AbortSignal =>
+    Boolean(signal),
+  );
 
   try {
     const response = await guardedFetch(`${options.baseUrl ?? API_URL}${path}`, {
@@ -226,23 +236,61 @@ async function request<T>(
         ...(options.headers ?? {}),
         ...(init.headers as Record<string, string>),
       },
-      signal: options.signal
-        ? combineAbortSignals([options.signal, controller.signal])
-        : controller.signal,
+      signal:
+        callerSignals.length > 0
+          ? combineAbortSignals([...callerSignals, controller.signal])
+          : controller.signal,
     });
     assertApiAccountGeneration(accountGeneration);
 
     if (response.status === 401 && !options._skipAuthRetry) {
       const refreshed = await tryRefreshToken();
       assertApiAccountGeneration(accountGeneration);
+      release();
       if (refreshed) {
-        return request<T>(path, init, { ...options, _skipAuthRetry: true });
+        return sendRequest(path, init, { ...options, _skipAuthRetry: true });
       }
 
       handleUnrecoverableAuth();
       throw new Error('HTTP 401: Session expired. Please sign in again.');
     }
 
+    return { response, release };
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+
+const BODYLESS_STATUSES = new Set([204, 205, 304]);
+
+export async function apiFetch(
+  path: string,
+  init: RequestInit = {},
+  options: RequestOptions = {},
+): Promise<Response> {
+  const { response, release } = await sendRequest(path, init, options);
+  try {
+    const body = BODYLESS_STATUSES.has(response.status) ? '' : await response.text();
+    return new Response(body.length > 0 ? body : null, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  } finally {
+    release();
+  }
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  options: RequestOptions = {},
+): Promise<T> {
+  const accountGeneration = _accountGeneration;
+  const { response, release } = await sendRequest(path, init, options);
+
+  try {
     if (response.status === 429) {
       const bodyText = await response.text();
       assertApiAccountGeneration(accountGeneration);
@@ -346,7 +394,7 @@ async function request<T>(
     assertApiAccountGeneration(accountGeneration);
     return result;
   } finally {
-    clearTimeout(timeoutId);
+    release();
   }
 }
 

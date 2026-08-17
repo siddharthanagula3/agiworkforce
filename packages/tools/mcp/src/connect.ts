@@ -154,13 +154,21 @@ function toSafeServerName(name: string): string {
     .slice(0, 48);
 }
 
+export interface McpCallToolOptions {
+  signal?: AbortSignal;
+}
+
 export interface McpServerHandle {
   serverName: string;
   safeServerName: string;
   catalog: McpServerCatalog;
   client: Client;
   protocolEra: 'modern' | 'legacy';
-  callTool(name: string, args: Record<string, unknown>): Promise<McpCallToolResult>;
+  callTool(
+    name: string,
+    args: Record<string, unknown>,
+    options?: McpCallToolOptions,
+  ): Promise<McpCallToolResult>;
   close(): Promise<void>;
 }
 
@@ -253,8 +261,15 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     catalog: serverCatalog,
     client,
     protocolEra,
-    async callTool(name: string, args: Record<string, unknown>): Promise<McpCallToolResult> {
-      const res = await client.callTool({ name, arguments: args });
+    async callTool(
+      name: string,
+      args: Record<string, unknown>,
+      options?: McpCallToolOptions,
+    ): Promise<McpCallToolResult> {
+      const res = await client.callTool(
+        { name, arguments: args },
+        options?.signal ? { signal: options.signal } : undefined,
+      );
 
       if (isInputRequiredResult(res)) {
         return {

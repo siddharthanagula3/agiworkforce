@@ -1,9 +1,10 @@
-
 import type { StreamChunk } from '@agiworkforce/types';
 import type { AgentEvent, AgentEventStopReason, JsonValue } from '@agiworkforce/types/protocol';
 
+type StreamStopReason = Extract<StreamChunk, { type: 'stop' }>['reason'];
+
 const STOP_REASON_TO_AGENT_EVENT: Record<
-  Extract<StreamChunk, { type: 'stop' }>['reason'],
+  Exclude<StreamStopReason, 'pause_turn'>,
   AgentEventStopReason
 > = {
   end_turn: 'end-turn',
@@ -15,10 +16,7 @@ const STOP_REASON_TO_AGENT_EVENT: Record<
   error: 'error',
 };
 
-const AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK: Record<
-  AgentEventStopReason,
-  Extract<StreamChunk, { type: 'stop' }>['reason']
-> = {
+const AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK: Record<AgentEventStopReason, StreamStopReason> = {
   'end-turn': 'end_turn',
   'max-tokens': 'max_tokens',
   'tool-use': 'tool_use',
@@ -68,7 +66,9 @@ export function streamChunkToAgentEvent(chunk: StreamChunk): AgentEvent | null {
         retryAfterSeconds: chunk.retryAfterSeconds,
       };
     case 'stop':
-      return { type: 'stop', reason: STOP_REASON_TO_AGENT_EVENT[chunk.reason] };
+      return chunk.reason === 'pause_turn'
+        ? { type: 'lifecycle', phase: 'paused' }
+        : { type: 'stop', reason: STOP_REASON_TO_AGENT_EVENT[chunk.reason] };
     case 'citation-delta':
     case 'vendor-raw':
     case 'response-meta':

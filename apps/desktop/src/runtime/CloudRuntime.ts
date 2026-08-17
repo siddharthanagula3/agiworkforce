@@ -75,6 +75,7 @@ import {
   createDesktopCloudAgentRunClient,
   createDesktopCloudAgentRunCleanupClient,
   generateCloudImage,
+  generateCloudVideo,
   sendCloudMessage,
   CLOUD_API_BASE_URL,
   type DesktopCloudRunCleanupCredential,
@@ -262,7 +263,7 @@ export class CloudRuntime implements ChatRuntime {
 
   readonly supportsImageGeneration = true;
 
-  readonly supportsVideoGeneration = false;
+  readonly supportsVideoGeneration = true;
 
   readonly supportsComputerUse = false;
 
@@ -542,6 +543,117 @@ export class CloudRuntime implements ChatRuntime {
         assistantMessageId,
         '',
         selection.model,
+        undefined,
+        undefined,
+        undefined,
+        {
+          finishReason: 'stop',
+          toolCalls: [completedToolCall],
+          generatedFiles: [file],
+        },
+      );
+    } catch {
+      return;
+    }
+    this.emitForConversation(conversationId, { type: 'done', finishReason: 'stop' });
+  }
+
+  private async sendManagedVideoTurn(
+    conversationId: string,
+    prompt: string,
+    userMessageId: string,
+    controller: AbortController,
+  ): Promise<void> {
+    const assistantMessageId = uuidv7();
+    const toolCallId = uuidv7();
+    const toolName = 'media_generate_video';
+    const args = { prompt };
+    const startedAt = Date.now();
+
+    this.emitForConversation(conversationId, {
+      type: 'tool_call',
+      toolCall: { id: toolCallId, name: toolName, args },
+    });
+
+    let generated: Awaited<ReturnType<typeof generateCloudVideo>>;
+    try {
+      generated = await generateCloudVideo({
+        prompt,
+        idempotencyKey: createManagedMediaIdempotencyKey({
+          surface: 'desktop',
+          operation: 'video',
+          operationId: userMessageId,
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const message = error instanceof Error ? error.message : String(error);
+      const failedToolCall = {
+        id: toolCallId,
+        name: toolName,
+        args,
+        status: 'failed' as const,
+        error: message,
+      };
+      this.emitForConversation(conversationId, {
+        type: 'tool_result',
+        toolCallId,
+        error: message,
+        durationMs: Date.now() - startedAt,
+      });
+      try {
+        await this.persistAssistantTurn(
+          conversationId,
+          assistantMessageId,
+          '',
+          getRoutingSlotModel('video_generation'),
+          undefined,
+          undefined,
+          undefined,
+          failedMessageProjection({ toolCalls: [failedToolCall] }, message),
+        );
+      } catch {
+        // persistAssistantTurn already emitted the scoped persistence failure.
+      }
+      this.emitForConversation(conversationId, { type: 'error', error: message });
+      return;
+    }
+
+    if (controller.signal.aborted) return;
+
+    const file: GeneratedFileEntry = {
+      id: generated.id,
+      fileName: `generated-video-${generated.id.slice(0, 8)}.mp4`,
+      mimeType: 'video/mp4',
+      uri: generated.uri,
+      byteCount: 0,
+      kind: 'video',
+      surface: 'file',
+      previewable: true,
+    };
+    const resultLabel = `Generated with ${generated.provider} (${generated.model})`;
+    const completedToolCall = {
+      id: toolCallId,
+      name: toolName,
+      args,
+      status: 'completed' as const,
+      result: resultLabel,
+    };
+    this.emitForConversation(conversationId, {
+      type: 'tool_result',
+      toolCallId,
+      result: resultLabel,
+      durationMs: Date.now() - startedAt,
+    });
+    this.emitForConversation(conversationId, { type: 'generated_files', files: [file] });
+
+    try {
+      await this.persistAssistantTurn(
+        conversationId,
+        assistantMessageId,
+        '',
+        generated.model,
         undefined,
         undefined,
         undefined,
@@ -899,10 +1011,21 @@ export class CloudRuntime implements ChatRuntime {
       return;
     }
 
+    const canGenerateMedia = !isContinuation && uploadedAttachments.length === 0;
+
+    if (canGenerateMedia && options?.mediaMode === 'video') {
+      try {
+        await this.sendManagedVideoTurn(conversationId, content, userMessageId, controller);
+      } finally {
+        clearController();
+      }
+      return;
+    }
+
     const shouldGenerateImage =
-      !isContinuation &&
-      uploadedAttachments.length === 0 &&
-      classifyTaskLocally(content, []).type === 'image_generation';
+      canGenerateMedia &&
+      (options?.mediaMode === 'image' ||
+        classifyTaskLocally(content, []).type === 'image_generation');
     if (shouldGenerateImage) {
       try {
         await this.sendManagedImageTurn(conversationId, content, userMessageId, controller);

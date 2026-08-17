@@ -39,6 +39,7 @@ import {
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import type { V3Mode } from './DesktopShellV3';
 import { UpdatePill } from '../updates';
+import { NotificationCenter } from '../notifications';
 import { AccountMenu } from './AccountMenu';
 import { AgiMark, shortcutLabel } from '@agiworkforce/ui';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
@@ -960,6 +961,7 @@ export function Sidebar({
               </div>
             )}
           </button>
+          {!collapsed && <NotificationCenter />}
           {!collapsed && (
             <button
               type="button"

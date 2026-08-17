@@ -15,7 +15,11 @@ import {
 import { cn } from '@/lib/utils';
 import { useShallow } from 'zustand/react/shallow';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
-import { useMemoryStore } from '@/stores/memoryStore';
+import { isMemoryCategory, useMemoryStore } from '@/stores/memoryStore';
+
+function toMemoryCategory(value: unknown): MemoryCategory {
+  return isMemoryCategory(value) ? value : 'fact';
+}
 
 export type ImportSource = 'chatgpt' | 'claude' | 'custom';
 
@@ -70,7 +74,7 @@ function parseChatGptJson(raw: string): ParsedMemory[] {
         .map((item) => ({
           topic: String(item['title'] ?? item['name'] ?? 'Imported memory').slice(0, 120),
           content: String(item['content'] ?? item['text'] ?? item['value'] ?? JSON.stringify(item)),
-          category: String(item['category'] ?? item['type'] ?? 'fact') as MemoryCategory,
+          category: toMemoryCategory(item['category'] ?? item['type']),
           importance: 5,
           source: 'ChatGPT',
         }))
@@ -92,7 +96,7 @@ function parseClaudeJson(raw: string): ParsedMemory[] {
         .map((item) => ({
           topic: String(item.topic ?? 'Imported memory').slice(0, 120),
           content: String(item.content ?? '').trim(),
-          category: (item.category as MemoryCategory) ?? 'fact',
+          category: toMemoryCategory(item.category),
           importance: typeof item.importance === 'number' ? item.importance : 5,
           source: 'Claude',
         }))

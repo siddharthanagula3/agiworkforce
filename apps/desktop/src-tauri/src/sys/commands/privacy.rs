@@ -83,103 +83,100 @@ pub async fn privacy_export_data(state: State<'_, AppDatabase>) -> Result<String
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
+    export_local_user_data(&conn)
+}
+
+const REDACTED_EXPORT_VALUE: &str = "[redacted]";
+
+/// Column-name fragments that mark a value as a credential rather than personal
+/// data. A portability export is written to an unprotected file, so these are
+/// named in the export but never carried in it.
+const SECRET_COLUMN_MARKERS: &[&str] = &[
+    "password",
+    "secret",
+    "token",
+    "api_key",
+    "apikey",
+    "credential",
+    "private_key",
+    "encrypted",
+];
+
+fn is_secret_column(name: &str) -> bool {
+    let lowered = name.to_ascii_lowercase();
+    SECRET_COLUMN_MARKERS
+        .iter()
+        .any(|marker| lowered.contains(marker))
+}
+
+fn cell_to_json(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<serde_json::Value> {
+    use rusqlite::types::ValueRef;
+    Ok(match row.get_ref(index)? {
+        ValueRef::Null => serde_json::Value::Null,
+        ValueRef::Integer(value) => serde_json::Value::from(value),
+        ValueRef::Real(value) => serde_json::Number::from_f64(value)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        ValueRef::Text(value) => {
+            serde_json::Value::String(String::from_utf8_lossy(value).into_owned())
+        }
+        ValueRef::Blob(value) => {
+            serde_json::Value::String(format!("[binary {} bytes]", value.len()))
+        }
+    })
+}
+
+/// Serialize every user-scoped local table, derived from the same schema
+/// enumeration the erasure path uses so an export can never claim less than a
+/// deletion removes.
+pub fn export_local_user_data(conn: &Connection) -> Result<String, String> {
+    let tables = classify_local_tables(conn)?;
     let mut export_data = serde_json::Map::new();
+    let mut exported_rows = 0usize;
 
-    // Export conversations
-    let mut conversations_stmt = conn
-        .prepare(
-            "SELECT id, title, created_at, updated_at FROM conversations ORDER BY created_at DESC",
-        )
-        .map_err(|e| format!("Failed to prepare conversations query: {}", e))?;
+    for table in &tables.rows {
+        let mut stmt = conn
+            .prepare(&format!("SELECT * FROM \"{}\"", table))
+            .map_err(|e| format!("Failed to prepare export of {}: {}", table, e))?;
+        let columns: Vec<String> = stmt
+            .column_names()
+            .into_iter()
+            .map(str::to_string)
+            .collect();
 
-    let conversations: Vec<serde_json::Value> = conversations_stmt
-        .query_map([], |row| {
-            Ok(serde_json::json!({
-                "id": row.get::<_, String>(0)?,
-                "title": row.get::<_, Option<String>>(1)?,
-                "created_at": row.get::<_, String>(2)?,
-                "updated_at": row.get::<_, Option<String>>(3)?
-            }))
-        })
-        .map_err(|e| format!("Failed to query conversations: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
+        let rows = stmt
+            .query_map([], |row| {
+                let mut record = serde_json::Map::new();
+                for (index, column) in columns.iter().enumerate() {
+                    let value = if is_secret_column(column) {
+                        match row.get_ref(index)? {
+                            rusqlite::types::ValueRef::Null => serde_json::Value::Null,
+                            _ => serde_json::Value::String(REDACTED_EXPORT_VALUE.to_string()),
+                        }
+                    } else {
+                        cell_to_json(row, index)?
+                    };
+                    record.insert(column.clone(), value);
+                }
+                Ok(serde_json::Value::Object(record))
+            })
+            .map_err(|e| format!("Failed to query {}: {}", table, e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to read {}: {}", table, e))?;
 
-    export_data.insert(
-        "conversations".to_string(),
-        serde_json::Value::Array(conversations),
-    );
+        exported_rows += rows.len();
+        export_data.insert(table.clone(), serde_json::Value::Array(rows));
+    }
 
-    // Export messages
-    let mut messages_stmt = conn
-        .prepare("SELECT id, conversation_id, role, content, created_at FROM messages ORDER BY created_at")
-        .map_err(|e| format!("Failed to prepare messages query: {}", e))?;
-
-    let messages: Vec<serde_json::Value> = messages_stmt
-        .query_map([], |row| {
-            Ok(serde_json::json!({
-                "id": row.get::<_, String>(0)?,
-                "conversation_id": row.get::<_, String>(1)?,
-                "role": row.get::<_, String>(2)?,
-                "content": row.get::<_, String>(3)?,
-                "created_at": row.get::<_, String>(4)?
-            }))
-        })
-        .map_err(|e| format!("Failed to query messages: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    export_data.insert("messages".to_string(), serde_json::Value::Array(messages));
-
-    // Export settings
-    let mut settings_stmt = conn
-        .prepare("SELECT key, value, category FROM settings_v2")
-        .map_err(|e| format!("Failed to prepare settings query: {}", e))?;
-
-    let settings: Vec<serde_json::Value> = settings_stmt
-        .query_map([], |row| {
-            Ok(serde_json::json!({
-                "key": row.get::<_, String>(0)?,
-                "value": row.get::<_, String>(1)?,
-                "category": row.get::<_, Option<String>>(2)?
-            }))
-        })
-        .map_err(|e| format!("Failed to query settings: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    export_data.insert("settings".to_string(), serde_json::Value::Array(settings));
-
-    // Export custom instructions
-    let mut instructions_stmt = conn
-        .prepare("SELECT id, name, content, created_at FROM custom_instructions")
-        .map_err(|e| format!("Failed to prepare custom_instructions query: {}", e))?;
-
-    let instructions: Vec<serde_json::Value> = instructions_stmt
-        .query_map([], |row| {
-            Ok(serde_json::json!({
-                "id": row.get::<_, String>(0)?,
-                "name": row.get::<_, Option<String>>(1)?,
-                "content": row.get::<_, String>(2)?,
-                "created_at": row.get::<_, Option<String>>(3)?
-            }))
-        })
-        .map_err(|e| format!("Failed to query custom_instructions: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    export_data.insert(
-        "custom_instructions".to_string(),
-        serde_json::Value::Array(instructions),
-    );
-
-    // Add metadata
     export_data.insert(
         "export_metadata".to_string(),
         serde_json::json!({
             "exported_at": chrono::Utc::now().to_rfc3339(),
             "app_name": "AGI Workforce",
-            "export_version": "1.0"
+            "export_version": "2.0",
+            "tables": tables.rows.len(),
+            "rows": exported_rows,
+            "redacted_columns": REDACTED_EXPORT_VALUE,
         }),
     );
 
@@ -187,22 +184,9 @@ pub async fn privacy_export_data(state: State<'_, AppDatabase>) -> Result<String
         .map_err(|e| format!("Failed to serialize export data: {}", e))?;
 
     tracing::info!(
-        "[Privacy] Exported user data: {} conversations, {} messages, {} settings",
-        export_data
-            .get("conversations")
-            .and_then(|v| v.as_array())
-            .map(|a| a.len())
-            .unwrap_or(0),
-        export_data
-            .get("messages")
-            .and_then(|v| v.as_array())
-            .map(|a| a.len())
-            .unwrap_or(0),
-        export_data
-            .get("settings")
-            .and_then(|v| v.as_array())
-            .map(|a| a.len())
-            .unwrap_or(0)
+        "[Privacy] Exported {} rows across {} local tables",
+        exported_rows,
+        tables.rows.len()
     );
 
     Ok(result)
@@ -293,8 +277,114 @@ fn clear_search_index(conn: &Connection, name: &str) -> Result<(), String> {
         })
 }
 
-pub fn purge_local_user_data(conn: &Connection) -> Result<(usize, usize), String> {
+fn is_artefact_path_column(name: &str) -> bool {
+    let lowered = name.to_ascii_lowercase();
+    lowered == "path" || lowered.ends_with("_path")
+}
+
+fn artefact_path_columns(conn: &Connection, table: &str) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info(\"{}\")", table))
+        .map_err(|e| format!("Failed to read columns of {}: {}", table, e))?;
+    let columns = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| format!("Failed to read columns of {}: {}", table, e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to read columns of {}: {}", table, e))?;
+
+    Ok(columns
+        .into_iter()
+        .filter(|name| is_safe_identifier(name) && is_artefact_path_column(name))
+        .collect())
+}
+
+fn collect_artefact_paths(
+    conn: &Connection,
+    tables: &LocalUserTables,
+) -> Result<Vec<std::path::PathBuf>, String> {
+    let mut paths = Vec::new();
+    for table in &tables.rows {
+        for column in artefact_path_columns(conn, table)? {
+            let mut stmt = conn
+                .prepare(&format!(
+                    "SELECT DISTINCT \"{0}\" FROM \"{1}\" WHERE \"{0}\" IS NOT NULL AND \"{0}\" <> ''",
+                    column, table
+                ))
+                .map_err(|e| format!("Failed to list {}.{}: {}", table, column, e))?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| format!("Failed to list {}.{}: {}", table, column, e))?;
+            for row in rows {
+                match row {
+                    Ok(value) => paths.push(std::path::PathBuf::from(value)),
+                    Err(e) => tracing::warn!(
+                        "[Privacy] Skipped unreadable path in {}.{}: {}",
+                        table,
+                        column,
+                        e
+                    ),
+                }
+            }
+        }
+    }
+    Ok(paths)
+}
+
+/// Delete the artefacts the erased rows referenced, but only the ones the app
+/// itself wrote. Path columns also hold locations the user owns — a watched
+/// folder, an indexed project — and erasing an account must not erase those,
+/// so containment inside an app-owned root is the authority, not the column.
+fn remove_contained_artefacts(paths: &[std::path::PathBuf], roots: &[std::path::PathBuf]) -> usize {
+    let canonical_roots: Vec<std::path::PathBuf> = roots
+        .iter()
+        .filter_map(|root| std::fs::canonicalize(root).ok())
+        .collect();
+    if canonical_roots.is_empty() {
+        return 0;
+    }
+
+    let mut removed = 0usize;
+    for path in paths {
+        let Ok(canonical) = std::fs::canonicalize(path) else {
+            continue;
+        };
+        let contained = canonical_roots
+            .iter()
+            .any(|root| canonical != *root && canonical.starts_with(root));
+        if !contained {
+            continue;
+        }
+
+        let outcome = if canonical.is_dir() {
+            std::fs::remove_dir_all(&canonical)
+        } else {
+            std::fs::remove_file(&canonical)
+        };
+        match outcome {
+            Ok(()) => removed += 1,
+            Err(e) => tracing::warn!(
+                "[Privacy] Failed to erase artefact {}: {}",
+                canonical.display(),
+                e
+            ),
+        }
+    }
+    removed
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PurgeSummary {
+    pub deleted_rows: usize,
+    pub cleared_tables: usize,
+    pub removed_artefacts: usize,
+}
+
+pub fn purge_local_user_data(
+    conn: &Connection,
+    artefact_roots: &[std::path::PathBuf],
+) -> Result<PurgeSummary, String> {
     let tables = classify_local_tables(conn)?;
+    let artefacts = collect_artefact_paths(conn, &tables)?;
 
     conn.execute_batch("BEGIN IMMEDIATE; PRAGMA defer_foreign_keys = ON;")
         .map_err(|e| format!("Failed to open deletion transaction: {}", e))?;
@@ -316,10 +406,11 @@ pub fn purge_local_user_data(conn: &Connection) -> Result<(usize, usize), String
         Ok(deleted_rows) => {
             conn.execute_batch("COMMIT")
                 .map_err(|e| format!("Failed to commit account deletion: {}", e))?;
-            Ok((
+            Ok(PurgeSummary {
                 deleted_rows,
-                tables.rows.len() + tables.search_indexes.len(),
-            ))
+                cleared_tables: tables.rows.len() + tables.search_indexes.len(),
+                removed_artefacts: remove_contained_artefacts(&artefacts, artefact_roots),
+            })
         }
         Err(e) => {
             let _ = conn.execute_batch("ROLLBACK");
@@ -328,32 +419,46 @@ pub fn purge_local_user_data(conn: &Connection) -> Result<(usize, usize), String
     }
 }
 
+fn artefact_roots(app_handle: &tauri::AppHandle) -> Vec<std::path::PathBuf> {
+    let resolver = app_handle.path();
+    [
+        resolver.app_data_dir(),
+        resolver.app_local_data_dir(),
+        resolver.app_cache_dir(),
+    ]
+    .into_iter()
+    .filter_map(Result::ok)
+    .collect()
+}
+
 #[tauri::command]
 pub async fn privacy_delete_account(
     user_id: String,
     state: State<'_, AppDatabase>,
+    app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
     let conn = state
         .conn
         .lock()
         .map_err(|e| format!("Failed to lock database: {}", e))?;
 
-    let (deleted_rows, cleared_tables) = purge_local_user_data(&conn)?;
+    let summary = purge_local_user_data(&conn, &artefact_roots(&app_handle))?;
 
     if let Err(e) = conn.execute_batch("VACUUM") {
         tracing::warn!("[Privacy] Deleted pages not reclaimed: {}", e);
     }
 
     tracing::info!(
-        "[Privacy] Account data deletion completed for user {}: {} rows across {} local tables",
+        "[Privacy] Account data deletion completed for user {}: {} rows across {} local tables, {} on-disk artefacts",
         user_id,
-        deleted_rows,
-        cleared_tables
+        summary.deleted_rows,
+        summary.cleared_tables,
+        summary.removed_artefacts
     );
 
     Ok(format!(
-        "Deleted {} local records across {} tables",
-        deleted_rows, cleared_tables
+        "Deleted {} local records across {} tables and {} stored files",
+        summary.deleted_rows, summary.cleared_tables, summary.removed_artefacts
     ))
 }
 
@@ -550,7 +655,8 @@ mod tests {
         let conn = migrated_conn();
         seed_local_content(&conn);
 
-        let (deleted_rows, cleared_tables) = purge_local_user_data(&conn).expect("purge");
+        let summary = purge_local_user_data(&conn, &[]).expect("purge");
+        let (deleted_rows, cleared_tables) = (summary.deleted_rows, summary.cleared_tables);
 
         assert!(deleted_rows >= 6, "expected seeded rows to be deleted");
         assert!(cleared_tables > 50, "expected the whole schema to be swept");
@@ -579,7 +685,7 @@ mod tests {
         )
         .expect("seed future table");
 
-        purge_local_user_data(&conn).expect("purge");
+        purge_local_user_data(&conn, &[]).expect("purge");
 
         assert_eq!(
             count(&conn, "desk22_future_feature"),
@@ -593,7 +699,7 @@ mod tests {
         let conn = migrated_conn();
         seed_local_content(&conn);
 
-        purge_local_user_data(&conn).expect("purge");
+        purge_local_user_data(&conn, &[]).expect("purge");
 
         let tables = classify_local_tables(&conn).expect("classify");
         assert!(
@@ -631,9 +737,64 @@ mod tests {
         )
         .expect("seed fts row");
 
-        purge_local_user_data(&conn).expect("purge");
+        purge_local_user_data(&conn, &[]).expect("purge");
 
         assert_eq!(count(&conn, "messages_fts"), 0, "search index kept content");
+    }
+
+    #[test]
+    fn purge_removes_the_on_disk_artefacts_the_rows_point_at() {
+        let artefact_root = tempfile::tempdir().expect("artefact root");
+        let screenshot = artefact_root.path().join("c1.png");
+        std::fs::write(&screenshot, b"screen pixels").expect("write screenshot");
+
+        let user_workspace = tempfile::tempdir().expect("user workspace");
+        let user_document = user_workspace.path().join("thesis.pdf");
+        std::fs::write(&user_document, b"not the app's to delete").expect("write document");
+
+        let conn = migrated_conn();
+        conn.execute(
+            "INSERT INTO captures (id, capture_type, file_path, ocr_text, created_at)
+             VALUES ('c1', 'fullscreen', ?1, 'bank balance', 1)",
+            [screenshot.to_str().expect("utf8 path")],
+        )
+        .expect("seed capture");
+        conn.execute(
+            "INSERT INTO codebase_cache (id, project_path, cache_type, data, created_at, expires_at)
+             VALUES ('p1', ?1, 'file_tree', '{}', 1, 1)",
+            [user_workspace.path().to_str().expect("utf8 path")],
+        )
+        .expect("seed codebase cache");
+
+        let summary =
+            purge_local_user_data(&conn, &[artefact_root.path().to_path_buf()]).expect("purge");
+
+        assert!(
+            !screenshot.exists(),
+            "screenshot file survived account deletion"
+        );
+        assert!(
+            user_document.exists(),
+            "purge deleted a file outside the app's own artefact roots"
+        );
+        assert_eq!(summary.removed_artefacts, 1);
+    }
+
+    #[test]
+    fn export_returns_the_local_content_it_claims_to() {
+        let conn = migrated_conn();
+        seed_local_content(&conn);
+
+        let raw = export_local_user_data(&conn).expect("export must not fail");
+        let parsed: serde_json::Value = serde_json::from_str(&raw).expect("export is json");
+
+        assert!(
+            parsed
+                .get("messages")
+                .and_then(|v| v.as_array())
+                .is_some_and(|rows| !rows.is_empty()),
+            "export dropped the user's messages"
+        );
     }
 
     #[test]

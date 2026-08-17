@@ -13,6 +13,7 @@ import {
   type AuthenticatedSurfaceClass,
 } from '@/lib/free-chat-surface-policy';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { resolveSubscriptionAccess } from '@/lib/services/subscription-access-policy';
 import { resolveAuthenticatedSurface } from './request-surface';
 
 export type AuthGateSuccess = {
@@ -148,8 +149,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     });
   }
 
-  const activeStatuses = ['active', 'trialing'];
-  if (!activeStatuses.includes(subscription.status)) {
+  if (!resolveSubscriptionAccess(subscription.status, subscription.plan_tier).managedExecution) {
     if (isFreePlanTier(subscription.plan_tier)) {
       return enforceManagedCloudSurface(request, {
         ok: true,

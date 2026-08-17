@@ -28,7 +28,7 @@ function WaveformBars({ animate }: { animate: boolean }) {
         <div
           key={i}
           className={cn(
-            'w-[3px] rounded-full bg-red-400 transition-all duration-300',
+            'w-[3px] rounded-full bg-red-600 transition-all duration-300 dark:bg-red-400',
             animate ? 'animate-[waveform_0.8s_ease-in-out_infinite_alternate]' : 'h-1',
           )}
           style={{

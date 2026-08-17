@@ -998,7 +998,7 @@
     "managed-cloud/gateway": {
       "provider": "managed_cloud",
       "apiFamily": "managed_gateway",
-      "adapter": "services/api-gateway",
+      "adapter": "apps/web/app/api/llm",
       "trustModes": ["managed_cloud"],
       "features": { "webSearch": { "providerSupport": "agi", "implementation": "implemented" } }
     },
@@ -1280,7 +1280,7 @@
       "trustMode": "local",
       "status": "partial",
       "features": {},
-      "allowedHarnessIds": []
+      "allowedHarnessIds": ["ollama/chat", "lmstudio/chat-completions"]
     },
     "mobile/cloud-chat": {
       "family": "consumer",

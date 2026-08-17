@@ -15,7 +15,12 @@ import { fileURLToPath } from 'node:url';
 
 import type { ModelResponse, Responder } from './types';
 
-const MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
+const DEFAULT_ANTHROPIC_ROOT = 'https://api.anthropic.com/v1';
+
+export function messagesUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const root = env['ANTHROPIC_BASE_URL']?.trim();
+  return `${(root && root.length > 0 ? root : DEFAULT_ANTHROPIC_ROOT).replace(/\/+$/, '')}/messages`;
+}
 
 const ANTHROPIC_VERSION = '2023-06-01';
 
@@ -88,7 +93,7 @@ export function anthropicResponder(options: AnthropicResponderOptions): Responde
   if (apiKey.length === 0) throw new Error('anthropicResponder requires an API key');
 
   return async (evalCase) => {
-    const response = await fetchImpl(MESSAGES_URL, {
+    const response = await fetchImpl(messagesUrl(), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

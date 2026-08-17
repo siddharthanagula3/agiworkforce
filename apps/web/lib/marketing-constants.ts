@@ -1,4 +1,3 @@
-
 import { BILLING_PLAN_PRICING, modelsCatalogJson } from '@agiworkforce/types';
 
 export const MARKETING_MODEL_PILLS = [
@@ -19,7 +18,7 @@ export const COMING_SOON_LABEL = 'Coming soon';
 export const SURFACE_STATUS = {
   web: 'Available now',
   desktop: 'Linux assets · v1.2.0',
-  cli: 'Released · v1.0.0',
+  cli: 'Released · v1.7.1',
   mobile: COMING_SOON_LABEL,
   vscode: COMING_SOON_LABEL,
   chrome: COMING_SOON_LABEL,

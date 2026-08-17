@@ -6,11 +6,12 @@ members = [
 ]
 # 2026-07-08 restructure P0: dead crates removed (agiworkforce-apply-patch,
 # agiworkforce-plugin-runtime, agiworkforce-task-runtime — zero dependents).
-# Actual dependency surface: apps/cli path-depends on app-server, llm,
-# protocol, sandbox-policy, execpolicy, command-registry, and utils-image;
-# apps/desktop/src-tauri path-depends on sandbox-policy only. CLI/desktop
-# engine convergence is tracked in docs/plans/rust-engine-extraction-2026-07-09.md
-# (agiworkforce-llm shipped in stage c1; desktop adoption lands in c2+).
+# Both binaries now path-depend on the shared harness crates (agent-core, llm,
+# mcp, model-registry, protocol, sandbox-policy, execpolicy); the CLI adds
+# app-server, command-registry and utils-image. What remains unconverged is the
+# desktop's two chat engines (core/agi/core.rs and
+# sys/commands/chat/send_message_execution.rs), tracked in
+# docs/plans/rust-engine-extraction-2026-07-09.md.
 exclude = []
 resolver = "2"
 
@@ -68,7 +69,9 @@ panic = "abort"
 
 
 [profile.dev]
-debug = true           # enable debug info for readable backtraces
+# line-tables-only keeps file-and-line backtraces, which is what panics and CI
+# failures need, without the full DWARF that took target/debug to 49 GB.
+debug = "line-tables-only"
 opt-level = 0
 split-debuginfo = "off"
 

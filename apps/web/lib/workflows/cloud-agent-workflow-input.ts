@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
+import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import type { ApprovalMode, ResumeApproval } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ManagedUsageRequestReservation } from '@/lib/services/managed-usage-request-service';
+import { TOOL_APPROVAL_POLICIES, type ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 
 const MessageSchema = z
   .object({
@@ -103,6 +105,7 @@ export interface CloudAgentWorkflowInput {
   billing: SerializedManagedUsageReservation;
   mcpTools: WebMcpToolDef[];
   approvalMode: ApprovalMode;
+  toolApprovalPolicy?: ToolApprovalPolicy;
   continuation?: {
     eventSessionId: string;
     eventTurnId: string;
@@ -137,6 +140,7 @@ const ContinuationSchema = z
           )
           .min(1)
           .max(32),
+        guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
       })
       .strict()
       .optional(),
@@ -159,6 +163,7 @@ const CloudAgentWorkflowInputSchema = z
     billing: BillingSchema,
     mcpTools: z.array(McpToolSchema),
     approvalMode: z.enum(['auto', 'manual']),
+    toolApprovalPolicy: z.enum(TOOL_APPROVAL_POLICIES).optional(),
     continuation: ContinuationSchema.optional(),
     predecessorApproval: PredecessorApprovalSchema.optional(),
   })
@@ -183,6 +188,7 @@ export function buildCloudAgentWorkflowInput(input: {
   processed: ProcessedRequest;
   mcpTools: WebMcpToolDef[];
   approvalMode: ApprovalMode;
+  toolApprovalPolicy?: ToolApprovalPolicy;
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
 }): CloudAgentWorkflowInput {
@@ -200,6 +206,7 @@ export function buildCloudAgentWorkflowInput(input: {
     billing,
     mcpTools: input.mcpTools,
     approvalMode: input.approvalMode,
+    toolApprovalPolicy: input.toolApprovalPolicy,
     continuation: input.continuation,
     predecessorApproval: input.predecessorApproval,
   };

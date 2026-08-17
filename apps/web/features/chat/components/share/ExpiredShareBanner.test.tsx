@@ -17,4 +17,12 @@ describe('ExpiredShareBanner', () => {
     expect(screen.getByRole('heading')).toHaveTextContent('Shared conversation expired');
     expect(screen.queryByText(/7 days/i)).toBeNull();
   });
+
+  it('paints from theme tokens so it stays readable in light theme', () => {
+    const { container } = render(<ExpiredShareBanner />);
+
+    expect(container.querySelector('.bg-background')).not.toBeNull();
+    expect(screen.getByRole('heading')).toHaveClass('text-foreground');
+    expect(container.innerHTML).not.toMatch(/bg-gray-950|text-gray-400|text-gray-300|bg-white\/5/);
+  });
 });

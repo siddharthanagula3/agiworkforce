@@ -177,6 +177,7 @@ export async function executeCloudAgentWorkflowInvocation(
   const generator = runToolLoop(processed, {
     mcpTools: input.mcpTools,
     approvalMode: input.approvalMode,
+    toolApprovalPolicy: input.toolApprovalPolicy,
     userId: input.userId,
     connectorExecutor,
     resume: input.continuation?.resume,

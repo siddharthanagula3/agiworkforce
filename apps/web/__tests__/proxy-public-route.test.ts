@@ -247,6 +247,45 @@ describe('web proxy', () => {
     );
   });
 
+  it('protects the task history and preserves its requested URL', async () => {
+    clerkState.clerkPaths = [];
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/tasks?status=running'),
+      {} as never,
+    );
+
+    expect(clerkState.clerkPaths).toEqual([]);
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get('Location')).toBe(
+      'http://localhost/login?redirectTo=%2Ftasks%3Fstatus%3Drunning',
+    );
+  });
+
+  it('covers task history subpaths, not just the index', async () => {
+    clerkState.clerkPaths = [];
+    const { proxy } = await import('../proxy');
+
+    const signedOut = await proxy(new NextRequest('http://localhost/tasks/run-1'), {} as never);
+
+    expect(clerkState.clerkPaths).toEqual([]);
+    expect(signedOut?.status).toBe(307);
+    expect(signedOut?.headers.get('Location')).toBe(
+      'http://localhost/login?redirectTo=%2Ftasks%2Frun-1',
+    );
+
+    const signedIn = await proxy(
+      new NextRequest('http://localhost/tasks/run-1', {
+        headers: { Cookie: '__session=test-session' },
+      }),
+      {} as never,
+    );
+
+    expect(clerkState.clerkPaths).toEqual(['/tasks/run-1']);
+    expect(signedIn?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
+  });
+
   it('keeps public health checks out of Clerk session middleware', async () => {
     clerkState.clerkPaths = [];
     const { proxy } = await import('../proxy');

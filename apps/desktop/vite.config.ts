@@ -285,6 +285,14 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/platform/utils/src/displayName.ts',
         ),
+        '@agiworkforce/utils/composer-paste': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/composerPaste.ts',
+        ),
+        '@agiworkforce/utils/markdown-source': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/markdownSource.ts',
+        ),
         '@agiworkforce/utils': path.resolve(
           __dirname,
           '../../packages/platform/utils/src/index.ts',

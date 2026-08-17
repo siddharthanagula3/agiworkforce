@@ -57,16 +57,16 @@ import {
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import type { ResearchStep } from '@agiworkforce/types';
 import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
 import { parseAgiWorkPlanEvent, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 import {
-  classifyManagedQuotaErrorCode,
-  getNextUpgradeTier,
-  isSelfServePaidPlanTier,
-} from '@agiworkforce/types';
+  resolveQuotaPaywallSlot,
+  type ServerQuotaRecovery,
+} from '@/features/chat/lib/quotaPaywallSlot';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   createSendReplayMetadata,
@@ -104,6 +104,8 @@ interface SendMessageOptions {
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
     steps: ResearchStep[];
+    /** The plan the user pressed Start on after the server paused for approval. */
+    approvedSteps?: ResearchStep[];
   };
   workMode?: CloudWorkMode;
   agiWorkGoal?: AgiWorkGoalInput;
@@ -133,6 +135,7 @@ export interface UseChatStreamReturn {
     assistantMessageId: string,
     toolCallId: string,
     decision: ToolApprovalDecision,
+    guidance?: string,
   ) => Promise<void>;
   isStreaming: boolean;
 }
@@ -141,13 +144,23 @@ class ChatApiError extends Error {
   code: string | undefined;
   status: number | undefined;
   resetAt: string | undefined;
+  recovery: ServerQuotaRecovery | undefined;
 
-  constructor(message: string, options: { code?: string; status?: number; resetAt?: string } = {}) {
+  constructor(
+    message: string,
+    options: {
+      code?: string;
+      status?: number;
+      resetAt?: string;
+      recovery?: ServerQuotaRecovery;
+    } = {},
+  ) {
     super(message);
     this.name = 'ChatApiError';
     this.code = options.code;
     this.status = options.status;
     this.resetAt = options.resetAt;
+    this.recovery = options.recovery;
   }
 }
 
@@ -177,10 +190,17 @@ function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function readServerQuotaRecovery(value: unknown): ServerQuotaRecovery | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const action = readString((value as Record<string, unknown>)['action']);
+  const href = readString((value as Record<string, unknown>)['href']);
+  return action && href ? { action, href } : undefined;
+}
+
 function readChatApiErrorPayload(
   payload: unknown,
   fallbackMessage: string,
-): { message: string; code?: string } {
+): { message: string; code?: string; recovery?: ServerQuotaRecovery } {
   if (!payload || typeof payload !== 'object') {
     return { message: fallbackMessage };
   }
@@ -198,9 +218,11 @@ function readChatApiErrorPayload(
     const errorBody = error as Record<string, unknown>;
     const nestedMessage = readString(errorBody['message']);
     const nestedCode = readString(errorBody['code']);
+    const recovery = readServerQuotaRecovery(errorBody['recovery']);
     return {
       message: nestedMessage ?? topLevelMessage ?? fallbackMessage,
       code: nestedCode ?? topLevelCode,
+      ...(recovery ? { recovery } : {}),
     };
   }
 
@@ -316,6 +338,7 @@ interface PendingTurn {
   calls: PendingApprovalCall[];
   decisions: Map<string, ToolApprovalDecision>;
   resolving: boolean;
+  guidance?: string;
 }
 
 const pendingTurns = new Map<string, PendingTurn>();
@@ -484,6 +507,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const runHandle = readManagedCloudAgentRunHandle(response);
   ctx.onRunHandle?.(runHandle);
   const updateMessage = store.updateMessage;
+  const streamFallbackReason = response.headers.get(FALLBACK_REASON_HEADER)?.trim();
+  const isTurnContinuation = ctx.seedContent !== undefined;
+  if (streamFallbackReason) {
+    updateMessage(assistantMessageId, { fallbackReason: streamFallbackReason }, conversationId);
+  } else if (!isTurnContinuation) {
+    updateMessage(assistantMessageId, { fallbackReason: undefined }, conversationId);
+  }
   const appendToMessage = store.appendToMessage;
   const appendToThinking = store.appendToThinking;
   const setSearching = store.setSearching;
@@ -1098,6 +1128,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             const phase = researchStatus.phase;
             if (
               phase === 'planning' ||
+              phase === 'awaiting_approval' ||
               phase === 'searching' ||
               phase === 'synthesizing' ||
               phase === 'complete' ||
@@ -1727,7 +1758,15 @@ export function useChatStream(): UseChatStreamReturn {
             web_fetch: options.webFetch || undefined,
             research: options.research || undefined,
             research_resume:
-              options.research && options.researchResume ? options.researchResume : undefined,
+              options.research && options.researchResume
+                ? {
+                    sources: options.researchResume.sources,
+                    steps: options.researchResume.steps,
+                    ...(options.researchResume.approvedSteps?.length
+                      ? { approved_steps: options.researchResume.approvedSteps }
+                      : {}),
+                  }
+                : undefined,
             code_execution: options.codeExecution || undefined,
             office_creation: options.officeCreation || undefined,
             skill_name: options.skillName,
@@ -1746,7 +1785,7 @@ export function useChatStream(): UseChatStreamReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const { message, code } = readChatApiErrorPayload(
+          const { message, code, recovery } = readChatApiErrorPayload(
             errorData,
             `Request failed: ${response.status}`,
           );
@@ -1754,6 +1793,7 @@ export function useChatStream(): UseChatStreamReturn {
             code,
             status: response.status,
             resetAt: readErrorResetAt(errorData, response),
+            ...(recovery ? { recovery } : {}),
           });
         }
 
@@ -1915,14 +1955,16 @@ export function useChatStream(): UseChatStreamReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const { message: errMessage, code } = readChatApiErrorPayload(
-            errorData,
-            `Request failed: ${response.status}`,
-          );
+          const {
+            message: errMessage,
+            code,
+            recovery,
+          } = readChatApiErrorPayload(errorData, `Request failed: ${response.status}`);
           throw new ChatApiError(errMessage, {
             code,
             status: response.status,
             resetAt: readErrorResetAt(errorData, response),
+            ...(recovery ? { recovery } : {}),
           });
         }
 
@@ -2060,6 +2102,7 @@ export function useResolveToolApproval(
       assistantMessageId: string,
       toolCallId: string,
       decision: ToolApprovalDecision,
+      guidance?: string,
     ): Promise<void> {
       const store = useChatStore.getState();
       const {
@@ -2076,6 +2119,10 @@ export function useResolveToolApproval(
       if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
 
       turn.decisions.set(toolCallId, decision);
+      const trimmedGuidance = guidance?.trim();
+      if (trimmedGuidance) {
+        turn.guidance = turn.guidance ? `${turn.guidance}\n\n${trimmedGuidance}` : trimmedGuidance;
+      }
 
       updateToolEntry(
         assistantMessageId,
@@ -2197,13 +2244,14 @@ export function useResolveToolApproval(
           body: JSON.stringify({
             run_id: turn.runId,
             tool_approvals: toolApprovals,
+            ...(turn.guidance ? { guidance: turn.guidance } : {}),
           }),
           signal: abortController.signal,
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const { message, code } = readChatApiErrorPayload(
+          const { message, code, recovery } = readChatApiErrorPayload(
             errorData,
             `Resume failed: ${response.status}`,
           );
@@ -2211,6 +2259,7 @@ export function useResolveToolApproval(
             code,
             status: response.status,
             resetAt: readErrorResetAt(errorData, response),
+            ...(recovery ? { recovery } : {}),
           });
         }
 
@@ -2376,39 +2425,22 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
 
   const errorCode = error instanceof ChatApiError ? error.code : undefined;
 
-  const quotaBlock = classifyManagedQuotaErrorCode(errorCode);
-  if (quotaBlock) {
+  const subscription = useBillingStore.getState().subscription;
+  const paywall = resolveQuotaPaywallSlot({
+    code: errorCode,
+    message: errorMessage,
+    planTier: subscription?.tier,
+    subscriptionSource: subscription?.subscription_source,
+    ...(error instanceof ChatApiError && error.recovery ? { recovery: error.recovery } : {}),
+    ...(error instanceof ChatApiError && error.resetAt ? { resetAt: error.resetAt } : {}),
+  });
+  if (paywall) {
     if (errorCode === 'free_trial_token_budget_reached') {
       useFreeTrialStore.getState().markLimitReached();
     }
-    const planTier = useBillingStore.getState().subscription?.tier;
-    const nextTier = getNextUpgradeTier(planTier);
-    const resetAt = error instanceof ChatApiError ? error.resetAt : undefined;
-
-    const canBuyCredits =
-      quotaBlock.clearedByCredits &&
-      isSelfServePaidPlanTier(planTier) &&
-      useBillingStore.getState().subscription?.subscription_source === 'stripe';
-    const recoveryAction = canBuyCredits ? ('top_up' as const) : ('upgrade' as const);
     updateMessage(
       assistantMessageId,
-      {
-        isStreaming: false,
-        content: '',
-        error: false,
-        metadata: {
-          paywall: {
-            feature: quotaBlock.feature,
-            requiredTier: nextTier ?? 'basic',
-            reason: errorMessage || quotaBlock.reason,
-            showUpgradeCta: quotaBlock.showUpgradeCta && (nextTier !== null || canBuyCredits),
-            recoveryAction,
-            showResetTime: quotaBlock.showResetTime,
-            suggestStandardModel: quotaBlock.suggestStandardModel,
-            ...(resetAt ? { resetAt } : {}),
-          },
-        },
-      },
+      { isStreaming: false, content: '', error: false, metadata: { paywall } },
       conversationId,
     );
     setError(errorMessage, conversationId);

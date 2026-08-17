@@ -57,62 +57,10 @@ impl WordHandler {
             return Err(Error::Generic(format!("File not found: {}", file_path)));
         }
 
-        let file =
-            File::open(path).map_err(|e| Error::Generic(format!("Failed to open DOCX: {}", e)))?;
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| Error::Generic(format!("Invalid DOCX archive: {}", e)))?;
+        let bytes = std::fs::read(path)
+            .map_err(|e| Error::Generic(format!("Failed to open DOCX: {}", e)))?;
 
-        let mut document_xml = String::new();
-        {
-            let mut doc_entry = archive
-                .by_name("word/document.xml")
-                .map_err(|e| Error::Generic(format!("Failed to read document.xml: {}", e)))?;
-            doc_entry
-                .read_to_string(&mut document_xml)
-                .map_err(|e| Error::Generic(format!("Failed to load document.xml: {}", e)))?;
-        }
-
-        let xml = XmlDocument::parse(&document_xml)
-            .map_err(|e| Error::Generic(format!("Invalid DOCX XML: {}", e)))?;
-        let mut output = String::new();
-        let mut last_was_newline = true;
-
-        for node in xml.descendants() {
-            if node.has_tag_name((
-                "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-                "p",
-            )) {
-                if !last_was_newline {
-                    output.push('\n');
-                    last_was_newline = true;
-                }
-                for child in node.descendants() {
-                    if child.has_tag_name((
-                        "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-                        "t",
-                    )) {
-                        if let Some(text) = child.text() {
-                            output.push_str(text);
-                            last_was_newline = false;
-                        }
-                    } else if child.has_tag_name((
-                        "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-                        "br",
-                    )) {
-                        output.push('\n');
-                        last_was_newline = true;
-                    } else if child.has_tag_name((
-                        "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-                        "tab",
-                    )) {
-                        output.push('\t');
-                        last_was_newline = false;
-                    }
-                }
-            }
-        }
-
-        Ok(output)
+        super::ooxml::extract_docx_text(&bytes)
     }
 
     pub async fn get_metadata(&self, file_path: &str) -> Result<DocumentMetadata> {

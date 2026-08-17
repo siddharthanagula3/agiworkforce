@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -87,6 +86,19 @@ describe('ProjectSettingsDialog — delete fires a real server request', () => {
     expect(screen.getByRole('button', { name: /delete project/i }).className.split(' ')).toEqual(
       expect.arrayContaining(['col-span-2', 'w-full', 'sm:w-auto']),
     );
+  });
+
+  it('warns that knowledge files and their uploaded contents go with the project', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(screen.getByRole('button', { name: /delete project/i }));
+
+    const confirm = await screen.findByRole('button', { name: /^delete$/i });
+    const warning = confirm.closest('[role="alertdialog"]')?.textContent ?? '';
+    expect(warning).toMatch(/knowledge files/i);
+    expect(warning).toMatch(/uploaded file contents/i);
+    expect(warning).toMatch(/cannot be undone/i);
   });
 
   it('sends DELETE /api/projects/[id], then removes locally and toasts success', async () => {

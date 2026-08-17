@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { buildLocalToByokHandoffDraft, type LocalToByokHandoffPreview } from '@agiworkforce/utils';
@@ -87,10 +86,18 @@ export function LocalByokHandoffDialog({
     if (!preview || isBlocked || !targetModel) return;
 
     const forkId = forkConversationForByok(conversationId, {
+      approvedContext: preview.redactedContext.map((item) => ({
+        messageId: item.id,
+        redactedContent: item.redactedContent,
+      })),
       title: `${conversationTitle} (BYOK fork)`,
       model: targetModel.id,
       provider: targetModel.provider,
     });
+    if (!forkId) {
+      toast.error('Nothing was approved for the BYOK fork, so the Local thread stays here.');
+      return;
+    }
     setProviderMode('cloud');
     useChatModelStore.getState().selectModel(targetModel.id);
     selectConversation(forkId);

@@ -1,6 +1,7 @@
-import { BookOpen, Clock3, Download, FilePlus2 } from 'lucide-react';
+import { BookOpen, Clock3, FilePlus2 } from 'lucide-react';
 import { useChatStore } from '@agiworkforce/unified-chat';
 import { BrandedGreeting } from '../chat/BrandedGreeting';
+import { FirstRunChecklist, type FirstRunChecklistItem } from './FirstRunChecklist';
 
 interface EmptyChatProps {
   workspaceLabel?: string | null;
@@ -8,6 +9,8 @@ interface EmptyChatProps {
   onOpenScheduled?: () => void;
   onSetUpLocalModel?: () => void;
   needsLocalModelSetup?: boolean;
+  onOpenConnectors?: () => void;
+  hasConnectedTools?: boolean;
 }
 
 const STARTERS = [
@@ -29,34 +32,51 @@ export function EmptyChat({
   onOpenScheduled,
   onSetUpLocalModel,
   needsLocalModelSetup = false,
+  onOpenConnectors,
+  hasConnectedTools = false,
 }: EmptyChatProps) {
   const setDraftContent = useChatStore((state) => state.setDraftContent);
-  const showLocalModelSetup = Boolean(onSetUpLocalModel) && needsLocalModelSetup;
+  const blockedOnLocalModel = Boolean(onSetUpLocalModel) && needsLocalModelSetup;
+
+  const checklistItems: FirstRunChecklistItem[] = [];
+  if (onSelectWorkspace) {
+    checklistItems.push({
+      id: 'workspace',
+      label: 'Choose a working folder',
+      description: 'AGI reads and writes files here. You can change it any time.',
+      done: Boolean(workspaceLabel),
+      onAction: onSelectWorkspace,
+    });
+  }
+  if (onSetUpLocalModel) {
+    checklistItems.push({
+      id: 'local-model',
+      label: 'Set up a local model',
+      description:
+        'Start a local runtime and choose a downloaded model. Nothing is sent to AGI Cloud.',
+      done: !needsLocalModelSetup,
+      onAction: onSetUpLocalModel,
+    });
+  }
+  if (onOpenConnectors) {
+    checklistItems.push({
+      id: 'connectors',
+      label: 'Connect your tools',
+      description: 'Give AGI access to the apps you already work in.',
+      done: hasConnectedTools,
+      onAction: onOpenConnectors,
+    });
+  }
 
   return (
     <div className="flex w-full flex-col items-center justify-center gap-7 px-6 pb-6">
       <BrandedGreeting workspaceLabel={workspaceLabel} onSelectWorkspace={onSelectWorkspace} />
 
-      {showLocalModelSetup ? (
-        <button
-          type="button"
-          onClick={onSetUpLocalModel}
-          aria-label="Set up a local model"
-          className="group flex w-full max-w-[760px] items-center gap-3 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-4 py-3 text-left transition-colors hover:border-[var(--chat-accent-primary)]/35 hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]">
-            <Download className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-sm font-semibold text-[var(--chat-text-primary)]">
-              Set up a local model
-            </span>
-            <span className="mt-0.5 block text-xs leading-5 text-[var(--chat-text-muted)]">
-              Start a local runtime and choose a downloaded model. Nothing is sent to AGI Cloud.
-            </span>
-          </span>
-        </button>
-      ) : (
+      <FirstRunChecklist items={checklistItems} />
+
+      {/* Starters compose a prompt for a model this session does not have yet, so
+          they stay out until the Local setup step above is finished. */}
+      {blockedOnLocalModel ? null : (
         <div
           className="grid w-full max-w-[760px] grid-cols-1 gap-2 sm:grid-cols-3"
           aria-label="Start something"

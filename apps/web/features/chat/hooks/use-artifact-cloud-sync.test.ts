@@ -10,6 +10,7 @@ const authState = vi.hoisted(() => ({
 }));
 
 const pullArtifactCloudChanges = vi.hoisted(() => vi.fn());
+const pushArtifactCloudChanges = vi.hoisted(() => vi.fn(async () => null));
 
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => authState,
@@ -17,6 +18,7 @@ vi.mock('@clerk/nextjs', () => ({
 
 vi.mock('../services/artifact-cloud-sync', () => ({
   pullArtifactCloudChanges,
+  pushArtifactCloudChanges,
 }));
 
 import { useArtifactCloudSync } from './use-artifact-cloud-sync';
@@ -42,6 +44,38 @@ describe('useArtifactCloudSync', () => {
 
     unmount();
     expect(useArtifactsStore.getState().cloudSyncStatus).toBe('idle');
+  });
+
+  it('pushes locally created artifacts to the cloud after each pull', async () => {
+    pullArtifactCloudChanges.mockResolvedValue('12');
+    useArtifactsStore.getState().addArtifact({
+      id: '00000000-0000-4000-8000-00000000a001',
+      type: 'html',
+      title: 'Local artifact',
+      language: 'html',
+      content: '<main>Local</main>',
+      messageId: '00000000-0000-4000-8000-00000000d001',
+      conversationId: '00000000-0000-4000-8000-00000000c001',
+    });
+
+    const { unmount } = renderHook(() => useArtifactCloudSync());
+
+    await waitFor(() => expect(pushArtifactCloudChanges).toHaveBeenCalledTimes(1));
+    expect(pushArtifactCloudChanges).toHaveBeenCalledWith(
+      expect.objectContaining({
+        getToken: authState.getToken,
+        artifacts: [
+          expect.objectContaining({
+            id: '00000000-0000-4000-8000-00000000a001',
+            conversationId: '00000000-0000-4000-8000-00000000c001',
+            content: '<main>Local</main>',
+            baseVersion: '0',
+          }),
+        ],
+      }),
+    );
+
+    act(() => unmount());
   });
 
   it('surfaces a failed pull as retrying instead of silently claiming sync', async () => {

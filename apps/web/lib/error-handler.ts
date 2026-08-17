@@ -3,6 +3,12 @@ import { AppError, createError } from './errors';
 import { logger } from './logger';
 import { redactAttributes } from './observability/redact';
 import {
+  PayloadCeilingExceededError,
+  findPayloadCeilingBreach,
+  meterUndeclaredBody,
+  type PayloadCeilingBreach,
+} from './payload-ceiling';
+import {
   formatTraceparent,
   newSpanId,
   newTraceId,
@@ -137,6 +143,27 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
   );
 }
 
+function payloadTooLargeResponse(
+  breach: PayloadCeilingBreach | { declaredBytes: null; ceilingBytes: number },
+  requestId: string,
+): NextResponse {
+  logger.warn(
+    { declaredBytes: breach.declaredBytes, ceilingBytes: breach.ceilingBytes, requestId },
+    'Rejected a request body above the route payload ceiling',
+  );
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: 'PAYLOAD_TOO_LARGE',
+        message: `Request body is too large. This endpoint accepts at most ${breach.ceilingBytes} bytes.`,
+      },
+      requestId,
+    },
+    { status: 413 },
+  );
+}
+
 type HeaderBearing = { headers?: { get?: (key: string) => string | null } };
 
 function readHeader(source: unknown, name: string): string | null {
@@ -166,6 +193,12 @@ export function withErrorHandler<T extends unknown[]>(
         : context.traceId;
     const method = (args[0] as { method?: string } | undefined)?.method;
     const url = (args[0] as { url?: string } | undefined)?.url;
+    const breach = findPayloadCeilingBreach(
+      (args[0] ?? {}) as Parameters<typeof findPayloadCeilingBreach>[0],
+    );
+    if (!breach && args[0]) {
+      meterUndeclaredBody(args[0] as Parameters<typeof meterUndeclaredBody>[0]);
+    }
 
     return runWithTraceContext(context, async () => {
       const startedAt = Date.now();
@@ -173,11 +206,22 @@ export function withErrorHandler<T extends unknown[]>(
       let status: 'ok' | 'error' = 'ok';
       let thrown: unknown;
       try {
-        response = await handler(...args);
+        if (breach) {
+          status = 'error';
+          response = payloadTooLargeResponse(breach, requestId);
+        } else {
+          response = await handler(...args);
+        }
       } catch (error) {
         thrown = error;
         status = 'error';
-        response = handleError(error, requestId);
+        response =
+          error instanceof PayloadCeilingExceededError
+            ? payloadTooLargeResponse(
+                { declaredBytes: null, ceilingBytes: error.ceilingBytes },
+                requestId,
+              )
+            : handleError(error, requestId);
       }
 
       logger.info(

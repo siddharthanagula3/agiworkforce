@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SendButton } from './SendButton';
@@ -127,6 +126,14 @@ describe('SendButton · queue mode', () => {
     const btn = container.querySelector('button');
     expect(btn?.className).toContain('bg-terra-cotta-500');
     expect(btn?.className).not.toContain('bg-amber');
+  });
+
+  it('falls back to theme tokens when disabled, not a translucent brand fill', () => {
+    const { container } = renderButton({ mode: 'queue', disabled: true, onClick: vi.fn() });
+    const btn = container.querySelector('button');
+    expect(btn?.className).toContain('bg-muted');
+    expect(btn?.className).toContain('text-muted-foreground');
+    expect(btn?.className).not.toContain('text-white/70');
   });
 
   it('has the queue title', () => {

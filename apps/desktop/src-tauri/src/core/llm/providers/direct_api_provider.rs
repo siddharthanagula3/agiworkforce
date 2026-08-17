@@ -229,6 +229,19 @@ impl DirectApiProvider {
 /// desktop bridge).
 const ALLOWED_LOOPBACK_PORTS: &[u16] = &[11434, 1234, 8080, 8000, 5000, 3000];
 
+/// Hosts of providers this product has removed. A retired host keeps resolving in
+/// DNS long after the integration is gone, so a stale saved base URL would still
+/// ship the user's key somewhere we no longer vet. `apps/web/lib/egress-policy.ts`
+/// subtracts the same set on the web boundary.
+const RETIRED_PROVIDER_HOSTS: &[&str] = &["api.mulerouter.ai"];
+
+fn is_retired_provider_host(host: &str) -> bool {
+    let lower = host.to_ascii_lowercase();
+    RETIRED_PROVIDER_HOSTS
+        .iter()
+        .any(|retired| lower == *retired || lower.ends_with(&format!(".{retired}")))
+}
+
 /// Validates a provider base URL to prevent SSRF attacks.
 ///
 /// Blocks requests to private/link-local IP ranges (e.g. AWS IMDS at
@@ -246,6 +259,14 @@ fn validate_provider_base_url(url: &str) -> Result<(), String> {
         scheme => {
             return Err(format!(
                 "Unsupported URL scheme '{scheme}'. Only https:// (and http:// for approved local ports) are allowed."
+            ));
+        }
+    }
+
+    if let Some(host) = parsed.host_str() {
+        if is_retired_provider_host(host) {
+            return Err(format!(
+                "'{host}' belongs to a provider AGI Workforce has removed. Point this provider at a supported endpoint."
             ));
         }
     }
@@ -382,8 +403,20 @@ fn validate_azure_base_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Joins a capability path onto a provider's registered base URL so callers outside
+/// this module never retype a provider host.
+pub fn provider_endpoint(provider: Provider, path: &str) -> Option<String> {
+    default_base_url(provider).map(|base| {
+        format!(
+            "{}/{}",
+            base.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        )
+    })
+}
+
 /// Returns the default base URL for direct BYOK providers with stable public API endpoints.
-fn default_base_url(provider: Provider) -> Option<&'static str> {
+pub fn default_base_url(provider: Provider) -> Option<&'static str> {
     match provider {
         Provider::OpenAI => Some("https://api.openai.com/v1"),
         Provider::Anthropic => Some("https://api.anthropic.com/v1"),
@@ -1009,6 +1042,21 @@ mod tests {
     fn validate_allows_https_remote_urls() {
         assert!(validate_provider_base_url("https://api.openai.com/v1").is_ok());
         assert!(validate_provider_base_url("https://api.anthropic.com/v1").is_ok());
+    }
+
+    #[test]
+    fn validate_blocks_every_retired_provider_host() {
+        for retired in RETIRED_PROVIDER_HOSTS {
+            for candidate in [
+                format!("https://{retired}/v1"),
+                format!("https://eu.{retired}/v1/chat/completions"),
+                format!("https://{}/v1", retired.to_ascii_uppercase()),
+            ] {
+                let result = validate_provider_base_url(&candidate);
+                assert!(result.is_err(), "{candidate} must be refused");
+                assert!(result.unwrap_err().contains("removed"));
+            }
+        }
     }
 
     #[test]

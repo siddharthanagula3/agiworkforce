@@ -79,6 +79,34 @@ export {
 } from './async';
 
 export {
+  runWithRetryPolicy,
+  classifyRetryError,
+  computeRetryDelayMs,
+  createRetryBudget,
+  retryBudgetFor,
+  resetRetryBudgets,
+  readRetryAfterMs,
+  RetryStoppedError,
+  RetryAbortedError,
+  RETRY_POLICY_DEFAULTS,
+  type RetryPolicy,
+  type RetryBudget,
+  type RetryClassification,
+  type RetryDisposition,
+  type RetryStopReason,
+  type RetryTelemetryEvent,
+} from './retryPolicy';
+
+export {
+  INTERACTION_DEBOUNCE_MS,
+  SEARCH_INPUT_DEBOUNCE_MS,
+  FILTER_INPUT_DEBOUNCE_MS,
+  REGISTRY_DISCOVERY_DEBOUNCE_MS,
+  AUTOSAVE_DEBOUNCE_MS,
+  type InteractionDebounceKind,
+} from './interactionTimings';
+
+export {
   CircuitBreaker,
   CircuitOpenError,
   DependencyOverloadedError,

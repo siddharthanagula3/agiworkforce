@@ -12,6 +12,12 @@ vi.mock('@/lib/server/neon-db', () => ({
 const events: string[] = [];
 const finalize = vi.fn(async (_input: unknown) => {
   events.push('settled');
+  return {
+    requestStatus: 'completed' as const,
+    operationResult: 'finalized' as const,
+    settlementStatus: 'succeeded' as const,
+    actualCostCents: 11,
+  };
 });
 const delivered = vi.fn(async (_input: unknown) => {
   events.push('delivered');
@@ -26,6 +32,10 @@ const appendCloudAgentEvent = vi.fn(async (_db: unknown, input: { envelope: unkn
 const transitionCloudAgentRun = vi.fn(async (_db: unknown, input: { state: string }) => ({
   state: input.state,
 }));
+const recordCloudAgentRunSettledUsage = vi.fn(async (_db: unknown, _input: unknown) => {
+  events.push('usage-recorded');
+  return null;
+});
 
 vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/managed-usage-accounting-service')>()),
@@ -45,6 +55,8 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
     appendCloudAgentEvent(db, input as { envelope: unknown }),
   transitionCloudAgentRun: (db: unknown, input: unknown) =>
     transitionCloudAgentRun(db, input as { state: string }),
+  recordCloudAgentRunSettledUsage: (db: unknown, input: unknown) =>
+    recordCloudAgentRunSettledUsage(db, input),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -332,6 +344,43 @@ describe('managed agent stream', () => {
       expect.anything(),
       expect.objectContaining({ state: 'ready_for_review' }),
     );
+  });
+
+  it('prices a journaled in-request run from the same settlement that charged the user', async () => {
+    recordCloudAgentRunSettledUsage.mockClear();
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, {
+      inputTokens: 820,
+      outputTokens: 260,
+      reasoningTokens: 40,
+    });
+    const stream = buildManagedAgentStream({
+      generator: completedGenerator(),
+      processed,
+      usage,
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+      runJournal: {
+        db: processed.managedUsage!.db,
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+      },
+    });
+
+    await readAll(stream);
+
+    expect(recordCloudAgentRunSettledUsage).toHaveBeenCalledWith(processed.managedUsage!.db, {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.send.message-1',
+      usage: {
+        providerCalls: 1,
+        inputTokens: 820,
+        outputTokens: 260,
+        reasoningTokens: 40,
+        costCents: 11,
+      },
+    });
   });
 
   it('marks a journaled run cancelled when its client stream disconnects', async () => {

@@ -78,4 +78,4 @@ The protected job fails unless it can prove all of the following:
 - Once public, release a higher version. Do not replace a published binary in place because its recorded updater signature and notarization evidence would no longer identify the downloaded bytes.
 - If the Developer ID certificate is exposed, revoke and replace it in Apple Developer, rotate the GitHub environment copy, and ship a new version. Notarization and the independent Tauri updater signature are separate trust boundaries.
 - If the App Store Connect key is exposed, revoke only that key and create a replacement; it does not require changing the Developer ID certificate or updater key.
-- If the Tauri updater key is exposed, follow the updater key-rotation procedure before shipping; changing it without a client migration can strand installed versions.
+- If the Tauri updater key is exposed or lost, follow `docs/security/tauri-updater-key-custody.md` before shipping; changing the key without the transition release described there strands every installed version.

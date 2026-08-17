@@ -82,15 +82,23 @@ requireIncludes('.github/workflows/ci.yml', 'pnpm audit --audit-level=critical')
 requireIncludes('.github/workflows/ci.yml', 'pnpm audit --audit-level=high');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run lint --affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm check:module-reachability');
+requireIncludes('.github/workflows/ci.yml', 'run: pnpm check:no-hex-mobile');
+requireIncludes(
+  '.github/workflows/ci.yml',
+  'run: pnpm --filter @agiworkforce/web check:no-hex-web',
+);
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run typecheck --affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm test:affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run build --affected');
 requireIncludes('package.json', '"test": "turbo run test --concurrency=2"');
 requireIncludes('package.json', '"test:affected": "turbo run test --affected --concurrency=2"');
-requireIncludes(
-  'package.json',
-  'pnpm check:model-catalog && pnpm check:model-id-literals && pnpm check:marketing-models',
-);
+for (const gate of [
+  'pnpm check:model-catalog',
+  'pnpm check:model-id-literals',
+  'pnpm check:marketing-models',
+]) {
+  requireIncludes('package.json', gate);
+}
 requireIncludes('.github/workflows/ci.yml', 'pnpm check:protocol-types');
 requireIncludes('.github/workflows/ci.yml', 'image: postgres:16-alpine');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- apply --target ci');
@@ -104,8 +112,8 @@ requireIncludes(
 );
 requireIncludes('.github/workflows/ci.yml', 'vscode_changed: ${{ steps.scope.outputs.vscode }}');
 requireIncludes('.github/workflows/ci.yml', 'mobile_changed: ${{ steps.scope.outputs.mobile }}');
-requireIncludes('.github/workflows/ci.yml', "if: needs.check.outputs.native_changed == 'true'");
-requireIncludes('.github/workflows/ci.yml', "if: needs.check.outputs.web_changed == 'true'");
+requireIncludes('.github/workflows/ci.yml', "if: needs.scope.outputs.native_changed == 'true'");
+requireIncludes('.github/workflows/ci.yml', "if: needs.scope.outputs.web_changed == 'true'");
 requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/ci.yml', '--filter=agi-workforce');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter agi-workforce package');
@@ -163,27 +171,7 @@ requireIncludes('.github/workflows/deploy-production.yml', 'vercel deploy --preb
 requireIncludes('.github/workflows/deploy-production.yml', 'vercel@58.4.0');
 requireIncludes('.github/workflows/deploy-production.yml', 'environment=production');
 requireIncludes('.github/workflows/deploy-production.yml', 'environment:');
-requireIncludes('.github/workflows/deploy-production.yml', 'deploy-gateway-staging:');
-requireIncludes('.github/workflows/deploy-production.yml', 'deploy-gateway-production:');
-requireIncludes(
-  '.github/workflows/deploy-production.yml',
-  'needs: [scope, deploy-gateway-staging]',
-);
-requireIncludes('.github/workflows/deploy-production.yml', 'services/api-gateway/Dockerfile');
-requireIncludes('.github/workflows/deploy-production.yml', '--platform linux/amd64');
-requireIncludes('.github/workflows/deploy-production.yml', 'containerimage.digest');
-requireIncludes('.github/workflows/deploy-production.yml', '--image "$IMAGE_REF"');
 requireIncludes('.github/workflows/deploy-production.yml', 'pnpm db:migrate -- verify');
-requireIncludes(
-  '.github/workflows/deploy-production.yml',
-  'node scripts/verify-gateway-deployment.mjs',
-);
-requireIncludes('infrastructure/api-gateway/fly.staging.toml', 'path = "/health"');
-requireIncludes('infrastructure/api-gateway/fly.staging.toml', 'path = "/ready"');
-requireIncludes('infrastructure/api-gateway/fly.production.toml', 'min_machines_running = 1');
-requireIncludes('services/api-gateway/Dockerfile', 'turbo@2.10.5 prune');
-requireIncludes('services/api-gateway/Dockerfile', '--bundle');
-requireNotIncludes('services/api-gateway/Dockerfile', '|| pnpm install');
 requireIncludes('.dockerignore', '**/.env.*');
 requireIncludes('.dockerignore', '**/node_modules');
 requireIncludes('.dockerignore', '**/.next');
@@ -255,6 +243,25 @@ requireIncludes('.github/workflows/ci.yml', 'Semgrep (security audit)');
 
 requireIncludes('.github/workflows/ci.yml', 'This is a broken scanner, not a clean scan');
 requireIncludes('.github/workflows/ci.yml', 'semgrep==');
+requireIncludes('.github/workflows/ci.yml', 'node scripts/check-semgrep-findings.mjs');
+requireNotIncludes('.github/workflows/ci.yml', '--exclude-rule');
+requireOnlyAfter(
+  '.github/workflows/ci.yml',
+  '      - name: Semgrep gate',
+  'node scripts/check-semgrep-findings.mjs',
+);
+
+const semgrepAllowlist = spawnSync(
+  process.execPath,
+  ['scripts/check-semgrep-findings.mjs', '--allowlist-only'],
+  { cwd: root, encoding: 'utf8' },
+);
+if (semgrepAllowlist.status !== 0) {
+  errors.push(
+    'scripts/semgrep-allowlist.json is malformed or has expired entries: ' +
+      `${semgrepAllowlist.stdout ?? ''}${semgrepAllowlist.stderr ?? ''}`,
+  );
+}
 
 requireIncludes(
   '.github/workflows/actions-pinned-check.yml',
@@ -402,7 +409,14 @@ requireNotIncludes(
 );
 requireIncludes(
   '.github/workflows/release-desktop.yml',
-  'needs: [prepare-release, build-linux, build-macos]',
+  `needs:
+      [
+        prepare-release,
+        build-linux,
+        build-macos,
+        clean-install-linux,
+        upgrade-from-previous-linux,
+      ]`,
 );
 requireIncludes(
   '.github/workflows/release-desktop.yml',

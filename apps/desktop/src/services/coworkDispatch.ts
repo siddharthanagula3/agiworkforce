@@ -17,6 +17,7 @@ import {
   MOBILE_COMPANION_SESSION_ENDED_EVENT,
   sendCompanionControl,
 } from '../stores/connectionStore';
+import { createControlReceiptLedger } from './controlReceipts';
 
 const MAX_REQUEST_ID_LENGTH = 128;
 const MAX_PROMPT_LENGTH = 20_000;
@@ -39,6 +40,7 @@ interface ActiveDispatch {
 
 const dispatchesByRequest = new Map<string, ActiveDispatch>();
 const requestIdByTask = new Map<string, string>();
+const controlReceipts = createControlReceiptLedger();
 const relayedApprovalIds = new Set<string>();
 const relayingApprovalIds = new Set<string>();
 const resolvingApprovalIds = new Set<string>();
@@ -504,6 +506,17 @@ async function handleLegacyAgentCommand(payload: Record<string, unknown>): Promi
   return true;
 }
 
+async function acknowledgeCompanionControl(
+  action: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const requestId = boundedString(payload['requestId'], MAX_REQUEST_ID_LENGTH);
+  if (!requestId) return;
+
+  const receipt = controlReceipts.record(action, requestId);
+  await sendCompanionControl(receipt.action, { ...receipt });
+}
+
 async function handleCompanionControl(
   event: Event,
   isCurrentSession: () => boolean,
@@ -511,6 +524,9 @@ async function handleCompanionControl(
   if (!isCurrentSession()) return;
   const detail = (event as CustomEvent<MobileCompanionControlDetail>).detail;
   if (!detail || typeof detail.action !== 'string' || !isRecord(detail.payload)) return;
+
+  await acknowledgeCompanionControl(detail.action, detail.payload);
+  if (!isCurrentSession()) return;
 
   if (
     (detail.action === 'dispatch_request' || detail.action === 'cancel') &&
@@ -538,6 +554,7 @@ async function handleCompanionControl(
 function resetCoworkDispatchSession(): void {
   dispatchesByRequest.clear();
   requestIdByTask.clear();
+  controlReceipts.clear();
   relayedApprovalIds.clear();
   relayingApprovalIds.clear();
   resolvingApprovalIds.clear();

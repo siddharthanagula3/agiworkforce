@@ -8,30 +8,22 @@ import {
   toPublicUsagePercentage,
 } from '@/lib/server/managed-usage-policy';
 import { getRollingUsage } from '@/lib/server/rolling-usage';
+import {
+  ROLLING_SESSION_WINDOW_HOURS,
+  ROLLING_WEEKLY_WINDOW_HOURS,
+  rollingResetAt,
+  toIsoTimestamp,
+} from '@/lib/server/capability-limit-resets';
+import { getSpendableCredits } from '@/lib/server/spendable-credits';
 import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
-const SESSION_WINDOW_HOURS = 5;
-const WEEKLY_WINDOW_HOURS = 7 * 24;
-
-function toIsoTimestamp(value: string | Date | null | undefined): string | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
-function getRollingResetAt(oldestAt: string | null, windowHours: number): string | null {
-  if (!oldestAt) return null;
-  const oldestTimestamp = Date.parse(oldestAt);
-  if (Number.isNaN(oldestTimestamp)) return null;
-  return new Date(oldestTimestamp + windowHours * 60 * 60 * 1000).toISOString();
-}
-
 export async function getManagedUsageSummary(userId: string): Promise<ManagedUsageSummaryResponse> {
-  const [balance, subscription] = await Promise.all([
+  const [balance, subscription, spendableCredits] = await Promise.all([
     CreditService.getBalance(userId),
     SubscriptionService.getSubscription(userId),
+    getSpendableCredits(userId),
   ]);
 
   const planTier = subscription?.plan_tier || 'free';
@@ -53,9 +45,9 @@ export async function getManagedUsageSummary(userId: string): Promise<ManagedUsa
   const [session, weekly, flagshipWeekly] =
     sessionCapCents > 0 || weeklyCapCents > 0
       ? await Promise.all([
-          getRollingUsage(userId, SESSION_WINDOW_HOURS, false),
-          getRollingUsage(userId, WEEKLY_WINDOW_HOURS, false),
-          getRollingUsage(userId, WEEKLY_WINDOW_HOURS, true),
+          getRollingUsage(userId, ROLLING_SESSION_WINDOW_HOURS, false),
+          getRollingUsage(userId, ROLLING_WEEKLY_WINDOW_HOURS, false),
+          getRollingUsage(userId, ROLLING_WEEKLY_WINDOW_HOURS, true),
         ])
       : [
           { usedCents: 0, oldestAt: null },
@@ -81,15 +73,17 @@ export async function getManagedUsageSummary(userId: string): Promise<ManagedUsa
       freeUsage?.sessionUsagePercentage ??
       toPublicUsagePercentage(session.usedCents, sessionCapCents),
     session_reset_at:
-      freeUsage?.sessionResetAt ?? getRollingResetAt(session.oldestAt, SESSION_WINDOW_HOURS),
+      freeUsage?.sessionResetAt ?? rollingResetAt(session.oldestAt, ROLLING_SESSION_WINDOW_HOURS),
     weekly_usage_percentage:
       freeUsage?.weeklyUsagePercentage ?? toPublicUsagePercentage(weekly.usedCents, weeklyCapCents),
     weekly_reset_at:
-      freeUsage?.weeklyResetAt ?? getRollingResetAt(weekly.oldestAt, WEEKLY_WINDOW_HOURS),
+      freeUsage?.weeklyResetAt ?? rollingResetAt(weekly.oldestAt, ROLLING_WEEKLY_WINDOW_HOURS),
     flagship_weekly_usage_percentage: toPublicUsagePercentage(
       flagshipWeekly.usedCents,
       flagshipWeeklyCapCents,
     ),
-    flagship_weekly_reset_at: getRollingResetAt(flagshipWeekly.oldestAt, WEEKLY_WINDOW_HOURS),
+    flagship_weekly_reset_at: rollingResetAt(flagshipWeekly.oldestAt, ROLLING_WEEKLY_WINDOW_HOURS),
+    credit_balance_cents: spendableCredits.availableCents,
+    overage_enabled: spendableCredits.overageEnabled,
   };
 }

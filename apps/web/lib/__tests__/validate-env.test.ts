@@ -216,3 +216,106 @@ describe('validateSecurityEscapeHatches · ACCOUNT_STATUS_FAIL_OPEN', () => {
     expect(result.warnings).toEqual([expect.stringContaining('ACCOUNT_STATUS_FAIL_OPEN')]);
   });
 });
+
+describe('validateSecurityEscapeHatches · AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    delete process.env['AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY'];
+    delete process.env['ACCOUNT_STATUS_FAIL_OPEN'];
+    delete process.env['VERCEL_ENV'];
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  it('says nothing when the policy is unset or explicitly fail-closed', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    expect(validateSecurityEscapeHatches()).toEqual({ valid: true, errors: [], warnings: [] });
+
+    process.env['AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY'] = 'fail-closed';
+    expect(validateSecurityEscapeHatches()).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('fails the production boot check when rate limiting is set to fail open', () => {
+    process.env['AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY'] = 'Fail-Open';
+    process.env['VERCEL_ENV'] = 'production';
+
+    const result = validateSecurityEscapeHatches();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([
+      expect.stringContaining('AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY is set to fail-open'),
+    ]);
+  });
+
+  it('only warns outside production, where fail-open is already the default', () => {
+    process.env['AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY'] = 'fail-open';
+
+    const result = validateSecurityEscapeHatches();
+
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toEqual([
+      expect.stringContaining('AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY'),
+    ]);
+  });
+});
+
+import { validateEnvironment } from '../validate-env';
+
+describe('validateEnvironment · generated media storage reaches the boot check', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = 'account';
+    process.env['CLOUDFLARE_R2_ACCESS_KEY_ID'] = 'access-key';
+    process.env['CLOUDFLARE_R2_SECRET_ACCESS_KEY'] = 'secret-key';
+    process.env['CLOUDFLARE_R2_BUCKET_NAME'] = 'media-public';
+    delete process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'];
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  it('warns at boot when the private bucket is missing, so billed generations cannot fail silently', () => {
+    const result = validateEnvironment();
+
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME is not set'),
+      ]),
+    );
+  });
+
+  it('warns at boot when the private bucket duplicates the public one', () => {
+    process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'] = 'media-public';
+
+    const result = validateEnvironment();
+
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME matches'),
+      ]),
+    );
+  });
+
+  it('is silent once a distinct private bucket is configured', () => {
+    process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'] = 'media-private';
+
+    const result = validateEnvironment();
+
+    expect(
+      result.warnings.filter((warning) => warning.includes('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME')),
+    ).toEqual([]);
+  });
+});

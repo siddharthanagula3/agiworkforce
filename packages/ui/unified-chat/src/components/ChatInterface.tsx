@@ -27,6 +27,7 @@ import {
   ChatInput,
   type ChatInputProjectPicker,
   type ChatWorkScope,
+  type ComposerSkillSuggestion,
   type ComposerVoiceController,
 } from './ChatInput';
 import type { MentionSkill } from './SkillMentionPicker';
@@ -261,6 +262,7 @@ export interface ChatInterfaceProps {
   onDismissUsageWarning?: () => void;
   composerSendShortcut?: 'enter' | 'mod-enter';
   skills?: MentionSkill[];
+  suggestSkills?: (content: string) => Promise<ComposerSkillSuggestion[]>;
   onNavigateView?: (view: string) => void;
   hostBridge?: ChatHostBridge | null;
   onAddMessage?: (msg: { role: string; content: string; id?: string }) => void;
@@ -325,6 +327,7 @@ export function ChatInterface({
   onDismissUsageWarning,
   composerSendShortcut,
   skills = [],
+  suggestSkills,
   onNavigateView,
   hostBridge = null,
   onAddMessage,
@@ -808,6 +811,7 @@ export function ChatInterface({
                 hostControls={composerHostControls}
                 sendShortcut={composerSendShortcut}
                 skills={skills}
+                suggestSkills={suggestSkills}
                 onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}
                 onRecordSkill={onRecordSkill}
                 currentFolderLabel={currentFolderLabel}
@@ -823,6 +827,8 @@ export function ChatInterface({
                 projectId={projectPicker?.activeProjectId ?? null}
                 supportsCodeExecution={runtime?.supportsCodeExecution ?? false}
                 supportsResearch={runtime?.supportsResearch ?? false}
+                supportsImageGeneration={runtime?.supportsImageGeneration ?? false}
+                supportsVideoGeneration={runtime?.supportsVideoGeneration ?? false}
                 supportsExplicitLocalWebSearch={runtime?.supportsExplicitLocalWebSearch ?? false}
                 attachmentPolicy={runtime?.attachmentPolicy}
                 pendingAttachments={pendingAttachments}

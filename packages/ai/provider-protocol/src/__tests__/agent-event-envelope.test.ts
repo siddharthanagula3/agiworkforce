@@ -178,5 +178,11 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
       const roundTripped = streamChunkToAgentEvent(streamChunk!);
       expect(roundTripped).toEqual({ type: 'stop', reason: 'refusal' });
     });
+
+    it("'pause_turn' is a suspension, not a stop: it becomes the non-terminal paused lifecycle phase instead of any terminal stop reason", () => {
+      const event = streamChunkToAgentEvent({ type: 'stop', reason: 'pause_turn' });
+      expect(event).toEqual({ type: 'lifecycle', phase: 'paused' });
+      expect(event).not.toEqual({ type: 'stop', reason: 'end-turn' });
+    });
   });
 });

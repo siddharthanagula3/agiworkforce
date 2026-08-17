@@ -7,6 +7,7 @@ import { getModelContextWindow } from '../../constants/llm';
 import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
 import { useAppModeStore } from '../appModeStore';
 import type { ChatExecutionMode } from '@agiworkforce/types';
+import { AUTOSAVE_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { selectHasCloudAccountSession, useUnifiedAuthStore } from '../auth';
 import { useModelStore } from '../modelStore';
 import { registerChatStoreStateReader } from './chatStoreRef';
@@ -154,7 +155,7 @@ function persistIdMappings() {
     if (!success) {
       console.warn('[ChatStore] Failed to persist ID mappings - using in-memory only');
     }
-  }, 300);
+  }, AUTOSAVE_DEBOUNCE_MS);
 }
 
 function pruneIdMappingsIfNeeded() {
@@ -217,6 +218,18 @@ import type { ToolLabelEntry } from '@agiworkforce/types';
 import { STORAGE_KEYS } from '../../constants/storageKeys';
 export type { ToolLabelEntry };
 
+export interface ApprovedByokContextItem {
+  messageId: string;
+  redactedContent: string;
+}
+
+export interface ByokForkOptions {
+  approvedContext: readonly ApprovedByokContextItem[];
+  title?: string;
+  model?: string;
+  provider?: string;
+}
+
 export interface ChatMessageState {
   conversations: ConversationSummary[];
   activeConversationId: string | null;
@@ -227,8 +240,8 @@ export interface ChatMessageState {
   createConversation: (title?: string, options?: { incognito?: boolean }) => string;
   forkConversationForByok: (
     sourceConversationId: string,
-    options?: { title?: string; model?: string; provider?: string },
-  ) => string;
+    options: ByokForkOptions,
+  ) => string | null;
   selectConversation: (id: string) => void;
   loadConversations: (userId: string) => Promise<void>;
   loadConversationMessages: (id: string, userId: string) => Promise<void>;
@@ -486,9 +499,14 @@ export const useChatMessageStore = create<ChatMessageState>()(
               (conversation) => conversation.id === sourceConversationId,
             );
             const sourceMessages = sourceState.messagesByConversation[sourceConversationId] ?? [];
+            const approvedContentById = new Map(
+              options.approvedContext.map((item) => [item.messageId, item.redactedContent]),
+            );
             const forkId = crypto.randomUUID();
             const forkedAt = new Date();
-            const forkedMessages = sourceMessages.map((message, index): EnhancedMessage => {
+            const forkedMessages = sourceMessages.flatMap((message, index): EnhancedMessage[] => {
+              const approvedContent = approvedContentById.get(message.id);
+              if (approvedContent === undefined) return [];
               const {
                 streaming: _streaming,
                 pending: _pending,
@@ -496,19 +514,23 @@ export const useChatMessageStore = create<ChatMessageState>()(
                 ...safeMessage
               } = message;
 
-              return {
-                ...safeMessage,
-                id: `${message.id}-byok-fork-${forkedAt.getTime()}-${index}`,
-                timestamp: new Date(message.timestamp),
-                metadata: {
-                  ...message.metadata,
-                  ...(options?.model ? { model: options.model } : {}),
-                  ...(options?.provider ? { provider: options.provider } : {}),
+              return [
+                {
+                  ...safeMessage,
+                  id: `${message.id}-byok-fork-${forkedAt.getTime()}-${index}`,
+                  content: approvedContent,
+                  timestamp: new Date(message.timestamp),
+                  metadata: {
+                    ...message.metadata,
+                    ...(options.model ? { model: options.model } : {}),
+                    ...(options.provider ? { provider: options.provider } : {}),
+                  },
                 },
-              };
+              ];
             });
+            if (forkedMessages.length === 0) return null;
             const title =
-              options?.title ?? `${sourceConversation?.title ?? 'Conversation'} (BYOK fork)`;
+              options.title ?? `${sourceConversation?.title ?? 'Conversation'} (BYOK fork)`;
             const lastMessage =
               forkedMessages.at(-1)?.content ?? sourceConversation?.lastMessage ?? '';
 
@@ -522,7 +544,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                   updatedAt: forkedAt,
                   customInstructions: sourceConversation?.customInstructions,
                   projectId: sourceConversation?.projectId,
-                  modelOverride: options?.model ?? sourceConversation?.modelOverride,
+                  modelOverride: options.model ?? sourceConversation?.modelOverride,
                   executionMode: 'byok',
                 };
 

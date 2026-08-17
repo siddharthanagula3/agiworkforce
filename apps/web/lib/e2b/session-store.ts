@@ -125,6 +125,57 @@ export async function deleteE2BSession(scope: E2BSessionScope): Promise<void> {
   }
 }
 
+export interface E2BCachePurgeResult {
+  deleted: number;
+  failed: number;
+  reachable: boolean;
+}
+
+const GLOB_METACHARACTERS = /[*?[\]\\^]/u;
+const SCAN_PAGE = 500;
+
+function userScopedKeyPatterns(owner: string): string[] {
+  return [
+    `e2b:session:v2:*:${owner}:*`,
+    `e2b:session:v3:*:${owner}:*`,
+    `e2b:create-lock:v1:*:${owner}`,
+  ];
+}
+
+export async function deleteE2BSessionsForUser(userId: string): Promise<E2BCachePurgeResult> {
+  if (!redis) return { deleted: 0, failed: 0, reachable: false };
+
+  const owner = encodeKeyPart(userId);
+  if (GLOB_METACHARACTERS.test(owner)) {
+    logger.error(
+      { userId },
+      '[e2b] refusing to purge sandbox cache: the owner id would widen the match pattern',
+    );
+    return { deleted: 0, failed: userScopedKeyPatterns(owner).length, reachable: true };
+  }
+
+  let deleted = 0;
+  let failed = 0;
+  for (const match of userScopedKeyPatterns(owner)) {
+    let cursor = '0';
+    try {
+      do {
+        const [next, keys] = await redis.scan(cursor, { match, count: SCAN_PAGE });
+        cursor = String(next);
+        if (keys.length > 0) {
+          await redis.del(...keys);
+          deleted += keys.length;
+        }
+      } while (cursor !== '0');
+    } catch (err) {
+      failed += 1;
+      logger.error({ err, userId, match }, '[e2b] sandbox cache purge failed for a key pattern');
+    }
+  }
+
+  return { deleted, failed, reachable: true };
+}
+
 const SANDBOX_LOCK_TTL_MS = 30_000;
 const SANDBOX_LOCK_WAIT_MS = 10_000;
 const SANDBOX_LOCK_POLL_MS = 100;

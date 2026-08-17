@@ -134,10 +134,9 @@
   },
   "capModal": {
     "title": "You've hit your message limit",
-    "subtitle": "Pick how you want to keep going — switch to a smaller model, top up, or wait until your usage resets.",
+    "subtitle": "Pick how you want to keep going — switch to a smaller model or wait until your usage resets.",
     "dismiss": "Dismiss until next reset",
     "switchModel": "Switch to a smaller model",
-    "buyTopUp": "Buy a top-up",
     "waitReset": "Wait until reset"
   },
   "artifact": {
@@ -185,6 +184,12 @@
     "settings": "Settings",
     "language": "Language",
     "privacySecurity": "Privacy & security",
+    "workspace": "Workspace",
+    "workspacePersonal": "Personal",
+    "workspaceLoading": "Loading workspaces…",
+    "workspaceRetry": "Try loading workspaces again",
+    "workspaceManage": "Manage workspaces",
+    "workspaceSelected": "Selected",
     "viewAllPlans": "View all plans",
     "byokLocal": "BYOK & local models",
     "appsExtensions": "Apps & extensions",

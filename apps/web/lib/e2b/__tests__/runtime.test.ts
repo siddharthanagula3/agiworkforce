@@ -232,6 +232,49 @@ describe('getE2BExecutor — conversation-scoped', () => {
     expect(executor).not.toBeNull();
   });
 
+  it('kills the sandbox it could not reach before creating the replacement', async () => {
+    sessions.set(scopeKey(scope('conv-transient')), { sandboxId: 'sbx-stranded', contexts: {} });
+    connect.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-transient'));
+
+    expect(executor).not.toBeNull();
+    expect(staticKill).toHaveBeenCalledWith('sbx-stranded');
+    expect(staticKill.mock.invocationCallOrder[0]!).toBeLessThan(
+      create.mock.invocationCallOrder[0]!,
+    );
+    expect(sessions.get(scopeKey(scope('conv-transient')))!.sandboxId).not.toBe('sbx-stranded');
+  });
+
+  it('settles the stranded sandbox open compute interval before replacing it', async () => {
+    sessions.set(scopeKey(scope('conv-transient-meter')), {
+      sandboxId: 'sbx-stranded-meter',
+      contexts: {},
+      activeSinceMs: Date.now() - 120_000,
+    });
+    connect.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(scope('conv-transient-meter'));
+
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-stranded-meter', reason: 'kill' }),
+    );
+  });
+
+  it('still replaces the sandbox when the release kill itself fails', async () => {
+    sessions.set(scopeKey(scope('conv-kill-fails')), { sandboxId: 'sbx-unkillable', contexts: {} });
+    connect.mockRejectedValueOnce(new Error('ECONNRESET'));
+    staticKill.mockRejectedValueOnce(new Error('kill API unavailable'));
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-kill-fails'));
+
+    expect(executor).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it('dispose() persists the session instead of killing the sandbox', async () => {
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(scope('conv-4'));

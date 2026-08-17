@@ -2,16 +2,110 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
 Every audit finding, known flaw, gap, blocker and unfinished-work item in this
 repository, consolidated into one place so it can be planned and resolved as a
 single body of work instead of a dozen drifting documents.
 
-**823 items** — 36 critical, 257 high, 354 medium, 176 low. 737 open, 36 in
-progress, 41 unclear (the source documents disagree with each other), 8 wontfix.
-A further **328 items** were checked, found already resolved, and retired to
-[`RESOLVED.md`](RESOLVED.md) rather than deleted.
+**This register carries remaining work only.** Items closed on 2026-08-17 were
+moved to [`RESOLVED.md`](RESOLVED.md) with the code fact each closure rests on,
+and removed from `register.json`. Nothing is lost — closed rows are in that file
+and in git history — but a reader opening the register sees what is left, not a
+scrollback of what is done.
+
+**421 items remain** — 5 critical, 67 high, 220 medium, 129 low. By status: 319
+open, 89 in progress, 13 unclear (the source documents disagree with each other).
+
+By who can close them:
+
+| Kind              | Count | Meaning                                  |
+| ----------------- | ----- | ---------------------------------------- |
+| `defect`          | 311   | An engineer can build it now             |
+| `unbuilt_scope`   | 40    | Feature work, not a defect               |
+| `needs_human`     | 51    | No code change can close it              |
+| `decision_needed` | 19    | Buildable once someone picks an approach |
+
+The remaining criticals are `BILL-01`, `DPDP-04`, `INFRA-01`, `INFRA-17` and
+`INFRA-60`. Only `INFRA-01` (main CI red) is a code fix; the rest need a
+dashboard action, a credential or a legal appointment.
+
+A further **735 items** were closed earlier or found already resolved and live in
+[`RESOLVED.md`](RESOLVED.md).
+
+## Verification status
+
+Status is only trustworthy where an item carries a `verification` object. That
+object records the date, the method, and the specific code fact the status rests
+on, so a reader can re-check the claim instead of taking the status on faith.
+
+Every remaining item carries one as of 2026-08-17. No status here is inherited
+from an audit that nobody re-checked.
+
+Verifying the whole register moved 118 statuses and found **58 items already
+fixed** that were still recorded as open. It also disproved premises rather than
+preserving them: `WEB-131` claimed the schedules page had no status filter, no
+running indicator and a wrong recurrence default, and all three already existed;
+`WEB-114` cited a `v3/dialogs` path that no longer exists; `INFRA-53` demanded a
+parity test that was already written. A register that is never re-checked drifts
+toward overstating what is broken.
+
+## The fix pass, and why PARTIAL is the useful number
+
+A subsequent pass attempted all 72 critical and high code-actionable rows under
+one rule: a fix counts only with a test observed failing before the change and
+passing after. Outcomes were 18 FIXED, 31 PARTIAL, 10 NEEDS_HUMAN, 6
+PREMISE_WRONG, 5 ALREADY_DONE, 2 SKIPPED.
+
+**PARTIAL outnumbering FIXED is the pass working, not failing.** A multi-clause
+fix with one clause proven and three unproven is in progress, and saying so is
+what keeps the register honest. `DESK-01`/`SEC-05` is the model: connect-time DNS
+pinning landed with a red-then-green proof, and the agent then recorded that 22
+files still construct `reqwest::Client` directly and that the compile-time guard
+cannot land until they are migrated — because enabling it today would fail the
+build. It also declined to add an enforcement function for the org BYOK allowlist
+on the grounds that _a decision function with no caller would be a dead control_.
+
+Two fixes are worth reading as examples of what the proof standard catches.
+`DPDP-06`: desktop data export queried a `custom_instructions` table that has
+never existed, so "export my data" failed every time — invisible until a test
+demanded real output. `DESK-04`: automation triggers could never fire, and a
+trigger whose agent failed to spawn **reported success**.
+
+### Three traps this pass hit
+
+**A remediation pass and a verification pass can miss each other almost
+entirely.** The first 85 items were selected because the working tree touches a
+file they cite. That sounds like the population most likely to have moved, but
+the overlap with the 121 items a remediation pass had actually worked was **4**.
+A single remediation run edits files that dozens of unrelated items also cite, so
+"cites a changed file" selects mostly bystanders. The 51 worked-but-unverified
+items were then verified directly, which is where `TEST-03`, `DPDP-08`,
+`CLI-16` and `TEST-05` turned out to be resolved while still sitting at `open`.
+Select verification by _what was worked_, not by _what changed_.
+
+**A verdict rests on the implementation, not on a grep.** Searching for the text
+a fix would contain produces false negatives when the fix took a different shape:
+`SEC-19` was first recorded open because the sandbox runtimes carry `integrity`
+as a JS object property rather than an HTML attribute, and it is in fact
+resolved. Four verdicts were corrected on re-check. Where a fix has several
+clauses and only some are provably done, the item is `in-progress`, not
+`resolved`.
+
+**A batch that returns nothing is not a batch that found nothing.** One of the
+twelve verification agents returned an empty result, silently leaving 36 items
+unverified while the run reported success. Reconcile the ids you queued against
+the ids you got back; re-queue the difference. Splitting the failed batch across
+two agents recovered all 36.
+
+## Untracked files count as present
+
+134 source files in this working tree are untracked — including
+`apps/desktop/scripts/verify-updater-key.mjs`, `apps/desktop/e2e/utils/visual-diff.ts`
+and `apps/extension/src/features/options/site-permission-policy.ts`. Several
+`resolved` verdicts rest on them. They are absent from `git diff`, invisible to
+CI, and would vanish on a clean checkout, so the commit that lands this work must
+use `git add -A`. Do not read "not in git" as "not there" when verifying.
 
 ## How to use this
 

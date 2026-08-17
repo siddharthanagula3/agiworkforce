@@ -1,4 +1,3 @@
-
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import {
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
@@ -557,9 +556,31 @@ export interface CloudOrganization {
   currentUserRole: CloudTeamRole;
 }
 
+export interface CloudWorkspaceMembership {
+  id: string;
+  name: string;
+  slug: string;
+  role: CloudTeamRole;
+}
+
 export interface CloudOrganizationOverview {
   organization: CloudOrganization | null;
   canManageTeam: boolean;
+  activeOrganizationId: string | null;
+  workspaces: CloudWorkspaceMembership[];
+}
+
+function parseWorkspaceMembership(value: unknown): CloudWorkspaceMembership | null {
+  if (!isRecord(value)) return null;
+  const id = value['id'];
+  const name = value['name'];
+  if (typeof id !== 'string' || !id) return null;
+  return {
+    id,
+    name: typeof name === 'string' && name ? name : 'Workspace',
+    slug: typeof value['slug'] === 'string' ? value['slug'] : '',
+    role: parseTeamRole(value['role']),
+  };
 }
 
 function parseOrganization(value: unknown): CloudOrganization | null {
@@ -589,10 +610,29 @@ export async function getCloudOrganizationOverview(): Promise<CloudOrganizationO
   const payload: unknown = await response.json();
   request.assertBoundary();
   const access = isRecord(payload) && isRecord(payload['access']) ? payload['access'] : {};
+  const rawWorkspaces = isRecord(payload) ? payload['workspaces'] : null;
+  const activeOrganizationId = isRecord(payload) ? payload['activeOrganizationId'] : null;
   return {
     organization: isRecord(payload) ? parseOrganization(payload['organization']) : null,
     canManageTeam: access['canManageTeam'] === true,
+    activeOrganizationId: typeof activeOrganizationId === 'string' ? activeOrganizationId : null,
+    workspaces: Array.isArray(rawWorkspaces)
+      ? rawWorkspaces
+          .map(parseWorkspaceMembership)
+          .filter((workspace): workspace is CloudWorkspaceMembership => workspace !== null)
+      : [],
   };
+}
+
+export async function setActiveCloudWorkspace(organizationId: string | null): Promise<void> {
+  const request = createManagedCloudRequestContext('Cloud active workspace');
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/settings/organization/active`, {
+    method: 'PUT',
+    headers: await request.getHeaders(),
+    body: JSON.stringify({ organizationId }),
+  });
+  if (!response.ok) throw await failure(request, response, 'Could not switch workspace');
+  request.assertBoundary();
 }
 
 export interface CloudTeamMember {

@@ -5,7 +5,7 @@ import {
   type ManagedMediaVideoAspectRatio,
   type ManagedMediaVideoResolution,
 } from '@agiworkforce/cloud-contracts';
-import { resolveMediaModelId } from './mediaMode';
+import { resolveMediaModelId, resolveVideoOutputSelection } from './mediaMode';
 
 export type MobileVideoGenerationBlockCode =
   | 'empty_prompt'
@@ -111,19 +111,21 @@ export function resolveMobileVideoGenerationRequest(
     return blocked('route_unavailable');
   }
 
+  const selection = resolveVideoOutputSelection(modelId, input.aspectRatio, input.resolution);
+
   return {
     status: 'ready',
     prompt,
     model: modelId,
     aspectRatio: MANAGED_MEDIA_VIDEO_ASPECT_RATIOS.includes(
-      input.aspectRatio as ManagedMediaVideoAspectRatio,
+      selection.aspectRatio as ManagedMediaVideoAspectRatio,
     )
-      ? (input.aspectRatio as ManagedMediaVideoAspectRatio)
+      ? (selection.aspectRatio as ManagedMediaVideoAspectRatio)
       : '16:9',
     resolution: MANAGED_MEDIA_VIDEO_RESOLUTIONS.includes(
-      input.resolution as ManagedMediaVideoResolution,
+      selection.resolution as ManagedMediaVideoResolution,
     )
-      ? (input.resolution as ManagedMediaVideoResolution)
+      ? (selection.resolution as ManagedMediaVideoResolution)
       : '720p',
     ownerId: input.ownerId,
   };

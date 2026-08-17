@@ -433,6 +433,122 @@ pub async fn notification_set_settings(
     Ok(())
 }
 
+/// Why the user's settings refuse this notification, or `None` when it may be delivered.
+///
+/// `now_hhmm` is the local wall clock in `HH:MM` so the DND window is decidable
+/// without a clock, and so every emitter is judged by the same rule.
+pub fn suppression_reason(
+    settings: &NotificationSettings,
+    notification_type: &NotificationType,
+    now_hhmm: &str,
+) -> Option<String> {
+    if !settings.enabled {
+        return Some("Notifications are disabled".to_string());
+    }
+
+    if !settings.enabled_types.is_empty() && !settings.enabled_types.contains(notification_type) {
+        return Some(format!(
+            "Notification type {:?} is disabled",
+            notification_type
+        ));
+    }
+
+    if !settings.do_not_disturb {
+        return None;
+    }
+
+    let (Some(start_time), Some(end_time)) = (&settings.dnd_start_time, &settings.dnd_end_time)
+    else {
+        return Some("Do not disturb mode is enabled".to_string());
+    };
+
+    let is_within_dnd = if start_time <= end_time {
+        now_hhmm >= start_time.as_str() && now_hhmm <= end_time.as_str()
+    } else {
+        now_hhmm >= start_time.as_str() || now_hhmm <= end_time.as_str()
+    };
+
+    is_within_dnd.then(|| {
+        format!(
+            "Do not disturb mode is enabled ({} - {})",
+            start_time, end_time
+        )
+    })
+}
+
+/// What the user's settings ask the OS to do once a notification is accepted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeliveryPlan {
+    /// Raise an OS notification for this one.
+    pub os_notification: bool,
+    /// Attach the platform default sound to it.
+    pub sound: bool,
+    /// Unread count to paint on the app icon, or `None` to clear the badge.
+    pub badge_count: Option<i64>,
+}
+
+pub fn delivery_plan(settings: &NotificationSettings, unread_count: usize) -> DeliveryPlan {
+    DeliveryPlan {
+        os_notification: settings.desktop_notifications,
+        sound: settings.sound_enabled,
+        badge_count: settings
+            .badge_enabled
+            .then_some(i64::try_from(unread_count).unwrap_or(i64::MAX)),
+    }
+}
+
+/// Deliver a notification through the notification center, honoring the user's
+/// master switch, per-type toggles, DND window, sound and badge settings. Every
+/// in-app emitter must go through here rather than raising an OS notification of
+/// its own.
+pub async fn deliver_notification(
+    app: &AppHandle,
+    state: &NotificationCenterState,
+    input: CreateNotificationInput,
+) -> Result<Notification, String> {
+    let guard = state.settings.lock().await;
+    let now_hhmm = chrono::Local::now().format("%H:%M").to_string();
+    if let Some(reason) = suppression_reason(&guard, &input.notification_type, &now_hhmm) {
+        return Err(reason);
+    }
+    let settings = guard.clone();
+    drop(guard);
+
+    let notification = store_notification(app, state, input).await?;
+
+    let plan = delivery_plan(&settings, state.get_unread_count().await);
+    if plan.os_notification {
+        show_os_notification(app, &notification.title, &notification.message, plan.sound);
+    }
+    apply_badge_count(app, plan.badge_count);
+    Ok(notification)
+}
+
+fn show_os_notification(app: &AppHandle, title: &str, body: &str, sound: bool) {
+    use tauri_plugin_notification::NotificationExt;
+
+    let mut builder = app.notification().builder().title(title).body(body);
+    if sound {
+        builder = builder.sound(DEFAULT_NOTIFICATION_SOUND);
+    }
+    if let Err(e) = builder.show() {
+        tracing::warn!("[NotificationCenter] Failed to show OS notification: {}", e);
+    }
+}
+
+const DEFAULT_NOTIFICATION_SOUND: &str = "default";
+
+fn apply_badge_count(app: &AppHandle, count: Option<i64>) {
+    use tauri::Manager;
+
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if let Err(e) = window.set_badge_count(count) {
+        tracing::warn!("[NotificationCenter] Failed to set badge count: {}", e);
+    }
+}
+
 /// Create a new notification (internal use or for testing).
 ///
 /// # Arguments
@@ -449,57 +565,20 @@ pub async fn notification_create(
     state: State<'_, NotificationCenterState>,
 ) -> Result<Notification, String> {
     let settings = state.settings.lock().await;
-
-    // Check if notifications are enabled
-    if !settings.enabled {
-        return Err("Notifications are disabled".to_string());
+    let now_hhmm = chrono::Local::now().format("%H:%M").to_string();
+    if let Some(reason) = suppression_reason(&settings, &input.notification_type, &now_hhmm) {
+        return Err(reason);
     }
-
-    // Check if the notification type is enabled
-    if !settings.enabled_types.is_empty()
-        && !settings.enabled_types.contains(&input.notification_type)
-    {
-        return Err(format!(
-            "Notification type {:?} is disabled",
-            input.notification_type
-        ));
-    }
-
-    // Check do not disturb mode
-    if settings.do_not_disturb {
-        // Check if we're within the time-based DND window
-        if let (Some(start_time), Some(end_time)) =
-            (&settings.dnd_start_time, &settings.dnd_end_time)
-        {
-            // Parse the time strings (HH:MM format)
-            let now = chrono::Local::now();
-            let current_time = now.format("%H:%M").to_string();
-
-            // Check if current time is within the DND time range
-            // Handle both overnight ranges (e.g., 22:00 to 06:00) and normal ranges
-            let is_within_dnd = if start_time <= end_time {
-                // Normal range: start_time <= end_time (e.g., 09:00 to 17:00)
-                current_time >= *start_time && current_time <= *end_time
-            } else {
-                // Overnight range: start_time > end_time (e.g., 22:00 to 06:00)
-                current_time >= *start_time || current_time <= *end_time
-            };
-
-            if is_within_dnd {
-                return Err(format!(
-                    "Do not disturb mode is enabled ({} - {})",
-                    start_time, end_time
-                ));
-            }
-            // If outside time range, allow notification even with DND enabled
-        } else {
-            // No time range set, block all notifications in DND mode
-            return Err("Do not disturb mode is enabled".to_string());
-        }
-    }
-
     drop(settings);
 
+    store_notification(&app, &state, input).await
+}
+
+async fn store_notification(
+    app: &AppHandle,
+    state: &NotificationCenterState,
+    input: CreateNotificationInput,
+) -> Result<Notification, String> {
     let expires_at = input
         .expires_at
         .map(|s| DateTime::parse_from_rfc3339(&s).map(|dt| dt.with_timezone(&Utc)))
@@ -595,5 +674,95 @@ mod tests {
         assert!(json.contains("test-id"));
         assert!(json.contains("Test Title"));
         assert!(json.contains("Test Message"));
+    }
+
+    fn settings_with(mutate: impl FnOnce(&mut NotificationSettings)) -> NotificationSettings {
+        let mut settings = NotificationSettings::default();
+        mutate(&mut settings);
+        settings
+    }
+
+    #[test]
+    fn the_master_switch_suppresses_every_type() {
+        let settings = settings_with(|s| s.enabled = false);
+        assert_eq!(
+            suppression_reason(&settings, &NotificationType::AgentActivity, "12:00"),
+            Some("Notifications are disabled".to_string())
+        );
+    }
+
+    #[test]
+    fn a_group_toggle_suppresses_only_the_groups_left_out() {
+        let settings = settings_with(|s| s.enabled_types = vec![NotificationType::Reminder]);
+        assert!(suppression_reason(&settings, &NotificationType::AgentActivity, "12:00").is_some());
+        assert!(suppression_reason(&settings, &NotificationType::Reminder, "12:00").is_none());
+    }
+
+    #[test]
+    fn the_dnd_window_suppresses_inside_it_and_allows_outside_it() {
+        let overnight = settings_with(|s| {
+            s.do_not_disturb = true;
+            s.dnd_start_time = Some("22:00".to_string());
+            s.dnd_end_time = Some("06:00".to_string());
+        });
+        for inside in ["22:00", "23:30", "00:15", "06:00"] {
+            assert!(
+                suppression_reason(&overnight, &NotificationType::Info, inside).is_some(),
+                "{inside} is inside the overnight window"
+            );
+        }
+        for outside in ["06:01", "12:00", "21:59"] {
+            assert!(
+                suppression_reason(&overnight, &NotificationType::Info, outside).is_none(),
+                "{outside} is outside the overnight window"
+            );
+        }
+
+        let daytime = settings_with(|s| {
+            s.do_not_disturb = true;
+            s.dnd_start_time = Some("09:00".to_string());
+            s.dnd_end_time = Some("17:00".to_string());
+        });
+        assert!(suppression_reason(&daytime, &NotificationType::Info, "12:00").is_some());
+        assert!(suppression_reason(&daytime, &NotificationType::Info, "08:59").is_none());
+    }
+
+    #[test]
+    fn the_sound_and_badge_settings_reach_the_delivery_plan() {
+        let all_on = delivery_plan(&NotificationSettings::default(), 7);
+        assert_eq!(
+            all_on,
+            DeliveryPlan {
+                os_notification: true,
+                sound: true,
+                badge_count: Some(7),
+            }
+        );
+
+        let muted = delivery_plan(
+            &settings_with(|s| {
+                s.sound_enabled = false;
+                s.badge_enabled = false;
+                s.desktop_notifications = false;
+            }),
+            7,
+        );
+        assert_eq!(
+            muted,
+            DeliveryPlan {
+                os_notification: false,
+                sound: false,
+                badge_count: None,
+            }
+        );
+    }
+
+    #[test]
+    fn dnd_without_a_window_suppresses_around_the_clock() {
+        let settings = settings_with(|s| s.do_not_disturb = true);
+        assert_eq!(
+            suppression_reason(&settings, &NotificationType::Info, "03:00"),
+            Some("Do not disturb mode is enabled".to_string())
+        );
     }
 }

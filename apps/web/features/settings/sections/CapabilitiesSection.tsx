@@ -9,11 +9,13 @@ import {
 } from '@/app/settings/_lib/preferences-client';
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
+import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
 
 type CapabilitiesSettings = {
   memory: boolean;
   generateFromHistory: boolean;
   allowToolAssistedGeneration: boolean;
+  searchPastChats: boolean;
 };
 
 const NAMESPACE = 'capabilities';
@@ -22,6 +24,7 @@ const DEFAULT_SETTINGS: CapabilitiesSettings = {
   memory: false,
   generateFromHistory: true,
   allowToolAssistedGeneration: false,
+  searchPastChats: false,
 };
 
 export function CapabilitiesSection() {
@@ -141,6 +144,17 @@ export function CapabilitiesSection() {
         )}
 
         {row(
+          'Search past chats',
+          'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',
+          <Switch
+            aria-label="Search past chats"
+            checked={settings.searchPastChats}
+            disabled={loadError !== null}
+            onCheckedChange={(value) => setBoolean('searchPastChats', value)}
+          />,
+        )}
+
+        {row(
           'Allow memory generation from tool-assisted chats',
           'Create memories from chats that use tools, connectors, code, or web search',
           <Switch
@@ -166,6 +180,8 @@ export function CapabilitiesSection() {
           */}
         </div>
       </section>
+
+      <ToolApprovalDefaultsPanel />
 
       <p className="text-xs text-muted-foreground">
         Skills have moved to{' '}

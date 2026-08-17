@@ -5,7 +5,7 @@
   "type": "module",
   "main": "electron/dist/main.cjs",
   "scripts": {
-    "dev": "tauri dev",
+    "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "dev:vite": "vite",
     "build": "pnpm run build:release",
     "build:native-host": "node scripts/build-native-messaging-host.mjs",
@@ -27,6 +27,7 @@
     "test:e2e:build": "node --test wdio/tauri-config.test.mjs && VITE_WDIO_E2E=1 pnpm exec vite build && node wdio/verify-bundle.mjs && cd src-tauri && TAURI_CONFIG=\"$(node ../wdio/tauri-config.mjs)\" cargo build --features tauri/custom-protocol",
     "test:e2e:only": "wdio run wdio.conf.ts",
     "check:release-binary": "node wdio/check-release-binary.mjs",
+    "verify:updater-key": "node scripts/verify-updater-key.mjs",
     "test:e2e:dom": "playwright test",
     "test:e2e:dom:ui": "playwright test --ui",
     "test:smoke": "playwright test smoke.spec.ts",

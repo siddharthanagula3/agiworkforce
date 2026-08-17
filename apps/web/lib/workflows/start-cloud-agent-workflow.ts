@@ -6,6 +6,7 @@ import { start, type WorkflowReadableStream } from 'workflow/api';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import type { ApprovalMode } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 import { attachCloudAgentWorkflow } from '@/lib/services/cloud-agent-execution-service';
 import { cloudAgentWorkflow } from './cloud-agent-workflow';
 import {
@@ -20,6 +21,7 @@ export interface StartCloudAgentWorkflowExecutionInput {
   processed: ProcessedRequest;
   mcpTools: WebMcpToolDef[];
   approvalMode: ApprovalMode;
+  toolApprovalPolicy?: ToolApprovalPolicy;
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
 }

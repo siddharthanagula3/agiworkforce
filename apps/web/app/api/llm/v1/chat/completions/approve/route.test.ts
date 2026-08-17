@@ -310,6 +310,29 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
     expect(checkpointMocks.complete).not.toHaveBeenCalled();
   });
 
+  it('forwards steering guidance to the durable continuation without leaking it into request validation', async () => {
+    const response = await POST(
+      makeRequest({ ...resumeBody(), guidance: '  Only touch the docs repo.  ' }),
+    );
+    await response.text();
+
+    const syntheticBody = (await (
+      mockProcessRequest.mock.calls[0]![0] as NextRequest
+    ).json()) as Record<string, unknown>;
+    expect(syntheticBody).not.toHaveProperty('guidance');
+
+    expect(workflowMocks.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        continuation: expect.objectContaining({
+          resume: {
+            approvals: [{ toolCallId: 'call_1', decision: 'approved' }],
+            guidance: 'Only touch the docs repo.',
+          },
+        }),
+      }),
+    );
+  });
+
   it('releases the checkpoint lease when current request validation cannot proceed', async () => {
     mockProcessRequest.mockResolvedValue({
       ok: false,

@@ -48,6 +48,7 @@ import { isWebSearchAvailable } from '@agiworkforce/search';
 import { isModelAdmittedForExecutionMode } from '../lib/modelAdmission';
 import { isChatModelSelectable } from '../lib/modelInfo';
 import { useTierStore } from '../stores/tierStore';
+import { resolveSendMediaKind, useMediaModeStore } from '../stores/mediaModeStore';
 import { getWritingStyleInstruction, type WritingStyle } from '../lib/writingStyle';
 
 const AGENT_TASK_STATES = new Set<AgentTaskState>([
@@ -816,6 +817,13 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     ) => {
       if (!runtime || isStreamingRef.current) return;
 
+      const mediaModeState = useMediaModeStore.getState();
+      const sendMediaKind = resolveSendMediaKind(mediaModeState.mediaMode, {
+        image: runtime.supportsImageGeneration === true,
+        video: runtime.supportsVideoGeneration === true,
+      });
+      mediaModeState.exitMediaMode();
+
       const preflightStore = useChatStore.getState();
       const preflightConversation = preflightStore.conversations.find(
         (conversation) => conversation.id === preflightStore.activeConversationId,
@@ -1081,6 +1089,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           ...(agentMode ? { agentMode } : {}),
           ...(thinkingPolicy.effort ? { effort: thinkingPolicy.effort } : {}),
           ...(attachments && attachments.length > 0 ? { attachments } : {}),
+          ...(sendMediaKind ? { mediaMode: sendMediaKind } : {}),
         })
         .then(() => {
           if (replacement && replacement.messageIds.length > 0) {

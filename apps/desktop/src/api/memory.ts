@@ -1,7 +1,9 @@
+import { MEMORY_CATEGORIES, isMemoryCategory, type MemoryCategory } from '@agiworkforce/types';
 
 import { invoke } from '../lib/tauri-mock';
 
-export type MemoryCategory = 'preference' | 'fact' | 'decision' | 'context';
+export { MEMORY_CATEGORIES, isMemoryCategory };
+export type { MemoryCategory };
 
 export interface MemoryEntry {
   id: number;

@@ -4,6 +4,8 @@
     "a2a",
     "agent",
     "agent-status",
+    "ai-act-provenance",
+    "artifact-csp",
     "artifacts",
     "audit",
     "auth",

@@ -7,6 +7,7 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
+import { ManagedMediaImageGenerationRequestSchema } from '@agiworkforce/cloud-contracts';
 import { ApiPaywallError } from '../services/api';
 import { runImageGenerationTurn } from '../src/features/chat/actions/runImageGenerationTurn';
 import {
@@ -230,5 +231,82 @@ describe('runImageGenerationTurn', () => {
     expect(callbacks.fail).not.toHaveBeenCalled();
     expect(callbacks.remove).not.toHaveBeenCalled();
     expect(callbacks.onPaywall).not.toHaveBeenCalled();
+  });
+
+  it('sends the reference image as a contract-valid edit request', async () => {
+    const callbacks = createCallbacks();
+    const generate = jest.fn(async () => ({
+      success: true,
+      persisted: true,
+      images: [{ url: '/api/files/00000000-0000-0000-0000-000000000002' }],
+      model: 'registry-image-route',
+    }));
+    const readReferenceImage = jest.fn(async () => 'cmVmZXJlbmNlLWJ5dGVz');
+
+    const outcome = await runImageGenerationTurn(
+      {
+        conversationId: 'conversation-1',
+        displayText: 'make it a poster',
+        prompt: 'make it a poster',
+        model: 'registry-image-route',
+        operation: 'edit',
+        sourceImage: { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', fileName: 'photo.jpg' },
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      { generate, getUri: (image) => image?.url ?? null, readReferenceImage },
+    );
+
+    expect(readReferenceImage).toHaveBeenCalledWith('file:///photo.jpg');
+    expect(callbacks.begin).toHaveBeenCalledWith(
+      'conversation-1',
+      'make it a poster',
+      'make it a poster',
+      'registry-image-route',
+      [{ url: 'file:///photo.jpg', mimeType: 'image/jpeg', fileName: 'photo.jpg' }],
+    );
+    expect(generate).toHaveBeenCalledWith({
+      prompt: 'make it a poster',
+      model: 'registry-image-route',
+      operation: 'edit',
+      source_image: { b64_json: 'cmVmZXJlbmNlLWJ5dGVz' },
+    });
+    expect(
+      ManagedMediaImageGenerationRequestSchema.safeParse(generate.mock.calls[0]?.[0]).success,
+    ).toBe(true);
+    expect(outcome).toEqual({ status: 'completed', assistantMessageId: 'assistant-1' });
+  });
+
+  it('fails the turn instead of silently generating from text when the reference image cannot be read', async () => {
+    const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+    const generate = jest.fn();
+
+    const outcome = await runImageGenerationTurn(
+      {
+        conversationId: 'conversation-1',
+        displayText: 'make it a poster',
+        prompt: 'make it a poster',
+        model: 'registry-image-route',
+        operation: 'edit',
+        sourceImage: { uri: 'file:///gone.jpg', mimeType: 'image/jpeg', fileName: 'gone.jpg' },
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      {
+        generate,
+        getUri: () => null,
+        readReferenceImage: async () => {
+          throw new Error('The reference image could not be read from this device.');
+        },
+      },
+    );
+
+    expect(generate).not.toHaveBeenCalled();
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'The reference image could not be read from this device.',
+    );
+    expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
   });
 });

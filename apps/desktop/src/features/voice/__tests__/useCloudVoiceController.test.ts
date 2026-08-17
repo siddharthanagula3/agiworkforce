@@ -104,8 +104,8 @@ describe('useCloudVoiceController', () => {
       sessionValidated: true,
     });
     useComputerUseStore.setState({
-      computerUseEnabled: false,
-      consentAccepted: false,
+      computerUseEnabled: true,
+      consentAccepted: true,
       error: null,
       isExecutingOpa: false,
       activeOpaExecutionId: null,
@@ -173,6 +173,72 @@ describe('useCloudVoiceController', () => {
       await result.current.approveAction();
     });
 
+    expect(nativeMock.invoke).toHaveBeenCalledWith(
+      'computer_use_execute_opa_task',
+      expect.objectContaining({
+        description: 'Open Notes and create a launch checklist.',
+        executionMode: 'cloud_managed',
+      }),
+    );
+    expect(result.current.pendingAction).toBeNull();
+  });
+
+  it('never grants standing computer-use consent from voice mode alone', async () => {
+    useComputerUseStore.setState({ computerUseEnabled: false, consentAccepted: false });
+    const { result } = renderHook(() => useCloudVoiceController(true));
+
+    await waitFor(() => expect(result.current.controller.state).toBe('idle'));
+    await act(async () => result.current.controller.onToggle());
+    await act(async () => result.current.controller.onToggle());
+    await waitFor(() =>
+      expect(result.current.pendingAction).toBe('Open Notes and create a launch checklist.'),
+    );
+    expect(result.current.requiresComputerUseConsent).toBe(true);
+
+    await act(async () => {
+      await result.current.approveAction();
+    });
+
+    expect(result.current.consentPromptOpen).toBe(true);
+    expect(useComputerUseStore.getState().consentAccepted).toBe(false);
+    expect(useComputerUseStore.getState().computerUseEnabled).toBe(false);
+    expect(
+      nativeMock.invoke.mock.calls.some(([command]) => command === 'computer_use_execute_opa_task'),
+    ).toBe(false);
+
+    act(() => result.current.dismissComputerUseConsent());
+
+    expect(result.current.consentPromptOpen).toBe(false);
+    expect(useComputerUseStore.getState().consentAccepted).toBe(false);
+    expect(useComputerUseStore.getState().computerUseEnabled).toBe(false);
+    expect(
+      nativeMock.invoke.mock.calls.some(([command]) => command === 'computer_use_execute_opa_task'),
+    ).toBe(false);
+  });
+
+  it('runs a voice action only after the user accepts the computer-use consent dialog', async () => {
+    useComputerUseStore.setState({ computerUseEnabled: false, consentAccepted: false });
+    const { result } = renderHook(() => useCloudVoiceController(true));
+
+    await waitFor(() => expect(result.current.controller.state).toBe('idle'));
+    await act(async () => result.current.controller.onToggle());
+    await act(async () => result.current.controller.onToggle());
+    await waitFor(() =>
+      expect(result.current.pendingAction).toBe('Open Notes and create a launch checklist.'),
+    );
+
+    await act(async () => {
+      await result.current.approveAction();
+    });
+    expect(result.current.consentPromptOpen).toBe(true);
+
+    await act(async () => {
+      await result.current.acceptComputerUseConsent();
+    });
+
+    expect(result.current.consentPromptOpen).toBe(false);
+    expect(useComputerUseStore.getState().consentAccepted).toBe(true);
+    expect(useComputerUseStore.getState().computerUseEnabled).toBe(true);
     expect(nativeMock.invoke).toHaveBeenCalledWith(
       'computer_use_execute_opa_task',
       expect.objectContaining({

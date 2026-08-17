@@ -1,4 +1,9 @@
-
+import {
+  RetryStoppedError,
+  classifyRetryError,
+  computeRetryDelayMs,
+  runWithRetryPolicy,
+} from '@agiworkforce/utils/retry-policy';
 
 export const ErrorCodes = {
   NETWORK_ERROR: 'NETWORK_ERROR',
@@ -282,9 +287,12 @@ export function normalizeRetryConfig(
 }
 
 export function computeBackoffMs(attempt: number, config: NormalizedRetryConfig): number {
-  const base = Math.min(config.maxDelay, config.initialDelay * Math.pow(2, Math.max(0, attempt)));
-  const jitter = base * 0.2;
-  return Math.max(0, Math.floor(base - jitter + Math.random() * jitter * 2));
+  return computeRetryDelayMs(attempt + 1, {
+    baseDelayMs: config.initialDelay,
+    maxDelayMs: config.maxDelay,
+    multiplier: 2,
+    jitter: 'equal',
+  });
 }
 
 export function sleep(ms: number): Promise<void> {
@@ -301,52 +309,43 @@ export async function retryWithBackoff<T>(
     return fn();
   }
 
-  let lastError: unknown = null;
-  let attempt = 0;
-
-  while (attempt <= opts.maxRetries) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-
-      if (!opts.shouldRetry(error)) {
-        throw toAppError(error);
-      }
-
-      if (attempt >= opts.maxRetries) {
-        throw toAppError(error);
-      }
-
-      const exponentialDelay = Math.min(
-        opts.initialDelay * Math.pow(opts.backoffFactor, attempt),
-        opts.maxDelay,
-      );
-
-      const jitter = Math.random() * exponentialDelay * 0.3;
-      const delay = exponentialDelay + jitter;
-
-      opts.onRetry(attempt + 1, error);
-
-      await sleep(delay);
-
-      attempt++;
-    }
+  try {
+    return await runWithRetryPolicy(fn, {
+      operation: 'shared.retryWithBackoff',
+      maxAttempts: opts.maxRetries + 1,
+      baseDelayMs: opts.initialDelay,
+      maxDelayMs: opts.maxDelay,
+      multiplier: opts.backoffFactor,
+      jitter: 'equal',
+      classify: (error) => {
+        if (!opts.shouldRetry(error)) {
+          return { disposition: 'terminal', reason: 'caller_should_not_retry' };
+        }
+        const shared = classifyRetryError(error);
+        if (shared.disposition === 'terminal' && shared.reason === 'unclassified') {
+          return { disposition: 'retry', reason: 'unclassified' };
+        }
+        return shared;
+      },
+      onEvent: (event) => {
+        if (event.type === 'scheduled') opts.onRetry(event.attempt, event.error);
+      },
+    });
+  } catch (error) {
+    throw toAppError(error instanceof RetryStoppedError ? error.lastError : error);
   }
-
-  throw toAppError(lastError);
 }
 
 export function getRetryDelay(
   attempt: number,
   options: Pick<RetryOptions, 'initialDelay' | 'maxDelay' | 'backoffFactor'> = {},
 ): number {
-  const { initialDelay = 1000, maxDelay = 10000, backoffFactor = 2 } = options;
-
-  const exponentialDelay = Math.min(initialDelay * Math.pow(backoffFactor, attempt - 1), maxDelay);
-
-  const jitter = Math.random() * exponentialDelay * 0.3;
-  return exponentialDelay + jitter;
+  return computeRetryDelayMs(attempt, {
+    baseDelayMs: options.initialDelay ?? 1000,
+    maxDelayMs: options.maxDelay ?? 10000,
+    multiplier: options.backoffFactor ?? 2,
+    jitter: 'equal',
+  });
 }
 
 export function withErrorHandling<TArgs extends unknown[], TResult>(

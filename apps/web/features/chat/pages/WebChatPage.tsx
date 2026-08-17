@@ -67,7 +67,6 @@ import {
   Download,
   HelpCircle,
   Keyboard,
-  Globe,
   LogOut,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
@@ -94,18 +93,14 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  shortcutLabel,
 } from '@agiworkforce/ui';
-import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
+import { EnhancedExportDialog } from '../components/dialogs/EnhancedExportDialog';
 import { printConversation } from '../lib/print-conversation';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import {
@@ -133,10 +128,12 @@ import {
 } from '../components/work-session/WorkSessionPanel';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
+import type { ResearchPlanDecision } from '../components/research/ResearchActivity';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { UpgradePlanDialog, type UpgradeTarget } from '../components/dialogs/UpgradePlanDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import { toast } from 'sonner';
+import { safeClipboard } from '@shared/utils/browser-utils';
 import {
   upgradeToBasicPlan,
   upgradeToProPlan,
@@ -158,7 +155,7 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
-import { completedResearchSteps } from '../utils/research-plan';
+import { approvedResearchSteps, completedResearchSteps } from '../utils/research-plan';
 import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
   planEditRollback,
@@ -172,7 +169,10 @@ import {
   isConversationRoutePending,
   isStaleActiveConversation,
 } from '../lib/staleActiveConversation';
-import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
+import type { Conversation, Message, MessageMetadata } from '@shared/stores/web-chat-store';
+import type { ChatSession } from '@shared/types';
+import { describeModelSubstitution, type ModelSubstitution } from '@shared/stores/model-store';
+import { UnavailableModelNotice } from '../components/UnavailableModelNotice';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { useFreeTrialStore } from '../stores/freeTrialStore';
@@ -394,10 +394,11 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
       : undefined;
 
   const metadata: Record<string, unknown> | undefined =
-    m.metadata || m.model || tokensUsed !== undefined
+    m.metadata || m.model || m.fallbackReason || tokensUsed !== undefined
       ? {
           ...m.metadata,
           model: m.model ?? m.metadata?.model,
+          ...(m.fallbackReason ? { fallbackReason: m.fallbackReason } : {}),
           ...(inputTokens !== undefined ? { inputTokens } : {}),
           ...(outputTokens !== undefined ? { outputTokens } : {}),
           ...(tokensUsed !== undefined ? { tokensUsed } : {}),
@@ -420,6 +421,21 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
     isStreaming: m.isStreaming,
     attachments: m.attachments,
     metadata,
+  };
+}
+
+export function toChatSession(conversation: Conversation, messageCount: number): ChatSession {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    createdAt: new Date(conversation.createdAt),
+    updatedAt: new Date(conversation.updatedAt),
+    messageCount: conversation.messageCount ?? messageCount,
+    isPinned: conversation.isPinned ?? false,
+    isArchived: conversation.isArchived ?? false,
+    isStarred: conversation.isStarred ?? false,
+    tags: [],
+    participants: [],
   };
 }
 
@@ -644,12 +660,10 @@ export default function WebChatPage() {
    */
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
 
-  // Core chat UI previously had zero i18n coverage — every string, including
-  // the composer placeholder, was hardcoded English even though full
-  // translation resources already exist (packages/ui/i18n/locales/*, the single
-  // runtime locale root). Wire the most visible strings through the existing
-  // 'chat' and 'common' namespaces.
-  const { t, i18n } = useTranslation(['chat', 'common']);
+  // Only a handful of strings on this surface are translated. Display language
+  // is chosen in Settings → General, which states that coverage honestly
+  // instead of implying the whole chat UI switches language.
+  const { t } = useTranslation(['chat', 'common']);
   const { getToken, isLoaded: authLoaded, userId } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -1162,6 +1176,13 @@ export default function WebChatPage() {
       onDismiss={() => setUsageWarningDismissed(true)}
     />
   );
+  const [modelSubstitution, setModelSubstitution] = useState<ModelSubstitution | null>(null);
+  const unavailableModelNotice = (
+    <UnavailableModelNotice
+      substitution={modelSubstitution}
+      onDismiss={() => setModelSubstitution(null)}
+    />
+  );
   const managedBudgetPercent = useMemo(
     () => getWorstUsagePercent(managedUsageSummary),
     [managedUsageSummary],
@@ -1174,6 +1195,7 @@ export default function WebChatPage() {
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const chatError = useChatStore((s) => s.error);
   const setChatError = useChatStore((s) => s.setError);
+  const setResearchState = useChatStore((s) => s.setResearchState);
 
   /**
    * SendPreview presentation · outbound-route disclosure rendered as a compact
@@ -1291,11 +1313,15 @@ export default function WebChatPage() {
   // render after a downgrade.
   useEffect(() => {
     const persistedModel = displayedConversation?.model;
-    if (!displayedConversationId || !persistedModel) return;
+    if (!displayedConversationId || !persistedModel) {
+      setModelSubstitution(null);
+      return;
+    }
     const hydrationKey = `${displayedConversationId}:${persistedModel}`;
     if (hydratedConversationModelRef.current === hydrationKey) return;
     hydratedConversationModelRef.current = hydrationKey;
     setSelectedModelId(resolveSelectableModelId(persistedModel));
+    setModelSubstitution(describeModelSubstitution(persistedModel));
   }, [displayedConversation?.model, displayedConversationId, setSelectedModelId]);
 
   const handleConversationModelChange = useCallback(
@@ -1304,6 +1330,7 @@ export default function WebChatPage() {
       const targetConversationId = displayedConversationId;
       if (!targetConversationId) {
         setSelectedModelId(modelId);
+        setModelSubstitution(null);
         return true;
       }
 
@@ -1311,6 +1338,7 @@ export default function WebChatPage() {
       if (!saved) return false;
       if (displayedConversationIdRef.current === targetConversationId) {
         setSelectedModelId(modelId);
+        setModelSubstitution(null);
       }
       return true;
     },
@@ -1326,6 +1354,7 @@ export default function WebChatPage() {
   // Share dialog and the browser tab always name the same chat.
   useDocumentTitleSync(activeConversationId, activeConversationTitle);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
 
   // "Reply ready" browser notification: fires once per completed stream while
@@ -3009,15 +3038,6 @@ export default function WebChatPage() {
     textarea?.focus();
   }, []);
 
-  // Wire global keyboard shortcuts. Dialogs now live at the page level.
-  useKeyboardShortcuts({
-    onNewChat: handleNewChat,
-    onToggleSidebar: handleToggleSidebar,
-    onSearch: handleOpenSearch,
-    onShowShortcuts: handleOpenShortcuts,
-    onFocusComposer: handleFocusComposer,
-  });
-
   const handleSelectSession = useCallback(
     (id: string) => {
       // Navigate to the canonical /chat/[id] URL so the conversation is
@@ -3752,6 +3772,37 @@ export default function WebChatPage() {
     ],
   );
 
+  const lastAssistantMessage = useMemo(
+    () => [...displayedMessages].reverse().find((m) => m.role === 'assistant'),
+    [displayedMessages],
+  );
+
+  const handleCopyLastMessage = useCallback(async () => {
+    const content = lastAssistantMessage?.content?.trim();
+    if (!content) return;
+    const copied = await safeClipboard.writeText(content);
+    if (copied) toast.success('Copied to clipboard');
+    else toast.error('Could not copy to clipboard');
+  }, [lastAssistantMessage]);
+
+  const handleRegenerateLastMessage = useCallback(() => {
+    if (!lastAssistantMessage) return;
+    void handleRegenerateMessage(lastAssistantMessage.id);
+  }, [lastAssistantMessage, handleRegenerateMessage]);
+
+  // Every binding the shortcuts dialog documents is claimed here; an omitted
+  // handler leaves the key unclaimed and the browser default fires instead
+  // (⌘⇧C opens the DevTools inspector).
+  useKeyboardShortcuts({
+    onNewChat: handleNewChat,
+    onToggleSidebar: handleToggleSidebar,
+    onSearch: handleOpenSearch,
+    onShowShortcuts: handleOpenShortcuts,
+    onFocusComposer: handleFocusComposer,
+    onCopyLastMessage: handleCopyLastMessage,
+    onRegenerateLastMessage: handleRegenerateLastMessage,
+  });
+
   /**
    * Retry a Deep Research run that errored or was interrupted (CAP-045 slice 4).
    *
@@ -3800,6 +3851,9 @@ export default function WebChatPage() {
             researchResume: {
               sources: research.sourcesForRetry ?? [],
               steps: completedResearchSteps(research.steps),
+              // Steps the failed run never reached are already approved, so the
+              // retry resumes them instead of asking for the same plan twice.
+              approvedSteps: approvedResearchSteps(research.steps),
             },
             onTurnCommitted,
           }),
@@ -3819,6 +3873,97 @@ export default function WebChatPage() {
       sendMessage,
       sendReplacingMessages,
       setChatError,
+    ],
+  );
+
+  /**
+   * Send a follow-up question about a saved research report as an ordinary
+   * turn: same send path, same metering, with the report carried in the
+   * question so the answer is grounded in the run the user is reading.
+   */
+  const handleResearchFollowUp = useCallback(
+    (prompt: string) => {
+      handleSend(prompt);
+    },
+    [handleSend],
+  );
+
+  /**
+   * Answer a Deep Research run the server paused for plan approval.
+   *
+   * Start re-sends the same question through the normal send path with the
+   * approved steps attached, so the searches that run are exactly the ones the
+   * user read. Cancel keeps the plan on screen but ends the turn — nothing was
+   * searched, and nothing pretends it was.
+   */
+  const handleResearchPlanDecision = useCallback(
+    async (id: string, decision: ResearchPlanDecision) => {
+      if (!displayedConversationId || isStreaming) return;
+      const assistantMsg = displayedMessages.find((m) => m.id === id);
+      const research = assistantMsg?.metadata?.research;
+      if (!research || research.phase !== 'awaiting_approval') return;
+
+      if (decision === 'cancel') {
+        setResearchState(
+          id,
+          { ...research, phase: 'interrupted', label: 'Research plan cancelled' },
+          displayedConversationId,
+        );
+        return;
+      }
+
+      const approved = approvedResearchSteps(research.steps);
+      if (approved.length === 0) return;
+      const plan = planRegenerateRollback(displayedMessages, id);
+      if (!plan) return;
+      const userMsg = displayedMessages[plan.userIndex];
+      if (!userMsg) return;
+      if (isTrialExhausted) {
+        handleOpenUpgradeDialog();
+        return;
+      }
+      const boundaryRefusal = resolveRegenerateBoundaryRefusal({
+        conversation: displayedConversation,
+        messages: displayedMessages,
+        targetModelId: activeModelId,
+      });
+      if (boundaryRefusal) {
+        setChatError(boundaryRefusal, displayedConversationId);
+        return;
+      }
+
+      setRetryingResearchMessageId(id);
+      try {
+        await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
+          sendMessage(userMsg.content, {
+            model: activeModelId,
+            conversationId: displayedConversationId,
+            attachments: userMsg.attachments,
+            research: true,
+            researchResume: {
+              sources: research.sourcesForRetry ?? [],
+              steps: completedResearchSteps(research.steps),
+              approvedSteps: approved,
+            },
+            onTurnCommitted,
+          }),
+        );
+      } finally {
+        setRetryingResearchMessageId(null);
+      }
+    },
+    [
+      activeModelId,
+      displayedConversation,
+      displayedConversationId,
+      displayedMessages,
+      handleOpenUpgradeDialog,
+      isStreaming,
+      isTrialExhausted,
+      sendMessage,
+      sendReplacingMessages,
+      setChatError,
+      setResearchState,
     ],
   );
 
@@ -3941,6 +4086,19 @@ export default function WebChatPage() {
         : [],
     [displayedMessages, displayedConversationId],
   );
+  const exportSession = useMemo(
+    () =>
+      displayedConversation ? toChatSession(displayedConversation, chatMessages.length) : null,
+    [displayedConversation, chatMessages.length],
+  );
+  const exportMessages = useMemo(
+    () =>
+      chatMessages.map((message) => ({
+        ...message,
+        createdAt: message.createdAt ?? new Date(),
+      })),
+    [chatMessages],
+  );
   const showWorkSession = hasWorkSession(displayedMessages, composerToggles?.workMode);
   useEffect(() => {
     if (!showWorkSession) setWorkSessionPanelOpen(false);
@@ -4006,11 +4164,6 @@ export default function WebChatPage() {
       })),
     [conversations, runningConversationIds],
   );
-
-  // Keyboard shortcuts definitions forwarded to the shortcuts dialog.
-  // The dialog documents the CANONICAL list (`KEYBOARD_SHORTCUT_DOCS`). This
-  // used to be a separate four-entry array that omitted Escape, Cmd+Shift+C
-  // and Cmd+Shift+R — all bound and working, none of them listed.
 
   // Top-level destinations stay visible in the production sidebar. The rail body
   // still owns chat recents; the Chat item is the stable mode destination paired
@@ -4107,27 +4260,6 @@ export default function WebChatPage() {
             <Settings className="mr-2 h-4 w-4" />
             {t('common:settings')}
           </DropdownMenuItem>
-          <DropdownMenuSub>
-            {/* No ChevronRight here: DropdownMenuSubTrigger already appends one
-                after `children`, so adding a second rendered two arrows. */}
-            <DropdownMenuSubTrigger>
-              <Globe className="mr-2 h-4 w-4" />
-              {t('common:navLanguage')}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-40">
-              <DropdownMenuRadioGroup
-                value={i18n.language}
-                onValueChange={(code) => void i18n.changeLanguage(code)}
-              >
-                {SUPPORTED_LANGUAGES.map((lang) => (
-                  <DropdownMenuRadioItem key={lang.code} value={lang.code}>
-                    <span className="mr-2">{lang.flag}</span>
-                    {lang.nativeName}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
           <DropdownMenuItem onClick={() => router.push('/help')}>
             <HelpCircle className="mr-2 h-4 w-4" />
             {t('common:navGetHelp')}
@@ -4149,7 +4281,7 @@ export default function WebChatPage() {
           <DropdownMenuItem onClick={() => setKeyboardShortcutsOpen(true)}>
             <Keyboard className="mr-2 h-4 w-4" />
             {t('common:navKeyboardShortcuts')}
-            <span className="ml-auto text-[10px] text-muted-foreground">?</span>
+            <span className="ml-auto text-[10px] text-muted-foreground">{shortcutLabel('/')}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -4329,6 +4461,7 @@ export default function WebChatPage() {
                   // virtualized, so the browser would print only the rows in
                   // the DOM and the result would look complete.
                   onPrint={() => void printConversation()}
+                  onExport={() => setExportDialogOpen(true)}
                   // Conversation-level fork. The branch API and its hook were
                   // already live for per-message branching; only this entry
                   // point was missing. Branching from the LAST message
@@ -4432,6 +4565,7 @@ export default function WebChatPage() {
                 <GreetingBanner onSendMessage={setComposerPrefill} />
                 <div className="w-full max-w-[940px]">
                   {usageBanner}
+                  {unavailableModelNotice}
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
@@ -4479,6 +4613,7 @@ export default function WebChatPage() {
                       isUserTyping={isUserTyping}
                       onRegenerate={handleRegenerateMessage}
                       onRetryResearch={handleRetryResearch}
+                      onResearchPlanDecision={handleResearchPlanDecision}
                       retryingResearchMessageId={retryingResearchMessageId}
                       onContinue={handleContinueMessage}
                       onEdit={handleEditMessage}
@@ -4520,6 +4655,7 @@ export default function WebChatPage() {
                   )}
                 >
                   {usageBanner}
+                  {unavailableModelNotice}
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
@@ -4556,7 +4692,7 @@ export default function WebChatPage() {
             onClose={() => setWorkSessionPanelOpen(false)}
           />
         )}
-        <ResearchPanel />
+        <ResearchPanel {...(isStreaming ? {} : { onAskFollowUp: handleResearchFollowUp })} />
         <ArtifactsPanel />
       </div>
       <CreateProjectDialog
@@ -4581,6 +4717,12 @@ export default function WebChatPage() {
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
         conversationTitle={activeConversationTitle}
+      />
+      <EnhancedExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        session={exportSession}
+        messages={exportMessages}
       />
       <UpgradeConfirmDialog
         request={upgradeConfirm}

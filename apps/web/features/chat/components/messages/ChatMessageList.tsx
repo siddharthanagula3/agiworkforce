@@ -15,6 +15,7 @@ import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 import { MessageBubble } from './MessageBubble';
+import type { ResearchPlanDecision } from '../research/ResearchActivity';
 import {
   InlinePaywallCard,
   normalizePaywallFeature,
@@ -57,6 +58,7 @@ export interface ChatMessageListProps {
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
   onRetryResearch?: (messageId: string) => void;
+  onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onContinue?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
@@ -188,6 +190,7 @@ interface MessageGroupRowProps {
   currentTier: UserTier;
   onRegenerate?: (id: string) => void;
   onRetryResearch?: (id: string) => void;
+  onResearchPlanDecision?: (id: string, decision: ResearchPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -219,6 +222,7 @@ interface MessageRowProps {
   currentTier: UserTier;
   onRegenerate?: (id: string) => void;
   onRetryResearch?: (id: string) => void;
+  onResearchPlanDecision?: (id: string, decision: ResearchPlanDecision) => void;
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -402,6 +406,7 @@ const MessageRow = ({
   currentTier,
   onRegenerate,
   onRetryResearch,
+  onResearchPlanDecision,
   retryingResearchMessageId,
   onEdit,
   onDelete,
@@ -503,6 +508,11 @@ const MessageRow = ({
           ? onRetryResearch
           : undefined
       }
+      onResearchPlanDecision={
+        onResearchPlanDecision && displayRole === 'assistant' && message.metadata?.['research']
+          ? onResearchPlanDecision
+          : undefined
+      }
       isRetryingResearch={retryingResearchMessageId === message.id}
       onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
@@ -528,6 +538,7 @@ const MessageGroupRow = memo(
     currentTier,
     onRegenerate,
     onRetryResearch,
+    onResearchPlanDecision,
     retryingResearchMessageId,
     onEdit,
     onDelete,
@@ -557,6 +568,7 @@ const MessageGroupRow = memo(
             currentTier={currentTier}
             onRegenerate={onRegenerate}
             onRetryResearch={onRetryResearch}
+            onResearchPlanDecision={onResearchPlanDecision}
             retryingResearchMessageId={retryingResearchMessageId}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -592,6 +604,7 @@ const MessageGroupRow = memo(
       prev.currentTier === next.currentTier &&
       prev.onRegenerate === next.onRegenerate &&
       prev.onRetryResearch === next.onRetryResearch &&
+      prev.onResearchPlanDecision === next.onResearchPlanDecision &&
       prev.retryingResearchMessageId === next.retryingResearchMessageId &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
@@ -712,6 +725,7 @@ const ChatMessageListComponent = ({
   isLoading,
   onRegenerate,
   onRetryResearch,
+  onResearchPlanDecision,
   retryingResearchMessageId = null,
   onContinue,
   onEdit,
@@ -1040,6 +1054,7 @@ const ChatMessageListComponent = ({
       currentTier,
       onRegenerate: handleRegenerate,
       onRetryResearch,
+      onResearchPlanDecision,
       retryingResearchMessageId,
       onEdit: handleEdit,
       onDelete: handleDelete,
@@ -1070,6 +1085,7 @@ const ChatMessageListComponent = ({
       handleRegenerate,
       handleRegenerateImage,
       onRetryResearch,
+      onResearchPlanDecision,
       retryingResearchMessageId,
       isReadAloudSupported,
       isSpeaking,
@@ -1263,6 +1279,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.isUserTyping === next.isUserTyping &&
     prev.onRegenerate === next.onRegenerate &&
     prev.onRetryResearch === next.onRetryResearch &&
+    prev.onResearchPlanDecision === next.onResearchPlanDecision &&
     prev.retryingResearchMessageId === next.retryingResearchMessageId &&
     prev.onContinue === next.onContinue &&
     prev.onDelete === next.onDelete &&

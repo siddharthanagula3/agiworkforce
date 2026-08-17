@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import {
   CloudToolApprovalProjectionSchema,
@@ -6,6 +5,7 @@ import {
   ToolApprovalDecisionSchema,
   ToolApprovalResumeRequestSchema,
   ToolApprovalResumeErrorResponseSchema,
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
 } from '../tool-approval-resume';
 
 describe('CloudToolApprovalProjectionSchema', () => {
@@ -117,6 +117,29 @@ describe('ToolApprovalResumeRequestSchema', () => {
     }));
     expect(
       ToolApprovalResumeRequestSchema.safeParse({ ...body, tool_approvals: many }).success,
+    ).toBe(false);
+  });
+
+  it('accepts trimmed steering guidance alongside the decisions', () => {
+    const parsed = ToolApprovalResumeRequestSchema.parse({
+      ...body,
+      guidance: '  Skip the staging repo.  ',
+    });
+    expect(parsed.guidance).toBe('Skip the staging repo.');
+  });
+
+  it('rejects whitespace-only guidance so an empty steer never becomes a user turn', () => {
+    expect(ToolApprovalResumeRequestSchema.safeParse({ ...body, guidance: '   ' }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects guidance beyond the shared length bound', () => {
+    expect(
+      ToolApprovalResumeRequestSchema.safeParse({
+        ...body,
+        guidance: 'x'.repeat(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH + 1),
+      }).success,
     ).toBe(false);
   });
 

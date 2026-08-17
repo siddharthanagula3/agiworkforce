@@ -37,6 +37,7 @@ import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
 } from '../lib/connector-tool-permissions';
+import { loadToolApprovalPolicy } from '../lib/tool-approval-policy';
 
 function jsonError(message: string, status: number): NextResponse {
   return NextResponse.json(
@@ -251,6 +252,8 @@ async function handleToolApproval(request: NextRequest) {
     );
   }
 
+  const toolApprovalPolicy = await loadToolApprovalPolicy(db, userId);
+
   let workflow;
   try {
     workflow = await startCloudAgentWorkflowExecution({
@@ -260,13 +263,17 @@ async function handleToolApproval(request: NextRequest) {
       processed,
       mcpTools,
       approvalMode: 'manual',
+      toolApprovalPolicy,
       continuation: {
         eventSessionId: claim.checkpoint.sessionId,
         eventTurnId: claim.checkpoint.turnId,
         initialEventSequence: claim.checkpoint.nextEventSequence,
         initialCompletedSteps: claim.checkpoint.completedSteps,
         invocationContinuation: false,
-        resume: { approvals: enforcedApprovals },
+        resume: {
+          approvals: enforcedApprovals,
+          ...(resumeFields.guidance ? { guidance: resumeFields.guidance } : {}),
+        },
       },
       predecessorApproval: {
         checkpointId: claim.checkpoint.id,

@@ -2,20 +2,22 @@
 
 Execution order for every item in the register. Waves run top to bottom: each is a batch that shares enough context to plan in one pass, and earlier waves unblock or de-risk later ones. Open one wave file, work it, close it out.
 
-| #   | Wave                                                                                                                                                       | Items | Open | Critical | High |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ---- | -------- | ---- |
-| 1   | [W1 — Live secret exposure and key custody](waves/W01-live-secret-exposure-and-key-custody.md)                                                             | 13    | 12   | 4        | 6    |
-| 2   | [W2 — Unauthenticated and pre-auth reachable endpoints](waves/W02-unauthenticated-and-pre-auth-reachable-endpoints.md)                                     | 25    | 22   | 2        | 9    |
-| 3   | [W3 — Build, CI, deploy and release-publishing integrity](waves/W03-build-ci-deploy-and-release-publishing-integrity.md)                                   | 62    | 54   | 7        | 30   |
-| 4   | [W4 — Untrusted input: injection, egress, sandbox escape and resource abuse](waves/W04-untrusted-input-injection-egress-sandbox-escape-.md)                | 37    | 35   | 2        | 23   |
-| 5   | [W5 — Authorization, tenant isolation and enterprise governance controls](waves/W05-authorization-tenant-isolation-and-enterprise-go.md)                   | 31    | 26   | 2        | 13   |
-| 6   | [W6 — Privacy, consent, erasure and legal obligations](waves/W06-privacy-consent-erasure-and-legal-obligations.md)                                         | 61    | 54   | 7        | 31   |
-| 7   | [W7 — Billing, metering and entitlements](waves/W07-billing-metering-and-entitlements.md)                                                                  | 77    | 70   | 3        | 29   |
-| 8   | [W8 — Model routing, agent runtime, connectors and durable execution](waves/W08-model-routing-agent-runtime-connectors-and-durab.md)                       | 92    | 82   | 0        | 33   |
-| 9   | [W9 — Web application and shared UI surfaces](waves/W09-web-application-and-shared-ui-surfaces.md)                                                         | 178   | 167  | 1        | 29   |
-| 10  | [W10 — Desktop application](waves/W10-desktop-application.md)                                                                                              | 100   | 83   | 6        | 19   |
-| 11  | [W11 — Mobile, browser and editor extensions, and CLI surfaces](waves/W11-mobile-browser-and-editor-extensions-and-cli-sur.md)                             | 85    | 80   | 1        | 15   |
-| 12  | [W12 — Observability, scale limits, published-claim accuracy, dead code and test integrity](waves/W12-observability-scale-limits-published-claim-accur.md) | 62    | 52   | 1        | 20   |
+Counts are regenerated from `register.json` and show REMAINING work only — items closed on 2026-08-17 were moved to [`RESOLVED.md`](RESOLVED.md) and are no longer counted here. **Needs you** cannot be closed by any code change; **Decisions** are buildable once someone picks an approach.
+
+| #   | Wave                                                                                                                                                       | Remaining | Critical | High | Needs you | Decisions |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------- | ---- | --------- | --------- |
+| 1   | [W1 — Live secret exposure and key custody](waves/W01-live-secret-exposure-and-key-custody.md)                                                             | 4         | 0        | 4    | 3         | 0         |
+| 2   | [W2 — Unauthenticated and pre-auth reachable endpoints](waves/W02-unauthenticated-and-pre-auth-reachable-endpoints.md)                                     | 10        | 0        | 1    | 1         | 2         |
+| 3   | [W3 — Build, CI, deploy and release-publishing integrity](waves/W03-build-ci-deploy-and-release-publishing-integrity.md)                                   | 32        | 3        | 10   | 16        | 1         |
+| 4   | [W4 — Untrusted input: injection, egress, sandbox escape and resource abuse](waves/W04-untrusted-input-injection-egress-sandbox-escape-.md)                | 13        | 0        | 3    | 1         | 0         |
+| 5   | [W5 — Authorization, tenant isolation and enterprise governance controls](waves/W05-authorization-tenant-isolation-and-enterprise-go.md)                   | 21        | 0        | 4    | 2         | 3         |
+| 6   | [W6 — Privacy, consent, erasure and legal obligations](waves/W06-privacy-consent-erasure-and-legal-obligations.md)                                         | 20        | 1        | 6    | 6         | 1         |
+| 7   | [W7 — Billing, metering and entitlements](waves/W07-billing-metering-and-entitlements.md)                                                                  | 48        | 1        | 11   | 10        | 3         |
+| 8   | [W8 — Model routing, agent runtime, connectors and durable execution](waves/W08-model-routing-agent-runtime-connectors-and-durab.md)                       | 60        | 0        | 15   | 5         | 5         |
+| 9   | [W9 — Web application and shared UI surfaces](waves/W09-web-application-and-shared-ui-surfaces.md)                                                         | 69        | 0        | 4    | 2         | 4         |
+| 10  | [W10 — Desktop application](waves/W10-desktop-application.md)                                                                                              | 57        | 0        | 2    | 0         | 0         |
+| 11  | [W11 — Mobile, browser and editor extensions, and CLI surfaces](waves/W11-mobile-browser-and-editor-extensions-and-cli-sur.md)                             | 51        | 0        | 1    | 1         | 0         |
+| 12  | [W12 — Observability, scale limits, published-claim accuracy, dead code and test integrity](waves/W12-observability-scale-limits-published-claim-accur.md) | 36        | 0        | 6    | 4         | 0         |
 
 ## [W1 — Live secret exposure and key custody](waves/W01-live-secret-exposure-and-key-custody.md)
 

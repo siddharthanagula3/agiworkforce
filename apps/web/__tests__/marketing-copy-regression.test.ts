@@ -1,11 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 const WEB_ROOT = join(__dirname, '..');
 
 function readWebFile(path: string) {
   return readFileSync(join(WEB_ROOT, path), 'utf8');
+}
+
+const UNSOURCED_METRIC_PATTERNS = [
+  /\b\d+(?:\.\d+)?\s?%\s+(?:faster|fewer|more|less|cheaper|higher|lower|of\s+(?:teams|users|customers))/i,
+  /\b\d+(?:\.\d+)?x\s+(?:faster|cheaper|more|better|productive)/i,
+  /\b\d[\d,]{2,}\+?\s+(?:users|teams|companies|developers|customers|businesses|organizations)\b/i,
+  /\btrusted by\s+[\d\w]/i,
+  /\bjoin\s+\d[\d,]*\+?\s/i,
+  /\bsaves?\s+(?:you\s+)?\d+\s*(?:hours|hrs|minutes)\b/i,
+];
+
+function marketingPages(): string[] {
+  return readdirSync(join(WEB_ROOT, 'app'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_'))
+    .map((entry) => join('app', entry.name, 'page.tsx'))
+    .filter((path) => {
+      try {
+        readWebFile(path);
+        return true;
+      } catch {
+        return false;
+      }
+    });
 }
 
 describe('public marketing copy regressions', () => {
@@ -64,6 +87,31 @@ describe('public marketing copy regressions', () => {
     expect(cliInstall, 'cli page must read its status from the registry').toContain(
       'SURFACE_STATUS.cli',
     );
+  });
+
+  it('publishes no traction or performance number a reader cannot check', () => {
+    const offenders: string[] = [];
+
+    for (const page of marketingPages()) {
+      const source = readWebFile(page);
+      for (const pattern of UNSOURCED_METRIC_PATTERNS) {
+        const match = pattern.exec(source);
+        if (match) offenders.push(`${page}: ${match[0].trim()}`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps published CLI versions out of hand-typed copy', () => {
+    for (const file of ['app/download/page.tsx', 'app/cli/page.tsx', 'app/agi-code/page.tsx']) {
+      const literals = readWebFile(file).match(/v?\d+\.\d+\.\d+/g) ?? [];
+
+      expect(
+        literals,
+        `${file} must read the shipped version from SURFACE_STATUS or the live release endpoint`,
+      ).toEqual([]);
+    }
   });
 
   it('keeps public download CTAs away from unavailable installer API JSON', () => {
@@ -318,6 +366,52 @@ describe('public marketing copy regressions', () => {
     expect(es).toContain('alfa pública');
     expect(layout).not.toContain('open by waitlist invite');
     expect(layout).toContain('public alpha');
+  });
+
+  it('describes web search as ambient, not a manual toggle the composer does not have (DOCS-14)', () => {
+    const aiChat = readWebFile('app/features/ai-chat/page.tsx');
+    const deepResearch = readWebFile('app/features/deep-research/page.tsx');
+    const composer = readWebFile('features/chat/components/Composer/ChatComposerNew.tsx');
+
+    expect(composer, 'web search must still be derived from the resolved model').toContain(
+      'setComposerToggles({ webSearchEnabled: modelSupportsSearch })',
+    );
+    expect(composer, 'the composer must show whether search is on for this turn').toContain(
+      'data-testid="web-search-indicator"',
+    );
+
+    for (const [file, source] of [
+      ['app/features/ai-chat/page.tsx', aiChat],
+      ['app/features/deep-research/page.tsx', deepResearch],
+    ] as const) {
+      const normalized = source.replace(/\s+/g, ' ');
+
+      expect(normalized, `${file} must not promise a one-tap search toggle`).not.toMatch(
+        /one-tap toggle/i,
+      );
+      expect(normalized, `${file} must not tell users to turn search on`).not.toMatch(
+        /turn (on )?search( on)?/i,
+      );
+      expect(normalized, `${file} must describe search as model-driven`).toContain(
+        'Search-capable models reach the live web on their own',
+      );
+    }
+
+    expect(aiChat.replace(/\s+/g, ' ')).toContain(
+      'The composer states whether search is on for the model you picked',
+    );
+    expect(deepResearch.replace(/\s+/g, ' ')).toContain('the composer states whether search is on');
+
+    const supportArticles = readWebFile('lib/support/static-data.ts');
+
+    expect(
+      supportArticles,
+      'the web-search help article must not send users to a toolbar control that was removed',
+    ).not.toMatch(/enable web search in the chat toolbar/i);
+    expect(supportArticles, 'the web-search help article must describe ambient search').toContain(
+      'Search-capable models reach the live web on their own',
+    );
+    expect(supportArticles).toContain('the composer states whether search is on');
   });
 
   it('reframes the web InviteCodeModal away from invite-only cloud access (PA-5)', () => {

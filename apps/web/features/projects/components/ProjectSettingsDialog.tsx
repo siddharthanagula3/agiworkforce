@@ -303,8 +303,9 @@ export function ProjectSettingsDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete project?</AlertDialogTitle>
             <AlertDialogDescription>
-              &ldquo;{project.name}&rdquo; will be permanently deleted. Conversations in this
-              project will be moved to &ldquo;All Chats&rdquo;. This action cannot be undone.
+              &ldquo;{project.name}&rdquo; and its knowledge files will be permanently deleted,
+              including the uploaded file contents. Conversations in this project will be moved to
+              &ldquo;All Chats&rdquo;. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

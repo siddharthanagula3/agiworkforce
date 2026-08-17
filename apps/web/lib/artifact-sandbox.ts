@@ -1,4 +1,3 @@
-
 export type ArtifactKind = 'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'text' | 'code';
 
 export interface ArtifactRenderPayload {
@@ -17,6 +16,11 @@ export interface SandboxIncomingMessage {
   error?: string;
 }
 
+function isThisAppsOwnOrigin(origin: string): boolean {
+  const here = (globalThis as { location?: { origin?: string } }).location?.origin;
+  return typeof here === 'string' && here !== 'null' && here === origin;
+}
+
 export function getSandboxOrigin(): string | null {
   const raw = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'];
   if (!raw) return null;
@@ -27,7 +31,11 @@ export function getSandboxOrigin(): string | null {
     if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
       return null;
     }
-    return `${url.protocol}//${url.host}`;
+    const origin = `${url.protocol}//${url.host}`;
+    // SandboxedIframe frames this origin with `allow-same-origin`; pointed at the
+    // app's own origin that hands artifact scripts the user's session, so a
+    // misprovisioned value must degrade to the opaque srcDoc fallback instead.
+    return isThisAppsOwnOrigin(origin) ? null : origin;
   } catch {
     return null;
   }

@@ -242,6 +242,35 @@ describe('TauriRuntime', () => {
     expect(instructions).toBeUndefined();
   });
 
+  it('loads the composer-selected skill and sends its instructions to the native chat command', async () => {
+    const baseInvoke = invokeMock.getMockImplementation()!;
+    invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      if (command === 'skill_get_instructions') {
+        return args?.['name'] === 'invoice-reconciler'
+          ? 'Reconcile every invoice line against the ledger before answering.'
+          : null;
+      }
+      return baseInvoke(command, args);
+    });
+
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Reconcile the vendor invoice', {
+      model: FIXTURE_MODEL_ID,
+      skillName: 'invoice-reconciler',
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('skill_get_instructions', {
+      name: 'invoice-reconciler',
+    });
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    const instructions = (sendCall?.[1] as { request: { customInstructions?: string } } | undefined)
+      ?.request.customInstructions;
+    expect(instructions).toContain(
+      'Reconcile every invoice line against the ledger before answering.',
+    );
+  });
+
   it('carries the conversation project scope into the backend create', async () => {
     executionModeByConversationId.set('frontend-conversation-id', 'local_only');
     projectIdByConversationId.set('frontend-conversation-id', 'proj-42');

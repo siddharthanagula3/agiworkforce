@@ -533,26 +533,32 @@ describe('ModelPickerSheet', () => {
     expect(queryByLabelText('Reasoning effort High')).toBeNull();
   });
 
-  it('sets a per-conversation effort override through one discrete slider', () => {
+  it('sets a per-conversation effort override by tapping a labelled tier', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     useModelStore.getState().setModel(EFFORT_MODEL.id);
     const { getByLabelText } = renderPicker({ modelScope: 'cloud', conversationId: 'conv-1' });
 
-    const efforts = sortedEfforts(EFFORT_MODEL_REASONING);
     const selectedEffort = 'medium';
     const nextEffort = 'high';
-    const slider = getByLabelText('Reasoning effort');
-    expect(slider.props.accessibilityValue).toEqual({
-      min: 0,
-      max: efforts.length - 1,
-      now: efforts.indexOf(selectedEffort),
-      text: effortLabel(selectedEffort),
-    });
+    expect(
+      getByLabelText(`Reasoning effort ${effortLabel(selectedEffort)}`).props.accessibilityState
+        .selected,
+    ).toBe(true);
+    const nextTier = getByLabelText(`Reasoning effort ${effortLabel(nextEffort)}`);
+    expect(nextTier.props.accessibilityState.selected).toBe(false);
 
-    fireEvent(slider, 'valueChange', efforts.indexOf(nextEffort));
+    fireEvent.press(nextTier);
 
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe(nextEffort);
+    expect(
+      getByLabelText(`Reasoning effort ${effortLabel(nextEffort)}`).props.accessibilityState
+        .selected,
+    ).toBe(true);
+    expect(
+      getByLabelText(`Reasoning effort ${effortLabel(selectedEffort)}`).props.accessibilityState
+        .selected,
+    ).toBe(false);
     expect(useModelStore.getState().selectedModel).toBe(EFFORT_MODEL.id);
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();
   });
@@ -563,11 +569,10 @@ describe('ModelPickerSheet', () => {
     useModelStore.getState().setModel(EFFORT_MODEL.id);
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
-    fireEvent(getByLabelText('Reasoning effort'), 'valueChange', 0);
+    const lowestEffort = sortedEfforts(EFFORT_MODEL_REASONING)[0];
+    fireEvent.press(getByLabelText(`Reasoning effort ${effortLabel(lowestEffort)}`));
 
-    expect(useAgentControlStore.getState().byProject.__default__?.effort).toBe(
-      sortedEfforts(EFFORT_MODEL_REASONING)[0],
-    );
+    expect(useAgentControlStore.getState().byProject.__default__?.effort).toBe(lowestEffort);
     expect(useAgentControlStore.getState().byConversation).toEqual({});
   });
 
@@ -575,34 +580,41 @@ describe('ModelPickerSheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     useModelStore.getState().setModel(FULL_LADDER_MODEL.id);
-    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
+    const { getByLabelText, queryByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     const efforts = sortedEfforts(getModelReasoning(FULL_LADDER_MODEL.id));
-    const selectedEffort = 'medium';
-    expect(getByLabelText('Reasoning effort').props.accessibilityValue).toEqual({
-      min: 0,
-      max: efforts.length - 1,
-      now: efforts.indexOf(selectedEffort),
-      text: effortLabel(selectedEffort),
-    });
+    expect(efforts.length).toBeGreaterThan(1);
+    for (const effort of efforts) {
+      const tier = getByLabelText(`Reasoning effort ${effortLabel(effort)}`);
+      expect(tier.props.accessibilityRole).toBe('button');
+      expect(tier.props.accessibilityState.selected).toBe(effort === 'medium');
+    }
+    const unsupported = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].filter(
+      (effort) => !efforts.includes(effort),
+    );
+    for (const effort of unsupported) {
+      expect(queryByLabelText(`Reasoning effort ${effortLabel(effort)}`)).toBeNull();
+    }
   });
 
-  it('shows the exact catalog reasoning effort control for a four-step model', () => {
+  it('explains the trade-off next to every effort tier of a four-step model', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     useModelStore.getState().setModel(EXACT_EFFORT_MODEL.id);
     const { getByTestId, getByText, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     const efforts = sortedEfforts(getModelReasoning(EXACT_EFFORT_MODEL.id));
-    const selectedEffort = 'medium';
     expect(getByTestId('model-picker-effort-selector')).toBeTruthy();
     expect(getByText('Effort')).toBeTruthy();
-    expect(getByLabelText('Reasoning effort').props.accessibilityValue).toEqual({
-      min: 0,
-      max: efforts.length - 1,
-      now: efforts.indexOf(selectedEffort),
-      text: effortLabel(selectedEffort),
-    });
+    for (const effort of efforts) {
+      const label = effortLabel(effort);
+      const tier = getByLabelText(`Reasoning effort ${label}`);
+      const tradeoff = tier.props.accessibilityHint;
+      expect(typeof tradeoff).toBe('string');
+      expect(tradeoff.length).toBeGreaterThan(0);
+      expect(getByText(label)).toBeTruthy();
+      expect(getByText(tradeoff)).toBeTruthy();
+    }
   });
 
   it('shows a thinking toggle and no effort selector for a thinking_toggle model', () => {
@@ -625,17 +637,17 @@ describe('ModelPickerSheet', () => {
       conversationId: 'conv-1',
     });
 
-    const sourceEfforts = sortedEfforts(EFFORT_MODEL_REASONING);
-    fireEvent(getByLabelText('Reasoning effort'), 'valueChange', sourceEfforts.indexOf('max'));
+    fireEvent.press(getByLabelText(`Reasoning effort ${effortLabel('max')}`));
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('max');
 
     fireEvent.press(getByTestId(`model-row-${CLAMP_TARGET_MODEL.id}`));
 
     const targetDefault = getModelReasoning(CLAMP_TARGET_MODEL.id).defaultEffort!;
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe(targetDefault);
-    expect(getByLabelText('Reasoning effort').props.accessibilityValue.text).toBe(
-      effortLabel(targetDefault),
-    );
+    expect(
+      getByLabelText(`Reasoning effort ${effortLabel(targetDefault)}`).props.accessibilityState
+        .selected,
+    ).toBe(true);
   });
 
   it('expands the thinking toggle when re-tapping the already-selected cloud model', () => {

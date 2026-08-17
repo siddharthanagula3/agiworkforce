@@ -14,14 +14,11 @@ const colorSchemes = ['light', 'dark'];
 
 // This runner has no session, so every entry must be reachable signed out: proxy.ts sends
 // /chat, /library, /schedules, /settings, /billing and /admin to /login, and a redirected
-// audit silently reports the login wall under the requested route's name.
-export const auditedPages = [
-  { path: '/', name: 'Home' },
-  { path: '/login', name: 'Sign in' },
-  { path: '/pricing', name: 'Pricing' },
-  { path: '/features/agents', name: 'Features - Agents' },
-  { path: '/download', name: 'Download' },
-];
+// audit silently reports the login wall under the requested route's name. The list is shared
+// with /accessibility so the published scope cannot drift from what is actually scanned.
+export const auditedPages = JSON.parse(
+  fs.readFileSync(path.join(scriptDirectory, '../lib/a11y/audited-routes.json'), 'utf8'),
+);
 
 export function findUnexpectedRedirect(requestedUrl, landedUrl) {
   const requestedPath = new URL(requestedUrl).pathname.replace(/\/+$/, '') || '/';
@@ -40,6 +37,7 @@ function summarize(violations, passes) {
   };
 }
 
+/** @returns {Promise<Record<string, unknown>>} */
 export async function auditPage(browser, pageDefinition, colorScheme) {
   const context = await browser.newContext({ colorScheme, reducedMotion: 'reduce' });
   const page = await context.newPage();

@@ -156,6 +156,7 @@ export async function executeWebMcpTool(
   serverId: string,
   toolName: string,
   args: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
 ): Promise<McpCallToolResult> {
   return withSpan(
     'mcp.call_tool',
@@ -184,7 +185,10 @@ export async function executeWebMcpTool(
         _state.handles.set(serverId, handle);
         span.setAttributes({ 'mcp.connection.cold_start': true });
       }
-      const result = await handle.callTool(toolName, args);
+      options?.signal?.throwIfAborted();
+      const result = options?.signal
+        ? await handle.callTool(toolName, args, { signal: options.signal })
+        : await handle.callTool(toolName, args);
       span.setAttributes({ 'mcp.tool.is_error': result.isError === true });
       return result;
     },

@@ -20,6 +20,7 @@ import {
   Terminal,
   Paintbrush,
   Sparkles,
+  Clock,
 } from 'lucide-react-native';
 import {
   canUseBillingPlanCapability,
@@ -60,8 +61,13 @@ import {
 } from '@/src/features/chat/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
-
-const LARGE_PASTE_THRESHOLD = 10_000;
+import {
+  LARGE_PASTE_THRESHOLD,
+  PASTED_TEXT_MIME_TYPE,
+  isLargePaste,
+  isPastedTextFileName,
+  pastedTextFileName,
+} from '@agiworkforce/utils/composer-paste';
 
 const STACK_LAYOUT_MIN_HEIGHT = 34;
 
@@ -70,6 +76,12 @@ function mergeTranscript(previous: string, transcript: string): string {
   if (!cleanedTranscript) return previous;
   if (detectVoiceCommand(cleanedTranscript)) return cleanedTranscript;
   return previous ? `${previous} ${cleanedTranscript}` : cleanedTranscript;
+}
+
+interface QueuedFollowUp {
+  id: string;
+  text: string;
+  attachments: Attachment[];
 }
 
 export interface ChatInputHandle {
@@ -131,14 +143,23 @@ export function ChatInput({
   const [voiceResetSignal, setVoiceResetSignal] = useState(0);
   const [isMultiline, setIsMultiline] = useState(false);
   const [expandedEditorVisible, setExpandedEditorVisible] = useState(false);
+  const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
   const inputRef = useRef<TextInput>(null);
   const transcriptionRunRef = useRef(0);
   const sendPendingRef = useRef(false);
+  const queuedFollowUpsRef = useRef<QueuedFollowUp[]>(queuedFollowUps);
+  queuedFollowUpsRef.current = queuedFollowUps;
+  const queuedFollowUpSeqRef = useRef(0);
+  const wasStreamingRef = useRef(isStreaming === true);
   const draftIdentity =
     draftProvenance?.scope === 'cloud'
       ? `${draftKey ?? ''}:cloud:${draftProvenance.ownerId}`
       : `${draftKey ?? ''}:${draftProvenance?.scope ?? 'unowned'}`;
   const previousDraftIdentityRef = useRef(draftIdentity);
+  const previousDraftTargetRef = useRef<{ key?: string; provenance?: DraftProvenance }>({
+    key: draftKey,
+    provenance: draftProvenance,
+  });
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
@@ -230,6 +251,19 @@ export function ChatInput({
   useLayoutEffect(() => {
     if (previousDraftIdentityRef.current !== draftIdentity) {
       previousDraftIdentityRef.current = draftIdentity;
+      const stranded = queuedFollowUpsRef.current;
+      const previousTarget = previousDraftTargetRef.current;
+      if (stranded.length > 0 && previousTarget.key && previousTarget.provenance) {
+        const parked = getDraft(previousTarget.key, previousTarget.provenance);
+        setDraft(
+          previousTarget.key,
+          [...stranded.map((item) => item.text), parked].filter(Boolean).join('\n\n'),
+          previousTarget.provenance,
+        );
+      }
+      previousDraftTargetRef.current = { key: draftKey, provenance: draftProvenance };
+      queuedFollowUpsRef.current = [];
+      setQueuedFollowUps([]);
       setText(draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance));
       setAttachments([]);
       return;
@@ -264,6 +298,21 @@ export function ChatInput({
       const fileAttachments = attachments.filter((a) => !a.pastedText);
       const outgoing = [...pastedBlocks, trimmed].filter(Boolean).join('\n\n');
 
+      if (isStreaming) {
+        queuedFollowUpSeqRef.current += 1;
+        const queued: QueuedFollowUp = {
+          id: `followup-${queuedFollowUpSeqRef.current}`,
+          text: outgoing,
+          attachments: fileAttachments,
+        };
+        queuedFollowUpsRef.current = [...queuedFollowUpsRef.current, queued];
+        setQueuedFollowUps(queuedFollowUpsRef.current);
+        clearDraft(draftKey, draftProvenance);
+        setText('');
+        setAttachments([]);
+        return;
+      }
+
       const sentText = sourceText;
       const sentAttachmentIds = new Set(attachments.map((a) => a.id));
       sendPendingRef.current = true;
@@ -282,12 +331,43 @@ export function ChatInput({
           sendPendingRef.current = false;
         });
     },
-    [attachments, onSend, hapticsEnabled, draftKey, draftProvenance],
+    [attachments, onSend, hapticsEnabled, draftKey, draftProvenance, isStreaming],
   );
 
   const handleSend = useCallback(() => {
     sendComposerMessage(text);
   }, [sendComposerMessage, text]);
+
+  const returnQueuedToComposer = useCallback((item: QueuedFollowUp) => {
+    setText((current) => (current ? `${item.text}\n\n${current}` : item.text));
+    if (item.attachments.length > 0) {
+      setAttachments((current) => [...item.attachments, ...current]);
+    }
+  }, []);
+
+  const cancelQueuedFollowUp = useCallback((id: string) => {
+    queuedFollowUpsRef.current = queuedFollowUpsRef.current.filter((item) => item.id !== id);
+    setQueuedFollowUps(queuedFollowUpsRef.current);
+  }, []);
+
+  useEffect(() => {
+    const streaming = isStreaming === true;
+    if (wasStreamingRef.current && !streaming) {
+      const [next, ...rest] = queuedFollowUpsRef.current;
+      if (next) {
+        queuedFollowUpsRef.current = rest;
+        setQueuedFollowUps(rest);
+        Promise.resolve(
+          onSend(next.text, next.attachments.length > 0 ? next.attachments : undefined),
+        )
+          .then((accepted) => {
+            if (accepted === false) returnQueuedToComposer(next);
+          })
+          .catch(() => returnQueuedToComposer(next));
+      }
+    }
+    wasStreamingRef.current = streaming;
+  }, [isStreaming, onSend, returnQueuedToComposer]);
 
   const handleChangeText = useCallback(
     (next: string) => {
@@ -306,15 +386,18 @@ export function ChatInput({
           suffix++;
         }
         const pasted = next.slice(prefix, next.length - suffix);
-        if (pasted.length >= LARGE_PASTE_THRESHOLD) {
+        if (isLargePaste(pasted)) {
           const id = `pasted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
           setAttachments((prev) => [
             ...prev,
             {
               id,
               uri: `pasted-text://${id}`,
-              mimeType: 'text/plain',
-              fileName: 'Pasted text',
+              mimeType: PASTED_TEXT_MIME_TYPE,
+              fileName: pastedTextFileName(
+                prev.filter((attachment) => isPastedTextFileName(attachment.fileName ?? ''))
+                  .length + 1,
+              ),
               fileSize: pasted.length,
               pastedText: pasted,
             },
@@ -474,6 +557,8 @@ export function ChatInput({
       ? ('queued' as const)
       : ('idle' as const);
 
+  const canQueueFollowUp = isStreaming === true && hasContent && !isRecording && !isTranscribing;
+
   const handleSendButtonPress = useCallback(() => {
     if (isStreaming) {
       onStop?.();
@@ -499,8 +584,12 @@ export function ChatInput({
 
   const handleExpandedSend = useCallback(() => {
     setExpandedEditorVisible(false);
+    if (canQueueFollowUp) {
+      handleSend();
+      return;
+    }
     handleSendButtonPress();
-  }, [handleSendButtonPress]);
+  }, [canQueueFollowUp, handleSend, handleSendButtonPress]);
 
   const sendPreviewPresentation = useMemo(() => {
     if (!sendPreview) return undefined;
@@ -520,8 +609,7 @@ export function ChatInput({
     ? `Reply to ${modelName}...`
     : !isOnline
       ? `Offline — message will send on reconnect${queueLabel}`
-      :
-        mediaMode === 'image'
+      : mediaMode === 'image'
         ? 'Describe the image to create'
         : mediaMode === 'video'
           ? 'Describe the video to create'
@@ -649,6 +737,60 @@ export function ChatInput({
               >
                 {label}
               </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {queuedFollowUps.length > 0 && !isRecording && !isTranscribing ? (
+        <View style={{ gap: 6, marginBottom: 8 }}>
+          {queuedFollowUps.map((item, index) => (
+            <View
+              key={item.id}
+              testID="chat.composer.queued-followup"
+              accessibilityLabel={`Queued message ${index + 1} of ${queuedFollowUps.length}: ${item.text}`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                minHeight: 28,
+                paddingLeft: 10,
+                paddingRight: 4,
+                borderRadius: radii.full,
+                borderWidth: 1,
+                borderColor: themeColors.composerBorder,
+                backgroundColor: themeColors.surfaceElevated,
+              }}
+            >
+              <Clock size={12} color={themeColors.textMuted} strokeWidth={1.8} />
+              <Text
+                numberOfLines={1}
+                style={{
+                  flex: 1,
+                  color: themeColors.textSecondary,
+                  fontSize: 12,
+                  includeFontPadding: false,
+                }}
+              >
+                {item.text}
+              </Text>
+              <Pressable
+                onPress={() => cancelQueuedFollowUp(item.id)}
+                testID={`chat.composer.queued-followup-cancel.${item.id}`}
+                accessibilityLabel="Cancel queued message"
+                accessibilityHint="Removes this message from the queue so it is not sent"
+                accessibilityRole="button"
+                hitSlop={8}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: radii.full,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={14} color={themeColors.textMuted} />
+              </Pressable>
             </View>
           ))}
         </View>
@@ -960,33 +1102,47 @@ export function ChatInput({
             </Pressable>
           </>
         ) : (
-          <View testID="chat.composer.send">
-            {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
-              <Pressable
-                onPress={onOpenVoiceMode}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: radii.full,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: themeColors.textPrimary,
-                }}
-                hitSlop={6}
-                accessibilityLabel="Start voice mode"
-                accessibilityHint="Opens hands-free voice conversation"
-                accessibilityRole="button"
-              >
-                <AudioLines size={18} color={themeColors.surfaceElevated} />
-              </Pressable>
-            ) : (
-              <SendButton
-                state={sendButtonState}
-                onPress={handleSendButtonPress}
-                disabled={!hasContent && !isStreaming}
-              />
-            )}
-          </View>
+          <>
+            {/* Queue, not send: firing a second turn now would abort the one
+                still streaming. Kept beside the stop button so ending the reply
+                stays one tap away. */}
+            {canQueueFollowUp ? (
+              <View testID="chat.composer.queue">
+                <SendButton
+                  state="queued"
+                  onPress={handleSend}
+                  accessibilityLabel="Queue message"
+                />
+              </View>
+            ) : null}
+            <View testID="chat.composer.send">
+              {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
+                <Pressable
+                  onPress={onOpenVoiceMode}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: radii.full,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: themeColors.textPrimary,
+                  }}
+                  hitSlop={6}
+                  accessibilityLabel="Start voice mode"
+                  accessibilityHint="Opens hands-free voice conversation"
+                  accessibilityRole="button"
+                >
+                  <AudioLines size={18} color={themeColors.surfaceElevated} />
+                </Pressable>
+              ) : (
+                <SendButton
+                  state={sendButtonState}
+                  onPress={handleSendButtonPress}
+                  disabled={!hasContent && !isStreaming}
+                />
+              )}
+            </View>
+          </>
         )}
       </View>
 
@@ -998,7 +1154,7 @@ export function ChatInput({
         value={text}
         onChangeText={handleChangeText}
         placeholder={placeholder}
-        sendState={sendButtonState}
+        sendState={canQueueFollowUp ? 'queued' : sendButtonState}
         canSend={hasContent || isStreaming === true}
         onClose={() => setExpandedEditorVisible(false)}
         onSend={handleExpandedSend}

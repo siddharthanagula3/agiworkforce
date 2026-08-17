@@ -4,10 +4,12 @@ export {
   fetchWorkspaceMembers,
   fetchWorkspaceOverview,
   removeWorkspaceMember,
+  setActiveWorkspace,
   updateWorkspaceMemberRole,
   type Workspace,
   type WorkspaceAccess,
   type WorkspaceMember,
+  type WorkspaceMembership,
   type WorkspaceOverview,
   type WorkspaceRole,
 } from './service';

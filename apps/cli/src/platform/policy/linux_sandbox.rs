@@ -1,22 +1,22 @@
-//! Linux seccomp-BPF sandbox preset. M38 of v1.3.
+//! Linux seccomp-BPF allow-list builder. Architecture-aware (x86_64, aarch64).
+//! Three presets matching SandboxMode in screen_renderers.rs.
 //!
-//! Wraps a child process under a tight syscall allowlist using seccomp-BPF.
-//! Architecture-aware (x86_64, aarch64). Three presets matching SandboxMode
-//! in screen_renderers.rs.
+//! NOT A SHIPPING SANDBOX. Nothing calls `install_filter`: `sandbox.rs` runs
+//! sandboxed commands exclusively through bubblewrap, and the `linux-seccomp`
+//! feature this module's runtime half is gated on is absent from `default` and
+//! from the release workflow's `cargo build`. Two reasons it stays that way:
 //!
-//! Strategy:
-//! 1. Build a BpfProgram from the seccompiler crate using the preset's allow-list.
-//! 2. Apply via `seccompiler::apply_filter` BEFORE exec(); the wrapped child
-//!    inherits the filter.
-//! 3. Errors deny by default (return EACCES).
+//! 1. seccomp filters syscalls, not paths. `Contained` permits `openat`/`write`
+//!    against the entire filesystem, so enabling it would not deliver the
+//!    workspace confinement `SandboxPolicy` promises — it would only advertise
+//!    it. Path confinement needs Landlock, which is not implemented here.
+//! 2. `install_filter` applies to the calling thread. Sandboxing a child needs
+//!    the filter installed in a `pre_exec` hook between fork and exec; no such
+//!    call site exists.
 //!
-//! Behind `cfg(target_os = "linux")`.
-//!
-//! NOTE: This module ships the allow-list builder and filter description.
-//! Actually applying the BPF filter to a child process (via
-//! `seccompiler::apply_filter` after `prctl(PR_SET_NO_NEW_PRIVS)` and before
-//! `execve`) is the runtime piece. That integration is deferred pending
-//! Landlock + seccompiler dep addition to Cargo.toml.
+//! Until both are done, bubblewrap is a hard runtime dependency on Linux
+//! (see `sandbox::missing_sandbox_message`), and `doctor` must not let this
+//! module's presence upgrade its sandbox verdict.
 
 #![cfg(target_os = "linux")]
 #![allow(dead_code)]

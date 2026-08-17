@@ -95,11 +95,11 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
 
           {result.stderr && (
             <div>
-              <p className="text-xs font-medium text-red-400 mb-1">Stderr</p>
+              <p className="text-xs font-medium text-[var(--chat-destructive)] mb-1">Stderr</p>
               <pre
                 className={cn(
-                  'rounded bg-red-500/5 border border-red-500/20 px-3 py-2',
-                  'text-xs font-mono leading-relaxed text-red-300',
+                  'rounded bg-[var(--chat-destructive)]/5 border border-[var(--chat-destructive)]/20 px-3 py-2',
+                  'text-xs font-mono leading-relaxed text-[var(--chat-destructive)]',
                   'overflow-x-auto whitespace-pre-wrap break-words',
                   'max-h-48 overflow-y-auto',
                 )}
@@ -122,7 +122,7 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
           ))}
 
           {result.returnCode !== 0 && (
-            <p className="text-xs text-red-400">Exit code: {result.returnCode}</p>
+            <p className="text-xs text-[var(--chat-destructive)]">Exit code: {result.returnCode}</p>
           )}
         </div>
       )}

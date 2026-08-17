@@ -1,6 +1,4 @@
 import * as Calendar from 'expo-calendar';
-import * as Contacts from 'expo-contacts';
-import { Platform } from 'react-native';
 
 export interface CalendarEvent {
   id: string;
@@ -10,13 +8,6 @@ export interface CalendarEvent {
   location: string | null;
   notes: string | null;
   calendarTitle: string | null;
-}
-
-export interface ContactEntry {
-  id: string;
-  name: string;
-  phone: string | null;
-  email: string | null;
 }
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
@@ -65,80 +56,4 @@ export async function getUpcomingEvents(days: number = 7): Promise<CalendarEvent
     notes: event.notes ?? null,
     calendarTitle: calendarMap.get(event.calendarId) ?? null,
   }));
-}
-
-export async function getContactsPermissionStatus(): Promise<PermissionStatus> {
-  const { status } = await Contacts.getPermissionsAsync();
-  if (status === Contacts.PermissionStatus.GRANTED) return 'granted';
-  if (status === Contacts.PermissionStatus.DENIED) return 'denied';
-  return 'undetermined';
-}
-
-export async function requestContactsPermission(): Promise<boolean> {
-  const { status } = await Contacts.requestPermissionsAsync();
-  return status === 'granted';
-}
-
-function stableContactId(name: string, secondary: string): string {
-  const input = `${name}:${secondary}`;
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
-}
-
-export async function searchContacts(query: string): Promise<ContactEntry[]> {
-  const hasPermission = await requestContactsPermission();
-  if (!hasPermission) return [];
-
-  if (!query.trim()) return [];
-
-  const { data } = await Contacts.getContactsAsync({
-    fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
-    name: query,
-    pageSize: 20,
-    pageOffset: 0,
-  });
-
-  return data.map((contact) => {
-    const phone = contact.phoneNumbers?.[0]?.number ?? null;
-    const email = contact.emails?.[0]?.email ?? null;
-    const name =
-      (contact.name ?? [contact.firstName, contact.lastName].filter(Boolean).join(' ')) ||
-      'Unknown';
-
-    return {
-      id: contact.id ?? `contact_${stableContactId(name, phone ?? email ?? '')}`,
-      name,
-      phone,
-      email,
-    };
-  });
-}
-
-/**
- * Discriminated result for {@link getContactsCount}. On platforms where a true
- * total count is unavailable we report presence without an exact number, so
- * callers never compute against a magic sentinel value.
- */
-export type ContactsCountResult =
-  | { known: true; count: number }
-  | { known: false; hasContacts: boolean };
-
-export async function getContactsCount(): Promise<ContactsCountResult> {
-  const hasPermission = await requestContactsPermission();
-  if (!hasPermission) return { known: true, count: 0 };
-
-  const { data } = await Contacts.getContactsAsync({
-    fields: [Contacts.Fields.Name],
-    pageSize: 1,
-  });
-
-  if (Platform.OS === 'ios') {
-    const all = await Contacts.getContactsAsync({ fields: [Contacts.Fields.Name] });
-    return { known: true, count: all.data.length };
-  }
-
-  return { known: false, hasContacts: data.length > 0 };
 }

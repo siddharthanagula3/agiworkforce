@@ -1,0 +1,47 @@
+name: CI failure attribution
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-attribution-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  attribute:
+    name: Attribute red gates to a commit or the named baseline
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'failure' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Verify the attribution logic before trusting its verdicts
+        run: node --test scripts/ci-failure-attribution.test.mjs
+
+      - name: Attribute each red gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CI_ATTRIBUTION_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/ci-failure-attribution.mjs | tee -a "$GITHUB_STEP_SUMMARY"

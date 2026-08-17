@@ -14,14 +14,10 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { CliUserCodeSchema } from '@/lib/validations/device';
 
 const DeviceCodeApproveSchema = z.object({
-  user_code: z
-    .string()
-    .min(1, 'user_code is required')
-    .max(16, 'user_code is too long')
-    .transform((value) => value.trim().toUpperCase())
-    .refine((value) => /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(value), 'Invalid user code format'),
+  user_code: CliUserCodeSchema,
   action: z.enum(['approve', 'deny']).optional(),
   surface: z.literal('desktop').optional(),
 });

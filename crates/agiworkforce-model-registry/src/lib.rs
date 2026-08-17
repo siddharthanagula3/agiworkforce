@@ -172,6 +172,16 @@ pub struct AutoFallbackRoute {
     pub harness_id: String,
 }
 
+/// The concrete provider model a routing slot resolves to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlotModel {
+    pub slot: String,
+    pub model_key: String,
+    pub provider: String,
+    pub provider_model_id: String,
+    pub route_id: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectedAutoRoute {
     pub requested_selection: String,
@@ -398,6 +408,45 @@ pub fn is_auto_routing_selection(selection: &str) -> bool {
 pub fn model_keys_for_provider(provider: &str) -> Result<Option<Vec<String>>, RegistryError> {
     let registry = registry()?;
     Ok(registry.provider_model_keys.get(provider).cloned())
+}
+
+/// Resolve a routing slot to the concrete provider model the generated
+/// registry assigns it.
+///
+/// Surfaces that call a single canonical model for a modality — voice
+/// transcription is the first — read the slot instead of re-deriving the model
+/// from per-surface tier heuristics that drift apart.
+pub fn slot_model(slot: &str) -> Result<Option<SlotModel>, RegistryError> {
+    let registry = registry()?;
+    let Some(model_key) = registry
+        .policies
+        .auto
+        .slots
+        .get(slot)
+        .map(|entry| entry.model_key.as_str())
+    else {
+        return Ok(None);
+    };
+    let Some(model) = registry.models.get(model_key) else {
+        return Ok(None);
+    };
+    let route = registry
+        .routes
+        .iter()
+        .filter(|(_, route)| {
+            route.model_key == model_key && route.provider == model.identity.provider
+        })
+        .min_by(|(left, _), (right, _)| left.cmp(right));
+    let Some((route_id, route)) = route else {
+        return Ok(None);
+    };
+    Ok(Some(SlotModel {
+        slot: slot.to_owned(),
+        model_key: model_key.to_owned(),
+        provider: route.provider.clone(),
+        provider_model_id: route.provider_model_id.clone(),
+        route_id: route_id.clone(),
+    }))
 }
 
 /// Return the generated admission profile for a concrete surface/mode runtime.
@@ -1074,6 +1123,37 @@ mod tests {
         };
         assert_eq!(unavailable.code, UnavailableCode::UnknownTask);
         assert_eq!(unavailable.reasons, vec!["unknown routing task: coding"]);
+    }
+
+    #[test]
+    fn the_voice_transcription_slot_resolves_to_a_live_provider_model() {
+        let resolved = slot_model("voice_transcription")
+            .expect("generated registry should load")
+            .expect("the voice transcription slot must resolve to a route");
+        let registry = registry().expect("generated registry should load");
+        let expected_key = registry
+            .policies
+            .auto
+            .slots
+            .get("voice_transcription")
+            .expect("slot must exist")
+            .model_key
+            .clone();
+        assert_eq!(resolved.model_key, expected_key);
+        assert_eq!(
+            resolved.provider,
+            registry.models[&expected_key].identity.provider
+        );
+        assert!(!resolved.provider_model_id.is_empty());
+        assert!(!registry.models[&expected_key].lifecycle.deprecated);
+    }
+
+    #[test]
+    fn an_unknown_slot_resolves_to_nothing() {
+        assert_eq!(
+            slot_model("fixture_slot_that_does_not_exist").expect("registry should load"),
+            None
+        );
     }
 
     #[test]

@@ -110,6 +110,8 @@ export default function ChatTabScreen() {
   const updateVideoGenerationProgress = useChatStore((s) => s.updateVideoGenerationProgress);
   const completeVideoGeneration = useChatStore((s) => s.completeVideoGeneration);
   const failVideoGeneration = useChatStore((s) => s.failVideoGeneration);
+  const recordVideoGenerationTask = useChatStore((s) => s.recordVideoGenerationTask);
+  const isVideoGenerationCancelRequested = useChatStore((s) => s.isVideoGenerationCancelRequested);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
   const setMediaMode = useChatViewStore((s) => s.setMediaMode);
   const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
@@ -293,6 +295,8 @@ export default function ChatTabScreen() {
             resolution: videoRequest.resolution,
             ownerId: videoRequest.ownerId,
             begin: beginVideoGeneration,
+            taskCreated: recordVideoGenerationTask,
+            isCancelRequested: isVideoGenerationCancelRequested,
             progress: updateVideoGenerationProgress,
             complete: completeVideoGeneration,
             fail: failVideoGeneration,
@@ -317,7 +321,7 @@ export default function ChatTabScreen() {
               mediaMode,
               selection: modelForSend,
               subscriptionTier,
-              hasAttachments: Boolean(attachments?.length),
+              attachments: attachments ?? [],
               globalImageGenerationEnabled: FEATURES.imageGen,
               imageGenerationEnabled,
               isClerkSignedIn,
@@ -345,6 +349,8 @@ export default function ChatTabScreen() {
             prompt: imageRequest.prompt,
             model: imageRequest.model,
             aspectRatio: imageRequest.aspectRatio,
+            operation: imageRequest.operation,
+            sourceImage: imageRequest.sourceImage,
             ownerId: imageRequest.ownerId,
             begin: beginImageGeneration,
             complete: completeImageGeneration,
@@ -418,6 +424,8 @@ export default function ChatTabScreen() {
       completeImageGeneration,
       failImageGeneration,
       beginVideoGeneration,
+      recordVideoGenerationTask,
+      isVideoGenerationCancelRequested,
       updateVideoGenerationProgress,
       completeVideoGeneration,
       failVideoGeneration,

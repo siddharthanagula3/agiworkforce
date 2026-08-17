@@ -212,6 +212,9 @@ describe('AGI Cloud subscription hydration', () => {
       subscriptionStatus: 'active',
       usagePercentage: 37,
       resetsAt: '2026-08-01T00:00:00.000Z',
+      usageBuckets: [
+        { bucket: 'period', percentRemaining: 63, resetAt: '2026-08-01T00:00:00.000Z' },
+      ],
     });
   });
 
@@ -228,6 +231,7 @@ describe('AGI Cloud subscription hydration', () => {
       accountPlanTier: 'enterprise',
       subscriptionStatus: 'past_due',
       usagePercentage: 82,
+      usageBuckets: [{ bucket: 'period', percentRemaining: 18, resetAt: null }],
     });
   });
 });

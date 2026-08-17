@@ -60,6 +60,36 @@
         "purpose": "App functionality",
         "optional": true,
         "collected_when": "Only if provided by the user's sign-in method when signing in to AGI Cloud."
+      },
+      {
+        "type": "Other in-app messages",
+        "purpose": "App functionality",
+        "optional": true,
+        "collected_when": "Only in AGI Cloud: the messages the user sends are uploaded to AGI Cloud and forwarded to the model provider serving the request. Local Mode uploads nothing."
+      },
+      {
+        "type": "Photos",
+        "purpose": "App functionality",
+        "optional": true,
+        "collected_when": "Only in AGI Cloud: photos attached to a message or set as the account avatar are uploaded."
+      },
+      {
+        "type": "Files and docs",
+        "purpose": "App functionality",
+        "optional": true,
+        "collected_when": "Only in AGI Cloud: documents attached to a message are uploaded."
+      },
+      {
+        "type": "User IDs",
+        "purpose": "App functionality",
+        "optional": true,
+        "collected_when": "Only after sign-in: the account identifier carried by every authenticated cloud request."
+      },
+      {
+        "type": "Device or other IDs",
+        "purpose": "App functionality",
+        "optional": true,
+        "collected_when": "Only after the user enables push notifications: an app-generated device UUID is registered with the push token. No advertising identifier is collected."
       }
     ],
     "data_not_linked": [],
@@ -68,7 +98,7 @@
       "data_encrypted_at_rest": true,
       "data_deletion_request_supported": true
     },
-    "note": "Local Mode collects no personal data by default and shares no data. Signing in to AGI Cloud collects account email and optional name."
+    "note": "Local Mode collects no personal data by default and uploads nothing. Signing in to AGI Cloud collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends. 'Data shared' stays false because the model providers, storage and push subprocessors listed at https://agiworkforce.com/subprocessors process that data on AGI's behalf under Play's service-provider exception, not for their own purposes."
   },
   "contact_details": {
     "email": "support@agiworkforce.com",

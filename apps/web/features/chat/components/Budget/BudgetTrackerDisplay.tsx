@@ -67,7 +67,7 @@ export function BudgetTrackerDisplay({
     return (
       <span
         className={cn(
-          'inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.02] px-2 py-0.5 text-[10px] text-muted-foreground',
+          'inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground',
           className,
         )}
         aria-label={`Session budget: ${sessionUsedPercent}% used`}
@@ -81,7 +81,7 @@ export function BudgetTrackerDisplay({
 
   return (
     <div
-      className={cn('rounded-lg border border-white/[0.06] bg-white/[0.02] p-3', className)}
+      className={cn('rounded-lg border border-border bg-card p-3', className)}
       aria-label="Session budget"
     >
       <div className="space-y-2 text-xs">
@@ -102,7 +102,7 @@ export function BudgetTrackerDisplay({
               </div>
             ) : creditBalance ? (
               <>
-                <div className="border-t border-white/[0.06] pt-2 mt-2">
+                <div className="border-t border-border pt-2 mt-2">
                   <p className="text-muted-foreground mb-1.5 font-medium uppercase tracking-wide text-[10px]">
                     Plan usage
                   </p>

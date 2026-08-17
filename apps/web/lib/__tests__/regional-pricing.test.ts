@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getPublishedPlanPriceCents } from '@agiworkforce/types';
 import {
   formatLocalizedPrice,
   getCurrencyForCountry,
@@ -46,6 +47,21 @@ describe('regional pricing', () => {
   it('falls back honestly to the authored USD price when a currency is unavailable', () => {
     expect(resolveLocalizedPlanPrice('pro', 'monthly', 'cad', proStripePrice)).toMatchObject({
       amountMinor: 2_000,
+      currency: 'usd',
+      localized: false,
+    });
+  });
+
+  it('never lets a Stripe USD amount override the published USD price', () => {
+    const published = getPublishedPlanPriceCents('pro', 'monthly');
+    const liveCatalogPrice = {
+      currency: 'usd',
+      unit_amount: published + 999,
+      currency_options: { usd: { unit_amount: published + 999 } },
+    };
+
+    expect(resolveLocalizedPlanPrice('pro', 'monthly', 'usd', liveCatalogPrice)).toEqual({
+      amountMinor: published,
       currency: 'usd',
       localized: false,
     });

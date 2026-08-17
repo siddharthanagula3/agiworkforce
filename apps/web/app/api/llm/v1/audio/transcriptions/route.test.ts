@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getSubscription: vi.fn(),
   neonDb: vi.fn(),
   fetch: vi.fn(),
+  assertTierUnitAllowance: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -43,6 +44,13 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: (...args: unknown[]) => mocks.getSubscription(...args) },
 }));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    assertTierUnitAllowance: (...args: unknown[]) => mocks.assertTierUnitAllowance(...args),
+  };
+});
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
@@ -81,6 +89,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.neonDb.mockReturnValue({ query: vi.fn() });
   mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
+  mocks.assertTierUnitAllowance.mockResolvedValue({
+    unit: 'transcription_seconds',
+    hardLimit: null,
+    softLimit: null,
+    consumed: 0,
+    requested: 0,
+    softLimitReached: false,
+  });
   mocks.reserve.mockImplementation(async (input: { estimatedCostCents: number }) => ({
     db: { query: vi.fn() },
     userId: 'user-1',

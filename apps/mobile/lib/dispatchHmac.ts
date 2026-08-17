@@ -1,4 +1,3 @@
-
 import * as Crypto from 'expo-crypto';
 import {
   DISPATCH_HMAC_REQUIRED_AFTER as CANONICAL_DISPATCH_HMAC_REQUIRED_AFTER,
@@ -128,10 +127,16 @@ async function hkdfExpand(prk: Uint8Array, infoBytes: Uint8Array): Promise<Uint8
  *   PRK = HMAC-SHA-256(salt=UTF8(sessionSalt), IKM=UTF8(pairingCode))
  *   OKM = HMAC-SHA-256(PRK, UTF8("dispatch-hmac-v2") ∥ 0x01)
  *
- * @param pairingCode - 12-char alphanumeric pairing code (pre-shared key, AUDIT-FIX: H-12).
+ * Threat model: this key authenticates the peer against anyone who reaches the
+ * data channel without the pairing transcript. It does not defend against the
+ * signaling relay. The relay mints the pairing code and receives it again on
+ * POST /pairings/{code}/claim and in the register frame, and the salt travels
+ * to it in register metadata, so the relay — or a relay compromise, or a
+ * TLS-intercepting proxy while `PINNING_ENFORCED` is false — holds both KDF
+ * inputs and can mint envelopes that verify in either direction. Closing that
+ * needs an out-of-band key or a PAKE: SEC-16 in docs/remediation/register.json.
  *
- * Future work: replace the shared-password scheme with a PAKE such as
- * OPAQUE or SRP so the IKM is never recoverable from the pairing transcript.
+ * @param pairingCode - 12-char alphanumeric pairing code (pre-shared key, AUDIT-FIX: H-12).
  * @param sessionSalt - Random per-session salt (not secret; sent in metadata)
  * @returns hex-encoded 32-byte derived key
  */
