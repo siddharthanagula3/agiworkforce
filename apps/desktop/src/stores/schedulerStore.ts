@@ -38,6 +38,18 @@ export interface NextRunInfo {
   nextRun: string;
 }
 
+export type JobExecutionStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface JobExecutionRecord {
+  id: number;
+  jobId: string;
+  startedAt: string;
+  completedAt: string | null;
+  status: JobExecutionStatus;
+  error: string | null;
+  durationMs: number | null;
+}
+
 export type TaskInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'custom';
 export type TaskStatus = 'active' | 'paused' | 'completed' | 'failed';
 
@@ -209,6 +221,8 @@ interface SchedulerState {
   pauseJob: (jobId: string) => Promise<boolean>;
   resumeJob: (jobId: string) => Promise<boolean>;
   listJobs: () => Promise<void>;
+  getJob: (jobId: string) => Promise<ScheduledJob | null>;
+  getHistory: (jobId?: string) => Promise<JobExecutionRecord[]>;
   getNextRuns: (limit?: number) => Promise<NextRunInfo[]>;
   toggleJob: (jobId: string) => Promise<boolean>;
   runJobNow: (jobId: string) => Promise<boolean>;
@@ -405,6 +419,31 @@ export const useSchedulerStore = create<SchedulerState>()(
               undefined,
               'scheduler/listJobs/error',
             );
+            throw error;
+          }
+        },
+
+        getJob: async (jobId: string): Promise<ScheduledJob | null> => {
+          try {
+            const job = await invoke<ScheduledJob | null>('scheduler_get_job', { jobId });
+            return job ?? null;
+          } catch (error) {
+            console.error('[schedulerStore] Failed to get job:', error);
+            throw error;
+          }
+        },
+
+        // The backend records every run into execution_history; without this
+        // there is no way to read it back, so a failed overnight job is
+        // invisible in the app.
+        getHistory: async (jobId?: string): Promise<JobExecutionRecord[]> => {
+          try {
+            const history = await invoke<JobExecutionRecord[]>('scheduler_get_history', {
+              jobId: jobId ?? null,
+            });
+            return history;
+          } catch (error) {
+            console.error('[schedulerStore] Failed to get execution history:', error);
             throw error;
           }
         },
