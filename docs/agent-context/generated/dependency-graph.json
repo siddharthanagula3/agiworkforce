@@ -91,6 +91,10 @@
         "to": "@agiworkforce/types"
       },
       {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/utils"
+      },
+      {
         "from": "@agiworkforce/artifacts",
         "to": "@agiworkforce/cloud-contracts"
       },
