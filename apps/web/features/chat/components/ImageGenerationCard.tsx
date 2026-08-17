@@ -201,7 +201,7 @@ function GeneratingCard({
       )}
       style={{
         backgroundImage:
-          'radial-gradient(circle, hsl(var(--muted-foreground) / 0.14) 1px, transparent 1px)',
+          'radial-gradient(circle, color-mix(in srgb, var(--color-muted-foreground) 14%, transparent) 1px, transparent 1px)',
         backgroundSize: '20px 20px',
       }}
       aria-label="Generating image"

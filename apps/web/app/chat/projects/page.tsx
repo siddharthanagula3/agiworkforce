@@ -201,8 +201,8 @@ export default function ProjectsPage() {
                   padding: '7px 14px',
                   border: '1px solid transparent',
                   borderRadius: 9999,
-                  background: 'hsl(var(--primary))',
-                  color: 'hsl(var(--primary-foreground))',
+                  background: 'var(--color-primary)',
+                  color: 'var(--color-primary-foreground)',
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -311,7 +311,7 @@ export default function ProjectsPage() {
                       }}
                       onMouseEnter={(e) => {
                         (e.currentTarget as HTMLButtonElement).style.background =
-                          'hsl(var(--muted))';
+                          'var(--color-muted)';
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
@@ -443,8 +443,8 @@ export default function ProjectsPage() {
                             padding: '8px 16px',
                             border: '1px solid transparent',
                             borderRadius: 9999,
-                            background: 'hsl(var(--primary))',
-                            color: 'hsl(var(--primary-foreground))',
+                            background: 'var(--color-primary)',
+                            color: 'var(--color-primary-foreground)',
                             fontSize: 13,
                             fontWeight: 600,
                             cursor: 'pointer',
