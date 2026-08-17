@@ -260,6 +260,18 @@ const CROSS_TENANT_TABLES = new Map([
     'the support-agent roster. Its `agent_user_id` is staff, not a customer, and the console ' +
       'exists to list every online agent so a waiting visitor can be routed to one.',
   ],
+  [
+    'provider_cost_events',
+    'a cost-of-goods record of what a request cost US, not what a customer was charged. Its ' +
+      '`user_id` is nullable attribution that account erasure nulls while the cost row survives ' +
+      '(0127). Every read goes through the platform-wide `cogs_summary()` aggregate from a cron ' +
+      'route; no user-facing path selects from it, so there is no tenant to scope a read to.',
+  ],
+  [
+    'cogs_adjustments',
+    'the non-provider half of the same ledger — processing fees, refunds, chargebacks, discounts ' +
+      'and goodwill. Same shape and same reason as `provider_cost_events` above.',
+  ],
 ]);
 
 const UNPOLICED_APP_ENFORCED_TABLES = new Map([
