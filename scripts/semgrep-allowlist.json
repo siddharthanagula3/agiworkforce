@@ -37,8 +37,7 @@
       "rule": "javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
       "paths": [
         "apps/web/app/api/auth/logout/route.test.ts",
-        "apps/web/lib/__tests__/api-auth.test.ts",
-        "services/api-gateway/__tests__/integration/dependency-isolation.test.ts"
+        "apps/web/lib/__tests__/api-auth.test.ts"
       ],
       "owner": "@siddhartha",
       "expires": "2027-02-28",
@@ -54,13 +53,6 @@
       "owner": "@siddhartha",
       "expires": "2027-02-28",
       "reason": "ArtifactPreview routes markdown through DOMPurify and raw HTML through a sandboxed iframe; SEOHead emits ld+json and has no importers; ToolResultCard is under archive/ and is not built."
-    },
-    {
-      "rule": "javascript.express.security.audit.xss.direct-response-write.direct-response-write",
-      "paths": ["services/api-gateway/src/routes/enterprise.ts"],
-      "owner": "@siddhartha",
-      "expires": "2027-02-28",
-      "reason": "The audit-event export sets Content-Type to text/csv or application/x-ndjson and Content-Disposition: attachment before res.send, and services/api-gateway/src/app.ts applies helmet() so nosniff is on. The body is never interpreted as HTML."
     },
     {
       "rule": "package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown",
