@@ -30,7 +30,7 @@ import {
   readControlRequestId,
   type ControlAckTracker,
   type ControlDelivery,
-} from '../lib/controlAckTracker';
+} from '../src/integrations/controlAckTracker';
 import { parseControlReceipt } from '../stores/connectionStore';
 
 const TIMEOUT_MS = 1_000;
