@@ -1746,6 +1746,15 @@ These block or gate code items but cannot be closed by a commit.
   pass until the rendered behavior is rechecked against the references.
 - **Audit the other newly-reachable sheets.** They were unreachable until the
   bottom-sheet upgrade, so none of their contents have ever been exercised.
+- **TODO: wire `apps/web/lib/server/data-retention-tiers.ts` to a consumer.**
+  The DPDP retention registry and its `ERASURE_FAN_OUT_STORES` derivation are
+  written and tested, but nothing in production imports them — the module is
+  declared unreachable debt in `scripts/config/surface-reachability-allowlist.json`.
+  Two candidate consumers: `apps/web/lib/server/account-erasure.ts`, which
+  carries its own hand-maintained store map that this registry should become
+  the source for, and the privacy page's section 05 retention table, which is
+  hand-written prose. Neither is a mechanical edit — erasure correctness and
+  legal copy are both at stake — so it did not land with the 2026-08-17 sweep.
 
 ### Web composer — 2026-08-13 (founder-reported)
 
